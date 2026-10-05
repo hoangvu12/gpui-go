@@ -1,0 +1,40 @@
+{
+    "ticket": "03-scoped-entities-effects",
+    "date": "2026-10-05",
+    "authorization": "User: ok now use roboco mcp, create a new chat that use /implement skill to do all those tickets, use iroha dashscope glm 5.3 with pi harness",
+    "session": "Roboco chat 065e52f5, harness pi, model iroha/dashscope/glm-5.3; implemented by parallel background subagent session ticket03-entities",
+    "git_state": "No git repository; commit step environment-blocked, not fabricated.",
+    "implemented": {
+        "package": "gpui (root package of module gpui-go, previously empty; real runtime, not stubs)",
+        "files": ["app.go", "entity.go", "scope.go", "context.go", "event.go", "effects.go", "executor.go", "testapp.go"],
+        "port_fixture": "internal/portfixture (Run(envelope) -> conformance trace mirroring reference/harness/src/fixtures/layout_effects.rs op-for-op)",
+        "api_shape": "preserves the verified signature-fixture API (AppContext sealed interface, Context[S], Entity/WeakEntity, Event[S,P], Subscription); additive reference-mirroring methods documented in the subagent report and pinned by internal/portfixture/apishape_test.go"
+    },
+    "gate": {
+        "test": "TestFx0001EffectSectionMatchesRecordedReference (internal/portfixture/run_test.go)",
+        "result": "PASS: the port trace reproduces the recorded reference trace events 1-47 exactly (conformance.CompareTraces Equal, empty diff), including: one observer-notified for two notifies in one update (coalescing), three FIFO event-delivered, both defers in one flush loop, task started/completed/result-observed during advance-clock before clock-advanced, entity-released {value: 2} at flush start before effects-run, exact field names and value types",
+        "determinism": "10x repeat clean; scheduler drives background tasks lock-step for deterministic ordering",
+        "pending": "layout.geometry.bounds and related layout capabilities deferred to ticket06 (fixture layout section intentionally not emitted)"
+    },
+    "ownership_contract_coverage": {
+        "tests": "39 ownership-rule tests in internal/portfixture/ownership_test.go",
+        "covered": "lease alias invalidation + stale-alias diagnostic, release idempotence (hook once), RetainInto independent lease, TransferInto moves without decrement, logical-zero irreversibility across reclamation and slot reuse, reentry guards with diagnostics (nested reads ok, write conflicts panic), borrowed-facade expiry and misuse, construction-failure disposal without release hooks + generation advance, scope close order (4 phases, idempotent, closing subtree rejects ownership), entity-dependent scope follows entity lifetime, close outside update enters flush, subscription scope-owned when handle ignored, detached subscription weak endpoint (dead observer unsubscribes without panic), cancel idempotence/alias token, one observer death never cancels the other, nil interface payload identity, FIFO emit + registration order, deferred registration activation, cancel-next during delivery, notify coalescing + re-notify, release-before-other-pending-effects, nested defers same flush loop, source death during traversal, active-callback pin delays release, EmitOwned arena-tail retirement, factory failure closes ownership, weak access errors, Listener weak endpoint, task cancel/detach/foreground delivery, global coalescing, panic unwinding restores boundary, strong cycle reported not collected and resolvable by explicit edge break"
+    },
+    "executed_results": {
+        "go_tests": "CGO_ENABLED=0 go test ./gpui/... ./internal/portfixture/... 41 tests pass; independently re-verified by the orchestrator",
+        "full_suite": "CGO_ENABLED=0 go test ./... pass (with authoring, conformance, internal/native)",
+        "vet_gofmt": "go vet clean; gofmt clean"
+    },
+    "go_adaptations_documented": [
+        "No drop-driven cancellation: explicit Release/Cancel/Close; ignored Subscription/Task handles stay scope-owned (reference drop-unsubscribes documented beside the port behavior).",
+        "Scheduler drives background tasks FIFO lock-step rather than the reference's seeded random interleaving; additional schedules remain future fixture work.",
+        "OnRelease default owner is the app root scope (documented: the dependent scope's cancellation is ordered before release callbacks, so a dep-owned release hook would never fire).",
+        "Arena-tail extra wakeup implemented as a separate flush cycle inside the same outermost update boundary.",
+        "EntityCreated effect carries identity only (no strong handle in the effect)."
+    ],
+    "limitations": [
+        "No windows/elements/actions/views yet (later tickets); Window is a placeholder type with typed errors.",
+        "Background task scheduling is deterministic lock-step only; randomized/seeded schedules and full task ownership semantics (ticket04) are not yet exercised.",
+        "Race detector not run (no C compiler on host; CGO_ENABLED=0 target does not require it)."
+    ]
+}

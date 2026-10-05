@@ -1,0 +1,98 @@
+[
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "commit":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui_render/build.rs",
+        "local":  "crates__gpui_render__build.rs",
+        "sha256":  "082677CE0DDEF42F8600CCDF5E3F837E756411BE2AD50CAA6E9CFE7212DF7F7F",
+        "url":  "https://raw.githubusercontent.com/gpui-ce/gpui-ce/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_render/build.rs"
+    },
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "commit":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui_render/src/shaders/interface.rs",
+        "local":  "crates__gpui_render__src__shaders__interface.rs",
+        "sha256":  "BB9F0C6401246ACD527438630A6E71676C3C15BFD82A41D16EACDA91FCD82F91",
+        "url":  "https://raw.githubusercontent.com/gpui-ce/gpui-ce/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_render/src/shaders/interface.rs"
+    },
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "commit":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui_render/src/shaders/sprites.rs",
+        "local":  "crates__gpui_render__src__shaders__sprites.rs",
+        "sha256":  "6D8CDC3875F5C2011842DB40ADC46BB81E50AF5DA1BC93905E70F0EC66A1FBD6",
+        "url":  "https://raw.githubusercontent.com/gpui-ce/gpui-ce/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_render/src/shaders/sprites.rs"
+    },
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "commit":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui_wgpu/Cargo.toml",
+        "local":  "crates__gpui_wgpu__Cargo.toml",
+        "sha256":  "51212694E438FF1A80652601D2DBFCEE26BF60655AEB0D948AD82AD1394AC60B",
+        "url":  "https://raw.githubusercontent.com/gpui-ce/gpui-ce/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_wgpu/Cargo.toml"
+    },
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "commit":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui_wgpu/src/wgpu_renderer/surfaces/windows/shared.rs",
+        "local":  "crates__gpui_wgpu__src__wgpu_renderer__surfaces__windows__shared.rs",
+        "sha256":  "4D089C1CFC3A1E8ACC18BBF66C313572E5A2EDCA9E298ABDB9A87903079C7E83",
+        "url":  "https://raw.githubusercontent.com/gpui-ce/gpui-ce/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_wgpu/src/wgpu_renderer/surfaces/windows/shared.rs"
+    },
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "commit":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui_wgpu/src/wgpu_renderer/surfaces/windows/upload.rs",
+        "local":  "crates__gpui_wgpu__src__wgpu_renderer__surfaces__windows__upload.rs",
+        "sha256":  "899AFEC11DCB9126E8BDA77C9FB79920353F4A6E158F0814E29972DA1EE2A540",
+        "url":  "https://raw.githubusercontent.com/gpui-ce/gpui-ce/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_wgpu/src/wgpu_renderer/surfaces/windows/upload.rs"
+    },
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "commit":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui_windows/src/directx_atlas.rs",
+        "local":  "crates__gpui_windows__src__directx_atlas.rs",
+        "sha256":  "CE16F2FC205B292C3DC95F4A771A1793EF99F5C05E8117F19AC6665806CD1343",
+        "url":  "https://raw.githubusercontent.com/gpui-ce/gpui-ce/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_windows/src/directx_atlas.rs"
+    },
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "commit":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui_windows/src/directx_devices.rs",
+        "local":  "crates__gpui_windows__src__directx_devices.rs",
+        "sha256":  "2B596C78606047AA1AAC07D739CB331CFBAB8B8753A8796E4A7099B7F1251DA9",
+        "url":  "https://raw.githubusercontent.com/gpui-ce/gpui-ce/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_windows/src/directx_devices.rs"
+    },
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "commit":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui_windows/src/directx_renderer.rs",
+        "local":  "crates__gpui_windows__src__directx_renderer.rs",
+        "sha256":  "064600723AD99503E9D2DBEFC001C22EEAA1D84BED627149292F677131B09850",
+        "url":  "https://raw.githubusercontent.com/gpui-ce/gpui-ce/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_windows/src/directx_renderer.rs"
+    },
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "commit":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui_windows/src/vsync.rs",
+        "local":  "crates__gpui_windows__src__vsync.rs",
+        "sha256":  "2223E21DA45CBEFB3D427E5A804AC7367815DB41E56D1D47F315AB0AD9EFB675",
+        "url":  "https://raw.githubusercontent.com/gpui-ce/gpui-ce/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_windows/src/vsync.rs"
+    },
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "commit":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui/src/platform/screen_capture/windows.rs",
+        "local":  "crates__gpui__src__platform__screen_capture__windows.rs",
+        "sha256":  "208357BED9E3742457740B785759955F622275754FBD6D58145DD703738A3EDA",
+        "url":  "https://raw.githubusercontent.com/gpui-ce/gpui-ce/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui/src/platform/screen_capture/windows.rs"
+    },
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "commit":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui/src/platform/windows_screen_capture.rs",
+        "local":  "crates__gpui__src__platform__windows_screen_capture.rs",
+        "sha256":  "7309A5D195BBE38E858FF0D379DDBCA556E117ECDFB232B904E99081C247C21A",
+        "url":  "https://raw.githubusercontent.com/gpui-ce/gpui-ce/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui/src/platform/windows_screen_capture.rs"
+    }
+]

@@ -1,0 +1,39 @@
+{
+    "ticket": "08-paint-boxes",
+    "date": "2026-10-05",
+    "authorization": "User: ok now use roboco mcp, create a new chat that use /implement skill to do all those tickets, use iroha dashscope glm 5.3 with pi harness",
+    "session": "Roboco chat 065e52f5; subagent ticket08-scene; orchestrator re-verified",
+    "git_state": "No git repository; commit step environment-blocked, not fabricated.",
+    "native_service": {
+        "slot": 3,
+        "capability": "scene-kernel-v1 (mask 0xF, native revision 4)",
+        "dll_bytes": 783360,
+        "dll_sha256": "1d34a9676e6308ff89e20e767df790a825658929a828eba1f140e9e81803f6c6",
+        "crt": "static; no new imports (KERNEL32x72, api-ms-win-core-synchx3, bcryptprimitives, d3d11, dcomp, dxgi, kernel32x10, ntdll, oleaut32)",
+        "abi_doc": "reference/native/SCENE_ABI.md"
+    },
+    "pinned_semantics": [
+        "bounds-tree draw orders (max-intersecting + 1, order floors incl. deferred floors)",
+        "finish sort: stable per-array by order; boundaries (order, !is_start); surfaces zipped with paired opacities",
+        "batch merging via precedes_limit with PrimitiveKind discriminant order; corner-smoothing splits",
+        "MAX_FILTER_GROUP_DEPTH = 2",
+        "nested element opacity multiplies (0.5x0.5=0.25) and never merges",
+        "border-split quads, drop/inset shadows, underlines, content masks from the pinned window.rs formulas",
+        "replay and paint-order semantics"
+    ],
+    "oracle": {
+        "fixture": "fx-0003-scene-painting (scene-painting-v1), 6 cases, 142 events, byte-deterministic (3+3 runs)",
+        "boundary": "the pinned Scene public API (insert_primitive/push_layer/pop_layer/raise_order_floor/finish/render_commands/render_plan) — TestPlatform is pub(crate) so the headless renderer path is unreachable; recorded honestly in the fixture doc",
+        "colors": "recorded as stored SceneHsla h/s/l/a f32 bits (public accessors); the Go port includes the palette 0.7.7 Srgb-to-Hsl f32 path with real hex inputs"
+    },
+    "gate": "TestFx0003ScenePaintingMatchesRecordedReference: ALL 142 events equal (25 layout-bounds, 41 scene-command, 58 scene-op, 6 scene-meta + case markers); the port's plan self-consistency additionally asserted (arrays sorted, batch ranges partition, plan order non-decreasing)",
+    "executed_results": {
+        "rust": "cargo build + 53 tests (26 new incl. ports of the pinned scene/plan tests: content_filter_group_brackets_its_children, nested filters, surface opacity preservation, plan requirements, randomized bounds-tree orders)",
+        "go": "CGO_ENABLED=0 go test ./... all 12 packages green; 17 scenespec tests (pairing, floors, deferred, sort, capacity, stale handles, forced GC, panic containment); vet/gofmt clean; demo PASS"
+    },
+    "limitations": [
+        "paths/sprite primitive classes bounded out of this slice (ABI slots reserved so adding them cannot reorder existing scenes)",
+        "surface ops not fixture-observable (insert_surface is crate-private) — covered by kernel and scenespec tests",
+        "a port border-split bug was found by the gate during bring-up and fixed (the right strip ends at inner_bounds.bottom per window.rs:4693)"
+    ]
+}

@@ -1,0 +1,269 @@
+{
+  "schema": "gpui-go/conformance/envelope@1",
+  "fixture_id": "fx-0004-text-geometry",
+  "fixture_kind": "text-geometry-v1",
+  "title": "Reference text geometry: font resolution, shaping runs, clusters, wrapped lines, carets, hit tests and selections through the pinned Parley text stack",
+  "profile": "test",
+  "capabilities": [
+    "text.font.resolve",
+    "text.font.metrics",
+    "text.shape",
+    "text.runs",
+    "text.features",
+    "text.letter-spacing",
+    "text.wrap",
+    "text.line-clamp",
+    "text.clusters",
+    "text.lines",
+    "text.carets",
+    "text.hit-test",
+    "text.selection"
+  ],
+  "environment": [
+    "windows",
+    "system-fonts",
+    "directwrite"
+  ],
+  "inputs": {
+    "text_cases": {
+      "cases": [
+        {
+          "label": "latin-basic",
+          "font": {
+            "family": "Segoe UI",
+            "weight": 400,
+            "style": "Normal"
+          },
+          "text": "Hello, gpui!",
+          "font_size": 16,
+          "caret_mode": "all-clusters",
+          "hit_points": [
+            { "x": 0, "y": 2 },
+            { "x": 10.25, "y": 3 },
+            { "x": 200, "y": 3 },
+            { "x": 5, "y": 100 },
+            { "x": 5, "y": -3 }
+          ],
+          "selections": [
+            { "start": 2, "end": 8 }
+          ]
+        },
+        {
+          "label": "grapheme-clusters",
+          "font": {
+            "family": "Segoe UI",
+            "weight": 400,
+            "style": "Normal"
+          },
+          "text": "áé 👨‍👩‍👧‍👦",
+          "font_size": 16,
+          "caret_queries": [
+            { "index": 0, "affinity": "downstream" },
+            { "index": 1, "affinity": "downstream" },
+            { "index": 3, "affinity": "downstream" },
+            { "index": 4, "affinity": "downstream" },
+            { "index": 7, "affinity": "upstream" },
+            { "index": 32, "affinity": "upstream" },
+            { "index": 33, "affinity": "downstream" }
+          ],
+          "hit_points": [
+            { "x": 2, "y": 4 },
+            { "x": 30, "y": 4 },
+            { "x": 500, "y": 4 }
+          ],
+          "selections": [
+            { "start": 0, "end": 7 },
+            { "start": 7, "end": 32 }
+          ]
+        },
+        {
+          "label": "cjk-latin-mixed",
+          "font": {
+            "family": "Segoe UI",
+            "weight": 400,
+            "style": "Normal"
+          },
+          "text": "日本語ABC漢字",
+          "font_size": 16,
+          "caret_queries": [
+            { "index": 0, "affinity": "downstream" },
+            { "index": 9, "affinity": "downstream" },
+            { "index": 12, "affinity": "downstream" },
+            { "index": 18, "affinity": "upstream" }
+          ],
+          "hit_points": [
+            { "x": 5, "y": 3 },
+            { "x": 40, "y": 3 }
+          ],
+          "selections": [
+            { "start": 3, "end": 15 }
+          ]
+        },
+        {
+          "label": "wrap-narrow",
+          "font": {
+            "family": "Segoe UI",
+            "weight": 400,
+            "style": "Normal"
+          },
+          "text": "The quick brown fox",
+          "font_size": 16,
+          "wrap_width": 70,
+          "caret_mode": "all-clusters-both",
+          "hit_points": [
+            { "x": 0, "y": 2 },
+            { "x": 10, "y": 30 },
+            { "x": 200, "y": 30 },
+            { "x": 10, "y": 200 },
+            { "x": 10, "y": -5 }
+          ],
+          "selections": [
+            { "start": 4, "end": 16 }
+          ]
+        },
+        {
+          "label": "line-height-override",
+          "font": {
+            "family": "Segoe UI",
+            "weight": 400,
+            "style": "Normal"
+          },
+          "text": "Tall lines",
+          "font_size": 16,
+          "line_height": 40,
+          "caret_queries": [
+            { "index": 0, "affinity": "downstream" },
+            { "index": 5, "affinity": "downstream" },
+            { "index": 10, "affinity": "upstream" }
+          ],
+          "hit_points": [
+            { "x": 3, "y": 35 },
+            { "x": 3, "y": 50 }
+          ],
+          "selections": [
+            { "start": 0, "end": 10 }
+          ]
+        },
+        {
+          "label": "features-letter-spacing",
+          "font": {
+            "family": "Segoe UI",
+            "weight": 400,
+            "style": "Normal",
+            "features": [
+              { "tag": "calt", "value": 0 }
+            ]
+          },
+          "text": "office flask ffi",
+          "font_size": 16,
+          "runs": [
+            { "len": 16, "letter_spacing": 1.5 }
+          ],
+          "caret_queries": [
+            { "index": 0, "affinity": "downstream" },
+            { "index": 6, "affinity": "downstream" },
+            { "index": 16, "affinity": "upstream" }
+          ],
+          "hit_points": [
+            { "x": 5, "y": 3 },
+            { "x": 100, "y": 3 }
+          ],
+          "selections": [
+            { "start": 0, "end": 6 }
+          ]
+        },
+        {
+          "label": "multi-run-weights",
+          "font": {
+            "family": "Segoe UI",
+            "weight": 400,
+            "style": "Normal"
+          },
+          "text": "Bold Ital plain",
+          "font_size": 16,
+          "runs": [
+            { "len": 5, "font": { "weight": 700 } },
+            { "len": 5, "font": { "style": "Italic" } },
+            { "len": 5 }
+          ],
+          "caret_queries": [
+            { "index": 5, "affinity": "downstream" },
+            { "index": 10, "affinity": "downstream" },
+            { "index": 15, "affinity": "upstream" }
+          ],
+          "hit_points": [
+            { "x": 8, "y": 3 }
+          ],
+          "selections": [
+            { "start": 5, "end": 10 }
+          ]
+        },
+        {
+          "label": "wrap-clamp",
+          "font": {
+            "family": "Segoe UI",
+            "weight": 400,
+            "style": "Normal"
+          },
+          "text": "one two three four five six seven eight nine ten",
+          "font_size": 16,
+          "wrap_width": 60,
+          "line_clamp": 2,
+          "caret_queries": [
+            { "index": 0, "affinity": "downstream" },
+            { "index": 48, "affinity": "upstream" }
+          ],
+          "hit_points": [
+            { "x": 5, "y": 5 },
+            { "x": 5, "y": 80 }
+          ],
+          "selections": [
+            { "start": 0, "end": 48 }
+          ]
+        },
+        {
+          "label": "empty-string",
+          "font": {
+            "family": "Segoe UI",
+            "weight": 400,
+            "style": "Normal"
+          },
+          "text": "",
+          "font_size": 16,
+          "caret_queries": [
+            { "index": 0, "affinity": "downstream" }
+          ],
+          "hit_points": [
+            { "x": 0, "y": 2 }
+          ],
+          "selections": [
+            { "start": 0, "end": 0 }
+          ]
+        },
+        {
+          "label": "newline-only",
+          "font": {
+            "family": "Segoe UI",
+            "weight": 400,
+            "style": "Normal"
+          },
+          "text": "\n",
+          "font_size": 16,
+          "caret_queries": [
+            { "index": 0, "affinity": "downstream" },
+            { "index": 0, "affinity": "upstream" },
+            { "index": 1, "affinity": "downstream" },
+            { "index": 1, "affinity": "upstream" }
+          ],
+          "hit_points": [
+            { "x": 2, "y": 2 },
+            { "x": 2, "y": 30 }
+          ],
+          "selections": [
+            { "start": 0, "end": 1 }
+          ]
+        }
+      ]
+    }
+  }
+}

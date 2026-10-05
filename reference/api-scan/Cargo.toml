@@ -1,0 +1,15 @@
+[package]
+name = "gpui-api-scan"
+version = "0.1.0"
+edition = "2024"
+description = "Enumerates the public API surface of the pinned GPUI-CE source with cfg conditions"
+publish = false
+
+[dependencies]
+syn = { version = "2", features = ["full", "visit", "extra-traits", "parsing"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+walkdir = "2"
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"

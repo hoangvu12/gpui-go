@@ -1,0 +1,26 @@
+[
+    {
+        "repository":  "energye/gpui",
+        "commit":  "eebfbcd036d30ab179492694e982b1b4122e59f1",
+        "path":  "README.md",
+        "localFile":  "energye-gpui--README.md",
+        "sha256":  "3CC67D2F6286C4FB5E020090C9EB3EE3C233C5835B5E4C7A35A90C3B85CEE1C1",
+        "url":  "https://github.com/energye/gpui/blob/eebfbcd036d30ab179492694e982b1b4122e59f1/README.md"
+    },
+    {
+        "repository":  "energye/gpui",
+        "commit":  "eebfbcd036d30ab179492694e982b1b4122e59f1",
+        "path":  "go.mod",
+        "localFile":  "energye-gpui--go.mod",
+        "sha256":  "C936D7DA02BB1DA14C249FFB2E09691FEBFD5F7971D7217C8A7EB10DD4E05960",
+        "url":  "https://github.com/energye/gpui/blob/eebfbcd036d30ab179492694e982b1b4122e59f1/go.mod"
+    },
+    {
+        "repository":  "energye/gpui",
+        "commit":  "eebfbcd036d30ab179492694e982b1b4122e59f1",
+        "path":  "examples/basic/main.go",
+        "localFile":  "energye-gpui--examples__basic__main.go",
+        "sha256":  "49526082F22618DFAD03D12A9402BFC705824AB65681678FA0B0F1A34C025673",
+        "url":  "https://github.com/energye/gpui/blob/eebfbcd036d30ab179492694e982b1b4122e59f1/examples/basic/main.go"
+    }
+]

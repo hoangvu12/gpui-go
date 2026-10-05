@@ -1,0 +1,86 @@
+# Windows platform, text, and input: selection and draft audit
+
+Research date: 2026-10-04. Evidence for [Choose Windows platform, text, and input integration](../.scratch/gpui-core/issues/06-choose-windows-platform-and-text.md), auditing the draft of the now [selected contract](../docs/windows-platform-contract.md) against the pinned sources in `evidence/windows-platform` (16 snapshots: platform, window, events, keyboard, font rasterizer, clipboard, Direct Manipulation, Parley text system and paragraphs, lockfile, application manifest, editor/input examples) and `evidence/core` platform traits. Pin `254b5dbd47cbb5acbcc5bbdcbb322a339276c88a`; target PC per [inspection](../evidence/windows-target-inspection.json). No implementation, probe, build, or benchmark ran. Source observations support the engineering recommendations below; they do not prove the proposed bridges work.
+
+## Recommendation (concise)
+
+Adopt the draft's selected boundary as researched: **a Go-owned Win32 host and GPUI runtime plus new maintainer-built native service bridges** — a Parley text service (shape/paragraph/rasterization) adapted from pinned `gpui_ce_parley` + the Windows rasterizer, an AccessKit Windows provider, and narrow COM adapters (OLE drag/drop, Direct Manipulation) — with consumers building `CGO_ENABLED=0` from Go plus prebuilt DLLs. Not selected: a whole-Rust-GPUI runtime bridge (it would import a second entity store/element tree/event loop and blur the renderer seam) and Gio hosting (a second input/text/window ownership model that still leaves all Parley/AccessKit work undone). The FFI rules are the layout ticket's: versioned C ABI, fixed trampolines, generation tokens, explicit buffer ownership, unwind containment, no Go pointers retained natively.
+
+## Pinned engine facts (verified)
+
+**Text stack.** `WindowsPlatform::new` constructs `ParleyTextSystem::new_with_rasterizer(SystemFonts::Load, "Segoe UI", WindowsGlyphRasterizer::new()).with_fallback_families(["Lilex", "IBM Plex Sans", "Arial"])` ([platform.rs](https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_windows/src/platform.rs)). Locked versions: **parley 0.11.1, fontique 0.11.1, skrifa 0.44.0, swash 0.2.10, harfrust 0.12.0, accesskit 0.24.1, accesskit_windows 0.33.1, windows 0.62.2** ([Cargo.lock](https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/Cargo.lock)). Parley 0.11.1's own dependency list names **harfrust** (the Rust HarfBuzz port) as its shaper plus ICU segmentation/normalization — shaping is *not* DirectWrite and *not* Swash. `gpui_ce_parley` enables parley's `complex-scripts` and fontique/parley `system` features ([Cargo.toml](https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_ce_parley/Cargo.toml)). This confirms the draft's central claim: DirectWrite is the Windows **rasterizer**, not the shaping engine.
+
+**Rasterizer.** `WindowsGlyphRasterizer` is DirectWrite-primary with typed Swash fallback: `IDWriteFactory5` (variable axes via optional `IDWriteFactory6`), in-memory font file loader, `CreateGlyphRunAnalysis` + `CreateAlphaTexture`, gamma/contrast from `IDWriteRenderingParams1`, variable-axis instantiation, bold/oblique simulations, and system ClearType detection via `SystemParametersInfoW` ([font_rasterizer.rs](https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_windows/src/font_rasterizer.rs)). Output formats are exactly `AlphaMask` (1×1), `BgraSubpixelMask` (ClearType 3×1 expanded to BGRA), and `BgraColor` (COLRv0 layers with color correction, plus color-rasterized monochrome with preblend). The *outer* capability predicate accepts `ColrV0 | Bitmap`; the *inner* DirectWrite predicate accepts only `ColrV0`, with per-glyph fallback errors for bitmap color, COLRv1, and variable axes on legacy DirectWrite. Init failure degrades the whole backend to Swash. Subpixel variants are positional offsets passed into the analysis (`SUBPIXEL_VARIANTS_X/Y` fractions over scale).
+
+**Host loop.** `OleInitialize` at platform construction; `OleUninitialize` at platform drop after unregistering power notifications and destroying the hidden message window — both verified in the pinned source. The run loop is `GetMessageW`/`TranslateMessage`/`DispatchMessageW`, but `translate_accelerator` first sends `WM_GPUI_KEYDOWN` for `WM_KEYDOWN`/`WM_SYSKEYDOWN` and skips translation+dispatch when GPUI consumed the key — this is the pin's actual duplicate-`WM_CHAR` prevention mechanism, not a heuristic drop. Foreground waking uses posted `WM_GPUI_TASK_DISPATCHED_ON_MAIN_THREAD`; a `VSyncProvider` thread invalidates all windows via `RedrawWindow`; a `DrawCoordinator` defers re-entrant draws (COM `SendMessage`/modal reentry); `WM_ENTERSIZEMOVE`/`WM_ENTERMENULOOP` start a minimum timer whose `WM_TIMER` drains the runnable queue and paints, so modal move/resize/menu loops keep foreground work alive ([events.rs](https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_windows/src/events.rs), [platform.rs](https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_windows/src/platform.rs)). Dialogs use `TaskDialogIndirect`; restart defers process spawning because `CreateProcessW` pumps the message loop — two concrete reentrancy precedents.
+
+The per-message dispatch contract the Go host must reproduce (from the pinned `handle_msg` table):
+
+| Message | Pinned behavior | Consumed result |
+|---|---|---|
+| `WM_MOUSEACTIVATE` | eagerly activate | `MA_ACTIVATE` |
+| `WM_CLOSE` | run `should_close` veto callback | unhandled when closing (let `DefWindowProcW` destroy), else 0 |
+| `WM_KEYDOWN`/`WM_SYSKEYDOWN` (via `WM_GPUI_KEYDOWN`) | build `KeyDownEvent` with `key_char`, `is_held`, `prefer_character_input`; deliver synchronously | 0 if GPUI handled (also suppresses `TranslateMessage`), else fall through |
+| `WM_CHAR` | surrogate assembly via `pending_surrogate`; `replace_text_in_range(None, …)` | 0 |
+| `WM_IME_*` | composition/candidate positioning and string handling per above | 0 when GCS flags present |
+| mouse down/up | `SetCapture`/`ReleaseCapture`, click counting, logical coordinates via scale | 0 if handled, 1 otherwise |
+| wheel | system lines/chars settings; shift → horizontal | 0 if handled |
+| `WM_ENTERSIZEMOVE`/`WM_ENTERMENULOOP` | start min timer | unhandled |
+| `WM_TIMER` (size/move id) | drain runnables + paint | paint result |
+| `WM_SIZE` (minimized) | stash `request_frame`, skip renderer resize | 0 |
+| `WM_DESTROY` | re-enable modal parent, run close callback, post generation-checked removal | 0 |
+| `WM_DPICHANGED`, `WM_DISPLAYCHANGE`, `WM_INPUTLANGCHANGE`, `WM_SETTINGCHANGE` | update scale/display/layout/settings and notify | 0 |
+| `WM_GETOBJECT` | AccessKit adapter | per adapter |
+| anything else | `DefWindowProcW` | — |
+
+**Keyboard.** `GetKeyboardLayoutNameW` + registry layout names; key mapping via `MapVirtualKeyW` (VK↔char with dead-key flag; VK↔scancode) and `ToUnicode` against `GetKeyboardState` producing `key_char` plus `prefer_character_input`; repeat is lParam bit 30 (`is_held`); a US-layout fallback table exists for key equivalents ([keyboard.rs](https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_windows/src/keyboard.rs)). Real keyboard state informs AltGr handling, but correctness still requires layout-specific traces. The events source comments on the Windows `ctrl-shift-0` limitation; that comment does not establish an implemented workaround.
+
+**IME.** The pin uses **IMM32 only** — no TSF in the inspected sources: `WM_IME_STARTCOMPOSITION` repositions composition/candidate windows (`ImmSetCompositionWindow` CFS_POINT, `ImmSetCandidateWindow` CFS_CANDIDATEPOS) from caret bounds; `WM_IME_COMPOSITION` handles `GCS_RESULTSTR` (commit → `replace_text_in_range(None, …)`) and `GCS_COMPSTR` (→ `replace_and_mark_text_in_range(None, …, caret_range)` with `GCS_CURSORPOS` preference and an end-of-string fallback), including the Japanese zero-lparam case; `ImmAssociateContextEx` enables/disables per window with the focused-HWND guard and `ImmNotifyIME(CPS_COMPLETE)` before disabling — the per-thread IME context hazard the draft cites. `WM_CHAR` inserts via `parse_char_message`, with a `pending_surrogate` cell for UTF-16 assembly. The `InputHandler` trait is a documented 1:1 exposure of NSTextInputClient with **UTF-16 ranges throughout** ([core platform traits](https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui/src/platform.rs)); `LineLayout` clusters/carets are byte-indexed on the layout side — the two index systems must stay distinct, as the draft requires.
+
+**Coordinates.** `retrieve_caret_position` multiplies caret bounds by scale only (origin at caret, y offset by half height), with no screen-to-client translation — while the core `InputHandler::bounds_for_range` comment says "screen coordinates." The draft flags this discrepancy; the local [editor example](https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui/examples/view_example/example_editor.rs)'s `bounds_for_range` **returns `None`**, so that example cannot adjudicate the convention either. Resolution stays a nonzero-window-origin oracle fixture; the IMM32 composition/candidate forms take window-relative coordinates, consistent with the draft's window-relative reading.
+
+**Accessibility.** `accesskit_windows::Adapter::new(HWND, is_focused, action_handler)`; tree updates via `update_if_active` returning events raised **after dropping the state borrow** because `UiaRaiseAutomationPropertyChangedEvent` can synchronously send a nested `WM_GETOBJECT`; `ActivationHandler::request_initial_tree` and `ActionHandler::do_action` are important bridge callback seams ([window.rs](https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_windows/src/window.rs)). The selected design requires native published-tree reads and no wait on mutable Go state. The CE call-site snapshot alone does not prove all locked-provider RPC/thread/bounds behavior; inspect the provider implementation and exercise those cases before claiming compliance.
+
+**DPI and windows.** `GetDpiForWindow` scale; `WM_DPICHANGED`/`WM_DISPLAYCHANGE`; per-window `scale_factor`, logical/device conversion helpers; `WS_EX_NOREDIRECTIONBITMAP` under DirectComposition; modality by disabling the parent HWND and re-enabling at destroy; `DestroyWindow` deferred to the foreground executor; `raw-window-handle` exposes the HWND. The embedded manifest declares `PerMonitorV2` (`true/pm`) ([gpui.manifest.xml](https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui/resources/windows/gpui.manifest.xml)) — verified, and packaging must carry it to consumer executables.
+
+## Text and input contracts to carry
+
+The Go-side `TextSystem` keeps the core wrapper semantics: font resolution caching (`font_ids_by_font`), font metrics, raster metadata caching, and font-generation invalidation on font addition ([core text system](https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui/src/text_system.rs)). The native text service must therefore expose, per the `PlatformTextSystem`/`LineLayout` traits: font ids and metrics/bounding boxes; prewarm; paragraph construction from runs (font, size, features, fallbacks, wrap width, line clamp, line height); cluster-count, caret-from-point, caret bounds, adjacent/normalized carets, selection and inline-range geometry with visual line indices, and size — all byte-indexed on the Go side while the input handler's UTF-16 offsets are converted only at the `InputHandler` boundary ([line layout](https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui/src/text_system/line_layout.rs)). Rasterization requests carry `RenderGlyphParams` (font id, glyph id, font size, subpixel variant, scale factor, prepared raster style); responses carry typed pixels, bounds, and format. Variable-axis and synthesis inputs travel with the face record, matching `RasterFace`.
+
+## Renderer-facing native window ABI (boundary sketch)
+
+```text
+// Conceptual operations only; not valid Go declarations or a frozen ABI.
+// Go-owned host provides; native services consume only these:
+type NativeWindowHandle struct{ Hwnd uintptr; Generation uint64 }
+
+CreateTextService(opts *TextServiceOpts, out *TextServiceHandle) uint32
+AddFonts(h TextServiceHandle, records *FontFileRecord, n uint32) uint32 // bytes via native-copied buffers
+LayoutParagraph(h TextServiceHandle, req *ParagraphRequestC) uint32    // runs, wrap/clamp/line-height inputs
+QueryLayout(h TextServiceHandle, layout ParagraphHandle, q *LayoutQueryC) uint32 // carets/selections/geometry
+RasterGlyph(h TextServiceHandle, req *RasterRequestC, out *RasterGlyphC) uint32   // typed pixels copied out
+A11yAdapterNew(w NativeWindowHandle, focused uint32, actionTrampoline uintptr) uint32
+A11yUpdate(h A11yAdapterHandle, records *FrozenTreeUpdateC) uint32 // copy snapshot; raise events after unlock
+ImmWindowServices(...) // composition/candidate positioning via the host's HWND, driver-free
+```
+
+All records use the layout bridge's conventions (explicit widths, tags, presence flags, counts, version/size headers; f32 as bits; status codes; no Rust enums/Vec/closures; no Go pointers retained). COM-holding adapters (drop target helper, Direct Manipulation) take the window handle plus generation tokens and are released on the owning apartment before host shutdown. The renderer ticket receives the same `NativeWindowHandle` lease plus device-pixel extent, scale, and resize generation — never direct window-procedure access.
+
+## Alternatives and costs
+
+| Option | Verdict | Cost |
+|---|---|---|
+| Go-owned Win32 host + native Parley/raster + AccessKit/COM bridges (selected) | Full parity surface with bounded native islands | New extraction/bridge engineering; maintainer Rust builds; ABI discipline |
+| Direct Win32 + pure-Go text (e.g., a Go shaper/rasterizer) | Rejected | Reimplementing harfrust shaping, fontique fallback, parley paragraph/wrap/caret and DirectWrite-grade rasterization is the largest parity risk in the project; no inspected candidate establishes equivalence |
+| Gio host reuse | Rejected | Adopts a second window/input/text ownership model; still requires Parley/AccessKit; research 03 already found its layout model unsuitable |
+| Bridge entire CE Windows platform unchanged | Rejected | Couples renderer/device construction and GPUI-specific types to the host; extraction is required to preserve the selected renderer seam and avoid introducing a second app runtime |
+
+## Audit of the draft contract
+
+**No material change to the architecture recommended.** Inspection supports the engine split, locked versions and fallback families; raster formats and capability predicates; IMM32 message paths and focused-HWND guard; index-unit separation and surrogate assembly; key pre-dispatch; modal-loop pumping; AccessKit release-before-raise; PerMonitorV2 and OLE init/uninit pairing. Source correspondence does not establish executable behavior or complete provider coverage. Three useful additions: (1) name **harfrust 0.12.0** in build provenance; (2) port/test the outer/inner color-capability split; (3) use a real IME fixture for the coordinate gate because the editor example returns `None`. The proposed renderer seam adapts the HWND/window-state inputs while excluding existing DirectX construction; the seam itself remains new bridge work.
+
+Main review after the side chat became idle tightened claims about AltGr and provider execution, removed the unsupported implication of a `ctrl-shift-0` workaround, and changed the conceptual accessibility update to frozen records rather than an arbitrary Go builder callback. The selected contract governs if a sketch in this report differs. Whole-platform reuse would couple existing GPUI types and device construction; merely linking shared Rust code need not instantiate a second runtime, but the selected bridge must not introduce one.
+
+## Unexecuted gates
+
+Bridge feasibility and all message-policy tables are design until run: clean `CGO_ENABLED=0` consumer build + run; per-message consumed/default-result tables compared against CE traces (including `WM_MOUSEACTIVATE → MA_ACTIVATE`, close veto, unhandled→`DefWindowProcW`); modal dialog/drag-drop/size-move reentrancy; IMM32 commit/cancel/focus-loss single-delivery traces with surrogate and mixed GCS flags; nonzero-origin candidate-position fixture resolving the screen-vs-window coordinate discrepancy; PerMonitorV2 DPI transition with geometry/text/surface co-invalidation; screen-reader activation ordering, concurrent provider queries, and COM references outlasting logical windows; clipboard multi-format/metadata round trips; DLL load/call/free with callback panic, stale tokens, and shutdown draining. Text-geometry checks stay separate from the visual-closeness metric; deterministic layout fixtures remain ticket 05's; the actual-font suite needs the recorded font environment. None of these has run; nothing here claims executed parity.

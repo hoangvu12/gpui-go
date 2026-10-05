@@ -1,0 +1,32 @@
+[package]
+name = "yororen_ui_core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Headless UI primitives, animation, a11y, RTL, and i18n mechanism for gpui-based apps. Theme tokens live in DesignTokens; no default theme ships here."
+readme = "../../README.md"
+repository.workspace = true
+
+[dependencies]
+gpui = { package = "gpui-ce", version = "0.3" }
+
+# rust-embed is retained for asset/icon embedding (`assets/icons/**`).
+# Locale data is no longer embedded here; it ships in dedicated
+# `yororen-ui-locale-*` crates.
+rust-embed = "8.11"
+smallvec = "1"
+unicode-segmentation = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# `chrono` is used by `i18n::format::DateTimeFormatter` for
+# locale-aware date/time rendering. The `notification` module does
+# NOT depend on chrono — it uses `std::time::SystemTime` directly.
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+# `test-support` enables `gpui::test` and `TestAppContext`, used by
+# the hooks integration tests.
+gpui = { package = "gpui-ce", version = "0.3", features = ["test-support"] }
+
+[lints]
+workspace = true

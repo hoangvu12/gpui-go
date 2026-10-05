@@ -1,0 +1,15 @@
+{
+  "run_started_at": "2026-10-05T02:00:34+07:00",
+  "harness_exe": "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\target\\debug\\gpui-reference-harness.exe",
+  "harness_sha256": "b58cbb746ed6121135d555bc2e64b3bd9035bc7d17e1de21a474447555832df5",
+  "envelope_path": "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\conformance\\fixtures\\fx-0001-layout-effects.json",
+  "envelope_sha256": "f55e0db6780f95da864484c3af6b63024b7f292258537cbed706b8da52fd8197",
+  "argv": [
+    "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\target\\debug\\gpui-reference-harness.exe",
+    "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\conformance\\fixtures\\fx-0001-layout-effects.json",
+    "conformance\\recorded\\fx-0001-layout-effects\\trace.json"
+  ],
+  "go_version": "go1.27.1",
+  "os": "windows",
+  "arch": "amd64"
+}

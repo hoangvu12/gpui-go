@@ -1,0 +1,18 @@
+{
+  "status": "blocked_before_execution",
+  "user_authorized": true,
+  "requested_language_floor": "go1.27",
+  "selected_patch_version": "go1.27.1",
+  "installed_version_after_attempt": "go version go1.26.5 windows/amd64",
+  "installation_path": "C:\\Program Files\\Go",
+  "installation_method": "Windows MSI",
+  "metadata_source": "https://go.dev/dl/?mode=json",
+  "installer_url": "https://go.dev/dl/go1.27.1.windows-amd64.msi",
+  "expected_sha256_from_official_metadata": "54dbabbc910840fce0028779e896cd99a22bdf89463354a1ca0d9288044dc6e7",
+  "expected_size_bytes": 66088960,
+  "attempted_action": "Download official MSI, verify SHA-256, install silently in place, verify installed version",
+  "rejection": "blocked by policy",
+  "download_or_hash_verification_completed": false,
+  "installer_executed": false,
+  "notes": "Automatic approval review rejected exec_command before process creation. The selected patch and hash are metadata, not a verified local artifact. No fallback installation attempted."
+}

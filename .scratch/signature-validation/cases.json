@@ -1,0 +1,176 @@
+[
+  {
+    "name": "event_emit_source",
+    "diagnostic_pattern": "cannot use.*cx|Context\\[int\\].*Context\\[string\\]",
+    "negative": "testdata/negative/event_emit_source",
+    "control": "testdata/controls/event_emit_source"
+  },
+  {
+    "name": "event_emit_payload",
+    "diagnostic_pattern": "cannot use.*\"x\"|untyped string.*int",
+    "negative": "testdata/negative/event_emit_payload",
+    "control": "testdata/controls/event_emit_payload"
+  },
+  {
+    "name": "event_subscribe_source",
+    "diagnostic_pattern": "cannot use.*source|Entity\\[string\\].*Entity\\[bool\\]",
+    "negative": "testdata/negative/event_subscribe_source",
+    "control": "testdata/controls/event_subscribe_source"
+  },
+  {
+    "name": "event_subscribe_observer",
+    "diagnostic_pattern": "does not match|cannot use|inferred",
+    "negative": "testdata/negative/event_subscribe_observer",
+    "control": "testdata/controls/event_subscribe_observer"
+  },
+  {
+    "name": "event_subscribe_payload",
+    "diagnostic_pattern": "does not match|cannot use",
+    "negative": "testdata/negative/event_subscribe_payload",
+    "control": "testdata/controls/event_subscribe_payload"
+  },
+  {
+    "name": "listener_owner",
+    "diagnostic_pattern": "does not match|cannot use",
+    "negative": "testdata/negative/listener_owner",
+    "control": "testdata/controls/listener_owner"
+  },
+  {
+    "name": "event_relabel_source",
+    "diagnostic_pattern": "cannot convert",
+    "negative": "testdata/negative/event_relabel_source",
+    "control": "testdata/controls/event_relabel_source"
+  },
+  {
+    "name": "event_relabel_payload",
+    "diagnostic_pattern": "cannot convert",
+    "negative": "testdata/negative/event_relabel_payload",
+    "control": "testdata/controls/event_relabel_payload"
+  },
+  {
+    "name": "event_relabel_identical_underlying_payload",
+    "diagnostic_pattern": "cannot convert",
+    "negative": "testdata/negative/event_relabel_identical_underlying_payload",
+    "control": "testdata/controls/event_relabel_identical_underlying_payload"
+  },
+  {
+    "name": "event_assign_pair",
+    "diagnostic_pattern": "cannot use",
+    "negative": "testdata/negative/event_assign_pair",
+    "control": "testdata/controls/event_assign_pair"
+  },
+  {
+    "name": "view_nonrenderable",
+    "diagnostic_pattern": "does not satisfy|missing method Render",
+    "negative": "testdata/negative/view_nonrenderable",
+    "control": "testdata/controls/view_nonrenderable"
+  },
+  {
+    "name": "view_wrong_pointer_constraint",
+    "diagnostic_pattern": "does not satisfy|missing method Render",
+    "negative": "testdata/negative/view_wrong_pointer_constraint",
+    "control": "testdata/controls/view_wrong_pointer_constraint"
+  },
+  {
+    "name": "managed_view_missing_dismiss",
+    "diagnostic_pattern": "does not satisfy|missing method DismissEvent",
+    "negative": "testdata/negative/managed_view_missing_dismiss",
+    "control": "testdata/controls/managed_view_missing_dismiss"
+  },
+  {
+    "name": "unit_action_nonempty",
+    "diagnostic_pattern": "does not satisfy|~struct",
+    "negative": "testdata/negative/unit_action_nonempty",
+    "control": "testdata/controls/unit_action_nonempty"
+  },
+  {
+    "name": "unit_action_pointer",
+    "diagnostic_pattern": "does not satisfy|~struct",
+    "negative": "testdata/negative/unit_action_pointer",
+    "control": "testdata/controls/unit_action_pointer"
+  },
+  {
+    "name": "dispatch_payload",
+    "diagnostic_pattern": "cannot use|does not match|inferred",
+    "negative": "testdata/negative/dispatch_payload",
+    "control": "testdata/controls/dispatch_payload"
+  },
+  {
+    "name": "action_handler",
+    "diagnostic_pattern": "does not match|cannot use",
+    "negative": "testdata/negative/action_handler",
+    "control": "testdata/controls/action_handler"
+  },
+  {
+    "name": "action_clone",
+    "diagnostic_pattern": "cannot use",
+    "negative": "testdata/negative/action_clone",
+    "control": "testdata/controls/action_clone"
+  },
+  {
+    "name": "read_state",
+    "diagnostic_pattern": "does not match|cannot use",
+    "negative": "testdata/negative/read_state",
+    "control": "testdata/controls/read_state"
+  },
+  {
+    "name": "read_result",
+    "diagnostic_pattern": "cannot use",
+    "negative": "testdata/negative/read_result",
+    "control": "testdata/controls/read_result"
+  },
+  {
+    "name": "entity_factory_context",
+    "diagnostic_pattern": "does not match|cannot use|inferred",
+    "negative": "testdata/negative/entity_factory_context",
+    "control": "testdata/controls/entity_factory_context"
+  },
+  {
+    "name": "owned_event_payload",
+    "diagnostic_pattern": "cannot use",
+    "negative": "testdata/negative/owned_event_payload",
+    "control": "testdata/controls/owned_event_payload"
+  },
+  {
+    "name": "custom_element_phase",
+    "diagnostic_pattern": "does not implement|wrong type for method|does not match",
+    "negative": "testdata/negative/custom_element_phase",
+    "control": "testdata/controls/custom_element_phase"
+  },
+  {
+    "name": "a11y_prepaint_state",
+    "diagnostic_pattern": "does not implement|wrong type for method",
+    "negative": "testdata/negative/a11y_prepaint_state",
+    "control": "testdata/controls/a11y_prepaint_state"
+  },
+  {
+    "name": "restricted_parent_child",
+    "diagnostic_pattern": "cannot use",
+    "negative": "testdata/negative/restricted_parent_child",
+    "control": "testdata/controls/restricted_parent_child"
+  },
+  {
+    "name": "raw_entity_view",
+    "diagnostic_pattern": "does not implement|missing method",
+    "negative": "testdata/negative/raw_entity_view",
+    "control": "testdata/controls/raw_entity_view"
+  },
+  {
+    "name": "forged_app_context",
+    "diagnostic_pattern": "does not implement|unexported method|wrong type for method",
+    "negative": "testdata/negative/forged_app_context",
+    "control": "testdata/controls/forged_app_context"
+  },
+  {
+    "name": "style_bind_value",
+    "diagnostic_pattern": "does not satisfy|must be a pointer|cannot infer|does not match|not satisfy",
+    "negative": "testdata/negative/style_bind_value",
+    "control": "testdata/controls/style_bind_value"
+  },
+  {
+    "name": "div_namespace_collision",
+    "diagnostic_pattern": "Div redeclared",
+    "negative": "testdata/negative/div_namespace_collision",
+    "control": "testdata/controls/div_namespace_collision"
+  }
+]

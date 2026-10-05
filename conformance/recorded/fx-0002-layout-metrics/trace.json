@@ -1,0 +1,662 @@
+{
+  "schema": "gpui-go/conformance/trace@1",
+  "fixture_id": "fx-0002-layout-metrics",
+  "fixture_kind": "layout-metrics-v1",
+  "envelope_sha256": "6a314840e338dc8022b2b530088fbffe054aac027c21ba3c1a6b42a4e047a011",
+  "harness": {
+    "harness_version": "0.1.0",
+    "harness_crate": "gpui-reference-harness",
+    "gpui_crate": "gpui-ce 0.2.2",
+    "gpui_commit": "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+    "profile": "test",
+    "features": [
+      "default",
+      "test-support"
+    ]
+  },
+  "events": [
+    {
+      "seq": 1,
+      "name": "case-begin",
+      "label": "flex-wrap-row",
+      "fields": {
+        "label": "flex-wrap-row",
+        "remSize": "f32:41800000",
+        "scale": "f32:40000000"
+      }
+    },
+    {
+      "seq": 2,
+      "name": "layout-bounds",
+      "label": "wrap-root",
+      "fields": {
+        "height": "f32:42A00000",
+        "width": "f32:42C80000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 3,
+      "name": "layout-bounds",
+      "label": "w1",
+      "fields": {
+        "height": "f32:41280000",
+        "width": "f32:41F00000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 4,
+      "name": "layout-bounds",
+      "label": "w2",
+      "fields": {
+        "height": "f32:41A00000",
+        "width": "f32:41F00000",
+        "x": "f32:420C0000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 5,
+      "name": "layout-bounds",
+      "label": "w3",
+      "fields": {
+        "height": "f32:41480000",
+        "width": "f32:41F00000",
+        "x": "f32:428C0000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 6,
+      "name": "layout-bounds",
+      "label": "w4",
+      "fields": {
+        "height": "f32:41000000",
+        "width": "f32:41F00000",
+        "x": "f32:00000000",
+        "y": "f32:42420000"
+      }
+    },
+    {
+      "seq": 7,
+      "name": "case-end",
+      "label": "flex-wrap-row"
+    },
+    {
+      "seq": 8,
+      "name": "case-begin",
+      "label": "grid-minmax-columns",
+      "fields": {
+        "label": "grid-minmax-columns",
+        "remSize": "f32:41800000",
+        "scale": "f32:40000000"
+      }
+    },
+    {
+      "seq": 9,
+      "name": "layout-bounds",
+      "label": "grid-root",
+      "fields": {
+        "height": "f32:42700000",
+        "width": "f32:42C80000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 10,
+      "name": "layout-bounds",
+      "label": "g1",
+      "fields": {
+        "height": "f32:41680000",
+        "width": "f32:41200000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 11,
+      "name": "layout-bounds",
+      "label": "g2",
+      "fields": {
+        "height": "f32:41100000",
+        "width": "f32:41200000",
+        "x": "f32:42480000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 12,
+      "name": "layout-bounds",
+      "label": "g3",
+      "fields": {
+        "height": "f32:41380000",
+        "width": "f32:41200000",
+        "x": "f32:00000000",
+        "y": "f32:41F00000"
+      }
+    },
+    {
+      "seq": 13,
+      "name": "case-end",
+      "label": "grid-minmax-columns"
+    },
+    {
+      "seq": 14,
+      "name": "case-begin",
+      "label": "absolute-inset-anchors",
+      "fields": {
+        "label": "absolute-inset-anchors",
+        "remSize": "f32:41800000",
+        "scale": "f32:40000000"
+      }
+    },
+    {
+      "seq": 15,
+      "name": "layout-bounds",
+      "label": "abs-root",
+      "fields": {
+        "height": "f32:42B40000",
+        "width": "f32:42F00000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 16,
+      "name": "layout-bounds",
+      "label": "abs-static",
+      "fields": {
+        "height": "f32:41780000",
+        "width": "f32:42200000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 17,
+      "name": "layout-bounds",
+      "label": "abs-top-right",
+      "fields": {
+        "height": "f32:41400000",
+        "width": "f32:41C00000",
+        "x": "f32:42B00000",
+        "y": "f32:41280000"
+      }
+    },
+    {
+      "seq": 18,
+      "name": "layout-bounds",
+      "label": "abs-bottom-left",
+      "fields": {
+        "height": "f32:41200000",
+        "width": "f32:41A00000",
+        "x": "f32:41480000",
+        "y": "f32:42940000"
+      }
+    },
+    {
+      "seq": 19,
+      "name": "case-end",
+      "label": "absolute-inset-anchors"
+    },
+    {
+      "seq": 20,
+      "name": "case-begin",
+      "label": "rem-override-20",
+      "fields": {
+        "label": "rem-override-20",
+        "remSize": "f32:41A00000",
+        "scale": "f32:40000000"
+      }
+    },
+    {
+      "seq": 21,
+      "name": "layout-bounds",
+      "label": "rem-root",
+      "fields": {
+        "height": "f32:42A00000",
+        "width": "f32:42C80000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 22,
+      "name": "layout-bounds",
+      "label": "rem-a",
+      "fields": {
+        "height": "f32:41F00000",
+        "width": "f32:41F00000",
+        "x": "f32:40A00000",
+        "y": "f32:40A00000"
+      }
+    },
+    {
+      "seq": 23,
+      "name": "layout-bounds",
+      "label": "rem-b",
+      "fields": {
+        "height": "f32:42520000",
+        "width": "f32:42200000",
+        "x": "f32:42340000",
+        "y": "f32:40A00000"
+      }
+    },
+    {
+      "seq": 24,
+      "name": "case-end",
+      "label": "rem-override-20"
+    },
+    {
+      "seq": 25,
+      "name": "case-begin",
+      "label": "measured-fixed-flex",
+      "fields": {
+        "label": "measured-fixed-flex",
+        "remSize": "f32:41800000",
+        "scale": "f32:40000000"
+      }
+    },
+    {
+      "seq": 26,
+      "name": "measure-query",
+      "label": "m-fixed",
+      "fields": {
+        "availHeight": "f32:42700000",
+        "availHeightTag": "definite",
+        "availWidthTag": "max-content",
+        "knownHeight": "f32:42700000",
+        "knownHeightPresent": 1,
+        "knownWidthPresent": 0,
+        "label": "m-fixed"
+      }
+    },
+    {
+      "seq": 27,
+      "name": "measure-result",
+      "label": "m-fixed",
+      "fields": {
+        "height": "f32:41C80000",
+        "label": "m-fixed",
+        "width": "f32:42200000"
+      }
+    },
+    {
+      "seq": 28,
+      "name": "measure-query",
+      "label": "m-fixed",
+      "fields": {
+        "availHeight": "f32:42700000",
+        "availHeightTag": "definite",
+        "availWidthTag": "min-content",
+        "knownHeight": "f32:42700000",
+        "knownHeightPresent": 1,
+        "knownWidthPresent": 0,
+        "label": "m-fixed"
+      }
+    },
+    {
+      "seq": 29,
+      "name": "measure-result",
+      "label": "m-fixed",
+      "fields": {
+        "height": "f32:41C80000",
+        "label": "m-fixed",
+        "width": "f32:42200000"
+      }
+    },
+    {
+      "seq": 30,
+      "name": "measure-query",
+      "label": "m-fixed",
+      "fields": {
+        "availHeight": "f32:42700000",
+        "availHeightTag": "definite",
+        "availWidth": "f32:42200000",
+        "availWidthTag": "definite",
+        "knownHeightPresent": 0,
+        "knownWidth": "f32:42200000",
+        "knownWidthPresent": 1,
+        "label": "m-fixed"
+      }
+    },
+    {
+      "seq": 31,
+      "name": "measure-result",
+      "label": "m-fixed",
+      "fields": {
+        "height": "f32:41C80000",
+        "label": "m-fixed",
+        "width": "f32:42200000"
+      }
+    },
+    {
+      "seq": 32,
+      "name": "measure-query",
+      "label": "m-fixed",
+      "fields": {
+        "availHeight": "f32:42700000",
+        "availHeightTag": "definite",
+        "availWidth": "f32:42200000",
+        "availWidthTag": "definite",
+        "knownHeightPresent": 0,
+        "knownWidthPresent": 0,
+        "label": "m-fixed"
+      }
+    },
+    {
+      "seq": 33,
+      "name": "measure-result",
+      "label": "m-fixed",
+      "fields": {
+        "height": "f32:41C80000",
+        "label": "m-fixed",
+        "width": "f32:42200000"
+      }
+    },
+    {
+      "seq": 34,
+      "name": "layout-bounds",
+      "label": "m-root",
+      "fields": {
+        "height": "f32:42700000",
+        "width": "f32:43160000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 35,
+      "name": "layout-bounds",
+      "label": "m-sib1",
+      "fields": {
+        "height": "f32:41A00000",
+        "width": "f32:41F00000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 36,
+      "name": "layout-bounds",
+      "label": "m-fixed",
+      "fields": {
+        "height": "f32:42700000",
+        "width": "f32:42200000",
+        "x": "f32:420C0000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 37,
+      "name": "layout-bounds",
+      "label": "m-sib2",
+      "fields": {
+        "height": "f32:42700000",
+        "width": "f32:428C0000",
+        "x": "f32:42A00000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 38,
+      "name": "case-end",
+      "label": "measured-fixed-flex"
+    },
+    {
+      "seq": 39,
+      "name": "case-begin",
+      "label": "measured-echo-min-content",
+      "fields": {
+        "label": "measured-echo-min-content",
+        "remSize": "f32:41800000",
+        "scale": "f32:40000000"
+      }
+    },
+    {
+      "seq": 40,
+      "name": "measure-query",
+      "label": "m-echo",
+      "fields": {
+        "availHeight": "f32:41F00000",
+        "availHeightTag": "definite",
+        "availWidthTag": "min-content",
+        "knownHeight": "f32:41F00000",
+        "knownHeightPresent": 1,
+        "knownWidthPresent": 0,
+        "label": "m-echo"
+      }
+    },
+    {
+      "seq": 41,
+      "name": "measure-result",
+      "label": "m-echo",
+      "fields": {
+        "height": "f32:41F00000",
+        "label": "m-echo",
+        "width": "f32:42480000"
+      }
+    },
+    {
+      "seq": 42,
+      "name": "measure-query",
+      "label": "m-echo",
+      "fields": {
+        "availHeight": "f32:41F00000",
+        "availHeightTag": "definite",
+        "availWidth": "f32:42480000",
+        "availWidthTag": "definite",
+        "knownHeightPresent": 0,
+        "knownWidthPresent": 0,
+        "label": "m-echo"
+      }
+    },
+    {
+      "seq": 43,
+      "name": "measure-result",
+      "label": "m-echo",
+      "fields": {
+        "height": "f32:41A00000",
+        "label": "m-echo",
+        "width": "f32:42480000"
+      }
+    },
+    {
+      "seq": 44,
+      "name": "layout-bounds",
+      "label": "echo-root",
+      "fields": {
+        "height": "f32:42700000",
+        "width": "f32:42480000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 45,
+      "name": "layout-bounds",
+      "label": "m-echo",
+      "fields": {
+        "height": "f32:41F00000",
+        "width": "f32:42480000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 46,
+      "name": "case-end",
+      "label": "measured-echo-min-content"
+    },
+    {
+      "seq": 47,
+      "name": "case-begin",
+      "label": "percent-margin-padding-border",
+      "fields": {
+        "label": "percent-margin-padding-border",
+        "remSize": "f32:41800000",
+        "scale": "f32:40000000"
+      }
+    },
+    {
+      "seq": 48,
+      "name": "layout-bounds",
+      "label": "p-root",
+      "fields": {
+        "height": "f32:42F00000",
+        "width": "f32:43480000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 49,
+      "name": "layout-bounds",
+      "label": "p-outer",
+      "fields": {
+        "height": "f32:42B40000",
+        "width": "f32:42BE0000",
+        "x": "f32:41200000",
+        "y": "f32:41200000"
+      }
+    },
+    {
+      "seq": 50,
+      "name": "layout-bounds",
+      "label": "p-inner",
+      "fields": {
+        "height": "f32:42040000",
+        "width": "f32:420E0000",
+        "x": "f32:41CC0000",
+        "y": "f32:41CC0000"
+      }
+    },
+    {
+      "seq": 51,
+      "name": "case-end",
+      "label": "percent-margin-padding-border"
+    },
+    {
+      "seq": 52,
+      "name": "case-begin",
+      "label": "max-height-clamp",
+      "fields": {
+        "label": "max-height-clamp",
+        "remSize": "f32:41800000",
+        "scale": "f32:40000000"
+      }
+    },
+    {
+      "seq": 53,
+      "name": "layout-bounds",
+      "label": "clamp-root",
+      "fields": {
+        "height": "f32:42700000",
+        "width": "f32:42C80000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 54,
+      "name": "layout-bounds",
+      "label": "clamp-tall",
+      "fields": {
+        "height": "f32:42360000",
+        "width": "f32:41F00000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 55,
+      "name": "layout-bounds",
+      "label": "clamp-below",
+      "fields": {
+        "height": "f32:41200000",
+        "width": "f32:41F00000",
+        "x": "f32:00000000",
+        "y": "f32:42360000"
+      }
+    },
+    {
+      "seq": 56,
+      "name": "case-end",
+      "label": "max-height-clamp"
+    },
+    {
+      "seq": 57,
+      "name": "case-begin",
+      "label": "block-display-stacking",
+      "fields": {
+        "label": "block-display-stacking",
+        "remSize": "f32:41800000",
+        "scale": "f32:40000000"
+      }
+    },
+    {
+      "seq": 58,
+      "name": "layout-bounds",
+      "label": "b-root",
+      "fields": {
+        "height": "f32:42E90000",
+        "width": "f32:43200000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 59,
+      "name": "layout-bounds",
+      "label": "b-first",
+      "fields": {
+        "height": "f32:41F00000",
+        "width": "f32:43180000",
+        "x": "f32:40800000",
+        "y": "f32:40800000"
+      }
+    },
+    {
+      "seq": 60,
+      "name": "layout-bounds",
+      "label": "b-second",
+      "fields": {
+        "height": "f32:424A0000",
+        "width": "f32:43140000",
+        "x": "f32:40C00000",
+        "y": "f32:42200000"
+      }
+    },
+    {
+      "seq": 61,
+      "name": "layout-bounds",
+      "label": "b-second-inner",
+      "fields": {
+        "height": "f32:41200000",
+        "width": "f32:00000000",
+        "x": "f32:41080000",
+        "y": "f32:422A0000"
+      }
+    },
+    {
+      "seq": 62,
+      "name": "layout-bounds",
+      "label": "b-third",
+      "fields": {
+        "height": "f32:41A00000",
+        "width": "f32:42C00000",
+        "x": "f32:00000000",
+        "y": "f32:42C10000"
+      }
+    },
+    {
+      "seq": 63,
+      "name": "case-end",
+      "label": "block-display-stacking"
+    }
+  ]
+}

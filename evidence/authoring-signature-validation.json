@@ -1,0 +1,830 @@
+{
+    "date":  "2026-10-05",
+    "kind":  "Bounded Go authoring signature validation",
+    "toolchain":  "go version go1.27.1 windows/amd64",
+    "executable":  "C:\\Program Files\\Go\\bin\\go.exe",
+    "environment":  {
+                        "GOTOOLCHAIN":  "local",
+                        "GOWORK":  "off",
+                        "CGO_ENABLED":  "0",
+                        "GOPROXY":  "off",
+                        "GOSUMDB":  "off"
+                    },
+    "checks":  [
+                   {
+                       "name":  "fixture_test",
+                       "command":  "go test ./...",
+                       "exit_code":  0,
+                       "output":  "?   \tgpui-go\t[no test files]\nok  \tgpui-go/authoring\t(cached)\n?   \tgpui-go/consumer\t[no test files]\n?   \tgpui-go/example\t[no test files]\n?   \tgpui-go/shared\t[no test files]"
+                   },
+                   {
+                       "name":  "root_test",
+                       "command":  "go test ./...",
+                       "exit_code":  0,
+                       "output":  "ok  \tgpui-go/authoring\t(cached)"
+                   },
+                   {
+                       "name":  "fixture_vet",
+                       "command":  "go vet ./...",
+                       "exit_code":  0,
+                       "output":  ""
+                   },
+                   {
+                       "name":  "root_vet",
+                       "command":  "go vet ./...",
+                       "exit_code":  0,
+                       "output":  ""
+                   }
+               ],
+    "negative_cases":  [
+                           {
+                               "name":  "event_emit_source",
+                               "passed":  true,
+                               "expected_diagnostic":  "cannot use.*cx|Context\\[int\\].*Context\\[string\\]",
+                               "control":  {
+                                               "name":  "event_emit_source_control",
+                                               "command":  "go test ./testdata/controls/event_emit_source",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/event_emit_source\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "event_emit_source",
+                                                "command":  "go test ./testdata/negative/event_emit_source",
+                                                "exit_code":  1,
+                                                "output":  "FAIL\tgpui-go/testdata/negative/event_emit_source [build failed]\n# gpui-go/testdata/negative/event_emit_source\nFAIL\ntestdata\\negative\\event_emit_source\\case.go:7:42: cannot use cx (variable of type *gpui.Context[int]) as *gpui.Context[string] value in argument to gpui.DefineEvent[string, string]().Emit"
+                                            }
+                           },
+                           {
+                               "name":  "event_emit_payload",
+                               "passed":  true,
+                               "expected_diagnostic":  "cannot use.*\"x\"|untyped string.*int",
+                               "control":  {
+                                               "name":  "event_emit_payload_control",
+                                               "command":  "go test ./testdata/controls/event_emit_payload",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/event_emit_payload\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "event_emit_payload",
+                                                "command":  "go test ./testdata/negative/event_emit_payload",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/event_emit_payload\ntestdata\\negative\\event_emit_payload\\case.go:7:40: cannot use \"x\" (untyped string constant) as int value in argument to gpui.DefineEvent[int, int]().Emit\nFAIL\tgpui-go/testdata/negative/event_emit_payload [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "event_subscribe_source",
+                               "passed":  true,
+                               "expected_diagnostic":  "cannot use.*source|Entity\\[string\\].*Entity\\[bool\\]",
+                               "control":  {
+                                               "name":  "event_subscribe_source_control",
+                                               "command":  "go test ./testdata/controls/event_subscribe_source",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/event_subscribe_source\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "event_subscribe_source",
+                                                "command":  "go test ./testdata/negative/event_subscribe_source",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/event_subscribe_source\ntestdata\\negative\\event_subscribe_source\\case.go:7:46: cannot use source (variable of struct type gpui.Entity[string]) as gpui.Entity[bool] value in argument to gpui.DefineEvent[bool, int]().Subscribe\nFAIL\tgpui-go/testdata/negative/event_subscribe_source [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "event_subscribe_observer",
+                               "passed":  true,
+                               "expected_diagnostic":  "does not match|cannot use|inferred",
+                               "control":  {
+                                               "name":  "event_subscribe_observer_control",
+                                               "command":  "go test ./testdata/controls/event_subscribe_observer",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/event_subscribe_observer\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "event_subscribe_observer",
+                                                "command":  "go test ./testdata/negative/event_subscribe_observer",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/event_subscribe_observer\nFAIL\tgpui-go/testdata/negative/event_subscribe_observer [build failed]\ntestdata\\negative\\event_subscribe_observer\\case.go:7:56: in call to gpui.DefineEvent[string, int]().Subscribe, type func(*bool, gpui.Entity[string], *int, *gpui.Context[bool]) of func(*bool, gpui.Entity[string], *int, *gpui.Context[bool]) {} does not match inferred type func(*int, gpui.Entity[string], *int, *gpui.Context[int]) for func(*O, gpui.Entity[string], *int, *gpui.Context[O])\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "event_subscribe_payload",
+                               "passed":  true,
+                               "expected_diagnostic":  "does not match|cannot use",
+                               "control":  {
+                                               "name":  "event_subscribe_payload_control",
+                                               "command":  "go test ./testdata/controls/event_subscribe_payload",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/event_subscribe_payload\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "event_subscribe_payload",
+                                                "command":  "go test ./testdata/negative/event_subscribe_payload",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/event_subscribe_payload\ntestdata\\negative\\event_subscribe_payload\\case.go:7:56: in call to gpui.DefineEvent[string, int]().Subscribe, type func(*int, gpui.Entity[string], *string, *gpui.Context[int]) of func(*int, gpui.Entity[string], *string, *gpui.Context[int]) {} does not match inferred type func(*int, gpui.Entity[string], *int, *gpui.Context[int]) for func(*O, gpui.Entity[string], *int, *gpui.Context[O])\nFAIL\tgpui-go/testdata/negative/event_subscribe_payload [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "listener_owner",
+                               "passed":  true,
+                               "expected_diagnostic":  "does not match|cannot use",
+                               "control":  {
+                                               "name":  "listener_owner_control",
+                                               "command":  "go test ./testdata/controls/listener_owner",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/listener_owner\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "listener_owner",
+                                                "command":  "go test ./testdata/negative/listener_owner",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/listener_owner\ntestdata\\negative\\listener_owner\\case.go:7:18: in call to cx.Listener, type func(*string, *gpui.ClickEvent, *gpui.Window, *gpui.Context[string]) of func(*string, *gpui.ClickEvent, *gpui.Window, *gpui.Context[string]) {} does not match func(*int, *E, *gpui.Window, *gpui.Context[int]) (cannot infer E)\nFAIL\tgpui-go/testdata/negative/listener_owner [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "event_relabel_source",
+                               "passed":  true,
+                               "expected_diagnostic":  "cannot convert",
+                               "control":  {
+                                               "name":  "event_relabel_source_control",
+                                               "command":  "go test ./testdata/controls/event_relabel_source",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/event_relabel_source\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "event_relabel_source",
+                                                "command":  "go test ./testdata/negative/event_relabel_source",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/event_relabel_source\ntestdata\\negative\\event_relabel_source\\case.go:7:30: cannot convert gpui.DefineEvent[int, int]() (value of struct type gpui.Event[int, int]) to type gpui.Event[string, int]\nFAIL\tgpui-go/testdata/negative/event_relabel_source [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "event_relabel_payload",
+                               "passed":  true,
+                               "expected_diagnostic":  "cannot convert",
+                               "control":  {
+                                               "name":  "event_relabel_payload_control",
+                                               "command":  "go test ./testdata/controls/event_relabel_payload",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/event_relabel_payload\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "event_relabel_payload",
+                                                "command":  "go test ./testdata/negative/event_relabel_payload",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/event_relabel_payload\ntestdata\\negative\\event_relabel_payload\\case.go:7:30: cannot convert gpui.DefineEvent[int, int]() (value of struct type gpui.Event[int, int]) to type gpui.Event[int, string]\nFAIL\tgpui-go/testdata/negative/event_relabel_payload [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "event_relabel_identical_underlying_payload",
+                               "passed":  true,
+                               "expected_diagnostic":  "cannot convert",
+                               "control":  {
+                                               "name":  "event_relabel_identical_underlying_payload_control",
+                                               "command":  "go test ./testdata/controls/event_relabel_identical_underlying_payload",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/event_relabel_identical_underlying_payload\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "event_relabel_identical_underlying_payload",
+                                                "command":  "go test ./testdata/negative/event_relabel_identical_underlying_payload",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/event_relabel_identical_underlying_payload\ntestdata\\negative\\event_relabel_identical_underlying_payload\\case.go:9:30: cannot convert gpui.DefineEvent[int, First]() (value of struct type gpui.Event[int, First]) to type gpui.Event[int, Second]\nFAIL\tgpui-go/testdata/negative/event_relabel_identical_underlying_payload [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "event_assign_pair",
+                               "passed":  true,
+                               "expected_diagnostic":  "cannot use",
+                               "control":  {
+                                               "name":  "event_assign_pair_control",
+                                               "command":  "go test ./testdata/controls/event_assign_pair",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/event_assign_pair\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "event_assign_pair",
+                                                "command":  "go test ./testdata/negative/event_assign_pair",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/event_assign_pair\ntestdata\\negative\\event_assign_pair\\case.go:7:34: cannot use gpui.DefineEvent[int, int]() (value of struct type gpui.Event[int, int]) as gpui.Event[string, int] value in variable declaration\nFAIL\tgpui-go/testdata/negative/event_assign_pair [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "view_nonrenderable",
+                               "passed":  true,
+                               "expected_diagnostic":  "does not satisfy|missing method Render",
+                               "control":  {
+                                               "name":  "view_nonrenderable_control",
+                                               "command":  "go test ./testdata/controls/view_nonrenderable",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/view_nonrenderable\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "view_nonrenderable",
+                                                "command":  "go test ./testdata/negative/view_nonrenderable",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/view_nonrenderable\ntestdata\\negative\\view_nonrenderable\\case.go:9:17: *int does not satisfy interface{*int; gpui.Render[int]} (missing method Render)\nFAIL\tgpui-go/testdata/negative/view_nonrenderable [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "view_wrong_pointer_constraint",
+                               "passed":  true,
+                               "expected_diagnostic":  "does not satisfy|missing method Render",
+                               "control":  {
+                                               "name":  "view_wrong_pointer_constraint_control",
+                                               "command":  "go test ./testdata/controls/view_wrong_pointer_constraint",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/view_wrong_pointer_constraint\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "view_wrong_pointer_constraint",
+                                                "command":  "go test ./testdata/negative/view_wrong_pointer_constraint",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/view_wrong_pointer_constraint\ntestdata\\negative\\view_wrong_pointer_constraint\\case.go:9:23: *string does not satisfy interface{*int; gpui.Render[int]} (missing method Render)\nFAIL\tgpui-go/testdata/negative/view_wrong_pointer_constraint [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "managed_view_missing_dismiss",
+                               "passed":  true,
+                               "expected_diagnostic":  "does not satisfy|missing method DismissEvent",
+                               "control":  {
+                                               "name":  "managed_view_missing_dismiss_control",
+                                               "command":  "go test ./testdata/controls/managed_view_missing_dismiss",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/managed_view_missing_dismiss\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "managed_view_missing_dismiss",
+                                                "command":  "go test ./testdata/negative/managed_view_missing_dismiss",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/managed_view_missing_dismiss\nFAIL\tgpui-go/testdata/negative/managed_view_missing_dismiss [build failed]\ntestdata\\negative\\managed_view_missing_dismiss\\case.go:10:24: *screen does not satisfy interface{*screen; gpui.ManagedView[screen]} (missing method DismissEvent)\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "unit_action_nonempty",
+                               "passed":  true,
+                               "expected_diagnostic":  "does not satisfy|~struct",
+                               "control":  {
+                                               "name":  "unit_action_nonempty_control",
+                                               "command":  "go test ./testdata/controls/unit_action_nonempty",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/unit_action_nonempty\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "unit_action_nonempty",
+                                                "command":  "go test ./testdata/negative/unit_action_nonempty",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/unit_action_nonempty\ntestdata\\negative\\unit_action_nonempty\\case.go:8:28: Payload does not satisfy ~struct{} (Payload missing in ~struct{})\nFAIL\tgpui-go/testdata/negative/unit_action_nonempty [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "unit_action_pointer",
+                               "passed":  true,
+                               "expected_diagnostic":  "does not satisfy|~struct",
+                               "control":  {
+                                               "name":  "unit_action_pointer_control",
+                                               "command":  "go test ./testdata/controls/unit_action_pointer",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/unit_action_pointer\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "unit_action_pointer",
+                                                "command":  "go test ./testdata/negative/unit_action_pointer",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/unit_action_pointer\ntestdata\\negative\\unit_action_pointer\\case.go:7:28: *struct{} does not satisfy ~struct{} (*struct{} missing in ~struct{})\nFAIL\tgpui-go/testdata/negative/unit_action_pointer [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "dispatch_payload",
+                               "passed":  true,
+                               "expected_diagnostic":  "cannot use|does not match|inferred",
+                               "control":  {
+                                               "name":  "dispatch_payload_control",
+                                               "command":  "go test ./testdata/controls/dispatch_payload",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/dispatch_payload\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "dispatch_payload",
+                                                "command":  "go test ./testdata/negative/dispatch_payload",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/dispatch_payload\ntestdata\\negative\\dispatch_payload\\case.go:7:51: cannot use 3 (untyped int constant) as struct{} value in argument to w.Dispatch\nFAIL\tgpui-go/testdata/negative/dispatch_payload [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "action_handler",
+                               "passed":  true,
+                               "expected_diagnostic":  "does not match|cannot use",
+                               "control":  {
+                                               "name":  "action_handler_control",
+                                               "command":  "go test ./testdata/controls/action_handler",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/action_handler\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "action_handler",
+                                                "command":  "go test ./testdata/negative/action_handler",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/action_handler\ntestdata\\negative\\action_handler\\case.go:7:60: in call to gpui.Div().OnAction, type func(*int, *gpui.Window, *gpui.App) of func(*int, *gpui.Window, *gpui.App) {} does not match inferred type func(*struct{}, *gpui.Window, *gpui.App) for func(*A, *gpui.Window, *gpui.App)\nFAIL\tgpui-go/testdata/negative/action_handler [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "action_clone",
+                               "passed":  true,
+                               "expected_diagnostic":  "cannot use",
+                               "control":  {
+                                               "name":  "action_clone_control",
+                                               "command":  "go test ./testdata/controls/action_clone",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/action_clone\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "action_clone",
+                                                "command":  "go test ./testdata/negative/action_clone",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/action_clone\ntestdata\\negative\\action_clone\\case.go:7:34: cannot use func(string) string {…} (value of type func(string) string) as func(int) int value in struct literal\nFAIL\tgpui-go/testdata/negative/action_clone [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "read_state",
+                               "passed":  true,
+                               "expected_diagnostic":  "does not match|cannot use",
+                               "control":  {
+                                               "name":  "read_state_control",
+                                               "command":  "go test ./testdata/controls/read_state",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/read_state\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "read_state",
+                                                "command":  "go test ./testdata/negative/read_state",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/read_state\ntestdata\\negative\\read_state\\case.go:7:18: in call to e.Read, type func(*string, *gpui.App) int of func(*string, *gpui.App) int {…} does not match func(*int, *gpui.App) R (cannot infer R)\nFAIL\tgpui-go/testdata/negative/read_state [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "read_result",
+                               "passed":  true,
+                               "expected_diagnostic":  "cannot use",
+                               "control":  {
+                                               "name":  "read_result_control",
+                                               "command":  "go test ./testdata/controls/read_result",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/read_result\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "read_result",
+                                                "command":  "go test ./testdata/negative/read_result",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/read_result\ntestdata\\negative\\read_result\\case.go:7:22: cannot use e.Read(app, func(*int, *gpui.App) int {…}) (value of type int) as string value in variable declaration\nFAIL\tgpui-go/testdata/negative/read_result [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "entity_factory_context",
+                               "passed":  true,
+                               "expected_diagnostic":  "does not match|cannot use|inferred",
+                               "control":  {
+                                               "name":  "entity_factory_context_control",
+                                               "command":  "go test ./testdata/controls/entity_factory_context",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/entity_factory_context\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "entity_factory_context",
+                                                "command":  "go test ./testdata/negative/entity_factory_context",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/entity_factory_context\ntestdata\\negative\\entity_factory_context\\case.go:7:33: in call to gpui.NewEntity, type func(*int, *gpui.Context[string]) of func(*int, *gpui.Context[string]) {} does not match inferred type func(*int, *gpui.Context[int]) for func(*S, *gpui.Context[S])\nFAIL\tgpui-go/testdata/negative/entity_factory_context [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "owned_event_payload",
+                               "passed":  true,
+                               "expected_diagnostic":  "cannot use",
+                               "control":  {
+                                               "name":  "owned_event_payload_control",
+                                               "command":  "go test ./testdata/controls/owned_event_payload",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/owned_event_payload\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "owned_event_payload",
+                                                "command":  "go test ./testdata/negative/owned_event_payload",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/owned_event_payload\ntestdata\\negative\\owned_event_payload\\case.go:7:48: cannot use func(*gpui.Scope) int {…} (value of type func(*gpui.Scope) int) as func(*gpui.Scope) string value in argument to gpui.DefineEvent[int, string]().EmitOwned\nFAIL\tgpui-go/testdata/negative/owned_event_payload [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "custom_element_phase",
+                               "passed":  true,
+                               "expected_diagnostic":  "does not implement|wrong type for method|does not match",
+                               "control":  {
+                                               "name":  "custom_element_phase_control",
+                                               "command":  "go test ./testdata/controls/custom_element_phase",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/custom_element_phase\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "custom_element_phase",
+                                                "command":  "go test ./testdata/negative/custom_element_phase",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/custom_element_phase\ntestdata\\negative\\custom_element_phase\\case.go:7:51: cannot use \u0026consumer.Mark{} (value of type *consumer.Mark) as gpui.Element[int, consumer.PaintState] value in argument to gpui.CustomElement[int, consumer.PaintState]: *consumer.Mark does not implement gpui.Element[int, consumer.PaintState] (wrong type for method Paint)\n\t\thave Paint(*gpui.GlobalElementID, *gpui.InspectorElementID, gpui.Bounds, *consumer.LayoutState, *consumer.PaintState, *gpui.Window, *gpui.App)\n\t\twant Paint(*gpui.GlobalElementID, *gpui.InspectorElementID, gpui.Bounds, *int, *consumer.PaintState, *gpui.Window, *gpui.App)\nFAIL\tgpui-go/testdata/negative/custom_element_phase [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "a11y_prepaint_state",
+                               "passed":  true,
+                               "expected_diagnostic":  "does not implement|wrong type for method",
+                               "control":  {
+                                               "name":  "a11y_prepaint_state_control",
+                                               "command":  "go test ./testdata/controls/a11y_prepaint_state",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/a11y_prepaint_state\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "a11y_prepaint_state",
+                                                "command":  "go test ./testdata/negative/a11y_prepaint_state",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/a11y_prepaint_state\ntestdata\\negative\\a11y_prepaint_state\\case.go:7:51: cannot use \u0026consumer.Mark{} (value of type *consumer.Mark) as gpui.A11ySyntheticChildren[int] value in variable declaration: *consumer.Mark does not implement gpui.A11ySyntheticChildren[int] (wrong type for method A11ySyntheticChildren)\n\t\thave A11ySyntheticChildren(*consumer.PaintState, *gpui.A11ySubtreeBuilder)\n\t\twant A11ySyntheticChildren(*int, *gpui.A11ySubtreeBuilder)\nFAIL\tgpui-go/testdata/negative/a11y_prepaint_state [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "restricted_parent_child",
+                               "passed":  true,
+                               "expected_diagnostic":  "cannot use",
+                               "control":  {
+                                               "name":  "restricted_parent_child_control",
+                                               "command":  "go test ./testdata/controls/restricted_parent_child",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/restricted_parent_child\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "restricted_parent_child",
+                                                "command":  "go test ./testdata/negative/restricted_parent_child",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/restricted_parent_child\ntestdata\\negative\\restricted_parent_child\\case.go:8:39: cannot use gpui.Div() (value of type *gpui.DivElement) as *example.CountLabel value in argument to new(consumer.RestrictedParent).Child\nFAIL\tgpui-go/testdata/negative/restricted_parent_child [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "raw_entity_view",
+                               "passed":  true,
+                               "expected_diagnostic":  "does not implement|missing method",
+                               "control":  {
+                                               "name":  "raw_entity_view_control",
+                                               "command":  "go test ./testdata/controls/raw_entity_view",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/raw_entity_view\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "raw_entity_view",
+                                                "command":  "go test ./testdata/negative/raw_entity_view",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/raw_entity_view\ntestdata\\negative\\raw_entity_view\\case.go:7:23: cannot use e (variable of struct type gpui.Entity[int]) as gpui.View value in variable declaration: gpui.Entity[int] does not implement gpui.View (missing method EntityID)\nFAIL\tgpui-go/testdata/negative/raw_entity_view [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "forged_app_context",
+                               "passed":  true,
+                               "expected_diagnostic":  "does not implement|unexported method|wrong type for method",
+                               "control":  {
+                                               "name":  "forged_app_context_control",
+                                               "command":  "go test ./testdata/controls/forged_app_context",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/forged_app_context\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "forged_app_context",
+                                                "command":  "go test ./testdata/negative/forged_app_context",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/forged_app_context\ntestdata\\negative\\forged_app_context\\case.go:9:11: cannot use fake{} (value of struct type fake) as gpui.AppContext value in argument to e.Update: fake does not implement gpui.AppContext (unexported method access)\nFAIL\tgpui-go/testdata/negative/forged_app_context [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "style_bind_value",
+                               "passed":  true,
+                               "expected_diagnostic":  "does not satisfy|must be a pointer|cannot infer|does not match|not satisfy",
+                               "control":  {
+                                               "name":  "style_bind_value_control",
+                                               "command":  "go test ./testdata/controls/style_bind_value",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/style_bind_value\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "style_bind_value",
+                                                "command":  "go test ./testdata/negative/style_bind_value",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/style_bind_value\ntestdata\\negative\\style_bind_value\\case.go:8:26: in call to authoring.BindStyled, Self (type component) does not satisfy interface{StyleBase() *authoring.Styled[Self]; *Value}\nFAIL\tgpui-go/testdata/negative/style_bind_value [build failed]\nFAIL"
+                                            }
+                           },
+                           {
+                               "name":  "div_namespace_collision",
+                               "passed":  true,
+                               "expected_diagnostic":  "Div redeclared",
+                               "control":  {
+                                               "name":  "div_namespace_collision_control",
+                                               "command":  "go test ./testdata/controls/div_namespace_collision",
+                                               "exit_code":  0,
+                                               "output":  "?   \tgpui-go/testdata/controls/div_namespace_collision\t[no test files]"
+                                           },
+                               "negative":  {
+                                                "name":  "div_namespace_collision",
+                                                "command":  "go test ./testdata/negative/div_namespace_collision",
+                                                "exit_code":  1,
+                                                "output":  "# gpui-go/testdata/negative/div_namespace_collision\ntestdata\\negative\\div_namespace_collision\\case.go:7:6: Div redeclared in this block\n\ttestdata\\negative\\div_namespace_collision\\case.go:6:6: other declaration of Div\nFAIL\tgpui-go/testdata/negative/div_namespace_collision [build failed]\nFAIL"
+                                            }
+                           }
+                       ],
+    "negative_case_count":  29,
+    "helper_copies":  [
+                          {
+                              "file":  "doc.go",
+                              "identical":  true,
+                              "sha256":  "e24695c85197965bfa1c3be0d0548763993b0eaa3eb5b4017c3f9d0fb58414c5"
+                          },
+                          {
+                              "file":  "style.go",
+                              "identical":  true,
+                              "sha256":  "ef25f9cf5ffad6787c2232dfe171b9e147c5e305c5a97d5e717d0ca373828d9e"
+                          },
+                          {
+                              "file":  "style_test.go",
+                              "identical":  true,
+                              "sha256":  "168f3d1bd030e883b5da99833e12d12496a291a193c10e5d9aacb46f034f2c08"
+                          }
+                      ],
+    "fixture_sources":  [
+                            {
+                                "path":  "api.go",
+                                "sha256":  "580388e331a677d3b0e857789e498d399dee886b4b5d94642e358f25ee4db1fe"
+                            },
+                            {
+                                "path":  "authoring/doc.go",
+                                "sha256":  "e24695c85197965bfa1c3be0d0548763993b0eaa3eb5b4017c3f9d0fb58414c5"
+                            },
+                            {
+                                "path":  "authoring/style.go",
+                                "sha256":  "ef25f9cf5ffad6787c2232dfe171b9e147c5e305c5a97d5e717d0ca373828d9e"
+                            },
+                            {
+                                "path":  "authoring/style_test.go",
+                                "sha256":  "168f3d1bd030e883b5da99833e12d12496a291a193c10e5d9aacb46f034f2c08"
+                            },
+                            {
+                                "path":  "cases.json",
+                                "sha256":  "ea7e4b35a8060eef17c117b1314b5976fc2d120d393f60bb7aa256d93ff2964c"
+                            },
+                            {
+                                "path":  "consumer/positive.go",
+                                "sha256":  "e15ed7e7fc5bbbc3f62339d228cb70443b74a717ad80ec0f12282ea4f01c9f84"
+                            },
+                            {
+                                "path":  "example/counter.go",
+                                "sha256":  "94532eee85b81a4615daa2e9d1f3431a7e9f0045ec34c9baf33adbed033cacec"
+                            },
+                            {
+                                "path":  "go.mod",
+                                "sha256":  "0b0c9baf89017601f490fd9dad0bf62ccef0ef0f583ab812003c5eecf38af33c"
+                            },
+                            {
+                                "path":  "shared/payload.go",
+                                "sha256":  "bb7d7af1abfbe080e454f0ef7e6a4b374ce81b0fdff55f1c09eb55a7727f2542"
+                            },
+                            {
+                                "path":  "testdata/controls/a11y_prepaint_state/case.go",
+                                "sha256":  "a65763c1b3cc006d5613e650b603d302aeefba3cd783b5084d377fe3b7fb6638"
+                            },
+                            {
+                                "path":  "testdata/controls/action_clone/case.go",
+                                "sha256":  "468af1c47483a05a9e30eb8711ad5da433cc9b43a847352230fc00d9232d4f1d"
+                            },
+                            {
+                                "path":  "testdata/controls/action_handler/case.go",
+                                "sha256":  "4643f2fe861ab862411c1248a970a7b3533de28191efbc2c62f5c531e0031313"
+                            },
+                            {
+                                "path":  "testdata/controls/custom_element_phase/case.go",
+                                "sha256":  "e0364ffc3c149ad0ee910a8f7c5d2721cd31cac1a5a57cca7f8e77223074f40d"
+                            },
+                            {
+                                "path":  "testdata/controls/dispatch_payload/case.go",
+                                "sha256":  "1655f5f6ac1528edf7b4c88de47e74680739f565f4ce33155dc87826cf15cfe9"
+                            },
+                            {
+                                "path":  "testdata/controls/div_namespace_collision/case.go",
+                                "sha256":  "9e99b77ad219f33a145fa9f641f363428bcf3a7d6a0fd40f6a9a14e9087d3410"
+                            },
+                            {
+                                "path":  "testdata/controls/entity_factory_context/case.go",
+                                "sha256":  "86e328fc86322f5a1b1eeabe34831b35e67ca365ddd4c427a01a415c9ce9f39f"
+                            },
+                            {
+                                "path":  "testdata/controls/event_assign_pair/case.go",
+                                "sha256":  "478b90eaef05997a2e36207fb29889acd36be4e0f02e982044ecd981ad3854a3"
+                            },
+                            {
+                                "path":  "testdata/controls/event_emit_payload/case.go",
+                                "sha256":  "d7ba3ad093d4febcda71e6624eb2d9449e8e3e67f67f3f25b96797ec672b82b8"
+                            },
+                            {
+                                "path":  "testdata/controls/event_emit_source/case.go",
+                                "sha256":  "45704d48207c809cf85699c9d21be16823317d10352a66399285cee4b53645ff"
+                            },
+                            {
+                                "path":  "testdata/controls/event_relabel_identical_underlying_payload/case.go",
+                                "sha256":  "829eb4b6ca47aadabedc8f7922d314eb3167eef84b01ed8b20308811a91d8cac"
+                            },
+                            {
+                                "path":  "testdata/controls/event_relabel_payload/case.go",
+                                "sha256":  "ad1c83cffa1b0b2c56d721a56720f696bd245ef255d95005f4e513115a72a91c"
+                            },
+                            {
+                                "path":  "testdata/controls/event_relabel_source/case.go",
+                                "sha256":  "ad1c83cffa1b0b2c56d721a56720f696bd245ef255d95005f4e513115a72a91c"
+                            },
+                            {
+                                "path":  "testdata/controls/event_subscribe_observer/case.go",
+                                "sha256":  "2191efac9a4956f86e47c93f3527e04ed27fc67b4b31c75d9062913870a83230"
+                            },
+                            {
+                                "path":  "testdata/controls/event_subscribe_payload/case.go",
+                                "sha256":  "2191efac9a4956f86e47c93f3527e04ed27fc67b4b31c75d9062913870a83230"
+                            },
+                            {
+                                "path":  "testdata/controls/event_subscribe_source/case.go",
+                                "sha256":  "2191efac9a4956f86e47c93f3527e04ed27fc67b4b31c75d9062913870a83230"
+                            },
+                            {
+                                "path":  "testdata/controls/forged_app_context/case.go",
+                                "sha256":  "1141328847e9b80dd5cb9a7f174d8aa5ec74435677a1c62313b9cbc7e15bf053"
+                            },
+                            {
+                                "path":  "testdata/controls/listener_owner/case.go",
+                                "sha256":  "851dda21ac2b466ef318143078ca6014d86eb1adeeb882fa9942744ca9ad78da"
+                            },
+                            {
+                                "path":  "testdata/controls/managed_view_missing_dismiss/case.go",
+                                "sha256":  "6140e3978c61d3cb37bd4b824004f7fe1e08f6d366bb99a9ca0c5e8b5d824ff1"
+                            },
+                            {
+                                "path":  "testdata/controls/owned_event_payload/case.go",
+                                "sha256":  "d8c95000dd8d69dc16fb53aba4dedb1257a9708d179a91f6713a91bac060227a"
+                            },
+                            {
+                                "path":  "testdata/controls/raw_entity_view/case.go",
+                                "sha256":  "79cfb7f6ae5f87bc221570d1c3cc04014b839b197a952638a6956a1574702639"
+                            },
+                            {
+                                "path":  "testdata/controls/read_result/case.go",
+                                "sha256":  "1bc30a82cc38a4c56bf6d276670ff2e8e196f7e1c1b173b95cdbdf24de562db1"
+                            },
+                            {
+                                "path":  "testdata/controls/read_state/case.go",
+                                "sha256":  "d0af3db0d93bea20b80f83ef5c68efecaf8d4c32800f87014f3d8346566938df"
+                            },
+                            {
+                                "path":  "testdata/controls/restricted_parent_child/case.go",
+                                "sha256":  "50fa2d368906b4c1417e316b46fb0680bce1ca3bfd5124fd4ef1cf9d9de3e591"
+                            },
+                            {
+                                "path":  "testdata/controls/style_bind_value/case.go",
+                                "sha256":  "6da2df3baf88053c5d9236d9a2febbeec8e0aadbbe1a18691215f95cd3a6be83"
+                            },
+                            {
+                                "path":  "testdata/controls/unit_action_nonempty/case.go",
+                                "sha256":  "db16840083092acc597f3572df4d6da4710be7b6452ffaa401c113f8edd9841d"
+                            },
+                            {
+                                "path":  "testdata/controls/unit_action_pointer/case.go",
+                                "sha256":  "b05c3a676eacb28064d0b510c0b465f5eaddd627c86e2a5eb737421ec97aa29c"
+                            },
+                            {
+                                "path":  "testdata/controls/view_nonrenderable/case.go",
+                                "sha256":  "3c87b251a34267675f3d0f6ecfd05b8e2e04c045168b5402e602cea970fc0eac"
+                            },
+                            {
+                                "path":  "testdata/controls/view_wrong_pointer_constraint/case.go",
+                                "sha256":  "64ab11f92a286ecb6a333e09eb0a21473a266d06ea294ab913b870cccac4fde2"
+                            },
+                            {
+                                "path":  "testdata/negative/a11y_prepaint_state/case.go",
+                                "sha256":  "1319b3c5fb4a311c5afa9f3edf9052314660b1809d8fefa533f5ecc1c2be6f45"
+                            },
+                            {
+                                "path":  "testdata/negative/action_clone/case.go",
+                                "sha256":  "2daca3a4837d528f9483e17d1e3baea845d6809c87006e42d07e6b073d35c42a"
+                            },
+                            {
+                                "path":  "testdata/negative/action_handler/case.go",
+                                "sha256":  "498408bb8644f81d1c0db0e73b680f78cc127bad898a301095dad6fd8c6ffd58"
+                            },
+                            {
+                                "path":  "testdata/negative/custom_element_phase/case.go",
+                                "sha256":  "17656e0a37db13afb011612853dee0098b1cbc5cb9a4bff31ca51ba67d594508"
+                            },
+                            {
+                                "path":  "testdata/negative/dispatch_payload/case.go",
+                                "sha256":  "5ad4b3dd358f6b37b3e46a637a036e301650284c4b349356765703fbac6249dd"
+                            },
+                            {
+                                "path":  "testdata/negative/div_namespace_collision/case.go",
+                                "sha256":  "0a94ac275cc4d777d3496dd86e838cf9377c397eb0b405526dc71222e6b266d2"
+                            },
+                            {
+                                "path":  "testdata/negative/entity_factory_context/case.go",
+                                "sha256":  "9f417c4a25aa2f89c6057850b3b280fd41fbaa92795a4ad39c30513f1445acc4"
+                            },
+                            {
+                                "path":  "testdata/negative/event_assign_pair/case.go",
+                                "sha256":  "828b88775df8281d476c449aa765acecae83ce0e08ffcf65281f4da0a0bdcb41"
+                            },
+                            {
+                                "path":  "testdata/negative/event_emit_payload/case.go",
+                                "sha256":  "2c2520b520323e1c52d6764880602cd6a6bb4779853bba7ab2587518ef85adab"
+                            },
+                            {
+                                "path":  "testdata/negative/event_emit_source/case.go",
+                                "sha256":  "2b51529d1cb2cadb21d264bcb3219c2bbe925c2ac7bcd0699b89f290ca37fcf9"
+                            },
+                            {
+                                "path":  "testdata/negative/event_relabel_identical_underlying_payload/case.go",
+                                "sha256":  "27a54ff8fbfa24c2777ff55525799a7f987eabf2cb36c8d00b1b8fe476136f21"
+                            },
+                            {
+                                "path":  "testdata/negative/event_relabel_payload/case.go",
+                                "sha256":  "d2ffc207a79d0deeb16994c0e060a7186a1b909cbc878eba774a1bc6da50697b"
+                            },
+                            {
+                                "path":  "testdata/negative/event_relabel_source/case.go",
+                                "sha256":  "93c585cf23988a2c7d58a2567a9da4936069eee153d97c5d401237c3f9b6d1fe"
+                            },
+                            {
+                                "path":  "testdata/negative/event_subscribe_observer/case.go",
+                                "sha256":  "ac5a7b4f999c52d53f5c102fa76e6c386d291bcb6f7d0262e03dde2097b32cbd"
+                            },
+                            {
+                                "path":  "testdata/negative/event_subscribe_payload/case.go",
+                                "sha256":  "0eeae1442c5c006092da9a982bd0343abe4ab2225ad76ae3ebff7c954276a6d1"
+                            },
+                            {
+                                "path":  "testdata/negative/event_subscribe_source/case.go",
+                                "sha256":  "3101ccada9e1d14bcfafa885501ad313750323bb8f864799daf92b3c2a462fc8"
+                            },
+                            {
+                                "path":  "testdata/negative/forged_app_context/case.go",
+                                "sha256":  "b7e72d4b872f5bad66ccba285005f1d1a907851b33d040ed85312b5e35e035ee"
+                            },
+                            {
+                                "path":  "testdata/negative/listener_owner/case.go",
+                                "sha256":  "4706859f941211411887dff9b92a017a2e77f35a96dccf66b978240f06cf99a5"
+                            },
+                            {
+                                "path":  "testdata/negative/managed_view_missing_dismiss/case.go",
+                                "sha256":  "af6891ffda979282251a19ea16d0bfe455104c02716b974fff7b001247b47e7b"
+                            },
+                            {
+                                "path":  "testdata/negative/owned_event_payload/case.go",
+                                "sha256":  "4d3bc60d6df0d28264263abea0bfdde392cf481aab1f29bc9d568f2dd5d7223e"
+                            },
+                            {
+                                "path":  "testdata/negative/raw_entity_view/case.go",
+                                "sha256":  "41cfbf78b39bc86eb6d8a7d49867a2720a4ce5ccaeb39ff5de6ebc97ba756161"
+                            },
+                            {
+                                "path":  "testdata/negative/read_result/case.go",
+                                "sha256":  "79e5b28059757179011c32eb69f12cfe3e4746f279773c90f7629107db2240bc"
+                            },
+                            {
+                                "path":  "testdata/negative/read_state/case.go",
+                                "sha256":  "1fea048d466c77568b29fda7ff430cc4a709f442dfbce698d305fd7f44f38de9"
+                            },
+                            {
+                                "path":  "testdata/negative/restricted_parent_child/case.go",
+                                "sha256":  "0e45e06c6985db83976dc0d3cd2ed9bbca4857d9c608fcf4525c21d959af76c0"
+                            },
+                            {
+                                "path":  "testdata/negative/style_bind_value/case.go",
+                                "sha256":  "8c9bc5bd9a4c9278ce58870b457248b8e8031927279ae5554d1ea57ad96f7d13"
+                            },
+                            {
+                                "path":  "testdata/negative/unit_action_nonempty/case.go",
+                                "sha256":  "536fff951e9ef27420349d5e26a8e2f120d5fb93fdc4f76c85e50922e895bdee"
+                            },
+                            {
+                                "path":  "testdata/negative/unit_action_pointer/case.go",
+                                "sha256":  "a157f2dd278b3a078eeb14edda79e378a3601f9199a61e1bae4216a13ac23a51"
+                            },
+                            {
+                                "path":  "testdata/negative/view_nonrenderable/case.go",
+                                "sha256":  "cc9c28f2282b1868f32ab7512017f4b6bbaadf51ceb14aa21cd65abfec472421"
+                            },
+                            {
+                                "path":  "testdata/negative/view_wrong_pointer_constraint/case.go",
+                                "sha256":  "d862f514a99f68f7b1027c7336513a1b9af2e3157100e29e1a361ddcf8a45ef4"
+                            },
+                            {
+                                "path":  "verify.ps1",
+                                "sha256":  "541289baf8450a6589b97f9921667c9f764b01b2d328fa3f632a432a744b5ead"
+                            }
+                        ],
+    "failures":  [
+
+                 ],
+    "limits":  "API operation bodies are compile-only stubs. Positive counter, two-window and external-package functions are typechecked, not executed. Existing styling tests execute. No entity/event/action/lifetime behavior, native DLL/ABI, layout, window, GPU, IME/UIA, visual calibration, performance or full parity result is established."
+}

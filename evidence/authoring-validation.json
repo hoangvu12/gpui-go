@@ -1,0 +1,39 @@
+{
+  "selected_product_language_floor": "go1.27.0",
+  "validation_compiler": "go1.26.5 windows/amd64",
+  "scope": "Fluent custom-component authoring package; no runtime, renderer, full style vocabulary or benchmarks.",
+  "root_go127_build": "not verified; local compiler rejects root module language requirement",
+  "isolated_module": ".scratch/authoring-probe",
+  "environment": {
+    "GOTOOLCHAIN": "local",
+    "GOWORK": "off"
+  },
+  "commands": [
+    {
+      "command": "go test ./...",
+      "result": "passed: generic binding probe and external-package authoring tests/example"
+    },
+    {
+      "command": "go vet ./...",
+      "result": "passed"
+    }
+  ],
+  "sources": [
+    {
+      "source": "authoring\\doc.go",
+      "sha256": "e24695c85197965bfa1c3be0d0548763993b0eaa3eb5b4017c3f9d0fb58414c5",
+      "mirror_identical": true
+    },
+    {
+      "source": "authoring\\style.go",
+      "sha256": "ef25f9cf5ffad6787c2232dfe171b9e147c5e305c5a97d5e717d0ca373828d9e",
+      "mirror_identical": true
+    },
+    {
+      "source": "authoring\\style_test.go",
+      "sha256": "168f3d1bd030e883b5da99833e12d12496a291a193c10e5d9aacb46f034f2c08",
+      "mirror_identical": true
+    }
+  ],
+  "independent_review": "No correctness issue found within supported value-embedding contract; pointer embedding and arbitrary custom-method guarding are excluded."
+}

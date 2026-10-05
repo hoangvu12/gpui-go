@@ -1,0 +1,379 @@
+{
+  "schema": "gpui-go/conformance/trace@1",
+  "fixture_id": "fx-0001-layout-effects",
+  "fixture_kind": "layout-effects-v1",
+  "envelope_sha256": "f55e0db6780f95da864484c3af6b63024b7f292258537cbed706b8da52fd8197",
+  "harness": {
+    "harness_version": "0.1.0",
+    "harness_crate": "gpui-reference-harness",
+    "gpui_crate": "gpui-ce 0.2.2",
+    "gpui_commit": "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+    "profile": "test",
+    "features": [
+      "default",
+      "test-support"
+    ]
+  },
+  "events": [
+    {
+      "seq": 1,
+      "name": "op-begin",
+      "fields": {
+        "op": "create-entity"
+      }
+    },
+    {
+      "seq": 2,
+      "name": "entity-created",
+      "label": "counter",
+      "fields": {
+        "value": 0
+      }
+    },
+    {
+      "seq": 3,
+      "name": "op-end"
+    },
+    {
+      "seq": 4,
+      "name": "op-begin",
+      "fields": {
+        "op": "subscribe"
+      }
+    },
+    {
+      "seq": 5,
+      "name": "subscription-registered",
+      "label": "obs1",
+      "fields": {
+        "source": "counter"
+      }
+    },
+    {
+      "seq": 6,
+      "name": "op-end"
+    },
+    {
+      "seq": 7,
+      "name": "op-begin",
+      "fields": {
+        "op": "observe-release"
+      }
+    },
+    {
+      "seq": 8,
+      "name": "release-observed",
+      "label": "counter"
+    },
+    {
+      "seq": 9,
+      "name": "op-end"
+    },
+    {
+      "seq": 10,
+      "name": "op-begin",
+      "fields": {
+        "op": "notify"
+      }
+    },
+    {
+      "seq": 11,
+      "name": "update-returned",
+      "label": "counter",
+      "fields": {
+        "count": 2,
+        "op": "notify"
+      }
+    },
+    {
+      "seq": 12,
+      "name": "observer-notified",
+      "label": "obs1",
+      "fields": {
+        "notified": 1,
+        "receivedEvents": 0
+      }
+    },
+    {
+      "seq": 13,
+      "name": "op-end"
+    },
+    {
+      "seq": 14,
+      "name": "op-begin",
+      "fields": {
+        "op": "emit"
+      }
+    },
+    {
+      "seq": 15,
+      "name": "update-returned",
+      "label": "counter",
+      "fields": {
+        "count": 3,
+        "op": "emit"
+      }
+    },
+    {
+      "seq": 16,
+      "name": "event-delivered",
+      "label": "obs1",
+      "fields": {
+        "receivedEvents": 1,
+        "value": 1
+      }
+    },
+    {
+      "seq": 17,
+      "name": "event-delivered",
+      "label": "obs1",
+      "fields": {
+        "receivedEvents": 2,
+        "value": 2
+      }
+    },
+    {
+      "seq": 18,
+      "name": "event-delivered",
+      "label": "obs1",
+      "fields": {
+        "receivedEvents": 3,
+        "value": 3
+      }
+    },
+    {
+      "seq": 19,
+      "name": "op-end"
+    },
+    {
+      "seq": 20,
+      "name": "op-begin",
+      "fields": {
+        "op": "defer"
+      }
+    },
+    {
+      "seq": 21,
+      "name": "defer-ran",
+      "label": "d1"
+    },
+    {
+      "seq": 22,
+      "name": "defer-ran",
+      "label": "d1b"
+    },
+    {
+      "seq": 23,
+      "name": "op-end"
+    },
+    {
+      "seq": 24,
+      "name": "op-begin",
+      "fields": {
+        "op": "spawn-task"
+      }
+    },
+    {
+      "seq": 25,
+      "name": "op-end"
+    },
+    {
+      "seq": 26,
+      "name": "op-begin",
+      "fields": {
+        "op": "run-effects"
+      }
+    },
+    {
+      "seq": 27,
+      "name": "effects-run"
+    },
+    {
+      "seq": 28,
+      "name": "op-end"
+    },
+    {
+      "seq": 29,
+      "name": "op-begin",
+      "fields": {
+        "op": "advance-clock"
+      }
+    },
+    {
+      "seq": 30,
+      "name": "task-started",
+      "label": "t1",
+      "fields": {
+        "delayMs": 50,
+        "result": 42
+      }
+    },
+    {
+      "seq": 31,
+      "name": "task-completed",
+      "label": "t1",
+      "fields": {
+        "result": 42
+      }
+    },
+    {
+      "seq": 32,
+      "name": "task-result-observed",
+      "label": "t1",
+      "fields": {
+        "result": 42
+      }
+    },
+    {
+      "seq": 33,
+      "name": "clock-advanced",
+      "fields": {
+        "ms": 100
+      }
+    },
+    {
+      "seq": 34,
+      "name": "op-end"
+    },
+    {
+      "seq": 35,
+      "name": "op-begin",
+      "fields": {
+        "op": "run-tasks"
+      }
+    },
+    {
+      "seq": 36,
+      "name": "tasks-run"
+    },
+    {
+      "seq": 37,
+      "name": "op-end"
+    },
+    {
+      "seq": 38,
+      "name": "op-begin",
+      "fields": {
+        "op": "run-effects"
+      }
+    },
+    {
+      "seq": 39,
+      "name": "effects-run"
+    },
+    {
+      "seq": 40,
+      "name": "op-end"
+    },
+    {
+      "seq": 41,
+      "name": "op-begin",
+      "fields": {
+        "op": "drop-entity"
+      }
+    },
+    {
+      "seq": 42,
+      "name": "entity-dropped",
+      "label": "counter"
+    },
+    {
+      "seq": 43,
+      "name": "op-end"
+    },
+    {
+      "seq": 44,
+      "name": "op-begin",
+      "fields": {
+        "op": "run-effects"
+      }
+    },
+    {
+      "seq": 45,
+      "name": "entity-released",
+      "label": "counter",
+      "fields": {
+        "value": 2
+      }
+    },
+    {
+      "seq": 46,
+      "name": "effects-run"
+    },
+    {
+      "seq": 47,
+      "name": "op-end"
+    },
+    {
+      "seq": 48,
+      "name": "layout-requested",
+      "label": "root"
+    },
+    {
+      "seq": 49,
+      "name": "layout-bounds",
+      "label": "root",
+      "fields": {
+        "height": "f32:43480000",
+        "width": "f32:43960000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 50,
+      "name": "layout-bounds",
+      "label": "a",
+      "fields": {
+        "height": "f32:42480000",
+        "width": "f32:42A90000",
+        "x": "f32:41400000",
+        "y": "f32:41400000"
+      }
+    },
+    {
+      "seq": 51,
+      "name": "layout-bounds",
+      "label": "b",
+      "fields": {
+        "height": "f32:43300000",
+        "width": "f32:00000000",
+        "x": "f32:42D10000",
+        "y": "f32:41400000"
+      }
+    },
+    {
+      "seq": 52,
+      "name": "layout-bounds",
+      "label": "c",
+      "fields": {
+        "height": "f32:42300000",
+        "width": "f32:42EA0000",
+        "x": "f32:42E10000",
+        "y": "f32:41400000"
+      }
+    },
+    {
+      "seq": 53,
+      "name": "layout-bounds",
+      "label": "c1",
+      "fields": {
+        "height": "f32:41200000",
+        "width": "f32:41200000",
+        "x": "f32:42E10000",
+        "y": "f32:41400000"
+      }
+    },
+    {
+      "seq": 54,
+      "name": "layout-bounds",
+      "label": "d",
+      "fields": {
+        "height": "f32:43300000",
+        "width": "f32:424A0000",
+        "x": "f32:436D8000",
+        "y": "f32:41400000"
+      }
+    }
+  ]
+}

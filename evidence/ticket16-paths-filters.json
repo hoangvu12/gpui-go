@@ -1,0 +1,23 @@
+{
+    "ticket": "16-paths-filters",
+    "date": "2026-10-06",
+    "authorization": "User: ok now use roboco mcp, create a new chat that use /implement skill to do all those tickets, use iroha dashscope glm 5.3 with pi harness",
+    "session": "Roboco chat 065e52f5; subagent ticket16-paths-filters (died mid-work once; resumed and completed); orchestrator re-verified 2/2 full-suite runs",
+    "git_state": "No git repository; commit step environment-blocked, not fabricated.",
+    "native": {
+        "revision": 7, "mask": "0xFF (bit 7 scene-draw-paths added)",
+        "dll": "12,489,728 bytes; sha256 d648523b7fe1173a8810a27de77ff8ecbfebaa53eab95d69a6335c4a042b87dd; static CRT (OS-only imports)",
+        "scene_service": "version 3: path records (the pinned PathBuilder with fill/stroke/caps/joins/dash/euclid post-composition), insert_path/path_dump/path_script, batch/requirements/meta/replay/snapshot",
+        "renderer_service": "version 2: the full pinned draw path port (renderer/draw.rs, 2413 lines): 68 prebuilt DXBC shader blobs (542,448 bytes, combined sha256 991b93ac...) compiled at MAINTAINER build time exactly like the pinned gpui_render build.rs (wgsl-rs -> Naga validation/lowering -> HLSL sm_5_0 -> Fxc); instance pipelines for quads/shadows/underlines, two-pass MSAA paths (PATH_MULTISAMPLE_COUNT=4), monochrome/subpixel/polychrome sprites via atlas SRVs, SURFACES pipeline, the pinned blur/composite filter chain with isolated group targets up to MAX_FILTER_GROUP_DEPTH (deeper inline), surface_draw_scene + staging readback",
+        "device_sharing": "device-global pipelines (documented deviation: the pin is per-renderer) safe under the renderer-global serialization; atlas lock order fixed (renderer->atlas only)"
+    },
+    "oracle": "fx-0007-paths-filters (428 events, 3x deterministic, sha 7fbe3e19...): path-vertex f32 bits of the pinned tessellation, draw orders, batch structures with vertex/sprite counts and texture indices, depth-3 filter-target plan (isolated 0, isolated 1, inline)",
+    "gate": "TestFx0007PathsFiltersMatchesRecordedReference: 428/428 events bit-exact, empty diff; fx-0001..0006 gates unchanged",
+    "real_window": "TestRealWindowCompositeDrawPresentsAndRetires: background quad + content-filter group (blur 4) + filled red path + REAL text sprite (DirectWrite raster -> atlas -> sprite) verified by STAGING READBACK PIXELS (background #334155, path interior #dc2626, group center != background, 40 bright glyph pixels), presented + retired through the ledger (1/1/0/0), forced GC clean, stale/unfinished scene handles typed errors",
+    "executed_results": {"rust": "cargo build clean; cargo test -p gpui-go-native 96/96 (7 new path tests); workspace tests green (after clearing a 22GB debug dir — disk-space environment limit, not code)", "go": "CGO_ENABLED=0 go test ./... 16/16 packages (fx-0001..0007 all pass); vet/gofmt clean; demo PASS"},
+    "limitations": [
+        "Surface pixel output awaits the capture-producer slice (ticket28): the ABI carries the pinned SurfaceSource::Unsupported stand-in which draws through the pinned error path (ERR_UNSUPPORTED_SOURCE); the SURFACES pipeline itself is ported and constructed.",
+        "Pinned Path::id is not carried by the ABI (assigned at insertion); the runner assigns dumped position, equal to insertion order for this fixture.",
+        "A one-ulp color round-trip difference is possible in render snapshots (pixels only, never traces)."
+    ]
+}

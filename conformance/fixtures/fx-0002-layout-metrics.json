@@ -1,0 +1,409 @@
+{
+  "schema": "gpui-go/conformance/envelope@1",
+  "fixture_id": "fx-0002-layout-metrics",
+  "fixture_kind": "layout-metrics-v1",
+  "title": "Reference layout metrics: wrap, grid, absolute, rem, measurement and clamping",
+  "profile": "test",
+  "capabilities": [
+    "layout.geometry.bounds",
+    "layout.grid",
+    "layout.flex.wrap",
+    "layout.position.absolute",
+    "layout.measurement.callbacks",
+    "layout.rem",
+    "layout.block"
+  ],
+  "environment": [
+    "headless",
+    "test-platform"
+  ],
+  "inputs": {
+    "layout_cases": {
+      "cases": [
+        {
+          "label": "flex-wrap-row",
+          "available_space": {
+            "width": 100,
+            "height": 80
+          },
+          "style_tree": {
+            "label": "wrap-root",
+            "style": {
+              "display": "Flex",
+              "flexDirection": "Row",
+              "flexWrap": "Wrap",
+              "width": "100px",
+              "height": "80px",
+              "gap": "5px"
+            },
+            "children": [
+              {
+                "label": "w1",
+                "style": {
+                  "width": "30px",
+                  "height": "10.5px"
+                },
+                "children": []
+              },
+              {
+                "label": "w2",
+                "style": {
+                  "width": "30px",
+                  "height": "20px"
+                },
+                "children": []
+              },
+              {
+                "label": "w3",
+                "style": {
+                  "width": "30px",
+                  "height": "12.5px"
+                },
+                "children": []
+              },
+              {
+                "label": "w4",
+                "style": {
+                  "width": "30px",
+                  "height": "8px"
+                },
+                "children": []
+              }
+            ]
+          }
+        },
+        {
+          "label": "grid-minmax-columns",
+          "available_space": {
+            "width": 100,
+            "height": 60
+          },
+          "style_tree": {
+            "label": "grid-root",
+            "style": {
+              "display": "Grid",
+              "width": "100px",
+              "height": "60px",
+              "gridTemplateColumns": "repeat(2, minmax(min-content, 1fr))",
+              "gridTemplateRows": "repeat(2, minmax(0, 1fr))"
+            },
+            "children": [
+              {
+                "label": "g1",
+                "style": {
+                  "width": "10px",
+                  "height": "14.5px"
+                },
+                "children": []
+              },
+              {
+                "label": "g2",
+                "style": {
+                  "width": "10px",
+                  "height": "9px"
+                },
+                "children": []
+              },
+              {
+                "label": "g3",
+                "style": {
+                  "width": "10px",
+                  "height": "11.5px"
+                },
+                "children": []
+              }
+            ]
+          }
+        },
+        {
+          "label": "absolute-inset-anchors",
+          "available_space": {
+            "width": 120,
+            "height": 90
+          },
+          "style_tree": {
+            "label": "abs-root",
+            "style": {
+              "display": "Flex",
+              "position": "Relative",
+              "width": "120px",
+              "height": "90px"
+            },
+            "children": [
+              {
+                "label": "abs-static",
+                "style": {
+                  "width": "40px",
+                  "height": "15.5px"
+                },
+                "children": []
+              },
+              {
+                "label": "abs-top-right",
+                "style": {
+                  "position": "Absolute",
+                  "top": "10.5px",
+                  "right": "8px",
+                  "width": "24px",
+                  "height": "12px"
+                },
+                "children": []
+              },
+              {
+                "label": "abs-bottom-left",
+                "style": {
+                  "position": "Absolute",
+                  "bottom": "6px",
+                  "left": "12.5px",
+                  "width": "20px",
+                  "height": "10px"
+                },
+                "children": []
+              }
+            ]
+          }
+        },
+        {
+          "label": "rem-override-20",
+          "rem_size": 20,
+          "available_space": {
+            "width": 100,
+            "height": 100
+          },
+          "style_tree": {
+            "label": "rem-root",
+            "style": {
+              "display": "Flex",
+              "flexDirection": "Row",
+              "width": "5rem",
+              "height": "4rem",
+              "gap": "0.5rem",
+              "padding": "0.25rem"
+            },
+            "children": [
+              {
+                "label": "rem-a",
+                "style": {
+                  "width": "1.5rem",
+                  "height": "1.5rem"
+                },
+                "children": []
+              },
+              {
+                "label": "rem-b",
+                "style": {
+                  "width": "2rem",
+                  "height": "75%"
+                },
+                "children": []
+              }
+            ]
+          }
+        },
+        {
+          "label": "measured-fixed-flex",
+          "available_space": {
+            "width": 150,
+            "height": 60
+          },
+          "measured": {
+            "m-fixed": {
+              "kind": "fixed",
+              "width": 40,
+              "height": 25
+            }
+          },
+          "style_tree": {
+            "label": "m-root",
+            "style": {
+              "display": "Flex",
+              "flexDirection": "Row",
+              "width": "150px",
+              "height": "60px",
+              "gap": "5px"
+            },
+            "children": [
+              {
+                "label": "m-sib1",
+                "style": {
+                  "width": "30px",
+                  "height": "20px"
+                },
+                "children": []
+              },
+              {
+                "label": "m-fixed",
+                "style": {},
+                "children": []
+              },
+              {
+                "label": "m-sib2",
+                "style": {
+                  "flexGrow": "1",
+                  "minHeight": "12.5px"
+                },
+                "children": []
+              }
+            ]
+          }
+        },
+        {
+          "label": "measured-echo-min-content",
+          "available_space": {
+            "width": 120,
+            "height": 60
+          },
+          "available_width_mode": "min-content",
+          "measured": {
+            "m-echo": {
+              "kind": "echo-known",
+              "width": 50,
+              "height": 20
+            }
+          },
+          "style_tree": {
+            "label": "echo-root",
+            "style": {
+              "display": "Flex",
+              "flexDirection": "Row",
+              "height": "60px"
+            },
+            "children": [
+              {
+                "label": "m-echo",
+                "style": {
+                  "height": "30px"
+                },
+                "children": []
+              }
+            ]
+          }
+        },
+        {
+          "label": "percent-margin-padding-border",
+          "available_space": {
+            "width": 200,
+            "height": 120
+          },
+          "style_tree": {
+            "label": "p-root",
+            "style": {
+              "display": "Flex",
+              "width": "200px",
+              "height": "120px"
+            },
+            "children": [
+              {
+                "label": "p-outer",
+                "style": {
+                  "width": "47.5%",
+                  "height": "75%",
+                  "margin": "5%",
+                  "padding": "5%",
+                  "borderWidth": "2px"
+                },
+                "children": [
+                  {
+                    "label": "p-inner",
+                    "style": {
+                      "width": "50%",
+                      "height": "50%",
+                      "margin": "5%",
+                      "padding": "2.5%"
+                    },
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "label": "max-height-clamp",
+          "available_space": {
+            "width": 100,
+            "height": 60
+          },
+          "style_tree": {
+            "label": "clamp-root",
+            "style": {
+              "display": "Flex",
+              "flexDirection": "Column",
+              "width": "100px",
+              "height": "60px"
+            },
+            "children": [
+              {
+                "label": "clamp-tall",
+                "style": {
+                  "width": "30px",
+                  "height": "150px",
+                  "maxHeight": "45.5px"
+                },
+                "children": []
+              },
+              {
+                "label": "clamp-below",
+                "style": {
+                  "width": "30px",
+                  "height": "10px"
+                },
+                "children": []
+              }
+            ]
+          }
+        },
+        {
+          "label": "block-display-stacking",
+          "available_space": {
+            "width": 200,
+            "height": 300
+          },
+          "style_tree": {
+            "label": "b-root",
+            "style": {
+              "display": "Block",
+              "width": "160px",
+              "margin": "8px"
+            },
+            "children": [
+              {
+                "label": "b-first",
+                "style": {
+                  "height": "30px",
+                  "margin": "4px"
+                },
+                "children": []
+              },
+              {
+                "label": "b-second",
+                "style": {
+                  "height": "50.5px",
+                  "margin": "6px"
+                },
+                "children": [
+                  {
+                    "label": "b-second-inner",
+                    "style": {
+                      "height": "10px",
+                      "margin": "2.5px"
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "label": "b-third",
+                "style": {
+                  "width": "60%",
+                  "height": "20px"
+                },
+                "children": []
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

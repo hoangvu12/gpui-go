@@ -1,0 +1,42 @@
+[package]
+name = "gpui-reference-harness"
+version = "0.1.0"
+edition = "2024"
+description = "Independent reference oracle harness built from the pinned GPUI-CE source"
+publish = false
+
+[dependencies]
+# Pinned upstream: crates/gpui in ce-source is the exact gpui-ce crate
+# (package name gpui-ce, lib name gpui) at commit 254b5dbd.
+gpui-ce = { path = "../ce-source/crates/gpui", features = ["test-support"] }
+
+# Ticket16 (paths-filters-v1 fixture): the pinned tessellation engine
+# behind the public `gpui::PathBuilder` (the CE workspace declares
+# `lyon = "1.0"`; the same registry resolution serves gpui here). The
+# fixture's style command needs `LineCap`/`LineJoin`/`Orientation`, which
+# gpui does not re-export.
+lyon = "1.0"
+# The pinned text stack (ticket09 text-geometry fixture): the exact
+# gpui_ce_parley crate the pinned Windows platform constructs, so the
+# reference harness shapes through the REAL Parley/Fontique backend.
+# Adding it rebuilds the gpui dependency subtree into this workspace's
+# lock; that is expected.
+gpui_ce_parley = { path = "../ce-source/crates/gpui_ce_parley", features = ["system-fonts"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+sha2 = "0.10"
+
+# Ticket10 (glyph-raster-v1 fixture): the pinned Windows rasterizer's
+# dependencies. The fixture contains an independent port of
+# crates/gpui_windows/src/font_rasterizer.rs (the pinned type is
+# pub(crate) in gpui_windows and cannot be linked), which needs the
+# DirectWrite API surface and the OS subpixel probe. Only the features
+# the port uses are enabled; the version mirrors the pin's workspace
+# dependency (windows 0.62.2, windows-numerics 0.3).
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_DirectWrite",
+    "Win32_UI_WindowsAndMessaging",
+] }
+windows-numerics = "0.3"

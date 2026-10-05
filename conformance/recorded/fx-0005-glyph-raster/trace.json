@@ -1,0 +1,772 @@
+{
+  "schema": "gpui-go/conformance/trace@1",
+  "fixture_id": "fx-0005-glyph-raster",
+  "fixture_kind": "glyph-raster-v1",
+  "envelope_sha256": "719e7667a513674d505874151601d3f042a9b7afd834cfb18ff253f88eaaa1a0",
+  "harness": {
+    "harness_version": "0.1.0",
+    "harness_crate": "gpui-reference-harness",
+    "gpui_crate": "gpui-ce 0.2.2",
+    "gpui_commit": "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+    "profile": "test",
+    "features": [
+      "default",
+      "test-support"
+    ]
+  },
+  "events": [
+    {
+      "seq": 1,
+      "name": "raster-system-begin",
+      "label": "raster-system",
+      "fields": {
+        "fallbackFamilies": "Lilex, IBM Plex Sans, Arial",
+        "fontGeneration": 0,
+        "recommendedMode": "Subpixel",
+        "subpixelVariantsX": 4,
+        "subpixelVariantsY": 1,
+        "systemFontFamily": "Segoe UI"
+      }
+    },
+    {
+      "seq": 2,
+      "name": "case-begin",
+      "label": "latin-grayscale",
+      "fields": {
+        "family": "Segoe UI",
+        "fontId": 9223372036854775808,
+        "mode": "grayscale"
+      }
+    },
+    {
+      "seq": 3,
+      "name": "glyph-raster",
+      "label": "latin-grayscale",
+      "fields": {
+        "boundsH": 11,
+        "boundsW": 11,
+        "boundsX": 0,
+        "boundsY": -11,
+        "char": "\\u{41}",
+        "effectTag": "independent",
+        "fontSize": "f32:41800000",
+        "format": "alpha-mask",
+        "glyphId": 36,
+        "hasGlyph": 1,
+        "height": 11,
+        "outcome": "ok",
+        "pixelBytes": 121,
+        "pixelsSHA256": "cc45a71af5930928cec0e59ca3ed8a40aeb92fe25e80fe7a3eedba6c2d4e7334",
+        "scale": "f32:3F800000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 11
+      }
+    },
+    {
+      "seq": 4,
+      "name": "glyph-raster",
+      "label": "latin-grayscale",
+      "fields": {
+        "boundsH": 23,
+        "boundsW": 21,
+        "boundsX": 0,
+        "boundsY": -23,
+        "char": "\\u{41}",
+        "effectTag": "independent",
+        "fontSize": "f32:41800000",
+        "format": "alpha-mask",
+        "glyphId": 36,
+        "hasGlyph": 1,
+        "height": 23,
+        "outcome": "ok",
+        "pixelBytes": 483,
+        "pixelsSHA256": "aca8066155502f1cde0352e318608b967f4eb55456e01f36f3a93ecbcf158063",
+        "scale": "f32:40000000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 21
+      }
+    },
+    {
+      "seq": 5,
+      "name": "glyph-raster",
+      "label": "latin-grayscale",
+      "fields": {
+        "boundsH": 17,
+        "boundsW": 16,
+        "boundsX": 0,
+        "boundsY": -17,
+        "char": "\\u{41}",
+        "effectTag": "independent",
+        "fontSize": "f32:41C00000",
+        "format": "alpha-mask",
+        "glyphId": 36,
+        "hasGlyph": 1,
+        "height": 17,
+        "outcome": "ok",
+        "pixelBytes": 272,
+        "pixelsSHA256": "8aaa7fe36cd4fa3f94672354f783f436e1db1528d248a90451369e8c0a5d3398",
+        "scale": "f32:3F800000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 16
+      }
+    },
+    {
+      "seq": 6,
+      "name": "glyph-raster",
+      "label": "latin-grayscale",
+      "fields": {
+        "boundsH": 34,
+        "boundsW": 31,
+        "boundsX": 0,
+        "boundsY": -34,
+        "char": "\\u{41}",
+        "effectTag": "independent",
+        "fontSize": "f32:41C00000",
+        "format": "alpha-mask",
+        "glyphId": 36,
+        "hasGlyph": 1,
+        "height": 34,
+        "outcome": "ok",
+        "pixelBytes": 1054,
+        "pixelsSHA256": "9af0ce593d9e43133aa09444e18864830d28960d81bf8ded151abf98824448bf",
+        "scale": "f32:40000000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 31
+      }
+    },
+    {
+      "seq": 7,
+      "name": "glyph-raster",
+      "label": "latin-grayscale",
+      "fields": {
+        "boundsH": 12,
+        "boundsW": 9,
+        "boundsX": 0,
+        "boundsY": -8,
+        "char": "\\u{67}",
+        "effectTag": "independent",
+        "fontSize": "f32:41800000",
+        "format": "alpha-mask",
+        "glyphId": 74,
+        "hasGlyph": 1,
+        "height": 12,
+        "outcome": "ok",
+        "pixelBytes": 108,
+        "pixelsSHA256": "41605158ac5ab5959914bc42fc40a35f01d5c4fe3199053039bff8ffd4648daa",
+        "scale": "f32:3F800000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 9
+      }
+    },
+    {
+      "seq": 8,
+      "name": "glyph-raster",
+      "label": "latin-grayscale",
+      "fields": {
+        "boundsH": 23,
+        "boundsW": 16,
+        "boundsX": 1,
+        "boundsY": -16,
+        "char": "\\u{67}",
+        "effectTag": "independent",
+        "fontSize": "f32:41800000",
+        "format": "alpha-mask",
+        "glyphId": 74,
+        "hasGlyph": 1,
+        "height": 23,
+        "outcome": "ok",
+        "pixelBytes": 368,
+        "pixelsSHA256": "40c522820dee36c1a50575209ae2fe46b7349ed6657cda40416cd79b7fa36ab2",
+        "scale": "f32:40000000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 16
+      }
+    },
+    {
+      "seq": 9,
+      "name": "glyph-raster",
+      "label": "latin-grayscale",
+      "fields": {
+        "boundsH": 18,
+        "boundsW": 12,
+        "boundsX": 1,
+        "boundsY": -12,
+        "char": "\\u{67}",
+        "effectTag": "independent",
+        "fontSize": "f32:41C00000",
+        "format": "alpha-mask",
+        "glyphId": 74,
+        "hasGlyph": 1,
+        "height": 18,
+        "outcome": "ok",
+        "pixelBytes": 216,
+        "pixelsSHA256": "eab05b03cb50b7c0d9c33c38bece71056062fdc06e16e0a454b8f0546e389383",
+        "scale": "f32:3F800000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 12
+      }
+    },
+    {
+      "seq": 10,
+      "name": "glyph-raster",
+      "label": "latin-grayscale",
+      "fields": {
+        "boundsH": 36,
+        "boundsW": 23,
+        "boundsX": 2,
+        "boundsY": -25,
+        "char": "\\u{67}",
+        "effectTag": "independent",
+        "fontSize": "f32:41C00000",
+        "format": "alpha-mask",
+        "glyphId": 74,
+        "hasGlyph": 1,
+        "height": 36,
+        "outcome": "ok",
+        "pixelBytes": 828,
+        "pixelsSHA256": "83821633a0d5474c6ae63b80e552eb825f404258daa8ab3ac9fb91406d41fa0b",
+        "scale": "f32:40000000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 23
+      }
+    },
+    {
+      "seq": 11,
+      "name": "glyph-raster",
+      "label": "latin-grayscale",
+      "fields": {
+        "boundsH": 12,
+        "boundsW": 2,
+        "boundsX": 1,
+        "boundsY": -12,
+        "char": "\\u{69}",
+        "effectTag": "independent",
+        "fontSize": "f32:41800000",
+        "format": "alpha-mask",
+        "glyphId": 76,
+        "hasGlyph": 1,
+        "height": 12,
+        "outcome": "ok",
+        "pixelBytes": 24,
+        "pixelsSHA256": "98a8e73ad404deadde682fe01c7a5c319c380b957bd7d17168cc6f3137ffb1af",
+        "scale": "f32:3F800000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 2
+      }
+    },
+    {
+      "seq": 12,
+      "name": "glyph-raster",
+      "label": "latin-grayscale",
+      "fields": {
+        "boundsH": 23,
+        "boundsW": 4,
+        "boundsX": 2,
+        "boundsY": -23,
+        "char": "\\u{69}",
+        "effectTag": "independent",
+        "fontSize": "f32:41800000",
+        "format": "alpha-mask",
+        "glyphId": 76,
+        "hasGlyph": 1,
+        "height": 23,
+        "outcome": "ok",
+        "pixelBytes": 92,
+        "pixelsSHA256": "c3eed8967c2b7ffe6d50e2ccbd000d2286731a56bd05c48262d8fe32714f39a5",
+        "scale": "f32:40000000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 4
+      }
+    },
+    {
+      "seq": 13,
+      "name": "glyph-raster",
+      "label": "latin-grayscale",
+      "fields": {
+        "boundsH": 17,
+        "boundsW": 4,
+        "boundsX": 1,
+        "boundsY": -17,
+        "char": "\\u{69}",
+        "effectTag": "independent",
+        "fontSize": "f32:41C00000",
+        "format": "alpha-mask",
+        "glyphId": 76,
+        "hasGlyph": 1,
+        "height": 17,
+        "outcome": "ok",
+        "pixelBytes": 68,
+        "pixelsSHA256": "30189f9f68cb88b3f90bb3666e204c124daeb1d2e8ed8b4e8ca0c1e927445342",
+        "scale": "f32:3F800000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 4
+      }
+    },
+    {
+      "seq": 14,
+      "name": "glyph-raster",
+      "label": "latin-grayscale",
+      "fields": {
+        "boundsH": 36,
+        "boundsW": 6,
+        "boundsX": 3,
+        "boundsY": -36,
+        "char": "\\u{69}",
+        "effectTag": "independent",
+        "fontSize": "f32:41C00000",
+        "format": "alpha-mask",
+        "glyphId": 76,
+        "hasGlyph": 1,
+        "height": 36,
+        "outcome": "ok",
+        "pixelBytes": 216,
+        "pixelsSHA256": "a533af461853d426c0e43e0948d15ed1f99c3d68dd43f909a17fd1eb2b120148",
+        "scale": "f32:40000000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 6
+      }
+    },
+    {
+      "seq": 15,
+      "name": "case-end",
+      "label": "latin-grayscale"
+    },
+    {
+      "seq": 16,
+      "name": "case-begin",
+      "label": "latin-subpixel",
+      "fields": {
+        "family": "Segoe UI",
+        "fontId": 9223372036854775808,
+        "mode": "subpixel"
+      }
+    },
+    {
+      "seq": 17,
+      "name": "glyph-raster",
+      "label": "latin-subpixel",
+      "fields": {
+        "boundsH": 11,
+        "boundsW": 12,
+        "boundsX": -1,
+        "boundsY": -11,
+        "char": "\\u{41}",
+        "effectTag": "independent",
+        "fontSize": "f32:41800000",
+        "format": "bgra-subpixel",
+        "glyphId": 36,
+        "hasGlyph": 1,
+        "height": 11,
+        "outcome": "ok",
+        "pixelBytes": 528,
+        "pixelsSHA256": "a43275e894c36c071cbac52bdf0ed671d5939339dce03198cd30e7c97483d60e",
+        "scale": "f32:3F800000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 12
+      }
+    },
+    {
+      "seq": 18,
+      "name": "glyph-raster",
+      "label": "latin-subpixel",
+      "fields": {
+        "boundsH": 11,
+        "boundsW": 12,
+        "boundsX": 0,
+        "boundsY": -11,
+        "char": "\\u{41}",
+        "effectTag": "independent",
+        "fontSize": "f32:41800000",
+        "format": "bgra-subpixel",
+        "glyphId": 36,
+        "hasGlyph": 1,
+        "height": 11,
+        "outcome": "ok",
+        "pixelBytes": 528,
+        "pixelsSHA256": "e2342704b6313f1e794f468d13553af989f3182f0eb46721503f43d2222e3c83",
+        "scale": "f32:3F800000",
+        "subpixelX": 3,
+        "subpixelY": 0,
+        "width": 12
+      }
+    },
+    {
+      "seq": 19,
+      "name": "glyph-raster",
+      "label": "latin-subpixel",
+      "fields": {
+        "boundsH": 23,
+        "boundsW": 21,
+        "boundsX": 0,
+        "boundsY": -23,
+        "char": "\\u{41}",
+        "effectTag": "independent",
+        "fontSize": "f32:41800000",
+        "format": "bgra-subpixel",
+        "glyphId": 36,
+        "hasGlyph": 1,
+        "height": 23,
+        "outcome": "ok",
+        "pixelBytes": 1932,
+        "pixelsSHA256": "932fbc4c3f593f8ba1688175e55d4ae7216d5b0e46cd80de20f5b7e6e6061c41",
+        "scale": "f32:40000000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 21
+      }
+    },
+    {
+      "seq": 20,
+      "name": "glyph-raster",
+      "label": "latin-subpixel",
+      "fields": {
+        "boundsH": 23,
+        "boundsW": 22,
+        "boundsX": 0,
+        "boundsY": -23,
+        "char": "\\u{41}",
+        "effectTag": "independent",
+        "fontSize": "f32:41800000",
+        "format": "bgra-subpixel",
+        "glyphId": 36,
+        "hasGlyph": 1,
+        "height": 23,
+        "outcome": "ok",
+        "pixelBytes": 2024,
+        "pixelsSHA256": "826d696681e4e1e607986e2dc304ca833a0237ce6561fcbdabfcf38da743c2fb",
+        "scale": "f32:40000000",
+        "subpixelX": 3,
+        "subpixelY": 0,
+        "width": 22
+      }
+    },
+    {
+      "seq": 21,
+      "name": "glyph-raster",
+      "label": "latin-subpixel",
+      "fields": {
+        "boundsH": 12,
+        "boundsW": 9,
+        "boundsX": 0,
+        "boundsY": -8,
+        "char": "\\u{67}",
+        "effectTag": "independent",
+        "fontSize": "f32:41800000",
+        "format": "bgra-subpixel",
+        "glyphId": 74,
+        "hasGlyph": 1,
+        "height": 12,
+        "outcome": "ok",
+        "pixelBytes": 432,
+        "pixelsSHA256": "6f58e908f1a4c107f820944842babe66b59be0b2d912d31b695a2f839eb619a7",
+        "scale": "f32:3F800000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 9
+      }
+    },
+    {
+      "seq": 22,
+      "name": "glyph-raster",
+      "label": "latin-subpixel",
+      "fields": {
+        "boundsH": 12,
+        "boundsW": 9,
+        "boundsX": 1,
+        "boundsY": -8,
+        "char": "\\u{67}",
+        "effectTag": "independent",
+        "fontSize": "f32:41800000",
+        "format": "bgra-subpixel",
+        "glyphId": 74,
+        "hasGlyph": 1,
+        "height": 12,
+        "outcome": "ok",
+        "pixelBytes": 432,
+        "pixelsSHA256": "83209b74a4c31fb1ca5b3937aadc7dc504bef54f0b1225a16fb06f0da6dd28d3",
+        "scale": "f32:3F800000",
+        "subpixelX": 3,
+        "subpixelY": 0,
+        "width": 9
+      }
+    },
+    {
+      "seq": 23,
+      "name": "glyph-raster",
+      "label": "latin-subpixel",
+      "fields": {
+        "boundsH": 23,
+        "boundsW": 16,
+        "boundsX": 1,
+        "boundsY": -16,
+        "char": "\\u{67}",
+        "effectTag": "independent",
+        "fontSize": "f32:41800000",
+        "format": "bgra-subpixel",
+        "glyphId": 74,
+        "hasGlyph": 1,
+        "height": 23,
+        "outcome": "ok",
+        "pixelBytes": 1472,
+        "pixelsSHA256": "f89d36bb7fba1a47787159f1fff812efdf2a900b21ef33656512a41e390038bb",
+        "scale": "f32:40000000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 16
+      }
+    },
+    {
+      "seq": 24,
+      "name": "glyph-raster",
+      "label": "latin-subpixel",
+      "fields": {
+        "boundsH": 23,
+        "boundsW": 16,
+        "boundsX": 2,
+        "boundsY": -16,
+        "char": "\\u{67}",
+        "effectTag": "independent",
+        "fontSize": "f32:41800000",
+        "format": "bgra-subpixel",
+        "glyphId": 74,
+        "hasGlyph": 1,
+        "height": 23,
+        "outcome": "ok",
+        "pixelBytes": 1472,
+        "pixelsSHA256": "3e79431fbef7d06ad4b785c17b3187633031a0c42dfcc09b794b5e5526bf734c",
+        "scale": "f32:40000000",
+        "subpixelX": 3,
+        "subpixelY": 0,
+        "width": 16
+      }
+    },
+    {
+      "seq": 25,
+      "name": "case-end",
+      "label": "latin-subpixel"
+    },
+    {
+      "seq": 26,
+      "name": "case-begin",
+      "label": "latin-color-tint",
+      "fields": {
+        "family": "Segoe UI",
+        "fontId": 9223372036854775808,
+        "mode": "color"
+      }
+    },
+    {
+      "seq": 27,
+      "name": "glyph-raster",
+      "label": "latin-color-tint",
+      "fields": {
+        "boundsH": 17,
+        "boundsW": 16,
+        "boundsX": 0,
+        "boundsY": -17,
+        "char": "\\u{41}",
+        "effectA": 204,
+        "effectB": 16,
+        "effectG": 32,
+        "effectR": 224,
+        "effectTag": "preblend",
+        "fontSize": "f32:41C00000",
+        "format": "bgra-color",
+        "glyphId": 36,
+        "hasGlyph": 1,
+        "height": 17,
+        "outcome": "ok",
+        "pixelBytes": 1088,
+        "pixelsSHA256": "bfbaca6b8d1f9c09d94eff0d733b88b259a4c792490c2688be070cf4a70238f5",
+        "scale": "f32:3F800000",
+        "subpixelX": 1,
+        "subpixelY": 0,
+        "width": 16
+      }
+    },
+    {
+      "seq": 28,
+      "name": "glyph-raster",
+      "label": "latin-color-tint",
+      "fields": {
+        "boundsH": 34,
+        "boundsW": 31,
+        "boundsX": 0,
+        "boundsY": -34,
+        "char": "\\u{41}",
+        "effectA": 204,
+        "effectB": 16,
+        "effectG": 32,
+        "effectR": 224,
+        "effectTag": "preblend",
+        "fontSize": "f32:41C00000",
+        "format": "bgra-color",
+        "glyphId": 36,
+        "hasGlyph": 1,
+        "height": 34,
+        "outcome": "ok",
+        "pixelBytes": 4216,
+        "pixelsSHA256": "3e123f5958bea020b1a0e6819d6d2a1b690f699f1290fba406b5ed4274c1ef69",
+        "scale": "f32:40000000",
+        "subpixelX": 1,
+        "subpixelY": 0,
+        "width": 31
+      }
+    },
+    {
+      "seq": 29,
+      "name": "case-end",
+      "label": "latin-color-tint"
+    },
+    {
+      "seq": 30,
+      "name": "case-begin",
+      "label": "space-empty-raster",
+      "fields": {
+        "family": "Segoe UI",
+        "fontId": 9223372036854775808,
+        "mode": "grayscale"
+      }
+    },
+    {
+      "seq": 31,
+      "name": "glyph-raster",
+      "label": "space-empty-raster",
+      "fields": {
+        "boundsH": 0,
+        "boundsW": 0,
+        "boundsX": 0,
+        "boundsY": 0,
+        "char": "\\u{20}",
+        "effectTag": "independent",
+        "fontSize": "f32:41C00000",
+        "format": "alpha-mask",
+        "glyphId": 3,
+        "hasGlyph": 1,
+        "height": 0,
+        "outcome": "ok",
+        "pixelBytes": 0,
+        "pixelsSHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "scale": "f32:3F800000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 0
+      }
+    },
+    {
+      "seq": 32,
+      "name": "case-end",
+      "label": "space-empty-raster"
+    },
+    {
+      "seq": 33,
+      "name": "case-begin",
+      "label": "emoji-color",
+      "fields": {
+        "family": "Segoe UI Emoji",
+        "fontId": 9223372036854775809,
+        "mode": "color"
+      }
+    },
+    {
+      "seq": 34,
+      "name": "glyph-raster",
+      "label": "emoji-color",
+      "fields": {
+        "boundsH": 24,
+        "boundsW": 24,
+        "boundsX": 4,
+        "boundsY": -21,
+        "char": "\\u{1f600}",
+        "effectA": 255,
+        "effectB": 255,
+        "effectG": 255,
+        "effectR": 255,
+        "effectTag": "preblend",
+        "fontSize": "f32:41C00000",
+        "format": "bgra-color",
+        "glyphId": 2266,
+        "hasGlyph": 1,
+        "height": 24,
+        "outcome": "ok",
+        "pixelBytes": 2304,
+        "pixelsSHA256": "4c4aa38ff15f9ed9333619dee176c1ad0e413e852bc76007fd1d177ea9c99655",
+        "scale": "f32:3F800000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 24
+      }
+    },
+    {
+      "seq": 35,
+      "name": "glyph-raster",
+      "label": "emoji-color",
+      "fields": {
+        "boundsH": 48,
+        "boundsW": 48,
+        "boundsX": 9,
+        "boundsY": -42,
+        "char": "\\u{1f600}",
+        "effectA": 255,
+        "effectB": 255,
+        "effectG": 255,
+        "effectR": 255,
+        "effectTag": "preblend",
+        "fontSize": "f32:41C00000",
+        "format": "bgra-color",
+        "glyphId": 2266,
+        "hasGlyph": 1,
+        "height": 48,
+        "outcome": "ok",
+        "pixelBytes": 9216,
+        "pixelsSHA256": "562f5ee6331368d25f93e5e91158a6b11908b8a47195fdf383ee962e280ce3e4",
+        "scale": "f32:40000000",
+        "subpixelX": 0,
+        "subpixelY": 0,
+        "width": 48
+      }
+    },
+    {
+      "seq": 36,
+      "name": "case-end",
+      "label": "emoji-color"
+    },
+    {
+      "seq": 37,
+      "name": "case-begin",
+      "label": "missing-glyph",
+      "fields": {
+        "family": "Segoe UI",
+        "fontId": 9223372036854775808,
+        "mode": "grayscale"
+      }
+    },
+    {
+      "seq": 38,
+      "name": "glyph-raster",
+      "label": "missing-glyph",
+      "fields": {
+        "char": "\\u{e000}",
+        "hasGlyph": 0
+      }
+    },
+    {
+      "seq": 39,
+      "name": "case-end",
+      "label": "missing-glyph"
+    }
+  ]
+}

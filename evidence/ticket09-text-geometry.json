@@ -1,0 +1,34 @@
+{
+    "ticket": "09-text-geometry",
+    "date": "2026-10-05",
+    "authorization": "User: ok now use roboco mcp, create a new chat that use /implement skill to do all those tickets, use iroha dashscope glm 5.3 with pi harness",
+    "session": "Roboco chat 065e52f5; three subagents (ticket09-native-text: service; ticket09-fixture-text: oracle; ticket09-go-text: adapter+gate); orchestrator re-verified",
+    "git_state": "No git repository; commit step environment-blocked, not fabricated.",
+    "native_service": {
+        "slot": 4, "capability": "text-parley-0-11-1 (mask 0x1F, native revision 5)",
+        "construction": "the pinned WindowsPlatform::new text stack: ParleyTextSystem::new_with_rasterizer(SystemFonts::Load, \"Segoe UI\", SwashGlyphRasterizer::default()).with_fallback_families([\"Lilex\",\"IBM Plex Sans\",\"Arial\"]) wrapped in gpui::TextSystem — the full pinned gpui graph lands in the DLL (expected; the artifact is the combined native service). DirectWrite present via Fontique enumeration (dwrite.dll import). Rasterizer deviation recorded: the pin's WindowsGlyphRasterizer is pub(crate); no entry rasterizes in this ticket — Swash stands in until the glyph-pixels slice ports the DirectWrite rasterizer.",
+        "dll": "7,579,648 bytes; sha256 2d8e4a3dd5812143b6a1baa5ccedd9c3ae5ac55ca6240ccd7a65028a0e7517d7; static CRT; imports kernel32, api-ms-win-core-synch, api-ms-win-core-winrt-error, bcryptprimitives, d3d11, dcomp, dwrite, dxgi, ntdll, ole32, oleaut32",
+        "resolutions": "parley 0.11.1, fontique 0.11.1, harfrust 0.12.0, skrifa 0.44.0, swash 0.2.10 (checksums in the manifest); gpui-ce 0.2.2 + gpui_ce_parley 0.1.0 path pins",
+        "abi": "15 entries (font_names/font_resolve/font_metrics/shape/layout/dispose/layout_info/line_count/line/caret/hit_test/selection_rects/cluster/fragments/glyphs); 256-shaping-handle capacity; TEXT_ABI.md"
+    },
+    "oracle": {
+        "fixture": "fx-0004-text-geometry (text-geometry-v1), 10 cases, 339 events, byte-deterministic (3+3 runs, sha256 f0770fc9...)",
+        "boundary": "the pinned public text API only (WindowTextSystem::shape_text, LineLayout/VisualLine/PaintFragment, closest_caret_for_pixel_point, byte_index_for_pixel_point, logical_cluster_before/after, selection_bounds, PlatformTextLayout::caret_bounds, PlatformTextSystem::font_id/font_metrics/font_generation/all_font_names) — pub(crate) facts (run directions, per-glyph advances, fragment byte ranges, selected face identity) are NOT in the gate; recorded in the fixture docs",
+        "cases": "latin-basic (all-cluster carets), grapheme-clusters (decomposed marks + ZWJ), cjk-latin-mixed (fallback), wrap-narrow (every boundary both affinities), line-height-override, features-letter-spacing, multi-run-weights, wrap-clamp, empty-string, newline-only"
+    },
+    "gate": "TestFx0004TextGeometryMatchesRecordedReference: ALL 339 events equal (text-system-begin 1, font-resolved 13, shape-meta 10, font-metrics 14, text-line 14, text-run 16, text-cluster 133, text-caret 80, text-hit 25, text-selection 13 + case markers); empty diff; -count=3 stable",
+    "executed_results": {
+        "rust": "cargo test 69 tests (17 new: shape counts, wrap/clamp/re-layout, caret monotonicity, hit round trip, selection rects, multibyte graphemes, multi-run fonts, validation, empty/newlines, bidi, stale/bad handles, capacity, feature/letter-spacing geometry)",
+        "go": "CGO_ENABLED=0 go test ./... all 13 packages green; textspec adapter tests (resolve determinism vs recorded FontId bits, stale handles, capacity, forced GC, hit/caret round trips, edge cases incl. upstream affinity at (10.25,3) and trailing-newline selection extension); vet/gofmt clean; demo PASS"
+    },
+    "mismatches_resolved": [
+        "beyond-end caret: the native ABI rejects out-of-range indices where the pinned public caret_bounds answers None with grapheme context — the adapter answers beyond-end queries from enumerated grapheme clusters",
+        "fontId trace-field canonicalization: recorded numbers decode as float64; the runner records fontIds in the canonical float64 form"
+    ],
+    "documented_limitations": [
+        "DirectWrite rasterization deferred to the glyph-pixels slice (ticket10) — the geometry service never rasterizes",
+        "UTF-16 conversion is the Go input layer's concern (documented; ticket20 owns IME UTF-16 ranges)",
+        "In-range non-boundary caret indices are typed errors (ABI boundary validation) rather than the pin's internal snapping — unexercised by the fixture",
+        "ByteIndexForPixelPoint derived from caret+cluster APIs; a strict sub-cluster upstream case (ZWJ splits) is unexercised"
+    ]
+}

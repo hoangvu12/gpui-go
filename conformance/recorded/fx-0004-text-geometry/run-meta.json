@@ -1,0 +1,15 @@
+{
+  "run_started_at": "2026-10-05T16:08:48+07:00",
+  "harness_exe": "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\target\\debug\\gpui-reference-harness.exe",
+  "harness_sha256": "09f03dfa1437fc4b8f837a2aba769ad93fcd03d673ea2fcd507a3d391ff823c2",
+  "envelope_path": "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\conformance\\fixtures\\fx-0004-text-geometry.json",
+  "envelope_sha256": "73fa86794b600fa1bebeaba83bde38b0cb90024d64cc36801f86e35c9a288a95",
+  "argv": [
+    "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\target\\debug\\gpui-reference-harness.exe",
+    "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\conformance\\fixtures\\fx-0004-text-geometry.json",
+    "conformance\\recorded\\fx-0004-text-geometry\\trace.json"
+  ],
+  "go_version": "go1.27.1",
+  "os": "windows",
+  "arch": "amd64"
+}

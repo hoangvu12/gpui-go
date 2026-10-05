@@ -1,0 +1,42 @@
+{
+    "ticket": "07-present-and-retire",
+    "date": "2026-10-05",
+    "authorization": "User: ok now use roboco mcp, create a new chat that use /implement skill to do all those tickets, use iroha dashscope glm 5.3 with pi harness",
+    "session": "Roboco chat 065e52f5; implemented by background subagent session ticket07-renderer; independently re-verified by the orchestrator",
+    "git_state": "No git repository; commit step environment-blocked, not fabricated.",
+    "native_service": {
+        "slot": 2 (renderer-d3d11, capability mask 7), native revision 3",
+        "dll": "675,328 bytes; sha256 9b55a88fcc964d2e503e260098f2f727e678fa882bf704d2d4ef3e8b0bf27aeb; static CRT; imports KERNEL32, api-ms-win-core-synch, bcryptprimitives, d3d11, dcomp, dxgi, oleaut32, ntdll (OS components only)",
+        "windows_crate": "0.62.2 resolved (checksum recorded; 7 features exactly mirroring the needed surface)",
+        "device": "per-process D3D11 device per the pinned directx_devices.rs: D3D_DRIVER_TYPE_UNKNOWN + BGRA_SUPPORT, feature levels [11_1, 11_0], EnumAdapters first-success, no WARP fallback; immediate context multithread-protected",
+        "swap_chains": "both pinned modes: DirectComposition (DXGI_SCALING_STRETCH + PREMULTIPLIED alpha, DComp visual/target/root/commit) and HWND (DXGI_SCALING_NONE + ALPHA_MODE_IGNORE + MakeWindowAssociation NO_ALT_ENTER); DXGI_FORMAT_B8G8R8A8_UNORM, buffer count 3, FLIP_SEQUENTIAL",
+        "retirement": "D3D11_QUERY_EVENT ended after the last command, GetData S_OK+true retires / S_FALSE pending, exactly-once retire with stale-handle errors, query-object reuse only after retirement, bounded 64 pending submissions with typed backpressure, immediate-context serialization via device mutex, GetDeviceRemovedReason surfaced with quarantine semantics (no fake retirement)"
+    },
+    "real_gpu_environment": {
+        "adapter": "NVIDIA GeForce RTX 5050, vendor 0x10de, device 0x2d83",
+        "feature_level": "0xb100 (11_1)",
+        "vram_bytes": 8294236160,
+        "driver": "NVIDIA Corporation 610.74 r610_00 (NvAPI probe)"
+    },
+    "ledger_proofs": {
+        "pending_then_completed": "immediate polls captured S_FALSE (state 0, hr 0x1) before completion in ~1/3 runs; the ledger trace shows [accepted poll-pending poll-pending poll-completed retired] — never completed-before-poll",
+        "present_is_not_completion": "retirement happens only after a completed poll; Present(0,0) + per-submission Flush submit the marker",
+        "two_windows": "concurrent presents from two goroutines on two surfaces: 8/8 accepted and retired, serialized",
+        "resize": "320x200 -> 480x320 through the real SetBounds path + native ResizeBuffers (unbind/drop views/resize/recreate/rebind)",
+        "hidden_window": "submission completed and retired via a real poll (honest observation)",
+        "backpressure": "64 accepted, 65th typed ErrRendererBusy, drain restores",
+        "pacing_worker": "2ms bounded nonblocking polls off the foreground thread; retirement records dispatched to the foreground via App.Update (all Foreground=true)",
+        "forced_gc": "clean across present/poll cycles"
+    },
+    "executed_results": {
+        "rust": "cargo build (crt-static) + cargo test 27 tests green",
+        "go": "CGO_ENABLED=0 go test ./... all packages green (renderer tests + 7 rendererspec real-window/real-GPU tests); go vet/gofmt clean; demo PASS"
+    },
+    "documented_limitations": [
+        "Device removal cannot be forced deterministically on healthy hardware: removal/abort/quarantine paths are implemented and unit-validated at the record/status level; an end-to-end forced-loss harness remains future work (ticket29 owns device loss).",
+        "Minimized/occluded windows not exercised (hidden-window path tested; minimize/monitor-sleep occlusion needs manual/host support).",
+        "Partial-submit failure path typed but not forceable on healthy hardware.",
+        "Per-submission Flush is a service-seam addition (the pin flushes only on the device-lost path) — documented deviation implementing the contract's marker-submission rule.",
+        "The retirement protocol itself is a service-seam addition (the inspected pinned renderer has no explicit per-submission query retirement) per the contract."
+    ]
+}

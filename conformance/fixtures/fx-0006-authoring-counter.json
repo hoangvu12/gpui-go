@@ -1,0 +1,68 @@
+{
+  "schema": "gpui-go/conformance/envelope@1",
+  "fixture_id": "fx-0006-authoring-counter",
+  "fixture_kind": "authoring-counter-v1",
+  "title": "Typed counter and custom-component authoring path",
+  "profile": "test",
+  "capabilities": [
+    "element-phases",
+    "div-element",
+    "view-root-render",
+    "shared-model-entity",
+    "scene-paint",
+    "text-shape"
+  ],
+  "environment": [
+    "headless",
+    "test-platform"
+  ],
+  "inputs": {
+    "counter_cases": {
+      "cases": [
+        {
+          "label": "shared-counter-two-windows",
+          "initial_value": 8,
+          "windows": [
+            {
+              "label": "A",
+              "width": 320,
+              "height": 200
+            },
+            {
+              "label": "B",
+              "width": 280,
+              "height": 160
+            }
+          ],
+          "counter_style": {
+            "padding": "0.75rem",
+            "font_size": "1.25rem",
+            "justify": "Center",
+            "background": "dc2626ff"
+          },
+          "script": [
+            {
+              "op": "increment",
+              "window": "A",
+              "clicks": 2
+            },
+            {
+              "op": "increment",
+              "window": "B",
+              "clicks": 1
+            },
+            {
+              "op": "close-window",
+              "window": "A"
+            },
+            {
+              "op": "increment",
+              "window": "B",
+              "clicks": 3
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

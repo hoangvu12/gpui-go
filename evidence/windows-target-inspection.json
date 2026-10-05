@@ -1,0 +1,19 @@
+{
+  "observed_date": "2026-10-04",
+  "method": "Read-only PowerShell Get-CimInstance for Win32_OperatingSystem, Win32_Processor and Win32_VideoController; PROCESSOR_ARCHITECTURE environment value",
+  "os": {
+    "caption": "Microsoft Windows 11 Pro",
+    "version": "10.0.26200",
+    "architecture": "64-bit"
+  },
+  "cpu": {
+    "name": "Intel(R) Core(TM) i5-14400F",
+    "win32_architecture_code": 9
+  },
+  "gpu": {
+    "name": "NVIDIA GeForce RTX 5050",
+    "driver_version": "32.0.16.1074"
+  },
+  "process_architecture": "AMD64",
+  "limits": "Inventory only. No graphics API, font, IME, accessibility, display/DPI, driver conformance or performance test was executed. No broad support matrix is implied."
+}

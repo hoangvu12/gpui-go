@@ -1,0 +1,462 @@
+﻿[
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "Cargo.toml",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/Cargo.toml",
+        "Bytes":  6033,
+        "SHA256":  "0B71245671DB9F9890251416B08E1BE1ADA0337285A1D0AE3BDA0FAB24770AF9",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "LICENSE-APACHE",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/LICENSE-APACHE",
+        "Bytes":  10305,
+        "SHA256":  "D1B0449E5478C574BA4F686C2656DF7FE77D66821A61F8B6ED3378A58ED9A811",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "LICENSE-DOCS.md",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/LICENSE-DOCS.md",
+        "Bytes":  1508,
+        "SHA256":  "8A9CCF144B2D5BF5AAE56ABDC6E723E17E1BA4DE1F5D515B3B644288FD4FC16F",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/Cargo.toml",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/Cargo.toml",
+        "Bytes":  2650,
+        "SHA256":  "ECA9116CA18BD29EBF6450A247F40D7FE2D2A2BE0E5E1C21804B39AAC6DBBFFE",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/button.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/button.rs",
+        "Bytes":  19731,
+        "SHA256":  "FF3026D04F12AFE3E6AEB3CC3D95B25C5EA6EB65884258FEA1B973AD6D08255E",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/checkbox.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/checkbox.rs",
+        "Bytes":  23315,
+        "SHA256":  "FAA48ACD7E1243FF661B542D753A6AA1327F76058837EDB4CC00B3F469409883",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/dialog.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/dialog.rs",
+        "Bytes":  30815,
+        "SHA256":  "F56CC07DDA43678903E2907B8C8C6028AE5FA80F0A637B8F065054A4C55B391D",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/element_ext.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/element_ext.rs",
+        "Bytes":  1001,
+        "SHA256":  "ADB2D1EB4206DA3653EDA513F119BB75D8C5853DC992B79EE77BF46327C0FE31",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/focus_trap.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/focus_trap.rs",
+        "Bytes":  7190,
+        "SHA256":  "5A110237EFD10A3D7B2478B8D0D3588E82AB1950984BDC71A47333B1D59E8BE6",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/global_state.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/global_state.rs",
+        "Bytes":  7152,
+        "SHA256":  "991C1B44763B0D94DD77514BF2D3C6E409E23AD2A1B0A51F553A93E9A975928A",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/lib.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/lib.rs",
+        "Bytes":  8529,
+        "SHA256":  "73A45299FF40356F394BE8F3D1B0CE8DF331CDD2C57D38E93E301680CC89E4AE",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/list_settings.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/list_settings.rs",
+        "Bytes":  435,
+        "SHA256":  "72DFF3E527AAF963D839BABBBDE99C78291C07FF5D01F86F24A39782CD9D6F1F",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/popover.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/popover.rs",
+        "Bytes":  19890,
+        "SHA256":  "91DAE11CC681C602327658CD375FE6C1AD1B3FF1FCB490E3D516DE28FD506A2C",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/popup.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/popup.rs",
+        "Bytes":  11385,
+        "SHA256":  "501034532166540E4A6ABDF4A84667BAF1141935385A048EBC960E8E9C215491",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/root.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/root.rs",
+        "Bytes":  13199,
+        "SHA256":  "E738745E5A72CB4016FCF5AA2F240B33156140A966D2905C9B7F70AD1BB7987F",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/state_style.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/state_style.rs",
+        "Bytes":  3239,
+        "SHA256":  "F7E1F85C0215E3CD84DF4B6FBCE34938A33D275C9DB392BDC9025670454760B1",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/styled.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/styled.rs",
+        "Bytes":  9022,
+        "SHA256":  "7C1E88964CC3D76968609E6AC24DB0C3698C87F9B138EF975D3776EAC81DBD87",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/theme.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/theme.rs",
+        "Bytes":  4179,
+        "SHA256":  "4376D3EFFDE9E0F12F32BCF87A126E82771CE2CCA17816EECE40823F37EA65F4",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/virtual_list.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/virtual_list.rs",
+        "Bytes":  33847,
+        "SHA256":  "E3D267980D927B26299E564108B078FA49CC8AAA16FFE54062DCBA30215C876B",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/dock/dock_area.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/dock/dock_area.rs",
+        "Bytes":  156580,
+        "SHA256":  "8A07B1B8822964C2E80E1D35C30766C946B5CFC396EB0B2F7420A905D8E05724",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/dock/mod.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/dock/mod.rs",
+        "Bytes":  9971,
+        "SHA256":  "C23FCAA23156995C55377C3F00620ABAF6D5E54A0139990C6F01657F6947764F",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/dock/panel.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/dock/panel.rs",
+        "Bytes":  10662,
+        "SHA256":  "B29050FCD827F649CF813CC717D115C24853008E99A08D83190AF553C92610CE",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/dock/registry.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/dock/registry.rs",
+        "Bytes":  3621,
+        "SHA256":  "4B53802C3ADD781065AC6AF6CC14170529E9DB440126DFADDCF9B3BF6EE0E668",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/dock/layout/tree.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/dock/layout/tree.rs",
+        "Bytes":  9347,
+        "SHA256":  "891263AABE9FE87079800408D87DAC7E4A9892349F1D39DA1B79FE3F22C585D6",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/input/mod.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/input/mod.rs",
+        "Bytes":  4069,
+        "SHA256":  "477509F87A4280E2F01D12CBD989AF53CCB419AD0FF7C20B1AA9F288CB631D0D",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/input/README.md",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/input/README.md",
+        "Bytes":  985,
+        "SHA256":  "CFED476DF2A64B3292E4F327F091349AFAEFA601898AA6E059954182DF14B376",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/input/base/element.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/input/base/element.rs",
+        "Bytes":  180120,
+        "SHA256":  "597C58EFDE68B3A5574132482B399116DE8F71846C64B05E813164BAD54EE888",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/input/base/native.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/input/base/native.rs",
+        "Bytes":  4583,
+        "SHA256":  "8FCB188C4027F73756E69A7E885D18D150E8BBBE2D5D6CACF1BDF51CB87F904B",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/input/base/state.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/input/base/state.rs",
+        "Bytes":  433198,
+        "SHA256":  "FA5D7B1DD8C521A886C91AA0A70CFCCB9AC4C2E1699A495110F9312283225177",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/input/editor/highlighting.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/input/editor/highlighting.rs",
+        "Bytes":  9102,
+        "SHA256":  "A8DDF22A7E48437DA874E5F4F665B0826660A39EA364A564BFDF77E90F218155",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/base/src/input/input/mod.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/base/src/input/input/mod.rs",
+        "Bytes":  2112,
+        "SHA256":  "6795120FFBD098BCFE1BFAD635615EB0133551AF31AE22D429FE6A2945E4680B",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/component/Cargo.toml",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/component/Cargo.toml",
+        "Bytes":  9300,
+        "SHA256":  "2D518EBF38F7B6F2413082511C1C7C0DDBBCD599F19CB010146C2ABF45DB6EA2",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/component/src/lib.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/component/src/lib.rs",
+        "Bytes":  3842,
+        "SHA256":  "81B2E61F0DCD6B5A083CFB1B4C603A26AFF0A30D2DDCB583B9C130F975ACFABD",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/component/src/button/button.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/component/src/button/button.rs",
+        "Bytes":  71128,
+        "SHA256":  "E4423F371EC5E954F0ECB4CD459EE24EF5A158AFFA6D44DC63E62C5DF463D61E",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "crates/component/src/theme/mod.rs",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/crates/component/src/theme/mod.rs",
+        "Bytes":  43889,
+        "SHA256":  "E3E7871D06D925ED818BC2B4290690F595F7CC383C69F37ED2C9AFD0DC81292C",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "longbridge/gpui-kit",
+        "Commit":  "4c7f1350331562436df868c55ac33bebc4c6406c",
+        "Path":  "script/check-gpui-pin.ts",
+        "SourceURL":  "https://github.com/longbridge/gpui-kit/blob/4c7f1350331562436df868c55ac33bebc4c6406c/script/check-gpui-pin.ts",
+        "Bytes":  3535,
+        "SHA256":  "557FA02E4FCE8A3EFD4118F6400FC68C7994905C47F5F7D5EBDF6DE6A519DA33",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "gpui-ce/gpui-component",
+        "Commit":  "c08206932417f863062d2ab70cc2854c6ca04238",
+        "Path":  "Cargo.toml",
+        "SourceURL":  "https://github.com/gpui-ce/gpui-component/blob/c08206932417f863062d2ab70cc2854c6ca04238/Cargo.toml",
+        "Bytes":  4708,
+        "SHA256":  "A9F1C7E2922EF70A0BA836B283AF13E1EAF42294BE53319B8BB70812F76A0252",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "gpui-ce/gpui-component",
+        "Commit":  "c08206932417f863062d2ab70cc2854c6ca04238",
+        "Path":  "crates/base/src/button.rs",
+        "SourceURL":  "https://github.com/gpui-ce/gpui-component/blob/c08206932417f863062d2ab70cc2854c6ca04238/crates/base/src/button.rs",
+        "Bytes":  19829,
+        "SHA256":  "21F1FC67A183095596C901B7785E95C7712E504382A35707F7B9BEB8E2A953A3",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "gpui-ce/gpui-component",
+        "Commit":  "c08206932417f863062d2ab70cc2854c6ca04238",
+        "Path":  "crates/base/src/popover.rs",
+        "SourceURL":  "https://github.com/gpui-ce/gpui-component/blob/c08206932417f863062d2ab70cc2854c6ca04238/crates/base/src/popover.rs",
+        "Bytes":  19890,
+        "SHA256":  "91DAE11CC681C602327658CD375FE6C1AD1B3FF1FCB490E3D516DE28FD506A2C",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "gpui-ce/gpui-component",
+        "Commit":  "c08206932417f863062d2ab70cc2854c6ca04238",
+        "Path":  "crates/base/src/virtual_list.rs",
+        "SourceURL":  "https://github.com/gpui-ce/gpui-component/blob/c08206932417f863062d2ab70cc2854c6ca04238/crates/base/src/virtual_list.rs",
+        "Bytes":  33847,
+        "SHA256":  "E3D267980D927B26299E564108B078FA49CC8AAA16FFE54062DCBA30215C876B",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "MeowLynxSea/yororen-ui",
+        "Commit":  "346502ac654b77fdaff3be2d7444fca8783acfc9",
+        "Path":  "Cargo.toml",
+        "SourceURL":  "https://github.com/MeowLynxSea/yororen-ui/blob/346502ac654b77fdaff3be2d7444fca8783acfc9/Cargo.toml",
+        "Bytes":  2364,
+        "SHA256":  "6A70310FE8EFCA11D43E15F256CD9FF8395746647488265C2E69FA323FF2A77C",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "MeowLynxSea/yororen-ui",
+        "Commit":  "346502ac654b77fdaff3be2d7444fca8783acfc9",
+        "Path":  "LICENSE",
+        "SourceURL":  "https://github.com/MeowLynxSea/yororen-ui/blob/346502ac654b77fdaff3be2d7444fca8783acfc9/LICENSE",
+        "Bytes":  10738,
+        "SHA256":  "FCB3C2D6639D13E858F4ED82D232405D55398D807B344A6A221129A446B24FA8",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "MeowLynxSea/yororen-ui",
+        "Commit":  "346502ac654b77fdaff3be2d7444fca8783acfc9",
+        "Path":  "crates/yororen-ui-core/Cargo.toml",
+        "SourceURL":  "https://github.com/MeowLynxSea/yororen-ui/blob/346502ac654b77fdaff3be2d7444fca8783acfc9/crates/yororen-ui-core/Cargo.toml",
+        "Bytes":  1160,
+        "SHA256":  "1B6697F5499ACA1CB8685445CC0A95BE8B11845BEE21E623C8322E1CF80417D1",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "MeowLynxSea/yororen-ui",
+        "Commit":  "346502ac654b77fdaff3be2d7444fca8783acfc9",
+        "Path":  "crates/yororen-ui-core/src/headless/button.rs",
+        "SourceURL":  "https://github.com/MeowLynxSea/yororen-ui/blob/346502ac654b77fdaff3be2d7444fca8783acfc9/crates/yororen-ui-core/src/headless/button.rs",
+        "Bytes":  7196,
+        "SHA256":  "B087EED5F85B642664B0C3F598ED1C90070A96854A3DB981BE6A786667A42588",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "MeowLynxSea/yororen-ui",
+        "Commit":  "346502ac654b77fdaff3be2d7444fca8783acfc9",
+        "Path":  "crates/yororen-ui-core/src/renderer/button.rs",
+        "SourceURL":  "https://github.com/MeowLynxSea/yororen-ui/blob/346502ac654b77fdaff3be2d7444fca8783acfc9/crates/yororen-ui-core/src/renderer/button.rs",
+        "Bytes":  2452,
+        "SHA256":  "1F22C431D2950861F2FCD82A1517A1CE89955485D104DC1974A1D60E93A1FA6E",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    },
+    {
+        "Repository":  "MeowLynxSea/yororen-ui",
+        "Commit":  "346502ac654b77fdaff3be2d7444fca8783acfc9",
+        "Path":  "crates/yororen-ui-default-renderer/src/renderers/button.rs",
+        "SourceURL":  "https://github.com/MeowLynxSea/yororen-ui/blob/346502ac654b77fdaff3be2d7444fca8783acfc9/crates/yororen-ui-default-renderer/src/renderers/button.rs",
+        "Bytes":  11572,
+        "SHA256":  "8D3FD20AD154951D456B8B42B37BA702766123DD4707F1754D65548ED89ABCC2",
+        "Retrieved":  "2026-10-04",
+        "Method":  "gh api contents; decode Base64 as UTF-8; no modifications"
+    }
+]

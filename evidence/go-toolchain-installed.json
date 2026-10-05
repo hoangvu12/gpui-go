@@ -1,0 +1,13 @@
+{
+    "date":  "2026-10-05",
+    "installation":  "User installed official MSI; assistant did not install or retry earlier blocked command",
+    "executable":  "C:\\Program Files\\Go\\bin\\go.exe",
+    "environment":  {
+                        "GOARCH":  "amd64",
+                        "GOOS":  "windows",
+                        "GOROOT":  "C:\\Program Files\\Go",
+                        "GOTOOLCHAIN":  "local",
+                        "GOVERSION":  "go1.27.1"
+                    },
+    "fixture_authorization":  "User: ok do them, after the proposed signature/conformance/spec/tickets sequence"
+}

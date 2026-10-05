@@ -1,0 +1,60 @@
+0gpui-ce v0.2.2 (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source\crates\gpui) custom-gpu,wgpu-surfaces
+1accesskit v0.24.1 enumn
+1anyhow v1.0.104 default,std
+1async-channel v2.5.0 default,std
+1async-task v4.7.1 default,std
+1bitflags v2.13.1 
+1chrono v0.4.45 alloc,clock,default,iana-time-zone,js-sys,now,oldtime,serde,std,wasm-bindgen,wasmbind,winapi,windows-link
+1ctor v1.0.13 default,priority,proc_macro,std
+1derive_more v2.1.1 add,add_assign,default,deref,deref_mut,display,from_str,mul,mul_assign,not,std
+1derive_setters v0.1.9 (proc-macro) 
+1etagere v0.2.15 
+1futures v0.3.34 alloc,async-await,default,executor,futures-executor,std
+1futures-concurrency v7.7.1 alloc,default,std
+1gpui_ce_collections v0.2.2 (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source\crates\gpui_collections) 
+1gpui_ce_macros v0.1.0 (proc-macro) (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source\crates\gpui_macros) 
+1gpui_ce_refineable v0.2.2 (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source\crates\gpui_refineable) 
+1gpui_ce_scheduler v0.2.2 (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source\crates\gpui_scheduler) 
+1gpui_ce_shared_string v0.1.0 (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source\crates\gpui_shared_string) 
+1gpui_ce_sum_tree v0.2.2 (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source\crates\gpui_sum_tree) 
+1gpui_ce_util v0.2.6 (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source\crates\gpui_ce_util) 
+1heapless v0.9.3 
+1http v1.5.0 default,std
+1image v0.25.10 avif,bmp,dds,default,default-formats,exr,ff,gif,hdr,ico,jpeg,png,pnm,qoi,rayon,tga,tiff,webp
+1inventory v0.3.24 
+1itertools v0.14.0 default,use_alloc,use_std
+1log v0.4.34 alloc,kv,kv_serde,kv_std,kv_unstable,kv_unstable_serde,kv_unstable_std,serde,serde_core,std,value-bag
+1lyon v1.0.19 
+1num_cpus v1.17.0 
+1palette v0.7.7 alloc,approx,default,named,named_from_str,phf,serde,serializing,std
+1parking v2.2.1 
+1parking_lot v0.12.5 default
+1phf v0.13.1 default,macros,phf_macros,std
+1pin-project v1.1.13 
+1pollster v0.4.0 
+1postage v0.5.0 blocking,default,futures,futures-traits,log,logging,pollster
+1profiling v1.0.18 default,procmacros,profiling-procmacros
+1rand v0.9.5 alloc,default,os_rng,small_rng,std,std_rng,thread_rng
+1raw-window-handle v0.6.2 
+1regex v1.13.1 default,perf,perf-backtrack,perf-cache,perf-dfa,perf-inline,perf-literal,perf-onepass,std,unicode,unicode-age,unicode-bool,unicode-case,unicode-gencat,unicode-perl,unicode-script,unicode-segment
+1resvg v0.48.1 gif,image-webp,memmap-fonts,raster-images,system-fonts,text
+1schemars v1.2.2 default,derive,indexmap2,schemars_derive,std
+1seahash v4.1.0 default
+1serde v1.0.229 alloc,default,derive,rc,serde_derive,std
+1serde_json v1.0.151 alloc,default,indexmap,preserve_order,raw_value,std
+1skrifa v0.44.0 autohint_shaping,default,std
+1slotmap v1.1.1 default,std
+1smallvec v1.16.0 const_generics,const_new,union
+1spin v0.10.1 barrier,default,lazy,lock_api,mutex,once,rwlock,spin_mutex
+1strum v0.27.2 default,derive,std,strum_macros
+1taffy v0.13.0 alloc,block_layout,calc,content_size,default,detailed_layout_info,flexbox,float_layout,grid,std,taffy_tree
+1thiserror v2.0.20 default,std
+1tracing v0.1.44 attributes,default,std,tracing-attributes
+1unicode-segmentation v1.13.3 
+1url v2.5.8 default,std
+1usvg v0.48.1 base64,fontdb,harfrust,memmap-fonts,skrifa,system-fonts,text,unicode-bidi,unicode-script,unicode-vo,writer,xmlwriter
+1uuid v1.26.0 default,rng,serde,sha1,std,v4,v5,v7
+1waker-fn v1.2.0 
+1web-time v1.1.0 
+1windows v0.61.3 Win32,Win32_Foundation,Win32_Graphics,Win32_Graphics_Direct3D11,default,std
+1windows v0.62.2 Data,Data_Xml,Data_Xml_Dom,Foundation,Foundation_Numerics,Globalization,Globalization_DateTimeFormatting,Storage,Storage_Search,Storage_Streams,System,System_Threading,UI,UI_Notifications,UI_ViewManagement,Wdk,Wdk_System,Wdk_System_SystemServices,Win32,Win32_Foundation,Win32_Globalization,Win32_Graphics,Win32_Graphics_Direct2D,Win32_Graphics_Direct2D_Common,Win32_Graphics_Direct3D,Win32_Graphics_Direct3D11,Win32_Graphics_Direct3D_Fxc,Win32_Graphics_DirectComposition,Win32_Graphics_DirectManipulation,Win32_Graphics_DirectWrite,Win32_Graphics_Dwm,Win32_Graphics_Dxgi,Win32_Graphics_Dxgi_Common,Win32_Graphics_Gdi,Win32_Graphics_Hlsl,Win32_Graphics_Imaging,Win32_Media,Win32_Networking,Win32_Networking_WinSock,Win32_Security,Win32_Security_Credentials,Win32_Security_Cryptography,Win32_Storage,Win32_Storage_FileSystem,Win32_Storage_Packaging,Win32_Storage_Packaging_Appx,Win32_System,Win32_System_Com,Win32_System_Com_StructuredStorage,Win32_System_Console,Win32_System_DataExchange,Win32_System_Diagnostics,Win32_System_Diagnostics_Debug,Win32_System_IO,Win32_System_JobObjects,Win32_System_LibraryLoader,Win32_System_Memory,Win32_System_Ole,Win32_System_Performance,Win32_System_Pipes,Win32_System_Power,Win32_System_RestartManager,Win32_System_SystemInformation,Win32_System_SystemServices,Win32_System_Threading,Win32_System_Variant,Win32_System_WinRT,Win32_UI,Win32_UI_Controls,Win32_UI_HiDpi,Win32_UI_Input,Win32_UI_Input_Ime,Win32_UI_Input_KeyboardAndMouse,Win32_UI_Input_Pointer,Win32_UI_Shell,Win32_UI_Shell_Common,Win32_UI_Shell_PropertiesSystem,Win32_UI_WindowsAndMessaging,default,std

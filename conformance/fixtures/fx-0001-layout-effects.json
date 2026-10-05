@@ -1,0 +1,98 @@
+{
+  "schema": "gpui-go/conformance/envelope@1",
+  "fixture_id": "fx-0001-layout-effects",
+  "fixture_kind": "layout-effects-v1",
+  "title": "Deterministic layout geometry and ordered effects",
+  "profile": "test",
+  "capabilities": [
+    "layout.geometry.bounds",
+    "layout.style.flex",
+    "layout.style.percentage",
+    "layout.style.padding",
+    "effects.order.notify",
+    "effects.order.fifo-events",
+    "effects.order.defer",
+    "entities.release",
+    "tasks.background-delivery"
+  ],
+  "environment": [
+    "headless",
+    "test-platform"
+  ],
+  "inputs": {
+    "available_space": {
+      "width": 640,
+      "height": 480
+    },
+    "style_tree": {
+      "label": "root",
+      "style": {
+        "width": "300px",
+        "height": "200px",
+        "flexDirection": "Row",
+        "gap": "8px",
+        "padding": "12px",
+        "justifyContent": "FlexStart",
+        "alignItems": "Stretch"
+      },
+      "children": [
+        {
+          "label": "a",
+          "style": {
+            "width": "100px",
+            "height": "50px"
+          },
+          "children": []
+        },
+        {
+          "label": "b",
+          "style": {
+            "flexGrow": "1",
+            "minHeight": "30px"
+          },
+          "children": []
+        },
+        {
+          "label": "c",
+          "style": {
+            "width": "50%",
+            "height": "25%"
+          },
+          "children": [
+            {
+              "label": "c1",
+              "style": {
+                "width": "10px",
+                "height": "10px"
+              },
+              "children": []
+            }
+          ]
+        },
+        {
+          "label": "d",
+          "style": {
+            "width": "60px",
+            "aspectRatio": "2"
+          },
+          "children": []
+        }
+      ]
+    },
+    "effect_script": [
+      { "op": "create-entity", "label": "counter", "value": 0 },
+      { "op": "subscribe", "observer": "obs1", "source": "counter", "event_type": "tick" },
+      { "op": "observe-release", "label": "counter" },
+      { "op": "notify", "entity": "counter", "count": 2 },
+      { "op": "emit", "entity": "counter", "values": [1, 2, 3] },
+      { "op": "defer", "label": "d1", "schedule": "d1b" },
+      { "op": "spawn-task", "label": "t1", "result": 42, "delay_ms": 50 },
+      { "op": "run-effects" },
+      { "op": "advance-clock", "ms": 100 },
+      { "op": "run-tasks" },
+      { "op": "run-effects" },
+      { "op": "drop-entity", "label": "counter" },
+      { "op": "run-effects" }
+    ]
+  }
+}

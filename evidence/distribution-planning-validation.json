@@ -1,0 +1,18 @@
+{
+    "date":  "2026-10-04",
+    "kind":  "Documentation and source-integrity checks only",
+    "documents":  32,
+    "local_links":  342,
+    "snapshots":  {
+                      "distribution":  7,
+                      "renderer":  12,
+                      "windows-platform":  16
+                  },
+    "resolved_tickets":  8,
+    "open_tickets":  2,
+    "dependency_graph_acyclic":  true,
+    "errors":  [
+
+               ],
+    "limits":  "No compiler, native bridge, loader/cache, CRT/import, executable DPI, image/SVG/HTTP behavior, ABI, GPU/capture, consumer build, visual calibration or performance test was run."
+}

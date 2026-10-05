@@ -1,0 +1,15 @@
+# Build outputs (rebuild with cargo; see reference/README.md)
+reference/target/
+
+# Pinned CE source checkout: re-fetch with
+#   git clone / shallow fetch of commit 254b5dbd47cbb5acbcc5bbdcbb322a339276c88a
+# from https://github.com/gpui-ce/gpui-ce (documented in reference/README.md)
+reference/ce-source/
+
+# Local agent/session state
+.claude/
+.pi/
+
+# OS cruft
+Thumbs.db
+Desktop.ini

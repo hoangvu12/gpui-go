@@ -1,0 +1,74 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\harness\Cargo.toml
+workspace: C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\Cargo.toml
+0gpui-reference-harness v0.1.0 (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\harness) 
+1anyhow v1.0.104 default,std
+1gpui-ce v0.2.2 (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source\crates\gpui) backtrace,default,leak-detection,proptest,test-support,wayland,windows-manifest,x11
+2accesskit v0.24.1 enumn
+2anyhow v1.0.104 default,std
+2async-channel v2.5.0 default,std
+2async-task v4.7.1 default,std
+2backtrace v0.3.76 default,std
+2bitflags v2.13.2 
+2chrono v0.4.45 alloc,clock,default,iana-time-zone,js-sys,now,oldtime,serde,std,wasm-bindgen,wasmbind,winapi,windows-link
+2ctor v1.0.13 default,priority,proc_macro,std
+2derive_more v2.1.1 add,add_assign,default,deref,deref_mut,display,from_str,mul,mul_assign,not,std
+2derive_setters v0.1.9 (proc-macro) 
+2etagere v0.2.15 
+2futures v0.3.34 alloc,async-await,default,executor,futures-executor,std
+2futures-concurrency v7.7.1 alloc,default,std
+2gpui_ce_collections v0.2.2 (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source\crates\gpui_collections) test-support
+2gpui_ce_macros v0.1.0 (proc-macro) (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source\crates\gpui_macros) 
+2gpui_ce_refineable v0.2.2 (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source\crates\gpui_refineable) 
+2gpui_ce_scheduler v0.2.2 (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source\crates\gpui_scheduler) 
+2gpui_ce_shared_string v0.1.0 (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source\crates\gpui_shared_string) 
+2gpui_ce_sum_tree v0.2.2 (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source\crates\gpui_sum_tree) 
+2gpui_ce_util v0.2.6 (C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source\crates\gpui_ce_util) 
+2heapless v0.9.3 
+2http v1.5.0 default,std
+2image v0.25.10 avif,bmp,dds,default,default-formats,exr,ff,gif,hdr,ico,jpeg,png,pnm,qoi,rayon,tga,tiff,webp
+2inventory v0.3.24 
+2itertools v0.14.0 default,use_alloc,use_std
+2log v0.4.34 alloc,kv,kv_serde,kv_std,kv_unstable,kv_unstable_serde,kv_unstable_std,serde,serde_core,std,value-bag
+2lyon v1.0.19 
+2num_cpus v1.17.0 
+2palette v0.7.7 alloc,approx,default,named,named_from_str,phf,serde,serializing,std
+2parking v2.2.1 
+2parking_lot v0.12.5 default
+2phf v0.13.1 default,macros,phf_macros,std
+2pin-project v1.1.13 
+2pollster v0.4.0 
+2postage v0.5.0 blocking,default,futures,futures-traits,log,logging,pollster
+2profiling v1.0.18 default,procmacros,profiling-procmacros
+2proptest v1.11.0 attr-macro,bit-set,default,fork,proptest-macro,regex-syntax,rusty-fork,std,tempfile,timeout
+2rand v0.9.5 alloc,default,os_rng,small_rng,std,std_rng,thread_rng
+2raw-window-handle v0.6.2 
+2regex v1.13.1 default,perf,perf-backtrack,perf-cache,perf-dfa,perf-inline,perf-literal,perf-onepass,std,unicode,unicode-age,unicode-bool,unicode-case,unicode-gencat,unicode-perl,unicode-script,unicode-segment
+2resvg v0.48.1 gif,image-webp,memmap-fonts,raster-images,system-fonts,text
+2schemars v1.2.2 default,derive,indexmap2,schemars_derive,std
+2seahash v4.1.0 default
+2serde v1.0.229 alloc,default,derive,rc,serde_derive,std
+2serde_json v1.0.151 alloc,default,indexmap,preserve_order,raw_value,std
+2skrifa v0.44.0 autohint_shaping,default,std
+2slotmap v1.1.1 default,std
+2smallvec v1.16.2 const_generics,const_new,union
+2spin v0.10.1 barrier,default,lazy,lock_api,mutex,once,rwlock,spin_mutex
+2strum v0.27.2 default,derive,std,strum_macros
+2taffy v0.13.0 alloc,block_layout,calc,content_size,default,detailed_layout_info,flexbox,float_layout,grid,std,taffy_tree
+2thiserror v2.0.21 default,std
+2tracing v0.1.44 attributes,default,std,tracing-attributes
+2unicode-segmentation v1.13.3 
+2url v2.5.8 default,std
+2usvg v0.48.1 base64,fontdb,harfrust,memmap-fonts,skrifa,system-fonts,text,unicode-bidi,unicode-script,unicode-vo,writer,xmlwriter
+2uuid v1.27.0 default,rng,serde,sha1,std,v4,v5,v7
+2waker-fn v1.2.0 
+2web-time v1.1.0 
+2windows v0.61.3 Win32,Win32_Foundation,Win32_Graphics,Win32_Graphics_Direct3D11,default,std
+2windows v0.62.2 Data,Data_Xml,Data_Xml_Dom,Foundation,Foundation_Numerics,Globalization,Globalization_DateTimeFormatting,Storage,Storage_Search,Storage_Streams,System,System_Threading,UI,UI_Notifications,UI_ViewManagement,Wdk,Wdk_System,Wdk_System_SystemServices,Win32,Win32_Foundation,Win32_Globalization,Win32_Graphics,Win32_Graphics_Direct2D,Win32_Graphics_Direct2D_Common,Win32_Graphics_Direct3D,Win32_Graphics_Direct3D11,Win32_Graphics_Direct3D_Fxc,Win32_Graphics_DirectComposition,Win32_Graphics_DirectManipulation,Win32_Graphics_DirectWrite,Win32_Graphics_Dwm,Win32_Graphics_Dxgi,Win32_Graphics_Dxgi_Common,Win32_Graphics_Gdi,Win32_Graphics_Hlsl,Win32_Graphics_Imaging,Win32_Media,Win32_Networking,Win32_Networking_WinSock,Win32_Security,Win32_Security_Credentials,Win32_Security_Cryptography,Win32_Storage,Win32_Storage_FileSystem,Win32_Storage_Packaging,Win32_Storage_Packaging_Appx,Win32_System,Win32_System_Com,Win32_System_Com_StructuredStorage,Win32_System_Console,Win32_System_DataExchange,Win32_System_Diagnostics,Win32_System_Diagnostics_Debug,Win32_System_IO,Win32_System_JobObjects,Win32_System_LibraryLoader,Win32_System_Memory,Win32_System_Ole,Win32_System_Performance,Win32_System_Pipes,Win32_System_Power,Win32_System_RestartManager,Win32_System_SystemInformation,Win32_System_SystemServices,Win32_System_Threading,Win32_System_Variant,Win32_System_WinRT,Win32_UI,Win32_UI_Controls,Win32_UI_HiDpi,Win32_UI_Input,Win32_UI_Input_Ime,Win32_UI_Input_KeyboardAndMouse,Win32_UI_Input_Pointer,Win32_UI_Shell,Win32_UI_Shell_Common,Win32_UI_Shell_PropertiesSystem,Win32_UI_WindowsAndMessaging,default,std
+2embed-resource v3.0.11 
+1serde v1.0.229 alloc,default,derive,rc,serde_derive,std (*)
+1serde_json v1.0.151 alloc,default,indexmap,preserve_order,raw_value,std (*)
+1sha2 v0.10.9 default,std
+2cfg-if v1.0.5 
+2cpufeatures v0.2.17 
+2digest v0.10.7 alloc,block-buffer,core-api,default,std

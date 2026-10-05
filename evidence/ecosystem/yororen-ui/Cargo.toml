@@ -1,0 +1,57 @@
+[workspace]
+resolver = "2"
+# Note: every `gpui = { package = "gpui-ce" ... }` dependency in this
+# workspace points at a third-party fork of the upstream `gpui` crate
+# (https://github.com/zed-industries/zed/tree/main/crates/gpui). The
+# fork exposes the same public API but is published under a
+# different name so a host app can pin to a specific version of
+# the UI layer independently of the core zed gpui version. See
+# `yororen-ui-core/Cargo.toml` for the canonical dep entry.
+members = [
+    "crates/yororen-ui",
+    "crates/yororen-ui-core",
+    "crates/yororen-ui-default-renderer",
+    "crates/yororen-ui-brutalism-renderer",
+    "crates/yororen-ui-xml",
+    "crates/yororen-ui-xml-macro",
+    "crates/yororen-ui-locale-en",
+    "crates/yororen-ui-locale-zh-CN",
+    "crates/yororen-ui-locale-ar",
+    "crates/yororen-ui-demos/counter",
+    "crates/yororen-ui-demos/showcase_xml",
+    "crates/yororen-ui-demos/gallery_demo",
+    "crates/yororen-ui-demos/gallery_xml",
+    "crates/yororen-ui-demos/inputs_demo",
+    "crates/yororen-ui-demos/layers_demo",
+    "crates/yororen-ui-demos/theme_showcase",
+    "crates/yororen-ui-demos/variant_showcase",
+]
+
+[workspace.package]
+version = "0.3.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/MeowLynxSea/yororen-ui"
+# crates.io discoverability — applied to every publishable crate.
+# `categories` and `keywords` are restricted to the allow-list published
+# at <https://crates.io/category_slugs> / <https://crates.io/keyword_slugs>.
+keywords = ["gui", "ui", "headless", "gpui", "components"]
+categories = ["gui", "accessibility"]
+
+# Workspace lints — every member inherits these via
+# `[lints] workspace = true` in its `Cargo.toml`. Enforce
+# the same clippy rules across the whole workspace so
+# `cargo clippy --workspace -- -D warnings` is a single
+# source of truth. Demos are NOT exempt: a missed
+# warning in a demo will fail the same check.
+#
+# Lint keys are quoted because TOML does not allow `::`
+# in unquoted keys; the trailing `= "warn"` keeps the
+# level configurable per-crate via `[lints.<name>]`
+# in member Cargo.toml files.
+[workspace.lints]
+# TOML key is `clippy.all` (dot-separated); the actual
+# lint name uses `::` in rust source. `level = "warn"`
+# keeps the level configurable per-crate via
+# `[lints.<name>]` in member Cargo.toml files.
+clippy.all = "warn"

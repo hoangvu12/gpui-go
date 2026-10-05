@@ -1,0 +1,35 @@
+{
+    "ticket": "06-layout-roundtrip",
+    "date": "2026-10-05",
+    "authorization": "User: ok now use roboco mcp, create a new chat that use /implement skill to do all those tickets, use iroha dashscope glm 5.3 with pi harness",
+    "session": "Roboco chat 065e52f5; implemented by three coordinated background subagents (ticket06-native-layout: Rust native service; ticket06-fixture-d: reference fixture fx-0002; ticket06-go-layout: Go adapter) plus orchestrator-added block-display case; independently re-verified",
+    "git_state": "No git repository; commit step environment-blocked, not fabricated.",
+    "native_service": {
+        "crate": "reference/native (gpui-go-native revision 2, capability mask 3: bootstrap + layout-taffy-0-13-0)",
+        "taffy": "exactly =0.13.0 resolved (crates.io checksum c034e05f6ee85a12daa63863c2245797715075c70649947aa0da54f3f2ab1d0f, identical to the CE workspace lock), default features retained (std, taffy_tree, flexbox, grid, block_layout, float_layout, calc, content_size, detailed_layout_info); full feature graph recorded in the manifest",
+        "rounding": "disabled following the pinned taffy.rs configuration",
+        "dll": "630,784 bytes; sha256 8e37a5c9c6d0b68c531122a7185c68e80765ab7a0396861c40ee32058fba3290; static CRT (OS imports only: KERNEL32, api-ms-win-core-synch-l1-2-0, bcryptprimitives, ntdll); rebuilt with RUSTFLAGS -C target-feature=+crt-static; re-measured and re-embedded",
+        "abi": "LAYOUT_ABI.md v1 (service slot 1, 14 functions, generation-checked engine/node handles, fixed Go trampoline via syscall.NewCallback, catch_unwind panic containment, busy guards, latched callback failure)",
+        "trampoline_rule_recorded": "out-parameters visible to callbacks must live in non-moving memory (pooled heap allocation; discovered under forced-GC testing and recorded in the ABI doc)"
+    },
+    "go_adapter": {
+        "files": ["gpui/style.go (port Style, Length/DefiniteLength/AbsoluteLength, enums in reference order, string parsers porting TryFrom<&str>)", "gpui/layout.go (adapter: pinned rounding helpers, styleToRecord porting into_taffy, LayoutID with engine identity + node handle + generation, RequestLayout/RequestMeasuredLayout/ComputeLayout/LayoutBounds/ParentRelativeLayoutBounds, busy guards, measured-leaf enforcement)", "gpui/layout_context.go (LayoutContext rem/scale/offset; NewTestLayoutContext = scale 2.0 + rem 16 matching the pinned TestWindow)", "internal/portfixture/layout.go + layout_metrics.go (fixture runners)", "internal/layoutspec/ (engine spec tests)"],
+        "pinned_semantics_ported": ["round_half_toward_zero (midpoint ties toward zero, signed zero via copysign)", "round/floor/ceil to device pixel", "round_stroke_to_device_pixel (exact zero stays zero, else >= 1 device pixel)", "snap_measured_size (clamp >= 0, x scale, ceil)", "ordinary outer bounds: accumulate unrounded device origins, round near/far edges independently, subtract, divide by scale, plus snapped element offset", "parent-relative bounds path", "proportional padding snap on auto-sized axes (snap_absolute_pair/convert_pair)", "measure wrapper: known dims and definite available divided back to logical before the user callback; result snapped", "available-space conversion multiplies by scale without rounding (pinned behavior)"]
+    },
+    "gates": {
+        "fx-0001": "TestFx0001FullTraceMatchesRecordedReference: ALL 54 events (effects + layout-requested + 6 layout-bounds with exact f32 bits) equal to the recorded reference trace, diff empty",
+        "fx-0002": "TestFx0002LayoutMetricsMatchesRecordedReference: ALL 63 events equal — 9 cases (flex-wrap, grid minmax, absolute-inset, rem-override-20, measured-fixed-flex, measured-echo-min-content, percent-margin-padding-border, max-height-clamp, block-display-stacking) with 8 measure-query/measure-result pairs (exact logical values and ordering: m-fixed queried 4x including max-content, min-content, definite with known width 64, definite with known height 60; m-echo 2x) and 33 layout-bounds",
+        "reference_fixture": "fx-0002 recorded via the reference harness (deterministic 3x, byte-identical); the reference trace includes taffy's repeated queries and the default cross-axis stretch fact (m-fixed final box 40x60 though the measure returned 40x25)",
+        "behavioral_facts": "TestFx0002LayoutMetricsBehavioralFacts pins the raw unsnapped measured size, stretch, rem override and scale 2.0"
+    },
+    "executed_results": {
+        "rust": "cargo build --release green; cargo test -p gpui-go-native 16 tests (style translation, records, engine generations, flex geometry, measure trampoline, latched failure, nested same-engine rejection)",
+        "go": "CGO_ENABLED=0 go test ./... all packages pass (native layout FFI 13 tests: table validation, record offsets, flex geometry, measured fixed-size honored, same-engine nested busy rejection, independent-engine nesting, panic containment with recovered value, stale handles, 300 forced-GC re-measuring iterations); go vet/gofmt clean; linux/darwin cross-builds compile"
+    },
+    "documented_limitations": [
+        "Float/calc are retained taffy features but not expressible through the GPUI Style surface (the pinned Style has no float/calc fields) — recorded rather than silently dropped.",
+        "The oracle scale is the reference test platform's fixed 2.0; other scales are covered by ported-helper unit tests against the pinned util.rs, not by an oracle fixture (the reference test platform cannot vary scale).",
+        "Actual-font measurement and inline fragmentation are assigned to tickets 09/15 per the plan.",
+        "The contract's 're-raise the original Go panic' vs the implemented 'typed error carrying the recovered panic value' was resolved as the latter (latched failure, no crash) — flagged for the conformance audit."
+    ]
+}

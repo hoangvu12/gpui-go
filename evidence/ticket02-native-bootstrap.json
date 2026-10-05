@@ -1,0 +1,54 @@
+{
+    "ticket": "02-native-bootstrap",
+    "date": "2026-10-05",
+    "authorization": "User: ok now use roboco mcp, create a new chat that use /implement skill to do all those tickets, use iroha dashscope glm 5.3 with pi harness",
+    "session": "Roboco chat 065e52f5, harness pi, model iroha/dashscope/glm-5.3; implemented by parallel background subagent session ticket02-native",
+    "git_state": "No git repository; commit step environment-blocked, not fabricated.",
+    "artifact": {
+        "crate": "gpui-go-native 0.1.0 (cdylib), reference/native, dependency-free Rust (std only)",
+        "binary": "reference/target/x86_64-pc-windows-msvc/release/gpui_go_native.dll",
+        "sha256": "b8a836dc5a24661f836239259b38adc025e970c03fce8c43adb1bfc1deb4fd18",
+        "bytes": 202752,
+        "gzip9_bytes": 107381,
+        "machine": "amd64",
+        "imports": ["KERNEL32.dll", "api-ms-win-core-synch-l1-2-0.dll", "ntdll.dll"],
+        "crt_outcome": "static: no VCRUNTIME/MSVCP/UCRT/api-ms-win-crt imports; only OS system components",
+        "abi": {
+            "abi_version": 1,
+            "magic": "0x4750474F (GPGO)",
+            "ce_commit": "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+            "capabilities": "bit 0 = bootstrap-buffer-roundtrip (only)",
+            "exports": ["gpui_go_abi", "gpui_go_panic_probe (test-only)"],
+            "service_slots": "8 reserved null pointers for future layout/text/renderer/a11y/image/SVG services"
+        },
+        "provenance_record": "reference/out/native-bootstrap.json"
+    },
+    "loader": {
+        "package": "internal/native (pure Go, stdlib syscall only, CGO_ENABLED=0)",
+        "embedding": "go:embed artifacts/gpui_go_native.dll + manifest.json (203264 bytes embedded contribution)",
+        "cache": "os.UserCacheDir()/gpui-go/native/windows-amd64/<sha256>/gpui_go_native-<sha256>.dll (contract formula; hash in basename)",
+        "publication": "cross-process lock (LockFileEx), uniquely named staging file + fsync + rename + verify; crashed-writer staging files cleaned; corrupt final file = typed ErrCacheCorrupt, never overwritten (bundle override is the recovery path)",
+        "loading": "LoadLibraryExW with absolute path + LOAD_LIBRARY_SEARCH_SYSTEM32 only (LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR reserved for future verified companion DLLs per contract)",
+        "verified_handle": "opened with FILE_SHARE_READ only (denies write/delete), hashed through the open handle, retained by Library for process lifetime; Close releases exactly once",
+        "identity_checks": "manifest hash, PE machine (debug/pe), ABI version, magic, CE commit, capability bit; distinct typed errors for wrong hash / wrong architecture / ABI mismatch / missing capability / OS load failure",
+        "ffi": "checked buffer round trip via table function pointer with validation of status codes 0-7, panic containment (status 7 via panic probe), no retained Go pointers, runtime.KeepAlive discipline, forced-GC stability"
+    },
+    "module_format": {
+        "demo_exe_embedded_bytes": 4900352,
+        "demo_exe_noembed_bytes": 4697088,
+        "embedding_contribution_bytes": 203264,
+        "ceiling_note": "far below the 500 MiB module-format ceiling; no distribution reopening required"
+    },
+    "executed_results": {
+        "cargo": "cargo build --release -p gpui-go-native succeeded; cargo test 6/6 pass",
+        "go_tests": "CGO_ENABLED=0 go test ./internal/native/... all pass (16 top-level + 21 subtests: identity round trips 0/1/4096, wrong-hash/arch/ABI/capability rejection, corrupt-cache typed error, staging cleanup, unwritable cache, concurrent publication exactly-once, forced GC, real status codes 1-7, bundle override + env authority rejection, exactly-once release, reparse redirect rejection, verified-handle write/delete denial)",
+        "demo": "CGO_ENABLED=0 go run ./internal/native/cmd/demo prints identity, round trips, panic containment, release; PASS",
+        "vet_gofmt": "go vet ./internal/native/... clean; gofmt clean; cross-build linux/darwin and gpui_native_noembed tag compile"
+    },
+    "limitations": [
+        "Bootstrap artifact only: no layout/text/renderer/a11y/image/SVG services linked yet; service slots are reserved and later tickets grow the artifact identity (per contract, any native byte change is a new identity).",
+        "ErrOSLoad is implemented but not machine-tested: with identity pre-checks, every forgeable input is rejected before LoadLibraryExW; forcing a genuine OS load failure is not deterministic.",
+        "Byte reproducibility is not claimed (contract: two builds have not demonstrated it); rebuilding requires rerunning reference/native/tools/measure and refreshing the embedded manifest.",
+        "A transient Rust panic message is printed to stderr by the deliberate panic-probe demo (contained, status 7 reported)."
+    ]
+}

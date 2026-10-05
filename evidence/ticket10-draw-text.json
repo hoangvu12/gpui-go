@@ -1,0 +1,33 @@
+{
+    "ticket": "10-draw-text",
+    "date": "2026-10-05",
+    "authorization": "User: ok now use roboco mcp, create a new chat that use /implement skill to do all those tickets, use iroha dashscope glm 5.3 with pi harness",
+    "session": "Roboco chat 065e52f5; subagent ticket10-glyphs; orchestrator re-verified and fixed the flagged renderer pacing race",
+    "git_state": "No git repository; commit step environment-blocked, not fabricated.",
+    "native_services": {
+        "slots": "5 glyph-raster-dwrite + 6 glyph-atlas-d3d11 (mask 0x7F, native revision 6)",
+        "rasterizer": "the pinned WindowsGlyphRasterizer ported into reference/native/src/glyph.rs from crates/gpui_windows/src/font_rasterizer.rs (pub(crate) in the pin): faces come from the Parley/Fontique stack itself (RasterFace via PlatformTextSystem::rasterize_glyph), DirectWrite in-memory font file loader; the service constructs the shared text stack WITH the ported rasterizer (the exact pinned platform construction) and exposes TextSystem::rasterize_glyph (the pinned window paint call)",
+        "formats": "AlphaMask (grayscale, DWRITE_TEXTURE_ALIASED_1x1), BgraSubpixelMask (ClearType 3x1 expanded BGRA), BgraColor (COLRv0 layers with gamma/contrast-corrected coverage, tinted monochrome, Swash fallback for bitmap/COLRv1 — typed NativeRasterUnsupported for genuinely unsupported color forms, never a false claim)",
+        "atlas": "directx_atlas.rs port: etagere =0.2.15 BucketedAtlasAllocator (the renderer-contract pin), three pools (R8_UNORM / B8G8R8A8), 1024x1024 default clamped 16384, free-list reuse, upload validation, UpdateSubresource row pitch, device-loss generation bump; bound to the renderer service's shared device (lock order atlas->renderer)",
+        "dll": "7,723,008 bytes; sha256 196914b41b74ba71870e7e64bfa4465411b73df9ad6576a8552547194d841c41; static CRT (OS-only imports incl. dwrite, user32, ole32)",
+        "sprite_scene": "scene service version 2: sprite primitives (atlas page/uv/color) in the scene kernel — fx-0003 gates unchanged"
+    },
+    "oracle": {
+        "fixture": "fx-0005-glyph-raster (glyph-raster-v1), 39 events, byte-deterministic (3x): construction facts, per-case font resolution, 26 raster queries (Segoe UI A/g/i at 16/24 x scale 1/2 grayscale; subpixel variants (0,0)/(3,0); color-tint; empty space; Segoe UI Emoji color; missing glyph)",
+        "pixels": "bitmap bytes recorded as SHA-256 + length; the gate proves all 26 hashes bit-exact through DirectWrite -> ABI -> Go",
+        "discovery": "a font-weight descriptor default of 0 resolved Segoe UI Light (segoeuil.ttf) instead of the pinned default 400 (segoeui.ttf) — fixed in the port; recorded"
+    },
+    "gate": "TestFx0005GlyphRasterMatchesRecordedReference: ALL 39 events equal, empty diff (pixel hashes included)",
+    "real_window_draw": "TestRealWindowTextFramePresentedAndRetired: host window -> surface -> shape 'Hello, gpui!' 24px (12 glyphs) -> rasterize + atlas insert -> 11 subpixel sprites (the space never inserts; ClearType machine => subpixel mode per the pinned mode selection) -> scene finished (1 batch) -> PresentClear -> retirement with a preceding completed poll; ledger 1/1/0/0",
+    "executed_results": {
+        "rust": "cargo build 0 warnings; cargo test --release 89/89",
+        "go": "CGO_ENABLED=0 go test ./... 14/14 packages green; 12 glyphspec tests; fx-0001/2/3/4 gates unchanged; vet/gofmt clean",
+        "flake_fixed": "the pre-existing renderer pacing shutdown race (Close nils r.paceStop while paceLoop's select re-read the field; ~2/10 full parallel runs) fixed by the orchestrator: the stop channel is captured once and passed to paceLoop/paceOnce; 6/6 consecutive full-suite runs green after the fix"
+    },
+    "limitations": [
+        "The sprite draw pipeline (text actually rasterized into pixels on screen) is ticket16's shader path; this slice's present is the clear frame with a fully built and CPU-verified sprite scene.",
+        "Subpixel-mode inputs: the platform window's background transparency is not exposed by the host yet; the port falls back to the platform recommendation with an explicit override (recorded).",
+        "Lazy rasterization via raster_metadata is pub(crate); the port dedups via the atlas map with identical observable atlas behavior.",
+        "No advance/stride in the raster record — the pinned RasterizedGlyph carries bounds/size/format/pixels only (CLARIFIED in GLYPH_ABI.md)."
+    ]
+}

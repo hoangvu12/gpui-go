@@ -1,0 +1,1487 @@
+{
+  "schema": "gpui-go/conformance/trace@1",
+  "fixture_id": "fx-0006-authoring-counter",
+  "fixture_kind": "authoring-counter-v1",
+  "envelope_sha256": "2ab6b65672b4a3cb4360bbeeb0c58bf61184cbebad46ee7c48d8e4d33f116002",
+  "harness": {
+    "harness_version": "0.1.0",
+    "harness_crate": "gpui-reference-harness",
+    "gpui_crate": "gpui-ce 0.2.2",
+    "gpui_commit": "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+    "profile": "test",
+    "features": [
+      "default",
+      "test-support"
+    ]
+  },
+  "events": [
+    {
+      "seq": 1,
+      "name": "case-begin",
+      "label": "shared-counter-two-windows",
+      "fields": {
+        "label": "shared-counter-two-windows",
+        "remSize": "f32:41800000",
+        "scale": "f32:40000000",
+        "value": 8,
+        "windowCount": 0
+      }
+    },
+    {
+      "seq": 2,
+      "name": "entity-created",
+      "label": "model",
+      "fields": {
+        "value": 8
+      }
+    },
+    {
+      "seq": 3,
+      "name": "window-opened",
+      "label": "A",
+      "fields": {
+        "height": "f32:43480000",
+        "width": "f32:43A00000",
+        "windowCount": 1
+      }
+    },
+    {
+      "seq": 4,
+      "name": "view-created",
+      "label": "A",
+      "fields": {
+        "renders": 0,
+        "value": 8
+      }
+    },
+    {
+      "seq": 5,
+      "name": "window-opened",
+      "label": "B",
+      "fields": {
+        "height": "f32:43200000",
+        "width": "f32:438C0000",
+        "windowCount": 2
+      }
+    },
+    {
+      "seq": 6,
+      "name": "view-created",
+      "label": "B",
+      "fields": {
+        "renders": 0,
+        "value": 8
+      }
+    },
+    {
+      "seq": 7,
+      "name": "text-shape",
+      "label": "A",
+      "fields": {
+        "ascent": "f32:41A40000",
+        "descent": "f32:C0B00000",
+        "fontSize": "f32:41A00000",
+        "glyphCount": 8,
+        "lineCount": 1,
+        "lineHeight": "f32:42020000",
+        "textLen": 8,
+        "width": "f32:42C00000"
+      }
+    },
+    {
+      "seq": 8,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 0,
+        "isEmoji": 0,
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 9,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 1,
+        "isEmoji": 0,
+        "x": "f32:41400000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 10,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 2,
+        "isEmoji": 0,
+        "x": "f32:41C00000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 11,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 3,
+        "isEmoji": 0,
+        "x": "f32:42100000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 12,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 4,
+        "isEmoji": 0,
+        "x": "f32:42400000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 13,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 5,
+        "isEmoji": 0,
+        "x": "f32:42700000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 14,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 6,
+        "isEmoji": 0,
+        "x": "f32:42900000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 15,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 7,
+        "isEmoji": 0,
+        "x": "f32:42A80000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 16,
+      "name": "window-drawn",
+      "label": "A",
+      "fields": {
+        "monoSprites": 0,
+        "notified": 0,
+        "polychromeSprites": 0,
+        "quads": 1,
+        "renders": 1,
+        "subpixelSprites": 0,
+        "value": 8
+      }
+    },
+    {
+      "seq": 17,
+      "name": "painted-quad",
+      "label": "A",
+      "fields": {
+        "backgroundA": "f32:3F800000",
+        "backgroundH": "f32:00000000",
+        "backgroundL": "f32:3F018182",
+        "backgroundS": "f32:3F38E38F",
+        "borderBottom": "f32:00000000",
+        "borderColorA": "f32:00000000",
+        "borderColorH": "f32:00000000",
+        "borderColorL": "f32:3F018182",
+        "borderColorS": "f32:3F38E38F",
+        "borderDashedGap": "f32:3F800000",
+        "borderDashedLength": "f32:40000000",
+        "borderLeft": "f32:00000000",
+        "borderRight": "f32:00000000",
+        "borderStyle": "solid",
+        "borderTop": "f32:00000000",
+        "boundsH": "f32:43C80000",
+        "boundsW": "f32:44200000",
+        "boundsX": "f32:00000000",
+        "boundsY": "f32:00000000",
+        "cornerSmoothing": "f32:00000000",
+        "maskH": "f32:43C80000",
+        "maskW": "f32:44200000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "padding": 0,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 18,
+      "name": "debug-bounds",
+      "label": "root",
+      "fields": {
+        "height": "f32:43480000",
+        "present": 1,
+        "width": "f32:43A00000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 19,
+      "name": "debug-bounds",
+      "label": "label",
+      "fields": {
+        "height": "f32:43300000",
+        "present": 1,
+        "width": "f32:42C00000",
+        "x": "f32:42E00000",
+        "y": "f32:41400000"
+      }
+    },
+    {
+      "seq": 20,
+      "name": "text-shape",
+      "label": "B",
+      "fields": {
+        "ascent": "f32:41A40000",
+        "descent": "f32:C0B00000",
+        "fontSize": "f32:41A00000",
+        "glyphCount": 8,
+        "lineCount": 1,
+        "lineHeight": "f32:42020000",
+        "textLen": 8,
+        "width": "f32:42C00000"
+      }
+    },
+    {
+      "seq": 21,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 0,
+        "isEmoji": 0,
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 22,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 1,
+        "isEmoji": 0,
+        "x": "f32:41400000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 23,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 2,
+        "isEmoji": 0,
+        "x": "f32:41C00000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 24,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 3,
+        "isEmoji": 0,
+        "x": "f32:42100000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 25,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 4,
+        "isEmoji": 0,
+        "x": "f32:42400000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 26,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 5,
+        "isEmoji": 0,
+        "x": "f32:42700000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 27,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 6,
+        "isEmoji": 0,
+        "x": "f32:42900000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 28,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 7,
+        "isEmoji": 0,
+        "x": "f32:42A80000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 29,
+      "name": "window-drawn",
+      "label": "B",
+      "fields": {
+        "monoSprites": 0,
+        "notified": 0,
+        "polychromeSprites": 0,
+        "quads": 1,
+        "renders": 1,
+        "subpixelSprites": 0,
+        "value": 8
+      }
+    },
+    {
+      "seq": 30,
+      "name": "painted-quad",
+      "label": "B",
+      "fields": {
+        "backgroundA": "f32:3F800000",
+        "backgroundH": "f32:00000000",
+        "backgroundL": "f32:3F018182",
+        "backgroundS": "f32:3F38E38F",
+        "borderBottom": "f32:00000000",
+        "borderColorA": "f32:00000000",
+        "borderColorH": "f32:00000000",
+        "borderColorL": "f32:3F018182",
+        "borderColorS": "f32:3F38E38F",
+        "borderDashedGap": "f32:3F800000",
+        "borderDashedLength": "f32:40000000",
+        "borderLeft": "f32:00000000",
+        "borderRight": "f32:00000000",
+        "borderStyle": "solid",
+        "borderTop": "f32:00000000",
+        "boundsH": "f32:43A00000",
+        "boundsW": "f32:440C0000",
+        "boundsX": "f32:00000000",
+        "boundsY": "f32:00000000",
+        "cornerSmoothing": "f32:00000000",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:440C0000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "padding": 0,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 31,
+      "name": "debug-bounds",
+      "label": "root",
+      "fields": {
+        "height": "f32:43200000",
+        "present": 1,
+        "width": "f32:438C0000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 32,
+      "name": "debug-bounds",
+      "label": "label",
+      "fields": {
+        "height": "f32:43080000",
+        "present": 1,
+        "width": "f32:42C00000",
+        "x": "f32:42B80000",
+        "y": "f32:41400000"
+      }
+    },
+    {
+      "seq": 33,
+      "name": "op-begin",
+      "label": "A",
+      "fields": {
+        "clicks": 2,
+        "op": "increment"
+      }
+    },
+    {
+      "seq": 34,
+      "name": "text-shape",
+      "label": "A",
+      "fields": {
+        "ascent": "f32:41A40000",
+        "descent": "f32:C0B00000",
+        "fontSize": "f32:41A00000",
+        "glyphCount": 9,
+        "lineCount": 1,
+        "lineHeight": "f32:42020000",
+        "textLen": 9,
+        "width": "f32:42D80000"
+      }
+    },
+    {
+      "seq": 35,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 0,
+        "isEmoji": 0,
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 36,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 1,
+        "isEmoji": 0,
+        "x": "f32:41400000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 37,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 2,
+        "isEmoji": 0,
+        "x": "f32:41C00000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 38,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 3,
+        "isEmoji": 0,
+        "x": "f32:42100000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 39,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 4,
+        "isEmoji": 0,
+        "x": "f32:42400000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 40,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 5,
+        "isEmoji": 0,
+        "x": "f32:42700000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 41,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 6,
+        "isEmoji": 0,
+        "x": "f32:42900000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 42,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 7,
+        "isEmoji": 0,
+        "x": "f32:42A80000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 43,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 8,
+        "isEmoji": 0,
+        "x": "f32:42C00000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 44,
+      "name": "window-drawn",
+      "label": "A",
+      "fields": {
+        "monoSprites": 0,
+        "notified": 1,
+        "polychromeSprites": 0,
+        "quads": 1,
+        "renders": 2,
+        "subpixelSprites": 0,
+        "value": 10
+      }
+    },
+    {
+      "seq": 45,
+      "name": "painted-quad",
+      "label": "A",
+      "fields": {
+        "backgroundA": "f32:3F800000",
+        "backgroundH": "f32:00000000",
+        "backgroundL": "f32:3F018182",
+        "backgroundS": "f32:3F38E38F",
+        "borderBottom": "f32:00000000",
+        "borderColorA": "f32:00000000",
+        "borderColorH": "f32:00000000",
+        "borderColorL": "f32:3F018182",
+        "borderColorS": "f32:3F38E38F",
+        "borderDashedGap": "f32:3F800000",
+        "borderDashedLength": "f32:40000000",
+        "borderLeft": "f32:00000000",
+        "borderRight": "f32:00000000",
+        "borderStyle": "solid",
+        "borderTop": "f32:00000000",
+        "boundsH": "f32:43C80000",
+        "boundsW": "f32:44200000",
+        "boundsX": "f32:00000000",
+        "boundsY": "f32:00000000",
+        "cornerSmoothing": "f32:00000000",
+        "maskH": "f32:43C80000",
+        "maskW": "f32:44200000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "padding": 0,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 46,
+      "name": "debug-bounds",
+      "label": "root",
+      "fields": {
+        "height": "f32:43480000",
+        "present": 1,
+        "width": "f32:43A00000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 47,
+      "name": "debug-bounds",
+      "label": "label",
+      "fields": {
+        "height": "f32:43300000",
+        "present": 1,
+        "width": "f32:42D80000",
+        "x": "f32:42D40000",
+        "y": "f32:41400000"
+      }
+    },
+    {
+      "seq": 48,
+      "name": "text-shape",
+      "label": "B",
+      "fields": {
+        "ascent": "f32:41A40000",
+        "descent": "f32:C0B00000",
+        "fontSize": "f32:41A00000",
+        "glyphCount": 9,
+        "lineCount": 1,
+        "lineHeight": "f32:42020000",
+        "textLen": 9,
+        "width": "f32:42D80000"
+      }
+    },
+    {
+      "seq": 49,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 0,
+        "isEmoji": 0,
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 50,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 1,
+        "isEmoji": 0,
+        "x": "f32:41400000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 51,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 2,
+        "isEmoji": 0,
+        "x": "f32:41C00000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 52,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 3,
+        "isEmoji": 0,
+        "x": "f32:42100000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 53,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 4,
+        "isEmoji": 0,
+        "x": "f32:42400000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 54,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 5,
+        "isEmoji": 0,
+        "x": "f32:42700000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 55,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 6,
+        "isEmoji": 0,
+        "x": "f32:42900000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 56,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 7,
+        "isEmoji": 0,
+        "x": "f32:42A80000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 57,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 8,
+        "isEmoji": 0,
+        "x": "f32:42C00000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 58,
+      "name": "window-drawn",
+      "label": "B",
+      "fields": {
+        "monoSprites": 0,
+        "notified": 1,
+        "polychromeSprites": 0,
+        "quads": 1,
+        "renders": 2,
+        "subpixelSprites": 0,
+        "value": 10
+      }
+    },
+    {
+      "seq": 59,
+      "name": "painted-quad",
+      "label": "B",
+      "fields": {
+        "backgroundA": "f32:3F800000",
+        "backgroundH": "f32:00000000",
+        "backgroundL": "f32:3F018182",
+        "backgroundS": "f32:3F38E38F",
+        "borderBottom": "f32:00000000",
+        "borderColorA": "f32:00000000",
+        "borderColorH": "f32:00000000",
+        "borderColorL": "f32:3F018182",
+        "borderColorS": "f32:3F38E38F",
+        "borderDashedGap": "f32:3F800000",
+        "borderDashedLength": "f32:40000000",
+        "borderLeft": "f32:00000000",
+        "borderRight": "f32:00000000",
+        "borderStyle": "solid",
+        "borderTop": "f32:00000000",
+        "boundsH": "f32:43A00000",
+        "boundsW": "f32:440C0000",
+        "boundsX": "f32:00000000",
+        "boundsY": "f32:00000000",
+        "cornerSmoothing": "f32:00000000",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:440C0000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "padding": 0,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 60,
+      "name": "debug-bounds",
+      "label": "root",
+      "fields": {
+        "height": "f32:43200000",
+        "present": 1,
+        "width": "f32:438C0000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 61,
+      "name": "debug-bounds",
+      "label": "label",
+      "fields": {
+        "height": "f32:43080000",
+        "present": 1,
+        "width": "f32:42D80000",
+        "x": "f32:42AC0000",
+        "y": "f32:41400000"
+      }
+    },
+    {
+      "seq": 62,
+      "name": "op-begin",
+      "label": "B",
+      "fields": {
+        "clicks": 1,
+        "op": "increment"
+      }
+    },
+    {
+      "seq": 63,
+      "name": "text-shape",
+      "label": "A",
+      "fields": {
+        "ascent": "f32:41A40000",
+        "descent": "f32:C0B00000",
+        "fontSize": "f32:41A00000",
+        "glyphCount": 9,
+        "lineCount": 1,
+        "lineHeight": "f32:42020000",
+        "textLen": 9,
+        "width": "f32:42D80000"
+      }
+    },
+    {
+      "seq": 64,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 0,
+        "isEmoji": 0,
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 65,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 1,
+        "isEmoji": 0,
+        "x": "f32:41400000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 66,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 2,
+        "isEmoji": 0,
+        "x": "f32:41C00000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 67,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 3,
+        "isEmoji": 0,
+        "x": "f32:42100000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 68,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 4,
+        "isEmoji": 0,
+        "x": "f32:42400000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 69,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 5,
+        "isEmoji": 0,
+        "x": "f32:42700000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 70,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 6,
+        "isEmoji": 0,
+        "x": "f32:42900000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 71,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 7,
+        "isEmoji": 0,
+        "x": "f32:42A80000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 72,
+      "name": "text-glyph",
+      "label": "A",
+      "fields": {
+        "id": 1,
+        "index": 8,
+        "isEmoji": 0,
+        "x": "f32:42C00000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 73,
+      "name": "window-drawn",
+      "label": "A",
+      "fields": {
+        "monoSprites": 0,
+        "notified": 2,
+        "polychromeSprites": 0,
+        "quads": 1,
+        "renders": 3,
+        "subpixelSprites": 0,
+        "value": 11
+      }
+    },
+    {
+      "seq": 74,
+      "name": "painted-quad",
+      "label": "A",
+      "fields": {
+        "backgroundA": "f32:3F800000",
+        "backgroundH": "f32:00000000",
+        "backgroundL": "f32:3F018182",
+        "backgroundS": "f32:3F38E38F",
+        "borderBottom": "f32:00000000",
+        "borderColorA": "f32:00000000",
+        "borderColorH": "f32:00000000",
+        "borderColorL": "f32:3F018182",
+        "borderColorS": "f32:3F38E38F",
+        "borderDashedGap": "f32:3F800000",
+        "borderDashedLength": "f32:40000000",
+        "borderLeft": "f32:00000000",
+        "borderRight": "f32:00000000",
+        "borderStyle": "solid",
+        "borderTop": "f32:00000000",
+        "boundsH": "f32:43C80000",
+        "boundsW": "f32:44200000",
+        "boundsX": "f32:00000000",
+        "boundsY": "f32:00000000",
+        "cornerSmoothing": "f32:00000000",
+        "maskH": "f32:43C80000",
+        "maskW": "f32:44200000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "padding": 0,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 75,
+      "name": "debug-bounds",
+      "label": "root",
+      "fields": {
+        "height": "f32:43480000",
+        "present": 1,
+        "width": "f32:43A00000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 76,
+      "name": "debug-bounds",
+      "label": "label",
+      "fields": {
+        "height": "f32:43300000",
+        "present": 1,
+        "width": "f32:42D80000",
+        "x": "f32:42D40000",
+        "y": "f32:41400000"
+      }
+    },
+    {
+      "seq": 77,
+      "name": "text-shape",
+      "label": "B",
+      "fields": {
+        "ascent": "f32:41A40000",
+        "descent": "f32:C0B00000",
+        "fontSize": "f32:41A00000",
+        "glyphCount": 9,
+        "lineCount": 1,
+        "lineHeight": "f32:42020000",
+        "textLen": 9,
+        "width": "f32:42D80000"
+      }
+    },
+    {
+      "seq": 78,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 0,
+        "isEmoji": 0,
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 79,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 1,
+        "isEmoji": 0,
+        "x": "f32:41400000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 80,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 2,
+        "isEmoji": 0,
+        "x": "f32:41C00000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 81,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 3,
+        "isEmoji": 0,
+        "x": "f32:42100000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 82,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 4,
+        "isEmoji": 0,
+        "x": "f32:42400000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 83,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 5,
+        "isEmoji": 0,
+        "x": "f32:42700000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 84,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 6,
+        "isEmoji": 0,
+        "x": "f32:42900000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 85,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 7,
+        "isEmoji": 0,
+        "x": "f32:42A80000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 86,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 8,
+        "isEmoji": 0,
+        "x": "f32:42C00000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 87,
+      "name": "window-drawn",
+      "label": "B",
+      "fields": {
+        "monoSprites": 0,
+        "notified": 2,
+        "polychromeSprites": 0,
+        "quads": 1,
+        "renders": 3,
+        "subpixelSprites": 0,
+        "value": 11
+      }
+    },
+    {
+      "seq": 88,
+      "name": "painted-quad",
+      "label": "B",
+      "fields": {
+        "backgroundA": "f32:3F800000",
+        "backgroundH": "f32:00000000",
+        "backgroundL": "f32:3F018182",
+        "backgroundS": "f32:3F38E38F",
+        "borderBottom": "f32:00000000",
+        "borderColorA": "f32:00000000",
+        "borderColorH": "f32:00000000",
+        "borderColorL": "f32:3F018182",
+        "borderColorS": "f32:3F38E38F",
+        "borderDashedGap": "f32:3F800000",
+        "borderDashedLength": "f32:40000000",
+        "borderLeft": "f32:00000000",
+        "borderRight": "f32:00000000",
+        "borderStyle": "solid",
+        "borderTop": "f32:00000000",
+        "boundsH": "f32:43A00000",
+        "boundsW": "f32:440C0000",
+        "boundsX": "f32:00000000",
+        "boundsY": "f32:00000000",
+        "cornerSmoothing": "f32:00000000",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:440C0000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "padding": 0,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 89,
+      "name": "debug-bounds",
+      "label": "root",
+      "fields": {
+        "height": "f32:43200000",
+        "present": 1,
+        "width": "f32:438C0000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 90,
+      "name": "debug-bounds",
+      "label": "label",
+      "fields": {
+        "height": "f32:43080000",
+        "present": 1,
+        "width": "f32:42D80000",
+        "x": "f32:42AC0000",
+        "y": "f32:41400000"
+      }
+    },
+    {
+      "seq": 91,
+      "name": "op-begin",
+      "label": "A",
+      "fields": {
+        "op": "close-window"
+      }
+    },
+    {
+      "seq": 92,
+      "name": "window-closed",
+      "label": "A",
+      "fields": {
+        "windowCount": 1
+      }
+    },
+    {
+      "seq": 93,
+      "name": "op-begin",
+      "label": "B",
+      "fields": {
+        "clicks": 3,
+        "op": "increment"
+      }
+    },
+    {
+      "seq": 94,
+      "name": "text-shape",
+      "label": "B",
+      "fields": {
+        "ascent": "f32:41A40000",
+        "descent": "f32:C0B00000",
+        "fontSize": "f32:41A00000",
+        "glyphCount": 9,
+        "lineCount": 1,
+        "lineHeight": "f32:42020000",
+        "textLen": 9,
+        "width": "f32:42D80000"
+      }
+    },
+    {
+      "seq": 95,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 0,
+        "isEmoji": 0,
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 96,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 1,
+        "isEmoji": 0,
+        "x": "f32:41400000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 97,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 2,
+        "isEmoji": 0,
+        "x": "f32:41C00000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 98,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 3,
+        "isEmoji": 0,
+        "x": "f32:42100000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 99,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 4,
+        "isEmoji": 0,
+        "x": "f32:42400000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 100,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 5,
+        "isEmoji": 0,
+        "x": "f32:42700000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 101,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 6,
+        "isEmoji": 0,
+        "x": "f32:42900000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 102,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 7,
+        "isEmoji": 0,
+        "x": "f32:42A80000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 103,
+      "name": "text-glyph",
+      "label": "B",
+      "fields": {
+        "id": 1,
+        "index": 8,
+        "isEmoji": 0,
+        "x": "f32:42C00000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 104,
+      "name": "window-drawn",
+      "label": "B",
+      "fields": {
+        "monoSprites": 0,
+        "notified": 3,
+        "polychromeSprites": 0,
+        "quads": 1,
+        "renders": 4,
+        "subpixelSprites": 0,
+        "value": 14
+      }
+    },
+    {
+      "seq": 105,
+      "name": "painted-quad",
+      "label": "B",
+      "fields": {
+        "backgroundA": "f32:3F800000",
+        "backgroundH": "f32:00000000",
+        "backgroundL": "f32:3F018182",
+        "backgroundS": "f32:3F38E38F",
+        "borderBottom": "f32:00000000",
+        "borderColorA": "f32:00000000",
+        "borderColorH": "f32:00000000",
+        "borderColorL": "f32:3F018182",
+        "borderColorS": "f32:3F38E38F",
+        "borderDashedGap": "f32:3F800000",
+        "borderDashedLength": "f32:40000000",
+        "borderLeft": "f32:00000000",
+        "borderRight": "f32:00000000",
+        "borderStyle": "solid",
+        "borderTop": "f32:00000000",
+        "boundsH": "f32:43A00000",
+        "boundsW": "f32:440C0000",
+        "boundsX": "f32:00000000",
+        "boundsY": "f32:00000000",
+        "cornerSmoothing": "f32:00000000",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:440C0000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "padding": 0,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 106,
+      "name": "debug-bounds",
+      "label": "root",
+      "fields": {
+        "height": "f32:43200000",
+        "present": 1,
+        "width": "f32:438C0000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 107,
+      "name": "debug-bounds",
+      "label": "label",
+      "fields": {
+        "height": "f32:43080000",
+        "present": 1,
+        "width": "f32:42D80000",
+        "x": "f32:42AC0000",
+        "y": "f32:41400000"
+      }
+    },
+    {
+      "seq": 108,
+      "name": "case-end",
+      "label": "shared-counter-two-windows"
+    }
+  ]
+}

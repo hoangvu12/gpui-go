@@ -1,0 +1,15 @@
+{
+  "run_started_at": "2026-10-05T18:54:29+07:00",
+  "harness_exe": "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\target\\release\\gpui-reference-harness.exe",
+  "harness_sha256": "9427eab101b41fa95a82b8bd3ca94f11a2bf6a81dddace556b5812a2a9f52b97",
+  "envelope_path": "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\conformance\\fixtures\\fx-0005-glyph-raster.json",
+  "envelope_sha256": "719e7667a513674d505874151601d3f042a9b7afd834cfb18ff253f88eaaa1a0",
+  "argv": [
+    "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\target\\release\\gpui-reference-harness.exe",
+    "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\conformance\\fixtures\\fx-0005-glyph-raster.json",
+    "conformance\\recorded\\fx-0005-glyph-raster\\trace.json"
+  ],
+  "go_version": "go1.27.1",
+  "os": "windows",
+  "arch": "amd64"
+}

@@ -1,0 +1,113 @@
+﻿{
+    "sha":  "346502ac654b77fdaff3be2d7444fca8783acfc9",
+    "node_id":  "C_kwDOQ-A7PNoAKDM0NjUwMmFjNjU0Yjc3ZmRhZmYzYmUyZDc0NDRmY2E4NzgzYWNmYzk",
+    "commit":  {
+                   "author":  {
+                                  "name":  "MeowLynxSea",
+                                  "email":  "mew@meowdream.cn",
+                                  "date":  "2026-06-18T10:25:16Z"
+                              },
+                   "committer":  {
+                                     "name":  "MeowLynxSea",
+                                     "email":  "mew@meowdream.cn",
+                                     "date":  "2026-06-18T10:25:16Z"
+                                 },
+                   "message":  "fix: 更新示例中的图片链接为绝对路径",
+                   "tree":  {
+                                "sha":  "ce0a2e7f586eb5e71835bb74d2e8773cc3a1186b",
+                                "url":  "https://api.github.com/repos/MeowLynxSea/yororen-ui/git/trees/ce0a2e7f586eb5e71835bb74d2e8773cc3a1186b"
+                            },
+                   "url":  "https://api.github.com/repos/MeowLynxSea/yororen-ui/git/commits/346502ac654b77fdaff3be2d7444fca8783acfc9",
+                   "comment_count":  0,
+                   "verification":  {
+                                        "verified":  false,
+                                        "reason":  "unsigned",
+                                        "signature":  null,
+                                        "payload":  null,
+                                        "verified_at":  null
+                                    }
+               },
+    "url":  "https://api.github.com/repos/MeowLynxSea/yororen-ui/commits/346502ac654b77fdaff3be2d7444fca8783acfc9",
+    "html_url":  "https://github.com/MeowLynxSea/yororen-ui/commit/346502ac654b77fdaff3be2d7444fca8783acfc9",
+    "comments_url":  "https://api.github.com/repos/MeowLynxSea/yororen-ui/commits/346502ac654b77fdaff3be2d7444fca8783acfc9/comments",
+    "author":  {
+                   "login":  "MeowLynxSea",
+                   "id":  169180836,
+                   "node_id":  "U_kgDOChV-pA",
+                   "avatar_url":  "https://avatars.githubusercontent.com/u/169180836?v=4",
+                   "gravatar_id":  "",
+                   "url":  "https://api.github.com/users/MeowLynxSea",
+                   "html_url":  "https://github.com/MeowLynxSea",
+                   "followers_url":  "https://api.github.com/users/MeowLynxSea/followers",
+                   "following_url":  "https://api.github.com/users/MeowLynxSea/following{/other_user}",
+                   "gists_url":  "https://api.github.com/users/MeowLynxSea/gists{/gist_id}",
+                   "starred_url":  "https://api.github.com/users/MeowLynxSea/starred{/owner}{/repo}",
+                   "subscriptions_url":  "https://api.github.com/users/MeowLynxSea/subscriptions",
+                   "organizations_url":  "https://api.github.com/users/MeowLynxSea/orgs",
+                   "repos_url":  "https://api.github.com/users/MeowLynxSea/repos",
+                   "events_url":  "https://api.github.com/users/MeowLynxSea/events{/privacy}",
+                   "received_events_url":  "https://api.github.com/users/MeowLynxSea/received_events",
+                   "type":  "User",
+                   "user_view_type":  "public",
+                   "site_admin":  false
+               },
+    "committer":  {
+                      "login":  "MeowLynxSea",
+                      "id":  169180836,
+                      "node_id":  "U_kgDOChV-pA",
+                      "avatar_url":  "https://avatars.githubusercontent.com/u/169180836?v=4",
+                      "gravatar_id":  "",
+                      "url":  "https://api.github.com/users/MeowLynxSea",
+                      "html_url":  "https://github.com/MeowLynxSea",
+                      "followers_url":  "https://api.github.com/users/MeowLynxSea/followers",
+                      "following_url":  "https://api.github.com/users/MeowLynxSea/following{/other_user}",
+                      "gists_url":  "https://api.github.com/users/MeowLynxSea/gists{/gist_id}",
+                      "starred_url":  "https://api.github.com/users/MeowLynxSea/starred{/owner}{/repo}",
+                      "subscriptions_url":  "https://api.github.com/users/MeowLynxSea/subscriptions",
+                      "organizations_url":  "https://api.github.com/users/MeowLynxSea/orgs",
+                      "repos_url":  "https://api.github.com/users/MeowLynxSea/repos",
+                      "events_url":  "https://api.github.com/users/MeowLynxSea/events{/privacy}",
+                      "received_events_url":  "https://api.github.com/users/MeowLynxSea/received_events",
+                      "type":  "User",
+                      "user_view_type":  "public",
+                      "site_admin":  false
+                  },
+    "parents":  [
+                    {
+                        "sha":  "a6a99559f4aa41d2bfc6445d969cb00ee95c615b",
+                        "url":  "https://api.github.com/repos/MeowLynxSea/yororen-ui/commits/a6a99559f4aa41d2bfc6445d969cb00ee95c615b",
+                        "html_url":  "https://github.com/MeowLynxSea/yororen-ui/commit/a6a99559f4aa41d2bfc6445d969cb00ee95c615b"
+                    }
+                ],
+    "stats":  {
+                  "total":  36,
+                  "additions":  18,
+                  "deletions":  18
+              },
+    "files":  [
+                  {
+                      "sha":  "838334dd087bc11744634ff0035ab6d3303ea4e9",
+                      "filename":  "README.md",
+                      "status":  "modified",
+                      "additions":  9,
+                      "deletions":  9,
+                      "changes":  18,
+                      "blob_url":  "https://github.com/MeowLynxSea/yororen-ui/blob/346502ac654b77fdaff3be2d7444fca8783acfc9/README.md",
+                      "raw_url":  "https://github.com/MeowLynxSea/yororen-ui/raw/346502ac654b77fdaff3be2d7444fca8783acfc9/README.md",
+                      "contents_url":  "https://api.github.com/repos/MeowLynxSea/yororen-ui/contents/README.md?ref=346502ac654b77fdaff3be2d7444fca8783acfc9",
+                      "patch":  "@@ -172,7 +172,7 @@ impl Render for MyApp {\n \n **`counter`** — minimal bootstrap, single `Entity\u003cT\u003e` global, three buttons.\n \n-\u003cp\u003e\u003cimg src=\"screenshots/counter.png\" width=\"480\" alt=\"Counter demo\"\u003e\u003c/p\u003e\n+\u003cp\u003e\u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/counter.png\" width=\"480\" alt=\"Counter demo\"\u003e\u003c/p\u003e\n \n ```\n cargo run -p counter-demo\n@@ -183,7 +183,7 @@ cargo run -p counter-demo\n \n **`gallery_demo`** — kitchen-sink reference: every component, theme switching, i18n, notifications, virtualised list.\n \n-\u003cp\u003e\u003cimg src=\"screenshots/gallery-demo.png\" width=\"480\" alt=\"Gallery demo\"\u003e\u003c/p\u003e\n+\u003cp\u003e\u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/gallery-demo.png\" width=\"480\" alt=\"Gallery demo\"\u003e\u003c/p\u003e\n \n ```\n cargo run -p gallery-demo\n@@ -196,7 +196,7 @@ cargo run -p gallery-demo\n \n **`inputs_demo`** — all seven text inputs wired with `cx.entity().clone()`. Handles \u003ckbd\u003eTab\u003c/kbd\u003e / \u003ckbd\u003eEnter\u003c/kbd\u003e / \u003ckbd\u003eEsc\u003c/kbd\u003e / \u003ckbd\u003e⌘V\u003c/kbd\u003e.\n \n-\u003cp\u003e\u003cimg src=\"screenshots/inputs-demo.png\" width=\"480\" alt=\"Inputs demo\"\u003e\u003c/p\u003e\n+\u003cp\u003e\u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/inputs-demo.png\" width=\"480\" alt=\"Inputs demo\"\u003e\u003c/p\u003e\n \n ```\n cargo run -p inputs-demo\n@@ -207,7 +207,7 @@ cargo run -p inputs-demo\n \n **`layers_demo`** — the three render pathways side by side + a hand-rolled Material ripple.\n \n-\u003cp\u003e\u003cimg src=\"screenshots/layers-demo.png\" width=\"480\" alt=\"Layers demo\"\u003e\u003c/p\u003e\n+\u003cp\u003e\u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/layers-demo.png\" width=\"480\" alt=\"Layers demo\"\u003e\u003c/p\u003e\n \n ```\n cargo run -p layers-demo\n@@ -220,7 +220,7 @@ cargo run -p layers-demo\n \n **`theme_showcase`** — live theme switching via `theme::install` per render. Cycles four themes.\n \n-\u003cp\u003e\u003cimg src=\"screenshots/theme-showcase.png\" width=\"480\" alt=\"Theme showcase demo\"\u003e\u003c/p\u003e\n+\u003cp\u003e\u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/theme-showcase.png\" width=\"480\" alt=\"Theme showcase demo\"\u003e\u003c/p\u003e\n \n ```\n cargo run -p theme-showcase-demo\n@@ -231,7 +231,7 @@ cargo run -p theme-showcase-demo\n \n **`variant_showcase`** — `ActionVariantKind` comparison (`Neutral` / `Primary` / `Danger`) with the same `headless::button` factory.\n \n-\u003cp\u003e\u003cimg src=\"screenshots/variant-showcase.png\" width=\"480\" alt=\"Variant showcase demo\"\u003e\u003c/p\u003e\n+\u003cp\u003e\u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/variant-showcase.png\" width=\"480\" alt=\"Variant showcase demo\"\u003e\u003c/p\u003e\n \n ```\n cargo run -p variant-showcase-demo\n@@ -244,7 +244,7 @@ cargo run -p variant-showcase-demo\n \n **`gallery_xml`** — the gallery written with the XML DSL instead of the Rust builder API.\n \n-\u003cp\u003e\u003cimg src=\"screenshots/gallery-xml.png\" width=\"480\" alt=\"Gallery XML demo\"\u003e\u003c/p\u003e\n+\u003cp\u003e\u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/gallery-xml.png\" width=\"480\" alt=\"Gallery XML demo\"\u003e\u003c/p\u003e\n \n ```\n cargo run -p gallery-xml-demo\n@@ -255,7 +255,7 @@ cargo run -p gallery-xml-demo\n \n **`showcase_xml`** — smaller XML-DSL smoke test.\n \n-\u003cp\u003e\u003cimg src=\"screenshots/showcase-xml.png\" width=\"480\" alt=\"Showcase XML demo\"\u003e\u003c/p\u003e\n+\u003cp\u003e\u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/showcase-xml.png\" width=\"480\" alt=\"Showcase XML demo\"\u003e\u003c/p\u003e\n \n ```\n cargo run -p showcase-xml-demo\n@@ -417,5 +417,5 @@ See the [Yororen UI Wiki](https://github.com/MeowLynxSea/yororen-ui/wiki) for gu\n ## Maintained by [Yoro.ren](yoro.ren)\n \n \u003cp align=\"center\"\u003e\n-  \u003cimg src=\"screenshots/yororen-brand.png\" width=\"560\" alt=\"Yororen — Maintained with care\"\u003e\n+  \u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/yororen-brand.png\" width=\"560\" alt=\"Yororen — Maintained with care\"\u003e\n \u003c/p\u003e\n\\ No newline at end of file"
+                  },
+                  {
+                      "sha":  "28888bfd1620ab1e1f562974b52c4ad05c1267a4",
+                      "filename":  "README_zh_CN.md",
+                      "status":  "modified",
+                      "additions":  9,
+                      "deletions":  9,
+                      "changes":  18,
+                      "blob_url":  "https://github.com/MeowLynxSea/yororen-ui/blob/346502ac654b77fdaff3be2d7444fca8783acfc9/README_zh_CN.md",
+                      "raw_url":  "https://github.com/MeowLynxSea/yororen-ui/raw/346502ac654b77fdaff3be2d7444fca8783acfc9/README_zh_CN.md",
+                      "contents_url":  "https://api.github.com/repos/MeowLynxSea/yororen-ui/contents/README_zh_CN.md?ref=346502ac654b77fdaff3be2d7444fca8783acfc9",
+                      "patch":  "@@ -171,7 +171,7 @@ impl Render for MyApp {\n \n **`counter`** —— 最小启动模板：仅使用一个全局 \u003ccode\u003eEntity\u0026lt;T\u0026gt;\u003c/code\u003e 和三个按钮。\n \n-\u003cp\u003e\u003cimg src=\"screenshots/counter.png\" width=\"480\" alt=\"Counter 示例\"\u003e\u003c/p\u003e\n+\u003cp\u003e\u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/counter.png\" width=\"480\" alt=\"Counter 示例\"\u003e\u003c/p\u003e\n \n ```\n cargo run -p counter-demo\n@@ -182,7 +182,7 @@ cargo run -p counter-demo\n \n **`gallery_demo`** —— 全面的组件参考示例：涵盖全部组件、主题切换、i18n、通知与虚拟化列表。\n \n-\u003cp\u003e\u003cimg src=\"screenshots/gallery-demo.png\" width=\"480\" alt=\"Gallery 示例\"\u003e\u003c/p\u003e\n+\u003cp\u003e\u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/gallery-demo.png\" width=\"480\" alt=\"Gallery 示例\"\u003e\u003c/p\u003e\n \n ```\n cargo run -p gallery-demo\n@@ -195,7 +195,7 @@ cargo run -p gallery-demo\n \n **`inputs_demo`** —— 全套七个文本输入，采用 \u003ccode\u003ecx.entity().clone()\u003c/code\u003e 模式。处理 \u003ckbd\u003eTab\u003c/kbd\u003e / \u003ckbd\u003eEnter\u003c/kbd\u003e / \u003ckbd\u003eEsc\u003c/kbd\u003e / \u003ckbd\u003e⌘V\u003c/kbd\u003e。\n \n-\u003cp\u003e\u003cimg src=\"screenshots/inputs-demo.png\" width=\"480\" alt=\"Inputs 示例\"\u003e\u003c/p\u003e\n+\u003cp\u003e\u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/inputs-demo.png\" width=\"480\" alt=\"Inputs 示例\"\u003e\u003c/p\u003e\n \n ```\n cargo run -p inputs-demo\n@@ -206,7 +206,7 @@ cargo run -p inputs-demo\n \n **`layers_demo`** —— 三种渲染路径并排展示，外加手写的 Material 涟漪动画。\n \n-\u003cp\u003e\u003cimg src=\"screenshots/layers-demo.png\" width=\"480\" alt=\"Layers 示例\"\u003e\u003c/p\u003e\n+\u003cp\u003e\u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/layers-demo.png\" width=\"480\" alt=\"Layers 示例\"\u003e\u003c/p\u003e\n \n ```\n cargo run -p layers-demo\n@@ -219,7 +219,7 @@ cargo run -p layers-demo\n \n **`theme_showcase`** —— 通过 \u003ccode\u003etheme::install\u003c/code\u003e 在每帧渲染时切换主题，循环展示四种主题。\n \n-\u003cp\u003e\u003cimg src=\"screenshots/theme-showcase.png\" width=\"480\" alt=\"Theme showcase 示例\"\u003e\u003c/p\u003e\n+\u003cp\u003e\u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/theme-showcase.png\" width=\"480\" alt=\"Theme showcase 示例\"\u003e\u003c/p\u003e\n \n ```\n cargo run -p theme-showcase-demo\n@@ -230,7 +230,7 @@ cargo run -p theme-showcase-demo\n \n **`variant_showcase`** —— \u003ccode\u003eActionVariantKind\u003c/code\u003e 视觉对比（\u003ccode\u003eNeutral\u003c/code\u003e / \u003ccode\u003ePrimary\u003c/code\u003e / \u003ccode\u003eDanger\u003c/code\u003e），使用同一个 \u003ccode\u003eheadless::button\u003c/code\u003e 工厂。\n \n-\u003cp\u003e\u003cimg src=\"screenshots/variant-showcase.png\" width=\"480\" alt=\"Variant showcase 示例\"\u003e\u003c/p\u003e\n+\u003cp\u003e\u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/variant-showcase.png\" width=\"480\" alt=\"Variant showcase 示例\"\u003e\u003c/p\u003e\n \n ```\n cargo run -p variant-showcase-demo\n@@ -243,7 +243,7 @@ cargo run -p variant-showcase-demo\n \n **`gallery_xml`** —— 使用 XML DSL 重新实现的 gallery。\n \n-\u003cp\u003e\u003cimg src=\"screenshots/gallery-xml.png\" width=\"480\" alt=\"Gallery XML 示例\"\u003e\u003c/p\u003e\n+\u003cp\u003e\u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/gallery-xml.png\" width=\"480\" alt=\"Gallery XML 示例\"\u003e\u003c/p\u003e\n \n ```\n cargo run -p gallery-xml-demo\n@@ -254,7 +254,7 @@ cargo run -p gallery-xml-demo\n \n **`showcase_xml`** —— 小规模的 XML DSL 基础测试。\n \n-\u003cp\u003e\u003cimg src=\"screenshots/showcase-xml.png\" width=\"480\" alt=\"Showcase XML 示例\"\u003e\u003c/p\u003e\n+\u003cp\u003e\u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/showcase-xml.png\" width=\"480\" alt=\"Showcase XML 示例\"\u003e\u003c/p\u003e\n \n ```\n cargo run -p showcase-xml-demo\n@@ -416,5 +416,5 @@ gpui = { package = \"gpui-ce\", version = \"0.3\" }\n ## 由 [Yoro.ren](yoro.ren) 维护\n \n \u003cp align=\"center\"\u003e\n-  \u003cimg src=\"screenshots/yororen-brand.png\" width=\"560\" alt=\"Yororen — Maintained with care\"\u003e\n+  \u003cimg src=\"https://raw.githubusercontent.com/MeowLynxSea/yororen-ui/refs/heads/main/screenshots/yororen-brand.png\" width=\"560\" alt=\"Yororen — Maintained with care\"\u003e\n \u003c/p\u003e\n\\ No newline at end of file"
+                  }
+              ]
+}

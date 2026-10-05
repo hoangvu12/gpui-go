@@ -1,0 +1,4864 @@
+{
+  "schema": "gpui-go/conformance/trace@1",
+  "fixture_id": "fx-0007-paths-filters",
+  "fixture_kind": "paths-filters-v1",
+  "envelope_sha256": "1ae72a411df0c0b1cc922868b0138b1c014ec0e82115f1a2a932d5198f877a1a",
+  "harness": {
+    "harness_version": "0.1.0",
+    "harness_crate": "gpui-reference-harness",
+    "gpui_crate": "gpui-ce 0.2.2",
+    "gpui_commit": "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+    "profile": "test",
+    "features": [
+      "default",
+      "test-support"
+    ]
+  },
+  "events": [
+    {
+      "seq": 1,
+      "name": "case-begin",
+      "label": "paths-fill-stroke",
+      "fields": {
+        "label": "paths-fill-stroke",
+        "remSize": "f32:41800000",
+        "scale": "f32:40000000"
+      }
+    },
+    {
+      "seq": 2,
+      "name": "layout-bounds",
+      "label": "root",
+      "fields": {
+        "height": "f32:42680000",
+        "width": "f32:42880000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 3,
+      "name": "layout-bounds",
+      "label": "b1",
+      "fields": {
+        "height": "f32:41C00000",
+        "width": "f32:42700000",
+        "x": "f32:40800000",
+        "y": "f32:40800000"
+      }
+    },
+    {
+      "seq": 4,
+      "name": "layout-bounds",
+      "label": "b2",
+      "fields": {
+        "height": "f32:41C00000",
+        "width": "f32:42700000",
+        "x": "f32:40800000",
+        "y": "f32:41F00000"
+      }
+    },
+    {
+      "seq": 5,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "paths",
+        "command": "batch",
+        "rangeEnd": 6,
+        "rangeStart": 0,
+        "rasterizationVertexCount": 150,
+        "spriteCount": 6
+      }
+    },
+    {
+      "seq": 6,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 0,
+        "boundsH": "f32:42400000",
+        "boundsW": "f32:42500000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:41000000",
+        "colorA": "f32:3F800000",
+        "colorH": "f32:3F1D4E70",
+        "colorL": "f32:3F088889",
+        "colorS": "f32:3F54F98D",
+        "kind": "path",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "pathId": 0,
+        "vertexCount": 6
+      }
+    },
+    {
+      "seq": 7,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42700000",
+        "y": "f32:41000000"
+      }
+    },
+    {
+      "seq": 8,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41000000",
+        "y": "f32:41000000"
+      }
+    },
+    {
+      "seq": 9,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41000000",
+        "y": "f32:42600000"
+      }
+    },
+    {
+      "seq": 10,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42700000",
+        "y": "f32:41000000"
+      }
+    },
+    {
+      "seq": 11,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41000000",
+        "y": "f32:42600000"
+      }
+    },
+    {
+      "seq": 12,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42700000",
+        "y": "f32:42600000"
+      }
+    },
+    {
+      "seq": 13,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 0,
+        "boundsH": "f32:40C00000",
+        "boundsW": "f32:42400000",
+        "boundsX": "f32:42900000",
+        "boundsY": "f32:40A00000",
+        "colorA": "f32:3F800000",
+        "colorH": "f32:00000000",
+        "colorL": "f32:3F018182",
+        "colorS": "f32:3F38E38F",
+        "kind": "path",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "pathId": 1,
+        "vertexCount": 6
+      }
+    },
+    {
+      "seq": 14,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42900000",
+        "y": "f32:40A00000"
+      }
+    },
+    {
+      "seq": 15,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42900000",
+        "y": "f32:41300000"
+      }
+    },
+    {
+      "seq": 16,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42F00000",
+        "y": "f32:41300000"
+      }
+    },
+    {
+      "seq": 17,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42900000",
+        "y": "f32:40A00000"
+      }
+    },
+    {
+      "seq": 18,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42F00000",
+        "y": "f32:41300000"
+      }
+    },
+    {
+      "seq": 19,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42F00000",
+        "y": "f32:40A00000"
+      }
+    },
+    {
+      "seq": 20,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 0,
+        "boundsH": "f32:41DFEB62",
+        "boundsW": "f32:42AFF5B0",
+        "boundsX": "f32:43080294",
+        "boundsY": "f32:40805278",
+        "colorA": "f32:3F800000",
+        "colorH": "f32:3F084848",
+        "colorL": "f32:3EBABABB",
+        "colorS": "f32:3F69FA7F",
+        "kind": "path",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "pathId": 2,
+        "vertexCount": 60
+      }
+    },
+    {
+      "seq": 21,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43340000",
+        "y": "f32:41BC3911"
+      }
+    },
+    {
+      "seq": 22,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4332360E",
+        "y": "f32:41FC9F26"
+      }
+    },
+    {
+      "seq": 23,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4335C9F2",
+        "y": "f32:41FC9F26"
+      }
+    },
+    {
+      "seq": 24,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4332360E",
+        "y": "f32:41FC9F26"
+      }
+    },
+    {
+      "seq": 25,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43340000",
+        "y": "f32:42000000"
+      }
+    },
+    {
+      "seq": 26,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4335C9F2",
+        "y": "f32:41FC9F26"
+      }
+    },
+    {
+      "seq": 27,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43340000",
+        "y": "f32:41BC3911"
+      }
+    },
+    {
+      "seq": 28,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4335C9F2",
+        "y": "f32:41FC9F26"
+      }
+    },
+    {
+      "seq": 29,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435DC9F2",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 30,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43340000",
+        "y": "f32:41BC3911"
+      }
+    },
+    {
+      "seq": 31,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435DC9F2",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 32,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435A360E",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 33,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435DC9F2",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 34,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435F93E5",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 35,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435A360E",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 36,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435DC9F2",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 37,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435FCB75",
+        "y": "f32:41143CDB"
+      }
+    },
+    {
+      "seq": 38,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435F93E5",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 39,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435DC9F2",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 40,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435F0598",
+        "y": "f32:4129EEA7"
+      }
+    },
+    {
+      "seq": 41,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435FCB75",
+        "y": "f32:41143CDB"
+      }
+    },
+    {
+      "seq": 42,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435FCB75",
+        "y": "f32:41143CDB"
+      }
+    },
+    {
+      "seq": 43,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435FFD6C",
+        "y": "f32:40F6ECA2"
+      }
+    },
+    {
+      "seq": 44,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435F93E5",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 45,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435F93E5",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 46,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435D43CD",
+        "y": "f32:40869162"
+      }
+    },
+    {
+      "seq": 47,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435A360E",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 48,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435F93E5",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 49,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435E9EEA",
+        "y": "f32:409F4CF5"
+      }
+    },
+    {
+      "seq": 50,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435D43CD",
+        "y": "f32:40869162"
+      }
+    },
+    {
+      "seq": 51,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435D43CD",
+        "y": "f32:40869162"
+      }
+    },
+    {
+      "seq": 52,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435BB765",
+        "y": "f32:4080527A"
+      }
+    },
+    {
+      "seq": 53,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435A360E",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 54,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430DC9F2",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 55,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430A360E",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 56,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4332360E",
+        "y": "f32:41FC9F26"
+      }
+    },
+    {
+      "seq": 57,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430DC9F2",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 58,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4332360E",
+        "y": "f32:41FC9F26"
+      }
+    },
+    {
+      "seq": 59,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43340000",
+        "y": "f32:41BC3911"
+      }
+    },
+    {
+      "seq": 60,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430DC9F2",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 61,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43086C1B",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 62,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430A360E",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 63,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430DC9F2",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 64,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430ABC32",
+        "y": "f32:40869166"
+      }
+    },
+    {
+      "seq": 65,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43086C1B",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 66,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430DC9F2",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 67,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430C489B",
+        "y": "f32:40805278"
+      }
+    },
+    {
+      "seq": 68,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430ABC32",
+        "y": "f32:40869166"
+      }
+    },
+    {
+      "seq": 69,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430ABC32",
+        "y": "f32:40869166"
+      }
+    },
+    {
+      "seq": 70,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43096116",
+        "y": "f32:409F4CFA"
+      }
+    },
+    {
+      "seq": 71,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43086C1B",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 72,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43086C1B",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 73,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4308348B",
+        "y": "f32:41143CD7"
+      }
+    },
+    {
+      "seq": 74,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430A360E",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 75,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43086C1B",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 76,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43080294",
+        "y": "f32:40F6EC9E"
+      }
+    },
+    {
+      "seq": 77,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4308348B",
+        "y": "f32:41143CD7"
+      }
+    },
+    {
+      "seq": 78,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4308348B",
+        "y": "f32:41143CD7"
+      }
+    },
+    {
+      "seq": 79,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4308FA68",
+        "y": "f32:4129EEA3"
+      }
+    },
+    {
+      "seq": 80,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430A360E",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 81,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 0,
+        "boundsH": "f32:41A00000",
+        "boundsW": "f32:42200000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:42880000",
+        "colorA": "f32:3F800000",
+        "colorH": "f32:3ECA231B",
+        "colorL": "f32:3EB9B9BA",
+        "colorS": "f32:3F431D10",
+        "kind": "path",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "pathId": 3,
+        "vertexCount": 27
+      }
+    },
+    {
+      "seq": 82,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42400000",
+        "y": "f32:42880000"
+      }
+    },
+    {
+      "seq": 83,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41000000",
+        "y": "f32:42880000"
+      }
+    },
+    {
+      "seq": 84,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42300001",
+        "y": "f32:42966664"
+      }
+    },
+    {
+      "seq": 85,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42300001",
+        "y": "f32:42966664"
+      }
+    },
+    {
+      "seq": 86,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41000000",
+        "y": "f32:42880000"
+      }
+    },
+    {
+      "seq": 87,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41400000",
+        "y": "f32:42966666"
+      }
+    },
+    {
+      "seq": 88,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41400000",
+        "y": "f32:42966666"
+      }
+    },
+    {
+      "seq": 89,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41800000",
+        "y": "f32:42A1999A"
+      }
+    },
+    {
+      "seq": 90,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41A00000",
+        "y": "f32:42A9999A"
+      }
+    },
+    {
+      "seq": 91,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41400000",
+        "y": "f32:42966666"
+      }
+    },
+    {
+      "seq": 92,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41A00000",
+        "y": "f32:42A9999A"
+      }
+    },
+    {
+      "seq": 93,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41C00000",
+        "y": "f32:42AE6666"
+      }
+    },
+    {
+      "seq": 94,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42200001",
+        "y": "f32:42A19998"
+      }
+    },
+    {
+      "seq": 95,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42300001",
+        "y": "f32:42966664"
+      }
+    },
+    {
+      "seq": 96,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42100000",
+        "y": "f32:42A99999"
+      }
+    },
+    {
+      "seq": 97,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42300001",
+        "y": "f32:42966664"
+      }
+    },
+    {
+      "seq": 98,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42000000",
+        "y": "f32:42AE6666"
+      }
+    },
+    {
+      "seq": 99,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42100000",
+        "y": "f32:42A99999"
+      }
+    },
+    {
+      "seq": 100,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42300001",
+        "y": "f32:42966664"
+      }
+    },
+    {
+      "seq": 101,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41400000",
+        "y": "f32:42966666"
+      }
+    },
+    {
+      "seq": 102,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41C00000",
+        "y": "f32:42AE6666"
+      }
+    },
+    {
+      "seq": 103,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42300001",
+        "y": "f32:42966664"
+      }
+    },
+    {
+      "seq": 104,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41C00000",
+        "y": "f32:42AE6666"
+      }
+    },
+    {
+      "seq": 105,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42000000",
+        "y": "f32:42AE6666"
+      }
+    },
+    {
+      "seq": 106,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42000000",
+        "y": "f32:42AE6666"
+      }
+    },
+    {
+      "seq": 107,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41C00000",
+        "y": "f32:42AE6666"
+      }
+    },
+    {
+      "seq": 108,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41E00000",
+        "y": "f32:42B00000"
+      }
+    },
+    {
+      "seq": 109,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 0,
+        "boundsH": "f32:40800000",
+        "boundsW": "f32:42B00000",
+        "boundsX": "f32:42900000",
+        "boundsY": "f32:42840000",
+        "colorA": "f32:3F800000",
+        "colorH": "f32:3F3A6606",
+        "colorL": "f32:3F141414",
+        "colorS": "f32:3F552288",
+        "kind": "path",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "pathId": 4,
+        "vertexCount": 48
+      }
+    },
+    {
+      "seq": 110,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42900000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 111,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42900000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 112,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42A00000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 113,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42900000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 114,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42A00000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 115,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42A00000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 116,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42A80000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 117,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42A80000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 118,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42B80000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 119,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42A80000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 120,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42B80000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 121,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42B80000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 122,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42C00000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 123,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42C00000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 124,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42D00000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 125,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42C00000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 126,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42D00000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 127,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42D00000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 128,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42D80000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 129,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42D80000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 130,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42E80000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 131,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42D80000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 132,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42E80000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 133,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42E80000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 134,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42F00000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 135,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42F00000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 136,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43000000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 137,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42F00000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 138,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43000000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 139,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43000000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 140,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43040000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 141,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43040000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 142,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430C0000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 143,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43040000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 144,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430C0000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 145,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430C0000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 146,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43100000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 147,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43100000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 148,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43180000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 149,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43100000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 150,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43180000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 151,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43180000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 152,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:431C0000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 153,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:431C0000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 154,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43200000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 155,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:431C0000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 156,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43200000",
+        "y": "f32:428C0000"
+      }
+    },
+    {
+      "seq": 157,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43200000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 158,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 0,
+        "boundsH": "f32:42700000",
+        "boundsW": "f32:42700000",
+        "boundsX": "f32:40C00000",
+        "boundsY": "f32:433A0000",
+        "colorA": "f32:3F800000",
+        "colorH": "f32:3F6D097C",
+        "colorL": "f32:3F018182",
+        "colorS": "f32:3F36DB6F",
+        "kind": "path",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "pathId": 5,
+        "vertexCount": 3
+      }
+    },
+    {
+      "seq": 159,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42840000",
+        "y": "f32:433A0000"
+      }
+    },
+    {
+      "seq": 160,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:40C00000",
+        "y": "f32:433A0000"
+      }
+    },
+    {
+      "seq": 161,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42840000",
+        "y": "f32:43760000"
+      }
+    },
+    {
+      "seq": 162,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "quads",
+        "command": "batch",
+        "rangeEnd": 1,
+        "rangeStart": 0,
+        "smoothed": 0
+      }
+    },
+    {
+      "seq": 163,
+      "name": "scene-op",
+      "fields": {
+        "backgroundA": "f32:3E808081",
+        "backgroundH": "f32:3F0D3F84",
+        "backgroundL": "f32:3EF7F7F8",
+        "backgroundS": "f32:3F62FAD1",
+        "batchIndex": 1,
+        "boundsH": "f32:42400000",
+        "boundsW": "f32:42F00000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:42700000",
+        "cornerSmoothing": "f32:00000000",
+        "kind": "quad",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 2,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 164,
+      "name": "scene-meta",
+      "fields": {
+        "backdropCount": 0,
+        "boundaryCount": 0,
+        "commandCount": 2,
+        "instanceBatchCount": 3,
+        "isolatedFilterCount": 0,
+        "isolatedTargetCount": 0,
+        "layerCount": 0,
+        "monochromeSpriteCount": 0,
+        "opCount": 7,
+        "pathCount": 6,
+        "pathRasterizationVertexCount": 150,
+        "pathSpriteCount": 6,
+        "polychromeSpriteCount": 0,
+        "quadCount": 1,
+        "shadowCount": 0,
+        "subpixelSpriteCount": 0,
+        "surfaceCount": 0,
+        "underlineCount": 0,
+        "usesOffscreenTarget": 0,
+        "usesPathTarget": 1
+      }
+    },
+    {
+      "seq": 165,
+      "name": "case-end",
+      "label": "paths-fill-stroke"
+    },
+    {
+      "seq": 166,
+      "name": "case-begin",
+      "label": "nested-filters-depth3",
+      "fields": {
+        "label": "nested-filters-depth3",
+        "remSize": "f32:41800000",
+        "scale": "f32:40000000"
+      }
+    },
+    {
+      "seq": 167,
+      "name": "layout-bounds",
+      "label": "root",
+      "fields": {
+        "height": "f32:430B0000",
+        "width": "f32:42D80000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 168,
+      "name": "layout-bounds",
+      "label": "g1",
+      "fields": {
+        "height": "f32:42700000",
+        "width": "f32:42C80000",
+        "x": "f32:40800000",
+        "y": "f32:40800000"
+      }
+    },
+    {
+      "seq": 169,
+      "name": "layout-bounds",
+      "label": "g2",
+      "fields": {
+        "height": "f32:41F00000",
+        "width": "f32:42700000",
+        "x": "f32:40800000",
+        "y": "f32:42840000"
+      }
+    },
+    {
+      "seq": 170,
+      "name": "layout-bounds",
+      "label": "g3",
+      "fields": {
+        "height": "f32:41700000",
+        "width": "f32:41F00000",
+        "x": "f32:40800000",
+        "y": "f32:42C40000"
+      }
+    },
+    {
+      "seq": 171,
+      "name": "layout-bounds",
+      "label": "s1",
+      "fields": {
+        "height": "f32:41A00000",
+        "width": "f32:42700000",
+        "x": "f32:40800000",
+        "y": "f32:42E60000"
+      }
+    },
+    {
+      "seq": 172,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "quads",
+        "command": "batch",
+        "rangeEnd": 1,
+        "rangeStart": 0,
+        "smoothed": 0
+      }
+    },
+    {
+      "seq": 173,
+      "name": "scene-op",
+      "fields": {
+        "backgroundA": "f32:3F800000",
+        "backgroundH": "f32:3F191919",
+        "backgroundL": "f32:3E888889",
+        "backgroundS": "f32:3E800000",
+        "batchIndex": 0,
+        "boundsH": "f32:42F00000",
+        "boundsW": "f32:43480000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:41000000",
+        "cornerSmoothing": "f32:00000000",
+        "kind": "quad",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 174,
+      "name": "scene-command",
+      "fields": {
+        "boundaryIndex": 0,
+        "command": "begin-filter",
+        "target": "isolated",
+        "targetIndex": 0
+      }
+    },
+    {
+      "seq": 175,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 1,
+        "blurRadius": "f32:40C00000",
+        "boundsH": "f32:43A00000",
+        "boundsW": "f32:43C80000",
+        "boundsX": "f32:00000000",
+        "boundsY": "f32:00000000",
+        "cornerSmoothing": "f32:00000000",
+        "isStart": 1,
+        "kind": "filter-boundary",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "opacity": "f32:3F800000",
+        "order": 2,
+        "radiusBottomLeft": "f32:41000000",
+        "radiusBottomRight": "f32:41000000",
+        "radiusTopLeft": "f32:41000000",
+        "radiusTopRight": "f32:41000000"
+      }
+    },
+    {
+      "seq": 176,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "quads",
+        "command": "batch",
+        "rangeEnd": 2,
+        "rangeStart": 1,
+        "smoothed": 0
+      }
+    },
+    {
+      "seq": 177,
+      "name": "scene-op",
+      "fields": {
+        "backgroundA": "f32:3F800000",
+        "backgroundH": "f32:3ECA231B",
+        "backgroundL": "f32:3EB9B9BA",
+        "backgroundS": "f32:3F431D10",
+        "batchIndex": 2,
+        "boundsH": "f32:42700000",
+        "boundsW": "f32:42F00000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:43040000",
+        "cornerSmoothing": "f32:00000000",
+        "kind": "quad",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 3,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 178,
+      "name": "scene-command",
+      "fields": {
+        "boundaryIndex": 1,
+        "command": "begin-filter",
+        "target": "isolated",
+        "targetIndex": 1
+      }
+    },
+    {
+      "seq": 179,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 3,
+        "blurRadius": "f32:40800000",
+        "boundsH": "f32:43A00000",
+        "boundsW": "f32:43C80000",
+        "boundsX": "f32:00000000",
+        "boundsY": "f32:00000000",
+        "cornerSmoothing": "f32:00000000",
+        "isStart": 1,
+        "kind": "filter-boundary",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "opacity": "f32:3F800000",
+        "order": 4,
+        "radiusBottomLeft": "f32:40C00000",
+        "radiusBottomRight": "f32:40C00000",
+        "radiusTopLeft": "f32:40C00000",
+        "radiusTopRight": "f32:40C00000"
+      }
+    },
+    {
+      "seq": 180,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "quads",
+        "command": "batch",
+        "rangeEnd": 3,
+        "rangeStart": 2,
+        "smoothed": 0
+      }
+    },
+    {
+      "seq": 181,
+      "name": "scene-op",
+      "fields": {
+        "backgroundA": "f32:3F800000",
+        "backgroundH": "f32:3E0121FB",
+        "backgroundL": "f32:3EF2F2F3",
+        "backgroundS": "f32:3F6F130B",
+        "batchIndex": 4,
+        "boundsH": "f32:41F00000",
+        "boundsW": "f32:42700000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:43440000",
+        "cornerSmoothing": "f32:00000000",
+        "kind": "quad",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 5,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 182,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "paths",
+        "command": "batch",
+        "rangeEnd": 1,
+        "rangeStart": 0,
+        "rasterizationVertexCount": 3,
+        "spriteCount": 1
+      }
+    },
+    {
+      "seq": 183,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 5,
+        "boundsH": "f32:41E00000",
+        "boundsW": "f32:42100000",
+        "boundsX": "f32:41400000",
+        "boundsY": "f32:435C0000",
+        "colorA": "f32:3F800000",
+        "colorH": "f32:3F7594D7",
+        "colorL": "f32:3ED0D0D1",
+        "colorS": "f32:3F53B13B",
+        "kind": "path",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 6,
+        "pathId": 0,
+        "vertexCount": 3
+      }
+    },
+    {
+      "seq": 184,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42400000",
+        "y": "f32:435C0000"
+      }
+    },
+    {
+      "seq": 185,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41400000",
+        "y": "f32:435C0000"
+      }
+    },
+    {
+      "seq": 186,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42400000",
+        "y": "f32:43780000"
+      }
+    },
+    {
+      "seq": 187,
+      "name": "scene-command",
+      "fields": {
+        "boundaryIndex": 2,
+        "command": "begin-filter",
+        "target": "inline"
+      }
+    },
+    {
+      "seq": 188,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 6,
+        "blurRadius": "f32:40800000",
+        "boundsH": "f32:43A00000",
+        "boundsW": "f32:43C80000",
+        "boundsX": "f32:00000000",
+        "boundsY": "f32:00000000",
+        "cornerSmoothing": "f32:00000000",
+        "isStart": 1,
+        "kind": "filter-boundary",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "opacity": "f32:3F800000",
+        "order": 7,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 189,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "quads",
+        "command": "batch",
+        "rangeEnd": 4,
+        "rangeStart": 3,
+        "smoothed": 0
+      }
+    },
+    {
+      "seq": 190,
+      "name": "scene-op",
+      "fields": {
+        "backgroundA": "f32:3F800000",
+        "backgroundH": "f32:3F1D4E70",
+        "backgroundL": "f32:3F088889",
+        "backgroundS": "f32:3F54F98D",
+        "batchIndex": 7,
+        "boundsH": "f32:42200000",
+        "boundsW": "f32:42F00000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:43660000",
+        "cornerSmoothing": "f32:00000000",
+        "kind": "quad",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 8,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 191,
+      "name": "scene-command",
+      "fields": {
+        "boundaryIndex": 2,
+        "closingBoundaryIndex": 3,
+        "command": "end-filter",
+        "target": "inline"
+      }
+    },
+    {
+      "seq": 192,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 8,
+        "blurRadius": "f32:40800000",
+        "boundsH": "f32:43A00000",
+        "boundsW": "f32:43C80000",
+        "boundsX": "f32:00000000",
+        "boundsY": "f32:00000000",
+        "cornerSmoothing": "f32:00000000",
+        "isStart": 0,
+        "kind": "filter-boundary",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "opacity": "f32:3F800000",
+        "order": 9,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 193,
+      "name": "scene-command",
+      "fields": {
+        "boundaryIndex": 1,
+        "closingBoundaryIndex": 4,
+        "command": "end-filter",
+        "target": "isolated",
+        "targetIndex": 1
+      }
+    },
+    {
+      "seq": 194,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 9,
+        "blurRadius": "f32:40800000",
+        "boundsH": "f32:43A00000",
+        "boundsW": "f32:43C80000",
+        "boundsX": "f32:00000000",
+        "boundsY": "f32:00000000",
+        "cornerSmoothing": "f32:00000000",
+        "isStart": 0,
+        "kind": "filter-boundary",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "opacity": "f32:3F800000",
+        "order": 10,
+        "radiusBottomLeft": "f32:40C00000",
+        "radiusBottomRight": "f32:40C00000",
+        "radiusTopLeft": "f32:40C00000",
+        "radiusTopRight": "f32:40C00000"
+      }
+    },
+    {
+      "seq": 195,
+      "name": "scene-command",
+      "fields": {
+        "boundaryIndex": 0,
+        "closingBoundaryIndex": 5,
+        "command": "end-filter",
+        "target": "isolated",
+        "targetIndex": 0
+      }
+    },
+    {
+      "seq": 196,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 10,
+        "blurRadius": "f32:40C00000",
+        "boundsH": "f32:43A00000",
+        "boundsW": "f32:43C80000",
+        "boundsX": "f32:00000000",
+        "boundsY": "f32:00000000",
+        "cornerSmoothing": "f32:00000000",
+        "isStart": 0,
+        "kind": "filter-boundary",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "opacity": "f32:3F800000",
+        "order": 11,
+        "radiusBottomLeft": "f32:41000000",
+        "radiusBottomRight": "f32:41000000",
+        "radiusTopLeft": "f32:41000000",
+        "radiusTopRight": "f32:41000000"
+      }
+    },
+    {
+      "seq": 197,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "surfaces",
+        "command": "batch",
+        "rangeEnd": 1,
+        "rangeStart": 0
+      }
+    },
+    {
+      "seq": 198,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 11,
+        "boundsH": "f32:42200000",
+        "boundsW": "f32:42F00000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:43660000",
+        "kind": "surface",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "opacity": "f32:3F800000",
+        "order": 12,
+        "sourceTag": 0
+      }
+    },
+    {
+      "seq": 199,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "backdrop-filters",
+        "command": "batch",
+        "rangeEnd": 1,
+        "rangeStart": 0
+      }
+    },
+    {
+      "seq": 200,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 12,
+        "blurRadius": "f32:41000000",
+        "boundsH": "f32:42F00000",
+        "boundsW": "f32:43480000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:41000000",
+        "cornerSmoothing": "f32:00000000",
+        "kind": "backdrop-filter",
+        "maskH": "f32:43A00000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "opacity": "f32:3F800000",
+        "order": 12,
+        "radiusBottomLeft": "f32:41400000",
+        "radiusBottomRight": "f32:41400000",
+        "radiusTopLeft": "f32:41400000",
+        "radiusTopRight": "f32:41400000"
+      }
+    },
+    {
+      "seq": 201,
+      "name": "scene-meta",
+      "fields": {
+        "backdropCount": 1,
+        "boundaryCount": 6,
+        "commandCount": 13,
+        "instanceBatchCount": 6,
+        "isolatedFilterCount": 2,
+        "isolatedTargetCount": 2,
+        "layerCount": 0,
+        "monochromeSpriteCount": 0,
+        "opCount": 13,
+        "pathCount": 1,
+        "pathRasterizationVertexCount": 3,
+        "pathSpriteCount": 1,
+        "polychromeSpriteCount": 0,
+        "quadCount": 4,
+        "shadowCount": 0,
+        "subpixelSpriteCount": 0,
+        "surfaceCount": 1,
+        "underlineCount": 0,
+        "usesOffscreenTarget": 1,
+        "usesPathTarget": 1
+      }
+    },
+    {
+      "seq": 202,
+      "name": "case-end",
+      "label": "nested-filters-depth3"
+    },
+    {
+      "seq": 203,
+      "name": "case-begin",
+      "label": "sprites-surfaces-order",
+      "fields": {
+        "label": "sprites-surfaces-order",
+        "remSize": "f32:41800000",
+        "scale": "f32:40000000"
+      }
+    },
+    {
+      "seq": 204,
+      "name": "layout-bounds",
+      "label": "root",
+      "fields": {
+        "height": "f32:42B80000",
+        "width": "f32:42880000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 205,
+      "name": "layout-bounds",
+      "label": "t1",
+      "fields": {
+        "height": "f32:41A00000",
+        "width": "f32:42700000",
+        "x": "f32:40800000",
+        "y": "f32:40800000"
+      }
+    },
+    {
+      "seq": 206,
+      "name": "layout-bounds",
+      "label": "t2",
+      "fields": {
+        "height": "f32:41A00000",
+        "width": "f32:42700000",
+        "x": "f32:40800000",
+        "y": "f32:41D00000"
+      }
+    },
+    {
+      "seq": 207,
+      "name": "layout-bounds",
+      "label": "s1",
+      "fields": {
+        "height": "f32:42200000",
+        "width": "f32:42700000",
+        "x": "f32:40800000",
+        "y": "f32:42400000"
+      }
+    },
+    {
+      "seq": 208,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "monochrome-sprites",
+        "command": "batch",
+        "rangeEnd": 1,
+        "rangeStart": 0,
+        "textureIndex": 0
+      }
+    },
+    {
+      "seq": 209,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 0,
+        "boundsH": "f32:42200000",
+        "boundsW": "f32:42F00000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:41000000",
+        "colorA": "f32:3F800000",
+        "colorH": "f32:00000000",
+        "colorL": "f32:3D888889",
+        "colorS": "f32:00000000",
+        "kind": "monochrome-sprite",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "tileH": "f32:41400000",
+        "tilePadding": 0,
+        "tileTextureIndex": 0,
+        "tileTextureKind": 0,
+        "tileTileId": 1,
+        "tileW": "f32:41400000",
+        "tileX": "f32:00000000",
+        "tileY": "f32:00000000",
+        "transform00": "f32:3F800000",
+        "transform01": "f32:00000000",
+        "transform10": "f32:00000000",
+        "transform11": "f32:3F800000",
+        "transformTX": "f32:00000000",
+        "transformTY": "f32:00000000"
+      }
+    },
+    {
+      "seq": 210,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "polychrome-sprites",
+        "command": "batch",
+        "rangeEnd": 1,
+        "rangeStart": 0,
+        "textureIndex": 0
+      }
+    },
+    {
+      "seq": 211,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 1,
+        "boundsH": "f32:42200000",
+        "boundsW": "f32:42F00000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:42500000",
+        "grayscale": 0,
+        "kind": "polychrome-sprite",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "opacity": "f32:3F4CCCCD",
+        "order": 1,
+        "radiusBottomLeft": "f32:41000000",
+        "radiusBottomRight": "f32:41000000",
+        "radiusTopLeft": "f32:41000000",
+        "radiusTopRight": "f32:41000000",
+        "tileH": "f32:41400000",
+        "tilePadding": 1,
+        "tileTextureIndex": 0,
+        "tileTextureKind": 1,
+        "tileTileId": 3,
+        "tileW": "f32:41400000",
+        "tileX": "f32:41C00000",
+        "tileY": "f32:00000000"
+      }
+    },
+    {
+      "seq": 212,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "surfaces",
+        "command": "batch",
+        "rangeEnd": 1,
+        "rangeStart": 0
+      }
+    },
+    {
+      "seq": 213,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 2,
+        "boundsH": "f32:42A00000",
+        "boundsW": "f32:42F00000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:42C00000",
+        "kind": "surface",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "opacity": "f32:3F800000",
+        "order": 1,
+        "sourceTag": 0
+      }
+    },
+    {
+      "seq": 214,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "monochrome-sprites",
+        "command": "batch",
+        "rangeEnd": 2,
+        "rangeStart": 1,
+        "textureIndex": 1
+      }
+    },
+    {
+      "seq": 215,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 3,
+        "boundsH": "f32:42200000",
+        "boundsW": "f32:42F00000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:42500000",
+        "colorA": "f32:3F800000",
+        "colorH": "f32:00000000",
+        "colorL": "f32:3E4CCCCD",
+        "colorS": "f32:00000000",
+        "kind": "monochrome-sprite",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 2,
+        "tileH": "f32:41400000",
+        "tilePadding": 0,
+        "tileTextureIndex": 1,
+        "tileTextureKind": 0,
+        "tileTileId": 4,
+        "tileW": "f32:41400000",
+        "tileX": "f32:00000000",
+        "tileY": "f32:41400000",
+        "transform00": "f32:3F800000",
+        "transform01": "f32:00000000",
+        "transform10": "f32:00000000",
+        "transform11": "f32:3F800000",
+        "transformTX": "f32:00000000",
+        "transformTY": "f32:00000000"
+      }
+    },
+    {
+      "seq": 216,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "subpixel-sprites",
+        "command": "batch",
+        "rangeEnd": 1,
+        "rangeStart": 0,
+        "textureIndex": 0
+      }
+    },
+    {
+      "seq": 217,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 4,
+        "boundsH": "f32:42200000",
+        "boundsW": "f32:42F00000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:41000000",
+        "colorA": "f32:3F800000",
+        "colorH": "f32:00000000",
+        "colorL": "f32:3E088889",
+        "colorS": "f32:00000000",
+        "kind": "subpixel-sprite",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 2,
+        "tileH": "f32:41400000",
+        "tilePadding": 0,
+        "tileTextureIndex": 0,
+        "tileTextureKind": 2,
+        "tileTileId": 2,
+        "tileW": "f32:41400000",
+        "tileX": "f32:41400000",
+        "tileY": "f32:00000000",
+        "transform00": "f32:3F800000",
+        "transform01": "f32:00000000",
+        "transform10": "f32:00000000",
+        "transform11": "f32:3F800000",
+        "transformTX": "f32:00000000",
+        "transformTY": "f32:00000000"
+      }
+    },
+    {
+      "seq": 218,
+      "name": "scene-meta",
+      "fields": {
+        "backdropCount": 0,
+        "boundaryCount": 0,
+        "commandCount": 5,
+        "instanceBatchCount": 4,
+        "isolatedFilterCount": 0,
+        "isolatedTargetCount": 0,
+        "layerCount": 0,
+        "monochromeSpriteCount": 2,
+        "opCount": 5,
+        "pathCount": 0,
+        "pathRasterizationVertexCount": 0,
+        "pathSpriteCount": 0,
+        "polychromeSpriteCount": 1,
+        "quadCount": 0,
+        "shadowCount": 0,
+        "subpixelSpriteCount": 1,
+        "surfaceCount": 1,
+        "underlineCount": 0,
+        "usesOffscreenTarget": 0,
+        "usesPathTarget": 0
+      }
+    },
+    {
+      "seq": 219,
+      "name": "case-end",
+      "label": "sprites-surfaces-order"
+    },
+    {
+      "seq": 220,
+      "name": "case-begin",
+      "label": "replay-paths-filters",
+      "fields": {
+        "label": "replay-paths-filters",
+        "remSize": "f32:41800000",
+        "scale": "f32:40000000"
+      }
+    },
+    {
+      "seq": 221,
+      "name": "layout-bounds",
+      "label": "root",
+      "fields": {
+        "height": "f32:42400000",
+        "width": "f32:42B00000",
+        "x": "f32:00000000",
+        "y": "f32:00000000"
+      }
+    },
+    {
+      "seq": 222,
+      "name": "layout-bounds",
+      "label": "r1",
+      "fields": {
+        "height": "f32:42200000",
+        "width": "f32:42A00000",
+        "x": "f32:40800000",
+        "y": "f32:40800000"
+      }
+    },
+    {
+      "seq": 223,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "paths",
+        "command": "batch",
+        "rangeEnd": 3,
+        "rangeStart": 0,
+        "rasterizationVertexCount": 72,
+        "spriteCount": 3
+      }
+    },
+    {
+      "seq": 224,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 0,
+        "boundsH": "f32:42400000",
+        "boundsW": "f32:42500000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:41000000",
+        "colorA": "f32:3F800000",
+        "colorH": "f32:3F1D4E70",
+        "colorL": "f32:3F088889",
+        "colorS": "f32:3F54F98D",
+        "kind": "path",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "pathId": 0,
+        "vertexCount": 6
+      }
+    },
+    {
+      "seq": 225,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42700000",
+        "y": "f32:41000000"
+      }
+    },
+    {
+      "seq": 226,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41000000",
+        "y": "f32:41000000"
+      }
+    },
+    {
+      "seq": 227,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41000000",
+        "y": "f32:42600000"
+      }
+    },
+    {
+      "seq": 228,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42700000",
+        "y": "f32:41000000"
+      }
+    },
+    {
+      "seq": 229,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:41000000",
+        "y": "f32:42600000"
+      }
+    },
+    {
+      "seq": 230,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42700000",
+        "y": "f32:42600000"
+      }
+    },
+    {
+      "seq": 231,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 0,
+        "boundsH": "f32:40C00000",
+        "boundsW": "f32:42400000",
+        "boundsX": "f32:42900000",
+        "boundsY": "f32:40A00000",
+        "colorA": "f32:3F800000",
+        "colorH": "f32:00000000",
+        "colorL": "f32:3F018182",
+        "colorS": "f32:3F38E38F",
+        "kind": "path",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "pathId": 1,
+        "vertexCount": 6
+      }
+    },
+    {
+      "seq": 232,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42900000",
+        "y": "f32:40A00000"
+      }
+    },
+    {
+      "seq": 233,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42900000",
+        "y": "f32:41300000"
+      }
+    },
+    {
+      "seq": 234,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42F00000",
+        "y": "f32:41300000"
+      }
+    },
+    {
+      "seq": 235,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42900000",
+        "y": "f32:40A00000"
+      }
+    },
+    {
+      "seq": 236,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42F00000",
+        "y": "f32:41300000"
+      }
+    },
+    {
+      "seq": 237,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42F00000",
+        "y": "f32:40A00000"
+      }
+    },
+    {
+      "seq": 238,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 0,
+        "boundsH": "f32:41DFEB62",
+        "boundsW": "f32:42AFF5B0",
+        "boundsX": "f32:43080294",
+        "boundsY": "f32:40805278",
+        "colorA": "f32:3F800000",
+        "colorH": "f32:3F084848",
+        "colorL": "f32:3EBABABB",
+        "colorS": "f32:3F69FA7F",
+        "kind": "path",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 1,
+        "pathId": 2,
+        "vertexCount": 60
+      }
+    },
+    {
+      "seq": 239,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43340000",
+        "y": "f32:41BC3911"
+      }
+    },
+    {
+      "seq": 240,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4332360E",
+        "y": "f32:41FC9F26"
+      }
+    },
+    {
+      "seq": 241,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4335C9F2",
+        "y": "f32:41FC9F26"
+      }
+    },
+    {
+      "seq": 242,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4332360E",
+        "y": "f32:41FC9F26"
+      }
+    },
+    {
+      "seq": 243,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43340000",
+        "y": "f32:42000000"
+      }
+    },
+    {
+      "seq": 244,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4335C9F2",
+        "y": "f32:41FC9F26"
+      }
+    },
+    {
+      "seq": 245,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43340000",
+        "y": "f32:41BC3911"
+      }
+    },
+    {
+      "seq": 246,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4335C9F2",
+        "y": "f32:41FC9F26"
+      }
+    },
+    {
+      "seq": 247,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435DC9F2",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 248,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43340000",
+        "y": "f32:41BC3911"
+      }
+    },
+    {
+      "seq": 249,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435DC9F2",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 250,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435A360E",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 251,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435DC9F2",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 252,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435F93E5",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 253,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435A360E",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 254,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435DC9F2",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 255,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435FCB75",
+        "y": "f32:41143CDB"
+      }
+    },
+    {
+      "seq": 256,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435F93E5",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 257,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435DC9F2",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 258,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435F0598",
+        "y": "f32:4129EEA7"
+      }
+    },
+    {
+      "seq": 259,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435FCB75",
+        "y": "f32:41143CDB"
+      }
+    },
+    {
+      "seq": 260,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435FCB75",
+        "y": "f32:41143CDB"
+      }
+    },
+    {
+      "seq": 261,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435FFD6C",
+        "y": "f32:40F6ECA2"
+      }
+    },
+    {
+      "seq": 262,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435F93E5",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 263,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435F93E5",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 264,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435D43CD",
+        "y": "f32:40869162"
+      }
+    },
+    {
+      "seq": 265,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435A360E",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 266,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435F93E5",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 267,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435E9EEA",
+        "y": "f32:409F4CF5"
+      }
+    },
+    {
+      "seq": 268,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435D43CD",
+        "y": "f32:40869162"
+      }
+    },
+    {
+      "seq": 269,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435D43CD",
+        "y": "f32:40869162"
+      }
+    },
+    {
+      "seq": 270,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435BB765",
+        "y": "f32:4080527A"
+      }
+    },
+    {
+      "seq": 271,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:435A360E",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 272,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430DC9F2",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 273,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430A360E",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 274,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4332360E",
+        "y": "f32:41FC9F26"
+      }
+    },
+    {
+      "seq": 275,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430DC9F2",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 276,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4332360E",
+        "y": "f32:41FC9F26"
+      }
+    },
+    {
+      "seq": 277,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43340000",
+        "y": "f32:41BC3911"
+      }
+    },
+    {
+      "seq": 278,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430DC9F2",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 279,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43086C1B",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 280,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430A360E",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 281,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430DC9F2",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 282,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430ABC32",
+        "y": "f32:40869166"
+      }
+    },
+    {
+      "seq": 283,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43086C1B",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 284,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430DC9F2",
+        "y": "f32:408D8369"
+      }
+    },
+    {
+      "seq": 285,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430C489B",
+        "y": "f32:40805278"
+      }
+    },
+    {
+      "seq": 286,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430ABC32",
+        "y": "f32:40869166"
+      }
+    },
+    {
+      "seq": 287,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430ABC32",
+        "y": "f32:40869166"
+      }
+    },
+    {
+      "seq": 288,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43096116",
+        "y": "f32:409F4CFA"
+      }
+    },
+    {
+      "seq": 289,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43086C1B",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 290,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43086C1B",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 291,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4308348B",
+        "y": "f32:41143CD7"
+      }
+    },
+    {
+      "seq": 292,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430A360E",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 293,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43086C1B",
+        "y": "f32:40C6C1B4"
+      }
+    },
+    {
+      "seq": 294,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43080294",
+        "y": "f32:40F6EC9E"
+      }
+    },
+    {
+      "seq": 295,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4308348B",
+        "y": "f32:41143CD7"
+      }
+    },
+    {
+      "seq": 296,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4308348B",
+        "y": "f32:41143CD7"
+      }
+    },
+    {
+      "seq": 297,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4308FA68",
+        "y": "f32:4129EEA3"
+      }
+    },
+    {
+      "seq": 298,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430A360E",
+        "y": "f32:41393E4C"
+      }
+    },
+    {
+      "seq": 299,
+      "name": "scene-command",
+      "fields": {
+        "boundaryIndex": 0,
+        "command": "begin-filter",
+        "target": "isolated",
+        "targetIndex": 0
+      }
+    },
+    {
+      "seq": 300,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 1,
+        "blurRadius": "f32:40800000",
+        "boundsH": "f32:42A00000",
+        "boundsW": "f32:43200000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:41000000",
+        "cornerSmoothing": "f32:00000000",
+        "isStart": 1,
+        "kind": "filter-boundary",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "opacity": "f32:3F800000",
+        "order": 2,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 301,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "quads",
+        "command": "batch",
+        "rangeEnd": 1,
+        "rangeStart": 0,
+        "smoothed": 0
+      }
+    },
+    {
+      "seq": 302,
+      "name": "scene-op",
+      "fields": {
+        "backgroundA": "f32:3F008081",
+        "backgroundH": "f32:3EF95F47",
+        "backgroundL": "f32:3E858586",
+        "backgroundS": "f32:3F464171",
+        "batchIndex": 2,
+        "boundsH": "f32:42A00000",
+        "boundsW": "f32:43200000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:41000000",
+        "cornerSmoothing": "f32:00000000",
+        "kind": "quad",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 3,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 303,
+      "name": "scene-command",
+      "fields": {
+        "boundaryIndex": 0,
+        "closingBoundaryIndex": 1,
+        "command": "end-filter",
+        "target": "isolated",
+        "targetIndex": 0
+      }
+    },
+    {
+      "seq": 304,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 3,
+        "blurRadius": "f32:40800000",
+        "boundsH": "f32:42A00000",
+        "boundsW": "f32:43200000",
+        "boundsX": "f32:41000000",
+        "boundsY": "f32:41000000",
+        "cornerSmoothing": "f32:00000000",
+        "isStart": 0,
+        "kind": "filter-boundary",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "opacity": "f32:3F800000",
+        "order": 4,
+        "radiusBottomLeft": "f32:00000000",
+        "radiusBottomRight": "f32:00000000",
+        "radiusTopLeft": "f32:00000000",
+        "radiusTopRight": "f32:00000000"
+      }
+    },
+    {
+      "seq": 305,
+      "name": "scene-command",
+      "fields": {
+        "batchKind": "paths",
+        "command": "batch",
+        "rangeEnd": 4,
+        "rangeStart": 3,
+        "rasterizationVertexCount": 120,
+        "spriteCount": 1
+      }
+    },
+    {
+      "seq": 306,
+      "name": "scene-op",
+      "fields": {
+        "batchIndex": 4,
+        "boundsH": "f32:424A13DF",
+        "boundsW": "f32:43027BE3",
+        "boundsX": "f32:4259F228",
+        "boundsY": "f32:420BF9F7",
+        "colorA": "f32:3F800000",
+        "colorH": "f32:3F410C97",
+        "colorL": "f32:3F0F0F0F",
+        "colorS": "f32:3F50369D",
+        "kind": "path",
+        "maskH": "f32:43480000",
+        "maskW": "f32:43C80000",
+        "maskX": "f32:00000000",
+        "maskY": "f32:00000000",
+        "order": 5,
+        "pathId": 3,
+        "vertexCount": 120
+      }
+    },
+    {
+      "seq": 307,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:425F2D74",
+        "y": "f32:4290EA3B"
+      }
+    },
+    {
+      "seq": 308,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42833917",
+        "y": "f32:42955A11"
+      }
+    },
+    {
+      "seq": 309,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4286B384",
+        "y": "f32:428B619E"
+      }
+    },
+    {
+      "seq": 310,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:425F2D74",
+        "y": "f32:4290EA3B"
+      }
+    },
+    {
+      "seq": 311,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4286B384",
+        "y": "f32:428B619E"
+      }
+    },
+    {
+      "seq": 312,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4269177E",
+        "y": "f32:4282B484"
+      }
+    },
+    {
+      "seq": 313,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4269177E",
+        "y": "f32:4282B484"
+      }
+    },
+    {
+      "seq": 314,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4286B384",
+        "y": "f32:428B619E"
+      }
+    },
+    {
+      "seq": 315,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:428CA147",
+        "y": "f32:4281D6D2"
+      }
+    },
+    {
+      "seq": 316,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4269177E",
+        "y": "f32:4282B484"
+      }
+    },
+    {
+      "seq": 317,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:428CA147",
+        "y": "f32:4281D6D2"
+      }
+    },
+    {
+      "seq": 318,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42795A1E",
+        "y": "f32:426B3D64"
+      }
+    },
+    {
+      "seq": 319,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42795A1E",
+        "y": "f32:426B3D64"
+      }
+    },
+    {
+      "seq": 320,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:428CA147",
+        "y": "f32:4281D6D2"
+      }
+    },
+    {
+      "seq": 321,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42953F32",
+        "y": "f32:427139C6"
+      }
+    },
+    {
+      "seq": 322,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42795A1E",
+        "y": "f32:426B3D64"
+      }
+    },
+    {
+      "seq": 323,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42953F32",
+        "y": "f32:427139C6"
+      }
+    },
+    {
+      "seq": 324,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4287BDDA",
+        "y": "f32:42538B1C"
+      }
+    },
+    {
+      "seq": 325,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4287BDDA",
+        "y": "f32:42538B1C"
+      }
+    },
+    {
+      "seq": 326,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42953F32",
+        "y": "f32:427139C6"
+      }
+    },
+    {
+      "seq": 327,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42A0B8EF",
+        "y": "f32:425F8548"
+      }
+    },
+    {
+      "seq": 328,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4287BDDA",
+        "y": "f32:42538B1C"
+      }
+    },
+    {
+      "seq": 329,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42A0B8EF",
+        "y": "f32:425F8548"
+      }
+    },
+    {
+      "seq": 330,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4295926F",
+        "y": "f32:423E3486"
+      }
+    },
+    {
+      "seq": 331,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4295926F",
+        "y": "f32:423E3486"
+      }
+    },
+    {
+      "seq": 332,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42A0B8EF",
+        "y": "f32:425F8548"
+      }
+    },
+    {
+      "seq": 333,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42AE3845",
+        "y": "f32:424FF7CC"
+      }
+    },
+    {
+      "seq": 334,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4295926F",
+        "y": "f32:423E3486"
+      }
+    },
+    {
+      "seq": 335,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42AE3845",
+        "y": "f32:424FF7CC"
+      }
+    },
+    {
+      "seq": 336,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42A55B67",
+        "y": "f32:422C043C"
+      }
+    },
+    {
+      "seq": 337,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42A55B67",
+        "y": "f32:422C043C"
+      }
+    },
+    {
+      "seq": 338,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42AE3845",
+        "y": "f32:424FF7CC"
+      }
+    },
+    {
+      "seq": 339,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42BCDAC6",
+        "y": "f32:4243D18E"
+      }
+    },
+    {
+      "seq": 340,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42A55B67",
+        "y": "f32:422C043C"
+      }
+    },
+    {
+      "seq": 341,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42BCDAC6",
+        "y": "f32:4243D18E"
+      }
+    },
+    {
+      "seq": 342,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42B65584",
+        "y": "f32:421DEC36"
+      }
+    },
+    {
+      "seq": 343,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42B65584",
+        "y": "f32:421DEC36"
+      }
+    },
+    {
+      "seq": 344,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42BCDAC6",
+        "y": "f32:4243D18E"
+      }
+    },
+    {
+      "seq": 345,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42CCAB3B",
+        "y": "f32:423B15A8"
+      }
+    },
+    {
+      "seq": 346,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42B65584",
+        "y": "f32:421DEC36"
+      }
+    },
+    {
+      "seq": 347,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42CCAB3B",
+        "y": "f32:423B15A8"
+      }
+    },
+    {
+      "seq": 348,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42C875FD",
+        "y": "f32:4213E95A"
+      }
+    },
+    {
+      "seq": 349,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42C875FD",
+        "y": "f32:4213E95A"
+      }
+    },
+    {
+      "seq": 350,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42CCAB3B",
+        "y": "f32:423B15A8"
+      }
+    },
+    {
+      "seq": 351,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42DDB625",
+        "y": "f32:4235CCC4"
+      }
+    },
+    {
+      "seq": 352,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42C875FD",
+        "y": "f32:4213E95A"
+      }
+    },
+    {
+      "seq": 353,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42DDB625",
+        "y": "f32:4235CCC4"
+      }
+    },
+    {
+      "seq": 354,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42DBB04F",
+        "y": "f32:420DF2FE"
+      }
+    },
+    {
+      "seq": 355,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42DBB04F",
+        "y": "f32:420DF2FE"
+      }
+    },
+    {
+      "seq": 356,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42DDB625",
+        "y": "f32:4235CCC4"
+      }
+    },
+    {
+      "seq": 357,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42F00000",
+        "y": "f32:42340609"
+      }
+    },
+    {
+      "seq": 358,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42DBB04F",
+        "y": "f32:420DF2FE"
+      }
+    },
+    {
+      "seq": 359,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42F00000",
+        "y": "f32:42340609"
+      }
+    },
+    {
+      "seq": 360,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42F00000",
+        "y": "f32:420BF9F7"
+      }
+    },
+    {
+      "seq": 361,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42F00000",
+        "y": "f32:420BF9F7"
+      }
+    },
+    {
+      "seq": 362,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42F00000",
+        "y": "f32:42340609"
+      }
+    },
+    {
+      "seq": 363,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430124EE",
+        "y": "f32:4235CCC3"
+      }
+    },
+    {
+      "seq": 364,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42F00000",
+        "y": "f32:420BF9F7"
+      }
+    },
+    {
+      "seq": 365,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430124EE",
+        "y": "f32:4235CCC3"
+      }
+    },
+    {
+      "seq": 366,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430227DA",
+        "y": "f32:420DF2FD"
+      }
+    },
+    {
+      "seq": 367,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430227DA",
+        "y": "f32:420DF2FD"
+      }
+    },
+    {
+      "seq": 368,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430124EE",
+        "y": "f32:4235CCC3"
+      }
+    },
+    {
+      "seq": 369,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4309AA63",
+        "y": "f32:423B15A9"
+      }
+    },
+    {
+      "seq": 370,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430227DA",
+        "y": "f32:420DF2FD"
+      }
+    },
+    {
+      "seq": 371,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4309AA63",
+        "y": "f32:423B15A9"
+      }
+    },
+    {
+      "seq": 372,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430BC503",
+        "y": "f32:4213E95B"
+      }
+    },
+    {
+      "seq": 373,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430BC503",
+        "y": "f32:4213E95B"
+      }
+    },
+    {
+      "seq": 374,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4309AA63",
+        "y": "f32:423B15A9"
+      }
+    },
+    {
+      "seq": 375,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4311929E",
+        "y": "f32:4243D190"
+      }
+    },
+    {
+      "seq": 376,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:430BC503",
+        "y": "f32:4213E95B"
+      }
+    },
+    {
+      "seq": 377,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4311929E",
+        "y": "f32:4243D190"
+      }
+    },
+    {
+      "seq": 378,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4314D540",
+        "y": "f32:421DEC38"
+      }
+    },
+    {
+      "seq": 379,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4314D540",
+        "y": "f32:421DEC38"
+      }
+    },
+    {
+      "seq": 380,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4311929E",
+        "y": "f32:4243D190"
+      }
+    },
+    {
+      "seq": 381,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4318E3DE",
+        "y": "f32:424FF7CE"
+      }
+    },
+    {
+      "seq": 382,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4314D540",
+        "y": "f32:421DEC38"
+      }
+    },
+    {
+      "seq": 383,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4318E3DE",
+        "y": "f32:424FF7CE"
+      }
+    },
+    {
+      "seq": 384,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:431D524E",
+        "y": "f32:422C043E"
+      }
+    },
+    {
+      "seq": 385,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:431D524E",
+        "y": "f32:422C043E"
+      }
+    },
+    {
+      "seq": 386,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4318E3DE",
+        "y": "f32:424FF7CE"
+      }
+    },
+    {
+      "seq": 387,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:431FA38A",
+        "y": "f32:425F854C"
+      }
+    },
+    {
+      "seq": 388,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:431D524E",
+        "y": "f32:422C043E"
+      }
+    },
+    {
+      "seq": 389,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:431FA38A",
+        "y": "f32:425F854C"
+      }
+    },
+    {
+      "seq": 390,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:432536CA",
+        "y": "f32:423E3488"
+      }
+    },
+    {
+      "seq": 391,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:432536CA",
+        "y": "f32:423E3488"
+      }
+    },
+    {
+      "seq": 392,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:431FA38A",
+        "y": "f32:425F854C"
+      }
+    },
+    {
+      "seq": 393,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43256069",
+        "y": "f32:427139C7"
+      }
+    },
+    {
+      "seq": 394,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:432536CA",
+        "y": "f32:423E3488"
+      }
+    },
+    {
+      "seq": 395,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43256069",
+        "y": "f32:427139C7"
+      }
+    },
+    {
+      "seq": 396,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:432C2115",
+        "y": "f32:42538B1F"
+      }
+    },
+    {
+      "seq": 397,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:432C2115",
+        "y": "f32:42538B1F"
+      }
+    },
+    {
+      "seq": 398,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:43256069",
+        "y": "f32:427139C7"
+      }
+    },
+    {
+      "seq": 399,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4329AF5D",
+        "y": "f32:4281D6D3"
+      }
+    },
+    {
+      "seq": 400,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:432C2115",
+        "y": "f32:42538B1F"
+      }
+    },
+    {
+      "seq": 401,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4329AF5D",
+        "y": "f32:4281D6D3"
+      }
+    },
+    {
+      "seq": 402,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4331A979",
+        "y": "f32:426B3D67"
+      }
+    },
+    {
+      "seq": 403,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4331A979",
+        "y": "f32:426B3D67"
+      }
+    },
+    {
+      "seq": 404,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4329AF5D",
+        "y": "f32:4281D6D3"
+      }
+    },
+    {
+      "seq": 405,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:432CA640",
+        "y": "f32:428B619F"
+      }
+    },
+    {
+      "seq": 406,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4331A979",
+        "y": "f32:426B3D67"
+      }
+    },
+    {
+      "seq": 407,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:432CA640",
+        "y": "f32:428B619F"
+      }
+    },
+    {
+      "seq": 408,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4335BA22",
+        "y": "f32:4282B485"
+      }
+    },
+    {
+      "seq": 409,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4335BA22",
+        "y": "f32:4282B485"
+      }
+    },
+    {
+      "seq": 410,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:432CA640",
+        "y": "f32:428B619F"
+      }
+    },
+    {
+      "seq": 411,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:432E6375",
+        "y": "f32:42955A11"
+      }
+    },
+    {
+      "seq": 412,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4335BA22",
+        "y": "f32:4282B485"
+      }
+    },
+    {
+      "seq": 413,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:432E6375",
+        "y": "f32:42955A11"
+      }
+    },
+    {
+      "seq": 414,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:433834A3",
+        "y": "f32:4290EA3D"
+      }
+    },
+    {
+      "seq": 415,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:433834A3",
+        "y": "f32:4290EA3D"
+      }
+    },
+    {
+      "seq": 416,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:432E6375",
+        "y": "f32:42955A11"
+      }
+    },
+    {
+      "seq": 417,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:432F0793",
+        "y": "f32:42A11612"
+      }
+    },
+    {
+      "seq": 418,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:433834A3",
+        "y": "f32:4290EA3D"
+      }
+    },
+    {
+      "seq": 419,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:432F0793",
+        "y": "f32:42A11612"
+      }
+    },
+    {
+      "seq": 420,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4338F86D",
+        "y": "f32:429EE9F0"
+      }
+    },
+    {
+      "seq": 421,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4259F228",
+        "y": "f32:42A8DAC9"
+      }
+    },
+    {
+      "seq": 422,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4280DAC8",
+        "y": "f32:42AB06EB"
+      }
+    },
+    {
+      "seq": 423,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42833917",
+        "y": "f32:42955A11"
+      }
+    },
+    {
+      "seq": 424,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:4259F228",
+        "y": "f32:42A8DAC9"
+      }
+    },
+    {
+      "seq": 425,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:42833917",
+        "y": "f32:42955A11"
+      }
+    },
+    {
+      "seq": 426,
+      "name": "path-vertex",
+      "fields": {
+        "s": "f32:00000000",
+        "t": "f32:3F800000",
+        "x": "f32:425F2D74",
+        "y": "f32:4290EA3B"
+      }
+    },
+    {
+      "seq": 427,
+      "name": "scene-meta",
+      "fields": {
+        "backdropCount": 0,
+        "boundaryCount": 2,
+        "commandCount": 5,
+        "instanceBatchCount": 5,
+        "isolatedFilterCount": 1,
+        "isolatedTargetCount": 1,
+        "layerCount": 0,
+        "monochromeSpriteCount": 0,
+        "opCount": 7,
+        "pathCount": 4,
+        "pathRasterizationVertexCount": 192,
+        "pathSpriteCount": 4,
+        "polychromeSpriteCount": 0,
+        "quadCount": 1,
+        "shadowCount": 0,
+        "subpixelSpriteCount": 0,
+        "surfaceCount": 0,
+        "underlineCount": 0,
+        "usesOffscreenTarget": 1,
+        "usesPathTarget": 1
+      }
+    },
+    {
+      "seq": 428,
+      "name": "case-end",
+      "label": "replay-paths-filters"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+    "ticket": "05-win32-window",
+    "date": "2026-10-05",
+    "authorization": "User: ok now use roboco mcp, create a new chat that use /implement skill to do all those tickets, use iroha dashscope glm 5.3 with pi harness",
+    "session": "Roboco chat 065e52f5; implemented by background subagent session ticket05-winhost (including a follow-up deadlock fix round); independently re-verified by the orchestrator (10/10 consecutive runs, full suite)",
+    "git_state": "No git repository; commit step environment-blocked, not fabricated.",
+    "implemented": {
+        "files": ["gpui/win32host_windows.go (foreground host: locked OLE-STA thread via OleInitialize, SetProcessDpiAwarenessContext PerMonitorV2 before any window, window classes gpui-go::PlatformWindow/Window, message-only platform window, GetMessageW loop, wake mechanism with WM_USER+3 + validation token + coalescing flag, WM_CLOSE close-veto, WM_DESTROY/WM_NCDESTROY lease retirement, WM_DPICHANGED scale updates, quit-on-last-close, OleUninitialize balanced incl. S_FALSE, stale-message flush for recycled pooled threads, loopDone thread-identity invalidation)", "gpui/win32host_other.go (non-Windows typed errors)", "gpui/window.go (real Window type, WindowOptions, app window registry, NewApp/Attach/Run real-app boot path, OpenWindow marshaled to the host thread)", "internal/winhostspec/winhost_test.go (7 tests incl. 1000-post stress regression)"],
+        "integration": "App.Spawn/foreground scheduler wakes via the host Post mechanism (mirroring the reference dispatch_on_main_thread + WM_GPUI_TASK_DISPATCHED_ON_MAIN_THREAD); window events wrap in App.Update; leased HWND with generation-stamped window ids; ErrWindowClosed on stale leases"
+    },
+    "executed_results": {
+        "real_window_tests": "7/7 pass: host boot with PerMonitorV2 verified effective (GetThreadDpiAwarenessContext + AreDpiAwarenessContextsEqual), two windows distinct/alive/titled, posted work FIFO on the foreground thread (verified via GetCurrentThreadId), close veto keeps window open while the other keeps pumping, observed machine DPI scale recorded 1.0 (96 DPI, 100% monitor), app window lifecycle (registry ids, per-window scope close, resize routed through App.Update with global observer firing in the same flush, background spawn running Update on the host thread, Run returns on last close, goroutine-leak checks), 1000-post/4-goroutine stress with zero lost wakes",
+        "stability": "10/10 consecutive full-package runs after the fix (before: ~5/8 failures from a pooled-thread WM_QUIT poisoning deadlock: PostQuitMessage on a recycled OS thread killed the next host; fixed with thread-identity invalidation, guarded quit posting, and startup queue flush)",
+        "full_suite": "CGO_ENABLED=0 go test ./... all 10 packages pass; vet/gofmt clean; linux/darwin cross-builds compile"
+    },
+    "reference_deviation_notes": [
+        "OleInitialize instead of literal CoInitializeEx(APARTMENTTHREADED) (same STA apartment; the pinned platform.rs uses OleInitialize)",
+        "class names derived from Zed::PlatformWindow/Window; native title bar kept (custom titlebar with renderer/input tickets); no WS_EX_NOREDIRECTIONBITMAP until DirectComposition (ticket07)",
+        "no translate_accelerator (keyboard is ticket13); Activate without the SendInput Alt workaround; drain-to-quiet instead of the reference's 10ms budget/re-post; hwnd record table instead of GWLP_USERDATA (vet-provable); GetProcessDpiAwarenessContext does not exist on this user32 — thread-context route used",
+        "real-mode timers: the scheduler's virtual clock is not advanced by the host (shutdown-integration ticket); quit-on-last-window-close always on"
+    ],
+    "limitations": [
+        "Renderer/paint not wired (ticket07); keyboard/IME routing not wired (ticket13/20); DPI-awareness is process-level in the test binary (PerMonitorV2 verified effective; the executable manifest is ticket31).",
+        "Race detector not runnable on this host (requires cgo; the consumer path is CGO_ENABLED=0 by design).",
+        "Observed DPI scale 1.0 on the current monitor; other scale values are recorded per-window via GetDpiForWindow and exercised logically, not with a physical multi-DPI monitor."
+    ]
+}

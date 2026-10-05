@@ -1,0 +1,15 @@
+{
+  "run_started_at": "2026-10-05T23:18:09+07:00",
+  "harness_exe": "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\target\\debug\\gpui-reference-harness.exe",
+  "harness_sha256": "df7f81732baa08fca9698af8051ce2ac0100e4db06b2e6f3487b6448a3b7ed81",
+  "envelope_path": "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\conformance\\fixtures\\fx-0006-authoring-counter.json",
+  "envelope_sha256": "2ab6b65672b4a3cb4360bbeeb0c58bf61184cbebad46ee7c48d8e4d33f116002",
+  "argv": [
+    "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\target\\debug\\gpui-reference-harness.exe",
+    "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\conformance\\fixtures\\fx-0006-authoring-counter.json",
+    "conformance\\recorded\\fx-0006-authoring-counter\\trace.json"
+  ],
+  "go_version": "go1.27.1",
+  "os": "windows",
+  "arch": "amd64"
+}

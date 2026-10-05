@@ -1,0 +1,91 @@
+{
+  "schema": "gpui-go/conformance/envelope@1",
+  "fixture_id": "fx-0005-glyph-raster",
+  "fixture_kind": "glyph-raster-v1",
+  "title": "DirectWrite glyph rasterization: masks, subpixel, color tints and the emoji fallback path",
+  "profile": "test",
+  "capabilities": [
+    "glyph-raster",
+    "directwrite",
+    "text-system"
+  ],
+  "environment": [
+    "windows",
+    "system-fonts",
+    "directwrite"
+  ],
+  "inputs": {
+    "glyph_cases": {
+      "cases": [
+        {
+          "label": "latin-grayscale",
+          "font": {
+            "family": "Segoe UI"
+          },
+          "chars": ["A", "g", "i"],
+          "sizes": [16, 24],
+          "scales": [1, 2],
+          "subpixel_variants": [[0, 0]],
+          "mode": "grayscale"
+        },
+        {
+          "label": "latin-subpixel",
+          "font": {
+            "family": "Segoe UI"
+          },
+          "chars": ["A", "g"],
+          "sizes": [16],
+          "scales": [1, 2],
+          "subpixel_variants": [[0, 0], [3, 0]],
+          "mode": "subpixel"
+        },
+        {
+          "label": "latin-color-tint",
+          "font": {
+            "family": "Segoe UI"
+          },
+          "chars": ["A"],
+          "sizes": [24],
+          "scales": [1, 2],
+          "subpixel_variants": [[1, 0]],
+          "mode": "color",
+          "scene_color": [0.8784313725490196, 0.12549019607843137, 0.06274509803921569, 0.8]
+        },
+        {
+          "label": "space-empty-raster",
+          "font": {
+            "family": "Segoe UI"
+          },
+          "chars": [" "],
+          "sizes": [24],
+          "scales": [1],
+          "subpixel_variants": [[0, 0]],
+          "mode": "grayscale"
+        },
+        {
+          "label": "emoji-color",
+          "font": {
+            "family": "Segoe UI Emoji"
+          },
+          "chars": ["\ud83d\ude00"],
+          "sizes": [24],
+          "scales": [1, 2],
+          "subpixel_variants": [[0, 0]],
+          "mode": "color",
+          "scene_color": [1.0, 1.0, 1.0, 1.0]
+        },
+        {
+          "label": "missing-glyph",
+          "font": {
+            "family": "Segoe UI"
+          },
+          "chars": ["\ue000"],
+          "sizes": [16],
+          "scales": [1],
+          "subpixel_variants": [[0, 0]],
+          "mode": "grayscale"
+        }
+      ]
+    }
+  }
+}

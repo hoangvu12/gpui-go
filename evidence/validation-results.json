@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-04",
+  "authored_documents_checked": 13,
+  "local_links_checked": 59,
+  "broken_local_links": [],
+  "malformed_pinned_commit_urls": [],
+  "manifest_entry_counts": {
+    "api": 6,
+    "core": 28,
+    "backends": 22,
+    "ecosystem": 46,
+    "discovery": 3
+  },
+  "evidence_hash_mismatches": [],
+  "authored_implementation_files": [],
+  "typography_encoding_repairs": 2,
+  "scope": "Document links, URL revision format, local evidence hashes, and research-only artifact inventory. No remote link sweep, builds, benchmarks or behavior tests."
+}

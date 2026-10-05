@@ -1,0 +1,142 @@
+[package]
+name = "gpui-go-native"
+version = "0.1.0"
+edition = "2024"
+description = "Native artifact for gpui-go: C ABI service table with the bootstrap buffer round trip (ticket02), the Taffy 0.13.0 layout service (ticket06), the D3D11 clear-frame present/retire renderer service (ticket07), the scene kernel service with sprite primitives (ticket08/10), the Parley text geometry service (ticket09), the DirectWrite glyph raster service and the D3D11 sprite atlas service (ticket10), following the pinned gpui-CE adapter semantics."
+publish = false
+
+# Dependencies: the layout contract (docs/layout-contract.md) selected the
+# pinned Taffy engine for the native layout service and pins it exactly:
+# `taffy = "=0.13.0"`, default features (std, taffy_tree, flexbox, grid,
+# block_layout, float_layout, calc, content_size, detailed_layout_info), the
+# same resolution as the gpui-CE workspace lock (checksum
+# c034e05f6ee85a12daa63863c2245797715075c70649947aa0da54f3f2ab1d0f). This
+# is the one authorized dependency of the native artifact; anything else is a
+# distribution-contract change that must reopen the module/native decision.
+# The measured lock hash and resolved feature graph are recorded by
+# `tools/measure` in the artifact manifest.
+[dependencies]
+taffy = "=0.13.0"
+
+# Ticket07 (renderer service): the windows crate for D3D11/DXGI/
+# DirectComposition device + swap-chain + present + query retirement, the
+# same crate and version family the pinned gpui_windows uses (workspace
+# dependency `windows 0.62.2`). ONLY the features this service needs are
+# enabled (the pin enables a much broader set for its full platform):
+#   - Win32_Foundation: HWND, HMODULE, BOOL
+#   - Win32_Graphics_Direct3D: driver/feature-level enums
+#   - Win32_Graphics_Direct3D11: device/context/query/multithread
+#   - Win32_Graphics_DirectComposition: DComp visual tree
+#   - Win32_Graphics_Dxgi: factory/adapter/swap chain/present
+#   - Win32_Graphics_Dxgi_Common: formats, alpha modes
+#   - Win32_System_LibraryLoader: the pinned driver-version probes
+#     (LoadLibraryA/GetProcAddress/FreeLibrary for nvapi/AGS)
+# The resolved version and feature graph are recorded by tools/measure in
+# the artifact manifest.
+# The artifact is a Windows AMD64 cdylib by contract; this dependency is
+# unconditional and the crate does not build elsewhere.
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_DirectComposition",
+    "Win32_Graphics_DirectWrite",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+# Ticket09 (text service): the pinned Parley text stack. The windows
+# platform contract pins Parley 0.11.1 / Fontique 0.11.1 / HarfRust 0.12.0 /
+# Skrifa 0.44.0 / Swash 0.2.10 (the CE workspace lock resolution, recorded
+# by tools/measure in the artifact manifest).
+#
+# Dependency decision (recorded per the ticket): both crates are required.
+# `gpui-ce` supplies the public text types the ABI mirrors (Font, TextRun,
+# TextLayoutRequest, LineLayout, PlatformTextSystem, TextSystem), and
+# `gpui-ce-parley` supplies the pinned PlatformTextSystem implementation
+# (ParleyTextSystem) the service links. The "OR" alternative in the ticket
+# is not a real footprint choice: gpui_ce_parley itself depends on gpui
+# (`gpui.workspace = true` in its Cargo.toml), so the gpui graph lands in
+# the artifact either way; the pinned checkout may not be modified (it is
+# the unmodified oracle), so no smaller-graph extraction is possible within
+# this ticket. The full gpui dependency graph (windows crate family,
+# accesskit, etc.) entering the DLL build is expected and authorized by the
+# distribution contract (one exact combined Windows AMD64 DLL); the size is
+# measured honestly by tools/measure.
+#
+# Features: gpui-ce-parley's `default` (system-fonts) is REQUIRED — the
+# service constructs the pinned system-font path (Fontique system
+# enumeration on Windows uses DirectWrite). gpui-ce default features come
+# along transitively (gpui_ce_parley resolves gpui with workspace defaults:
+# wayland/x11 are inert on the Windows target; windows-manifest runs
+# embed-resource in gpui's build script, the same build the reference
+# harness already performs on this machine). No features are trimmed: the
+# artifact is the combined native service, not a minimal extraction.
+gpui-ce = { path = "../ce-source/crates/gpui" }
+gpui-ce-parley = { path = "../ce-source/crates/gpui_ce_parley", package = "gpui_ce_parley" }
+
+# Ticket16 (scene draw): the pinned render crate. `gpui_ce_render` is
+# the maintainer-built shader artifact owner: its build.rs compiles the
+# Rust-authored WGSL shader modules through wgsl-rs (rev
+# b2de16a1b81e67d76bc265c296184f882864badb), validates them with Naga
+# 29.0.4 and the legacy Naga 24.0.0 ("naga-old"), lowers them to HLSL
+# sm_5.0 and invokes `D3DCompile` (Fxc) for `vs_5_0`/`ps_5_0`, embedding
+# the resulting DXBC blobs in the artifact via `include_bytes!`
+# (crates/gpui_render/build.rs, `write_dx11_bytecode`). The renderer
+# service consumes `gpui_ce_render::artifacts::NATIVE_SHADERS` exactly
+# like the pin's `directx_renderer::shader_resources::ShaderModule`\# does; consumer app builds and renderer startup never run the shader
+# toolchain (the renderer contract's maintainer-build decision). Runtime
+# deps are gpui (already in the graph) and wgsl-rs; the windows crate
+# with `Win32_Graphics_Direct3D_Fxc` is a Windows build-dependency of
+# the shader pipeline only, so it adds no DLL import to the artifact.
+gpui-render = { path = "../ce-source/crates/gpui_render", package = "gpui_ce_render" }
+
+# Ticket16 (path tessellation): `lyon` is the pinned tessellation
+# engine of the pinned `PathBuilder` (crates/gpui/src/path_builder.rs;
+# the CE workspace declares `lyon = "1.0"`, resolving through the same
+# lock as the reference oracle). The scene service's `path_script` entry
+# drives the pinned `gpui::PathBuilder` public API, whose
+# `StrokeOptions`/`FillOptions` types re-export lyon's; the ABI command
+# validation maps cap/join tags onto `lyon::tessellation::LineCap`/
+# `LineJoin`, which gpui does not re-export. Same registry resolution as
+# gpui's own dependency — not a second tessellator.
+lyon = "1.0"
+
+# Ticket16 (draw): `wgsl-rs` supplies the `vec2f`/`vec4f` constructors
+# of the shader uniform types the draw path fills (GlobalUniforms,
+# FontRasterizationUniforms) — the same pinned git revision
+# b2de16a1b81e67d76bc265c296184f882864badb and the same feature set the
+# gpui-render dependency resolves, so no new crate version enters the
+# graph.
+wgsl-rs = { git = "https://github.com/schell/wgsl-rs", rev = "b2de16a1b81e67d76bc265c296184f882864badb", default-features = false, features = ["validation"] }
+
+# Ticket10 (glyph raster + atlas services): the remaining pinned
+# dependencies of the ported code.
+#
+# `anyhow` is the pinned error type of the ported rasterizer
+# (crates/gpui_windows/src/font_rasterizer.rs) and of the atlas paths; the
+# version resolves from the workspace lock (the shared gpui graph already
+# depends on it).
+anyhow = "1"
+
+# `etagere` is the pinned atlas packing algorithm
+# (crates/gpui_windows/src/directx_atlas.rs; the renderer contract pins
+# etagere 0.2.15 — the workspace lock's resolution). Pinned exactly.
+etagere = "=0.2.15"
+
+# `windows-numerics` supplies the `Vector2` the pinned rasterizer feeds
+# into `IDWriteFactory5::TranslateColorGlyphRun` (the pin's gpui_windows
+# declares `windows-numerics = "0.3"`; the workspace lock resolves
+# 0.3.1).
+windows-numerics = "0.3"
+
+[lib]
+# One cdylib: the exact native artifact loaded by the Go-only consumer.
+crate-type = ["cdylib"]
+
+# Note on profiles: the workspace root [profile.release] pins `debug = false`
+# and states `panic = "unwind"` explicitly. Unwinding must remain enabled so
+# every export can contain panics with catch_unwind before returning to the
+# foreign (Go) caller; an aborting profile would violate that boundary.

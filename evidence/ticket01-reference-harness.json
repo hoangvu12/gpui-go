@@ -1,0 +1,88 @@
+{
+    "ticket": "01-reference-harness",
+    "date": "2026-10-05",
+    "authorization": "User: ok now use roboco mcp, create a new chat that use /implement skill to do all those tickets, use iroha dashscope glm 5.3 with pi harness",
+    "session": "Roboco chat 065e52f5-9c7f-4d65-8566-f4bb485196a1, harness pi, model iroha/dashscope/glm-5.3",
+    "git_state": "No git repository in the workspace; the implement skill's commit step is environment-blocked and was not fabricated. No remote publication.",
+    "source": {
+        "repository": "https://github.com/gpui-ce/gpui-ce",
+        "commit": "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "commit_subject": "Implement character palette support on Windows and Linux (#308)",
+        "checkout": "reference/ce-source (shallow fetch of the pinned commit, branch pinned-254b5dbd)",
+        "instrumentation_patches": "none; the oracle observes the pinned code through public APIs only",
+        "crate": "gpui-ce 0.2.2 (lib gpui), path dependency from reference/harness",
+        "oracle_features": "default + test-support on x86_64-pc-windows-msvc",
+        "reference_workspace_lock_sha256": "6148263b183ccb6a686ba66d93adb159409cfd15b90fe077a2d1d3bd975f9fc7"
+    },
+    "toolchain": {
+        "rustc": "rustc 1.97.0 (2d8144b78 2026-07-07)",
+        "cargo": "cargo 1.97.0 (c980f4866 2026-06-30)",
+        "host": "x86_64-pc-windows-msvc",
+        "linker": "VS 2022 BuildTools (VC.Tools.x86.x64)",
+        "go": "go1.27.1 windows/amd64, CGO_ENABLED=0"
+    },
+    "harness": {
+        "crate": "gpui-reference-harness 0.1.0",
+        "binary": "reference/target/debug/gpui-reference-harness.exe",
+        "binary_sha256": "b58cbb746ed6121135d555bc2e64b3bd9035bc7d17e1de21a474447555832df5",
+        "profile": "dev (test profile; determinism verified across three runs)",
+        "determinism": "three consecutive runs of fx-0001-layout-effects produced byte-identical traces (single unique SHA-256)"
+    },
+    "fixture_envelope": {
+        "id": "fx-0001-layout-effects",
+        "kind": "layout-effects-v1",
+        "path": "conformance/fixtures/fx-0001-layout-effects.json",
+        "sha256": "f55e0db6780f95da864484c3af6b63024b7f292258537cbed706b8da52fd8197",
+        "schema": "gpui-go/conformance/envelope@1"
+    },
+    "recorded_reference_trace": {
+        "path": "conformance/recorded/fx-0001-layout-effects/trace.json",
+        "schema": "gpui-go/conformance/trace@1",
+        "events": 54,
+        "semantics": "notify coalescing (2 notifies in one update -> 1 observer-notified), FIFO event delivery (values 1,2,3 in order), defer d1 scheduling d1b within the same flush, background task completing on the virtual clock with foreground result delivery, entity release observed before remaining effects, layout-bounds events for root/a/b/c/c1/d with exact f32 bit patterns",
+        "run_meta": "conformance/recorded/fx-0001-layout-effects/run-meta.json",
+        "raw_outputs": "raw-stdout.txt and raw-stderr.txt retained alongside the trace"
+    },
+    "capability_ledger": {
+        "generated": "conformance/ledger/generated/ledger.json and ledger.md",
+        "schema": "gpui-go/capability-ledger@1",
+        "rows": 6911,
+        "states": { "planned": 6911 },
+        "unassigned_rows": 351,
+        "unimplemented_or_noop_rows": 154,
+        "feature_gated_rows": 1001,
+        "profiles": {
+            "native-default": 5692,
+            "test-support": 6205,
+            "inspector-capture": 5729,
+            "custom-gpu-wgpu": 5692,
+            "hotpatch-profiler-stacker": 5852
+        },
+        "profiles_evidence": "reference/out/profiles/*.txt (cargo tree effective feature graphs, x86_64-pc-windows-msvc)",
+        "owner_rules": "conformance/ledger/owners.go, derived from docs/conformance-inventory.md; headless render_to_image rows owned by ticket 32 even when test-gated"
+    },
+    "mismatch_demonstration": {
+        "test": "TestRecordedReferenceTraceMismatchDemonstration in conformance/reference_recorded_test.go",
+        "mutations_caught": [
+            "one-bit f32 mantissa flip in a layout-bounds event",
+            "swap of two consecutive events",
+            "removal of one event",
+            "integer field change in an event-delivered event",
+            "fixture id change"
+        ],
+        "result": "each mutation produces Equal=false with a diff naming the exact event index/seq/field; self comparison is Equal"
+    },
+    "executed_results": {
+        "go_vet": "CGO_ENABLED=0 go vet ./... pass",
+        "go_tests": "CGO_ENABLED=0 go test ./... pass (authoring, conformance, conformance/ledger; cmd packages build)",
+        "gofmt": "gofmt -l conformance clean",
+        "oracle_runs": "reference harness executed successfully against the fixture; recorded via conformance/cmd/recordreference",
+        "api_scan": "reference/out/api-scan.json regenerated from the pinned source (24 crates, 6911 items, 1930 distinct cfg expressions evaluated with 0 failures)"
+    },
+    "limitations": [
+        "The debug (dev) profile was used for the recorded test-profile trace; a release-profile reference build is not yet recorded.",
+        "351 ledger rows are unassigned pending family triage (mostly sum_tree, zed_util, shared_string internals, collections, perf tooling); none of them are gpui-ce public exports.",
+        "The 154 unimplemented/no-op rows are enumerated from body markers; their per-operation applicability verdicts belong to their owner tickets.",
+        "Visual/native windows profile fixtures are not part of this slice; the recorded profile is the headless test platform."
+    ]
+}

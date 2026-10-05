@@ -1,0 +1,15 @@
+﻿package runtime // import "runtime"
+
+func LockOSThread()
+    LockOSThread wires the calling goroutine to its current operating system
+    thread. The calling goroutine will always execute in that thread, and no
+    other goroutine will execute in it, until the calling goroutine has made as
+    many calls to UnlockOSThread as to LockOSThread. If the calling goroutine
+    exits without unlocking the thread, the thread will be terminated.
+
+    All init functions are run on the startup thread. Calling LockOSThread from
+    an init function will cause the main function to be invoked on that thread.
+
+    A goroutine should call LockOSThread before calling OS services or non-Go
+    library functions that depend on per-thread state.
+

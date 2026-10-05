@@ -1,0 +1,250 @@
+{
+  "schema": "gpui-go/conformance/envelope@1",
+  "fixture_id": "fx-0007-paths-filters",
+  "fixture_kind": "paths-filters-v1",
+  "title": "Path builder scripts (fills, strokes, dashes, transforms), sprites, surfaces and nested filter groups through the pinned scene kernel",
+  "profile": "test",
+  "capabilities": [
+    "scene-kernel-v1",
+    "scene-draw-paths"
+  ],
+  "environment": [
+    "headless",
+    "test-platform"
+  ],
+  "inputs": {
+    "path_filter_cases": {
+      "cases": [
+        {
+          "label": "paths-fill-stroke",
+          "available_space": { "width": 200, "height": 100 },
+          "style_tree": {
+            "label": "root",
+            "style": { "flexDirection": "Column", "gap": "2px", "padding": "4px" },
+            "children": [
+              { "label": "b1", "style": { "width": "60px", "height": "24px" } },
+              { "label": "b2", "style": { "width": "60px", "height": "24px" } }
+            ]
+          },
+          "paint_script": [
+            {
+              "op": "paint-path",
+              "commands": [
+                { "kind": "move-to", "x": 4, "y": 4 },
+                { "kind": "line-to", "x": 30, "y": 4 },
+                { "kind": "line-to", "x": 30, "y": 28 },
+                { "kind": "line-to", "x": 4, "y": 28 },
+                { "kind": "close" }
+              ],
+              "color": "2563ebff"
+            },
+            {
+              "op": "paint-path",
+              "commands": [
+                { "kind": "style", "style": "stroke", "width": 3 },
+                { "kind": "move-to", "x": 36, "y": 4 },
+                { "kind": "line-to", "x": 60, "y": 4 }
+              ],
+              "color": "dc2626ff"
+            },
+            {
+              "op": "paint-path",
+              "commands": [
+                { "kind": "style", "style": "stroke", "width": 4, "start_cap": "round", "end_cap": "round", "line_join": "round" },
+                { "kind": "move-to", "x": 70, "y": 4 },
+                { "kind": "line-to", "x": 90, "y": 14 },
+                { "kind": "line-to", "x": 110, "y": 4 }
+              ],
+              "color": "0891b2ff"
+            },
+            {
+              "op": "paint-path",
+              "commands": [
+                { "kind": "move-to", "x": 4, "y": 34 },
+                { "kind": "curve-to", "to_x": 24, "to_y": 34, "ctrl_x": 14, "ctrl_y": 54 }
+              ],
+              "color": "16a34aff"
+            },
+            {
+              "op": "paint-path",
+              "commands": [
+                { "kind": "style", "style": "stroke", "width": 2 },
+                { "kind": "dash", "lengths": [4, 2] },
+                { "kind": "move-to", "x": 36, "y": 34 },
+                { "kind": "line-to", "x": 80, "y": 34 }
+              ],
+              "color": "7c3aedff"
+            },
+            {
+              "op": "paint-path",
+              "commands": [
+                { "kind": "style", "style": "fill", "tolerance": 0.05, "fill_rule": "non-zero" },
+                { "kind": "translate", "x": 2, "y": 62 },
+                { "kind": "scale", "factor": 1.5 },
+                { "kind": "move-to", "x": 0, "y": 0 },
+                { "kind": "line-to", "x": 20, "y": 0 },
+                { "kind": "line-to", "x": 20, "y": 20 },
+                { "kind": "close" }
+              ],
+              "color": "db2777ff"
+            },
+            {
+              "op": "paint-path",
+              "commands": [
+                { "kind": "style", "style": "stroke", "width": 2 },
+                { "kind": "move-to", "x": 0, "y": 0 },
+                { "kind": "close" }
+              ],
+              "color": "000000ff"
+            },
+            {
+              "op": "paint-path",
+              "commands": [
+                { "kind": "move-to", "x": 250, "y": 4 },
+                { "kind": "line-to", "x": 270, "y": 4 },
+                { "kind": "line-to", "x": 270, "y": 20 },
+                { "kind": "close" }
+              ],
+              "color": "f59e0bff",
+              "mask": { "x": 0, "y": 0, "width": 240, "height": 100 }
+            },
+            {
+              "op": "paint-box",
+              "label": "b2",
+              "background": "0ea5e940"
+            }
+          ]
+        },
+        {
+          "label": "nested-filters-depth3",
+          "available_space": { "width": 200, "height": 160 },
+          "style_tree": {
+            "label": "root",
+            "style": { "flexDirection": "Column", "gap": "2px", "padding": "4px" },
+            "children": [
+              { "label": "g1", "style": { "width": "100px", "height": "60px" } },
+              { "label": "g2", "style": { "width": "60px", "height": "30px" } },
+              { "label": "g3", "style": { "width": "30px", "height": "15px" } },
+              { "label": "s1", "style": { "width": "60px", "height": "20px" } }
+            ]
+          },
+          "paint_script": [
+            { "op": "paint-box", "label": "g1", "background": "334155ff" },
+            { "op": "begin-filter-group", "bounds": { "x": 0, "y": 0, "width": 200, "height": 160 }, "blur_radius": 3, "corner_radius": 4 },
+            { "op": "paint-box", "label": "g2", "background": "16a34aff" },
+            { "op": "begin-filter-group", "bounds": { "x": 0, "y": 0, "width": 200, "height": 160 }, "blur_radius": 2, "corner_radius": 3 },
+            { "op": "paint-box", "label": "g3", "background": "eab308ff" },
+            {
+              "op": "paint-path",
+              "commands": [
+                { "kind": "move-to", "x": 6, "y": 110 },
+                { "kind": "line-to", "x": 24, "y": 110 },
+                { "kind": "line-to", "x": 24, "y": 124 },
+                { "kind": "close" }
+              ],
+              "color": "be123cff"
+            },
+            { "op": "begin-filter-group", "bounds": { "x": 0, "y": 0, "width": 200, "height": 160 }, "blur_radius": 2 },
+            { "op": "paint-box", "label": "s1", "background": "2563ebff" },
+            { "op": "end-filter-group" },
+            { "op": "end-filter-group" },
+            { "op": "end-filter-group" },
+            { "op": "paint-backdrop", "label": "g1", "blur_radius": 4, "corner_radius": 6 },
+            { "op": "paint-surface", "label": "s1" }
+          ]
+        },
+        {
+          "label": "sprites-surfaces-order",
+          "available_space": { "width": 200, "height": 100 },
+          "style_tree": {
+            "label": "root",
+            "style": { "flexDirection": "Column", "gap": "2px", "padding": "4px" },
+            "children": [
+              { "label": "t1", "style": { "width": "60px", "height": "20px" } },
+              { "label": "t2", "style": { "width": "60px", "height": "20px" } },
+              { "label": "s1", "style": { "width": "60px", "height": "40px" } }
+            ]
+          },
+          "paint_script": [
+            {
+              "op": "paint-monochrome-sprite",
+              "label": "t1",
+              "color": "111111ff",
+              "tile": {
+                "texture_index": 0,
+                "texture_kind": 0,
+                "tile_id": 1,
+                "padding": 0,
+                "bounds": { "x": 0, "y": 0, "width": 12, "height": 12 }
+              }
+            },
+            {
+              "op": "paint-subpixel-sprite",
+              "label": "t1",
+              "color": "222222ff",
+              "tile": {
+                "texture_index": 0,
+                "texture_kind": 2,
+                "tile_id": 2,
+                "padding": 0,
+                "bounds": { "x": 12, "y": 0, "width": 12, "height": 12 }
+              }
+            },
+            {
+              "op": "paint-polychrome-sprite",
+              "label": "t2",
+              "opacity": 0.8,
+              "corner_radius": 4,
+              "tile": {
+                "texture_index": 0,
+                "texture_kind": 1,
+                "tile_id": 3,
+                "padding": 1,
+                "bounds": { "x": 24, "y": 0, "width": 12, "height": 12 }
+              }
+            },
+            {
+              "op": "paint-monochrome-sprite",
+              "label": "t2",
+              "color": "333333ff",
+              "tile": {
+                "texture_index": 1,
+                "texture_kind": 0,
+                "tile_id": 4,
+                "padding": 0,
+                "bounds": { "x": 0, "y": 12, "width": 12, "height": 12 }
+              }
+            },
+            { "op": "paint-surface", "label": "s1" }
+          ]
+        },
+        {
+          "label": "replay-paths-filters",
+          "available_space": { "width": 200, "height": 100 },
+          "style_tree": {
+            "label": "root",
+            "style": { "flexDirection": "Column", "gap": "2px", "padding": "4px" },
+            "children": [
+              { "label": "r1", "style": { "width": "80px", "height": "40px" } }
+            ]
+          },
+          "paint_script": [
+            { "op": "replay", "source": "paths-fill-stroke", "start": 0, "end": 3 },
+            { "op": "begin-filter-group", "label": "r1", "blur_radius": 2 },
+            { "op": "paint-box", "label": "r1", "background": "0f766e80" },
+            { "op": "end-filter-group" },
+            {
+              "op": "paint-path",
+              "commands": [
+                { "kind": "style", "style": "stroke", "width": 5, "start_cap": "square" },
+                { "kind": "move-to", "x": 30, "y": 40 },
+                { "kind": "arc-to", "radius_x": 30, "radius_y": 20, "x_rotation": 0, "large_arc": true, "sweep": true, "x": 90, "y": 40 }
+              ],
+              "color": "9333eaff"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

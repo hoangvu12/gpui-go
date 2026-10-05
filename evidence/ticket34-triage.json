@@ -1,0 +1,35 @@
+{
+    "ticket": "34-core-support-triage",
+    "date": "2026-10-05",
+    "authorization": "User: ok now use roboco mcp, create a new chat that use /implement skill to do all those tickets, use iroha dashscope glm 5.3 with pi harness",
+    "session": "Roboco chat 065e52f5; subagent ticket34-triage; orchestrator re-verified",
+    "git_state": "No git repository; commit step environment-blocked, not fabricated.",
+    "result": {
+        "triaged": 351,
+        "remaining_unassigned": 0,
+        "remaining_owner_34": 0,
+        "total_rows": 6911,
+        "dispositions": {
+            "family-03": 49,
+            "family-04": 36,
+            "family-14": 89,
+            "family-26": 3,
+            "family-27": 3,
+            "family-01": 56,
+            "core-structure": 115
+        },
+        "ledger_schema": "gpui-go/capability-ledger@2 (disposition field required, ByDisposition summary, Validate invariant, platform-gate notes for crate-level cfg gates covering 33 previously-invisible rows)",
+        "record": "conformance/ledger/generated/triage.md (group-by-group table with pinned-source citations)"
+    },
+    "judgment_calls": [
+        "SharedString -> 03 (no dominant consumer; the note lists all consumers: actions 12, keymap 13, div/aria 11/21, text 15/09/06, titles 05, assets 18, menus 26)",
+        "sum_tree -> 14 via list.rs dominance (26 refs vs 8 in tab_stop.rs; ticket13 exercises the same machinery)",
+        "gpui_ce_util split by concrete call sites across 03/04/26/27 plus structural",
+        "perf -> 01 (toolchain instrumentation)",
+        "zed_util -> structural after verifying no workspace crate depends on it"
+    ],
+    "executed_results": {
+        "go": "CGO_ENABLED=0 go test ./conformance/... green; regeneration deterministic (only GeneratedAt differs); exactly 351 rows changed owner, zero unintended changes",
+        "vet_gofmt": "clean"
+    }
+}

@@ -1,0 +1,692 @@
+{
+    "date":  "2026-10-05",
+    "kind":  "Wayfinder completion documentation and evidence validation",
+    "passed":  true,
+    "document_count":  68,
+    "local_link_count":  659,
+    "documents":  [
+                      {
+                          "sha256":  "bb53cc40e8a30a0930dc4554555be364b46501fa76fd82061604581176e75127",
+                          "path":  ".scratch/gpui-core/issues/01-define-windows-parity.md"
+                      },
+                      {
+                          "sha256":  "12865ac3327c3e0d42b2558a162e1cd5c4dd56ff494a3e99edd2d1a486b8f887",
+                          "path":  ".scratch/gpui-core/issues/02-set-development-and-runtime-budgets.md"
+                      },
+                      {
+                          "sha256":  "744724b7bbba3f3f98f3331a227a6c447f8f7d724f041aad5fc2e8a09ebe0401",
+                          "path":  ".scratch/gpui-core/issues/03-choose-go-authoring-contract.md"
+                      },
+                      {
+                          "sha256":  "957e6f7c3a920ab54cec89d7b6a2eec94c348b1c31a840c377171a6c26d2a91b",
+                          "path":  ".scratch/gpui-core/issues/04-define-runtime-ownership.md"
+                      },
+                      {
+                          "sha256":  "f391dee8c7939b3c9cdc4089e5ef3c5218ec9541a2452389766c8436db5254cd",
+                          "path":  ".scratch/gpui-core/issues/05-choose-layout-strategy.md"
+                      },
+                      {
+                          "sha256":  "8b2b8b30c315cdd3e25c1b4df15233f0c023fec31865260d8c644716be849205",
+                          "path":  ".scratch/gpui-core/issues/06-choose-windows-platform-and-text.md"
+                      },
+                      {
+                          "sha256":  "0a7f9051dce48c37ca22c6be1566bc0d72b5745a946a14b60ca69e2fc041e1e4",
+                          "path":  ".scratch/gpui-core/issues/07-choose-scene-renderer.md"
+                      },
+                      {
+                          "sha256":  "7a3bc0828b7991a0739fb87fd5a3a7d5ca9730336457f7f550806ebb087a7e86",
+                          "path":  ".scratch/gpui-core/issues/08-define-module-and-native-distribution.md"
+                      },
+                      {
+                          "sha256":  "1891c2f745edc9157e327c97a56def7b336b73eda8fbc93eb75b93e4cc55cb3f",
+                          "path":  ".scratch/gpui-core/issues/09-define-conformance-and-update-policy.md"
+                      },
+                      {
+                          "sha256":  "6bfc91fe6792f37367994d6bbdf347855e044896eb7dbc95850b5e1bca734054",
+                          "path":  ".scratch/gpui-core/issues/10-validate-authoring-signatures.md"
+                      },
+                      {
+                          "sha256":  "3687e774615a2d1c5b3178e77e670f21fd78a589fe9e10fab0a8e866faf7e1d9",
+                          "path":  ".scratch/gpui-core/map.md"
+                      },
+                      {
+                          "sha256":  "738c468854068fb8d7bc4de1dc7416f2df65c8ca1c6aacee063cc48a5b6efff8",
+                          "path":  ".scratch/gpui-core/spec.md"
+                      },
+                      {
+                          "sha256":  "4d26a7b82ee128087aee00770396c977f5ffb26f06aad5dd92f5db7138fc8df1",
+                          "path":  ".scratch/gpui-core-implementation/issues/01-reference-harness.md"
+                      },
+                      {
+                          "sha256":  "a77f5096bd5a5a782d810edbcc5e5cdaf1be6ede441dd029c3119364ace48164",
+                          "path":  ".scratch/gpui-core-implementation/issues/02-native-bootstrap.md"
+                      },
+                      {
+                          "sha256":  "2d438e18684f0344e08598f9cee0dda231c514af467f745008ca944541019ccd",
+                          "path":  ".scratch/gpui-core-implementation/issues/03-scoped-entities-effects.md"
+                      },
+                      {
+                          "sha256":  "36fa1961e1a7b33a1b7955f1aa3206e420ecbca6012c204df534873f684d0fa8",
+                          "path":  ".scratch/gpui-core-implementation/issues/04-scoped-tasks.md"
+                      },
+                      {
+                          "sha256":  "a613526633af03d56a162c21da5fd68316d606646c5fad7b1ed40fa79469e457",
+                          "path":  ".scratch/gpui-core-implementation/issues/05-win32-window.md"
+                      },
+                      {
+                          "sha256":  "9b971f65f02901b59ecb51e81f9915ab6ef31e0cd7c1b420a174418a08302a4b",
+                          "path":  ".scratch/gpui-core-implementation/issues/06-layout-roundtrip.md"
+                      },
+                      {
+                          "sha256":  "1680cd8a7fb159ca5eec6d96d5a6b3b02caa96e38b915580ce5a61199babd5ad",
+                          "path":  ".scratch/gpui-core-implementation/issues/07-present-and-retire.md"
+                      },
+                      {
+                          "sha256":  "782bc7ac51f1569bc3a76747750e1dcb37e54afeae0ef64d66ce2b4669aed2e1",
+                          "path":  ".scratch/gpui-core-implementation/issues/08-paint-boxes.md"
+                      },
+                      {
+                          "sha256":  "28a76e9c4a7fd349c5cf27bf62bb564142e5f2036491244cd5f19cdc9590fd64",
+                          "path":  ".scratch/gpui-core-implementation/issues/09-text-geometry.md"
+                      },
+                      {
+                          "sha256":  "461ddb17a5f9552cb19a5131680b1ab3ed3f4acca67ef9cecfcbe80b7c9f34b1",
+                          "path":  ".scratch/gpui-core-implementation/issues/10-draw-text.md"
+                      },
+                      {
+                          "sha256":  "71b071ab202ed266749fd08168fb5a09d4c461ee0c5c2204c07c253e715eb653",
+                          "path":  ".scratch/gpui-core-implementation/issues/11-authoring-counter.md"
+                      },
+                      {
+                          "sha256":  "1fa7c4d37eb50e2f0bfdc2be457dc036a25d85cf6a059edd2ed6580e5017d1c8",
+                          "path":  ".scratch/gpui-core-implementation/issues/12-action-registry.md"
+                      },
+                      {
+                          "sha256":  "121b30bc9915421526eca7a7778213dab41ec2b1c650f3ec19089de552c67284",
+                          "path":  ".scratch/gpui-core-implementation/issues/13-focus-keyboard.md"
+                      },
+                      {
+                          "sha256":  "d72075969d3b5056c775df5b6a4005d59e6eced874ffcaa5ac93d7abe62172b5",
+                          "path":  ".scratch/gpui-core-implementation/issues/14-retained-scroll.md"
+                      },
+                      {
+                          "sha256":  "3be09147eb87f2bf28e2cdbb4c9921aeab578955d67cc42a84fd1d6cab6866d9",
+                          "path":  ".scratch/gpui-core-implementation/issues/15-inline-layout.md"
+                      },
+                      {
+                          "sha256":  "e2af89cc4ce9b8cb1db84ba5df27568f2b4a4814f38da7d1b3542c210d6000cb",
+                          "path":  ".scratch/gpui-core-implementation/issues/16-paths-filters.md"
+                      },
+                      {
+                          "sha256":  "9084a978e250a2ce4d49503f24fd35aa5a6b37336881be64526d0900eb303f91",
+                          "path":  ".scratch/gpui-core-implementation/issues/17-image-decode.md"
+                      },
+                      {
+                          "sha256":  "6f5407ef5fad7cff524b7ff1f625ab5e7e249a47bd0837b4536f577b787cd3a3",
+                          "path":  ".scratch/gpui-core-implementation/issues/18-asset-loading.md"
+                      },
+                      {
+                          "sha256":  "de05c03c1f7f328fc372e608bb7f1dee1100664ad2016acb30a97a691db99c87",
+                          "path":  ".scratch/gpui-core-implementation/issues/19-svg-fonts.md"
+                      },
+                      {
+                          "sha256":  "8a2805f07f2e05f19c1fb71e2129a706f2e47fb781cf56881fc52055bc1dc71d",
+                          "path":  ".scratch/gpui-core-implementation/issues/20-ime-editor.md"
+                      },
+                      {
+                          "sha256":  "e8c396db90c095522a31588a7f3aacb89632381ac2d9e9e3ba4e898aa37aabb6",
+                          "path":  ".scratch/gpui-core-implementation/issues/21-accessibility-tree.md"
+                      },
+                      {
+                          "sha256":  "2d325423cae9cbd625ffa6abd2d180094513820e78f402a273be9d323e630f5b",
+                          "path":  ".scratch/gpui-core-implementation/issues/22-uia-provider.md"
+                      },
+                      {
+                          "sha256":  "ffc284b8d99048c92159f8c347bd243a4cd0fcee3373ae7b7fda2d4b6ab0289b",
+                          "path":  ".scratch/gpui-core-implementation/issues/23-clipboard.md"
+                      },
+                      {
+                          "sha256":  "876771f22bdb5316a18795270462fef32cc146a9162e83726abd3fcda59aa20b",
+                          "path":  ".scratch/gpui-core-implementation/issues/24-drop-touchpad.md"
+                      },
+                      {
+                          "sha256":  "ddf311d34a01a840649f74f8df1724f7b19dc97f1c7fa09acb724f45cd316a5b",
+                          "path":  ".scratch/gpui-core-implementation/issues/25-dialogs-credentials.md"
+                      },
+                      {
+                          "sha256":  "edd5e45b7f2a51f1c466af898c47a27e4a85fe1c2a7ab0511e59755834637be0",
+                          "path":  ".scratch/gpui-core-implementation/issues/26-desktop-operations.md"
+                      },
+                      {
+                          "sha256":  "72302459489278593422179e06b1c79b9e219922f9689b48a1b8d95bbbe50c49",
+                          "path":  ".scratch/gpui-core-implementation/issues/27-inspector.md"
+                      },
+                      {
+                          "sha256":  "dcf8d17a6160400b5b5d9bfd35df540b63216fe2f0558bb8eefd6b25a2a4cf91",
+                          "path":  ".scratch/gpui-core-implementation/issues/28-capture.md"
+                      },
+                      {
+                          "sha256":  "03075e5da0c3cd71ca747226c41b529fb02d75a737d0fba4848e8dcb5dc49bfb",
+                          "path":  ".scratch/gpui-core-implementation/issues/29-device-loss.md"
+                      },
+                      {
+                          "sha256":  "82db3eab8b69cf4bd1c299d207ca3952461e4f229aa06c689c083a5698c2a927",
+                          "path":  ".scratch/gpui-core-implementation/issues/30-shutdown-integration.md"
+                      },
+                      {
+                          "sha256":  "5c4086ce246ddba7ba5f02194b2caad01307a37425591c7c59456e24e06e9af2",
+                          "path":  ".scratch/gpui-core-implementation/issues/31-consumer-delivery.md"
+                      },
+                      {
+                          "sha256":  "1cd7d3283392f1842d8299a09c04c7c3284fd582b743053d3ed086489d24470c",
+                          "path":  ".scratch/gpui-core-implementation/issues/32-render-to-image.md"
+                      },
+                      {
+                          "sha256":  "4dbe6786954c1516e43ad7d9548aad02d112fde125aea0bcaf55037150bf8226",
+                          "path":  ".scratch/gpui-core-implementation/issues/33-full-core-acceptance.md"
+                      },
+                      {
+                          "sha256":  "e1fe0de664387848121d4305d33dc98abe5ca5512a3538861d2aaa874a148561",
+                          "path":  ".scratch/gpui-core-implementation/plan.md"
+                      },
+                      {
+                          "sha256":  "baea02f03bc0ae45e698261066a92e2458611d795b51909f278bc06899fa9a04",
+                          "path":  ".scratch/signature-validation/README.md"
+                      },
+                      {
+                          "sha256":  "ccef7aeb07e2a2ac8db135535d7df26bfd345f03476a3af0cfaa7d746abb82f1",
+                          "path":  "AGENTS.md"
+                      },
+                      {
+                          "sha256":  "f673ce2cde630cd8f87bfff99dd42da8103a56664a6e8b212798157c3272c546",
+                          "path":  "CLAUDE.md"
+                      },
+                      {
+                          "sha256":  "3821fcc30076e7a1b031cc5bec6893f388944abd88a3cb41b7cbfd464bc76f09",
+                          "path":  "CONTEXT.md"
+                      },
+                      {
+                          "sha256":  "85fd56e704a0010447c30bc0b507dd34e6c70eff5bc5e9ce0bcb31f3916cc14c",
+                          "path":  "docs/agents/domain.md"
+                      },
+                      {
+                          "sha256":  "0166a64a197d65290977c907bc19e619780e250dcbddfabb7d4d0c3cc8c690b3",
+                          "path":  "docs/agents/issue-tracker.md"
+                      },
+                      {
+                          "sha256":  "406d3e18435c13a53bde8bfa0ac50351c452f3a1103622ca3e83d8388256fba4",
+                          "path":  "docs/agents/triage-labels.md"
+                      },
+                      {
+                          "sha256":  "3e1073bd15aca750ef8e04a48b25dd65bc3ba2b10cfecefeb13f5a69a96735e1",
+                          "path":  "docs/authoring-decision-round.md"
+                      },
+                      {
+                          "sha256":  "9e5684e4c49537fdd590ad7d2905c9ec79d87fbf39a4709fbe000a685a5dd469",
+                          "path":  "docs/conformance-contract.md"
+                      },
+                      {
+                          "sha256":  "2d5487fa2678f2ec1310aa8119375b8b6ebce9b5b59671348ed37f207484b044",
+                          "path":  "docs/conformance-inventory.md"
+                      },
+                      {
+                          "sha256":  "9db1b202da0699b95de5ea13fbfd9e882c79773b2aded901049f07ebf10ceb60",
+                          "path":  "docs/counter-view-api.md"
+                      },
+                      {
+                          "sha256":  "15d0fa55cdc8702341748df5a4b79b53141e29d865a5bb251e99c6b5476d99c2",
+                          "path":  "docs/distribution-contract.md"
+                      },
+                      {
+                          "sha256":  "7c1e6d12a7bd16ee263fdb79db674caf7e845b1046c3ff0ed2ccc95ff79ebe6f",
+                          "path":  "docs/layout-contract.md"
+                      },
+                      {
+                          "sha256":  "fac69b8821cc90ef63545b93cc47693f945f366c8db43fcac876ddd86eaf3910",
+                          "path":  "docs/renderer-contract.md"
+                      },
+                      {
+                          "sha256":  "fb330e8ae69213e75748ab57d3e3746c46522c336f6c542258a293675a1d5d94",
+                          "path":  "docs/runtime-ownership-contract.md"
+                      },
+                      {
+                          "sha256":  "1df2aaa4a9513b456e5db0a31c033b250ca6080123aa9328fe1f2470c1e99a49",
+                          "path":  "docs/windows-platform-contract.md"
+                      },
+                      {
+                          "sha256":  "6f9158a3049491083f0cfb41641f607dcebbe1f960418e6ba50dc9b77fa01f35",
+                          "path":  "evidence/README.md"
+                      },
+                      {
+                          "sha256":  "3bd776c8491349f0bd04093838c7531c6400fb40d1d30c64e4119d33289de5c4",
+                          "path":  "handoff/resume.md"
+                      },
+                      {
+                          "sha256":  "f9e05d87e936faaf405841e76ff2f0cb0ad32070ba827b1a0891754f305cfb13",
+                          "path":  "PROJECT.md"
+                      },
+                      {
+                          "sha256":  "7051df8a47765e69472c987e14b4ffba764e3a480b4264dc1491dde5a7c422ad",
+                          "path":  "README.md"
+                      },
+                      {
+                          "sha256":  "24eb0f5cd82e670806b3f5497ecb7f38c62c4bea69e493bef2a51e03d35edff8",
+                          "path":  "research/19-conformance-update-policy.md"
+                      },
+                      {
+                          "sha256":  "d8b0ecfb6acaecd3fbac8fc9b34102572c1b27513fd3af1218fbf48286572ffd",
+                          "path":  "research/20-conformance-spec-coverage-review.md"
+                      }
+                  ],
+    "wayfinder":  {
+                      "count":  10,
+                      "acyclic":  true,
+                      "final_acceptance_prerequisite_count":  0,
+                      "tickets":  [
+                                      {
+                                          "status":  "resolved",
+                                          "blocked_by":  {
+
+                                                         },
+                                          "id":  "01",
+                                          "file":  "01-define-windows-parity.md"
+                                      },
+                                      {
+                                          "status":  "resolved",
+                                          "blocked_by":  {
+
+                                                         },
+                                          "id":  "02",
+                                          "file":  "02-set-development-and-runtime-budgets.md"
+                                      },
+                                      {
+                                          "status":  "resolved",
+                                          "blocked_by":  "01",
+                                          "id":  "03",
+                                          "file":  "03-choose-go-authoring-contract.md"
+                                      },
+                                      {
+                                          "status":  "resolved",
+                                          "blocked_by":  [
+                                                             "01",
+                                                             "03"
+                                                         ],
+                                          "id":  "04",
+                                          "file":  "04-define-runtime-ownership.md"
+                                      },
+                                      {
+                                          "status":  "resolved",
+                                          "blocked_by":  [
+                                                             "01",
+                                                             "02",
+                                                             "04"
+                                                         ],
+                                          "id":  "05",
+                                          "file":  "05-choose-layout-strategy.md"
+                                      },
+                                      {
+                                          "status":  "resolved",
+                                          "blocked_by":  [
+                                                             "01",
+                                                             "02",
+                                                             "04",
+                                                             "05"
+                                                         ],
+                                          "id":  "06",
+                                          "file":  "06-choose-windows-platform-and-text.md"
+                                      },
+                                      {
+                                          "status":  "resolved",
+                                          "blocked_by":  [
+                                                             "01",
+                                                             "02",
+                                                             "04",
+                                                             "06"
+                                                         ],
+                                          "id":  "07",
+                                          "file":  "07-choose-scene-renderer.md"
+                                      },
+                                      {
+                                          "status":  "resolved",
+                                          "blocked_by":  [
+                                                             "02",
+                                                             "03",
+                                                             "04",
+                                                             "05",
+                                                             "06",
+                                                             "07"
+                                                         ],
+                                          "id":  "08",
+                                          "file":  "08-define-module-and-native-distribution.md"
+                                      },
+                                      {
+                                          "status":  "resolved",
+                                          "blocked_by":  [
+                                                             "01",
+                                                             "02",
+                                                             "03",
+                                                             "04",
+                                                             "05",
+                                                             "06",
+                                                             "07",
+                                                             "08",
+                                                             "10"
+                                                         ],
+                                          "id":  "09",
+                                          "file":  "09-define-conformance-and-update-policy.md"
+                                      },
+                                      {
+                                          "status":  "resolved",
+                                          "blocked_by":  [
+                                                             "03",
+                                                             "04"
+                                                         ],
+                                          "id":  "10",
+                                          "file":  "10-validate-authoring-signatures.md"
+                                      }
+                                  ]
+                  },
+    "implementation":  {
+                           "count":  33,
+                           "acyclic":  true,
+                           "final_acceptance_prerequisite_count":  32,
+                           "tickets":  [
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  {
+
+                                                              },
+                                               "id":  "01",
+                                               "file":  "01-reference-harness.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  "01",
+                                               "id":  "02",
+                                               "file":  "02-native-bootstrap.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  "01",
+                                               "id":  "03",
+                                               "file":  "03-scoped-entities-effects.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  "03",
+                                               "id":  "04",
+                                               "file":  "04-scoped-tasks.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "02",
+                                                                  "03"
+                                                              ],
+                                               "id":  "05",
+                                               "file":  "05-win32-window.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  "02",
+                                               "id":  "06",
+                                               "file":  "06-layout-roundtrip.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  "05",
+                                               "id":  "07",
+                                               "file":  "07-present-and-retire.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "06",
+                                                                  "07"
+                                                              ],
+                                               "id":  "08",
+                                               "file":  "08-paint-boxes.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  "06",
+                                               "id":  "09",
+                                               "file":  "09-text-geometry.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "08",
+                                                                  "09"
+                                                              ],
+                                               "id":  "10",
+                                               "file":  "10-draw-text.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "03",
+                                                                  "10"
+                                                              ],
+                                               "id":  "11",
+                                               "file":  "11-authoring-counter.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  "03",
+                                               "id":  "12",
+                                               "file":  "12-action-registry.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "05",
+                                                                  "11",
+                                                                  "12"
+                                                              ],
+                                               "id":  "13",
+                                               "file":  "13-focus-keyboard.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "11",
+                                                                  "13"
+                                                              ],
+                                               "id":  "14",
+                                               "file":  "14-retained-scroll.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  "11",
+                                               "id":  "15",
+                                               "file":  "15-inline-layout.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  "08",
+                                               "id":  "16",
+                                               "file":  "16-paths-filters.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  "08",
+                                               "id":  "17",
+                                               "file":  "17-image-decode.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "04",
+                                                                  "11",
+                                                                  "17"
+                                                              ],
+                                               "id":  "18",
+                                               "file":  "18-asset-loading.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "09",
+                                                                  "18"
+                                                              ],
+                                               "id":  "19",
+                                               "file":  "19-svg-fonts.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  "13",
+                                               "id":  "20",
+                                               "file":  "20-ime-editor.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "11",
+                                                                  "13"
+                                                              ],
+                                               "id":  "21",
+                                               "file":  "21-accessibility-tree.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  "21",
+                                               "id":  "22",
+                                               "file":  "22-uia-provider.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "05",
+                                                                  "17"
+                                                              ],
+                                               "id":  "23",
+                                               "file":  "23-clipboard.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "13",
+                                                                  "23"
+                                                              ],
+                                               "id":  "24",
+                                               "file":  "24-drop-touchpad.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "04",
+                                                                  "05"
+                                                              ],
+                                               "id":  "25",
+                                               "file":  "25-dialogs-credentials.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "05",
+                                                                  "13"
+                                                              ],
+                                               "id":  "26",
+                                               "file":  "26-desktop-operations.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "14",
+                                                                  "21"
+                                                              ],
+                                               "id":  "27",
+                                               "file":  "27-inspector.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  "16",
+                                               "id":  "28",
+                                               "file":  "28-capture.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "14",
+                                                                  "28"
+                                                              ],
+                                               "id":  "29",
+                                               "file":  "29-device-loss.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "19",
+                                                                  "20",
+                                                                  "22",
+                                                                  "24",
+                                                                  "25",
+                                                                  "26",
+                                                                  "27",
+                                                                  "29"
+                                                              ],
+                                               "id":  "30",
+                                               "file":  "30-shutdown-integration.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  "05",
+                                               "id":  "31",
+                                               "file":  "31-consumer-delivery.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "16",
+                                                                  "29"
+                                                              ],
+                                               "id":  "32",
+                                               "file":  "32-render-to-image.md"
+                                           },
+                                           {
+                                               "status":  "open",
+                                               "blocked_by":  [
+                                                                  "15",
+                                                                  "30",
+                                                                  "31",
+                                                                  "32"
+                                                              ],
+                                               "id":  "33",
+                                               "file":  "33-full-core-acceptance.md"
+                                           }
+                                       ]
+                       },
+    "snapshots":  [
+                      {
+                          "entries":  28,
+                          "verified":  28,
+                          "manifest":  "evidence/core/manifest.json"
+                      },
+                      {
+                          "entries":  16,
+                          "verified":  16,
+                          "manifest":  "evidence/windows-platform/manifest.json"
+                      },
+                      {
+                          "entries":  12,
+                          "verified":  12,
+                          "manifest":  "evidence/renderer/manifest.json"
+                      },
+                      {
+                          "entries":  7,
+                          "verified":  7,
+                          "manifest":  "evidence/distribution/manifest.json"
+                      }
+                  ],
+    "signature_evidence":  {
+                               "toolchain":  "go version go1.27.1 windows/amd64",
+                               "negative_control_pairs":  29,
+                               "fixture_sources_verified":  68,
+                               "failures":  0
+                           },
+    "errors":  [
+
+               ],
+    "limits":  "Checks document links, tracker/DAG/coverage reachability and recorded source hashes. Does not rerun compiler tests or execute framework/native/oracle/visual/consumer gates. Compiler execution is separately recorded in authoring-signature-validation.json."
+}

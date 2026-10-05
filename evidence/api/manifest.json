@@ -1,0 +1,50 @@
+﻿[
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "ref":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui/src/styled.rs",
+        "localFile":  "crates__gpui__src__styled.rs",
+        "sha256":  "0BC3C2E0095FD727B61CA8792C161CDDFE0CFD12A605B9DFCEA760D5955D79D2",
+        "url":  "https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui/src/styled.rs"
+    },
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "ref":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui_macros/src/styles.rs",
+        "localFile":  "crates__gpui_macros__src__styles.rs",
+        "sha256":  "54FAABC1424917FEED684499AC5FAC37CB4CF4F6AC0925ACD5509139C4132652",
+        "url":  "https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_macros/src/styles.rs"
+    },
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "ref":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui/src/interactive.rs",
+        "localFile":  "crates__gpui__src__interactive.rs",
+        "sha256":  "443B41C4F7D6D31BA288A49A151DC2280EC1E1E20DF2F558551DC07009672087",
+        "url":  "https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui/src/interactive.rs"
+    },
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "ref":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui/src/subscription.rs",
+        "localFile":  "crates__gpui__src__subscription.rs",
+        "sha256":  "CCA3B5138CB23084932772C8E009CCE8A08562C2C00B69F3E0D4B1676B88087A",
+        "url":  "https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui/src/subscription.rs"
+    },
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "ref":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  "crates/gpui_render/Cargo.toml",
+        "localFile":  "crates__gpui_render__Cargo.toml",
+        "sha256":  "B0337D46470092CC47148D81FD845552E9FEFDD7A1D8EF57AF0095DC1B8F3D44",
+        "url":  "https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/crates/gpui_render/Cargo.toml"
+    },
+    {
+        "repository":  "gpui-ce/gpui-ce",
+        "ref":  "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
+        "path":  ".cargo/config.toml",
+        "localFile":  ".cargo__config.toml",
+        "sha256":  "46B48C4505D0C06D229D14F1A819EA294CE2E81ED2C870AEFAE812DD9E36D295",
+        "url":  "https://github.com/gpui-ce/gpui-ce/blob/254b5dbd47cbb5acbcc5bbdcbb322a339276c88a/.cargo/config.toml"
+    }
+]

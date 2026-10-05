@@ -1,0 +1,15 @@
+{
+  "run_started_at": "2026-10-06T01:31:51+07:00",
+  "harness_exe": "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\target\\debug\\gpui-reference-harness.exe",
+  "harness_sha256": "04d824f13e57abe48709f9cb28943d2102f8af99a7803c8ce8e1df0c9f62b38e",
+  "envelope_path": "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\conformance\\fixtures\\fx-0007-paths-filters.json",
+  "envelope_sha256": "1ae72a411df0c0b1cc922868b0138b1c014ec0e82115f1a2a932d5198f877a1a",
+  "argv": [
+    "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\target\\debug\\gpui-reference-harness.exe",
+    "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\conformance\\fixtures\\fx-0007-paths-filters.json",
+    "conformance\\recorded\\fx-0007-paths-filters\\trace.json"
+  ],
+  "go_version": "go1.27.1",
+  "os": "windows",
+  "arch": "amd64"
+}

@@ -1,0 +1,27 @@
+{
+    "ticket": "12-action-registry",
+    "date": "2026-10-05",
+    "authorization": "User: ok now use roboco mcp, create a new chat that use /implement skill to do all those tickets, use iroha dashscope glm 5.3 with pi harness",
+    "session": "Roboco chat 065e52f5; implemented by background subagent session ticket12-actions; independently re-verified by the orchestrator",
+    "git_state": "No git repository; commit step environment-blocked, not fabricated.",
+    "implemented": {
+        "files": ["gpui/action.go (canonical descriptors, unit/rich actions, registry, BuildAction, BoxedAction, binding core, NoAction/Unbind builtins with reference-derived semantics)", "gpui/action_test.go (21 tests)", "internal/actionspec (external-package API exercise, 6 tests)"],
+        "api_shape": "exactly the verified signature-fixture surface (Action[A]/ActionSpec[A]/AnyAction sealed/DefineAction/DefineUnitAction[~struct{}]/Box/Clone/Equal/Name/RegisterActions/BuildAction/BoxedAction/Window.Dispatch/DispatchBoxed); signature pins asserted by TestActionSignaturePins"
+    },
+    "reference_semantics_recorded": {
+        "NoAction": "action.rs: unbinds the keybinding it is associated with when it is the highest-precedence match; keymap.rs: suppresses equal-or-weaker-precedence bindings, stronger sources still apply",
+        "Unbind": "action.rs: unbinds later bindings for the same keystrokes dispatching the named action regardless of context; JSON form [\"zed::Unbind\", \"editor::NewLine\"]",
+        "unit_action_json": "params.unwrap_or_else(|| json!({})) — nil data becomes {}"
+    },
+    "schema_decision": "No schema dependency selected: stdlib encoding/json only; Schema func() any is author-supplied; the pinned Rust uses schemars (derive_action.rs) — aggregating per-action schemas deferred to the keymap/schema ticket owner when a concrete consumer exists (recorded on the field comments).",
+    "executed_results": {
+        "go_tests": "CGO_ENABLED=0 go test -count=1 ./... all pass (27 action tests incl. external-package; regression gates for tickets 03/04 unaffected); independently re-verified by the orchestrator",
+        "vet_gofmt": "go vet ./... clean; gofmt clean"
+    },
+    "box_binding_proof": "TestBoxedBindingDeliversCapturedClone: the handler receives the bind-time clone even when a different instance is dispatched (clone-count proof); payloads read-only by copy on every delivery path.",
+    "contract_flags": [
+        "Contract says 'every second DefineAction[A] is a definition error, even if the name matches'; the ticket's equal-spec idempotence rule was implemented (function bodies are incomparable in Go; documented at sameActionDefinition) — flagged for the conformance audit.",
+        "Window dispatch entry points panic with typed no-route errors (routing requires the focus tree, ticket13); nil window -> ErrNoWindow.",
+        "Per-app registration state lives in a package-level table keyed by *App (App struct fields out of the subagent's ownership); teardown arrives with the shutdown ticket."
+    ]
+}

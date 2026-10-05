@@ -1,0 +1,24 @@
+[workspace]
+resolver = "3"
+members = ["harness", "api-scan", "native"]
+exclude = ["ce-source"]
+
+[profile.release]
+# Keep the reference binary small and reproducible; no LTO surprises.
+debug = false
+# ticket02: unwinding stays enabled for the native artifact's panic boundary
+# (catch_unwind containment inside every export). This is also the default;
+# it is stated explicitly so the maintainer build cannot inherit an aborting
+# profile by assumption.
+panic = "unwind"
+
+# Reference workspace for gpui-go conformance tooling.
+#
+# This workspace is maintainer tooling. It depends on the pinned GPUI-CE
+# source checked out at `ce-source` (commit 254b5dbd47cbb5acbcc5bbdcbb322a339276c88a)
+# and never modifies that checkout: instrumentation happens through public
+# APIs only, so the reference oracle stays an independent build of the
+# upstream code.
+#
+# Cargo.lock in this workspace pins the resolved dependency graph used by the
+# reference oracle and is recorded as part of ticket01 evidence.

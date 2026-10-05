@@ -1,0 +1,47 @@
+[
+    {
+        "repository":  "zed-industries/zed",
+        "commit":  "a84689073d296dfd39987bc7dd478e43ef76d83a",
+        "path":  "crates/gpui/src/app/context.rs",
+        "blob":  "bce22b59f3751b7854f5127cf99737b55b89a186",
+        "local":  "crates__gpui__src__app__context.rs",
+        "sha256":  "AF9C74BA63623CF4F107861E041CDDB72CCA5B5C65695AB6531BB44FBF7B3573",
+        "url":  "https://github.com/zed-industries/zed/blob/a84689073d296dfd39987bc7dd478e43ef76d83a/crates/gpui/src/app/context.rs"
+    },
+    {
+        "repository":  "zed-industries/zed",
+        "commit":  "a84689073d296dfd39987bc7dd478e43ef76d83a",
+        "path":  "crates/gpui/src/gpui.rs",
+        "blob":  "d4da5aa34c01debb2ffb6330e5da3bc7d7a77063",
+        "local":  "crates__gpui__src__gpui.rs",
+        "sha256":  "2F060A8BDBF87BE91F434AC8290F44BD26BAB08BE0F2EAD38A5AA6D2F664C440",
+        "url":  "https://github.com/zed-industries/zed/blob/a84689073d296dfd39987bc7dd478e43ef76d83a/crates/gpui/src/gpui.rs"
+    },
+    {
+        "repository":  "zed-industries/zed",
+        "commit":  "a84689073d296dfd39987bc7dd478e43ef76d83a",
+        "path":  "crates/gpui/src/action.rs",
+        "blob":  "07c47fc2e4ade97b1398eae3f2eaae003fab782c",
+        "local":  "crates__gpui__src__action.rs",
+        "sha256":  "6566C34D4F4CF7F6A5280CBC4C07C747C5C6FC4C6554ABD42C73FEFE5716FC20",
+        "url":  "https://github.com/zed-industries/zed/blob/a84689073d296dfd39987bc7dd478e43ef76d83a/crates/gpui/src/action.rs"
+    },
+    {
+        "repository":  "zed-industries/zed",
+        "commit":  "a84689073d296dfd39987bc7dd478e43ef76d83a",
+        "path":  "crates/gpui/docs/key_dispatch.md",
+        "blob":  "ae7d828a4a3597ab473294c46381f471b043b61d",
+        "local":  "crates__gpui__docs__key_dispatch.md",
+        "sha256":  "56189467C43CA57C7CFA507F6ED7CDC31516144CBE648EF1F5FD97696862FE1A",
+        "url":  "https://github.com/zed-industries/zed/blob/a84689073d296dfd39987bc7dd478e43ef76d83a/crates/gpui/docs/key_dispatch.md"
+    },
+    {
+        "repository":  "zed-industries/zed",
+        "commit":  "a84689073d296dfd39987bc7dd478e43ef76d83a",
+        "path":  "crates/gpui/examples/testing.rs",
+        "blob":  "76e3b77352d547e928418b1828d89cb9e4afe4c1",
+        "local":  "crates__gpui__examples__testing.rs",
+        "sha256":  "95B15F220B4A37AC02BC6BA42108721BA00FAB3E94DBD8AE6CD3D0A0EF787B3C",
+        "url":  "https://github.com/zed-industries/zed/blob/a84689073d296dfd39987bc7dd478e43ef76d83a/crates/gpui/examples/testing.rs"
+    }
+]

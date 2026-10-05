@@ -1,0 +1,64 @@
+{
+    "repository":  "zed-industries/zed",
+    "revision":  "a84689073d296dfd39987bc7dd478e43ef76d83a",
+    "retrieved":  "2026-10-04",
+    "method":  "GitHub CLI contents API, decoded base64 bytes without text transcoding",
+    "files":  [
+                  {
+                      "path":  "crates/gpui_macros/src/derive_into_element.rs",
+                      "url":  "https://github.com/zed-industries/zed/blob/a84689073d296dfd39987bc7dd478e43ef76d83a/crates/gpui_macros/src/derive_into_element.rs",
+                      "snapshot":  "crates__gpui_macros__src__derive_into_element.rs",
+                      "git_blob":  "33ff658b68de7cdeed377dd3156e01bbbb98dbec",
+                      "sha256":  "50a2fe2c858e9f5fc9f9694d91485ed60fc4dc6fc1ca0e44f4f3011a5c8d7c66",
+                      "bytes":  886
+                  },
+                  {
+                      "path":  "crates/gpui/examples/hello_world.rs",
+                      "url":  "https://github.com/zed-industries/zed/blob/a84689073d296dfd39987bc7dd478e43ef76d83a/crates/gpui/examples/hello_world.rs",
+                      "snapshot":  "crates__gpui__examples__hello_world.rs",
+                      "git_blob":  "d18cb048726d6953edef9ea482d92bac05993d33",
+                      "sha256":  "7e9d145d93470b02ce5641290ed7b444776813de580fe1d613b45443cc890aa0",
+                      "bytes":  3906
+                  },
+                  {
+                      "path":  "crates/gpui/src/element.rs",
+                      "url":  "https://github.com/zed-industries/zed/blob/a84689073d296dfd39987bc7dd478e43ef76d83a/crates/gpui/src/element.rs",
+                      "snapshot":  "crates__gpui__src__element.rs",
+                      "git_blob":  "d6556258e15f7cac891e14861a2cd323fa09f6cf",
+                      "sha256":  "1eea2303609c4aca23e44e623a9d44eded93ad8b70f86e3e4c7446b3e0238b4c",
+                      "bytes":  29450
+                  },
+                  {
+                      "path":  "crates/gpui/src/elements/div.rs",
+                      "url":  "https://github.com/zed-industries/zed/blob/a84689073d296dfd39987bc7dd478e43ef76d83a/crates/gpui/src/elements/div.rs",
+                      "snapshot":  "crates__gpui__src__elements__div.rs",
+                      "git_blob":  "fc292f2a81e2ee0c16da4974f7953cdcfcd2c902",
+                      "sha256":  "f320948b8f90e36b7100ac3e0e061235d1e9422aeb323918e313f7d69980cfa9",
+                      "bytes":  225044
+                  },
+                  {
+                      "path":  "crates/gpui/src/elements/text.rs",
+                      "url":  "https://github.com/zed-industries/zed/blob/a84689073d296dfd39987bc7dd478e43ef76d83a/crates/gpui/src/elements/text.rs",
+                      "snapshot":  "crates__gpui__src__elements__text.rs",
+                      "git_blob":  "d1896ad0a65cc659f39d18cd601e2f9f2342ee64",
+                      "sha256":  "3ffcc422356924ae4d6eef864421f56588be65cd931c8fe35d7e5e6438c23346",
+                      "bytes":  47129
+                  },
+                  {
+                      "path":  "crates/gpui/src/styled.rs",
+                      "url":  "https://github.com/zed-industries/zed/blob/a84689073d296dfd39987bc7dd478e43ef76d83a/crates/gpui/src/styled.rs",
+                      "snapshot":  "crates__gpui__src__styled.rs",
+                      "git_blob":  "a24982a6acb6071701d2258e47a5f25a86d1ee89",
+                      "sha256":  "c6e62fe136bedf887ee755c886df5466d5fe0b398a004b35d1a3530fef809c8d",
+                      "bytes":  33010
+                  },
+                  {
+                      "path":  "crates/gpui/src/view.rs",
+                      "url":  "https://github.com/zed-industries/zed/blob/a84689073d296dfd39987bc7dd478e43ef76d83a/crates/gpui/src/view.rs",
+                      "snapshot":  "crates__gpui__src__view.rs",
+                      "git_blob":  "f24a4da9b7906e1c1f8dfd110f75fd6ef9c5aad8",
+                      "sha256":  "11eeda4ac05a0b03b22df9ffd58fc08ce1f6b0ef57af6cd8e7679d06f4601d94",
+                      "bytes":  19358
+                  }
+              ]
+}

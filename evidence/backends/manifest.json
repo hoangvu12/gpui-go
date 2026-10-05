@@ -1,0 +1,178 @@
+﻿[
+    {
+        "file":  "gioui_gio--app_app.go",
+        "repository":  "gioui/gio",
+        "commit":  "3397eb8f4df4d59eab121f64975173ea0d3fdb38",
+        "bytes":  11132,
+        "sha256":  "C1D0DCFAA9847AE08C16E0B07FCD71AF8481E540226F42152486F73324308DFF",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "gioui_gio--app_os.go",
+        "repository":  "gioui/gio",
+        "commit":  "3397eb8f4df4d59eab121f64975173ea0d3fdb38",
+        "bytes":  19076,
+        "sha256":  "8EA550A269D16BCA0CC9F60C8176C783EB1EE04E345D4399FCA12D00AE4DB208",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "gioui_gio--app_os_windows.go",
+        "repository":  "gioui/gio",
+        "commit":  "3397eb8f4df4d59eab121f64975173ea0d3fdb38",
+        "bytes":  80202,
+        "sha256":  "E86A58413A0C233E68B7E144019BC7983E51472324E8954EBD05CE8496F6338E",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "gioui_gio--app_window.go",
+        "repository":  "gioui/gio",
+        "commit":  "3397eb8f4df4d59eab121f64975173ea0d3fdb38",
+        "bytes":  52040,
+        "sha256":  "B641A5CF8E4AD82A205A2BFC7E96CDE97336F0284878DE04A1B89E8095264C59",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "gioui_gio--op_clip_clip.go",
+        "repository":  "gioui/gio",
+        "commit":  "3397eb8f4df4d59eab121f64975173ea0d3fdb38",
+        "bytes":  17748,
+        "sha256":  "E18CC9EBA63DF47D6117B9FE91E9F1BEAC8E897594D440CF1C616AA7A8730262",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "gioui_gio--op_paint_paint.go",
+        "repository":  "gioui/gio",
+        "commit":  "3397eb8f4df4d59eab121f64975173ea0d3fdb38",
+        "bytes":  10116,
+        "sha256":  "4E71405B96F3A4D3A7C56A53E33CCE86C36603D9FCB21D581DAEC421727E8897",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "gioui_gio--text_shaper.go",
+        "repository":  "gioui/gio",
+        "commit":  "3397eb8f4df4d59eab121f64975173ea0d3fdb38",
+        "bytes":  41746,
+        "sha256":  "30D7772EC7C10D1B7D1008F3787A280E779FF182269A444862DD942485EE6A71",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "go-gui-org_go-gui--gui_backend_metal_backend.go",
+        "repository":  "go-gui-org/go-gui",
+        "commit":  "58bae296bcc1112f9e118829e25225420c6712ba",
+        "bytes":  42758,
+        "sha256":  "FD0F5AD39569F8A5365082B14BB176C1748ECB8AC38A4F681525271E35E01789",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "go-gui-org_go-gui--gui_backend_metal_draw.go",
+        "repository":  "go-gui-org/go-gui",
+        "commit":  "58bae296bcc1112f9e118829e25225420c6712ba",
+        "bytes":  36518,
+        "sha256":  "4B84C654887293686C1D360CB604E5E7C0894F6E6B56A76F90742E647F383BA3",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "go-gui-org_go-gui--gui_backend_metal_text.go",
+        "repository":  "go-gui-org/go-gui",
+        "commit":  "58bae296bcc1112f9e118829e25225420c6712ba",
+        "bytes":  16474,
+        "sha256":  "7E67B142CD280D2CB9F8894CEAB87B7C4CA67744A73B03287B4DCE103DF7417F",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "go-gui-org_go-gui--gui_render_types.go",
+        "repository":  "go-gui-org/go-gui",
+        "commit":  "58bae296bcc1112f9e118829e25225420c6712ba",
+        "bytes":  9384,
+        "sha256":  "C6ADC99BBAD6CAF8F62F695AF43967221A5FBFA3CB5465C6F62958ADF5737B8D",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "go-webgpu_webgpu--wgpu_loader.go",
+        "repository":  "go-webgpu/webgpu",
+        "commit":  "907b82e37b752ea9a2735e5beec4c9e9925f6315",
+        "bytes":  2408,
+        "sha256":  "A89CF06B89C387E0F8B02B20513BEDE78F0E2D6DB22EC1748AC57A4F3BB301F3",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "go-webgpu_webgpu--wgpu_loader_windows.go",
+        "repository":  "go-webgpu/webgpu",
+        "commit":  "907b82e37b752ea9a2735e5beec4c9e9925f6315",
+        "bytes":  3418,
+        "sha256":  "FB650F6EDB9E65662E28BAE5D9E750E0AC908C094033CDC0E2C00F2132E16C28",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "gogpu_wgpu--go.mod",
+        "repository":  "gogpu/wgpu",
+        "commit":  "052a7e526b23454334761537410a5e50406bdfe4",
+        "bytes":  530,
+        "sha256":  "4538249E950257F17774D42EB5CCC3A4493415D2D1B6F46A71F0D5C5F9DB71C0",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "gogpu_wgpu--hal_metal_adapter.go",
+        "repository":  "gogpu/wgpu",
+        "commit":  "052a7e526b23454334761537410a5e50406bdfe4",
+        "bytes":  8660,
+        "sha256":  "70C3B926C847F3E84D50F30C892DFA779CAA71BBC1D5E4E1BAEA6AC1B36A409C",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "gogpu_wgpu--hal_metal_objc.go",
+        "repository":  "gogpu/wgpu",
+        "commit":  "052a7e526b23454334761537410a5e50406bdfe4",
+        "bytes":  70592,
+        "sha256":  "29798ACBA1C091818ECFC67E6DA6CB77D909F8FEF3E224C81247F57C12780626",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "gogpu_wgpu--hal_vulkan_api_linux.go",
+        "repository":  "gogpu/wgpu",
+        "commit":  "052a7e526b23454334761537410a5e50406bdfe4",
+        "bytes":  7104,
+        "sha256":  "491EA7484DF99EB3ED6438B090686A3339D320C2BCCBFF3C6175C8EA268EDB8D",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "gogpu_wgpu--instance_native.go",
+        "repository":  "gogpu/wgpu",
+        "commit":  "052a7e526b23454334761537410a5e50406bdfe4",
+        "bytes":  12990,
+        "sha256":  "041673B38261A70596792F5AEA6978CEF256BAC8235C2BF37B3F6633D4E230D4",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "SCKelemen_layout--docs_limitations.md",
+        "repository":  "SCKelemen/layout",
+        "commit":  "6f7349411616cbb31fc83c4b5d8baf48ccccebcb",
+        "bytes":  10640,
+        "sha256":  "5A33A37CD60003C632A45C5E4E170B9A1FF395824781C4CE34175131254F39AA",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "SCKelemen_layout--docs_spec-compliance.md",
+        "repository":  "SCKelemen/layout",
+        "commit":  "6f7349411616cbb31fc83c4b5d8baf48ccccebcb",
+        "bytes":  13364,
+        "sha256":  "4582C1C9902280121CD9BED8BF04E18BFB69FD1EE43544D43BF38F51E6E95614",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "SCKelemen_layout--go.mod",
+        "repository":  "SCKelemen/layout",
+        "commit":  "6f7349411616cbb31fc83c4b5d8baf48ccccebcb",
+        "bytes":  444,
+        "sha256":  "46F9890B9AEB46067C560B139C2B0C375E7C9513090D22CDA1FBD1097E6F9567",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    },
+    {
+        "file":  "SCKelemen_layout--length.go",
+        "repository":  "SCKelemen/layout",
+        "commit":  "6f7349411616cbb31fc83c4b5d8baf48ccccebcb",
+        "bytes":  28538,
+        "sha256":  "EAE8BD4521B243875F048722078618041EB61A12E49E4200000DF3D34A520F3A",
+        "note":  "gh api contents read at HEAD corresponding to recorded commit; filename underscores encode path separators"
+    }
+]

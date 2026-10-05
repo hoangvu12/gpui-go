@@ -1,0 +1,15 @@
+{
+  "run_started_at": "2026-10-05T13:56:45+07:00",
+  "harness_exe": "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\target\\x86_64-pc-windows-msvc\\release\\gpui-reference-harness.exe",
+  "harness_sha256": "d319558a093ed566951507aad5894c946c9f33ad06a29e027ef5b1ff477f22d0",
+  "envelope_path": "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\conformance\\fixtures\\fx-0003-scene-painting.json",
+  "envelope_sha256": "f83eb815e1860a1069212813e4b9bfa9ae780ff37a2f418ac0d0036d3a5dd0e8",
+  "argv": [
+    "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\target\\x86_64-pc-windows-msvc\\release\\gpui-reference-harness.exe",
+    "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\conformance\\fixtures\\fx-0003-scene-painting.json",
+    "conformance\\recorded\\fx-0003-scene-painting\\trace.json"
+  ],
+  "go_version": "go1.27.1",
+  "os": "windows",
+  "arch": "amd64"
+}

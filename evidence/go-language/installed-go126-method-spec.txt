@@ -1,0 +1,28 @@
+﻿
+  C:\Program Files\Go\doc\go_spec.html:2979:<pre class="ebnf">
+> C:\Program Files\Go\doc\go_spec.html:2980:MethodDecl = "func" Receiver MethodName Signature [ FunctionBody ] .
+  C:\Program Files\Go\doc\go_spec.html:2981:Receiver   = Parameters .
+  C:\Program Files\Go\doc\go_spec.html:2982:</pre>
+  C:\Program Files\Go\doc\go_spec.html:2989:names <code>[P1, P2, …]</code> enclosed in square brackets.
+> C:\Program Files\Go\doc\go_spec.html:2990:<code>T</code> is called the receiver <i>base type</i>. A receiver base type cannot be
+  C:\Program Files\Go\doc\go_spec.html:2991:a pointer or interface type and it must be defined in the same package as the method.
+> C:\Program Files\Go\doc\go_spec.html:2992:The method is said to be <i>bound</i> to its receiver base type and the method name
+  C:\Program Files\Go\doc\go_spec.html:2993:is visible only within <a href="#Selectors">selectors</a> for type <code>T</code>
+  C:\Program Files\Go\doc\go_spec.html:2994:or <code>*T</code>.
+  C:\Program Files\Go\doc\go_spec.html:3032:<p>
+> C:\Program Files\Go\doc\go_spec.html:3033:If the receiver base type is a <a href="#Type_definitions">generic type</a>, the
+  C:\Program Files\Go\doc\go_spec.html:3034:receiver specification must declare corresponding type parameters for the method
+  C:\Program Files\Go\doc\go_spec.html:3035:to use. This makes the receiver type parameters available to the method.
+  C:\Program Files\Go\doc\go_spec.html:3036:Syntactically, this type parameter declaration looks like an
+> C:\Program Files\Go\doc\go_spec.html:3037:<a href="#Instantiations">instantiation</a> of the receiver base type: the type
+  C:\Program Files\Go\doc\go_spec.html:3038:arguments must be identifiers denoting the type parameters being declared, one
+> C:\Program Files\Go\doc\go_spec.html:3039:for each type parameter of the receiver base type.
+  C:\Program Files\Go\doc\go_spec.html:3040:The type parameter names do not need to match their corresponding parameter names in the
+> C:\Program Files\Go\doc\go_spec.html:3041:receiver base type definition, and all non-blank parameter names must be unique in the
+  C:\Program Files\Go\doc\go_spec.html:3042:receiver parameter section and the method signature.
+> C:\Program Files\Go\doc\go_spec.html:3043:The receiver type parameter constraints are implied by the receiver base type definition:
+  C:\Program Files\Go\doc\go_spec.html:3044:corresponding type parameters have corresponding constraints.
+  C:\Program Files\Go\doc\go_spec.html:3045:</p>
+
+
+
