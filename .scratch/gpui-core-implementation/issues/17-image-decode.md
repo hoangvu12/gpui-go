@@ -32,4 +32,5 @@ Deliver this complete observable path against the [implementation specification]
 ## Comments
 
 - 2026-10-05 — Created under the user's authorization to finish Wayfinder, the specification and local implementation tickets. Routine details are delegated; a discovered scope or architecture contradiction must reopen the affected decision with evidence.
+- 2026-10-06 — DEFERRED (successor chat): the user's hard constraint forbids cargo/DLL rebuilds without explicit approval, and this ticket's pinned image-codec service requires native work. Proposed pure-Go alternative for user decision: Go stdlib image codecs + pure-Go WebP decode (e.g. x/image/webp) with the clipboard-vs-resource entry modes in Go, animated-WebP recorded as an explicit unavailable-codec row, and oracle fixtures recorded only after a one-time approved harness build. No work started.
 

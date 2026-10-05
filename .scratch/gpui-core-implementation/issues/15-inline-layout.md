@@ -4,8 +4,8 @@ Parent: ../plan.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: pi-implementer 386673cc (successor chat; ticket15 subagent)
 Blocked by: 11
 
 ## Question

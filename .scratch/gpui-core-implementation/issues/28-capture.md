@@ -32,4 +32,5 @@ Deliver this complete observable path against the [implementation specification]
 ## Comments
 
 - 2026-10-05 — Created under the user's authorization to finish Wayfinder, the specification and local implementation tickets. Routine details are delegated; a discovered scope or architecture contradiction must reopen the affected decision with evidence.
+- 2026-10-06 — DEFERRED (successor chat): the WinRT capture frame pool needs the renderer's actual D3D11 device (same-device adapter), but the renderer ABI currently exposes no device/shared-texture handle and external SurfaceSource is the pinned Unsupported stand-in (ERR_UNSUPPORTED_SOURCE). Needs a DLL addition (device or shared-texture export), blocked by the no-cargo/DLL-rebuild constraint. Alternative to propose: a one-time approved DLL rebuild adding the device export + shared surface source, OR a CPU staging-readback capture path if the ABI were extended. No work started.
 

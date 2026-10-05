@@ -33,4 +33,5 @@ Deliver this complete observable path against the [implementation specification]
 ## Comments
 
 - 2026-10-05 — Created under the user's authorization to finish Wayfinder, the specification and local implementation tickets. Routine details are delegated; a discovered scope or architecture contradiction must reopen the affected decision with evidence.
+- 2026-10-06 — DEFERRED (successor chat): pinned resvg/usvg SVG decoding lives in native services; blocked by the no-cargo/DLL-rebuild constraint (and by ticket17). No pure-Go resvg equivalent exists at reference quality. No work started.
 

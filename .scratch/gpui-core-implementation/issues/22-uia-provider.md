@@ -32,4 +32,5 @@ Deliver this complete observable path against the [implementation specification]
 ## Comments
 
 - 2026-10-05 — Created under the user's authorization to finish Wayfinder, the specification and local implementation tickets. Routine details are delegated; a discovered scope or architecture contradiction must reopen the affected decision with evidence.
+- 2026-10-06 — DEFERRED (successor chat): the pinned AccessKit provider is a Rust crate (native work, blocked by the no-cargo/DLL-rebuild constraint). A pure-Go/Win32 alternative is plausible (hand-written UIA provider COM interfaces in Go over the ticket21 semantic trees) but is a large COM surface; propose it to the user before starting. Blocked by ticket21 either way. No work started.
 
