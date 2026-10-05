@@ -35,6 +35,7 @@ package gpui
 
 import (
 	"fmt"
+	"reflect"
 
 	"gpui-go/authoring"
 )
@@ -497,34 +498,20 @@ type ClickEvent struct {
 	Button uint8
 }
 
-// focusedHandles stores each window's focused handle (the port's
-// focus-routing seam: the reference Window.focus field; real blur, key
-// dispatch and focus observers arrive with the focus ticket, like the
-// window-scoped handle storage the window slice landed).
-var focusedHandles = map[*Window]FocusHandle{}
-
-// Focus focuses the given handle in this window (the reference
-// Window::focus: set the focused handle and refresh). This slice stores
-// the focused identity per window; focus routing is the focus ticket's
-// slice.
-func (w *Window) Focus(handle FocusHandle) {
-	if w == nil {
-		panic("gpui: Focus requires a live window")
-	}
-	focusedHandles[w] = handle
-}
-
-// Focused returns the handle focused in this window, when any.
-func (w *Window) Focused() (FocusHandle, bool) {
-	handle, ok := focusedHandles[w]
-	return handle, ok
+// typedKeyListener is one registered key listener: the raw callback
+// and its phase (capture or bubble).
+type typedKeyListener struct {
+	// capture routes the listener on the capture phase (bubble default).
+	capture bool
+	// f is the plain listener shape (func(*KeyDownEvent, *Window, *App)
+	// or func(*KeyUpEvent, *Window, *App)).
+	f any
 }
 
 // typedActionListener is one registered action listener (OnAction /
 // CaptureAction / OnBoxedAction): the action descriptor, the phase and
-// the plain handler shape. Dispatch (capture/bubble routing, payload
-// cloning) arrives with the focus/keyboard ticket; this slice stores
-// the registrations only.
+// the plain handler shape. Dispatch routes them through the dispatch
+// tree since ticket13.
 type typedActionListener struct {
 	// capture routes the handler on the capture phase (bubble default).
 	capture bool
@@ -568,9 +555,25 @@ type DivElement struct {
 	// clickListeners are the registered click listeners (ticket13
 	// dispatch).
 	clickListeners []func(*ClickEvent, *Window, *App)
-	// actionListeners are the registered action listeners (ticket13
-	// dispatch).
+	// actionListeners are the registered action listeners (dispatch
+	// routed by the dispatch tree since ticket13).
 	actionListeners []typedActionListener
+	// keyDownListeners are the registered key-down listeners
+	// (div.rs key_down_listeners).
+	keyDownListeners []typedKeyListener
+	// keyUpListeners are the registered key-up listeners
+	// (div.rs key_up_listeners).
+	keyUpListeners []typedKeyListener
+	// modifiersChangedListeners are the registered modifiers-changed
+	// listeners (div.rs modifiers_changed_listeners).
+	modifiersChangedListeners []func(*ModifiersChangedEvent, *Window, *App)
+	// tabIndex is the interactivity tab index (div.rs tab_index).
+	tabIndex *int64
+	// tabGroup marks a tab group (div.rs tab_group).
+	tabGroup bool
+	// tabStop records an interactivity tab-stop request (div.rs
+	// tab_stop; explicit track_focus handles carry their own).
+	tabStop bool
 	// debugSelector is the test-support bounds key.
 	debugSelector string
 	// converting guards reentrant child mutation/conversion (the
@@ -756,9 +759,84 @@ func (d *DivElement) appendActionListener(capture bool, a any, handler any) *Div
 
 // OnBoxedAction binds a boxed-action listener (the pinned
 // OnBoxedAction: routing by payload type with a cloned instance at
-// delivery — the focus ticket).
+// delivery — the listener receives the binding's captured action,
+// cloned per dispatch, like on_boxed_action's captured clone).
 func (d *DivElement) OnBoxedAction(a BoxedAction, f func(BoxedAction, *Window, *App)) *DivElement {
 	return d.appendActionListener(false, a, f)
+}
+
+// OnKeyDown binds a key-down listener to the bubble phase
+// (InteractiveElement::on_key_down). The listener is stored and routed
+// by the dispatch tree during prepaint.
+func (d *DivElement) OnKeyDown(f func(*KeyDownEvent, *Window, *App)) *DivElement {
+	if f == nil {
+		panic("gpui: OnKeyDown requires a non-nil listener")
+	}
+	d.keyDownListeners = append(d.keyDownListeners, typedKeyListener{f: f})
+	return d
+}
+
+// CaptureKeyDown binds a key-down listener to the capture phase
+// (InteractiveElement::capture_key_down).
+func (d *DivElement) CaptureKeyDown(f func(*KeyDownEvent, *Window, *App)) *DivElement {
+	if f == nil {
+		panic("gpui: CaptureKeyDown requires a non-nil listener")
+	}
+	d.keyDownListeners = append(d.keyDownListeners, typedKeyListener{capture: true, f: f})
+	return d
+}
+
+// OnKeyUp binds a key-up listener to the bubble phase
+// (InteractiveElement::on_key_up).
+func (d *DivElement) OnKeyUp(f func(*KeyUpEvent, *Window, *App)) *DivElement {
+	if f == nil {
+		panic("gpui: OnKeyUp requires a non-nil listener")
+	}
+	d.keyUpListeners = append(d.keyUpListeners, typedKeyListener{f: f})
+	return d
+}
+
+// CaptureKeyUp binds a key-up listener to the capture phase
+// (InteractiveElement::capture_key_up).
+func (d *DivElement) CaptureKeyUp(f func(*KeyUpEvent, *Window, *App)) *DivElement {
+	if f == nil {
+		panic("gpui: CaptureKeyUp requires a non-nil listener")
+	}
+	d.keyUpListeners = append(d.keyUpListeners, typedKeyListener{capture: true, f: f})
+	return d
+}
+
+// OnModifiersChanged binds a modifiers-changed listener
+// (InteractiveElement::on_modifiers_changed).
+func (d *DivElement) OnModifiersChanged(f func(*ModifiersChangedEvent, *Window, *App)) *DivElement {
+	if f == nil {
+		panic("gpui: OnModifiersChanged requires a non-nil listener")
+	}
+	d.modifiersChangedListeners = append(d.modifiersChangedListeners, f)
+	return d
+}
+
+// TabIndex sets the div's tab index and makes it a tab stop
+// (InteractiveElement::tab_index): the index participates in tab-group
+// ordering; a tracked focus handle's own TabIndex/TabStop control its
+// focusability.
+func (d *DivElement) TabIndex(index int64) *DivElement {
+	i := index
+	d.tabIndex = &i
+	d.tabStop = true
+	return d
+}
+
+// TabGroup designates this div as a tab group
+// (InteractiveElement::tab_group): children's tab order restarts inside
+// the group's position.
+func (d *DivElement) TabGroup() *DivElement {
+	d.tabGroup = true
+	if d.tabIndex == nil {
+		i := int64(0)
+		d.tabIndex = &i
+	}
+	return d
 }
 
 // Child adds one child element, converting it with the selected
@@ -991,12 +1069,106 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 	}
 	WithTextStyleVoid(w, d.textStyleSheet(), func(w *Window) {
 		WithContentMaskVoid(w, d.overflowMask(bounds, RemSize(w)), func(w *Window) {
+			registerDivElementDispatch(w, d)
 			for i := range d.children {
 				d.children[i].Prepaint(w, app)
 			}
 		})
 	})
 	return state
+}
+
+// registerDivElementDispatch pushes the div's dispatch node and
+// registers its interactive state on the frame under construction
+// (div.rs Interactivity paint: with_tab_group + tab_stops.insert + the
+// dispatch-tree registrations; the port registers during prepaint so
+// the completed frame carries the tree — see key_dispatch.go's
+// header).
+func registerDivElementDispatch(w *Window, d *DivElement) {
+	tree := currentDispatchTree(w)
+	tree.PushNode()
+	if d.keyContext != nil {
+		if context, err := ParseKeyContext(*d.keyContext); err == nil {
+			tree.SetKeyContext(context)
+		}
+	}
+	if d.focusHandle != nil {
+		tree.SetFocusID(d.focusHandle.id)
+	}
+
+	// Key listeners (phase-routed by the tree).
+	for _, listener := range d.keyDownListeners {
+		tree.OnKeyEvent(true, listener.capture, listener.f)
+	}
+	for _, listener := range d.keyUpListeners {
+		tree.OnKeyEvent(false, listener.capture, listener.f)
+	}
+	for _, listener := range d.modifiersChangedListeners {
+		tree.OnModifiersChanged(listener)
+	}
+
+	// Action listeners: resolve the canonical descriptor and wrap the
+	// typed handler (the reference's downcast adapters; capture
+	// listeners keep propagation in the bubble phase).
+	for _, registration := range d.actionListeners {
+		descriptor := anyActionDescriptor(registration.action)
+		if descriptor == nil {
+			continue
+		}
+		listener := registration
+		tree.OnAction(descriptor, listener.capture, func(action any, phase DispatchPhase, w *Window, app *App) {
+			invokeTypedActionListener(listener, action, phase, w, app)
+		})
+	}
+
+	// The tab group opens before the children (their paths carry the
+	// group index); the container's own handle is inserted inside the
+	// group (div.rs: the container sorts with its children). The group
+	// is closed and the node popped by prepaint after the children.
+	if d.focusHandle != nil {
+		if d.tabGroup && d.tabIndex != nil {
+			currentTabStops(w).BeginGroup(*d.tabIndex)
+		}
+		registerFocusStop(w, *d.focusHandle)
+	}
+}
+
+// invokeTypedActionListener adapts a div action registration to a
+// dispatch callback: typed handlers receive the cloned payload; boxed
+// handlers receive the binding's captured action, cloned per dispatch
+// (on_boxed_action's captured clone); capture-only handlers re-enable
+// propagation in the bubble phase (capture_action's cx.propagate()).
+func invokeTypedActionListener(listener typedActionListener, action any, phase DispatchPhase, w *Window, app *App) {
+	if boxed, isBoxed := listener.handler.(func(BoxedAction, *Window, *App)); isBoxed {
+		if captured, ok := listener.action.(BoxedAction); ok && phase == DispatchBubble {
+			boxed(captured.Clone(), w, app)
+		}
+		return
+	}
+	if listener.capture && phase != DispatchCapture {
+		// capture_action: continue propagation when the bubble phase
+		// reaches this registration.
+		app.propagateEvent = true
+		return
+	}
+	if !listener.capture && phase != DispatchBubble {
+		return
+	}
+	handler := reflect.ValueOf(listener.handler)
+	handlerType := handler.Type()
+	if handlerType.NumIn() != 3 || handlerType.In(0).Kind() != reflect.Pointer {
+		return
+	}
+	payload := reflect.New(handlerType.In(0).Elem())
+	if action != nil {
+		value := reflect.ValueOf(action)
+		if value.Type().AssignableTo(payload.Elem().Type()) {
+			payload.Elem().Set(value)
+		} else {
+			return
+		}
+	}
+	handler.Call([]reflect.Value{payload, reflect.ValueOf(w), reflect.ValueOf(app)})
 }
 
 // Paint implements Element (the Interactivity::paint + Style::paint

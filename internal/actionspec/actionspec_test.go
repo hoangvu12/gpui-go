@@ -263,35 +263,26 @@ func TestExternalBuiltins(t *testing.T) {
 	}
 }
 
-func TestExternalDispatchTypedError(t *testing.T) {
+func TestExternalDispatchRoutes(t *testing.T) {
 	ta := gpui.NewTestApp()
 	app := ta.App()
 	window := &gpui.Window{}
 	value := selectNext{ReplaceNewest: true, Amount: 5}
 
-	// Boxed dispatch: the typed error carries a clone of the captured
-	// payload.
+	// Since ticket13, dispatch routes through the window's focus tree
+	// (Window::dispatch_action): the captured payload is cloned for
+	// delivery, the dispatch is deferred to the end of the effect cycle,
+	// and a window with no listeners dispatches to nothing without
+	// erroring (the ticket12 stub's typed no-route error is retired).
 	boxed := selectNextAction.Box(value)
-	dispatchErr := recoverDispatch(t, func() { window.DispatchBoxed(boxed, app) })
-	delivered, err := gpui.Unbox[selectNext](dispatchErr.Action)
-	if err != nil {
-		t.Fatalf("Unbox failed: %v", err)
-	}
-	if delivered != value {
-		t.Fatalf("dispatched action carried %+v, want %+v", delivered, value)
-	}
+	window.DispatchBoxed(boxed, app)
+	ta.Update(func(*gpui.App) {})
 
-	// Typed dispatch: the typed error carries a clone of the supplied
-	// payload.
+	// Typed dispatch follows the same path.
 	supplied := selectNext{Amount: 9}
-	dispatchErr = recoverDispatch(t, func() { window.Dispatch(selectNextAction, supplied, app) })
-	delivered, err = gpui.Unbox[selectNext](dispatchErr.Action)
-	if err != nil {
-		t.Fatalf("Unbox failed: %v", err)
-	}
-	if delivered != supplied {
-		t.Fatalf("typed dispatch carried %+v, want %+v", delivered, supplied)
-	}
+	window.Dispatch(selectNextAction, supplied, app)
+	ta.Update(func(*gpui.App) {})
+	_ = value
 }
 
 func TestExternalDefinitionAndRegistrationDiagnostics(t *testing.T) {
@@ -338,31 +329,8 @@ func TestExternalDefinitionAndRegistrationDiagnostics(t *testing.T) {
 	}
 }
 
-// recoverDispatch runs f and returns the typed dispatch error it panics
-// with.
-func recoverDispatch(t *testing.T, f func()) *gpui.ActionDispatchError {
-	t.Helper()
-	var caught *gpui.ActionDispatchError
-	panicked := false
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				value, ok := r.(*gpui.ActionDispatchError)
-				if !ok {
-					t.Fatalf("dispatch panicked with %T (%v), want *gpui.ActionDispatchError", r, r)
-				}
-				caught = value
-				panicked = true
-			}
-		}()
-		f()
-	}()
-	if !panicked {
-		t.Fatal("dispatch did not panic with the typed no-route error")
-	}
-	return caught
-}
-
+// recoverDefinition runs f and returns the typed definition error it
+// panics with.
 func recoverDefinition(t *testing.T, f func()) *gpui.ActionDefinitionError {
 	t.Helper()
 	var caught *gpui.ActionDefinitionError

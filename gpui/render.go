@@ -94,6 +94,10 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 	if err := ds.engine.Reset(); err != nil {
 		return nil, fmt.Errorf("gpui: DrawWindowFrame: engine reset: %w", err)
 	}
+	// A fresh dispatch frame for the element prepaint registrations
+	// (focus.go/key_dispatch.go): the completed tree and tab stops swap
+	// into the rendered state when the frame completes.
+	beginDispatchFrame(w)
 
 	baseMask := Bounds{Origin: Point{}, Size: viewport}
 	frame := &frameDrawState{
@@ -115,6 +119,10 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 		ds.draws++
 		ds.lastDebugBounds = frame.debugBounds
 		ds.lastScene = scene
+		// Swap the completed dispatch frame into the rendered state
+		// (the focus/dispatch runtime reads it for input dispatch).
+		endDispatchFrame(w)
+		ds.refreshRequested = false
 	}()
 
 	app := w.app

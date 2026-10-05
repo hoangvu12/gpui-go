@@ -68,6 +68,7 @@ var (
 	procTranslateMessage     = modUser32.NewProc("TranslateMessage")
 	procDispatchMessageW     = modUser32.NewProc("DispatchMessageW")
 	procPostMessageW         = modUser32.NewProc("PostMessageW")
+	procSendMessageW         = modUser32.NewProc("SendMessageW")
 	procPostQuitMessage      = modUser32.NewProc("PostQuitMessage")
 	procDestroyWindow        = modUser32.NewProc("DestroyWindow")
 	procSetWindowTextW       = modUser32.NewProc("SetWindowTextW")
@@ -113,7 +114,7 @@ func resolveHostProcs() error {
 		required := []*syscall.LazyProc{
 			procRegisterClassW, procCreateWindowExW, procDefWindowProcW,
 			procGetMessageW, procPeekMessageW, procTranslateMessage, procDispatchMessageW,
-			procPostMessageW, procPostQuitMessage, procDestroyWindow,
+			procPostMessageW, procPostQuitMessage, procDestroyWindow, procSendMessageW,
 			procSetWindowTextW, procGetWindowTextW, procGetWindowTextLengthW,
 			procShowWindow, procSetForegroundWindow, procSetActiveWindow,
 			procSetFocus, procSetWindowPos, procGetWindowRect, procGetClientRect,
@@ -613,6 +614,54 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		procValidateRect.Call(hwnd, 0)
 		return 0
 
+	case wmGPUIKeyDown:
+		// The pump redirected WM_KEYDOWN/WM_SYSKEYDOWN here
+		// (translate_accelerator). Translate, dispatch through the
+		// input callback, and report 0 only when the app consumed the
+		// key (handle_keydown_msg).
+		return w.handleKeyMsg(wparam, lp)
+
+	case wmKeyUp:
+		// WM_KEYUP dispatches directly (handle_keyup_msg): 0 when
+		// consumed, 1 otherwise; an untranslated key falls through to
+		// DefWindowProcW like the reference's None return.
+		if result, handled := w.translateKeyMsg(wparam, lp, false, false); handled {
+			return result
+		}
+		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
+		return r
+
+	case wmSysKeyUp:
+		// WM_SYSKEYUP is always consumed after dispatch (the reference
+		// returns Some(0) so ModifiersChanged handling stays correct).
+		if result, handled := w.translateKeyMsg(wparam, lp, false, true); handled {
+			return result
+		}
+		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
+		return r
+
+	case wmChar:
+		// WM_CHAR is text input, not a keydown: assemble surrogates and
+		// deliver to the text callback (handle_char_msg).
+		if text, ok := parseCharMessage(wparam, &w.pendingSurrogate); ok {
+			tracef("char text=%q", text)
+			if w.onText != nil {
+				w.onText(text)
+			}
+		}
+		return 0
+
+	case wmInputLangChange:
+		// WM_INPUTLANGCHANGE: report the new layout (the reference posts
+		// to the platform window, which calls the app callback; the Go
+		// host runs the callback here — same thread, same ordering).
+		layout := currentKeyboardLayout()
+		tracef("input lang change id=%s name=%q", layout.ID, layout.Name)
+		if w.onKeyboardLayoutChange != nil {
+			w.onKeyboardLayoutChange(layout)
+		}
+		return 0
+
 	case wmEraseBkgnd:
 		// The renderer owns painting; report the background as erased.
 		return 1
@@ -685,6 +734,27 @@ type hostWindow struct {
 	onResize    func(size Size, scale float32)
 	onMoved     func()
 	onRedraw    func()
+	// onKey receives keyboard platform events (*KeyDownEvent,
+	// *KeyUpEvent, *ModifiersChangedEvent); returning true reports the
+	// event consumed (the pump then skips TranslateMessage, so a handled
+	// shortcut does not also insert text).
+	onKey func(event any) bool
+	// onText receives assembled WM_CHAR text (the input-handler
+	// delivery path).
+	onText func(text string)
+	// onKeyboardLayoutChange receives WM_INPUTLANGCHANGE layout
+	// reports.
+	onKeyboardLayoutChange func(layout KeyboardLayoutInfo)
+
+	// pendingSurrogate parks a WM_CHAR high surrogate until its low
+	// surrogate arrives (parse_char_message).
+	pendingSurrogate uint16
+	// lastReportedModifiers dedups ModifiersChanged synthesis
+	// (last_reported_modifiers).
+	lastReportedModifiers *Modifiers
+	// lastReportedCapslock dedups the capslock toggle report
+	// (last_reported_capslock).
+	lastReportedCapslock *Capslock
 }
 
 // newHostWindow builds the record for a window being created. Runs at
@@ -706,6 +776,90 @@ func (h *Host) newHostWindow(hwnd uintptr) *hostWindow {
 
 // updateBorderOffset records the frame extent (GetWindowRect minus
 // GetClientRect), mirroring WindowBorderOffset::update.
+// handleKeyMsg translates and dispatches one WM_GPUI_KEYDOWN message
+// (handle_keydown_msg): modifier keys synthesize ModifiersChanged with
+// dedup; normal keys translate to a keystroke with the repeat bit and
+// the dead-key/AltGr prefer-character-input flag. Returns 0 when the
+// app consumed the key, 1 otherwise (the pump skips TranslateMessage
+// only for 0).
+func (w *hostWindow) handleKeyMsg(wparam, lp uintptr) uintptr {
+	if result, handled := w.translateKeyMsg(wparam, lp, true, false); handled {
+		return result
+	}
+	// The untranslated key (handle_keydown_msg's None branch).
+	return 1
+}
+
+// translateKeyMsg runs the shared key translation and dispatch.
+// handled=false mirrors the reference's Option::None (the app path did
+// not consume the message; the caller decides the default):
+// keydown reports 1, keyup falls to DefWindowProc, sysKeyUp reports 0.
+func (w *hostWindow) translateKeyMsg(wparam, lp uintptr, down, sysKeyUp bool) (uintptr, bool) {
+	if w.onKey == nil {
+		// No input callback: nothing to dispatch (the reference's
+		// missing-callback branch).
+		if sysKeyUp {
+			return 0, true
+		}
+		return 1, down
+	}
+	vkey := uint8(loword(wparam))
+
+	// Modifier-key messages synthesize ModifiersChanged (dedup via the
+	// last reported state; handle_key_event).
+	if event := win32ModifierEvent(vkey, w.lastReportedModifiers, w.lastReportedCapslock); event != nil {
+		if w.onKey(event) {
+			return 0, true
+		}
+		if sysKeyUp {
+			return 0, true
+		}
+		return 1, true
+	}
+	if isModifierVKey(vkey) || vkey == vkPacket {
+		// A deduped modifier report or VK_PACKET: not consumed (the
+		// reference's None), except that sysKeyUp reports 0.
+		if sysKeyUp {
+			return 0, true
+		}
+		return 0, false
+	}
+
+	keystroke, preferCharacterInput, ok := win32TranslateKeyDown(vkey, lp)
+	if !ok {
+		// No keystroke (handle_key_event's None).
+		return 0, false
+	}
+
+	var event any
+	if down {
+		event = &KeyDownEvent{
+			Keystroke:            keystroke,
+			IsHeld:               lp&(0x1<<30) > 0,
+			PreferCharacterInput: preferCharacterInput,
+		}
+	} else {
+		event = &KeyUpEvent{Keystroke: keystroke}
+	}
+	if w.onKey(event) {
+		return 0, true
+	}
+	if sysKeyUp {
+		return 0, true
+	}
+	return 1, true
+}
+
+// isModifierVKey reports whether the virtual key is a modifier key the
+// ModifiersChanged path owns.
+func isModifierVKey(vkey uint8) bool {
+	switch vkey {
+	case vkShift, vkControl, vkMenu, vkLmenu, vkRmenu, vkLwin, vkRwin, vkCapital:
+		return true
+	}
+	return false
+}
+
 func (w *hostWindow) updateBorderOffset() {
 	var wr, cr rect
 	procGetWindowRect.Call(w.hwnd, uintptr(unsafe.Pointer(&wr)))
@@ -938,9 +1092,11 @@ func (h *Host) loop() {
 	close(h.started)
 
 	// Message loop (reference WindowsPlatform::run). The accelerator
-	// pre-dispatch (translate_accelerator -> WM_GPUI_KEYDOWN) arrives
-	// with the keyboard ticket; TranslateMessage/DispatchMessageW alone
-	// are correct for this slice.
+	// pre-dispatch (translate_accelerator): WM_KEYDOWN/WM_SYSKEYDOWN are
+	// sent to their window as WM_GPUI_KEYDOWN first; a consumed result
+	// (0) skips TranslateMessage and dispatch, preventing a handled
+	// shortcut from also inserting text. Unconsumed keys translate and
+	// dispatch normally (WM_CHAR reaches the text input path).
 	for {
 		var m msg
 		r, _, _ := procGetMessageW.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0)
@@ -953,6 +1109,14 @@ func (h *Host) loop() {
 			tracef("loop exit GetMessageW-error thread=%d", h.threadID)
 			h.setLoopErr(fmt.Errorf("gpui: GetMessageW failed"))
 			break
+		}
+		if (m.message == wmKeyDown || m.message == wmSysKeyDown) && m.hwnd != 0 {
+			result, _, _ := procSendMessageW.Call(m.hwnd, uintptr(wmGPUIKeyDown), m.wParam, m.lParam)
+			if result == 0 {
+				// Consumed: skip translation and dispatch.
+				tracef("key consumed hwnd=%x w=%x", m.hwnd, m.wParam)
+				continue
+			}
 		}
 		procTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
 		procDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
@@ -1514,6 +1678,9 @@ func (h *Host) openWindowOnHostThread(opts WindowOptions) (WindowHandle, error) 
 	w.onResize = opts.OnResize
 	w.onMoved = opts.OnMoved
 	w.onRedraw = opts.OnRedraw
+	w.onKey = opts.OnKey
+	w.onText = opts.OnText
+	w.onKeyboardLayoutChange = opts.OnKeyboardLayoutChange
 	w.updateBorderOffset()
 
 	// Initial bounds: logical pixels convert to device pixels with the

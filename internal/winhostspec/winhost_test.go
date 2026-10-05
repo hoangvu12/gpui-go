@@ -524,7 +524,7 @@ func TestAppWindowLifecycleThroughHost(t *testing.T) {
 	if fh.WindowID() != w1.ID() {
 		t.Fatalf("focus handle window = %d, want %d", fh.WindowID(), w1.ID())
 	}
-	if _, ok := w1.FocusHandle(fh.ID()); !ok {
+	if _, ok := w1.FocusHandleByID(fh.ID()); !ok {
 		t.Fatal("focus handle not stored in its window")
 	}
 

@@ -829,6 +829,10 @@ type windowDrawState struct {
 	draws uint64
 	// closed marks a removed window.
 	closed bool
+	// refreshRequested records that focus or window state requested a
+	// redraw since the last completed draw (the invalidation seam; the
+	// draw itself is the explicit DrawWindowFrame path).
+	refreshRequested bool
 }
 
 // frameDrawState is one frame's draw state (the reference next_frame
@@ -863,9 +867,6 @@ type frameDrawState struct {
 	// renderedViews is the rendered-view stack
 	// (window.rendered_entity_stack).
 	renderedViews []EntityID
-	// draws counts completed frame draws of this window (evidence of
-	// the render lifecycle).
-	draws uint64
 }
 
 // windowDrawStates is the per-window element runtime registry.

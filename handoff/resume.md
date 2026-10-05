@@ -42,14 +42,15 @@ Parallel background implementer subagents (Agent tool, `background: true`, LEAN 
 | 12 action registry | typed actions, NoAction/Unbind reference semantics, boxed clones | 27 tests |
 | 16 paths/filters | scene v3 path kernel + renderer v2 full draw pipeline (68 prebuilt DXBC, MSAA paths, filters, surfaces pipeline, staging readback) | fx-0007 428/428 bit-exact + pixel-verified composite draw |
 | 34 ledger triage | 351 support rows dispositioned; regeneration deterministic | — |
+| 13 focus/keyboard | focus/keys/keymap/dispatch runtimes + the gpui_windows keyboard path (accelerator pre-dispatch, AltGr/dead-key translation, surrogate WM_CHAR, layout reports) | 17 reference test ports + focusspec 12 tests (10 deterministic transcripts incl. two-window isolation + 2 real-host input evidences) |
 
 **Current native artifact (do not rebuild without approval):** DLL 12,489,728 bytes, sha256 `d648523b7fe1173a8810a27de77ff8ecbfebaa53eab95d69a6335c4a042b87dd`, native revision 7, capability mask 0xFF (bootstrap/layout/renderer/scene/text/glyph-raster/glyph-atlas), static CRT, OS-only imports. Reference harness: `reference/target/debug/gpui-reference-harness.exe`. Fixture kinds v1: layout-effects, layout-metrics, scene-painting, paths-filters, text-geometry, glyph-raster, authoring-counter (fx-0001..0007 all byte-deterministic and reproduced bit-exactly).
 
 ## Current frontier and wave state (2026-10-06, successor chat)
 
-Resolved: 01–12, 16, 34. **Wave 1 in flight (4 parallel background subagents): 13 (focus/keyboard), 15 (inline layout), 25 (dialogs/credentials), 31 (consumer delivery).**
+Resolved: 01–13, 16, 34. **Wave 1 outcome: 13 resolved by the orchestrator.** All four wave-1 subagents aborted on connection errors (~18-20 min in, infra flake; 13's left a 570-line keystroke.go that was salvaged). Per the no-auto-retry rule the remaining slices are taken by the orchestrator in-session: 15 (inline layout), 25 (dialogs/credentials), 31 (consumer delivery). The tmp31 PE probe (.scratch/tmp31/) is ticket31 groundwork.
 
-- After 13 resolves: frontier adds 14 (retained scroll), 20 (IME editor), 21 (accessibility tree), 24 (drop/touchpad, needs 23), 26 (desktop operations).
+- Frontier after 13: 14 (retained scroll), 20 (IME editor), 21 (accessibility tree), 26 (desktop operations) — all pure-Go; 24 (needs 23) and 18/23 (need 17) remain blocked by the deferral chain.
 - After 15 + 31: nothing new unblocks until 30/33 chains complete (33 needs 15✓,30,31✓,32).
 - **Deferred pending user decision (want native/DLL work): 17, 19, 22, 28.** Their dependents stall: 18 (17), 23 (17), 27→29→32→30→33 partially (28/29/30/32/33). At the pure-Go exhaustion point, present the user: approve one bounded DLL rebuild for 17 (image codecs) or accept pure-Go alternatives per ticket (e.g. Go stdlib + x/image/webp for 17 with animated-WebP as explicit unavailable; CPU-staging capture for 28 if a device handle were exposed — it currently is not).
 - Ticket 13 history: attempted by the predecessor chat, aborted before any files were written; nothing partial on disk.

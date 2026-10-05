@@ -113,6 +113,21 @@ type App struct {
 	// test applications, whose tests drive the scheduler themselves).
 	platformWake func()
 
+	// keymap is the application's key binding collection (ticket13;
+	// the reference Rc<RefCell<Keymap>> on the dispatch tree). Created on
+	// first BindKeys/Keymap use.
+	keymap *Keymap
+	// keystrokeObservers are the app-level keystroke observers and
+	// interceptors (window.rs keystroke_observers/interceptors).
+	keystrokeObservers []keystrokeObserver
+	// globalActionListeners are the app-level action listeners
+	// (window.rs global_action_listeners).
+	globalActionListeners []globalActionListener
+	// propagateEvent is the dispatch propagation flag (App
+	// propagate_event): listeners stop it to consume an event. Only
+	// meaningful during a dispatch, on the foreground thread.
+	propagateEvent bool
+
 	// updateDepth is the active update nesting count. Only the outermost
 	// update exit flushes (contract: "Effects and payloads").
 	updateDepth int

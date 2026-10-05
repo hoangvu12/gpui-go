@@ -3,7 +3,6 @@ package gpui
 import (
 	"errors"
 	"fmt"
-	"sync"
 )
 
 // This file owns the window slice of the runtime (ticket05): the logical
@@ -110,6 +109,19 @@ type WindowOptions struct {
 	// calls this hook instead of drawing (the renderer arrives with
 	// ticket07; reference draw_window -> request_frame).
 	OnRedraw func()
+	// OnKey receives keyboard platform events (ticket13: *KeyDownEvent,
+	// *KeyUpEvent, *ModifiersChangedEvent from the Win32 translation).
+	// Returning true consumes the event: the host's pump then skips
+	// TranslateMessage, so a handled shortcut does not also insert text
+	// (the accelerator pre-dispatch contract).
+	OnKey func(event any) bool
+	// OnText receives assembled WM_CHAR text (ticket13: surrogate pairs
+	// combined, control characters dropped) for the focused input
+	// handler.
+	OnText func(text string)
+	// OnKeyboardLayoutChange receives WM_INPUTLANGCHANGE reports with
+	// the active layout's identity and display name (ticket13).
+	OnKeyboardLayoutChange func(layout KeyboardLayoutInfo)
 }
 
 // Typed window errors.
@@ -173,13 +185,10 @@ type Window struct {
 	scope  *Scope
 	title  string
 
-	// focusMu guards the focus-handle stub storage. Real focus routing
-	// (blur, key dispatch, focus observers) arrives with ticket13; this
-	// slice only stores window-scoped identities so later tickets can
-	// key dispatch state per window.
-	focusMu      sync.Mutex
-	focusHandles map[uint64]FocusHandle
-	focusSeq     uint64
+	// focus is the window's focus/keyboard-dispatch runtime (ticket13;
+	// focus.go's windowFocusState). Created on first use; touched only
+	// on the foreground thread.
+	focus *windowFocusState
 }
 
 // ID returns the window's logical identity. Identities are assigned in
@@ -230,45 +239,28 @@ func (w *Window) ScaleFactor() (float32, error) { return w.handle.ScaleFactor() 
 // Alive reports whether the leased window still exists.
 func (w *Window) Alive() bool { return w.handle.Alive() }
 
-// NewFocusHandle allocates a focus identity inside this window. It is
-// the stub seam for ticket13's focus routing: identities are stored
-// per window now; blur, key dispatch and observers land later.
+// NewFocusHandle allocates a focus identity inside this window
+// (window.rs FocusHandle::new: the window's focus registry inserts a
+// slot with the default tab properties).
 func NewFocusHandle(w *Window) FocusHandle {
 	if w == nil {
 		panic("gpui: NewFocusHandle requires a live window")
 	}
-	w.focusMu.Lock()
-	defer w.focusMu.Unlock()
-	if w.focusHandles == nil {
-		w.focusHandles = make(map[uint64]FocusHandle)
+	fs := focusState(w)
+	fs.seq++
+	id := fs.seq
+	fs.handles[id] = &focusRef{tabIndex: 0, tabStop: false}
+	return FocusHandle{id: id, window: w}
+}
+
+// FocusHandleByID looks up a live focus identity in this window (test
+// support; the identity must not be released).
+func (w *Window) FocusHandleByID(id uint64) (FocusHandle, bool) {
+	if w == nil || w.focusRefOf(id) == nil {
+		return FocusHandle{}, false
 	}
-	w.focusSeq++
-	h := FocusHandle{id: w.focusSeq, window: w.id}
-	w.focusHandles[h.id] = h
-	return h
+	return FocusHandle{id: id, window: w}, true
 }
-
-// FocusHandle looks a stored focus identity up in this window.
-func (w *Window) FocusHandle(id uint64) (FocusHandle, bool) {
-	w.focusMu.Lock()
-	defer w.focusMu.Unlock()
-	h, ok := w.focusHandles[id]
-	return h, ok
-}
-
-// FocusHandle is the identity of one focusable slot inside a window.
-// See NewFocusHandle: identities are stored per window in this slice;
-// real focus semantics arrive with ticket13.
-type FocusHandle struct {
-	id     uint64
-	window WindowID
-}
-
-// ID returns the focus identity within its window.
-func (h FocusHandle) ID() uint64 { return h.id }
-
-// WindowID returns the owning window identity.
-func (h FocusHandle) WindowID() WindowID { return h.window }
 
 // ---------------------------------------------------------------------------
 // The application window registry
@@ -436,6 +428,42 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 		}
 		hostOpts.OnMoved = wrap(opts.OnMoved)
 		hostOpts.OnRedraw = wrap(opts.OnRedraw)
+		// The keyboard input callback routes every event through the
+		// logical window's dispatch tree (the reference installs the
+		// platform input callback unconditionally in Window::new; an
+		// optional user OnKey hook runs first and can consume the event
+		// like an interceptor).
+		userKey := opts.OnKey
+		hostOpts.OnKey = func(event any) bool {
+			var handled bool
+			a.Update(func(a *App) {
+				if userKey != nil && userKey(event) {
+					handled = true
+					return
+				}
+				handled = !window.dispatchKeyEvent(event, a)
+			})
+			return handled
+		}
+		if opts.OnText != nil {
+			user := opts.OnText
+			hostOpts.OnText = func(text string) {
+				a.Update(func(*App) { user(text) })
+			}
+		} else {
+			// No user hook: WM_CHAR text still routes to the focused
+			// input handler (the reference delivers handle_char_msg
+			// through the platform input handler).
+			hostOpts.OnText = func(text string) {
+				a.Update(func(a *App) { window.deliverTextInput(text, a) })
+			}
+		}
+		if opts.OnKeyboardLayoutChange != nil {
+			user := opts.OnKeyboardLayoutChange
+			hostOpts.OnKeyboardLayoutChange = func(layout KeyboardLayoutInfo) {
+				a.Update(func(*App) { user(layout) })
+			}
+		}
 		if opts.OnResize != nil {
 			user := opts.OnResize
 			hostOpts.OnResize = func(size Size, scale float32) {

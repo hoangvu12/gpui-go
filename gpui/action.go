@@ -983,23 +983,31 @@ func (w *Window) Dispatch[A any](action Action[A], payload A, cx AppContext) {
 	if w == nil {
 		panic(ErrNoWindow)
 	}
-	appFrom(cx)
-	w.DispatchBoxed(action.Box(payload), cx)
+	app := appFrom(cx)
+	w.DispatchBoxed(action.Box(payload), app)
 }
 
-// DispatchBoxed dispatches a boxed action. The captured payload is
-// cloned again for delivery, so the delivered value stays independent
-// of the captured one. Routing requires the window focus tree, which
-// arrives with later tickets; until then dispatch fails with the typed
-// *ActionDispatchError carrying the prepared clone (see Dispatch).
+// DispatchBoxed dispatches a boxed action on the currently focused
+// element (Window::dispatch_action): the captured payload is cloned
+// again for delivery, and the dispatch is deferred to the end of the
+// current effect cycle so entities on the stack return to the app
+// before listeners run. Routing follows the focused element's dispatch
+// path with the reference's capture/bubble phases and
+// stop-by-default bubble semantics.
 func (w *Window) DispatchBoxed(action BoxedAction, cx AppContext) {
 	if w == nil {
 		panic(ErrNoWindow)
 	}
-	appFrom(cx)
+	app := appFrom(cx)
 	delivered := action.Clone()
-	panic(&ActionDispatchError{
-		Action: delivered,
-		Reason: "action dispatch routing requires the window focus tree, which arrives with the window and focus tickets",
+	app.Defer(func(app *App) {
+		fs := focusState(w)
+		nodeID := fs.renderedDispatchTree().RootNodeID()
+		if fs.focused != 0 {
+			if id, ok := fs.renderedDispatchTree().focusableNodeID(fs.focused); ok {
+				nodeID = id
+			}
+		}
+		w.dispatchActionOnNode(nodeID, delivered, app)
 	})
 }

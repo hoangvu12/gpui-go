@@ -887,39 +887,29 @@ func TestWindowDispatchTypedErrors(t *testing.T) {
 		t.Fatalf("nil window dispatch panicked with %v, want ErrNoWindow", err)
 	}
 
-	// DispatchBoxed clones the captured payload for delivery and reports
-	// the typed no-route error carrying that clone.
+	// Since ticket13, dispatch routes through the window's focus tree
+	// (Window::dispatch_action): the captured payload is cloned for
+	// delivery and the dispatch is deferred to the end of the effect
+	// cycle; a window with no listeners dispatches to nothing without
+	// erroring.
 	actionTestSelectCloneCalls = 0
 	boxed := actionTestSelectAction.Box(value)
-	dispatchErr := expectTypedActionPanic[*ActionDispatchError](t, func() {
-		window.DispatchBoxed(boxed, app)
-	})
+	window.DispatchBoxed(boxed, app)
 	if actionTestSelectCloneCalls != 2 {
 		t.Fatalf("clone calls through DispatchBoxed = %d, want 2 (capture + delivery)", actionTestSelectCloneCalls)
 	}
-	delivered, err := Unbox[actionTestSelect](dispatchErr.Action)
-	if err != nil {
-		t.Fatalf("Unbox(dispatch error action) failed: %v", err)
-	}
-	if delivered != value {
-		t.Fatalf("dispatched action carried %+v, want %+v", delivered, value)
-	}
-	if !strings.Contains(dispatchErr.Error(), "focus") {
-		t.Fatalf("dispatch diagnostic %q does not explain the missing routing", dispatchErr.Error())
-	}
+	// The deferred dispatch runs at the end of the next update cycle
+	// (an empty window has an empty root-only tree; nothing panics).
+	app.Update(func(*App) {})
 
-	// Typed dispatch clones the supplied payload into the error.
+	// Typed dispatch clones the supplied payload for delivery.
 	supplied := actionTestSelect{Tag: "supplied"}
-	dispatchErr = expectTypedActionPanic[*ActionDispatchError](t, func() {
-		window.Dispatch(actionTestSelectAction, supplied, app)
-	})
-	delivered, err = Unbox[actionTestSelect](dispatchErr.Action)
-	if err != nil {
-		t.Fatalf("Unbox failed: %v", err)
+	actionTestSelectCloneCalls = 0
+	window.Dispatch(actionTestSelectAction, supplied, app)
+	if actionTestSelectCloneCalls != 2 {
+		t.Fatalf("clone calls through typed Dispatch = %d, want 2 (capture + delivery)", actionTestSelectCloneCalls)
 	}
-	if delivered != supplied {
-		t.Fatalf("typed dispatch carried %+v, want the supplied payload %+v", delivered, supplied)
-	}
+	app.Update(func(*App) {})
 
 	// A nil context is rejected before anything is cloned.
 	expectActionPanic(t, "nil AppContext", func() {
