@@ -1,6 +1,6 @@
 # Resume after compaction or explicit chat transfer
 
-Working directory: `C:\Users\ADMIN\Desktop\nguyenvu\gpui-go`. Updated 2026-10-09/10 by the wave-2 implementation chat (Roboco `efb5f590` "Reimplementing Lost Work Specification", harness `pi`, model `iroha/dashscope/glm-5.3`, branch `implement-core-remaining`, batch 2 = commit d7f2c5b merged to main and pushed; PR #1 covered batch 1).
+Working directory: `C:\Users\ADMIN\Desktop\nguyenvu\gpui-go`. Updated 2026-10-10 by the wave-2 implementation chat (Roboco `efb5f590` "Reimplementing Lost Work Specification", harness `pi`, model `iroha/dashscope/glm-5.3`, branch `implement-core-remaining`; batch 2 = d7f2c5b, batch 3 = de99fb0 + 6d10ff3 (ticket 17's approved rebuild), both merged to main and pushed).
 
 ## Implementation authorization (supersedes all older planning-only restrictions)
 
@@ -46,22 +46,19 @@ Parallel background implementer subagents (Agent tool, `background: true`, LEAN 
 
 **Current native artifact (do not rebuild without approval):** DLL 12,489,728 bytes, sha256 `d648523b7fe1173a8810a27de77ff8ecbfebaa53eab95d69a6335c4a042b87dd`, native revision 7, capability mask 0xFF (bootstrap/layout/renderer/scene/text/glyph-raster/glyph-atlas), static CRT, OS-only imports. Reference harness: `reference/target/debug/gpui-reference-harness.exe`. Fixture kinds v1: layout-effects, layout-metrics, scene-painting, paths-filters, text-geometry, glyph-raster, authoring-counter (fx-0001..0007 all byte-deterministic and reproduced bit-exactly).
 
-## Current frontier (2026-10-10, after batch 2)
+## Current frontier (2026-10-10, after batch 3)
 
-**Resolved: 22/34 — 01–16, 20, 21, 25, 26, 31, 34. Batch 2 (wave 2) committed as d7f2c5b (79 files, +25,700 lines) and pushed to main; full suite `CGO_ENABLED=0 go test ./... -count=1` green (25 test packages; one unreproduced real-window foreground flake in a first parallel run — the known concurrent-binary class); vet + gofmt clean; fx-0001..0007 green.** Evidence: evidence/README.md (tickets 14, 15, 20, 21, 25, 26, 31 added in batch 2).
+**Resolved: 23/34 - 01-17, 20, 21, 25, 26, 31, 34.** Batch 3 (de99fb0 + 6d10ff3): ticket 17 under the user's option-A approval ("a", 2026-10-10) - the one bounded DLL rebuild: the image codec service (slot 7, bit 8, revision 8, artifact 14,453,248 bytes / sha256 29781ff7..., static CRT), the AtlasKey::Image polychrome extension, the Go client + the gpui Image/RenderImage model, 20 tests (internal/native 9 + imagespec 11, every EXIF orientation against the stdlib-transform oracle). **Current native artifact: revision 8, mask 0x1FF - do not rebuild without approval.** The fx-0008 reference-harness fixture is ticket 17's recorded follow-up (a bounded harness-crate addition at the next approved native touchpoint), alongside the img element's scene painting through the sprite machinery (the image cache/asset loading is ticket 18).
 
-**Remaining pure-Go frontier: EMPTY.** The only unblocked-style tickets left are the deferred Rust/DLL chain: 17 (image decode), 19 (SVG/resvg), 22 (AccessKit UIA), 28 (capture), and their dependents 18 (17), 23 (17), 24 (23), 27/29/32 (28), 30 (partial — needs 29/32), 33 (needs 30/32). **The pure-Go exhaustion point is REACHED: the user must decide** — approve one bounded DLL rebuild (most valuable: 17 image codecs, unblocking 18/23/24) or accept pure-Go alternatives per ticket (Go stdlib + x/image/webp for 17 with animated-WebP explicitly unavailable; note 28's capture would need a device/shared-texture export that the renderer ABI currently does not expose — CPU-staging is not reachable without native work). Wave-2 worker history for the record: three clean completions (20, 25, 26, plus the 14-list replacement 17m40s and 21-replacement 17m40s), one salvaged abort (15), two stalled sessions stopped by the orchestrator (the original 21 wrote nothing in 2h14m; 31's resumed session applied the delay-import fix then stalled — the orchestrator wrote its test gate).
-
-- Remaining pure-Go after this wave: 14 (retained scroll — needs element/render ownership now free), 26 (desktop operations — needs winhost ownership now free after 20), 24 (needs 23), 18/23 (need 17), 27–33 chains.
-- **Deferred pending user decision (want native/DLL work): 17, 19, 22, 28.** At the pure-Go exhaustion point, present the options (one bounded DLL rebuild for 17 image codecs vs Go stdlib + x/image/webp with animated-WebP unavailable; CPU-staging capture only if a device handle were exposed — it currently is not).
+**Remaining pure-Go frontier: 18 (asset loading - unblocked by 17), 23 (clipboard - unblocked), 24 (drop/touchpad - needs 23), 27, 30 (partial), 33.** Deferred (native beyond 17's approval): 19 (SVG/resvg), 22 (AccessKit UIA), 28 (capture; unreachable either way - no device/shared-texture export). Next wave: delegate 18 + 23 (18 = gpui/assets/cache new files; 23 = clipboard new files + the win32host clipboard cases - win32host is free since ticket 26 landed).
 
 ## Historical wave state (2026-10-06, predecessor chat)
 
 Wave 1: all four subagents aborted on connection errors (~18-20 min in); the orchestrator resolved 13 in-session and salvaged 15's tree. Per the no-auto-retry rule the remaining slices (15, 25, 31) were taken in-session; wave 2 (this chat) re-delegated 25/31/21/20 under the same pattern with the user's fresh authorization — all five workers have now run past the wave-1 abort window without connection failures.
 
-## Verification state (2026-10-10, at the batch-2 commit)
+## Verification state (2026-10-10, at the batch-3 commit)
 
-`CGO_ENABLED=0 go test ./... -count=1` — 25 test packages green (one unreproduced real-window foreground flake in a first run: focusspec/TestRealWindowKeyboardTranslation, the concurrent-binary class documented by the desktop worker). `go vet ./...` clean, gofmt clean. fx-0001..fx-0007 all pass. `.gitignore` now excludes .scratch/tmp15 and .scratch/tmp31 (worker scratch probes).
+`CGO_ENABLED=0 go test ./... -count=1` — 25 test packages green (one unreproduced real-window foreground flake in a first run: focusspec/TestRealWindowKeyboardTranslation, the concurrent-binary class documented by the desktop worker). `go vet ./...` clean, gofmt clean. fx-0001..fx-0007 all pass after the artifact rotation. The consumerspec provenance check passes (evidence/ticket17-image-decode.json mentions the new SHA). `.gitignore` excludes .scratch/tmp15, .scratch/tmp31 and the measure tool build output.
 
 ## Key conventions and gotchas
 
