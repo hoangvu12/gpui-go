@@ -112,6 +112,15 @@ lyon = "1.0"
 # graph.
 wgsl-rs = { git = "https://github.com/schell/wgsl-rs", rev = "b2de16a1b81e67d76bc265c296184f882864badb", default-features = false, features = ["validation"] }
 
+# Ticket17 (image codecs): the pinned image crate. The CE workspace
+# declares `image = "0.25.1"` (default features), which the workspace
+# lock resolves to 0.25.10 — the same resolution the pinned checkout
+# builds with. Only the crate's decoder surface is used (guess_format,
+# ImageReader::with_format, DynamicImage, orientation, the GIF and
+# WebP AnimationDecoders); the version and resolved feature graph are
+# recorded by tools/measure in the artifact manifest.
+image = "0.25.1"
+
 # Ticket10 (glyph raster + atlas services): the remaining pinned
 # dependencies of the ported code.
 #

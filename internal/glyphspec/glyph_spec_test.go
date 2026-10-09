@@ -1072,12 +1072,14 @@ func TestGlyphAndAtlasCapabilityIdentity(t *testing.T) {
 	// Ticket10 landed revision 6; ticket16 (path primitives + the
 	// pinned PathBuilder tessellation in the scene service, the scene
 	// drawing pipeline in the renderer service) bumped the cumulative
-	// revision to 7 and added bit 7 (scene-draw-paths).
-	if identity.NativeRevision != 7 {
-		t.Errorf("native revision = %d, want 7 (ticket16 cumulative)", identity.NativeRevision)
+	// revision to 7 and added bit 7 (scene-draw-paths); ticket17 (the
+	// image codec service) raised it to 8 with bit 8
+	// (image-codecs-image-0-25).
+	if identity.NativeRevision != 8 {
+		t.Errorf("native revision = %d, want 8 (ticket17 cumulative)", identity.NativeRevision)
 	}
-	if identity.Capabilities&0xFF != 0xFF {
-		t.Errorf("capabilities mask = %#x, want the eight assigned bits set", identity.Capabilities)
+	if identity.Capabilities&0x1FF != 0x1FF {
+		t.Errorf("capabilities mask = %#x, want the nine assigned bits set", identity.Capabilities)
 	}
 	for _, want := range []string{"glyph-raster-dwrite", "glyph-atlas-d3d11"} {
 		found := false

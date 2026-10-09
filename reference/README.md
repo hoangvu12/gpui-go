@@ -136,6 +136,20 @@ and refreshes the embedded pair `internal/native/artifacts/
 MSVC linker embeds a timestamp, so identical sources produce different
 SHA-256s (observed during this ticket).
 
+### Recorded measurements (2026-10-10, ticket17 rebuild)
+
+- Toolchain: `rustc 1.97.0`, host/target `x86_64-pc-windows-msvc`,
+  `RUSTFLAGS=-C target-feature=+crt-static`, `-j 4`.
+- DLL: 14,453,248 bytes, SHA-256
+  `29781ff7be4d3b8c7ae2164f5e2accf0de5e95a8f9979edb62a9cf3ab232c2b2`,
+  gzip-9 5,790,413 bytes. Native revision 8, capability mask `0x1FF`
+  (bootstrap + layout + renderer + scene + text + glyph + atlas +
+  scene-draw + image-codecs). CRT outcome: **static** — only OS
+  system DLLs imported. The image crate resolves to 0.25.10 (the
+  workspace lock's resolution of the pin's `image = "0.25.1"`),
+  recorded with its checksum and feature graph in
+  `internal/native/artifacts/manifest.json`.
+
 ### Recorded measurements (2026-10-05)
 
 - Toolchain: `rustc 1.97.0 (2d8144b78 2026-07-07)`, host/target

@@ -15,7 +15,11 @@
 //! pinned Parley/Fontique text stack: system font enumeration, font
 //! resolution, shaping, visual lines, paint fragments, positioned
 //! glyphs, carets, selections, hit tests and grapheme clusters) in
-//! reserved slot 4, behind `crate::text`.
+//! reserved slot 4, behind `crate::text`. Ticket17 added the **image
+//! codec service** (the pinned `image`-crate decode graph: resource
+//! sniffing and clipboard known-format entries, EXIF orientation,
+//! GIF/animated-WebP frame walks, BGRA output) in reserved slot 7,
+//! behind `crate::image`.
 //!
 //! Contract summary (see `docs/distribution-contract.md` and
 //! `reference/native/LAYOUT_ABI.md`):
@@ -44,6 +48,7 @@
 
 pub mod atlas;
 pub mod glyph;
+pub mod image;
 pub mod layout;
 pub mod renderer;
 pub mod scene;
@@ -69,7 +74,7 @@ pub const GPUI_GO_ABI_VERSION: u32 = 1;
 /// ticket16 (path primitives + the pinned PathBuilder tessellation in
 /// the scene service, the scene drawing pipeline in the renderer
 /// service) bumped it to 7.
-pub const GPUI_GO_NATIVE_REVISION: u32 = 7;
+pub const GPUI_GO_NATIVE_REVISION: u32 = 8;
 
 /// gpui-CE source pin this artifact family is built against (ASCII hex,
 /// zero-padded to 40 bytes in the table).
@@ -120,9 +125,14 @@ pub mod capabilities {
     /// sprites, the blur/offscreen filter chain) built from the pinned
     /// `gpui_ce_render` build-time DXBC artifacts (ticket16).
     pub const SCENE_DRAW_PATHS: u64 = 1 << 7;
+    /// Bit 8: image codec service, the pinned `image`-crate decode
+    /// graph (resource sniffing and clipboard known-format entries,
+    /// EXIF orientation, GIF/animated-WebP frame walks with rational
+    /// delays, BGRA output) (ticket17).
+    pub const IMAGE_CODECS_IMAGE_0_25: u64 = 1 << 8;
     // Reserved for the planned service tables (bits assigned when those
     // tickets land; do not pre-assign):
-    //   bit 8+: accessibility/COM service and later
+    //   bit 9+: accessibility/COM service and later
     //   unassigned bits remain 0
 }
 
@@ -314,7 +324,9 @@ static ABI_TABLE: GpuiGoAbiTable = GpuiGoAbiTable {
         ServiceTablePtr(
             &atlas::ATLAS_TABLE as *const atlas::GpuiGoAtlasTable as *const core::ffi::c_void,
         ),
-        ServiceTablePtr(core::ptr::null()),
+        ServiceTablePtr(
+            &image::IMAGE_TABLE as *const image::GpuiGoImageTable as *const core::ffi::c_void,
+        ),
     ],
     magic: GPUI_GO_ABI_MAGIC,
     abi_version: GPUI_GO_ABI_VERSION,
@@ -324,6 +336,7 @@ static ABI_TABLE: GpuiGoAbiTable = GpuiGoAbiTable {
         | capabilities::LAYOUT_TAFFY_0_13_0
         | capabilities::RENDERER_D3D11
         | capabilities::SCENE_KERNEL
+        | capabilities::IMAGE_CODECS_IMAGE_0_25
         | capabilities::TEXT_PARLEY_0_11_1
         | capabilities::GLYPH_RASTER_DIRECTWRITE
         | capabilities::ATLAS_D3D11

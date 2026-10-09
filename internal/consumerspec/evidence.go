@@ -33,11 +33,11 @@ import (
 // loudly instead of accepting a silent identity drift.
 const (
 	// EvidenceArtifactSHA256 is the recorded SHA-256 of the DLL.
-	EvidenceArtifactSHA256 = "d648523b7fe1173a8810a27de77ff8ecbfebaa53eab95d69a6335c4a042b87dd"
+	EvidenceArtifactSHA256 = "29781ff7be4d3b8c7ae2164f5e2accf0de5e95a8f9979edb62a9cf3ab232c2b2"
 	// EvidenceArtifactBytes is the recorded DLL size.
-	EvidenceArtifactBytes = 12489728
+	EvidenceArtifactBytes = 14453248
 	// EvidenceNativeRevision is the recorded native bridge revision.
-	EvidenceNativeRevision = 7
+	EvidenceNativeRevision = 8
 	// EvidenceCECommit is the pinned gpui-CE commit of the artifact.
 	EvidenceCECommit = "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a"
 	// EvidenceCRTOutcome is the recorded static-CRT outcome string.

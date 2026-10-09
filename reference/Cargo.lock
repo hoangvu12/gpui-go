@@ -1312,6 +1312,7 @@ dependencies = [
  "gpui-ce",
  "gpui_ce_parley",
  "gpui_ce_render",
+ "image",
  "lyon",
  "taffy",
  "wgsl-rs",

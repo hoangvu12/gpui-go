@@ -156,6 +156,12 @@ type AtlasKeyKind uint32
 const (
 	// AtlasKeyGlyph is the glyph key: raster params plus format.
 	AtlasKeyGlyph AtlasKeyKind = 0
+	// AtlasKeyImage is the image key (ticket17; the pinned
+	// AtlasKey::Image): image_id and frame_index, texture kind
+	// polychrome. The record reuses the glyph slots — image_id occupies
+	// FontID, frame_index FontSizeBits — and every other field must be
+	// zero.
+	AtlasKeyImage AtlasKeyKind = 1
 )
 
 // AtlasKeyRecord mirrors GpuiGoAtlasKeyRecord (88 bytes, alignment 8):
@@ -355,7 +361,7 @@ func (s *AtlasService) Insert(handle AtlasHandle, key AtlasKeyRecord, width, hei
 	if key.RecordSize != uint32(unsafe.Sizeof(AtlasKeyRecord{})) {
 		return tile, atlasStatusError(atlasErrBadValue, "key record size")
 	}
-	if key.Kind != uint32(AtlasKeyGlyph) {
+	if key.Kind != uint32(AtlasKeyGlyph) && key.Kind != uint32(AtlasKeyImage) {
 		return tile, atlasStatusError(atlasErrBadValue, "key kind")
 	}
 	if key.Reserved != [2]uint32{} {

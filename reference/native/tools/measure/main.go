@@ -45,16 +45,19 @@ const (
 	// (reserved slot 6, bit 6) landed with native revision 6. Ticket16
 	// (path primitives + the pinned PathBuilder tessellation in the
 	// scene service, the scene drawing pipeline in the renderer service)
-	// landed with native revision 7 and capability bit 7. Keep these in
-	// sync with reference/native/src/lib.rs (GPUI_GO_NATIVE_REVISION and
-	// the capabilities module).
-	nativeRevision = 7
+	// landed with native revision 7 and capability bit 7. Ticket17 (the
+	// image codec service in reserved slot 7, the pinned image-crate
+	// decode graph) landed with native revision 8 and capability bit 8.
+	// Keep these in sync with reference/native/src/lib.rs
+	// (GPUI_GO_NATIVE_REVISION and the capabilities module).
+	nativeRevision = 8
 
 	// bit 0 bootstrap, bit 1 layout-taffy-0-13-0, bit 2 renderer-d3d11,
 	// bit 3 scene-kernel-v1, bit 4 text-parley-0-11-1, bit 5
 	// glyph-raster-dwrite, bit 6 glyph-atlas-d3d11, bit 7
-	// scene-draw-paths (ticket16).
-	capabilitiesMask = 255
+	// scene-draw-paths (ticket16), bit 8 image-codecs-image-0-25
+	// (ticket17).
+	capabilitiesMask = 511
 )
 
 // The pinned Taffy engine of the layout service (docs/layout-contract.md).
@@ -151,6 +154,7 @@ type provenance struct {
 	Windows             windowsMeasure `json:"windows"`
 	Text                textMeasure    `json:"text"`
 	Glyph               glyphMeasure   `json:"glyph"`
+	Image               imageMeasure   `json:"image"`
 	CargoLockSHA256     string         `json:"cargo_lock_sha256"`
 	ReproducibilityNote string         `json:"reproducibility_note"`
 }
@@ -240,6 +244,15 @@ type glyphMeasure struct {
 	FeatureGraph    string          `json:"feature_graph"`
 }
 
+// imageMeasure records the resolved image crate of the image codec
+// service (ticket17): the CE workspace's `image = "0.25.1"`
+// default-features resolution through the workspace lock, plus the
+// feature subtree the native crate activates.
+type imageMeasure struct {
+	Image        registryMeasure `json:"image"`
+	FeatureGraph string          `json:"feature_graph"`
+}
+
 type manifestOut struct {
 	Schema             string         `json:"schema"`
 	Name               string         `json:"name"`
@@ -256,6 +269,7 @@ type manifestOut struct {
 	Windows            windowsMeasure `json:"windows"`
 	Text               textMeasure    `json:"text"`
 	Glyph              glyphMeasure   `json:"glyph"`
+	Image              imageMeasure   `json:"image"`
 	Target             string         `json:"target"`
 	Machine            string         `json:"machine"`
 	BuiltAt            string         `json:"built_at"`
@@ -333,6 +347,9 @@ func main() {
 	// resolved feature graph.
 	glyph := measureGlyph(*lockPath)
 
+	// The image codec service's resolved image crate (ticket17).
+	image := measureImage(*lockPath)
+
 	prov := provenance{
 		Schema:             "gpui-go/native-bootstrap@2",
 		BuiltAt:            time.Now().UTC().Format(time.RFC3339),
@@ -351,11 +368,12 @@ func main() {
 			GzipMethod: "Go stdlib compress/gzip, level 9 (BestCompression)",
 		},
 		PE:              *peM,
-		ABI:             abiMeasure{ABIVersion: abiVersion, NativeRevision: nativeRevision, CECommit: ceCommit, CapabilitiesMask: capabilitiesMask, Capabilities: []string{"bootstrap-buffer-roundtrip", "layout-taffy-0-13-0", "renderer-d3d11", "scene-kernel-v1", "text-parley-0-11-1", "glyph-raster-dwrite", "glyph-atlas-d3d11"}},
+		ABI:             abiMeasure{ABIVersion: abiVersion, NativeRevision: nativeRevision, CECommit: ceCommit, CapabilitiesMask: capabilitiesMask, Capabilities: []string{"bootstrap-buffer-roundtrip", "layout-taffy-0-13-0", "renderer-d3d11", "scene-kernel-v1", "text-parley-0-11-1", "glyph-raster-dwrite", "glyph-atlas-d3d11", "scene-draw-paths", "image-codecs-image-0-25"}},
 		Taffy:           taffy,
 		Windows:         windows,
 		Text:            text,
 		Glyph:           glyph,
+		Image:           image,
 		CargoLockSHA256: lockHex,
 		ReproducibilityNote: "Single build; byte reproducibility not claimed and not expected: the distribution " +
 			"contract states \"Two builds have not yet demonstrated byte reproducibility\", and the MSVC link embeds a " +
@@ -386,11 +404,12 @@ func main() {
 		ABIVersion:         abiVersion,
 		NativeRevision:     nativeRevision,
 		CapabilitiesMask:   capabilitiesMask,
-		Capabilities:       []string{"bootstrap-buffer-roundtrip", "layout-taffy-0-13-0", "renderer-d3d11", "scene-kernel-v1", "text-parley-0-11-1", "glyph-raster-dwrite", "glyph-atlas-d3d11"},
+		Capabilities:       []string{"bootstrap-buffer-roundtrip", "layout-taffy-0-13-0", "renderer-d3d11", "scene-kernel-v1", "text-parley-0-11-1", "glyph-raster-dwrite", "glyph-atlas-d3d11", "scene-draw-paths", "image-codecs-image-0-25"},
 		Taffy:              taffy,
 		Windows:            windows,
 		Text:               text,
 		Glyph:              glyph,
+		Image:              image,
 		Target:             targetTriple,
 		Machine:            "amd64",
 		BuiltAt:            prov.BuiltAt,
@@ -568,6 +587,29 @@ func measureGlyph(lockPath string) glyphMeasure {
 		version, checksum := lockEntry(lines, "anyhow")
 		m.Anyhow = registryMeasure{Version: version, Checksum: checksum, PinSatisfied: version != ""}
 	}
+	return m
+}
+
+// measureImage records the image codec service's resolved image crate
+// (ticket17): the CE workspace's `image = "0.25.1"` default-features
+// resolution through the workspace lock, plus the feature subtree the
+// native crate activates.
+func measureImage(lockPath string) imageMeasure {
+	m := imageMeasure{}
+	if lockBytes, err := os.ReadFile(lockPath); err == nil {
+		lines := strings.Split(string(lockBytes), "\n")
+		version, checksum := lockEntry(lines, "image")
+		m.Image = registryMeasure{
+			Version:  version,
+			Checksum: checksum,
+			// The workspace declares "0.25.1"; the lock resolves a
+			// 0.25.x compatible release — same major.minor family as
+			// the pinned checkout builds with.
+			PinSatisfied: strings.HasPrefix(version, "0.25."),
+		}
+	}
+	m.FeatureGraph = cmdOutputIn(filepath.Dir(lockPath), "cargo", "tree", "-p", "gpui-go-native",
+		"--target", targetTriple, "--edges", "features", "-i", "image")
 	return m
 }
 

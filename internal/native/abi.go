@@ -20,8 +20,9 @@ const (
 	// ticket10 (glyph raster + atlas services, scene sprite primitives)
 	// bumped it to 6; ticket16 (path primitives + the pinned PathBuilder
 	// tessellation in the scene service, the scene drawing pipeline in
-	// the renderer service) bumped it to 7.
-	nativeRevision uint32 = 7
+	// the renderer service) bumped it to 7; ticket17 (the image codec
+	// service in reserved slot 7) bumped it to 8.
+	nativeRevision uint32 = 8
 	// maxBufferLen mirrors GPUI_GO_MAX_BUFFER_LEN.
 	maxBufferLen = 4096
 	// maxTextLen mirrors the text service's MAX_TEXT_BYTES (1 MiB text
@@ -44,6 +45,7 @@ const (
 	capGlyphRaster              uint64 = 1 << 5 // "glyph-raster-dwrite"
 	capAtlasD3D11               uint64 = 1 << 6 // "glyph-atlas-d3d11"
 	capSceneDrawPaths           uint64 = 1 << 7 // "scene-draw-paths" (ticket16)
+	capImageCodecs              uint64 = 1 << 8 // "image-codecs-image-0-25" (ticket17)
 
 	// requiredCapabilities is the mask the loader demands of every artifact
 	// it accepts. Unknown extra bits are forward-compatible, never rejected.

@@ -146,11 +146,17 @@ pub mod atlas_texture_kind {
 }
 
 /// Atlas key kind tags (the pinned `AtlasKey` variants,
-/// crates/gpui/src/platform.rs:1815). Svg/Image keys are later tickets
-/// and rejected as bad values here.
+/// crates/gpui/src/platform.rs:1815). Svg keys remain a later ticket
+/// and are rejected as bad values here.
 pub mod atlas_key_kind {
     /// A glyph key: `(RenderGlyphParams, RasterizedGlyphFormat)`.
     pub const GLYPH: u32 = 0;
+    /// An image key: `RenderImageParams { image_id, frame_index }`
+    /// (ticket17; the pinned `AtlasKey::Image`, texture kind
+    /// polychrome). The record reuses the glyph slots: `image_id`
+    /// occupies the `font_id` slot, `frame_index` the
+    /// `font_size_bits` slot, and every other field must be zero.
+    pub const IMAGE: u32 = 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -358,29 +364,43 @@ pub(crate) static ATLAS_TABLE: GpuiGoAtlasTable = GpuiGoAtlasTable {
 // Internal state
 // ---------------------------------------------------------------------------
 
-/// The semantic atlas key: the pin's `AtlasKey::Glyph { params, format }`
-/// content (the cache identity of one glyph raster).
+/// The semantic atlas key (the pin's `AtlasKey` enum: the glyph
+/// variant's `(RenderGlyphParams, RasterizedGlyphFormat)` content, or
+/// the image variant's `RenderImageParams { image_id, frame_index }`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct AtlasKey {
-    font_id: u64,
-    glyph_id: u32,
-    font_size_bits: u32,
-    subpixel_x: u32,
-    subpixel_y: u32,
-    scale_bits: u32,
-    style_mode: u32,
-    style_effect: u32,
-    style_color: [u32; 4],
-    format: u32,
+enum AtlasKey {
+    /// A glyph raster's cache identity.
+    Glyph {
+        font_id: u64,
+        glyph_id: u32,
+        font_size_bits: u32,
+        subpixel_x: u32,
+        subpixel_y: u32,
+        scale_bits: u32,
+        style_mode: u32,
+        style_effect: u32,
+        style_color: [u32; 4],
+        format: u32,
+    },
+    /// A decoded image frame's cache identity (ticket17; the pinned
+    /// `AtlasKey::Image`).
+    Image {
+        image_id: u64,
+        frame_index: u32,
+    },
 }
 
 impl AtlasKey {
     fn texture_kind(&self) -> u32 {
-        match self.format {
-            raster_format::ALPHA_MASK => atlas_texture_kind::MONOCHROME,
-            raster_format::BGRA_SUBPIXEL_MASK => atlas_texture_kind::SUBPIXEL,
-            raster_format::BGRA_COLOR => atlas_texture_kind::POLYCHROME,
-            _ => atlas_texture_kind::MONOCHROME,
+        match self {
+            AtlasKey::Glyph { format, .. } => match *format {
+                raster_format::ALPHA_MASK => atlas_texture_kind::MONOCHROME,
+                raster_format::BGRA_SUBPIXEL_MASK => atlas_texture_kind::SUBPIXEL,
+                raster_format::BGRA_COLOR => atlas_texture_kind::POLYCHROME,
+                _ => atlas_texture_kind::MONOCHROME,
+            },
+            // The pinned `AtlasKey::Image` mapping: polychrome.
+            AtlasKey::Image { .. } => atlas_texture_kind::POLYCHROME,
         }
     }
 }
@@ -508,8 +528,35 @@ fn key_from_record(record: &GpuiGoAtlasKeyRecord) -> Result<AtlasKey, i32> {
     if record.record_size != core::mem::size_of::<GpuiGoAtlasKeyRecord>() as u32 {
         return Err(atlas_status::ERR_BAD_VALUE);
     }
+    if record.kind == atlas_key_kind::IMAGE {
+        // The image key (ticket17): image_id reuses the font_id slot,
+        // frame_index the font_size_bits slot; every other field must
+        // be zero (a clean image key, never a half-filled glyph key).
+        if record.reserved != [0, 0]
+            || record.glyph_id != 0
+            || record.subpixel_x != 0
+            || record.subpixel_y != 0
+            || record.scale_bits != 0
+            || record.style.record_size != 0
+            || record.style.dilation != 0
+            || record.style.reserved != 0
+            || record.style.mode != 0
+            || record.style.color_effect_tag != 0
+            || record.style.color_r != 0
+            || record.style.color_g != 0
+            || record.style.color_b != 0
+            || record.style.color_a != 0
+            || record.format != 0
+        {
+            return Err(atlas_status::ERR_BAD_VALUE);
+        }
+        return Ok(AtlasKey::Image {
+            image_id: record.font_id,
+            frame_index: record.font_size_bits,
+        });
+    }
     if record.kind != atlas_key_kind::GLYPH {
-        // Svg/Image keys are later tickets; not silently accepted.
+        // Svg keys remain a later ticket; not silently accepted.
         return Err(atlas_status::ERR_BAD_VALUE);
     }
     if record.reserved != [0, 0] {
@@ -547,7 +594,7 @@ fn key_from_record(record: &GpuiGoAtlasKeyRecord) -> Result<AtlasKey, i32> {
     if !scale.is_finite() || scale <= 0.0 {
         return Err(atlas_status::ERR_BAD_VALUE);
     }
-    Ok(AtlasKey {
+    Ok(AtlasKey::Glyph {
         font_id: record.font_id,
         glyph_id: record.glyph_id,
         font_size_bits: record.font_size_bits,
