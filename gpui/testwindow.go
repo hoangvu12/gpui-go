@@ -143,6 +143,256 @@ func (t *testTextSystem) shape(text string, fontSize float32, font FontDescripto
 	}, nil
 }
 
+// layoutInline implements windowTextSystem: the reference
+// TestTextSystem::layout_inline (platform.rs:1716), ported operation
+// for operation — the whole document is one visual line; the baseline
+// grows to the tallest box; boxes sit after the text preceding their
+// index, shifted by every preceding box; glyph x positions shift by
+// the widths of boxes at or before their char; the platform geometry
+// (caret stops) stays UN-shifted, so byte-range geometry excludes box
+// advances exactly like the pin's test platform; and the vertical
+// alignment runs the shared align_inline_boxes pass with the request's
+// container metrics and no per-row text bounds.
+func (t *testTextSystem) layoutInline(request inlineLayoutRequest) (inlineLayout, error) {
+	shaped, err := t.shape(request.text, request.fontSize, FontDescriptor{}, request.wrapWidth, request.lineClamp)
+	if err != nil {
+		return inlineLayout{}, err
+	}
+	document := shaped.(*testShapedText)
+
+	emWidth := request.fontSize * testTextAdvanceWidth / testTextUnitsPerEm
+	baseline := request.lineHeight
+	for _, box := range request.boxes {
+		baseline = max32(baseline, box.Size.Height)
+	}
+
+	// position_test_inline_boxes: each box sits after the text width
+	// preceding its index plus every preceding box width, bottom on the
+	// pre-alignment baseline.
+	precedingWidth := float32(0)
+	positionedBoxes := make([]PositionedInlineBox, 0, len(request.boxes))
+	for _, box := range request.boxes {
+		textWidth := float32(0)
+		for _, ch := range request.text[:box.Index] {
+			textWidth += emWidth * float32(utf16.RuneLen(ch))
+		}
+		positioned := PositionedInlineBox{
+			ID:        box.ID,
+			LineIndex: 0,
+			Bounds: Bounds{
+				Origin: Point{X: textWidth + precedingWidth, Y: baseline - box.Size.Height},
+				Size:   box.Size,
+			},
+		}
+		precedingWidth += box.Size.Width
+		positionedBoxes = append(positionedBoxes, positioned)
+	}
+
+	// add_test_inline_box_advances: every glyph shifts right by the
+	// widths of boxes inserted at or before its char index (glyphs are
+	// in char order, zipped with the text's char indices); the fragment
+	// extents, layout width and line advance gain the total box width.
+	glyphs := make([]ShapedGlyph, len(document.glyphs))
+	copy(glyphs, document.glyphs)
+	i := 0
+	for byteIndex, _ := range request.text {
+		if i >= len(glyphs) {
+			break
+		}
+		shift := float32(0)
+		for _, box := range request.boxes {
+			if box.Index <= byteIndex {
+				shift += box.Size.Width
+			}
+		}
+		glyphs[i].X += shift
+		i++
+	}
+	totalBoxWidth := float32(0)
+	for _, box := range request.boxes {
+		totalBoxWidth += box.Size.Width
+	}
+	inline := &testInlineDocument{
+		text:     request.text,
+		fontSize: request.fontSize,
+		glyphs:   glyphs,
+		advance:  document.advance + totalBoxWidth,
+		wrap:     request.wrapWidth,
+		stops:    testCaretStops(request.text, emWidth),
+	}
+
+	lineWidth := document.advance + totalBoxWidth
+	if request.wrapWidth != nil && *request.wrapWidth < lineWidth {
+		lineWidth = *request.wrapWidth
+	}
+	lines := []InlineVisualLine{{
+		Origin:   Point{},
+		Size:     Size{Width: lineWidth, Height: baseline},
+		Baseline: baseline,
+	}}
+	size := Size{Width: document.advance + totalBoxWidth, Height: baseline}
+
+	layout := inlineLayout{
+		lines:           lines,
+		boxes:           positionedBoxes,
+		alignmentOffset: 0,
+		size:            size,
+		pieces: []inlinePaintPiece{{
+			row:        0,
+			x:          0,
+			advance:    document.advance + totalBoxWidth,
+			byteStart:  0,
+			byteEnd:    len(request.text),
+			shaped:     inline,
+			lineIndex:  0,
+			lineHeight: request.lineHeight,
+		}},
+	}
+	layout.geometry = testInlineGeometry(inline, request.fontSize)
+
+	alignInlineBoxes(layout.lines, layout.boxes, &layout.size, request.boxes,
+		[]InlineTextMetrics{request.textMetrics}, nil, request.textMetrics, request.lineHeight)
+	return layout, nil
+}
+
+// inlineMetrics implements windowTextSystem: the stub's font metrics
+// at a font size (ascent 1025, descent -275, x_height 516 over 1000
+// units per em).
+func (t *testTextSystem) inlineMetrics(font FontDescriptor, fontSize float32) InlineTextMetrics {
+	return InlineTextMetrics{
+		Ascent:  fontSize * (testTextAscent / testTextUnitsPerEm),
+		Descent: fontSize * (testTextDescent / testTextUnitsPerEm),
+		XHeight: fontSize * (testTextXHeight / testTextUnitsPerEm),
+	}
+}
+
+// testTextXHeight is the stub's x_height (516 font units).
+const testTextXHeight = 516.0
+
+// testInlineDocument is the stub's inline document: the shifted glyph
+// line plus the un-shifted caret stops (the platform layout).
+type testInlineDocument struct {
+	text     string
+	fontSize float32
+	// glyphs are the box-shifted positioned glyphs.
+	glyphs []ShapedGlyph
+	// advance is the document width including box advances.
+	advance float32
+	// wrap is the wrap constraint (echo).
+	wrap *float32
+	// stops are the un-shifted (byte index, pen x) caret stops.
+	stops [][2]float32
+}
+
+// width implements shapedText.
+func (t *testInlineDocument) width() float32 { return t.advance }
+
+// ascent implements shapedText.
+func (t *testInlineDocument) ascent() float32 {
+	return t.fontSize * (testTextAscent / testTextUnitsPerEm)
+}
+
+// descent implements shapedText.
+func (t *testInlineDocument) descent() float32 {
+	return t.fontSize * (testTextDescent / testTextUnitsPerEm)
+}
+
+// lineCount implements shapedText: one line.
+func (t *testInlineDocument) lineCount() int { return 1 }
+
+// textLen implements shapedText.
+func (t *testInlineDocument) textLen() int { return len(t.text) }
+
+// size implements shapedText.
+func (t *testInlineDocument) size(lineHeight float32) Size {
+	width := t.advance
+	if t.wrap != nil && *t.wrap < width {
+		width = *t.wrap
+	}
+	return Size{Width: width, Height: lineHeight}
+}
+
+// paint implements shapedText: the stub's empty-raster paint (no
+// sprites; the paragraph layer carries the observable bounds).
+func (t *testInlineDocument) paint(w *Window, origin Point, lineHeight float32, color Hsla) error {
+	return nil
+}
+
+// paintLine implements shapedText: no observable output (empty
+// rasters).
+func (t *testInlineDocument) paintLine(w *Window, lineIndex int, origin Point, baseline float32, color Hsla) error {
+	return nil
+}
+
+// lineAdvance implements shapedText.
+func (t *testInlineDocument) lineAdvance(lineIndex int) float32 { return t.advance }
+
+// lineRange implements shapedText.
+func (t *testInlineDocument) lineRange(lineIndex int) (int, int) { return 0, len(t.text) }
+
+// selectionRects implements shapedText: the caret-stop geometry of a
+// byte range (the test platform's selection_bounds).
+func (t *testInlineDocument) selectionRects(start, end int, lineHeight float32) []TextRect {
+	if start >= end {
+		return nil
+	}
+	from := t.caretStop(start)
+	to := t.caretStop(end)
+	low, high := min32(from, to), max32(from, to)
+	return []TextRect{{X: low, Y: 0, W: high - low, H: lineHeight}}
+}
+
+// caretStop returns the pen x of the stop at or before a byte index
+// (the platform's caret_stop partition).
+func (t *testInlineDocument) caretStop(byteOffset int) float32 {
+	index := 0
+	for i, stop := range t.stops {
+		if int(stop[0]) <= byteOffset {
+			index = i
+		} else {
+			break
+		}
+	}
+	return t.stops[index][1]
+}
+
+// testCaretStops builds the (byte index, pen x) stops of a text at an
+// em width (the stub's layout_text stop accumulation: stop 0 at pen
+// 0, then every char boundary at its pen position).
+func testCaretStops(text string, emWidth float32) [][2]float32 {
+	stops := make([][2]float32, 0, len(text)+1)
+	position := float32(0)
+	stops = append(stops, [2]float32{0, 0})
+	byteIndex := 0
+	for _, ch := range text {
+		position += emWidth * float32(utf16.RuneLen(ch))
+		byteIndex += len(string(ch))
+		stops = append(stops, [2]float32{float32(byteIndex), position})
+	}
+	return stops
+}
+
+// testInlineGeometry builds the byte-range geometry source of the
+// stub's inline layout (the platform's default inline_geometry over
+// selection_bounds: line_height = the platform size height / line
+// count = font_size; one region per range at row 0).
+func testInlineGeometry(document *testInlineDocument, fontSize float32) func(start, end int) []inlineRangeGeometry {
+	return func(start, end int) []inlineRangeGeometry {
+		if start >= end {
+			return nil
+		}
+		rects := document.selectionRects(start, end, fontSize)
+		regions := make([]inlineRangeGeometry, 0, len(rects))
+		for _, rect := range rects {
+			regions = append(regions, inlineRangeGeometry{
+				bounds:          Bounds{Origin: Point{X: rect.X, Y: rect.Y}, Size: Size{Width: rect.W, Height: rect.H}},
+				visualLineIndex: int(rect.Y / fontSize),
+			})
+		}
+		return regions
+	}
+}
+
 // testShapedText is the stub's shaped document (the reference
 // TestPlatformTextLayout/LineLayout facts).
 type testShapedText struct {
@@ -214,6 +464,42 @@ func (t *testShapedText) paint(w *Window, origin Point, lineHeight float32, colo
 		}
 	}
 	return nil
+}
+
+// paintLine implements shapedText: the inline piece path has no
+// observable output in the stub (empty rasters; the paragraph layer
+// carries the observable bounds).
+func (t *testShapedText) paintLine(w *Window, lineIndex int, origin Point, baseline float32, color Hsla) error {
+	return nil
+}
+
+// lineAdvance implements shapedText: the stub's single line advance.
+func (t *testShapedText) lineAdvance(lineIndex int) float32 { return t.advance }
+
+// lineRange implements shapedText: the stub's single line byte range.
+func (t *testShapedText) lineRange(lineIndex int) (int, int) { return 0, len(t.text) }
+
+// selectionRects implements shapedText: the stub's caret-stop geometry
+// (the test platform's selection_bounds over pen positions).
+func (t *testShapedText) selectionRects(start, end int, lineHeight float32) []TextRect {
+	if start >= end {
+		return nil
+	}
+	emWidth := t.fontSize * testTextAdvanceWidth / testTextUnitsPerEm
+	from := testPenAt(t.text, emWidth, start)
+	to := testPenAt(t.text, emWidth, end)
+	low, high := min32(from, to), max32(from, to)
+	return []TextRect{{X: low, Y: 0, W: high - low, H: lineHeight}}
+}
+
+// testPenAt returns the stub's pen x at a byte boundary (the
+// accumulated em-width advance of the preceding chars).
+func testPenAt(text string, emWidth float32, byteOffset int) float32 {
+	position := float32(0)
+	for _, ch := range text[:byteOffset] {
+		position += emWidth * float32(utf16.RuneLen(ch))
+	}
+	return position
 }
 
 // ---------------------------------------------------------------------------

@@ -413,6 +413,13 @@ func platformHostFor(hwnd uintptr) *Host {
 // handles the private wake and window-registry messages; everything
 // else falls to DefWindowProcW.
 //
+// Ticket26's platform-window policies (desktop_windows.go holds the
+// bodies): WM_POWERBROADCAST runs the system-wake callback on
+// PBT_APMRESUMEAUTOMATIC (returning TRUE), WM_GPUI_DOCK_MENU_ACTION
+// dispatches one dock menu action (validation-token gated), and
+// WM_GPUI_END_SESSION runs the quit callback and posts WM_QUIT for the
+// orderly best-effort shutdown (a completed shutdown exits).
+//
 // The recover trampoline keeps a Go panic from unwinding into the Win32
 // dispatch frame (native ABI rule: panics are caught at trampolines).
 // lparam is unsafe.Pointer-typed because it is a pointer for the
@@ -472,6 +479,30 @@ func platformWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe
 			procPostQuitMessage.Call(0)
 		}
 		return 0
+	case wmPowerBroadcast:
+		// WM_POWERBROADCAST (ticket26, platform.rs handle_power_broadcast):
+		// an automatic resume runs the system-wake callback; every power
+		// broadcast returns TRUE.
+		return h.handlePowerBroadcastMsg(wparam)
+	case wmGPUIDockAction:
+		// WM_GPUI_DOCK_MENU_ACTION (ticket26, platform.rs
+		// handle_gpui_events -> handle_dock_action_event): the validation
+		// token gates the dispatch, a wrong token falls to default
+		// processing like the reference's error path.
+		if wparam != uintptr(h.validationNumber) {
+			h.recordFault("dock menu action with wrong validation token")
+			break
+		}
+		return h.handleDockMenuActionMsg(lp)
+	case wmGPUIEndSession:
+		// WM_GPUI_END_SESSION (ticket26, platform.rs handle_end_session):
+		// run the quit callback; completed shutdown exits, otherwise post
+		// WM_QUIT for an orderly best-effort shutdown.
+		if wparam != uintptr(h.validationNumber) {
+			h.recordFault("end session with wrong validation token")
+			break
+		}
+		return h.handleEndSessionMsg()
 	}
 	r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
 	return r
@@ -492,9 +523,25 @@ func platformWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe
 //     rectangle (SetWindowPos; WM_SIZE/WM_MOVE update the rest).
 //   - WM_SIZE skips the resize report while minimized.
 //   - WM_ACTIVATE defers the activation callback to the foreground
-//     queue (reference spawns it on the foreground executor).
+//     queue (reference spawns it on the foreground executor); ticket26
+//     adds the synchronous cursor-visibility/modifier-reset part.
 //   - WM_ERASEBKGND returns 1 (the renderer owns painting; ticket07).
 //   - WM_PAINT records dirty, calls the redraw hook, validates.
+//
+// Ticket26's desktop policies (desktop_windows.go holds the bodies):
+//
+//   - WM_MOUSEACTIVATE eagerly answers MA_ACTIVATE.
+//   - WM_SETCURSOR shows the platform cursor (or none while hidden)
+//     outside the resize edges; the edges fall to default processing.
+//   - WM_SETTINGCHANGE refreshes the tracked settings and frame border
+//     (wparam != 0) or runs the ImmersiveColorSet theme path (wparam 0).
+//   - WM_DISPLAYCHANGE re-resolves the window's monitor record.
+//   - WM_MOUSEMOVE / WM_NCMOUSEMOVE restore a hidden cursor and track
+//     the leave; WM_MOUSELEAVE / WM_NCMOUSELEAVE clear hover and the
+//     shared cursor flag.
+//   - WM_GPUI_CURSOR_STYLE_CHANGED adopts the platform's new cursor.
+//   - WM_SHOWWINDOW draws a shown window.
+//   - WM_ENDSESSION forwards a real session end to the platform window.
 //
 // Input, IME, accessibility and dialog messages arrive with their
 // tickets; they fall through to DefWindowProcW here. lparam is
@@ -532,10 +579,18 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		return r
 	}
 	switch message {
+	case wmMouseActivate:
+		// Eagerly activate: a click handler that consumes the press must
+		// not leave the window un-activated (events.rs WM_MOUSEACTIVATE
+		// returns MA_ACTIVATE).
+		return w.handleMouseActivateMsg()
+
 	case wmActivate:
 		activated := loword(wparam) != waInactive
-		// Deferred like the reference (handle_activate_msg spawns the
-		// callback through the foreground executor).
+		// The cursor/modifier reset runs synchronously (ticket26,
+		// handle_activate_msg); the observer stays deferred like the
+		// reference (it spawns the callback on the foreground executor).
+		w.handleActivateDesktopState(wparam)
 		if w.onActivate != nil {
 			cb := w.onActivate
 			w.host.post(func() { cb(activated) })
@@ -546,6 +601,9 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 	case wmMove:
 		w.originX = float32(signedLoword(lp))
 		w.originY = float32(signedHiword(lp))
+		// Re-associate the window with its monitor when its center left
+		// the current display (ticket26, handle_move_msg's display check).
+		w.maybeUpdateDisplayOnMove()
 		if w.onMoved != nil {
 			w.onMoved()
 		}
@@ -611,8 +669,31 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		if w.onRedraw != nil {
 			w.onRedraw()
 		}
+		// update_ime_enabled runs at the tail of draw_window, before
+		// the validate (events.rs draw_window): the input handler's
+		// accepts-text-input answer drives the IME context association.
+		w.updateIMEEnabled()
 		procValidateRect.Call(hwnd, 0)
 		return 0
+
+	case wmIMEStartComposition:
+		// WM_IME_STARTCOMPOSITION: position the composition and
+		// candidate windows at the caret (handle_ime_position); the
+		// message is always consumed (Some(0)).
+		return w.handleIMEPosition()
+
+	case wmIMEComposition:
+		// WM_IME_COMPOSITION: composition/result routing
+		// (handle_ime_composition). WM_IME_SETCONTEXT, WM_IME_NOTIFY,
+		// WM_IME_ENDCOMPOSITION and WM_IME_CHAR are NOT intercepted —
+		// the pinned dispatch table (events.rs handle_msg) leaves them
+		// to default processing, and default processing owns their
+		// consumed/default-result policy.
+		if result, handled := w.handleIMEComposition(lp); handled {
+			return result
+		}
+		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
+		return r
 
 	case wmGPUIKeyDown:
 		// The pump redirected WM_KEYDOWN/WM_SYSKEYDOWN here
@@ -665,6 +746,81 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 	case wmEraseBkgnd:
 		// The renderer owns painting; report the background as erased.
 		return 1
+
+	case wmSetCursor:
+		// WM_SETCURSOR: show the platform cursor (or none while hidden)
+		// unless DefWindowProc owns the area (disabled window, resize
+		// edges). Ticket26, events.rs handle_set_cursor.
+		if result, handled := w.handleSetCursorMsg(lp); handled {
+			return result
+		}
+		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
+		return r
+
+	case wmSettingChange:
+		// WM_SETTINGCHANGE: system-parameter refresh or the
+		// ImmersiveColorSet theme change (ticket26, events.rs
+		// handle_system_settings_changed).
+		if result, handled := w.handleSettingChangeMsg(wparam, lparam); handled {
+			return result
+		}
+		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
+		return r
+
+	case wmDisplayChange:
+		// WM_DISPLAYCHANGE: re-resolve this window's monitor (ticket26,
+		// events.rs handle_display_change_msg).
+		if result, handled := w.handleDisplayChangeMsg(); handled {
+			return result
+		}
+		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
+		return r
+
+	case wmMouseMove:
+		// WM_MOUSEMOVE: restore a hidden cursor and track the leave so
+		// hide-until-move stays exact (ticket26). Mouse input routing
+		// itself arrives with the input tickets.
+		w.restoreCursorAfterHide()
+		w.startMouseLeaveTracking(tmeLeave)
+		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
+		return r
+
+	case wmNcMouseMove:
+		// WM_NCMOUSEMOVE: the same cursor restore plus non-client leave
+		// tracking (ticket26, events.rs handle_nc_mouse_move_msg's cursor
+		// part).
+		w.restoreCursorAfterHide()
+		w.startMouseLeaveTracking(tmeLeave | tmeNonClient)
+		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
+		return r
+
+	case wmMouseLeave, wmNcMouseLeave:
+		// WM_MOUSELEAVE / WM_NCMOUSELEAVE: stop hovering and clear the
+		// shared cursor flag (ticket26, events.rs handle_mouse_leave_msg).
+		return w.handleMouseLeaveMsg()
+
+	case wmGPUICursorStyle:
+		// WM_GPUI_CURSOR_STYLE_CHANGED: adopt the platform's new cursor
+		// (ticket26, events.rs handle_cursor_changed).
+		return w.handleCursorStyleChangedMsg(lp)
+
+	case wmShowWindow:
+		// WM_SHOWWINDOW: a shown window draws (ticket26, events.rs
+		// handle_window_visibility_changed); default processing always
+		// continues.
+		w.handleWindowVisibilityChanged(wparam)
+		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
+		return r
+
+	case wmEndSession:
+		// WM_ENDSESSION: forward a real session end to the platform
+		// window's end-session handler (ticket26, events.rs
+		// handle_end_session_msg).
+		if result, handled := w.handleEndSessionWindowMsg(wparam); handled {
+			return result
+		}
+		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
+		return r
 
 	case wmClose:
 		if w.shouldClose != nil {
@@ -755,6 +911,50 @@ type hostWindow struct {
 	// lastReportedCapslock dedups the capslock toggle report
 	// (last_reported_capslock).
 	lastReportedCapslock *Capslock
+
+	// imeEnabled mirrors the reference's ime_enabled cell (window.rs:
+	// initially true; updateIMEEnabled flips it through
+	// ImmAssociateContextEx).
+	imeEnabled bool
+
+	// --- ticket26 desktop state (host thread only) ---
+
+	// cursor is this window's current cursor handle (0 = none), set by
+	// WM_GPUI_CURSOR_STYLE_CHANGED (reference WindowCreateContext shares
+	// the platform cursor; each window re-receives it on style change).
+	cursor uintptr
+	// hovered reports the cursor being over this window (WM_MOUSEMOVE
+	// sets it, WM_MOUSELEAVE clears it; reference state.hovered).
+	hovered bool
+	// appearance is the cached system appearance (reference
+	// state.appearance), seeded at creation and updated by the
+	// ImmersiveColorSet path.
+	appearance WindowAppearance
+	// backgroundAppearance is the recorded background appearance
+	// (reference state.background_appearance, default Opaque).
+	backgroundAppearance WindowBackgroundAppearance
+	// compositionRecord records the applied DWM composition path for
+	// diagnostics (ticket26's bounded observation surface).
+	compositionRecord string
+	// display is the window's current monitor record (reference
+	// state.display), updated by WM_DISPLAYCHANGE and window moves.
+	display *DisplayInfo
+	// pendingMaximized records a zoom requested while the window was
+	// hidden (reference initial_placement WindowOpenState::Maximized).
+	pendingMaximized bool
+
+	// onAppearanceChanged receives the ImmersiveColorSet report
+	// (reference callbacks.appearance_changed).
+	onAppearanceChanged func()
+	// onHoverStatusChange receives hover enter/leave reports (reference
+	// callbacks.hovered_status_change).
+	onHoverStatusChange func(hovered bool)
+
+	// imeTrace / imeTraceMu record the last IMM32 interaction
+	// (ticket20 diagnostics and the coordinate fixture's observation
+	// surface); host-thread written, mutex-guarded reads.
+	imeTrace   imeTraceEntry
+	imeTraceMu sync.Mutex
 }
 
 // newHostWindow builds the record for a window being created. Runs at
@@ -764,9 +964,30 @@ func (h *Host) newHostWindow(hwnd uintptr) *hostWindow {
 		host:  h,
 		hwnd:  hwnd,
 		scale: 1,
+		// The reference starts every window with the IME enabled
+		// (window.rs ime_enabled: Cell::new(true)); the first draw's
+		// update_ime_enabled query decides the real association.
+		imeEnabled: true,
+		// The reference seeds every window's appearance at creation
+		// (WindowsWindow::new: system_appearance().unwrap_or_default()),
+		// and its background appearance starts opaque.
+		appearance:           WindowAppearanceLight,
+		backgroundAppearance: WindowBackgroundOpaque,
+	}
+	if appearance, err := systemAppearanceProvider(); err == nil {
+		w.appearance = appearance
+	} else {
+		h.recordFault(fmt.Sprintf("window appearance at creation: %v", err))
 	}
 	if dpi, _, _ := procGetDpiForWindow.Call(hwnd); dpi != 0 {
 		w.scale = float32(uint32(dpi)) / userDefaultScreenDPI
+	}
+	if monitor, _, _ := procMonitorFromWindow.Call(hwnd, uintptr(monitorDefaultToNearest)); monitor != 0 {
+		if display, err := displayFromMonitor(monitor); err == nil {
+			w.display = &display
+		} else {
+			h.recordFault(fmt.Sprintf("window display at creation: %v", err))
+		}
 	}
 	// The creation closure fills id, callbacks and initial geometry
 	// when CreateWindowExW returns.
@@ -966,6 +1187,11 @@ type Host struct {
 	// Application wiring.
 	app        *App
 	dispatcher *platformDispatcher
+
+	// desktop is ticket26's desktop-operations state (cursor, displays,
+	// settings, notifications, jump list, identity, callbacks). See
+	// desktop_windows.go.
+	desktop desktopHostState
 }
 
 // NewHost creates an unstarted Win32 host. Start it (or App.Run) before
@@ -978,6 +1204,9 @@ func NewHost() *Host {
 		windows:          make(map[uintptr]*hostWindow),
 		quitOnLastWindow: true,
 		validationNumber: newValidationNumber(),
+		desktop: desktopHostState{
+			notif: newSystemNotificationState(),
+		},
 	}
 }
 
@@ -1074,6 +1303,10 @@ func (h *Host) loop() {
 	h.platformHWND = hwnd
 	tracef("loop ready thread=%d platformHWND=%x", h.threadID, hwnd)
 
+	// Ticket26's desktop state: the platform cursor, package identity
+	// and tracked system settings exist before any window can.
+	h.initDesktopStateOnHostThread()
+
 	// Flush any stale state this pooled thread carried over. The Go
 	// runtime recycles OS threads: a previous user of this thread can
 	// have left a WM_QUIT flag (or messages) behind, and GetMessageW
@@ -1122,6 +1355,10 @@ func (h *Host) loop() {
 		procDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
 	}
 
+	// The message loop ended (WM_QUIT or a GetMessageW error): run the
+	// app's quit callback once, like the reference's run tail, then
+	// retire the owned resources.
+	h.runQuitCallbackAfterLoop()
 	h.shutdownOnHostThread()
 	close(h.done)
 }
@@ -1241,6 +1478,9 @@ func (h *Host) initOLE() {
 // Destroying windows here runs their WM_DESTROY/WM_NCDESTROY handlers
 // synchronously on this thread.
 func (h *Host) shutdownOnHostThread() {
+	// Ticket26: unregister the power notification and stop the
+	// notification drain before the owned windows disappear.
+	h.shutdownDesktopStateOnHostThread()
 	// Deterministic order, not map iteration (runtime ownership
 	// contract: ordered records).
 	hwnds := make([]uintptr, 0, len(h.windows))
@@ -1609,6 +1849,13 @@ func (h *Host) OpenWindow(opts WindowOptions) (WindowHandle, error) {
 
 // openWindowOnHostThread creates one window. Runs on the host thread.
 func (h *Host) openWindowOnHostThread(opts WindowOptions) (WindowHandle, error) {
+	// Native anchored popups are rejected before creation so callers
+	// fall back to in-window popovers (ticket26, WindowsWindow::new:
+	// `if let WindowKind::AnchoredPopup(_) = params.kind { return
+	// Err(PopupNotSupportedError) }`).
+	if opts.Kind == WindowKindAnchoredPopup {
+		return WindowHandle{}, &WindowCreateError{Title: opts.Title, Err: ErrPopupNotSupported}
+	}
 	// Styles follow WindowsWindow::new for a normal window:
 	// WS_SYSMENU (+WS_THICKFRAME|WS_MAXIMIZEBOX when resizable,
 	// +WS_MINIMIZEBOX when minimizable) and WS_EX_APPWINDOW.
@@ -1681,6 +1928,8 @@ func (h *Host) openWindowOnHostThread(opts WindowOptions) (WindowHandle, error) 
 	w.onKey = opts.OnKey
 	w.onText = opts.OnText
 	w.onKeyboardLayoutChange = opts.OnKeyboardLayoutChange
+	w.onAppearanceChanged = opts.OnAppearanceChanged
+	w.onHoverStatusChange = opts.OnHoverStatusChange
 	w.updateBorderOffset()
 
 	// Initial bounds: logical pixels convert to device pixels with the
@@ -1710,6 +1959,12 @@ func (h *Host) openWindowOnHostThread(opts WindowOptions) (WindowHandle, error) 
 		cmd := uintptr(swShow)
 		if !opts.Activate {
 			cmd = swShowNoActivate
+		}
+		if w.pendingMaximized {
+			// A zoom requested while hidden is applied when the window is
+			// shown (ticket26, zoom's initial-placement path).
+			cmd = swMaximize
+			w.pendingMaximized = false
 		}
 		procShowWindow.Call(hwnd, cmd)
 	}
@@ -1817,13 +2072,21 @@ func (wh WindowHandle) SetTitle(title string) {
 	})
 }
 
-// Show shows the window without activating it.
+// Show shows the window without activating it. A zoom requested while
+// hidden applies on show (ticket26, set_visible's initial-placement
+// path).
 func (wh WindowHandle) Show() {
 	wh.host.runForegroundAsync(func() {
-		if wh.record() == nil {
+		w := wh.record()
+		if w == nil {
 			return
 		}
-		procShowWindow.Call(wh.hwnd, swShow)
+		cmd := uintptr(swShow)
+		if w.pendingMaximized {
+			cmd = swMaximize
+			w.pendingMaximized = false
+		}
+		procShowWindow.Call(wh.hwnd, cmd)
 	})
 }
 

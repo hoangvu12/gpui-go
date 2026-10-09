@@ -866,3 +866,445 @@ func (a *App) OwnershipReport() []string {
 	lines = append(lines, cycleLines...)
 	return lines
 }
+
+// ---------------------------------------------------------------------------
+// Desktop operations (ticket26)
+// ---------------------------------------------------------------------------
+
+// The application-level desktop surface delegates to the attached
+// platform host (the reference's Platform trait): cursor control,
+// displays, shell operations, notifications, jump lists, power/session
+// callbacks and the verified unsupported outcomes. Callbacks cross into
+// the application at an update boundary; the host invokes them on the
+// foreground thread.
+
+// desktopHost resolves the attached host or reports ErrNoHost.
+func (a *App) desktopHost() (*Host, error) {
+	if a.host == nil {
+		return nil, ErrNoHost
+	}
+	return a.host, nil
+}
+
+// SetCursorStyle sets the platform cursor (Platform::set_cursor_style).
+func (a *App) SetCursorStyle(style CursorStyle) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	h.SetCursorStyle(style)
+	return nil
+}
+
+// CursorStyle returns the platform's recorded cursor style.
+func (a *App) CursorStyle() (CursorStyle, error) {
+	h, err := a.desktopHost()
+	if err != nil {
+		return CursorArrow, err
+	}
+	return h.CursorStyle()
+}
+
+// HideCursorUntilMouseMoves hides the cursor until the next mouse move
+// (Platform::hide_cursor_until_mouse_moves).
+func (a *App) HideCursorUntilMouseMoves() error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	h.HideCursorUntilMouseMoves()
+	return nil
+}
+
+// IsCursorVisible reports the cursor-visibility flag
+// (Platform::is_cursor_visible).
+func (a *App) IsCursorVisible() (bool, error) {
+	h, err := a.desktopHost()
+	if err != nil {
+		return false, err
+	}
+	return h.IsCursorVisible(), nil
+}
+
+// Displays enumerates the machine's monitors (Platform::displays).
+func (a *App) Displays() ([]DisplayInfo, error) {
+	h, err := a.desktopHost()
+	if err != nil {
+		return nil, err
+	}
+	return h.Displays()
+}
+
+// PrimaryDisplay returns the primary monitor
+// (Platform::primary_display).
+func (a *App) PrimaryDisplay() (*DisplayInfo, error) {
+	h, err := a.desktopHost()
+	if err != nil {
+		return nil, err
+	}
+	return h.PrimaryDisplay()
+}
+
+// OpenURL opens a URL with the system handler (Platform::open_url).
+func (a *App) OpenURL(url string) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	h.OpenURL(url)
+	return nil
+}
+
+// OpenWithSystem opens a path with the system handler
+// (Platform::open_with_system).
+func (a *App) OpenWithSystem(path string) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	h.OpenWithSystem(path)
+	return nil
+}
+
+// RevealPath reveals a path in the shell (Platform::reveal_path).
+func (a *App) RevealPath(path string) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	h.RevealPath(path)
+	return nil
+}
+
+// OnOpenUrls registers the URL-open callback (Platform::on_open_urls).
+// Windows registers it but nothing delivers to it (protocol activation
+// does not feed an unpackaged process).
+func (a *App) OnOpenUrls(cb func(urls []string)) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	return h.OnOpenUrls(cb)
+}
+
+// OnSystemWake registers the system wake callback
+// (Platform::on_system_wake) and the suspend/resume notification.
+func (a *App) OnSystemWake(cb func()) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	if cb == nil {
+		return fmt.Errorf("gpui: OnSystemWake requires a non-nil callback")
+	}
+	return h.OnSystemWake(func() { a.Update(func(*App) { cb() }) })
+}
+
+// OnQuit registers the quit callback (Platform::on_quit): it runs after
+// the message loop exits and on session end; returning true reports
+// completed shutdown.
+func (a *App) OnQuit(cb func() bool) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	if cb == nil {
+		return fmt.Errorf("gpui: OnQuit requires a non-nil callback")
+	}
+	return h.OnQuit(func() bool {
+		var completed bool
+		a.Update(func(*App) { completed = cb() })
+		return completed
+	})
+}
+
+// OnReopen registers the reopen callback (Platform::on_reopen); no
+// Windows event delivers to it.
+func (a *App) OnReopen(cb func()) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	return h.OnReopen(cb)
+}
+
+// ThermalState returns the thermal state (Platform::thermal_state). A
+// real app reports the host's answer; test applications (no host)
+// report the source's constant Nominal, which is the Windows value.
+func (a *App) ThermalState() ThermalState {
+	if a.host == nil {
+		return ThermalStateNominal
+	}
+	return a.host.ThermalState()
+}
+
+// OnThermalStateChange registers the thermal-state callback
+// (Platform::on_thermal_state_change); Windows never fires it.
+func (a *App) OnThermalStateChange(cb func()) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	return h.OnThermalStateChange(cb)
+}
+
+// ActivateApp activates the application (Platform::activate; empty body
+// on Windows).
+func (a *App) ActivateApp(ignoringOtherApps bool) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	h.ActivateApp(ignoringOtherApps)
+	return nil
+}
+
+// HideApp hides the application (Platform::hide; empty body on
+// Windows).
+func (a *App) HideApp() error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	h.HideApp()
+	return nil
+}
+
+// HideOtherApps hides other applications. The reference panics with
+// unimplemented!(); the port reproduces the panic.
+func (a *App) HideOtherApps() error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	h.HideOtherApps()
+	return nil
+}
+
+// UnhideOtherApps unhides other applications. The reference panics with
+// unimplemented!(); the port reproduces the panic.
+func (a *App) UnhideOtherApps() error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	h.UnhideOtherApps()
+	return nil
+}
+
+// PathForAuxiliaryExecutable reproduces the reference's "not yet
+// implemented" failure (Platform::path_for_auxiliary_executable).
+func (a *App) PathForAuxiliaryExecutable(name string) (string, error) {
+	h, err := a.desktopHost()
+	if err != nil {
+		return "", err
+	}
+	return h.PathForAuxiliaryExecutable(name)
+}
+
+// RegisterURLScheme reproduces the reference's task error
+// (Platform::register_url_scheme).
+func (a *App) RegisterURLScheme(scheme string) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	return h.RegisterURLScheme(scheme)
+}
+
+// AppPath returns the current executable's path (Platform::app_path).
+func (a *App) AppPath() (string, error) {
+	h, err := a.desktopHost()
+	if err != nil {
+		return "", err
+	}
+	return h.AppPath()
+}
+
+// Restart relaunches the application after this process exits
+// (Platform::restart) through the deferred-launch path.
+func (a *App) Restart(binaryPath string, arguments []string) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	return h.Restart(binaryPath, arguments)
+}
+
+// SetAppIdentity records the application identity and sets the
+// process's AppUserModelID (Platform::set_app_identity).
+func (a *App) SetAppIdentity(identifier, name string) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	return h.SetAppIdentity(identifier, name)
+}
+
+// ShowSystemNotification shows one notification
+// (Platform::show_system_notification). Without an app identity this
+// is the source-supported no-op (a recorded warning, no toast); with an
+// identity it reports the unported WinRT toast notifier as an explicit
+// pending row.
+func (a *App) ShowSystemNotification(notification SystemNotification) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	return h.ShowSystemNotification(notification)
+}
+
+// DismissSystemNotification dismisses the notification with the given
+// tag (Platform::dismiss_system_notification).
+func (a *App) DismissSystemNotification(tag string) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	h.DismissSystemNotification(tag)
+	return nil
+}
+
+// OnSystemNotificationResponse registers the notification response
+// callback (Platform::on_system_notification_response).
+func (a *App) OnSystemNotificationResponse(cb func(SystemNotificationResponse)) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	if cb == nil {
+		return fmt.Errorf("gpui: OnSystemNotificationResponse requires a non-nil callback")
+	}
+	return h.OnSystemNotificationResponse(func(response SystemNotificationResponse) {
+		a.Update(func(*App) { cb(response) })
+	})
+}
+
+// SetMenus records the application menus (Platform::set_menus).
+func (a *App) SetMenus(menus []Menu) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	h.SetMenus(menus)
+	return nil
+}
+
+// GetMenus returns the recorded menus (Platform::get_menus; always
+// present on Windows).
+func (a *App) GetMenus() ([]Menu, bool) {
+	if a.host == nil {
+		return nil, false
+	}
+	return a.host.GetMenus()
+}
+
+// SetDockMenu builds the dock (taskbar) menu items and updates the jump
+// list (Platform::set_dock_menu).
+func (a *App) SetDockMenu(items []MenuItem) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	h.SetDockMenu(items)
+	return nil
+}
+
+// UpdateJumpList updates the jump-list state and reports the
+// user-removed entries (Platform::update_jump_list). The shell commit
+// is not ported; the typed error is the honest outcome.
+func (a *App) UpdateJumpList(menus []MenuItem, entries [][]string) ([][]string, error) {
+	h, err := a.desktopHost()
+	if err != nil {
+		return nil, err
+	}
+	return h.UpdateJumpList(menus, entries)
+}
+
+// PerformDockMenuAction dispatches one dock menu action by index
+// (Platform::perform_dock_menu_action).
+func (a *App) PerformDockMenuAction(index int) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	h.PerformDockMenuAction(index)
+	return nil
+}
+
+// OnAppMenuAction registers the app menu action callback
+// (Platform::on_app_menu_action), the delivery path for dock menu
+// actions.
+func (a *App) OnAppMenuAction(cb func(action BoxedAction)) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	if cb == nil {
+		return fmt.Errorf("gpui: OnAppMenuAction requires a non-nil callback")
+	}
+	return h.OnAppMenuAction(func(action BoxedAction) {
+		a.Update(func(*App) { cb(action) })
+	})
+}
+
+// OnWillOpenAppMenu registers the will-open callback
+// (Platform::on_will_open_app_menu); dormant on Windows.
+func (a *App) OnWillOpenAppMenu(cb func()) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	return h.OnWillOpenAppMenu(cb)
+}
+
+// OnValidateAppMenuCommand registers the validation callback
+// (Platform::on_validate_app_menu_command); dormant on Windows.
+func (a *App) OnValidateAppMenuCommand(cb func(action BoxedAction) bool) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	return h.OnValidateAppMenuCommand(cb)
+}
+
+// WindowAppearance returns the system appearance
+// (Platform::window_appearance: a fresh read).
+func (a *App) WindowAppearance() (WindowAppearance, error) {
+	h, err := a.desktopHost()
+	if err != nil {
+		return WindowAppearanceLight, err
+	}
+	return h.WindowAppearance()
+}
+
+// ButtonLayout reports the window-control button layout when the
+// platform supports one (Platform::button_layout; Windows reports the
+// unsupported trait default).
+func (a *App) ButtonLayout() (WindowButtonLayout, bool) {
+	h, err := a.desktopHost()
+	if err != nil {
+		return WindowButtonLayout{}, false
+	}
+	return h.ButtonLayout()
+}
+
+// OnButtonLayoutChanged registers the button-layout observer
+// (Platform::on_button_layout_changed; the Windows default never fires).
+func (a *App) OnButtonLayoutChanged(cb func()) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	return h.OnButtonLayoutChanged(cb)
+}
+
+// MouseWheelSettings returns the tracked wheel parameters
+// (WindowsSystemSettings::mouse_wheel_settings).
+func (a *App) MouseWheelSettings() (MouseWheelSettings, error) {
+	h, err := a.desktopHost()
+	if err != nil {
+		return MouseWheelSettings{}, err
+	}
+	return h.MouseWheelSettings(), nil
+}

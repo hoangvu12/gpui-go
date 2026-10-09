@@ -1,0 +1,30 @@
+{
+    "ticket": "21-accessibility-tree",
+    "date": "2026-10-09",
+    "authorization": "User hard constraints (successor-chat handoff 2026-10-06, restated 2026-10-09): full backlog implementation authorized; minimize Rust (no cargo/DLL work); parallel subagents with lean prompts; never auto-retry aborted subagents; commit and push to main after each resolved batch.",
+    "session": "Roboco chat efb5f590 (Reimplementing Lost Work Specification; pi, iroha/dashscope/glm-5.3). The original wave-2 worker ran 2h14m without writing any files and was stopped; the replacement worker (model dashscope/glm-5.3, session impl-21-accessibility-2, 17m40s, clean completion) delivered the whole slice. The orchestrator verified by re-running the tests (162 tests across accessspec+gpui, vet clean, one gofmt fix applied by the orchestrator).",
+    "git_state": "Branch implement-core-remaining; committed and pushed with this evidence (batch 2).",
+    "native": "No native changes: pure Go. DLL revision 7, capability mask 0xFF, sha256 d648523b... (unchanged).",
+    "implementation": {
+        "companions": "gpui/accessibility.go — the type-asserted element companions (A11yCompanion for role/label/description/value/hidden/author-id/focus binding, A11ySynthetic for synthetic children from prepaint state, A11yActions for per-frame action listeners built at paint), honoring the placeholder interfaces already declared in element.go (A11yRole/A11yHidden/A11yProperties). The generic Accessibility(elem) wrapper drives the tree from the REAL element phases: node push at prepaint with committed-layout bounds, synthetic children after child prepaint, focus/action registration at paint.",
+        "identity": "Node-ID determinism: FNV-1a-64 over a canonical kind-tagged encoding of the GlobalElementID path (root fixed at 0; synthetic ids hash parent-id+key like a11y.rs synthetic_node_id); ids are tree-local per window; duplicates dropped and recorded on the snapshot. Node identity generations: assigned at insertion, retired at removal; reinserted ids keep the same node id but a FRESH generation, so stale tokens can never target replacements.",
+        "snapshots": "PublishWindowA11y finalizes the frame build into a value-copied immutable A11ySnapshot (independent of mutable app state) with repair semantics (focus falls back to root, dangling child refs stripped) and Trace() for fixture comparison. Activation returns a minimal root immediately with a refresh request (the reference pattern); CloseWindowA11y bumps the generation and drops state.",
+        "actions": "Generation-checked foreground action routing: A11yToken (window identity + window generation + node + node generation), ResolveA11yToken, DispatchA11yAction validating and delivering inside one App.Update through the existing entity/window/focus machinery; listener-first with built-in Focus/Blur fallbacks; typed errors (ErrA11yWindowGone, ErrA11yStaleGeneration, ErrA11yNodeRemoved, ErrA11yNoHandler)."
+    },
+    "gates": {
+        "accessspec": "internal/accessspec: 12 tests over a real counter/editor corpus with custom typed elements (container, static-text label, focusable button with Click/Increment handlers, editor with prepaint-derived synthetic TextRun children) — activation pattern + golden trace, stable identity + property updates + snapshot immutability, synthetic children, focus semantics, token action routing, built-in Focus/Blur fallback, removal/reinsertion + stale-generation rejection, hidden flag + identity, post-close rejection without reviving entities, per-window generation separation with identical node ids across two windows, collision recording, unpublished-build frame lifecycle.",
+        "gpui": "gpui/accessibility_test.go: identity-policy unit tests (determinism, kind/separator disambiguation, synthetic derivation, publish gating, trace shape).",
+        "regressions": "Orchestrator re-run: accessspec + gpui green (162 tests total), vet clean."
+    },
+    "executed_results": {
+        "go": "CGO_ENABLED=0 go test ./internal/accessspec ./gpui -count=1 green across repeated runs."
+    },
+    "limitations": [
+        "No native UIA/AccessKit interop (explicitly out of this ticket's scope; ticket 22 remains deferred with the Rust constraint). The published snapshot is the seam ticket 22 will consume.",
+        "CE's Click fallback (synthetic MouseDown/MouseUp at the bounds center) is not implemented; Click works through registered listeners.",
+        "No CE-recorded a11y traces exist in this repo (ticket 01 recorded none), so the golden traces are port-recorded, deterministic by the ID policy.",
+        "set_focus misuse records a snapshot diagnostic instead of the reference's debug-build panic.",
+        "Teardown is the explicit CloseWindowA11y API; auto-hooking window close would have required editing existing files (flagged in the ticket Comments for ticket 22).",
+        "Capability-row updates would require editing docs/conformance-inventory.md — outside the worker's file ownership; the family state is recorded in the ticket for the batch bookkeeping."
+    ]
+}

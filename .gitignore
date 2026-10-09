@@ -13,3 +13,7 @@ reference/ce-source/
 # OS cruft
 Thumbs.db
 Desktop.ini
+
+# Worker scratch probes (build outputs; superseded by the spec packages)
+.scratch/tmp15/
+.scratch/tmp31/

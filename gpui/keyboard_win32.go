@@ -67,6 +67,14 @@ const (
 
 	klNameLength = 9 // KL_NAMELENGTH (includes the null terminator)
 
+	// hklmRoot is HKEY_LOCAL_MACHINE's predefined-handle value
+	// (0x80000002). RegOpenKeyExW requires the real handle: passing
+	// NULL fails with ERROR_INVALID_HANDLE (latent in readLayoutText
+	// until ticket20's IME availability enumeration read the same tree
+	// and exposed it — every layout-name lookup failed and fell back
+	// to "unknown").
+	hklmRoot = uintptr(0x80000002)
+
 	hklmKeyRead = 0x20019 // KEY_READ
 	rrfRegSz    = 0x00002 // RRF_RT_REG_SZ (the query returns REG_SZ data)
 )
@@ -172,7 +180,7 @@ func readLayoutText(id string) string {
 	}
 	var key uintptr
 	ret, _, _ := procRegOpenKeyExW.Call(
-		uintptr(0), // HKEY_LOCAL_MACHINE
+		hklmRoot, // HKEY_LOCAL_MACHINE
 		uintptr(unsafe.Pointer(pathUTF16)),
 		0, hklmKeyRead, uintptr(unsafe.Pointer(&key)))
 	if ret != 0 || key == 0 {

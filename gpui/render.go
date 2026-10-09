@@ -101,32 +101,47 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 
 	baseMask := Bounds{Origin: Point{}, Size: viewport}
 	frame := &frameDrawState{
-		scene:         scene,
-		paint:         NewPaintContext(scale, baseMask, 1.0),
-		viewport:      viewport,
-		scale:         scale,
-		rem:           ds.rem,
-		contentMask:   baseMask,
-		elementOffset: Point{},
-		text:          ds.text,
+		scene:             scene,
+		paint:             NewPaintContext(scale, baseMask, 1.0),
+		viewport:          viewport,
+		scale:             scale,
+		rem:               ds.rem,
+		contentMask:       baseMask,
+		elementOffset:     Point{},
+		text:              ds.text,
+		inlineShapedLines: make(map[*WrappedLine]struct{}),
 	}
 	ds.frame = frame
 	previousActive := activeFrame
 	activeFrame = w
+	var drawErr error
+	completed := false
 	defer func() {
 		activeFrame = previousActive
 		ds.frame = nil
-		ds.draws++
-		ds.lastDebugBounds = frame.debugBounds
-		ds.lastScene = scene
-		// Swap the completed dispatch frame into the rendered state
-		// (the focus/dispatch runtime reads it for input dispatch).
-		endDispatchFrame(w)
-		ds.refreshRequested = false
+		// An abandoned build preserves the prior published frame: the
+		// completed observables (scene, debug bounds, inline facts,
+		// dispatch tree, element-state retention, the draw counter)
+		// swap only when the frame completed — a returned error OR a
+		// panicking element build leaves everything at the previous
+		// frame; application mutations made during the failed build are
+		// NOT rolled back.
+		if completed {
+			ds.draws++
+			ds.lastDebugBounds = frame.debugBounds
+			ds.lastScene = scene
+			ds.lastInlineFacts = frame.inlineFacts
+			retainElementStates(ds, frame.accessedElementStates)
+			// Swap the completed dispatch frame into the rendered state
+			// (the focus/dispatch runtime reads it for input dispatch).
+			endDispatchFrame(w)
+			ds.refreshRequested = false
+		} else {
+			discardDispatchFrame(w)
+		}
 	}()
 
 	app := w.app
-	var drawErr error
 	app.Update(func(app *App) {
 		drawErr = drawRoots(w, app, ds, frame)
 	})
@@ -134,8 +149,10 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 		return nil, drawErr
 	}
 	if err := scene.Finish(); err != nil {
-		return nil, fmt.Errorf("gpui: DrawWindowFrame: scene finish: %w", err)
+		drawErr = fmt.Errorf("gpui: DrawWindowFrame: scene finish: %w", err)
+		return nil, drawErr
 	}
+	completed = true
 	return scene, nil
 }
 

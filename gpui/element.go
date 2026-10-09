@@ -335,6 +335,10 @@ type drawable[L, P any, E Element[L, P]] struct {
 	// populated when the element has an id.
 	global    *GlobalElementID
 	inspector *InspectorElementID
+	// inlineFragments is the fragment geometry of this element's layout
+	// node, captured when prepaint runs and replayed around paint (the
+	// reference Drawable's ElementDrawPhase::Prepaint::inline_fragments).
+	inlineFragments []Bounds
 	// available is the root available space of the last root compute
 	// (the LayoutComputed recompute guard).
 	available AvailableSize
@@ -413,6 +417,16 @@ func (d *drawable[L, P, E]) prepaint(global *GlobalElementID, inspector *Inspect
 		panic(fmt.Sprintf("gpui: prepaint could not resolve layout bounds: %v", err))
 	}
 	d.phase = phasePrepainted
+	// Scope this element's placed fragment geometry around its
+	// prepaint (the reference Drawable::prepaint swaps
+	// window.current_inline_fragments with window.inline_fragments)
+	// so elements whose content lives inside a parent paragraph can
+	// skip their standalone phases.
+	d.inlineFragments = inlineFragmentsOf(w, d.layoutID)
+	frame := currentFrame(w)
+	previousFragments := frame.currentInlineFragments
+	frame.currentInlineFragments = d.inlineFragments
+	defer func() { frame.currentInlineFragments = previousFragments }()
 	d.prepaintState = d.element.Prepaint(orGlobalID(global, d.global), orInspector(inspector, d.inspector), bounds, &d.requestState, w, app)
 }
 
@@ -432,6 +446,13 @@ func (d *drawable[L, P, E]) paint(global *GlobalElementID, inspector *InspectorE
 		panic(fmt.Sprintf("gpui: paint could not resolve layout bounds: %v", err))
 	}
 	d.phase = phasePainted
+	// Replay the fragments captured at prepaint around paint (the
+	// reference Drawable::paint swaps current_inline_fragments with the
+	// prepaint-captured list).
+	frame := currentFrame(w)
+	previousFragments := frame.currentInlineFragments
+	frame.currentInlineFragments = d.inlineFragments
+	defer func() { frame.currentInlineFragments = previousFragments }()
 	d.element.Paint(orGlobalID(global, d.global), orInspector(inspector, d.inspector), bounds, &d.requestState, &d.prepaintState, w, app)
 }
 
@@ -823,6 +844,9 @@ type windowDrawState struct {
 	// lastScene holds the last completed frame's finished scene (the
 	// reference rendered_frame.scene).
 	lastScene *Scene
+	// lastInlineFacts holds the last completed frame's inline paragraph
+	// facts (the port's test-support observable of the inline layer).
+	lastInlineFacts []InlineParagraphFacts
 	// frame is the in-flight frame draw state; nil outside a draw.
 	frame *frameDrawState
 	// draws counts completed frame draws of this window.
@@ -864,6 +888,25 @@ type frameDrawState struct {
 	// debugBounds is this frame's debug-selector bounds
 	// (window.next_frame.debug_bounds).
 	debugBounds map[string]Bounds
+	// inlineFacts is this frame's inline paragraph facts (the
+	// test-support observable; swapped into the window state when the
+	// frame completes).
+	inlineFacts []InlineParagraphFacts
+	// accessedElementStates records every element-state key used
+	// during this frame (window.rs accessed_element_states): the
+	// frame-end retention carries over exactly these keys from the
+	// previous frame's state, dropping the states of elements that no
+	// longer draw.
+	accessedElementStates map[string]struct{}
+	// currentInlineFragments is the fragment geometry of the element
+	// whose prepaint/paint is running (window.current_inline_fragments:
+	// Some — including an empty list — means the element's content
+	// lives inside a parent paragraph; nil means standalone).
+	currentInlineFragments []Bounds
+	// inlineShapedLines tracks the real WrappedLines referenced by this
+	// frame's inline paint pieces (frame-scoped native shaping handles;
+	// disposed when the frame completes).
+	inlineShapedLines map[*WrappedLine]struct{}
 	// renderedViews is the rendered-view stack
 	// (window.rendered_entity_stack).
 	renderedViews []EntityID
@@ -1216,6 +1259,7 @@ func WithOptionalElementState[S any, R any](w *Window, global *GlobalElementID, 
 	}
 	ds := drawState(w)
 	key := global.key()
+	recordElementStateAccess(w, key)
 	slot, existed := takeElementStateSlot[S](ds, key)
 	reentryGuard := elementStateReentry{key: key, stateType: reflect.TypeFor[S]()}
 	reentryGuard.enter()
@@ -1236,6 +1280,7 @@ func WithOptionalElementState[S any, R any](w *Window, global *GlobalElementID, 
 
 // withElementStateOf is the plain (non-optional) variant.
 func withElementStateOf[S any, R any](ds *windowDrawState, key string, f func(state *S, w *Window) (R, S), w *Window) R {
+	recordElementStateAccess(w, key)
 	slot, existed := takeElementStateSlot[S](ds, key)
 	reentryGuard := elementStateReentry{key: key, stateType: reflect.TypeFor[S]()}
 	reentryGuard.enter()
@@ -1247,6 +1292,34 @@ func withElementStateOf[S any, R any](ds *windowDrawState, key string, f func(st
 	result, retained := f(previous, w)
 	putElementState(ds, key, reflect.TypeFor[S](), &retained)
 	return result
+}
+
+// recordElementStateAccess marks an element-state key as used in the
+// frame under construction (window.rs accessed_element_states push).
+// Access outside a frame (allowed by this seam's diagnostics tests)
+// records nothing: retention follows the draws that used the state.
+func recordElementStateAccess(w *Window, key string) {
+	if ds := drawState(w); ds.frame != nil {
+		if ds.frame.accessedElementStates == nil {
+			ds.frame.accessedElementStates = make(map[string]struct{})
+		}
+		ds.frame.accessedElementStates[key] = struct{}{}
+	}
+}
+
+// retainElementStates filters the window's retained element state to
+// the keys accessed during the completed frame (window.rs
+// Frame::finish's carry-over loop): state of elements that did not
+// draw this frame is dropped, so removal followed by reinsertion
+// starts fresh.
+func retainElementStates(ds *windowDrawState, accessed map[string]struct{}) {
+	retained := make(map[string]map[reflect.Type]any, len(accessed))
+	for key := range accessed {
+		if byType, ok := ds.elementStates[key]; ok {
+			retained[key] = byType
+		}
+	}
+	ds.elementStates = retained
 }
 
 // takeElementStateSlot removes and returns the retained *S slot for the

@@ -804,6 +804,86 @@ func (s *Scene) PaintShapedText(
 	return nil
 }
 
+// PaintShapedTextLine paints one visual line of a shaped document at
+// an explicit origin and baseline (the inline piece paint path — the
+// pinned paint_visual_line: the line's fragments paint at the line
+// origin with the row's baseline; the ordinary PaintShapedText derives
+// its own single baseline from the line height and is the text
+// element's bounded path).
+func (s *Scene) PaintShapedTextLine(
+	line *WrappedLine,
+	lineIndex int,
+	origin Point,
+	baselineY float32,
+	color Hsla,
+	ts *TextSystem,
+	atlas *Atlas,
+	ctx *PaintContext,
+) error {
+	if line == nil {
+		return fmt.Errorf("gpui: PaintShapedTextLine: nil line")
+	}
+	summary, err := line.Summary()
+	if err != nil {
+		return fmt.Errorf("gpui: PaintShapedTextLine: %w", err)
+	}
+	if lineIndex < 0 || lineIndex >= summary.LineCount {
+		return fmt.Errorf("gpui: PaintShapedTextLine: line index %d out of range (%d lines)", lineIndex, summary.LineCount)
+	}
+	record, err := line.Line(lineIndex, 1)
+	if err != nil {
+		return fmt.Errorf("gpui: PaintShapedTextLine: %w", err)
+	}
+	fragments, err := line.Fragments()
+	if err != nil {
+		return fmt.Errorf("gpui: PaintShapedTextLine: %w", err)
+	}
+	glyphs, err := line.Glyphs()
+	if err != nil {
+		return fmt.Errorf("gpui: PaintShapedTextLine: %w", err)
+	}
+	if record.FragmentEnd < record.FragmentStart || record.FragmentEnd > len(fragments) {
+		return fmt.Errorf("gpui: PaintShapedTextLine: fragment range %d..%d out of range", record.FragmentStart, record.FragmentEnd)
+	}
+	for _, fragment := range fragments[record.FragmentStart:record.FragmentEnd] {
+		metrics, err := ts.FontMetrics(fragment.FontID)
+		if err != nil {
+			return fmt.Errorf("gpui: PaintShapedTextLine: %w", err)
+		}
+		maxGlyphSize := Size{
+			Width:  metrics.BoundingBoxWidth * fragment.FontSize / float32(metrics.UnitsPerEm),
+			Height: metrics.BoundingBoxHeight * fragment.FontSize / float32(metrics.UnitsPerEm),
+		}
+		for i := 0; i < fragment.GlyphCount; i++ {
+			glyph := glyphs[fragment.GlyphStart+i]
+			cullOrigin := Point{
+				X: origin.X + glyph.X,
+				Y: origin.Y,
+			}
+			if !intersectsBounds(
+				Bounds{Origin: cullOrigin, Size: maxGlyphSize},
+				ctx.Mask,
+			) {
+				continue
+			}
+			glyphOrigin := Point{
+				X: origin.X + glyph.X,
+				Y: baselineY + glyph.Y,
+			}
+			if glyph.IsEmoji {
+				if err := s.PaintColorGlyph(glyphOrigin, fragment.FontID, glyph.ID, fragment.FontSize, ts, atlas, ctx); err != nil {
+					return err
+				}
+			} else {
+				if err := s.PaintGlyph(glyphOrigin, fragment.FontID, glyph.ID, fragment.FontSize, color, ts, atlas, ctx, PaintTextOptions{}); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // intersectsBounds reports whether two logical-pixel bounds intersect
 // (the pinned Bounds::intersects).
 func intersectsBounds(a, b Bounds) bool {

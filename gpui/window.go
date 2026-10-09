@@ -73,6 +73,10 @@ type Bounds struct {
 type WindowOptions struct {
 	// Title is the window title. Empty is allowed.
 	Title string
+	// Kind selects the window flavor. A native AnchoredPopup is
+	// rejected on Windows with ErrPopupNotSupported so callers fall
+	// back to in-window popovers (ticket26, WindowsWindow::new).
+	Kind WindowKind
 	// Bounds is the requested window bounds in logical pixels. A zero
 	// size lets Windows place a default-sized window.
 	Bounds Bounds
@@ -122,6 +126,15 @@ type WindowOptions struct {
 	// OnKeyboardLayoutChange receives WM_INPUTLANGCHANGE reports with
 	// the active layout's identity and display name (ticket13).
 	OnKeyboardLayoutChange func(layout KeyboardLayoutInfo)
+	// OnAppearanceChanged receives the system appearance change report
+	// (ticket26): WM_SETTINGCHANGE with the ImmersiveColorSet area.
+	// Delivered synchronously on the foreground thread after the
+	// window's cached appearance changed.
+	OnAppearanceChanged func()
+	// OnHoverStatusChange receives hover enter/leave reports (ticket26,
+	// the cursor slice's WM_MOUSEMOVE tracking and WM_MOUSELEAVE
+	// clearing).
+	OnHoverStatusChange func(hovered bool)
 }
 
 // Typed window errors.
@@ -238,6 +251,70 @@ func (w *Window) ScaleFactor() (float32, error) { return w.handle.ScaleFactor() 
 
 // Alive reports whether the leased window still exists.
 func (w *Window) Alive() bool { return w.handle.Alive() }
+
+// Minimize minimizes the window (ticket26; ShowWindowAsync
+// SW_MINIMIZE). The restore reports the client size again through the
+// WM_SIZE policy.
+func (w *Window) Minimize() { w.handle.Minimize() }
+
+// Zoom toggles the maximized state (ticket26; a hidden window records
+// the pending state and applies it when shown).
+func (w *Window) Zoom() { w.handle.Zoom() }
+
+// IsMaximized reports whether the window is maximized (ticket26).
+func (w *Window) IsMaximized() (bool, error) { return w.handle.IsMaximized() }
+
+// IsMinimized reports whether the window is minimized (ticket26).
+func (w *Window) IsMinimized() (bool, error) { return w.handle.IsMinimized() }
+
+// IsActive reports whether this window is the active window (ticket26).
+func (w *Window) IsActive() (bool, error) { return w.handle.IsActive() }
+
+// RequestAttention flashes the window's taskbar entry once when it is
+// not active (ticket26).
+func (w *Window) RequestAttention() { w.handle.RequestAttention() }
+
+// MousePosition returns the cursor position in window-local logical
+// pixels (ticket26).
+func (w *Window) MousePosition() (Point, error) { return w.handle.MousePosition() }
+
+// IsHovered reports whether the cursor is over this window (ticket26).
+func (w *Window) IsHovered() (bool, error) { return w.handle.IsHovered() }
+
+// ShowCharacterPalette opens the Windows character palette for this
+// window when it is the foreground window (ticket26: modifier
+// release/restore with partial-send cleanup).
+func (w *Window) ShowCharacterPalette() error { return w.handle.ShowCharacterPalette() }
+
+// PlaySystemBell plays the Windows default beep (ticket26). It is
+// user-audible; tests do not invoke it.
+func (w *Window) PlaySystemBell() { w.handle.PlaySystemBell() }
+
+// Appearance returns the window's cached system appearance, updated by
+// the ImmersiveColorSet observer (ticket26).
+func (w *Window) Appearance() (WindowAppearance, error) { return w.handle.Appearance() }
+
+// SetBackgroundAppearance sets the window's background compositing
+// mode: the DWM behavior plus the renderer clear path (ticket26).
+func (w *Window) SetBackgroundAppearance(appearance WindowBackgroundAppearance) {
+	w.handle.SetBackgroundAppearance(appearance)
+}
+
+// BackgroundAppearance returns the window's background compositing
+// mode (ticket26).
+func (w *Window) BackgroundAppearance() (WindowBackgroundAppearance, error) {
+	return w.handle.BackgroundAppearance()
+}
+
+// ClearColor returns the renderer clear color for the window's current
+// background appearance (the renderer half of SetBackgroundAppearance,
+// ticket26: opaque modes clear to opaque white, the rest to fully
+// transparent).
+func (w *Window) ClearColor() (Color, error) { return w.handle.ClearColor() }
+
+// Display returns the window's current monitor record (ticket26,
+// updated by WM_DISPLAYCHANGE and window moves).
+func (w *Window) Display() (*DisplayInfo, error) { return w.handle.Display() }
 
 // NewFocusHandle allocates a focus identity inside this window
 // (window.rs FocusHandle::new: the window's focus registry inserts a
@@ -428,6 +505,13 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 		}
 		hostOpts.OnMoved = wrap(opts.OnMoved)
 		hostOpts.OnRedraw = wrap(opts.OnRedraw)
+		hostOpts.OnAppearanceChanged = wrap(opts.OnAppearanceChanged)
+		if opts.OnHoverStatusChange != nil {
+			user := opts.OnHoverStatusChange
+			hostOpts.OnHoverStatusChange = func(hovered bool) {
+				a.Update(func(*App) { user(hovered) })
+			}
+		}
 		// The keyboard input callback routes every event through the
 		// logical window's dispatch tree (the reference installs the
 		// platform input callback unconditionally in Window::new; an

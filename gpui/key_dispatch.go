@@ -624,6 +624,15 @@ func endDispatchFrame(w *Window) {
 	fs.next = nil
 }
 
+// discardDispatchFrame drops an abandoned frame's dispatch tree without
+// swapping the rendered state (render.go's failure path: the prior
+// published frame's tree stays active).
+func discardDispatchFrame(w *Window) {
+	fs := focusState(w)
+	fs.next = nil
+	fs.frameInputHandlers = nil
+}
+
 // currentDispatchTree returns the tree under construction (element
 // prepaint pushes nodes into it).
 func currentDispatchTree(w *Window) *DispatchTree {

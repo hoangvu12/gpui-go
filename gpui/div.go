@@ -203,6 +203,18 @@ type windowTextSystem interface {
 	// shape shapes the text at the resolved font size with one style run
 	// of the given font, under the optional wrap width and line clamp.
 	shape(text string, fontSize float32, font FontDescriptor, wrapWidth *float32, lineClamp *uint32) (shapedText, error)
+	// layoutInline lays out one inline document (text plus atomic
+	// element boxes) in one inline formatting context (the reference
+	// PlatformTextSystem::layout_inline). Go owns the algorithm on both
+	// stacks: the test system ports the reference
+	// TestTextSystem::layout_inline exactly, and the real system
+	// composes the native shaping seam with the Go greedy row/box
+	// algorithm (the native ABI exposes no box-aware shaping).
+	layoutInline(request inlineLayoutRequest) (inlineLayout, error)
+	// inlineMetrics returns the font metrics of one descriptor at a
+	// font size for an inline container's base font (the reference
+	// WindowTextSystem::ascent / descent / x_height).
+	inlineMetrics(font FontDescriptor, fontSize float32) InlineTextMetrics
 }
 
 // shapedText is one shaped document handle (the reference WrappedLine
@@ -223,6 +235,20 @@ type shapedText interface {
 	// paint paints the line at the origin with the window's current
 	// paint state (WrappedLine::paint → paint_visual_text).
 	paint(w *Window, origin Point, lineHeight float32, color Hsla) error
+	// paintLine paints one visual line at the given origin and
+	// baseline (the inline piece paint path; the ordinary paint
+	// derives its baseline from the line height — paint_visual_line).
+	paintLine(w *Window, lineIndex int, origin Point, baseline float32, color Hsla) error
+	// lineAdvance returns one visual line's shaped advance (the
+	// VisualLine::advance_width fact the inline row assembly reads).
+	lineAdvance(lineIndex int) float32
+	// lineRange returns one visual line's byte range (the
+	// VisualLine::text_range fact).
+	lineRange(lineIndex int) (start, end int)
+	// selectionRects returns the piece-local rectangles covering a
+	// byte range (the inline geometry source: the reference
+	// platform_layout.selection_bounds feeding inline_geometry).
+	selectionRects(start, end int, lineHeight float32) []TextRect
 }
 
 // realWindowTextSystem is the real text stack seam: shaping through the
@@ -412,7 +438,10 @@ func (t *textElement) WriteA11yInfo(node *Node) {
 // RequestLayout implements Element: resolve the ambient text style, then
 // request a MEASURED layout node whose measure function shapes the text
 // through the window's text system (the reference TextLayout::layout,
-// including its cached-layout reuse under matching wrap widths).
+// including its cached-layout reuse under matching wrap widths), and
+// publish the text as this node's inline content so a parent paragraph
+// can collect it (the reference layout publishes InlineContent::Text
+// after requesting the node).
 func (t *textElement) RequestLayout(global *GlobalElementID, inspector *InspectorElementID, w *Window, app *App) (LayoutID, stringLayoutState) {
 	textStyle := WindowTextStyle(w)
 	rem := RemSize(w)
@@ -455,13 +484,26 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		panic(fmt.Sprintf("gpui: text element request_layout: %v", err))
 	}
 	state.layoutID = layoutID
+	// The published runs are the runs the element would shape with: one
+	// run of the ambient font covering the text (TextStyle::to_run).
+	publishInlineContent(w, layoutID, &inlineTextContent{
+		text:       t.text,
+		runs:       []TextRun{{Len: len(t.text), Font: textStyle.FontDescriptorOf()}},
+		fontSize:   fontSize,
+		lineHeight: lineHeight,
+	})
 	return layoutID, state
 }
 
 // Prepaint implements Element: commit the parent-relative bounds (the
 // reference TextLayout::prepaint uses parent_relative_layout_bounds so
-// text placement stays stable when its container moves).
+// text placement stays stable when its container moves). Inside a
+// parent paragraph the element's prepaint is a no-op — the paragraph
+// owns its geometry (window.current_inline_fragments is Some).
 func (t *textElement) Prepaint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *stringLayoutState, w *Window, app *App) struct{} {
+	if currentFrame(w).currentInlineFragments != nil {
+		return struct{}{}
+	}
 	textBounds, err := parentRelativeLayoutBoundsOf(w, layout.layoutID)
 	if err != nil {
 		panic(fmt.Sprintf("gpui: text element prepaint bounds: %v", err))
@@ -472,8 +514,12 @@ func (t *textElement) Prepaint(global *GlobalElementID, inspector *InspectorElem
 
 // Paint implements Element: draw the shaped line at the committed
 // bounds origin (the reference TextLayout::paint with the ambient text
-// style).
+// style). Inside a parent paragraph the paragraph paints the text, so
+// the element's paint is a no-op.
 func (t *textElement) Paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *stringLayoutState, prepaint *struct{}, w *Window, app *App) {
+	if currentFrame(w).currentInlineFragments != nil {
+		return
+	}
 	if layout.cell == nil || layout.cell.shaped == nil || layout.bounds == nil {
 		panic(fmt.Sprintf("gpui: measurement or prepaint has not been performed on %q", t.text))
 	}
@@ -524,10 +570,29 @@ type typedActionListener struct {
 }
 
 // divFrameState is the div's request-layout state (the reference
-// DivFrameState): the children's layout ids.
+// DivFrameState): the children's layout ids, the inline frame state of
+// a Block/Inline div, and whether the div's contents participate in a
+// parent paragraph (committed at prepaint).
 type divFrameState struct {
 	// childLayoutIDs are the requested layout nodes of the children.
 	childLayoutIDs []LayoutID
+	// inline is the inline frame state (Block/Inline display only).
+	inline *inlineDivFrameState
+	// contentsInParentParagraph records that this div's own layout node
+	// carries placed fragments, so its contents belong to the parent's
+	// paragraph and its own paragraphs stay unplaced (the reference
+	// contents_in_parent_paragraph).
+	contentsInParentParagraph bool
+}
+
+// standaloneInline returns the div's own inline frame state when it
+// should drive this div's layout (not participating in a parent
+// paragraph).
+func (s *divFrameState) standaloneInline() *inlineDivFrameState {
+	if s.contentsInParentParagraph {
+		return nil
+	}
+	return s.inline
 }
 
 // DivElement is the concrete div element builder (the fixture API
@@ -614,6 +679,134 @@ func (d *DivElement) KeyContext(value string) *DivElement {
 // Flex sets the display type to flex (Styled::flex).
 func (d *DivElement) Flex() *DivElement {
 	d.style.Display = DisplayFlex
+	return d
+}
+
+// Block sets the display type to block (Styled::block): the div's
+// text and inline children are collected into paragraphs.
+func (d *DivElement) Block() *DivElement {
+	d.style.Display = DisplayBlock
+	return d
+}
+
+// Inline sets the display type to inline (Styled::inline): the div's
+// contents join the surrounding paragraph; standalone it lays out its
+// contents in block flow.
+func (d *DivElement) Inline() *DivElement {
+	d.style.Display = DisplayInline
+	return d
+}
+
+// InlineFlex sets the display type to inline-flex (Styled::inline_flex):
+// an atomic inline box whose children use flex layout.
+func (d *DivElement) InlineFlex() *DivElement {
+	d.style.Display = DisplayInlineFlex
+	return d
+}
+
+// Grid sets the display type to grid (Styled::grid): children place
+// into the tracks defined by GridTemplateCols/GridTemplateRows.
+func (d *DivElement) Grid() *DivElement {
+	d.style.Display = DisplayGrid
+	return d
+}
+
+// GridTemplateCols sets the column track template
+// (grid-template-columns: repeat(n, minmax(min, 1fr)) in the pinned
+// simplified form).
+func (d *DivElement) GridTemplateCols(template GridTemplate) *DivElement {
+	d.style.GridCols = &template
+	return d
+}
+
+// GridTemplateRows sets the row track template (grid-template-rows).
+func (d *DivElement) GridTemplateRows(template GridTemplate) *DivElement {
+	d.style.GridRows = &template
+	return d
+}
+
+// GridAt places this item in its parent grid (the reference
+// col_row/row_col placement).
+func (d *DivElement) GridAt(location GridLocation) *DivElement {
+	d.style.GridLocation = &location
+	return d
+}
+
+// Absolute sets the position to absolute (Styled::absolute): the
+// item offsets from its closest positioned ancestor and leaves the
+// inline/block flow.
+func (d *DivElement) Absolute() *DivElement {
+	d.style.Position = PositionAbsolute
+	return d
+}
+
+// Left sets the left inset (Styled::left).
+func (d *DivElement) Left(offset Length) *DivElement {
+	d.style.Inset.Left = offset
+	return d
+}
+
+// Top sets the top inset (Styled::top).
+func (d *DivElement) Top(offset Length) *DivElement {
+	d.style.Inset.Top = offset
+	return d
+}
+
+// Right sets the right inset (Styled::right).
+func (d *DivElement) Right(offset Length) *DivElement {
+	d.style.Inset.Right = offset
+	return d
+}
+
+// Bottom sets the bottom inset (Styled::bottom).
+func (d *DivElement) Bottom(offset Length) *DivElement {
+	d.style.Inset.Bottom = offset
+	return d
+}
+
+// W sets the width (Styled::w).
+func (d *DivElement) W(width Length) *DivElement {
+	d.style.Size.Width = width
+	return d
+}
+
+// H sets the height (Styled::h).
+func (d *DivElement) H(height Length) *DivElement {
+	d.style.Size.Height = height
+	return d
+}
+
+// Size sets the width and height (Styled::size).
+func (d *DivElement) Size(width, height Length) *DivElement {
+	d.style.Size = LengthSize{Width: width, Height: height}
+	return d
+}
+
+// AlignBaseline aligns this inline box's bottom with the text baseline
+// (Styled::align_baseline).
+func (d *DivElement) AlignBaseline() *DivElement {
+	d.style.VerticalAlign = VerticalAlignBaseline
+	return d
+}
+
+// AlignTop aligns this inline box's top with the line's top
+// (Styled::align_top).
+func (d *DivElement) AlignTop() *DivElement {
+	d.style.VerticalAlign = VerticalAlignTop
+	return d
+}
+
+// AlignBottom aligns this inline box's bottom with the line's bottom
+// (Styled::align_bottom).
+func (d *DivElement) AlignBottom() *DivElement {
+	d.style.VerticalAlign = VerticalAlignBottom
+	return d
+}
+
+// AlignMiddle centers this inline box on the text's x-height midpoint
+// (Styled::align_middle).
+func (d *DivElement) AlignMiddle() *DivElement {
+	d.style.VerticalAlign = VerticalAlignMiddle
 	return d
 }
 
@@ -1037,7 +1230,10 @@ func (d *DivElement) overflowMask(bounds Bounds, rem float32) *Bounds {
 // RequestLayout implements Element (the div.rs Div::request_layout +
 // Interactivity::request_layout path, bounded): compute the style, scope
 // the text style, request the children, then request this element's
-// layout node with the children.
+// layout node with the children — a Block/Inline div routes through the
+// inline frame state (paragraph collection) — and publish the node's
+// container inline content (the reference publishes Container for every
+// div).
 func (d *DivElement) requestLayout(global *GlobalElementID, inspector *InspectorElementID, w *Window, app *App) (LayoutID, divFrameState) {
 	style := d.computeStyle()
 	d.lastStyle = style
@@ -1049,20 +1245,40 @@ func (d *DivElement) requestLayout(global *GlobalElementID, inspector *Inspector
 			childLayoutIDs = append(childLayoutIDs, d.children[i].RequestLayout(w, app))
 		}
 		state.childLayoutIDs = childLayoutIDs
-		id, err := requestLayoutOf(w, style, childLayoutIDs...)
-		if err != nil {
-			panic(fmt.Sprintf("gpui: DivElement request_layout: %v", err))
+		if style.Display == DisplayBlock || style.Display == DisplayInline {
+			id, inlineState := requestInlineDivFrame(w, style, childLayoutIDs, app)
+			state.inline = inlineState
+			layoutID = id
+		} else {
+			id, err := requestLayoutOf(w, style, childLayoutIDs...)
+			if err != nil {
+				panic(fmt.Sprintf("gpui: DivElement request_layout: %v", err))
+			}
+			layoutID = id
 		}
-		layoutID = id
+		publishInlineContent(w, layoutID, &inlineContainerContent{children: childLayoutIDs})
 	})
 	return layoutID, state
 }
 
 // Prepaint implements Element (the Interactivity::prepaint path,
-// bounded): scope the text style and the overflow content mask, record
-// the debug-selector bounds, then prepaint the children in order.
+// bounded): a standalone inline div first places its paragraphs' boxes
+// and span fragments (prepare_layout, outside the style/mask scopes —
+// the reference computes the content size before the interactivity
+// prepaint), then scopes the text style and the overflow content mask,
+// records the debug-selector bounds, registers the dispatch state, and
+// prepaints the children (through the inline frame state when it owns
+// them).
 func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *divFrameState, w *Window, app *App) divPrepaintState {
 	state := divPrepaintState{}
+	// Contents participating in a parent paragraph are detected here:
+	// the drawable scoped this element's placed fragments around this
+	// call (the reference commits contents_in_parent_paragraph at
+	// prepaint from window.current_inline_fragments).
+	layout.contentsInParentParagraph = currentFrame(w).currentInlineFragments != nil
+	if standalone := layout.standaloneInline(); standalone != nil {
+		standalone.prepareLayout(bounds, layout.childLayoutIDs, w)
+	}
 	if d.debugSelector != "" {
 		recordDebugBounds(w, d.debugSelector, bounds)
 		state.debugBounds = true
@@ -1070,6 +1286,10 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 	WithTextStyleVoid(w, d.textStyleSheet(), func(w *Window) {
 		WithContentMaskVoid(w, d.overflowMask(bounds, RemSize(w)), func(w *Window) {
 			registerDivElementDispatch(w, d)
+			if standalone := layout.standaloneInline(); standalone != nil {
+				standalone.prepaintChildren(d.children, w, app)
+				return
+			}
 			for i := range d.children {
 				d.children[i].Prepaint(w, app)
 			}
@@ -1173,13 +1393,18 @@ func invokeTypedActionListener(listener typedActionListener, action any, phase D
 
 // Paint implements Element (the Interactivity::paint + Style::paint
 // path, bounded): scope the element opacity, paint the background quad
-// when non-transparent, paint the children, then paint the border when
-// visible.
+// when non-transparent, paint the children (through the inline frame
+// state — the children first, then the paragraphs — when it owns them),
+// then paint the border when visible.
 func (d *DivElement) paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *divFrameState, prepaint *divPrepaintState, w *Window, app *App) {
 	WithElementOpacityVoid(w, d.opacity, func(w *Window) {
 		paintDivElementBox(d, bounds, w, func(w *Window) {
 			WithTextStyleVoid(w, d.textStyleSheet(), func(w *Window) {
 				WithContentMaskVoid(w, d.overflowMask(bounds, RemSize(w)), func(w *Window) {
+					if standalone := layout.standaloneInline(); standalone != nil {
+						standalone.paintChildren(d.children, w, app)
+						return
+					}
 					for i := range d.children {
 						d.children[i].Paint(w, app)
 					}

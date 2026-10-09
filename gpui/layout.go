@@ -121,6 +121,12 @@ func pixelSnap(value, scaleFactor float32) float32 {
 	return roundToDevicePixel(value, scaleFactor) / scaleFactor
 }
 
+// pixelSnapPoint snaps both components of a logical point to the
+// device-pixel grid and back (window.rs pixel_snap_point).
+func pixelSnapPoint(p Point, scaleFactor float32) Point {
+	return Point{X: pixelSnap(p.X, scaleFactor), Y: pixelSnap(p.Y, scaleFactor)}
+}
+
 // ---------------------------------------------------------------------------
 // Style translation to the ABI record (taffy.rs into_taffy_style)
 // ---------------------------------------------------------------------------
@@ -477,6 +483,21 @@ type LayoutEngine struct {
 	// Roots already computed (computed_layouts): recomputing a root
 	// invalidates its subtree's cached bounds before layout runs.
 	computedRoots map[LayoutID]bool
+
+	// inlineContent is the inline content published per node during
+	// request_layout (the reference TaffyLayoutEngine::inline_content;
+	// GPUI-owned inline orchestration state, never forwarded to Taffy).
+	inlineContent map[LayoutID]inlineContentRecord
+	// inlineFragments is the fragment geometry placed per node during
+	// prepaint (the reference TaffyLayoutEngine::inline_fragments).
+	inlineFragments map[LayoutID][]Bounds
+	// verticalAligns records non-Baseline vertical alignments per node
+	// (the reference TaffyLayoutEngine::vertical_alignments).
+	verticalAligns map[LayoutID]VerticalAlign
+	// displayPositions records the display/position pair per node (the
+	// reference TaffyLayoutEngine::display_and_position) for the inline
+	// collector's classification.
+	displayPositions map[LayoutID]displayPositionRecord
 }
 
 // NewLayoutEngine creates a fresh layout engine backed by the embedded
@@ -499,6 +520,10 @@ func NewLayoutEngine() (*LayoutEngine, error) {
 		absoluteLayoutBounds: make(map[LayoutID]Bounds),
 		absoluteOuterOrigins: make(map[LayoutID]devicePoint),
 		computedRoots:        make(map[LayoutID]bool),
+		inlineContent:        make(map[LayoutID]inlineContentRecord),
+		inlineFragments:      make(map[LayoutID][]Bounds),
+		verticalAligns:       make(map[LayoutID]VerticalAlign),
+		displayPositions:     make(map[LayoutID]displayPositionRecord),
 	}, nil
 }
 
@@ -537,7 +562,27 @@ func (e *LayoutEngine) RequestLayout(ctx *LayoutContext, style Style, children .
 	if err != nil {
 		return LayoutID{}, fmt.Errorf("gpui: RequestLayout: %w", err)
 	}
-	return LayoutID{engine: e, node: node, generation: e.generation}, nil
+	id := LayoutID{engine: e, node: node, generation: e.generation}
+	e.recordInlineStyleState(id, &style)
+	return id, nil
+}
+
+// recordInlineStyleState records the inline-orchestration style facts
+// of a freshly requested node (the reference request_layout /
+// request_measured_layout record vertical_align and
+// display_and_position before returning the id).
+func (e *LayoutEngine) recordInlineStyleState(id LayoutID, style *Style) {
+	if style.VerticalAlign != VerticalAlignBaseline {
+		e.verticalAligns[id] = style.VerticalAlign
+	}
+	e.displayPositions[id] = displayPositionRecord{display: style.Display, position: style.Position}
+}
+
+// displayPositionRecord is the display/position pair of one node
+// (the reference display_and_position map entry).
+type displayPositionRecord struct {
+	display  Display
+	position Position
 }
 
 // RequestMeasuredLayout adds a MEASURED LEAF node: a node whose size is
@@ -572,7 +617,9 @@ func (e *LayoutEngine) RequestMeasuredLayout(ctx *LayoutContext, style Style, me
 	if err := e.native.SetMeasure(node, token); err != nil {
 		return LayoutID{}, fmt.Errorf("gpui: RequestMeasuredLayout: %w", err)
 	}
-	return LayoutID{engine: e, node: node, generation: e.generation}, nil
+	id := LayoutID{engine: e, node: node, generation: e.generation}
+	e.recordInlineStyleState(id, &style)
+	return id, nil
 }
 
 // wrapMeasure adapts a logical-space MeasureFunc to the native
@@ -822,6 +869,12 @@ func (e *LayoutEngine) ParentRelativeLayoutBounds(ctx *LayoutContext, id LayoutI
 		return Bounds{}, err
 	}
 	scaleFactor := ctx.ScaleFactor()
+	// Nodes with placed inline fragment geometry use the ordinary
+	// absolute-edge path (the pinned parent_relative_layout_bounds
+	// returns layout_bounds for fragment-bearing nodes).
+	if _, placed := e.inlineFragments[id]; placed {
+		return e.LayoutBounds(ctx, id)
+	}
 	parent, err := e.native.NodeParent(id.node)
 	if err != nil {
 		return Bounds{}, fmt.Errorf("gpui: ParentRelativeLayoutBounds: %w", err)
@@ -878,6 +931,7 @@ func (e *LayoutEngine) Reset() error {
 	e.absoluteLayoutBounds = make(map[LayoutID]Bounds)
 	e.absoluteOuterOrigins = make(map[LayoutID]devicePoint)
 	e.computedRoots = make(map[LayoutID]bool)
+	e.resetInlineState()
 	return nil
 }
 
@@ -895,5 +949,143 @@ func (e *LayoutEngine) Dispose() error {
 	e.absoluteLayoutBounds = make(map[LayoutID]Bounds)
 	e.absoluteOuterOrigins = make(map[LayoutID]devicePoint)
 	e.computedRoots = make(map[LayoutID]bool)
+	e.resetInlineState()
+	return nil
+}
+
+// resetInlineState drops the GPUI-owned inline orchestration records
+// (the reference TaffyLayoutEngine::clear clears the vertical
+// alignments, inline content, fragments and display records with the
+// tree; frame-scoped in the port since the window resets the engine
+// per frame).
+func (e *LayoutEngine) resetInlineState() {
+	e.inlineContent = make(map[LayoutID]inlineContentRecord)
+	e.inlineFragments = make(map[LayoutID][]Bounds)
+	e.verticalAligns = make(map[LayoutID]VerticalAlign)
+	e.displayPositions = make(map[LayoutID]displayPositionRecord)
+}
+
+// ---------------------------------------------------------------------------
+// GPUI-owned inline orchestration state (taffy.rs inline_content /
+// inline_fragments / place_inline, window.rs publish_inline_content /
+// inline_fragments / place_inline)
+// ---------------------------------------------------------------------------
+
+// PublishInlineContent records the inline content of a requested node
+// (the reference window.publish_inline_content → engine.inline_content
+// .insert). The record lives until the engine resets (frame-scoped).
+func (e *LayoutEngine) PublishInlineContent(id LayoutID, record inlineContentRecord) error {
+	if err := e.checkBusy("PublishInlineContent"); err != nil {
+		return err
+	}
+	if err := e.checkID(id, "PublishInlineContent"); err != nil {
+		return err
+	}
+	e.inlineContent[id] = record
+	return nil
+}
+
+// InlineContent returns the node's published inline content, when any.
+func (e *LayoutEngine) InlineContent(id LayoutID) (inlineContentRecord, bool) {
+	if err := e.checkID(id, "InlineContent"); err != nil {
+		return nil, false
+	}
+	record, ok := e.inlineContent[id]
+	return record, ok
+}
+
+// InlineFragments returns the node's placed fragment geometry in
+// window-local logical pixels — the raw stored regions shifted by the
+// pixel-snapped element offset (the reference window.inline_fragments:
+// each region's origin gains pixel_snap_point(element_offset())).
+func (e *LayoutEngine) InlineFragments(id LayoutID, scaleFactor float32, offset Point) ([]Bounds, bool) {
+	if err := e.checkID(id, "InlineFragments"); err != nil {
+		return nil, false
+	}
+	fragments, ok := e.inlineFragments[id]
+	if !ok {
+		return nil, false
+	}
+	snapped := pixelSnapPoint(offset, scaleFactor)
+	out := make([]Bounds, len(fragments))
+	for i, region := range fragments {
+		out[i] = Bounds{Origin: Point{X: region.Origin.X + snapped.X, Y: region.Origin.Y + snapped.Y}, Size: region.Size}
+	}
+	return out, true
+}
+
+// DisplayPositionOf returns the node's recorded display and position
+// (the reference window.layout_display_and_position).
+func (e *LayoutEngine) DisplayPositionOf(id LayoutID) (Display, Position, bool) {
+	if err := e.checkID(id, "DisplayPositionOf"); err != nil {
+		return DisplayFlex, PositionRelative, false
+	}
+	record, ok := e.displayPositions[id]
+	if !ok {
+		return DisplayFlex, PositionRelative, false
+	}
+	return record.display, record.position, true
+}
+
+// VerticalAlignOf returns the node's recorded vertical alignment (the
+// reference window.layout_vertical_align; Baseline when unrecorded).
+func (e *LayoutEngine) VerticalAlignOf(id LayoutID) (VerticalAlign, bool) {
+	if err := e.checkID(id, "VerticalAlignOf"); err != nil {
+		return VerticalAlignBaseline, false
+	}
+	align, ok := e.verticalAligns[id]
+	if !ok {
+		return VerticalAlignBaseline, true
+	}
+	return align, true
+}
+
+// PlaceInline places a detached inline box (or a text span's union
+// bounds with its fragment regions), invalidating the cached absolute
+// bounds and origins of its descendants first (the pinned
+// TaffyLayoutEngine::place_inline): the given logical-pixel bounds are
+// cached as the node's absolute layout bounds and their origin becomes
+// the unrounded absolute outer origin in device pixels, so later
+// LayoutBounds/ParentRelativeLayoutBounds queries of the placed node
+// read the placement instead of a Taffy-computed position. The
+// optional fragments are stored as the node's inline fragment
+// geometry (the reference stores them unshifted; the query shifts them
+// by the snapped element offset).
+func (e *LayoutEngine) PlaceInline(id LayoutID, bounds Bounds, fragments []Bounds, scaleFactor float32) error {
+	if err := e.checkBusy("PlaceInline"); err != nil {
+		return err
+	}
+	if err := e.checkID(id, "PlaceInline"); err != nil {
+		return err
+	}
+	// Invalidate the cached positions of the placed subtree, walking the
+	// native tree preorder (the pinned place_inline stack walk).
+	stack := []LayoutID{id}
+	for len(stack) > 0 {
+		node := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		delete(e.absoluteLayoutBounds, node)
+		delete(e.absoluteOuterOrigins, node)
+		count, err := e.native.NodeChildCount(node.node)
+		if err != nil {
+			return fmt.Errorf("gpui: PlaceInline: invalidating layout caches: %w", err)
+		}
+		for i := uint32(0); i < count; i++ {
+			child, err := e.native.NodeChild(node.node, i)
+			if err != nil {
+				return fmt.Errorf("gpui: PlaceInline: invalidating layout caches: %w", err)
+			}
+			stack = append(stack, LayoutID{engine: e, node: child, generation: e.generation})
+		}
+	}
+	e.absoluteLayoutBounds[id] = bounds
+	e.absoluteOuterOrigins[id] = devicePoint{X: bounds.Origin.X * scaleFactor, Y: bounds.Origin.Y * scaleFactor}
+	if fragments != nil {
+		stored := make([]Bounds, len(fragments))
+		copy(stored, fragments)
+		e.inlineFragments[id] = stored
+	} else {
+		delete(e.inlineFragments, id)
+	}
 	return nil
 }

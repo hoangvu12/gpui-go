@@ -712,6 +712,57 @@ type GridLocation struct {
 	Column GridPlacementRange
 }
 
+// VerticalAlign is the vertical alignment of an inline-level box
+// within its line (reference style.rs VerticalAlign; Baseline is the
+// default).
+type VerticalAlign uint8
+
+const (
+	// VerticalAlignBaseline aligns the box's bottom with the text
+	// baseline.
+	VerticalAlignBaseline VerticalAlign = iota
+	// VerticalAlignTop aligns the box's top with the line's top.
+	VerticalAlignTop
+	// VerticalAlignBottom aligns the box's bottom with the line's
+	// bottom.
+	VerticalAlignBottom
+	// VerticalAlignMiddle centers the box on the text's x-height
+	// midpoint.
+	VerticalAlignMiddle
+)
+
+// String renders the alignment like the reference Debug impl.
+func (v VerticalAlign) String() string {
+	switch v {
+	case VerticalAlignBaseline:
+		return "Baseline"
+	case VerticalAlignTop:
+		return "Top"
+	case VerticalAlignBottom:
+		return "Bottom"
+	case VerticalAlignMiddle:
+		return "Middle"
+	default:
+		return fmt.Sprintf("VerticalAlign(%d)", uint8(v))
+	}
+}
+
+// ParseVerticalAlign parses a reference variant name.
+func ParseVerticalAlign(s string) (VerticalAlign, error) {
+	switch s {
+	case "Baseline":
+		return VerticalAlignBaseline, nil
+	case "Top":
+		return VerticalAlignTop, nil
+	case "Bottom":
+		return VerticalAlignBottom, nil
+	case "Middle":
+		return VerticalAlignMiddle, nil
+	default:
+		return 0, fmt.Errorf("invalid VerticalAlign %q", s)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Style
 // ---------------------------------------------------------------------------
@@ -793,6 +844,12 @@ type Style struct {
 	GridRows *GridTemplate
 	// GridLocation places the item in its parent grid.
 	GridLocation *GridLocation
+
+	// VerticalAlign is the vertical alignment of this box when it
+	// participates in an inline line (reference Style::vertical_align;
+	// the adapter records it per node and the inline layout consumes
+	// it. Baseline by default; NOT forwarded to Taffy).
+	VerticalAlign VerticalAlign
 }
 
 // DefaultStyle returns the reference Style::default() for the forwarded
@@ -823,5 +880,6 @@ func DefaultStyle() Style {
 		FlexBasis:      AutoLength(),
 		FlexGrow:       0.0,
 		FlexShrink:     1.0,
+		VerticalAlign:  VerticalAlignBaseline,
 	}
 }
