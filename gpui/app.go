@@ -128,6 +128,14 @@ type App struct {
 	// meaningful during a dispatch, on the foreground thread.
 	propagateEvent bool
 
+	// activeDrag is the in-progress drag operation (ticket24;
+	// app.rs active_drag). Only meaningful on the foreground thread.
+	activeDrag *AnyDrag
+	// platformOwnedDrag tracks a drag handed to the platform's native
+	// drag loop (ticket24; app.rs platform_owned_drag). Only meaningful
+	// on the foreground thread.
+	platformOwnedDrag *platformOwnedDrag
+
 	// updateDepth is the active update nesting count. Only the outermost
 	// update exit flushes (contract: "Effects and payloads").
 	updateDepth int

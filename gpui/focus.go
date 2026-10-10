@@ -98,10 +98,14 @@ type windowFocusState struct {
 
 // renderedFrame is one completed frame's interaction state: the
 // dispatch tree and the tab-stop map (window.rs RenderedFrame's
-// dispatch members, bounded to this slice).
+// dispatch members, bounded to this slice), plus ticket24's mouse
+// interaction members — the frame-scoped mouse listeners (window.rs
+// Frame::mouse_listeners) and hitboxes (Frame::hitboxes).
 type renderedFrame struct {
-	dispatchTree *DispatchTree
-	tabStops     *TabStopMap
+	dispatchTree   *DispatchTree
+	tabStops       *TabStopMap
+	mouseListeners []mouseListener
+	hitboxes       []*hitboxRecord
 }
 
 // focusState returns (creating when absent) the window's focus
