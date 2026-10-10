@@ -52,6 +52,14 @@ const (
 	DispatchBubble
 )
 
+// String renders the phase for diagnostics and transcripts.
+func (p DispatchPhase) String() string {
+	if p == DispatchCapture {
+		return "capture"
+	}
+	return "bubble"
+}
+
 // DispatchNodeID identifies a node of a DispatchTree. Node identities
 // are only meaningful within the tree that provided them (not stable
 // between frames).

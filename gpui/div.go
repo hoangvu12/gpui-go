@@ -632,6 +632,24 @@ type DivElement struct {
 	// modifiersChangedListeners are the registered modifiers-changed
 	// listeners (div.rs modifiers_changed_listeners).
 	modifiersChangedListeners []func(*ModifiersChangedEvent, *Window, *App)
+	// mouseMoveListeners are the registered mouse-move listeners
+	// (ticket24; div.rs mouse_move_listeners).
+	mouseMoveListeners []typedMouseListener[MouseMoveEvent]
+	// mouseUpListeners are the registered mouse-up listeners (div.rs
+	// mouse_up_listeners).
+	mouseUpListeners []typedMouseListener[MouseUpEvent]
+	// scrollWheelListeners are the registered scroll listeners (div.rs
+	// scroll_wheel_listeners).
+	scrollWheelListeners []typedMouseListener[ScrollWheelEvent]
+	// pinchListeners are the registered pinch listeners (div.rs
+	// pinch_listeners).
+	pinchListeners []typedMouseListener[PinchEvent]
+	// dropListeners are the type-keyed drop listeners (div.rs
+	// drop_listeners: (TypeId, DropListener<dyn Any>)).
+	dropListeners []typedDropListener
+	// hitboxBehavior is this element's hitbox occlusion behavior (div.rs
+	// Interactivity hitbox behavior; Normal by default).
+	hitboxBehavior HitboxBehavior
 	// tabIndex is the interactivity tab index (div.rs tab_index).
 	tabIndex *int64
 	// tabGroup marks a tab group (div.rs tab_group).
@@ -1009,6 +1027,122 @@ func (d *DivElement) OnModifiersChanged(f func(*ModifiersChangedEvent, *Window, 
 	return d
 }
 
+// ---------------------------------------------------------------------------
+// Mouse, scroll and drop listeners (div.rs paint_mouse_listeners,
+// ticket24)
+// ---------------------------------------------------------------------------
+
+// typedMouseListener is one mouse-family listener registration: the
+// plain listener shape (func(*E, DispatchPhase, *Hitbox, *Window,
+// *App)) with its phase (capture or bubble; the reference's mouse
+// listeners all take the hitbox and phase).
+type typedMouseListener[E any] struct {
+	// capture routes the listener on the capture phase (bubble
+	// default).
+	capture bool
+	// f is the listener.
+	f func(*E, DispatchPhase, *Hitbox, *Window, *App)
+}
+
+// typedDropListener is one type-keyed drop listener (div.rs
+// (TypeId, DropListener<dyn Any>)): the payload type plus the
+// on-drop callback (canDrop predicates arrive with the fuller drag
+// surface; the hover gate is the pin's default).
+type typedDropListener struct {
+	// payloadType is the drag value type the listener receives
+	// (reflect.TypeOf of the payload type).
+	payloadType reflect.Type
+	// onDrop receives the drag value and the mouse-up event when a
+	// drag of the matching type lands on this element.
+	onDrop func(value any, event *MouseUpEvent, w *Window, app *App)
+}
+
+// OnMouseMove binds a mouse-move listener
+// (InteractiveElement::on_mouse_move): the listener receives the
+// event, the dispatch phase and this element's hitbox; the typical
+// listener checks hitbox.IsHovered(w).
+func (d *DivElement) OnMouseMove(f func(*MouseMoveEvent, DispatchPhase, *Hitbox, *Window, *App)) *DivElement {
+	if f == nil {
+		panic("gpui: OnMouseMove requires a non-nil listener")
+	}
+	d.mouseMoveListeners = append(d.mouseMoveListeners, typedMouseListener[MouseMoveEvent]{f: f})
+	return d
+}
+
+// OnMouseUp binds a mouse-up listener (InteractiveElement::on_mouse_up).
+func (d *DivElement) OnMouseUp(f func(*MouseUpEvent, DispatchPhase, *Hitbox, *Window, *App)) *DivElement {
+	if f == nil {
+		panic("gpui: OnMouseUp requires a non-nil listener")
+	}
+	d.mouseUpListeners = append(d.mouseUpListeners, typedMouseListener[MouseUpEvent]{f: f})
+	return d
+}
+
+// OnScrollWheel binds a scroll listener
+// (InteractiveElement::on_scroll_wheel). Precision-touchpad pans
+// arrive here as pixel-delta ScrollWheelEvents with gesture phases.
+func (d *DivElement) OnScrollWheel(f func(*ScrollWheelEvent, DispatchPhase, *Hitbox, *Window, *App)) *DivElement {
+	if f == nil {
+		panic("gpui: OnScrollWheel requires a non-nil listener")
+	}
+	d.scrollWheelListeners = append(d.scrollWheelListeners, typedMouseListener[ScrollWheelEvent]{f: f})
+	return d
+}
+
+// OnPinch binds a pinch listener (InteractiveElement::on_pinch).
+func (d *DivElement) OnPinch(f func(*PinchEvent, DispatchPhase, *Hitbox, *Window, *App)) *DivElement {
+	if f == nil {
+		panic("gpui: OnPinch requires a non-nil listener")
+	}
+	d.pinchListeners = append(d.pinchListeners, typedMouseListener[PinchEvent]{f: f})
+	return d
+}
+
+// OnDrop binds a drop listener for payloads of type T, whether or
+// not the drag started on this element (Interactivity::on_drop): on
+// a mouse up with an active drag whose value has type T and this
+// element's hitbox hovered, the drag stops and the listener receives
+// the value (div.rs paint_mouse_listeners's drop arm). A platform
+// file drag delivers an ExternalPaths value here.
+func OnDrop[T any](d *DivElement, f func(*T, *MouseUpEvent, *Window, *App)) *DivElement {
+	if f == nil {
+		panic("gpui: OnDrop requires a non-nil listener")
+	}
+	payloadType := reflect.TypeOf((*T)(nil)).Elem()
+	// A pre-existing listener for the same type is replaced, matching
+	// the pin's get_mut_drop_listener match.
+	for i, existing := range d.dropListeners {
+		if existing.payloadType == payloadType {
+			d.dropListeners[i].onDrop = dropListenerInvoke[T](f)
+			return d
+		}
+	}
+	d.dropListeners = append(d.dropListeners, typedDropListener{
+		payloadType: payloadType,
+		onDrop:      dropListenerInvoke[T](f),
+	})
+	return d
+}
+
+// dropListenerInvoke adapts the typed listener to the untyped drop
+// delivery: the drag value (an ExternalPaths for a platform file drag)
+// is delivered as a *T, matching the pin's downcast_ref.
+func dropListenerInvoke[T any](f func(*T, *MouseUpEvent, *Window, *App)) func(any, *MouseUpEvent, *Window, *App) {
+	return func(value any, event *MouseUpEvent, w *Window, app *App) {
+		if typed, ok := value.(T); ok {
+			f(&typed, event, w, app)
+		}
+	}
+}
+
+// Occlude sets the hitbox behavior to BlockMouse
+// (InteractiveElement::occlude): hitboxes behind this element's
+// hitbox stop reporting hover and scroll eligibility.
+func (d *DivElement) Occlude() *DivElement {
+	d.hitboxBehavior = HitboxBlockMouse
+	return d
+}
+
 // TabIndex sets the div's tab index and makes it a tab stop
 // (InteractiveElement::tab_index): the index participates in tab-group
 // ordering; a tracked focus handle's own TabIndex/TabStop control its
@@ -1286,6 +1420,7 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 	WithTextStyleVoid(w, d.textStyleSheet(), func(w *Window) {
 		WithContentMaskVoid(w, d.overflowMask(bounds, RemSize(w)), func(w *Window) {
 			registerDivElementDispatch(w, d)
+			registerDivElementMouseState(w, d, bounds)
 			if standalone := layout.standaloneInline(); standalone != nil {
 				standalone.prepaintChildren(d.children, w, app)
 				return
@@ -1351,6 +1486,102 @@ func registerDivElementDispatch(w *Window, d *DivElement) {
 		}
 		registerFocusStop(w, *d.focusHandle)
 	}
+}
+
+// registerDivElementMouseState inserts the div's hitbox and registers
+// its mouse-family listeners on the frame under construction
+// (ticket24; div.rs Interactivity prepaint's insert_hitbox +
+// paint_mouse_listeners). The port registers both during prepaint —
+// parent before children — which preserves the pin's ordering: the
+// hitbox walk and the listener capture phase both run parents first,
+// so children (inserted later) hit-test and dispatch in front of
+// their parents.
+func registerDivElementMouseState(w *Window, d *DivElement, bounds Bounds) {
+	// insert_hitbox (div.rs Interactivity::prepaint): the bounds plus
+	// the content mask active at insertion.
+	box := w.InsertHitbox(bounds, d.hitboxBehavior)
+
+	// A focusable element transfers focus on a hovered mouse down
+	// unless the default action was prevented (div.rs
+	// paint_mouse_listeners's tracked_focus_handle arm).
+	if d.focusHandle != nil {
+		handle := *d.focusHandle
+		hitbox := box
+		w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
+			if _, isDown := event.(*MouseDownEvent); !isDown {
+				return
+			}
+			if phase == DispatchBubble && hitbox.IsHovered(w) && !w.DefaultPrevented() {
+				w.Focus(handle)
+				// If there is a parent that is also focusable, prevent it
+				// from transferring focus because we already did so.
+				w.PreventDefault()
+			}
+		})
+	}
+
+	// The typed mouse-family listeners (div.rs's per-kind arms: the
+	// registration closure captures this element's hitbox and forwards
+	// the phase; the listener decides what the hitbox gates).
+	for _, listener := range d.mouseMoveListeners {
+		registerMouseListener(w, listener, box)
+	}
+	for _, listener := range d.mouseUpListeners {
+		registerMouseListener(w, listener, box)
+	}
+	for _, listener := range d.scrollWheelListeners {
+		registerMouseListener(w, listener, box)
+	}
+	for _, listener := range d.pinchListeners {
+		registerMouseListener(w, listener, box)
+	}
+
+	// The drop listeners (div.rs paint_mouse_listeners's drop arm): on
+	// a bubbled mouse up with an active drag whose value matches a
+	// listener's payload type and this element hovered, stop the drag,
+	// deliver the value, refresh and stop propagation.
+	if len(d.dropListeners) > 0 {
+		listeners := append([]typedDropListener(nil), d.dropListeners...)
+		hitbox := box
+		w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
+			up, isUp := event.(*MouseUpEvent)
+			if !isUp || phase != DispatchBubble {
+				return
+			}
+			drag := app.ActiveDrag()
+			if drag == nil {
+				return
+			}
+			for _, listener := range listeners {
+				if !dropListenerPayloadMatches(drag.Value, listener.payloadType) {
+					continue
+				}
+				// Without a listener-level can-drop predicate the hitbox
+				// must be hovered (div.rs: the default drop eligibility).
+				if !hitbox.IsHovered(w) {
+					continue
+				}
+				value, _ := app.StopDrag(w)
+				listener.onDrop(value, up, w, app)
+				w.requestRefresh()
+				app.StopPropagation()
+				break
+			}
+		})
+	}
+}
+
+// registerMouseListener wraps one typed mouse-family listener as a
+// frame mouse listener gated on its event type (div.rs's per-kind
+// registration: `window.on_mouse_event(move |event: &E, phase,
+// window, cx| listener(event, phase, &hitbox, window, cx))`).
+func registerMouseListener[E any](w *Window, listener typedMouseListener[E], box Hitbox) {
+	hitbox := box
+	w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
+		if e, ok := event.(*E); ok {
+			listener.f(e, phase, &hitbox, w, app)
+		}
+	})
 }
 
 // invokeTypedActionListener adapts a div action registration to a

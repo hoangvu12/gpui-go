@@ -135,6 +135,16 @@ type WindowOptions struct {
 	// the cursor slice's WM_MOUSEMOVE tracking and WM_MOUSELEAVE
 	// clearing).
 	OnHoverStatusChange func(hovered bool)
+	// OnFileDrop receives the OLE drop target's file-drop events
+	// (ticket24: the Entered/Pending/Submit/Exited/Ended events with
+	// window-relative logical positions — the pin's input callback
+	// FileDrop arm, delivered synchronously on the host thread from
+	// the IDropTarget calls, including inside OLE's modal drag loop).
+	OnFileDrop func(event FileDropEvent)
+	// OnGesture receives the Direct Manipulation events (ticket24:
+	// *ScrollWheelEvent and *PinchEvent with gesture phases, drained at
+	// the window's paint entry).
+	OnGesture func(event any)
 }
 
 // Typed window errors.
@@ -202,6 +212,13 @@ type Window struct {
 	// focus.go's windowFocusState). Created on first use; touched only
 	// on the foreground thread.
 	focus *windowFocusState
+
+	// input is the window's mouse-family input state (ticket24;
+	// mouseevent.go's windowInputState: the tracked mouse position,
+	// hit test, prevent-default flag, input modality and hitbox id
+	// counter). Created on first use; touched only on the foreground
+	// thread.
+	input *windowInputState
 }
 
 // ID returns the window's logical identity. Identities are assigned in
@@ -559,6 +576,35 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 			hostOpts.OnActivate = func(active bool) {
 				a.Update(func(*App) { user(active) })
 			}
+		}
+		// The file-drop callback routes the OLE drop target's events
+		// through the window's input dispatch (ticket24: the pin's
+		// input callback delivers PlatformInput::FileDrop straight into
+		// dispatch_event's translation arm — Entered/Pending become
+		// synthetic mouse moves, Submit a mouse up, Exited/Ended ride the
+		// mouse listener path). An optional user hook observes first.
+		userFileDrop := opts.OnFileDrop
+		hostOpts.OnFileDrop = func(event FileDropEvent) {
+			a.Update(func(a *App) {
+				if userFileDrop != nil {
+					userFileDrop(event)
+				}
+				// The pointer form matches the mouse-family pointer events
+				// dispatchInput routes.
+				window.dispatchInput(&event, a)
+			})
+		}
+		// The gesture callback routes Direct Manipulation events through
+		// the same dispatch (the pin's input callback ScrollWheel/Pinch
+		// arms).
+		userGesture := opts.OnGesture
+		hostOpts.OnGesture = func(event any) {
+			a.Update(func(a *App) {
+				if userGesture != nil {
+					userGesture(event)
+				}
+				window.dispatchInput(event, a)
+			})
 		}
 
 		handle, err := h.OpenWindow(hostOpts)

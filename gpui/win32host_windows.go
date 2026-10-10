@@ -631,6 +631,11 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 	case wmDPICHanged:
 		newDPI := float32(loword(wparam))
 		w.scale = newDPI / userDefaultScreenDPI
+		// The Direct Manipulation handler follows the new scale
+		// (ticket24, events.rs handle_dpi_changed_msg's set_scale_factor).
+		if w.dm != nil {
+			w.dm.setScaleFactor(w.scale)
+		}
 		w.updateBorderOffset()
 		if zoomed, _, _ := procIsZoomed.Call(hwnd); zoomed != 0 {
 			// Maximized: resize to the monitor's work area at the new
@@ -665,7 +670,13 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		// Paint stub: record dirty, run the redraw hook (the renderer
 		// arrives with ticket07), then validate so the invalid region
 		// stops reposting (reference draw_window validates at the end).
+		//
+		// Ticket24: the Direct Manipulation drain runs at the start of
+		// draw_window (events.rs: direct_manipulation.update() then
+		// drain_events(), each delivered through the input callback)
+		// before the redraw hook.
 		w.dirty = true
+		w.drainDirectManipulation()
 		if w.onRedraw != nil {
 			w.onRedraw()
 		}
@@ -675,6 +686,15 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		w.updateIMEEnabled()
 		procValidateRect.Call(hwnd, 0)
 		return 0
+
+	case dmPointerHitTest:
+		// DM_POINTERHITTEST (ticket24, events.rs
+		// handle_dm_pointer_hit_test): a touchpad pointer claims
+		// contact with the viewport; the message is not consumed
+		// (the reference returns None).
+		w.handleDMPointerHitTest(wparam)
+		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
+		return r
 
 	case wmIMEStartComposition:
 		// WM_IME_STARTCOMPOSITION: position the composition and
@@ -838,6 +858,18 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		// Synchronous close callback, then the generation-checked
 		// registry removal through the platform window (reference
 		// handle_destroy_msg).
+		//
+		// Ticket24: revoke the OLE drop registration exactly once BEFORE
+		// the record retires (window.rs Drop: RevokeDragDrop then
+		// DestroyWindow on the foreground thread). WM_DESTROY runs inside
+		// DestroyWindow — the HWND is still alive here, the revoke is
+		// host-thread synchronous, and the once-guard inside covers the
+		// shutdown path's destruction too. Direct Manipulation stops on
+		// the same apartment (the pin's Drop).
+		w.revokeDragDrop()
+		if w.dm != nil {
+			w.dm.deactivate()
+		}
 		if w.onClose != nil {
 			w.onClose()
 		}
@@ -955,6 +987,28 @@ type hostWindow struct {
 	// surface); host-thread written, mutex-guarded reads.
 	imeTrace   imeTraceEntry
 	imeTraceMu sync.Mutex
+
+	// --- ticket24 drag/drop + gesture state (host thread only) ---
+
+	// dropTarget is the registered OLE drop target object (the
+	// WindowsDragDropHandler port; dragdrop_windows.go). The registry
+	// in dragdrop_windows.go keeps the allocation alive while OLE
+	// holds its COM reference; RevokeDragDrop runs exactly once at
+	// WM_DESTROY (revokeDragDrop).
+	dropTarget *oleDropTarget
+	// dm is the per-window Direct Manipulation handler
+	// (directmanipulation_windows.go; the pin's WindowsWindowState
+	// member).
+	dm *directManipulationHandler
+	// onFileDrop receives the OLE drop target's file-drop events
+	// (handle_drag_drop's synchronous input callback delivery).
+	onFileDrop func(event FileDropEvent)
+	// onGesture receives the Direct Manipulation events (drain_events
+	// through the input callback: *ScrollWheelEvent / *PinchEvent).
+	onGesture func(event any)
+	// dmRecord records the Direct Manipulation setup outcome for
+	// diagnostics (the honest COM-call record).
+	dmRecord string
 }
 
 // newHostWindow builds the record for a window being created. Runs at
@@ -997,6 +1051,32 @@ func (h *Host) newHostWindow(hwnd uintptr) *hostWindow {
 
 // updateBorderOffset records the frame extent (GetWindowRect minus
 // GetClientRect), mirroring WindowBorderOffset::update.
+
+// drainDirectManipulation is draw_window's Direct Manipulation drain
+// (ticket24, events.rs: update_manager.Update, drain_events, then each
+// event through the input callback). Runs at WM_PAINT start, on the
+// host thread, before the redraw hook.
+func (w *hostWindow) drainDirectManipulation() {
+	if w.dm == nil {
+		return
+	}
+	w.dm.update()
+	for _, event := range w.dm.drainEvents() {
+		if w.onGesture != nil {
+			w.onGesture(event)
+		}
+	}
+}
+
+// handleDMPointerHitTest is DM_POINTERHITTEST: a touchpad pointer
+// claims contact with the viewport (SetContact; the pin's
+// on_pointer_hit_test).
+func (w *hostWindow) handleDMPointerHitTest(wparam uintptr) {
+	if w.dm != nil {
+		w.dm.onPointerHitTest(wparam)
+	}
+}
+
 // handleKeyMsg translates and dispatches one WM_GPUI_KEYDOWN message
 // (handle_keydown_msg): modifier keys synthesize ModifiersChanged with
 // dedup; normal keys translate to a keystroke with the repeat bit and
@@ -1192,6 +1272,12 @@ type Host struct {
 	// settings, notifications, jump list, identity, callbacks). See
 	// desktop_windows.go.
 	desktop desktopHostState
+
+	// dropTargetHelper is the platform's IDropTargetHelper
+	// (ticket24; platform.rs:177 CoCreateInstance(CLSID_DragDropHelper)),
+	// created once on the host thread after OleInitialize and released
+	// at shutdown before OleUninitialize. Host thread only.
+	dropTargetHelper *comIFace
 }
 
 // NewHost creates an unstarted Win32 host. Start it (or App.Run) before
@@ -1306,6 +1392,14 @@ func (h *Host) loop() {
 	// Ticket26's desktop state: the platform cursor, package identity
 	// and tracked system settings exist before any window can.
 	h.initDesktopStateOnHostThread()
+
+	// Ticket24: the platform's IDropTargetHelper exists before any
+	// window can register a drop target (platform.rs:177-184; a failure
+	// fails the host initialization like the pin's `?`).
+	if err := h.createDropTargetHelper(); err != nil {
+		fail(err)
+		return
+	}
 
 	// Flush any stale state this pooled thread carried over. The Go
 	// runtime recycles OS threads: a previous user of this thread can
@@ -1481,6 +1575,12 @@ func (h *Host) shutdownOnHostThread() {
 	// Ticket26: unregister the power notification and stop the
 	// notification drain before the owned windows disappear.
 	h.shutdownDesktopStateOnHostThread()
+	// Ticket24: the platform's drop-target helper releases before the
+	// owned windows disappear (the pin drops the platform's interface
+	// in the platform Drop, before OleUninitialize; the helper serves
+	// only the per-window drop targets, and RevokeDragDrop runs in the
+	// windows' WM_DESTROY handlers as they are destroyed below).
+	h.releaseDropTargetHelper()
 	// Deterministic order, not map iteration (runtime ownership
 	// contract: ordered records).
 	hwnds := make([]uintptr, 0, len(h.windows))
@@ -1930,7 +2030,35 @@ func (h *Host) openWindowOnHostThread(opts WindowOptions) (WindowHandle, error) 
 	w.onKeyboardLayoutChange = opts.OnKeyboardLayoutChange
 	w.onAppearanceChanged = opts.OnAppearanceChanged
 	w.onHoverStatusChange = opts.OnHoverStatusChange
+	w.onFileDrop = opts.OnFileDrop
+	w.onGesture = opts.OnGesture
 	w.updateBorderOffset()
+
+	// Ticket24: the per-window Direct Manipulation handler
+	// (WindowsWindowState::new: DirectManipulationHandler::new(hwnd,
+	// scale_factor) — a failure fails the window creation, the pin's
+	// `?`), then the OLE drop target registration (register_drag_drop
+	// right after the inner state exists).
+	dm, err := newDirectManipulationHandler(w)
+	if err != nil {
+		procDestroyWindow.Call(hwnd)
+		return WindowHandle{}, &WindowCreateError{
+			Title: opts.Title,
+			Err:   err,
+		}
+	}
+	w.dm = dm
+	w.dmRecord = "created"
+	if err := h.registerWindowDragDrop(w); err != nil {
+		// The window exists but its services failed: destroy it on this
+		// thread (WM_DESTROY runs the DM deactivation and the record
+		// retirement synchronously).
+		procDestroyWindow.Call(hwnd)
+		return WindowHandle{}, &WindowCreateError{
+			Title: opts.Title,
+			Err:   err,
+		}
+	}
 
 	// Initial bounds: logical pixels convert to device pixels with the
 	// window's own monitor DPI (simplified from retrieve_window_placement,
