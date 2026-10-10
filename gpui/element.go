@@ -144,23 +144,110 @@ func (g *GlobalElementID) Last() (ElementID, bool) {
 	return g.Path[len(g.Path)-1], true
 }
 
-// InspectorElementID is the inspector/debug-build identity of an element
-// (the reference builds it from the source location plus the global id
-// path when the inspector records it). This slice carries the identity
-// through the phases structurally; the inspector itself is a later
-// ticket. The zero value is a valid "no inspector identity".
-type InspectorElementID struct {
-	// file is the source location file of the element construction.
-	file string
-	// line is the source location line.
-	line int
-	// global is the global id path key the identity was recorded under.
-	global string
+// InspectorElementPath is a GlobalElementID qualified by the source
+// location of element construction (inspector.rs InspectorElementPath,
+// lines 36-44: the path to the nearest ancestor element that has an
+// ElementId, plus where this element was constructed). The path is
+// shared between the ids built from it and compared BY VALUE (the
+// pin's Rc<InspectorElementPath> PartialEq/Hash compare the inner
+// path, not the pointer).
+type InspectorElementPath struct {
+	// global is the element id stack snapshot at construction (the
+	// pin's global_id: Arc<[ElementId]>). Immutable after construction.
+	global *GlobalElementID
+	// globalKey is the path's map-key string (precomputed: the value
+	// equality form of global).
+	globalKey string
+	// location is where the element was constructed (the pin's
+	// &'static Location<'static>).
+	location SourceLocation
 }
 
-// String renders the identity for diagnostics.
+// key renders the path's value key (global path + source location);
+// same-path elements share it within a frame, so the instance ids
+// disambiguate them.
+func (p *InspectorElementPath) key() string {
+	if p == nil {
+		return ""
+	}
+	return p.globalKey + "\x00" + fmt.Sprintf("%s:%d", p.location.File, p.location.Line)
+}
+
+// Global returns the path's global element id (the ancestor-qualified
+// identity; includes the element's own id when it has one).
+func (p *InspectorElementPath) Global() *GlobalElementID {
+	if p == nil {
+		return nil
+	}
+	return p.global
+}
+
+// Location returns the construction source location.
+func (p *InspectorElementPath) Location() SourceLocation {
+	if p == nil {
+		return SourceLocation{}
+	}
+	return p.location
+}
+
+// InspectorElementID is the inspector/debug-build identity of an
+// element (inspector.rs InspectorElementId, lines 11-26: the gated
+// long id — a shared path plus an instance id that disambiguates
+// elements with the same path). The zero value is a valid "no
+// inspector identity".
+//
+// CAPABILITY MAPPING: the pin compiles the path/instance fields only
+// under #[cfg(any(feature = "inspector", debug_assertions))], leaving
+// an empty struct in release builds (the Option<&InspectorElementId>
+// parameters still thread through every phase). The Go port keeps the
+// struct and gates CONSTRUCTION: when CapInspectorIDs is off, the
+// drawable builds no inspector id (nil), which is the same release
+// observable. See inspector.go's capability surface.
+type InspectorElementID struct {
+	// path is the stable part of the id (the pin's Rc<InspectorElementPath>).
+	path *InspectorElementPath
+	// instanceID disambiguates elements that have the same path (the
+	// pin's instance_id: usize, assigned per frame by
+	// Window::build_inspector_element_id).
+	instanceID uint64
+}
+
+// String renders the identity for diagnostics (the pin's Debug impl
+// plus the instance).
 func (i InspectorElementID) String() string {
-	return fmt.Sprintf("%s:%d", i.file, i.line)
+	if i.path == nil {
+		return "<no inspector id>"
+	}
+	return fmt.Sprintf("%s:%d#%d", i.path.location.File, i.path.location.Line, i.instanceID)
+}
+
+// GlobalPath returns the id's global element id path key (the
+// "."-joined form).
+func (i InspectorElementID) GlobalPath() string {
+	if i.path == nil {
+		return ""
+	}
+	return i.path.globalKey
+}
+
+// SourceLocation returns the construction location.
+func (i InspectorElementID) SourceLocation() SourceLocation {
+	if i.path == nil {
+		return SourceLocation{}
+	}
+	return i.path.location
+}
+
+// InstanceID returns the per-frame instance id.
+func (i InspectorElementID) InstanceID() uint64 { return i.instanceID }
+
+// Equal reports value identity (the pin's derived PartialEq: path
+// value + instance id).
+func (i InspectorElementID) Equal(other InspectorElementID) bool {
+	if i.path == nil || other.path == nil {
+		return i.path == nil && other.path == nil && i.instanceID == other.instanceID
+	}
+	return i.path.key() == other.path.key() && i.instanceID == other.instanceID
 }
 
 // SourceLocation is where an element was constructed (the reference
@@ -363,8 +450,24 @@ func (d *drawable[L, P, E]) requestLayout(global *GlobalElementID, inspector *In
 		pushElementID(w, ownID)
 		defer popElementID(w)
 		d.global = &GlobalElementID{Path: currentElementIDs(w)}
+	}
+	// The inspector id: built from the element's source location and
+	// the CURRENT id stack (element.rs Drawable::request_layout,
+	// 345-361: the path is the stack snapshot — the element's own id
+	// when it has one, the nearest ancestor's path otherwise — and
+	// window.build_inspector_element_id assigns the per-frame instance
+	// id). Under the pin's #[cfg(any(feature = "inspector",
+	// debug_assertions))] this is where the long id exists; the cfg'd-
+	// out branch leaves inspector_id = None, which the port maps to
+	// building no id when CapInspectorIDs is off (inspector.go).
+	if inspectorIDsActive() {
 		if loc := d.element.SourceLocation(); loc != nil {
-			d.inspector = &InspectorElementID{file: loc.File, line: loc.Line, global: d.global.key()}
+			pathGlobal := &GlobalElementID{Path: currentElementIDs(w)}
+			d.inspector = buildInspectorElementID(w, &InspectorElementPath{
+				global:    pathGlobal,
+				globalKey: pathGlobal.key(),
+				location:  *loc,
+			})
 		}
 	}
 	d.phase = phaseRequested
@@ -427,6 +530,19 @@ func (d *drawable[L, P, E]) prepaint(global *GlobalElementID, inspector *Inspect
 	previousFragments := frame.currentInlineFragments
 	frame.currentInlineFragments = d.inlineFragments
 	defer func() { frame.currentInlineFragments = previousFragments }()
+	// The inspector tree build (ticket27; the pin has no tree — the
+	// inspector UI is app-rendered over with_inspector_state. The port's
+	// UI surface records every element with an inspector id while the
+	// window's inspector is on, pushing the node around this element's
+	// prepaint so children nest, with the committed bounds — the same
+	// bounds div.rs writes into DivInspectorState at prepaint,
+	// div.rs:2785-2794). Inert when the inspector is off.
+	inspectorNode := beginInspectorNode(w, d.inspector, bounds)
+	defer func() {
+		if inspectorNode != nil {
+			endInspectorNode(w)
+		}
+	}()
 	d.prepaintState = d.element.Prepaint(orGlobalID(global, d.global), orInspector(inspector, d.inspector), bounds, &d.requestState, w, app)
 }
 
@@ -857,6 +973,10 @@ type windowDrawState struct {
 	// redraw since the last completed draw (the invalidation seam; the
 	// draw itself is the explicit DrawWindowFrame path).
 	refreshRequested bool
+	// inspectorHitboxes is the LAST COMPLETED frame's inspector
+	// hitbox map (the pin's rendered_frame.inspector_hitboxes; ticket27
+	// — picking dispatch reads it between draws).
+	inspectorHitboxes map[uint64]InspectorElementID
 }
 
 // frameDrawState is one frame's draw state (the reference next_frame
@@ -910,6 +1030,17 @@ type frameDrawState struct {
 	// renderedViews is the rendered-view stack
 	// (window.rendered_entity_stack).
 	renderedViews []EntityID
+	// inspectorInstanceIDs is the per-frame inspector path instance
+	// counter (window.rs Frame::next_inspector_instance_ids, cleared
+	// by Frame::clear each frame; ticket27).
+	inspectorInstanceIDs map[string]uint64
+	// inspectorHitboxes maps hitbox ids to inspector ids for the frame
+	// under construction (window.rs Frame::inspector_hitboxes,
+	// populated only while picking).
+	inspectorHitboxes map[uint64]InspectorElementID
+	// inspectorTree is the frame's inspector tree build (ticket27's
+	// UI surface; see inspector.go).
+	inspectorTree *inspectorTreeBuild
 }
 
 // windowDrawStates is the per-window element runtime registry.
@@ -948,6 +1079,11 @@ func dropDrawState(w *Window) {
 		}
 		delete(windowDrawStates, w)
 	}
+	// Retire the per-window diagnostic runtimes with the element
+	// runtime (ticket27: the inspector state — generation bumped so
+	// outstanding selections resolve dead — and the debug frame
+	// overlay).
+	dropWindowDiagnostics(w)
 }
 
 // currentFrame returns the window's in-flight frame draw state.
