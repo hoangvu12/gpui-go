@@ -33,6 +33,7 @@ package gpui
 
 import (
 	"fmt"
+	"time"
 )
 
 // activeFrame is the window whose frame is being constructed (the
@@ -116,6 +117,10 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 	activeFrame = w
 	var drawErr error
 	completed := false
+	// The frame draw's duration (window.rs draw's frame_dirty →
+	// window_profiler.end_draw measurement; ticket27's overlay
+	// records it as one sample at completion).
+	drawStart := time.Now()
 	defer func() {
 		activeFrame = previousActive
 		ds.frame = nil
@@ -135,6 +140,16 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 			// Swap the completed dispatch frame into the rendered state
 			// (the focus/dispatch runtime reads it for input dispatch).
 			endDispatchFrame(w)
+			// Publish the inspector tree of the completed frame and swap
+			// its hitbox map into the window state (ticket27; window.rs
+			// Frame::finish + mem::swap(next_frame, rendered_frame) carry
+			// the inspector members over). An abandoned build below keeps
+			// the previously published tree.
+			inspectorFinishFrame(w, frame, ds.draws)
+			// Record the draw duration as one overlay sample (window.rs
+			// 3291-3298, cfg(feature = "profiler") → the port's
+			// CapFrameOverlay capability).
+			RecordDebugFrame(w, time.Since(drawStart))
 			ds.refreshRequested = false
 		} else {
 			discardDispatchFrame(w)
@@ -159,23 +174,41 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 // drawRoots is the reference Window::draw_roots: request the root
 // element's layout, stretch auto-sized roots to fill the viewport,
 // compute the layout, prepaint as root at the origin, then paint.
+// Ticket27's bounded integration (window.rs 3398-3481): while the
+// window's inspector is on, the root's width shrinks by the 30rem
+// inspector panel, the inspector UI element (the app renderer's)
+// prepaints after the root and paints after the root, the hovered
+// pick highlight paints after that, and the debug frame overlay
+// paints into the frame's scene (window.rs 3187-3197, the
+// cfg(feature = "profiler") call site).
 func drawRoots(w *Window, app *App, ds *windowDrawState, frame *frameDrawState) error {
 	root := viewElementOf(ds.root)
 	layoutID := root.RequestLayout(w, app)
+
+	// The root size: the viewport, shrunk by the inspector panel's
+	// width when the window's inspector is on (window.rs 3403-3415:
+	// rems(30.0).to_pixels(rem_size), clamped at zero).
+	rootSize := frame.viewport
+	if shrink := inspectorRootShrink(w, frame.rem); shrink > 0 {
+		rootSize.Width = rootSize.Width - shrink
+		if rootSize.Width < 0 {
+			rootSize.Width = 0
+		}
+	}
 
 	// "Window roots fill the window when their size is auto": the
 	// reference stretches the ROOT NODE's style through the layout
 	// engine. The port asks the root element's node style through the
 	// drawable's report (the engine cannot query node styles).
 	if style, ok := root.obj.rootStretchStyle(); ok {
-		if err := StretchAutoSizeToFill(w, layoutID, style, frame.viewport); err != nil {
+		if err := StretchAutoSizeToFill(w, layoutID, style, rootSize); err != nil {
 			return fmt.Errorf("root stretch: %w", err)
 		}
 	}
 
 	available := AvailableSize{
-		Width:  DefiniteAvailableSpace(frame.viewport.Width),
-		Height: DefiniteAvailableSpace(frame.viewport.Height),
+		Width:  DefiniteAvailableSpace(rootSize.Width),
+		Height: DefiniteAvailableSpace(rootSize.Height),
 	}
 	if err := computeLayoutOf(w, layoutID, available); err != nil {
 		return fmt.Errorf("root layout compute: %w", err)
@@ -183,7 +216,24 @@ func drawRoots(w *Window, app *App, ds *windowDrawState, frame *frameDrawState) 
 	WithAbsoluteElementOffsetVoid(w, Point{}, func(w *Window) {
 		root.Prepaint(w, app)
 	})
+	// prepaint_inspector (window.rs 3429-3437): lay the inspector UI
+	// element out in the panel region after the root's prepaint.
+	inspectorElement := prepaintInspectorElement(w, app, frame.viewport)
+
 	root.Paint(w, app)
+
+	// paint_inspector (window.rs 3467-3468) then the hovered pick
+	// highlight (paint_inspector_hitbox, 3480-3482).
+	paintInspectorElement(w, app, inspectorElement)
+	paintInspectorHighlight(w, app)
+
+	// The debug frame overlay (window.rs 3187-3197: painted after
+	// draw_roots, into the frame under construction, with the viewport
+	// size and scale factor; cfg(feature = "profiler") → the port's
+	// CapFrameOverlay capability).
+	if err := paintDebugFrameOverlay(w, frame); err != nil {
+		return fmt.Errorf("debug frame overlay: %w", err)
+	}
 	return nil
 }
 

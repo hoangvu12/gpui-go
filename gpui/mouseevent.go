@@ -543,6 +543,14 @@ func (w *Window) TrackedMousePosition() Point {
 // the active-drag bookkeeping (refresh on move, cancel on up) and the
 // pointer-capture auto-release on mouse up.
 func (w *Window) dispatchMouseEvent(event any, app *App) {
+	// Inspector picking replaces the normal mouse dispatch while active
+	// (window.rs dispatch_mouse_event 6088-6092: handle_inspector_mouse
+	// _event first; all other mouse handling is skipped when it reports
+	// picking). Wired by the orchestrator at the slice's recorded seam
+	// (inspector.go's InspectorDispatchMouseEvent).
+	if InspectorDispatchMouseEvent(w, app, event) {
+		return
+	}
 	fs := focusState(w)
 	if fs.rendered == nil {
 		// No completed frame: nothing is listening (the pin dispatches

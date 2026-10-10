@@ -1420,7 +1420,7 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 	WithTextStyleVoid(w, d.textStyleSheet(), func(w *Window) {
 		WithContentMaskVoid(w, d.overflowMask(bounds, RemSize(w)), func(w *Window) {
 			registerDivElementDispatch(w, d)
-			registerDivElementMouseState(w, d, bounds)
+			registerDivElementMouseState(w, d, bounds, inspector)
 			if standalone := layout.standaloneInline(); standalone != nil {
 				standalone.prepaintChildren(d.children, w, app)
 				return
@@ -1496,10 +1496,14 @@ func registerDivElementDispatch(w *Window, d *DivElement) {
 // hitbox walk and the listener capture phase both run parents first,
 // so children (inserted later) hit-test and dispatch in front of
 // their parents.
-func registerDivElementMouseState(w *Window, d *DivElement, bounds Bounds) {
+func registerDivElementMouseState(w *Window, d *DivElement, bounds Bounds, inspector *InspectorElementID) {
 	// insert_hitbox (div.rs Interactivity::prepaint): the bounds plus
 	// the content mask active at insertion.
 	box := w.InsertHitbox(bounds, d.hitboxBehavior)
+	// insert_inspector_hitbox (div.rs:3100-3111, the ticket27
+	// integration): while the window's inspector is picking, register
+	// this hitbox as selectable for its element's inspector id.
+	w.InsertInspectorHitbox(box, inspector)
 
 	// A focusable element transfers focus on a hovered mouse down
 	// unless the default action was prevented (div.rs
