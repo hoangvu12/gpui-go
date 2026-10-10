@@ -72,3 +72,19 @@ func (ta *TestApp) NowMs() int64 { return ta.sched.nowMs() }
 func (ta *TestApp) Now() time.Duration {
 	return time.Duration(ta.sched.nowMs()) * time.Millisecond
 }
+
+// WithAssets assigns the application's asset registry (the reference
+// Application::with_assets, app.rs lines 218-225), the test-side
+// injection of the app's asset source.
+func (ta *TestApp) WithAssets(assets *AssetRegistry) *TestApp {
+	ta.app.SetAssets(assets)
+	return ta
+}
+
+// WithHTTPClient injects the application's HTTP client (the reference
+// Application::with_http_client, app.rs lines 234-239). Without it the
+// app keeps the NullHttpClient default — zero network attempts.
+func (ta *TestApp) WithHTTPClient(client HttpClient) *TestApp {
+	ta.app.SetHTTPClient(client)
+	return ta
+}

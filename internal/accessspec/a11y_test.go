@@ -15,10 +15,6 @@ import (
 // node ids derive from element id paths only, so the traces are stable
 // across runs.
 
-// a11yHandlerRuns counts listener invocations independent of entity
-// lifetime, proving stale dispatch never runs handlers.
-var a11yHandlerRuns int
-
 // a11yFixture is one test window with its counter.
 type a11yFixture struct {
 	testApp *gpui.TestApp
