@@ -19,7 +19,16 @@
 //! codec service** (the pinned `image`-crate decode graph: resource
 //! sniffing and clipboard known-format entries, EXIF orientation,
 //! GIF/animated-WebP frame walks, BGRA output) in reserved slot 7,
-//! behind `crate::image`.
+//! behind `crate::image`. Ticket19 added the **SVG service** (the
+//! pinned `resvg`/`usvg` 0.48.1 stack through the public
+//! `SvgRenderer` paths: the system+bundled font resolution with the
+//! emoji fallback, the three sizing modes with the smooth-scale
+//! factor and the 8192 clamp, BGRA output, the alpha-mask entry, and
+//! the owned font-asset surface for Go orchestration) in reserved
+//! slot 8, behind `crate::svg` — extending the reserved slot array
+//! from 8 to 16 entries (an additive ABI record growth: 152 → 216
+//! bytes, mirrored in lockstep by the Go loader with the size
+//! self-checks enforcing the match).
 //!
 //! Contract summary (see `docs/distribution-contract.md` and
 //! `reference/native/LAYOUT_ABI.md`):
@@ -52,6 +61,7 @@ pub mod image;
 pub mod layout;
 pub mod renderer;
 pub mod scene;
+pub mod svg;
 pub mod text;
 
 use std::mem::{align_of, size_of};
@@ -74,7 +84,7 @@ pub const GPUI_GO_ABI_VERSION: u32 = 1;
 /// ticket16 (path primitives + the pinned PathBuilder tessellation in
 /// the scene service, the scene drawing pipeline in the renderer
 /// service) bumped it to 7.
-pub const GPUI_GO_NATIVE_REVISION: u32 = 8;
+pub const GPUI_GO_NATIVE_REVISION: u32 = 9;
 
 /// gpui-CE source pin this artifact family is built against (ASCII hex,
 /// zero-padded to 40 bytes in the table).
@@ -130,9 +140,16 @@ pub mod capabilities {
     /// EXIF orientation, GIF/animated-WebP frame walks with rational
     /// delays, BGRA output) (ticket17).
     pub const IMAGE_CODECS_IMAGE_0_25: u64 = 1 << 8;
+    /// Bit 9: SVG service, the pinned `resvg`/`usvg` 0.48.1 stack
+    /// driven through the public `SvgRenderer` paths (parse with the
+    /// system+bundled font resolution and emoji fallback, the three
+    /// sizing modes with the smooth-scale factor and the 8192 clamp,
+    /// premultiplied-RGBA→BGRA output, the alpha-mask entry) plus the
+    /// owned font-asset surface for Go orchestration (ticket19).
+    pub const SVG_RESGV_0_48: u64 = 1 << 9;
     // Reserved for the planned service tables (bits assigned when those
     // tickets land; do not pre-assign):
-    //   bit 9+: accessibility/COM service and later
+    //   bit 10+: accessibility/COM service and later
     //   unassigned bits remain 0
 }
 
@@ -202,16 +219,16 @@ pub struct GpuiGoBufferResponse {
 /// | Offset | Size | Field |
 /// |--------|------|-------|
 /// | 0 | 8 | `buffer_round_trip` |
-/// | 8 | 64 | `reserved[0..8]` (service-table slots) |
-/// | 72 | 4 | `magic` |
-/// | 76 | 4 | `abi_version` |
-/// | 80 | 4 | `native_revision` |
-/// | 84 | 40 | `ce_commit` (ASCII hex, zero padded) |
-/// | 128 | 8 | `capabilities` (bitmask; 4 bytes padding before it) |
-/// | 136 | 4 | `size_of_table` |
-/// | 140 | 4 | `align_of_table` |
-/// | 144 | 4 | `size_of_buffer_request` |
-/// | 148 | 4 | `size_of_buffer_response` |
+/// | 8 | 128 | `reserved[0..16]` (service-table slots) |
+/// | 136 | 4 | `magic` |
+/// | 140 | 4 | `abi_version` |
+/// | 144 | 4 | `native_revision` |
+/// | 148 | 40 | `ce_commit` (ASCII hex, zero padded) |
+/// | 192 | 8 | `capabilities` (bitmask; 4 bytes padding before it) |
+/// | 200 | 4 | `size_of_table` |
+/// | 204 | 4 | `align_of_table` |
+/// | 208 | 4 | `size_of_buffer_request` |
+/// | 212 | 4 | `size_of_buffer_response` |
 ///
 /// Total size 152, alignment 8. The `size_of_*`/`align_of_*` fields let the
 /// Go loader verify its mirror struct before reading any other field.
@@ -243,8 +260,10 @@ pub struct GpuiGoAbiTable {
     /// (ticket08); slot 4 carries the text geometry service table
     /// (ticket09); slot 5 carries the glyph raster service table
     /// (ticket10); slot 6 carries the atlas service table (ticket10);
-    /// slot 0 and slot 7 remain null.
-    pub reserved: [ServiceTablePtr; 8],
+    /// slot 7 carries the image codec service table (ticket17); slot 8
+    /// carries the SVG service table (ticket19); slot 0 and slots 9-15
+    /// remain null for future services.
+    pub reserved: [ServiceTablePtr; 16],
     /// [`GPUI_GO_ABI_MAGIC`].
     pub magic: u32,
     /// [`GPUI_GO_ABI_VERSION`].
@@ -268,7 +287,7 @@ pub struct GpuiGoAbiTable {
 // Compile-time layout pins. The Go loader mirrors these sizes exactly; a
 // mismatch anywhere fails the load with an ABI-schema error instead of
 // silently misreading a field.
-const _: () = assert!(size_of::<GpuiGoAbiTable>() == 152);
+const _: () = assert!(size_of::<GpuiGoAbiTable>() == 216);
 const _: () = assert!(align_of::<GpuiGoAbiTable>() == 8);
 const _: () = assert!(size_of::<GpuiGoBufferRequest>() == 24);
 const _: () = assert!(size_of::<GpuiGoBufferResponse>() == 24);
@@ -327,6 +346,16 @@ static ABI_TABLE: GpuiGoAbiTable = GpuiGoAbiTable {
         ServiceTablePtr(
             &image::IMAGE_TABLE as *const image::GpuiGoImageTable as *const core::ffi::c_void,
         ),
+        ServiceTablePtr(
+            &svg::SVG_TABLE as *const svg::GpuiGoSvgTable as *const core::ffi::c_void,
+        ),
+        ServiceTablePtr(core::ptr::null()),
+        ServiceTablePtr(core::ptr::null()),
+        ServiceTablePtr(core::ptr::null()),
+        ServiceTablePtr(core::ptr::null()),
+        ServiceTablePtr(core::ptr::null()),
+        ServiceTablePtr(core::ptr::null()),
+        ServiceTablePtr(core::ptr::null()),
     ],
     magic: GPUI_GO_ABI_MAGIC,
     abi_version: GPUI_GO_ABI_VERSION,
@@ -340,7 +369,8 @@ static ABI_TABLE: GpuiGoAbiTable = GpuiGoAbiTable {
         | capabilities::TEXT_PARLEY_0_11_1
         | capabilities::GLYPH_RASTER_DIRECTWRITE
         | capabilities::ATLAS_D3D11
-        | capabilities::SCENE_DRAW_PATHS,
+        | capabilities::SCENE_DRAW_PATHS
+        | capabilities::SVG_RESGV_0_48,
     size_of_table: size_of::<GpuiGoAbiTable>() as u32,
     align_of_table: align_of::<GpuiGoAbiTable>() as u32,
     size_of_buffer_request: size_of::<GpuiGoBufferRequest>() as u32,
@@ -508,6 +538,8 @@ mod tests {
                 | capabilities::GLYPH_RASTER_DIRECTWRITE
                 | capabilities::ATLAS_D3D11
                 | capabilities::SCENE_DRAW_PATHS
+                | capabilities::IMAGE_CODECS_IMAGE_0_25
+                | capabilities::SVG_RESGV_0_48
         );
         assert!(ABI_TABLE.buffer_round_trip.is_some());
         assert!(
@@ -538,8 +570,22 @@ mod tests {
             !ABI_TABLE.reserved[6].0.is_null(),
             "slot 6 carries the atlas table"
         );
-        assert!(ABI_TABLE.reserved[0].0.is_null());
-        assert!(ABI_TABLE.reserved[7].0.is_null());
+        assert!(
+            !ABI_TABLE.reserved[7].0.is_null(),
+            "slot 7 carries the image codec table (ticket17)"
+        );
+        assert!(
+            !ABI_TABLE.reserved[8].0.is_null(),
+            "slot 8 carries the SVG table (ticket19)"
+        );
+        // Slots 9-15 stay unassigned for future services (slot 0 stays
+        // the bootstrap-only null slot).
+        for slot in 9..16 {
+            assert!(
+                ABI_TABLE.reserved[slot].0.is_null(),
+                "slot {slot} must stay unassigned"
+            );
+        }
     }
 
     #[test]

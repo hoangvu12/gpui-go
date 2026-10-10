@@ -859,12 +859,14 @@ func openForWriteProbe(path string) error {
 	return nil
 }
 
-// Layout mirrors: the Go structs must match the sizes the artifact reports.
+// Layout mirrors: the Go structs must match the sizes the artifact
+// reports (ticket19 grew the reserved slot array from 8 to 16 entries:
+// the ABI table record is 216 bytes with capabilities at offset 192).
 func TestGoMirrorsMatchArtifactRecordSizes(t *testing.T) {
 	lib := mustLoad(t, Options{CacheRoot: testDir(t)})
 	defer lib.Close()
-	if got := unsafe.Sizeof(abiTable{}); got != 152 {
-		t.Errorf("sizeof(abiTable) = %d, want 152", got)
+	if got := unsafe.Sizeof(abiTable{}); got != 216 {
+		t.Errorf("sizeof(abiTable) = %d, want 216", got)
 	}
 	if got := unsafe.Sizeof(bufferRequest{}); got != 24 {
 		t.Errorf("sizeof(bufferRequest) = %d, want 24", got)
@@ -872,8 +874,8 @@ func TestGoMirrorsMatchArtifactRecordSizes(t *testing.T) {
 	if got := unsafe.Sizeof(bufferResponse{}); got != 24 {
 		t.Errorf("sizeof(bufferResponse) = %d, want 24", got)
 	}
-	if got := unsafe.Offsetof(abiTable{}.capabilities); got != 128 {
-		t.Errorf("offsetof(capabilities) = %d, want 128", got)
+	if got := unsafe.Offsetof(abiTable{}.capabilities); got != 192 {
+		t.Errorf("offsetof(capabilities) = %d, want 192", got)
 	}
 	if got := unsafe.Offsetof(abiTable{}.bufferRoundTrip); got != 0 {
 		t.Errorf("offsetof(bufferRoundTrip) = %d, want 0", got)

@@ -170,6 +170,13 @@ type App struct {
 	// cache retains frames in (lazily built; the first failure sticks).
 	imageCodec    *ImageCodec
 	imageCodecErr error
+	// svgRenderer is the application's SVG renderer (ticket19; the
+	// reference App.svg_renderer, app.rs line 790): lazily built over
+	// the process native SVG service and tied to the asset registry
+	// (SetAssets rebinds it, the with_assets wiring). The first
+	// failure sticks.
+	svgRenderer    *SvgRenderer
+	svgRendererErr error
 }
 
 // newApp builds the headless application core wired to scheduler.
@@ -221,9 +228,9 @@ func (a *App) Foreground() *ForegroundExecutor { return a.foreground }
 func (a *App) SetDrawHook(hook DrawHook) { a.drawHook = hook }
 
 // Assets returns the application's asset registry (App::assets, app.rs
-// lines 2096-2098). The registry is empty until configured; the pin also
-// builds an SvgRenderer from it here, which is a deferred service in this
-// port (ticket19).
+// lines 2096-2098). The registry is empty until configured; SvgRenderer
+// builds from it (ticket19's lazily-created renderer, the port of the
+// pin's with_assets svg_renderer wiring).
 func (a *App) Assets() *AssetRegistry { return a.assetRegistry }
 
 // SetAssets replaces the application's asset registry (the Go
@@ -231,12 +238,18 @@ func (a *App) Assets() *AssetRegistry { return a.assetRegistry }
 // real-application builder chain lands with the app entry
 // integration, so applications configure the registry through this
 // setter — with the same with_assets observable effect of swapping the
-// registry the app resolves assets from).
+// registry the app resolves assets from, including rebuilding the
+// SVG renderer binding from it).
 func (a *App) SetAssets(assets *AssetRegistry) {
 	if assets == nil {
 		assets = NewAssetRegistry()
 	}
 	a.assetRegistry = assets
+	// with_assets constructs a fresh SvgRenderer over the new registry
+	// (app.rs lines 218-225); the port's lazy renderer resets so the
+	// next use rebinds to this registry.
+	a.svgRenderer = nil
+	a.svgRendererErr = nil
 }
 
 // HTTPClient returns the application's HTTP client (App::http_client,

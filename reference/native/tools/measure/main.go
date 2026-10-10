@@ -48,16 +48,21 @@ const (
 	// landed with native revision 7 and capability bit 7. Ticket17 (the
 	// image codec service in reserved slot 7, the pinned image-crate
 	// decode graph) landed with native revision 8 and capability bit 8.
+	// Ticket19 (the SVG service in reserved slot 8, the pinned
+	// resvg/usvg 0.48.1 stack through the public SvgRenderer paths)
+	// landed with native revision 9 and capability bit 9, extending the
+	// reserved slot array from 8 to 16 entries (an additive ABI record
+	// growth, 152 -> 216 bytes, mirrored in lockstep by the Go loader).
 	// Keep these in sync with reference/native/src/lib.rs
 	// (GPUI_GO_NATIVE_REVISION and the capabilities module).
-	nativeRevision = 8
+	nativeRevision = 9
 
 	// bit 0 bootstrap, bit 1 layout-taffy-0-13-0, bit 2 renderer-d3d11,
 	// bit 3 scene-kernel-v1, bit 4 text-parley-0-11-1, bit 5
 	// glyph-raster-dwrite, bit 6 glyph-atlas-d3d11, bit 7
 	// scene-draw-paths (ticket16), bit 8 image-codecs-image-0-25
-	// (ticket17).
-	capabilitiesMask = 511
+	// (ticket17), bit 9 svg-resvg-0-48 (ticket19).
+	capabilitiesMask = 1023
 )
 
 // The pinned Taffy engine of the layout service (docs/layout-contract.md).
@@ -155,6 +160,7 @@ type provenance struct {
 	Text                textMeasure    `json:"text"`
 	Glyph               glyphMeasure   `json:"glyph"`
 	Image               imageMeasure   `json:"image"`
+	Svg                 svgMeasure     `json:"svg"`
 	CargoLockSHA256     string         `json:"cargo_lock_sha256"`
 	ReproducibilityNote string         `json:"reproducibility_note"`
 }
@@ -250,6 +256,18 @@ type glyphMeasure struct {
 // feature subtree the native crate activates.
 type imageMeasure struct {
 	Image        registryMeasure `json:"image"`
+	FeatureGraph string          `json:"feature_graph"`
+}
+
+// svgMeasure records the resolved resvg/usvg stack of the SVG service
+// (ticket19): the CE workspace's `resvg = "0.48.1"` (features text,
+// system-fonts, memmap-fonts, raster-images) and `usvg = "0.48.1"`
+// (default-features off), resolved through the same workspace lock the
+// pinned checkout builds with; the native crate adds no new crate (the
+// gpui-ce path dependency already pulls the graph into the DLL).
+type svgMeasure struct {
+	Resvg        registryMeasure `json:"resvg"`
+	Usvg         registryMeasure `json:"usvg"`
 	FeatureGraph string          `json:"feature_graph"`
 }
 
@@ -350,6 +368,9 @@ func main() {
 	// The image codec service's resolved image crate (ticket17).
 	image := measureImage(*lockPath)
 
+	// The SVG service's resolved resvg/usvg stack (ticket19).
+	svg := measureSvg(*lockPath)
+
 	prov := provenance{
 		Schema:             "gpui-go/native-bootstrap@2",
 		BuiltAt:            time.Now().UTC().Format(time.RFC3339),
@@ -368,12 +389,13 @@ func main() {
 			GzipMethod: "Go stdlib compress/gzip, level 9 (BestCompression)",
 		},
 		PE:              *peM,
-		ABI:             abiMeasure{ABIVersion: abiVersion, NativeRevision: nativeRevision, CECommit: ceCommit, CapabilitiesMask: capabilitiesMask, Capabilities: []string{"bootstrap-buffer-roundtrip", "layout-taffy-0-13-0", "renderer-d3d11", "scene-kernel-v1", "text-parley-0-11-1", "glyph-raster-dwrite", "glyph-atlas-d3d11", "scene-draw-paths", "image-codecs-image-0-25"}},
+		ABI:             abiMeasure{ABIVersion: abiVersion, NativeRevision: nativeRevision, CECommit: ceCommit, CapabilitiesMask: capabilitiesMask, Capabilities: []string{"bootstrap-buffer-roundtrip", "layout-taffy-0-13-0", "renderer-d3d11", "scene-kernel-v1", "text-parley-0-11-1", "glyph-raster-dwrite", "glyph-atlas-d3d11", "scene-draw-paths", "image-codecs-image-0-25", "svg-resvg-0-48"}},
 		Taffy:           taffy,
 		Windows:         windows,
 		Text:            text,
 		Glyph:           glyph,
 		Image:           image,
+		Svg:             svg,
 		CargoLockSHA256: lockHex,
 		ReproducibilityNote: "Single build; byte reproducibility not claimed and not expected: the distribution " +
 			"contract states \"Two builds have not yet demonstrated byte reproducibility\", and the MSVC link embeds a " +
@@ -404,7 +426,7 @@ func main() {
 		ABIVersion:         abiVersion,
 		NativeRevision:     nativeRevision,
 		CapabilitiesMask:   capabilitiesMask,
-		Capabilities:       []string{"bootstrap-buffer-roundtrip", "layout-taffy-0-13-0", "renderer-d3d11", "scene-kernel-v1", "text-parley-0-11-1", "glyph-raster-dwrite", "glyph-atlas-d3d11", "scene-draw-paths", "image-codecs-image-0-25"},
+		Capabilities:       []string{"bootstrap-buffer-roundtrip", "layout-taffy-0-13-0", "renderer-d3d11", "scene-kernel-v1", "text-parley-0-11-1", "glyph-raster-dwrite", "glyph-atlas-d3d11", "scene-draw-paths", "image-codecs-image-0-25", "svg-resvg-0-48"},
 		Taffy:              taffy,
 		Windows:            windows,
 		Text:               text,
@@ -610,6 +632,31 @@ func measureImage(lockPath string) imageMeasure {
 	}
 	m.FeatureGraph = cmdOutputIn(filepath.Dir(lockPath), "cargo", "tree", "-p", "gpui-go-native",
 		"--target", targetTriple, "--edges", "features", "-i", "image")
+	return m
+}
+
+// measureSvg records the resvg/usvg resolution of the SVG service.
+func measureSvg(lockPath string) svgMeasure {
+	m := svgMeasure{}
+	if lockBytes, err := os.ReadFile(lockPath); err == nil {
+		lines := strings.Split(string(lockBytes), "\n")
+		resvgVersion, resvgChecksum := lockEntry(lines, "resvg")
+		m.Resvg = registryMeasure{
+			Version:  resvgVersion,
+			Checksum: resvgChecksum,
+			// The workspace declares "0.48.1"; the lock resolves the
+			// same version — the graph the pinned checkout builds with.
+			PinSatisfied: strings.HasPrefix(resvgVersion, "0.48."),
+		}
+		usvgVersion, usvgChecksum := lockEntry(lines, "usvg")
+		m.Usvg = registryMeasure{
+			Version:      usvgVersion,
+			Checksum:     usvgChecksum,
+			PinSatisfied: strings.HasPrefix(usvgVersion, "0.48."),
+		}
+	}
+	m.FeatureGraph = cmdOutputIn(filepath.Dir(lockPath), "cargo", "tree", "-p", "gpui-go-native",
+		"--target", targetTriple, "--edges", "features", "-i", "resvg")
 	return m
 }
 

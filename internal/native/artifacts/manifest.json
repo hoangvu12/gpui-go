@@ -1,14 +1,14 @@
 {
   "schema": "gpui-go/native-manifest@2",
   "name": "gpui_go_native.dll",
-  "sha256": "29781ff7be4d3b8c7ae2164f5e2accf0de5e95a8f9979edb62a9cf3ab232c2b2",
-  "bytes": 14453248,
-  "gzip_bytes": 5790413,
-  "gzip_sha256": "a6aca13e7deff6ae694a34882e444658cae192e7a3560af1140da365831db7f3",
+  "sha256": "f10c79737a4f68f629efa70533b016ccdcfb03b919e0d8a2058b696d062fde8c",
+  "bytes": 18216448,
+  "gzip_bytes": 7294419,
+  "gzip_sha256": "93613b6af93653c8d3e1ea97ed83d0505d49424b8f46fb764314d99e48d7f96e",
   "ce_commit": "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
   "abi_version": 1,
-  "native_revision": 8,
-  "capabilities_mask": 511,
+  "native_revision": 9,
+  "capabilities_mask": 1023,
   "capabilities": [
     "bootstrap-buffer-roundtrip",
     "layout-taffy-0-13-0",
@@ -18,7 +18,8 @@
     "glyph-raster-dwrite",
     "glyph-atlas-d3d11",
     "scene-draw-paths",
-    "image-codecs-image-0-25"
+    "image-codecs-image-0-25",
+    "svg-resvg-0-48"
   ],
   "taffy": {
     "version": "0.13.0",
@@ -259,12 +260,12 @@
   },
   "target": "x86_64-pc-windows-msvc",
   "machine": "amd64",
-  "built_at": "2026-10-09T21:59:19Z",
+  "built_at": "2026-10-10T16:25:48Z",
   "rustc": "rustc 1.97.0 (2d8144b78 2026-07-07)",
   "crt_static_requested": true,
   "crt_static_outcome": "static: no VCRUNTIME/MSVCP/UCRT/api-ms-win-crt imports present; only OS system components are imported",
   "imports": [
-    "KERNEL32.dll (33 imports)",
+    "KERNEL32.dll (34 imports)",
     "api-ms-win-core-synch-l1-2-0.dll (3 imports)",
     "api-ms-win-core-winrt-error-l1-1-0.dll (1 imports)",
     "bcryptprimitives.dll (1 imports)",
@@ -273,7 +274,7 @@
     "dwrite.dll (1 imports)",
     "dxgi.dll (1 imports)",
     "kernel32.dll (68 imports)",
-    "ntdll.dll (2 imports)",
+    "ntdll.dll (3 imports)",
     "ole32.dll (1 imports)",
     "oleaut32.dll (4 imports)",
     "user32.dll (1 imports)"
