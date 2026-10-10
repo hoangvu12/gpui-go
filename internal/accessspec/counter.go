@@ -22,6 +22,11 @@ import (
 	"gpui-go/gpui"
 )
 
+// a11yHandlerRuns counts listener invocations independent of entity
+// lifetime (the a11y tests assert stale dispatch never runs handlers).
+// Package-level because the Click listener closure increments it.
+var a11yHandlerRuns int
+
 // ---------------------------------------------------------------------------
 // The model (a counter/editor entity shared by the render tree)
 // ---------------------------------------------------------------------------

@@ -141,6 +141,27 @@ type App struct {
 	// arena holds payload scopes of EmitOwned emissions in emission
 	// order, retired at the tail of the flush cycle.
 	arena []*Scope
+
+	// assetRegistry is the application's asset registry (ticket18; the
+	// reference App.asset_registry, app.rs lines 789/840-841): empty by
+	// default (the reference Application::new default), replaced through
+	// SetAssets/WithAssets.
+	assetRegistry *AssetRegistry
+	// httpClient is the application's injected HTTP client (the
+	// reference App.http_client, app.rs lines 791/841): NullHttpClient by
+	// default — zero network attempts.
+	httpClient HttpClient
+	// loadingAssets is the shared asset-task cache (the reference
+	// App.loading_assets, app.rs line 788): keyed by the loader type and
+	// the source hash; entries live until RemoveAsset.
+	loadingAssets map[assetKey]*taskRun
+	// reduceMotion is the animation policy flag (the reference
+	// App.reduce_motion / set_reduce_motion, app.rs lines 1119-1128).
+	reduceMotion bool
+	// imageCodec is the application's image decode+atlas pair the image
+	// cache retains frames in (lazily built; the first failure sticks).
+	imageCodec    *ImageCodec
+	imageCodecErr error
 }
 
 // newApp builds the headless application core wired to scheduler.
@@ -155,6 +176,9 @@ func newApp(sched *scheduler) *App {
 		globalObservers:       make(map[reflect.Type]*subscriberSet),
 		newEntityObservers:    make(map[reflect.Type]*subscriberSet),
 		windows:               make(map[WindowID]*Window),
+		assetRegistry:         NewAssetRegistry(),
+		httpClient:            NullHttpClient{},
+		loadingAssets:         make(map[assetKey]*taskRun),
 		sched:                 sched,
 	}
 	app.rootScope = newScope(app, nil)
@@ -187,6 +211,53 @@ func (a *App) Foreground() *ForegroundExecutor { return a.foreground }
 // the queue drains. Later tickets own real implementations; the hook is
 // only read during flushing.
 func (a *App) SetDrawHook(hook DrawHook) { a.drawHook = hook }
+
+// Assets returns the application's asset registry (App::assets, app.rs
+// lines 2096-2098). The registry is empty until configured; the pin also
+// builds an SvgRenderer from it here, which is a deferred service in this
+// port (ticket19).
+func (a *App) Assets() *AssetRegistry { return a.assetRegistry }
+
+// SetAssets replaces the application's asset registry (the Go
+// adaptation of Application::with_assets, app.rs lines 218-225: the
+// real-application builder chain lands with the app entry
+// integration, so applications configure the registry through this
+// setter — with the same with_assets observable effect of swapping the
+// registry the app resolves assets from).
+func (a *App) SetAssets(assets *AssetRegistry) {
+	if assets == nil {
+		assets = NewAssetRegistry()
+	}
+	a.assetRegistry = assets
+}
+
+// HTTPClient returns the application's HTTP client (App::http_client,
+// app.rs lines 1723-1725): the null client until one is injected — zero
+// network attempts by default.
+func (a *App) HTTPClient() HttpClient {
+	if a.httpClient == nil {
+		return NullHttpClient{}
+	}
+	return a.httpClient
+}
+
+// SetHTTPClient sets the HTTP client (App::set_http_client, app.rs
+// lines 1727-1729).
+func (a *App) SetHTTPClient(client HttpClient) { a.httpClient = client }
+
+// ReduceMotion reports whether non-essential animations should render
+// in a static state (App::reduce_motion, app.rs lines 1119-1121).
+func (a *App) ReduceMotion() bool { return a.reduceMotion }
+
+// SetReduceMotion sets the reduce-motion flag (App::set_reduce_motion,
+// app.rs lines 1123-1129): a change queues the RefreshWindows effect —
+// the image playback consults the flag every frame.
+func (a *App) SetReduceMotion(reduce bool) {
+	if a.reduceMotion != reduce {
+		a.reduceMotion = reduce
+		a.RefreshWindows()
+	}
+}
 
 // Update runs f as one application update on the owning dispatcher
 // goroutine. Update increments the update nesting count; when the

@@ -50,6 +50,17 @@ func (h *Host) OpenWindow(opts WindowOptions) (WindowHandle, error) {
 	return WindowHandle{}, ErrHostUnsupportedPlatform
 }
 
+// ReadClipboard reports the unsupported platform (ticket23: the
+// clipboard is a Windows-only platform surface in this port).
+func (h *Host) ReadClipboard() (*ClipboardItem, error) {
+	return nil, ErrHostUnsupportedPlatform
+}
+
+// WriteClipboard reports the unsupported platform.
+func (h *Host) WriteClipboard(item ClipboardItem) error {
+	return ErrHostUnsupportedPlatform
+}
+
 // attach rejects application wiring on non-windows builds.
 func (h *Host) attach(a *App) error {
 	return fmt.Errorf("gpui: attaching a real window host requires a windows build")

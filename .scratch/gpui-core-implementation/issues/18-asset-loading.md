@@ -4,8 +4,8 @@ Parent: ../plan.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: resolved
+Assignee: implement-spec wave-3 worker (background subagent, model dashscope/glm-5.3; evidence: ../../evidence/ticket18-asset-loading.json)
 Blocked by: 04, 11, 17
 
 ## Question
@@ -35,3 +35,7 @@ Deliver this complete observable path against the [implementation specification]
 
 - 2026-10-05 — Created under the user's authorization to finish Wayfinder, the specification and local implementation tickets. Routine details are delegated; a discovered scope or architecture contradiction must reopen the affected decision with evidence.
 
+
+## Answer
+
+Resolved 2026-10-10. Implemented by the wave-3 asset implementer subagent (session impl-18-assets, clean completion) and verified by the orchestrator (gpui 150 tests, assetspec 46 tests re-run green; vet/gofmt clean). The Go port of the pinned asset machinery, all in package gpui mirroring the pinned crate layout (a subpackage would import-cycle with the App wiring — documented in the file headers): gpui/assets.go (AssetSource load/list, AssetEntry PreLoaded/OnDemand, the AssetRegistry with the exact DuplicateAssetPath diagnostic, extend/iter_preloaded/iter_ondemand; Resource Uri/Path/Embedded; the (loader-tag, source-hash)-keyed application fetch cache with remove/has), gpui/httpclient.go (Get(url, followRedirects) over HttpResponse; NullHttpClient as the app default — zero network attempts; BlockedHttpClient with the permission-denied error; the fake fixed-status clients; the net/http adapter as explicit app configuration, never http.DefaultClient), gpui/imagecache.go (the three-state cache: nil=loading/result/error; RetainAllImageCache with shared-task dedup so two consumers share one load, clear/remove invalidation, the release-driven atlas drop; the ImageAssetLoader: Path=fs read, Uri=GET(url, true) with non-2xx → BadStatus keeping the first body line, Embedded=registry lookup; ErrImageFormatUnknown routed to an explicit SVG-deferred error; the ImageCacheError variants with the pinned strings; the 200ms LOADING_DELAY state; the rational frame-delay advance with backdating/wraparound, the 100ms out-of-range fallback, reduce-motion and active-window policies). Cancellation and discard ride ticket04 tasks (window close cancels the awaiter, entity release discards the late result); determinism rides the TestApp virtual clock. Adaptations and deferrals (the interactive img element's sprite painting, the window image-cache stack, the static-WebP ImageDecoder path, the SVG renderer = ticket19) are recorded in the evidence file. Dependent unblocked: 19 (SVG — still deferred natively). Executed evidence: [evidence/ticket18-asset-loading.json](../../../evidence/ticket18-asset-loading.json).
