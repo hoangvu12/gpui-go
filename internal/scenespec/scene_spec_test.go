@@ -870,13 +870,14 @@ func TestScenePanicContainment(t *testing.T) {
 	// ticket16 (path primitives + the pinned PathBuilder tessellation in
 	// the scene service, the scene drawing pipeline in the renderer
 	// service) to 7; ticket17 (the image codec service in reserved slot
-	// 7) raised it to 8; the cumulative capability mask is 0x1FF (the
+	// 7) raised it to 8, ticket19 (the SVG service in reserved slot 8)
+	// raised it to 9; the cumulative capability mask is 0x3FF (the
 	// additive pattern: every landed service raises both).
-	if identity.NativeRevision != 8 {
-		t.Errorf("native revision = %d, want 8 (ticket17 cumulative)", identity.NativeRevision)
+	if identity.NativeRevision != 9 {
+		t.Errorf("native revision = %d, want 9 (ticket19 cumulative)", identity.NativeRevision)
 	}
-	if identity.Capabilities&0x1FF != 0x1FF {
-		t.Errorf("capabilities mask = %#x, want the nine assigned bits set", identity.Capabilities)
+	if identity.Capabilities&0x3FF != 0x3FF {
+		t.Errorf("capabilities mask = %#x, want the ten assigned bits set", identity.Capabilities)
 	}
 	if !hasCapability(identity.Capabilities, "image-codecs-image-0-25") {
 		t.Errorf("capability names %v missing image-codecs-image-0-25 (ticket17)", identity.CapabilityNames)

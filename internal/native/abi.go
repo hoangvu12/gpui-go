@@ -21,8 +21,11 @@ const (
 	// bumped it to 6; ticket16 (path primitives + the pinned PathBuilder
 	// tessellation in the scene service, the scene drawing pipeline in
 	// the renderer service) bumped it to 7; ticket17 (the image codec
-	// service in reserved slot 7) bumped it to 8.
-	nativeRevision uint32 = 8
+	// service in reserved slot 7) bumped it to 8; ticket19 (the SVG
+	// service in reserved slot 8, extending the reserved slot array from
+	// 8 to 16 entries — an additive ABI record growth, 152→216 bytes,
+	// mirrored here in lockstep) bumped it to 9.
+	nativeRevision uint32 = 9
 	// maxBufferLen mirrors GPUI_GO_MAX_BUFFER_LEN.
 	maxBufferLen = 4096
 	// maxTextLen mirrors the text service's MAX_TEXT_BYTES (1 MiB text
@@ -46,6 +49,7 @@ const (
 	capAtlasD3D11               uint64 = 1 << 6 // "glyph-atlas-d3d11"
 	capSceneDrawPaths           uint64 = 1 << 7 // "scene-draw-paths" (ticket16)
 	capImageCodecs              uint64 = 1 << 8 // "image-codecs-image-0-25" (ticket17)
+	capSvgResvg                 uint64 = 1 << 9 // "svg-resvg-0-48" (ticket19)
 
 	// requiredCapabilities is the mask the loader demands of every artifact
 	// it accepts. Unknown extra bits are forward-compatible, never rejected.
@@ -92,13 +96,16 @@ func statusName(code int32) string {
 // Field order and widths must match the Rust definition exactly. The table
 // itself carries size/alignment self-check fields that are compared against
 // this mirror before any other field is interpreted. Layout (windows/amd64):
-// bufferRoundTrip @0, reserved @8..72, magic @72, abiVersion @76,
-// nativeRevision @80, ceCommit @84..124 (4 bytes padding), capabilities @128,
-// sizeOfTable @136, alignOfTable @140, sizeOfBufferRequest @144,
-// sizeOfBufferResponse @148; size 152, alignment 8.
+// bufferRoundTrip @0, reserved @8..136 (16 service-table slots), magic @136,
+// abiVersion @140, nativeRevision @144, ceCommit @148..188 (4 bytes padding),
+// capabilities @192, sizeOfTable @200, alignOfTable @204,
+// sizeOfBufferRequest @208, sizeOfBufferResponse @212; size 216, alignment 8.
+// Ticket19 grew the reserved slot array from 8 to 16 entries (the additive
+// ABI record growth mirrored with the Rust-side self-checks enforcing the
+// match).
 type abiTable struct {
 	bufferRoundTrip      uintptr // Option<unsafe extern "system" fn(..) -> i32>
-	reserved             [8]uintptr
+	reserved             [16]uintptr
 	magic                uint32
 	abiVersion           uint32
 	nativeRevision       uint32

@@ -7,15 +7,16 @@ import (
 // TestGlyphManifestIdentity pins the embedded manifest's glyph
 // resolution record (ticket10): the renderer contract's etagere 0.2.15
 // pin, the rasterizer's windows-numerics 0.3.1 and the error-type
-// anyhow resolution, plus the cumulative capability mask 0xFF and
-// native revision 8 (ticket16 added bit 7, scene-draw-paths; ticket17
-// added bit 8, image-codecs-image-0-25).
+// anyhow resolution, plus the cumulative capability mask 0x3FF and
+// native revision 9 (ticket16 added bit 7, scene-draw-paths; ticket17
+// added bit 8, image-codecs-image-0-25; ticket19 added bit 9,
+// svg-resvg-0-48).
 func TestGlyphManifestIdentity(t *testing.T) {
 	auth := testAuthority(t)
 	wantMask := capBootstrapBufferRoundTrip | capLayoutTaffy | capRendererD3D11 |
-		capSceneKernel | capTextParley | capGlyphRaster | capAtlasD3D11 | capSceneDrawPaths | capImageCodecs
+		capSceneKernel | capTextParley | capGlyphRaster | capAtlasD3D11 | capSceneDrawPaths | capImageCodecs | capSvgResvg
 	if auth.CapabilitiesMask != wantMask {
-		t.Errorf("manifest capabilities mask = %#x, want %#x (bootstrap + layout + renderer + scene + text + glyph + atlas + scene-draw + image)", auth.CapabilitiesMask, wantMask)
+		t.Errorf("manifest capabilities mask = %#x, want %#x (bootstrap + layout + renderer + scene + text + glyph + atlas + scene-draw + image + svg)", auth.CapabilitiesMask, wantMask)
 	}
 	if auth.NativeRevision != nativeRevision {
 		t.Errorf("manifest native revision = %d, want %d", auth.NativeRevision, nativeRevision)

@@ -1,6 +1,6 @@
 {
   "schema": "gpui-go/native-bootstrap@2",
-  "built_at": "2026-10-09T21:59:19Z",
+  "built_at": "2026-10-10T16:25:48Z",
   "rustc": "rustc 1.97.0 (2d8144b78 2026-07-07)",
   "cargo": "cargo 1.97.0 (c980f4866 2026-06-30)",
   "target": "x86_64-pc-windows-msvc",
@@ -9,10 +9,10 @@
   "rustflags": "-C target-feature=+crt-static",
   "dll": {
     "path": "reference/target/x86_64-pc-windows-msvc/release/gpui_go_native.dll",
-    "bytes": 14453248,
-    "sha256": "29781ff7be4d3b8c7ae2164f5e2accf0de5e95a8f9979edb62a9cf3ab232c2b2",
-    "gzip_bytes": 5790413,
-    "gzip_sha256": "a6aca13e7deff6ae694a34882e444658cae192e7a3560af1140da365831db7f3",
+    "bytes": 18216448,
+    "sha256": "f10c79737a4f68f629efa70533b016ccdcfb03b919e0d8a2058b696d062fde8c",
+    "gzip_bytes": 7294419,
+    "gzip_sha256": "93613b6af93653c8d3e1ea97ed83d0505d49424b8f46fb764314d99e48d7f96e",
     "gzip_method": "Go stdlib compress/gzip, level 9 (BestCompression)"
   },
   "pe": {
@@ -40,6 +40,7 @@
           "GetFileInformationByHandle",
           "GetFileInformationByHandleEx",
           "GetFileType",
+          "GetFinalPathNameByHandleW",
           "GetFullPathNameW",
           "GetModuleHandleW",
           "GetStdHandle",
@@ -179,6 +180,7 @@
       {
         "dll": "ntdll.dll",
         "symbols": [
+          "NtReadFile",
           "NtWriteFile",
           "RtlNtStatusToDosError"
         ]
@@ -208,9 +210,9 @@
   },
   "abi": {
     "abi_version": 1,
-    "native_revision": 8,
+    "native_revision": 9,
     "ce_commit": "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a",
-    "capabilities_mask": 511,
+    "capabilities_mask": 1023,
     "capabilities": [
       "bootstrap-buffer-roundtrip",
       "layout-taffy-0-13-0",
@@ -220,7 +222,8 @@
       "glyph-raster-dwrite",
       "glyph-atlas-d3d11",
       "scene-draw-paths",
-      "image-codecs-image-0-25"
+      "image-codecs-image-0-25",
+      "svg-resvg-0-48"
     ]
   },
   "taffy": {
@@ -459,6 +462,19 @@
       "version_pin_satisfied": true
     },
     "feature_graph": "image v0.25.10\n├── image feature \"avif\"\n│   └── image feature \"default-formats\"\n│       └── image feature \"default\"\n│           └── gpui-ce v0.2.2 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\ce-source\\crates\\gpui)\n│               [build-dependencies]\n│               └── gpui_ce_render v0.1.0 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\ce-source\\crates\\gpui_render)\n│                   └── gpui_ce_render feature \"default\"\n│                       └── gpui-go-native v0.1.0 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\native)\n│                           └── gpui-go-native feature \"default\" (command-line)\n├── image feature \"bmp\"\n│   ├── image feature \"default-formats\" (*)\n│   └── image feature \"ico\"\n│       └── image feature \"default-formats\" (*)\n├── image feature \"dds\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"default\" (*)\n├── image feature \"default-formats\" (*)\n├── image feature \"exr\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"ff\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"gif\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"hdr\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"ico\" (*)\n├── image feature \"jpeg\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"png\"\n│   ├── image feature \"default-formats\" (*)\n│   └── image feature \"ico\" (*)\n├── image feature \"pnm\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"qoi\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"rayon\"\n│   └── image feature \"default\" (*)\n├── image feature \"tga\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"tiff\"\n│   └── image feature \"default-formats\" (*)\n└── image feature \"webp\"\n    └── image feature \"default-formats\" (*)\n\nimage v0.25.10\n├── image feature \"avif\"\n│   └── image feature \"default-formats\"\n│       └── image feature \"default\"\n│           ├── gpui-ce v0.2.2 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\ce-source\\crates\\gpui)\n│           │   └── gpui_ce_render v0.1.0 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\ce-source\\crates\\gpui_render) (*)\n│           │   ├── gpui-ce feature \"default\"\n│           │   │   ├── gpui-go-native v0.1.0 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\native) (*)\n│           │   │   └── gpui_ce_parley v0.1.0 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\ce-source\\crates\\gpui_ce_parley)\n│           │   │       ├── gpui_ce_parley feature \"default\"\n│           │   │       │   └── gpui-go-native v0.1.0 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\native) (*)\n│           │   │       └── gpui_ce_parley feature \"system-fonts\"\n│           │   │           └── gpui_ce_parley feature \"default\" (*)\n│           │   ├── gpui-ce feature \"wayland\"\n│           │   │   └── gpui-ce feature \"default\" (*)\n│           │   ├── gpui-ce feature \"windows-manifest\"\n│           │   │   └── gpui-ce feature \"default\" (*)\n│           │   └── gpui-ce feature \"x11\"\n│           │       └── gpui-ce feature \"default\" (*)\n│           └── gpui-go-native v0.1.0 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\native) (*)\n├── image feature \"bmp\"\n│   ├── image feature \"default-formats\" (*)\n│   └── image feature \"ico\"\n│       └── image feature \"default-formats\" (*)\n├── image feature \"dds\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"default\" (*)\n├── image feature \"default-formats\" (*)\n├── image feature \"exr\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"ff\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"gif\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"hdr\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"ico\" (*)\n├── image feature \"jpeg\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"png\"\n│   ├── image feature \"default-formats\" (*)\n│   └── image feature \"ico\" (*)\n├── image feature \"pnm\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"qoi\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"rayon\"\n│   └── image feature \"default\" (*)\n├── image feature \"tga\"\n│   └── image feature \"default-formats\" (*)\n├── image feature \"tiff\"\n│   └── image feature \"default-formats\" (*)\n└── image feature \"webp\"\n    └── image feature \"default-formats\" (*)\n"
+  },
+  "svg": {
+    "resvg": {
+      "version": "0.48.1",
+      "checksum": "67e3803f97b999e80cbf7c6ecdd07a8102204d92e1633cf48783720c521196bd",
+      "version_pin_satisfied": true
+    },
+    "usvg": {
+      "version": "0.48.1",
+      "checksum": "977d0a4abdef933f424a99fe09f95576e089b90aebc6f016a3bc813762493e91",
+      "version_pin_satisfied": true
+    },
+    "feature_graph": "resvg v0.48.1\n├── resvg feature \"gif\"\n│   └── resvg feature \"raster-images\"\n│       └── gpui-ce v0.2.2 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\ce-source\\crates\\gpui)\n│           [build-dependencies]\n│           └── gpui_ce_render v0.1.0 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\ce-source\\crates\\gpui_render)\n│               └── gpui_ce_render feature \"default\"\n│                   └── gpui-go-native v0.1.0 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\native)\n│                       └── gpui-go-native feature \"default\" (command-line)\n├── resvg feature \"image-webp\"\n│   └── resvg feature \"raster-images\" (*)\n├── resvg feature \"memmap-fonts\"\n│   └── gpui-ce v0.2.2 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\ce-source\\crates\\gpui) (*)\n├── resvg feature \"raster-images\" (*)\n├── resvg feature \"system-fonts\"\n│   └── gpui-ce v0.2.2 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\ce-source\\crates\\gpui) (*)\n└── resvg feature \"text\"\n    └── gpui-ce v0.2.2 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\ce-source\\crates\\gpui) (*)\n\nresvg v0.48.1\n├── resvg feature \"gif\"\n│   └── resvg feature \"raster-images\"\n│       └── gpui-ce v0.2.2 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\ce-source\\crates\\gpui)\n│           └── gpui_ce_render v0.1.0 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\ce-source\\crates\\gpui_render) (*)\n│           ├── gpui-ce feature \"default\"\n│           │   ├── gpui-go-native v0.1.0 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\native) (*)\n│           │   └── gpui_ce_parley v0.1.0 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\ce-source\\crates\\gpui_ce_parley)\n│           │       ├── gpui_ce_parley feature \"default\"\n│           │       │   └── gpui-go-native v0.1.0 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\native) (*)\n│           │       └── gpui_ce_parley feature \"system-fonts\"\n│           │           └── gpui_ce_parley feature \"default\" (*)\n│           ├── gpui-ce feature \"wayland\"\n│           │   └── gpui-ce feature \"default\" (*)\n│           ├── gpui-ce feature \"windows-manifest\"\n│           │   └── gpui-ce feature \"default\" (*)\n│           └── gpui-ce feature \"x11\"\n│               └── gpui-ce feature \"default\" (*)\n├── resvg feature \"image-webp\"\n│   └── resvg feature \"raster-images\" (*)\n├── resvg feature \"memmap-fonts\"\n│   └── gpui-ce v0.2.2 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\ce-source\\crates\\gpui) (*)\n├── resvg feature \"raster-images\" (*)\n├── resvg feature \"system-fonts\"\n│   └── gpui-ce v0.2.2 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\ce-source\\crates\\gpui) (*)\n└── resvg feature \"text\"\n    └── gpui-ce v0.2.2 (C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\ce-source\\crates\\gpui) (*)\n"
   },
   "cargo_lock_sha256": "7d30365839498c738329adbef7fcef748810aa5bc49a3338efefe8cbfc5f80bc",
   "reproducibility_note": "Single build; byte reproducibility not claimed and not expected: the distribution contract states \"Two builds have not yet demonstrated byte reproducibility\", and the MSVC link embeds a timestamp, so rebuilding the identical source produces a new artifact identity (observed during this ticket: two builds of the same source differed). Expected flow: rebuild -\u003e new artifact identity -\u003e rerun the measure tool to refresh the manifest and embedded pair before any Go build."
