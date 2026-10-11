@@ -149,8 +149,8 @@ const (
 	AtlasKindSubpixel AtlasTextureKind = 2
 )
 
-// AtlasKeyKind tags the key variant (native 0 = glyph; svg/image are
-// later tickets and rejected).
+// AtlasKeyKind tags the key variant (native 0 = glyph, 1 = image,
+// 2 = svg — the wave-4 rebuild).
 type AtlasKeyKind uint32
 
 const (
@@ -162,6 +162,12 @@ const (
 	// FontID, frame_index FontSizeBits — and every other field must be
 	// zero.
 	AtlasKeyImage AtlasKeyKind = 1
+	// AtlasKeySvg is the SVG mask key (ticket19's follow-up, landed
+	// with the wave-4 rebuild; the pinned AtlasKey::Svg): the path+size
+	// identity hash occupies FontID (bit 62 set, disjoint from font
+	// ids), the raster width/height occupy GlyphID/SubpixelX, texture
+	// kind monochrome; every other field must be zero.
+	AtlasKeySvg AtlasKeyKind = 2
 )
 
 // AtlasKeyRecord mirrors GpuiGoAtlasKeyRecord (88 bytes, alignment 8):
@@ -361,7 +367,7 @@ func (s *AtlasService) Insert(handle AtlasHandle, key AtlasKeyRecord, width, hei
 	if key.RecordSize != uint32(unsafe.Sizeof(AtlasKeyRecord{})) {
 		return tile, atlasStatusError(atlasErrBadValue, "key record size")
 	}
-	if key.Kind != uint32(AtlasKeyGlyph) && key.Kind != uint32(AtlasKeyImage) {
+	if key.Kind != uint32(AtlasKeyGlyph) && key.Kind != uint32(AtlasKeyImage) && key.Kind != uint32(AtlasKeySvg) {
 		return tile, atlasStatusError(atlasErrBadValue, "key kind")
 	}
 	if key.Reserved != [2]uint32{} {

@@ -390,12 +390,26 @@ impl Default for GpuiGoSceneFilterRecord {
     }
 }
 
+/// Surface source kind tags (the ABI's `SurfaceSource` variants).
+pub mod surface_source_kind {
+    /// The pinned `SurfaceSource::Unsupported` stand-in (the pinned
+    /// renderer's draw path bails on it explicitly).
+    pub const UNSUPPORTED: u32 = 0;
+    /// A native capture frame handle in `source_reserved[0]` (the
+    /// pinned `SurfaceSource::WindowsCapture` import — the renderer
+    /// service resolves it through the capture service's frame
+    /// registry; ticket28).
+    pub const CAPTURE_FRAME: u32 = 1;
+}
+
 /// Surface record. Layout: `order` @0, `bounds` @4, `content_mask` @20,
 /// `source_tag` @36, `source_reserved` @40, `record_size` @56;
 /// size 56, alignment 4.
 ///
 /// The source is opaque payload (tag 0 = the pinned
-/// `SurfaceSource::Unsupported` stand-in used by tests); the paired
+/// `SurfaceSource::Unsupported` stand-in used by tests; tag 1 = a
+/// capture frame handle in `source_reserved[0]`, the pinned
+/// `SurfaceSource::WindowsCapture` import — ticket28); the paired
 /// opacity is carried by `scene_insert_surface`'s `opacity_bits` argument
 /// and by the parallel array of the surface dump.
 #[repr(C)]
@@ -1555,6 +1569,30 @@ impl SceneState {
         mut rec: GpuiGoSceneSurfaceRecord,
         opacity: f32,
     ) -> Result<(), i32> {
+        if rec.record_size as usize != core::mem::size_of::<GpuiGoSceneSurfaceRecord>() {
+            return Err(scene_status::ERR_BAD_VALUE);
+        }
+        // Ticket28: the source payload — tag 0 = the pinned
+        // `SurfaceSource::Unsupported` stand-in (reserved must be
+        // zero); tag 1 = a capture frame handle in reserved[0]
+        // (the pinned `SurfaceSource::WindowsCapture` import), the
+        // remaining reserved words zero.
+        match rec.source_tag {
+            surface_source_kind::UNSUPPORTED => {
+                if rec.source_reserved != [0, 0, 0] {
+                    return Err(scene_status::ERR_BAD_VALUE);
+                }
+            }
+            surface_source_kind::CAPTURE_FRAME => {
+                if rec.source_reserved[0] == 0
+                    || rec.source_reserved[1] != 0
+                    || rec.source_reserved[2] != 0
+                {
+                    return Err(scene_status::ERR_BAD_VALUE);
+                }
+            }
+            _ => return Err(scene_status::ERR_BAD_VALUE),
+        }
         self.check_insert_capacity(self.surfaces.len())?;
         let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask, false)? else {
             return Ok(());
@@ -3633,11 +3671,13 @@ pub(crate) struct SceneRenderSnapshot {
     pub subpixel_sprites: Vec<gpui::SubpixelSprite>,
     pub polychrome_sprites: Vec<gpui::PolychromeSprite>,
     pub paths: Vec<SnapshotPath>,
-    pub surfaces: Vec<gpui::PaintSurface>,
-    /// The paired surface opacities (consumed by the surface draw path
-    /// once imported surface sources exist; the pinned import error for
-    /// the ABI's Unsupported stand-in fires first today).
-    #[expect(dead_code)]
+    /// The ABI surface records (source tag 0 = the pinned
+    /// `SurfaceSource::Unsupported` stand-in; tag 1 = a capture frame
+    /// handle in `source_reserved[0]`, the pinned
+    /// `SurfaceSource::WindowsCapture` import — ticket28).
+    pub surfaces: Vec<GpuiGoSceneSurfaceRecord>,
+    /// The paired surface opacities (the pin's parallel
+    /// `surface_opacities` array, carried through the finish sort).
     pub surface_opacities: Vec<f32>,
     pub backdrops: Vec<gpui::BackdropFilter>,
     pub boundaries: Vec<gpui::FilterBoundary>,
@@ -3889,18 +3929,14 @@ pub(crate) struct SnapshotPathVertex {
     pub st: gpui::Point<f32>,
 }
 
-fn snapshot_surface(rec: &GpuiGoSceneSurfaceRecord) -> gpui::PaintSurface {
-    // The ABI surface source is the pinned `SurfaceSource::Unsupported`
-    // stand-in (tag 0); the pinned renderer's draw path bails on it
-    // explicitly ("DirectX renderer cannot import this surface source"),
-    // which the renderer service preserves as
-    // `renderer_status::ERR_UNSUPPORTED_SOURCE`.
-    gpui::PaintSurface {
-        order: rec.order,
-        bounds: snapshot_bounds(&rec.bounds),
-        content_mask: snapshot_mask(&rec.content_mask),
-        source: gpui::SurfaceSource::Unsupported(gpui::Size::default()),
-    }
+fn snapshot_surface(rec: &GpuiGoSceneSurfaceRecord) -> GpuiGoSceneSurfaceRecord {
+    // The ABI surface record IS the draw-side representation (the
+    // pinned PaintSurface's observable fields — order, bounds, content
+    // mask, source — map 1:1 onto it; the renderer service's surface
+    // draw path consumes the record and resolves tag-1 capture frame
+    // handles, preserving the pin's explicit import bail for tag-0
+    // Unsupported sources as `renderer_status::ERR_UNSUPPORTED_SOURCE`).
+    *rec
 }
 
 fn snapshot_backdrop(rec: &GpuiGoSceneFilterRecord) -> gpui::BackdropFilter {

@@ -86,3 +86,30 @@ func callRendererSurfaceReadPixels(
 ) (int32, error) {
 	return 0, hostSupported()
 }
+
+func callRendererDeviceStateCheck(fn uintptr, out *DeviceStateRecord) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callRendererDeviceInjectLoss(fn uintptr) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callRendererDeviceRebuild(fn uintptr, out *RebuildRecord) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callRendererDeviceMarkDrawable(fn uintptr) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callRendererSurfaceRenderToImage(
+	fn uintptr,
+	surface uint64,
+	scene uint64,
+	appearance uint32,
+	atlas uint64,
+	outBytes []byte,
+) (needed uint32, code int32, err error) {
+	return 0, 0, hostSupported()
+}

@@ -1,0 +1,15 @@
+{
+  "run_started_at": "2026-10-11T06:23:50+07:00",
+  "harness_exe": "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\target\\debug\\gpui-reference-harness.exe",
+  "harness_sha256": "1201aa97f56332198208e6d66a21abaa6cc6891c495bfbf0b9ad7115aa565c6e",
+  "envelope_path": "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\conformance\\fixtures\\fx-0008-image-codecs.json",
+  "envelope_sha256": "0fbabba91696349f0a635d8855956e899958a97e9f449ad8c7896f874ec669d7",
+  "argv": [
+    "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\reference\\target\\debug\\gpui-reference-harness.exe",
+    "C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-go\\conformance\\fixtures\\fx-0008-image-codecs.json",
+    "conformance\\recorded\\fx-0008-image-codecs\\trace.json"
+  ],
+  "go_version": "go1.27.1",
+  "os": "windows",
+  "arch": "amd64"
+}

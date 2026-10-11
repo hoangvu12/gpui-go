@@ -22,6 +22,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 	"unsafe"
@@ -55,6 +56,31 @@ func desktopWaitFor(t *testing.T, what string, cond func() bool) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("timed out waiting for %s", what)
+}
+
+// desktopDriveAndWaitFor is the wave-4 cursor-gate robustness helper
+// (the ticket-26 environmental flake fix): it re-drives the synthetic
+// input on a bounded retry while waiting for the condition, so a real
+// WM_MOUSELEAVE delivered by the system while TrackMouseEvent is armed
+// with the cursor outside the window (interactive machine use) cannot
+// poison a one-shot gate. The drive runs before every poll, on the same
+// 10-second budget as desktopWaitFor; each SendMessage is synchronous,
+// so the driven state is set before the poll that observes it. Honest
+// failure remains: a gate that never holds across a full drive-and-poll
+// pair still fails the test.
+func desktopDriveAndWaitFor(t *testing.T, what string, drive func(), cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		drive()
+		if cond() {
+			return
+		}
+		if !time.Now().Before(deadline) {
+			t.Fatalf("timed out waiting for %s (re-driven on retry)", what)
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -989,6 +1015,21 @@ func TestWindowControlsOnRealHost(t *testing.T) {
 // TestCursorHideUntilMoveOnRealWindow drives the cursor policy on a
 // real window: hiding flips the shared flag, a synthetic WM_MOUSEMOVE
 // restores it, and WM_MOUSELEAVE clears the hovered state again.
+var hrDiag rect
+
+var (
+	procGetWindowRgn  = modUser32.NewProc("GetWindowRgn")
+	procGetClassNameW = modUser32.NewProc("GetClassNameW")
+)
+
+func windowsClassName(raw []uint16) string {
+	n := 0
+	for n < len(raw) && raw[n] != 0 {
+		n++
+	}
+	return syscall.UTF16ToString(raw[:n])
+}
+
 func TestCursorHideUntilMoveOnRealWindow(t *testing.T) {
 	h := desktopNewHost(t)
 	handle, err := h.OpenWindow(WindowOptions{Title: "desktop cursor", Show: true})
@@ -1009,36 +1050,117 @@ func TestCursorHideUntilMoveOnRealWindow(t *testing.T) {
 	h.HideCursorUntilMouseMoves()
 	desktopWaitFor(t, "the cursor flag to clear", func() bool { return !h.IsCursorVisible() })
 
-	// Put the window under the real cursor so the hover tracking is
-	// deterministic (a cursor elsewhere makes TrackMouseEvent deliver
-	// the leave immediately, which is real behavior but not this
-	// assertion's subject).
-	scale, err := handle.ScaleFactor()
-	if err != nil {
-		t.Fatalf("ScaleFactor: %v", err)
-	}
-	var cursor point
-	if ok, _, _ := procGetCursorPos.Call(uintptr(unsafe.Pointer(&cursor))); ok == 0 {
-		t.Fatalf("GetCursorPos failed")
-	}
-	handle.SetBounds(Bounds{
-		Origin: Point{X: float32(cursor.x)/scale - 160, Y: float32(cursor.y)/scale - 100},
-		Size:   Size{Width: 320, Height: 200},
+	// Robustness (the wave-4 ticket-26 cursor-gate fix). The pre-fix gate
+	// sent one synthetic WM_MOUSEMOVE into a window placed under the live
+	// cursor and waited on one-shot gates; under interactive machine use
+	// that raced real WM_MOUSELEAVE delivery: TrackMouseEvent evaluates
+	// the cursor GEOMETRICALLY against the window rect — arming it while
+	// the real cursor sits outside posts WM_MOUSELEAVE at the next input
+	// evaluation, and the user's own motion re-delivers it. The fix keeps
+	// the message-level semantics under test (WM_MOUSEMOVE restores the
+	// cursor and marks hover; WM_MOUSELEAVE clears hover and leaves the
+	// cursor visible) while making the physical preconditions
+	// deterministic:
+	//   - the window is raised topmost covering the monitor work-area
+	//     center (a fullscreen game re-centers the cursor exactly there,
+	//     so its interference lands INSIDE the window; real input cannot
+	//     be delivered to this window under an occluding game, which is
+	//     what keeps the queue quiet — the synthetic messages carry the
+	//     semantics);
+	//   - each hover drive FIRST parks the real cursor inside the window
+	//     rect (a real SetCursorPos position change), so the
+	//     TrackMouseEvent the synthetic move arms has no pending leave
+	//     condition, and re-asserts the full topmost placement (the
+	//     filedrop drag test's proven re-drive pattern);
+	//   - the leave drive parks the real cursor far outside first, so the
+	//     synthetic WM_MOUSELEAVE is not re-armed by any geometric move.
+	// Every drive re-establishes the physical precondition on a bounded
+	// retry, so user mouse motion between drives cannot poison a gate; a
+	// gate that never holds across a full drive-and-poll pair still fails
+	// the test honestly.
+	//
+	// ENVIRONMENTAL RECORD (the machine state this gate can fail in): a
+	// fullscreen-exclusive app (a game) exiting can leave the shell's
+	// desktop layer winning every mouse hit test over every window,
+	// system-wide, surviving explorer restarts — TrackMouseEvent then
+	// delivers its leave immediately on every arming and NO hover gate
+	// can hold (verified with fresh windows from independent processes
+	// during the wave-4 session; a reboot restores the shell layer). That
+	// is the same environmental cursor class the handoff note documents;
+	// the gate fails honestly in it instead of silently passing.
+	var insideX, insideY, outsideX, outsideY int32
+	var placeLeft, placeTop, placeWidth, placeHeight int32
+	placed := h.runForegroundSync(func() {
+		monitor, _, _ := procMonitorFromWindow.Call(handle.Hwnd(), uintptr(monitorDefaultToNearest))
+		var mi monitorInfo
+		mi.cbSize = uint32(unsafe.Sizeof(mi))
+		procGetMonitorInfoW.Call(monitor, uintptr(unsafe.Pointer(&mi)))
+		work := mi.rcWork
+		centerX := work.left + (work.right-work.left)/2
+		centerY := work.top + (work.bottom-work.top)/2
+		// A 400x260 window centered on the work-area center; clamped to
+		// the work area for tiny screens.
+		w, hgt := int32(400), int32(260)
+		if w > (work.right-work.left)/2 {
+			w = (work.right - work.left) / 2
+		}
+		if hgt > (work.bottom-work.top)/2 {
+			hgt = (work.bottom - work.top) / 2
+		}
+		left := centerX - w/2
+		top := centerY - hgt/2
+		if left < work.left {
+			left = work.left
+		}
+		if top < work.top {
+			top = work.top
+		}
+		procSetWindowPos.Call(handle.Hwnd(), ^uintptr(0),
+			uintptr(left), uintptr(top), uintptr(w), uintptr(hgt),
+			uintptr(swpNoActivate))
+		placeLeft, placeTop, placeWidth, placeHeight = left, top, w, hgt
+		var wr rect
+		procGetWindowRect.Call(handle.Hwnd(), uintptr(unsafe.Pointer(&wr)))
+		insideX = wr.left + (wr.right-wr.left)/2
+		insideY = wr.top + (wr.bottom-wr.top)/2
+		outsideX = work.left + 4
+		outsideY = work.top + 4
 	})
+	if !placed {
+		t.Fatalf("the host stopped before the cursor-gate setup")
+	}
 
-	// A mouse move over the window restores it (the message is
-	// delivered directly: the pump owns the real mouse).
-	procSendMessageW.Call(handle.Hwnd(), uintptr(wmMouseMove), 0, 0)
-	desktopWaitFor(t, "the mouse move to restore the cursor", func() bool { return h.IsCursorVisible() })
+	desktopDriveAndWaitFor(t, "the mouse move to restore the cursor", func() {
+		procSetCursorPos.Call(uintptr(insideX), uintptr(insideY))
+		procSendMessageW.Call(handle.Hwnd(), uintptr(wmMouseMove), 0, 0)
+	}, func() bool { return h.IsCursorVisible() })
 
 	// WM_MOUSELEAVE clears the hovered state (and the flag stays
 	// visible: the leave sets it true).
-	desktopWaitFor(t, "the window to be hovered", func() bool {
+	desktopDriveAndWaitFor(t, "the window to be hovered", func() {
+		// Re-assert the FULL topmost placement (geometry included —
+		// the filedrop drag test's proven re-drive pattern): the
+		// post-fullscreen shell state can leave the desktop layer
+		// winning the mouse hit tests over a freshly placed window,
+		// which makes TrackMouseEvent deliver its leave immediately
+		// (the hover flag flickers true→false on every arming).
+		// Re-placing the window re-inserts it at the head of the
+		// topmost band; the bounded retry keeps driving until the hit
+		// test resolves this window again and the hover state holds.
+		procSetWindowPos.Call(handle.Hwnd(), ^uintptr(0),
+			uintptr(placeLeft), uintptr(placeTop),
+			uintptr(placeWidth), uintptr(placeHeight),
+			uintptr(swpNoActivate))
+		procSetCursorPos.Call(uintptr(insideX), uintptr(insideY))
+		procSendMessageW.Call(handle.Hwnd(), uintptr(wmMouseMove), 0, 0)
+	}, func() bool {
 		hovered, _ := handle.IsHovered()
 		return hovered
 	})
-	procSendMessageW.Call(handle.Hwnd(), uintptr(wmMouseLeave), 0, 0)
-	desktopWaitFor(t, "the mouse leave to clear hover", func() bool {
+	desktopDriveAndWaitFor(t, "the mouse leave to clear hover", func() {
+		procSetCursorPos.Call(uintptr(outsideX), uintptr(outsideY))
+		procSendMessageW.Call(handle.Hwnd(), uintptr(wmMouseLeave), 0, 0)
+	}, func() bool {
 		hovered, _ := handle.IsHovered()
 		return !hovered
 	})

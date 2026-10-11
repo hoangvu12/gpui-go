@@ -146,8 +146,7 @@ pub mod atlas_texture_kind {
 }
 
 /// Atlas key kind tags (the pinned `AtlasKey` variants,
-/// crates/gpui/src/platform.rs:1815). Svg keys remain a later ticket
-/// and are rejected as bad values here.
+/// crates/gpui/src/platform.rs:1815).
 pub mod atlas_key_kind {
     /// A glyph key: `(RenderGlyphParams, RasterizedGlyphFormat)`.
     pub const GLYPH: u32 = 0;
@@ -157,6 +156,17 @@ pub mod atlas_key_kind {
     /// occupies the `font_id` slot, `frame_index` the
     /// `font_size_bits` slot, and every other field must be zero.
     pub const IMAGE: u32 = 1;
+    /// An SVG mask key (ticket19's follow-up, landed with the wave-4
+    /// rebuild): the pinned `AtlasKey::Svg(RenderSvgParams)` — the
+    /// identity is the SVG path+size hash in the `font_id` slot (the
+    /// Go side's canonical FNV-1a identity, bit 62 set for structural
+    /// disjointness) with the raster width and height in the
+    /// `glyph_id`/`subpixel_x` slots; the pinned key is the string
+    /// path itself, and the hashed identity preserves the observable
+    /// hit/miss/removal semantics with a documented hash-collision
+    /// bound. Texture kind: monochrome (the pinned
+    /// `AtlasKey::Svg(_)` mapping, platform.rs 1840).
+    pub const SVG: u32 = 2;
 }
 
 // ---------------------------------------------------------------------------
@@ -388,6 +398,14 @@ enum AtlasKey {
         image_id: u64,
         frame_index: u32,
     },
+    /// An SVG mask's cache identity (ticket19's follow-up; the pinned
+    /// `AtlasKey::Svg(RenderSvgParams)` — see
+    /// [`atlas_key_kind::SVG`] for the identity derivation).
+    Svg {
+        svg_id: u64,
+        width: u32,
+        height: u32,
+    },
 }
 
 impl AtlasKey {
@@ -401,6 +419,9 @@ impl AtlasKey {
             },
             // The pinned `AtlasKey::Image` mapping: polychrome.
             AtlasKey::Image { .. } => atlas_texture_kind::POLYCHROME,
+            // The pinned `AtlasKey::Svg` mapping (platform.rs 1840):
+            // monochrome.
+            AtlasKey::Svg { .. } => atlas_texture_kind::MONOCHROME,
         }
     }
 }
@@ -555,8 +576,38 @@ fn key_from_record(record: &GpuiGoAtlasKeyRecord) -> Result<AtlasKey, i32> {
             frame_index: record.font_size_bits,
         });
     }
+    if record.kind == atlas_key_kind::SVG {
+        // The SVG mask key: svg identity hash in the font_id slot,
+        // raster width/height in the glyph_id/subpixel_x slots; every
+        // other field must be zero.
+        if record.reserved != [0, 0]
+            || record.font_size_bits != 0
+            || record.subpixel_y != 0
+            || record.scale_bits != 0
+            || record.style.record_size != 0
+            || record.style.dilation != 0
+            || record.style.reserved != 0
+            || record.style.mode != 0
+            || record.style.color_effect_tag != 0
+            || record.style.color_r != 0
+            || record.style.color_g != 0
+            || record.style.color_b != 0
+            || record.style.color_a != 0
+            || record.format != 0
+        {
+            return Err(atlas_status::ERR_BAD_VALUE);
+        }
+        if record.font_id == 0 || record.glyph_id == 0 || record.subpixel_x == 0 {
+            return Err(atlas_status::ERR_BAD_VALUE);
+        }
+        return Ok(AtlasKey::Svg {
+            svg_id: record.font_id,
+            width: record.glyph_id,
+            height: record.subpixel_x,
+        });
+    }
     if record.kind != atlas_key_kind::GLYPH {
-        // Svg keys remain a later ticket; not silently accepted.
+        // Unknown kind tags are refused, never silently accepted.
         return Err(atlas_status::ERR_BAD_VALUE);
     }
     if record.reserved != [0, 0] {

@@ -415,8 +415,11 @@ func PaintSvg(w *Window, app *App, bounds Bounds, path string, data []byte, tran
 	}
 
 	// The get_or_insert_with cache-hit probe: a live tile draws without
-	// any native raster work (the pinned map hit).
-	if tile, ok, err := atlas.SvgMaskTile(params); err != nil {
+	// any native raster work (the pinned map hit). The distinct SVG key
+	// carries the raster width/height (the wave-4 rebuild; the pin's
+	// RenderSvgParams size IS the raster size here — the smooth 2x is
+	// already folded into params.Size).
+	if tile, ok, err := atlas.SvgMaskTile(params, int(params.Size.Width), int(params.Size.Height)); err != nil {
 		return fmt.Errorf("gpui: PaintSvg: %w", err)
 	} else if ok {
 		return insertSvgSprite(frame, ctx, deviceBounds, tile, color, elementOpacity, transformation)

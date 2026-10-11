@@ -23,6 +23,12 @@ lyon = "1.0"
 # lock; that is expected.
 gpui_ce_parley = { path = "../ce-source/crates/gpui_ce_parley", features = ["system-fonts"] }
 serde = { version = "1", features = ["derive"] }
+# Ticket17's recorded harness follow-up (fx-0008, the wave-4 rebuild):
+# the pinned image crate for the image-codecs-v1 reference fixture —
+# the SAME version family the native image service decodes with (the
+# workspace lock's 0.25.10 resolution), so the reference trace and the
+# native decode are the same graph.
+image = "0.25.1"
 serde_json = "1"
 anyhow = "1"
 sha2 = "0.10"

@@ -65,6 +65,30 @@ pub struct FixtureInputs {
     /// Per-case path/filter paint inputs (paths-filters-v1, ticket16).
     #[serde(default)]
     pub path_filter_cases: Option<PathFilterInputs>,
+    /// Per-case image decode inputs (image-codecs-v1, fx-0008).
+    #[serde(default)]
+    pub image_cases: Option<ImageCodecsInputs>,
+}
+
+// ---------------------------------------------------------------------------
+// image-codecs-v1 inputs
+// ---------------------------------------------------------------------------
+
+/// Per-case inputs of the `image-codecs-v1` fixture kind: every case's
+/// image bytes as a hex string (self-contained; the same bytes feed
+/// the reference decode and the Go native service).
+#[derive(Deserialize, Debug, Clone)]
+pub struct ImageCodecsInputs {
+    /// Cases are executed in order.
+    pub cases: Vec<ImageCodecCase>,
+}
+
+/// One image-codecs case: a labeled image byte sequence.
+#[derive(Deserialize, Debug, Clone)]
+pub struct ImageCodecCase {
+    pub label: String,
+    /// The image bytes, hex-encoded.
+    pub bytes: String,
 }
 
 // ---------------------------------------------------------------------------

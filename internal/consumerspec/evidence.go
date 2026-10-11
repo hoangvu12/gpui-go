@@ -20,24 +20,26 @@ import (
 // ---------------------------------------------------------------------------
 
 // The artifact identity recorded for the current native build (native
-// revision 7). These constants are the evidence values the delivery checks
-// compare the module's embedded artifact against; they cite:
+// revision 10, the wave-4 rebuild). These constants are the evidence
+// values the delivery checks compare the module's embedded artifact
+// against; they cite:
 //
-//   - evidence/ticket16-paths-filters.json (the most recent recorded
-//     identity: "12,489,728 bytes; sha256 d648523b…; static CRT
-//     (OS-only imports)", native revision 7), and
-//   - evidence/ticket13-focus-keyboard.json (same artifact, revision 7).
+//   - evidence/ticket22-uia-provider.json, evidence/ticket28-capture.json,
+//     evidence/ticket29-device-loss.json and
+//     evidence/ticket32-render-to-image.json (the wave-4 evidence
+//     recording: "18,860,544 bytes; sha256 6442f00a…; static CRT
+//     (OS-only imports)", native revision 10, capability mask 0xFFF).
 //
 // When the maintainer artifact rotates, these constants, the embedded
 // manifest pair and the evidence records move together: the tests fail
 // loudly instead of accepting a silent identity drift.
 const (
 	// EvidenceArtifactSHA256 is the recorded SHA-256 of the DLL.
-	EvidenceArtifactSHA256 = "f10c79737a4f68f629efa70533b016ccdcfb03b919e0d8a2058b696d062fde8c"
+	EvidenceArtifactSHA256 = "6442f00acb8064a91a6d8aabb3996d47b1a93d4f7745df616fd3cbb1782258ce"
 	// EvidenceArtifactBytes is the recorded DLL size.
-	EvidenceArtifactBytes = 18216448
+	EvidenceArtifactBytes = 18860544
 	// EvidenceNativeRevision is the recorded native bridge revision.
-	EvidenceNativeRevision = 9
+	EvidenceNativeRevision = 10
 	// EvidenceCECommit is the pinned gpui-CE commit of the artifact.
 	EvidenceCECommit = "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a"
 	// EvidenceCRTOutcome is the recorded static-CRT outcome string.

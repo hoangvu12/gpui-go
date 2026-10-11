@@ -1,3 +1,4 @@
+pub mod image_codecs;
 pub mod authoring_counter;
 pub mod glyph_raster;
 pub mod layout_effects;
