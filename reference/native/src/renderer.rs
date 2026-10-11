@@ -136,7 +136,8 @@ use windows::Win32::Graphics::Dxgi::Common::{
 };
 use windows::Win32::Graphics::Dxgi::{
     CreateDXGIFactory2, DXGI_ADAPTER_FLAG_SOFTWARE, DXGI_CREATE_FACTORY_DEBUG,
-    DXGI_CREATE_FACTORY_FLAGS, DXGI_ERROR_NOT_FOUND, DXGI_MWA_NO_ALT_ENTER, DXGI_PRESENT,
+    DXGI_CREATE_FACTORY_FLAGS, DXGI_ERROR_DEVICE_REMOVED, DXGI_ERROR_NOT_FOUND,
+    DXGI_MWA_NO_ALT_ENTER, DXGI_PRESENT,
     DXGI_SCALING_NONE, DXGI_SCALING_STRETCH, DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_CHAIN_FLAG,
     DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL, DXGI_USAGE_RENDER_TARGET_OUTPUT, IDXGIAdapter1, IDXGIDevice,
     IDXGIFactory6, IDXGISwapChain1,
@@ -147,8 +148,12 @@ use windows::Win32::System::LibraryLoader::LoadLibraryA;
 /// changes of the renderer service). Version 2 (ticket16) added the
 /// scene drawing entries (`surface_draw_scene` / `surface_render_scene`
 /// / `surface_read_pixels`) and the draw-constant scalars
-/// (`max_instance_buffer_bytes`, `path_multisample_count`).
-pub const GPUI_GO_RENDERER_SERVICE_VERSION: u32 = 2;
+/// (`max_instance_buffer_bytes`, `path_multisample_count`). Version 3
+/// (ticket28/29/32, the wave-4 rebuild) added the device-loss entries
+/// (`device_state_check` / `device_inject_loss` / `device_rebuild` /
+/// `device_mark_drawable`), the test-support render-to-image entry
+/// (`surface_render_to_image`) and its record size.
+pub const GPUI_GO_RENDERER_SERVICE_VERSION: u32 = 3;
 
 /// The pin's swap-chain buffer count (`BUFFER_COUNT` in
 /// `directx_renderer.rs`): flip-sequential triple buffering.
@@ -213,6 +218,15 @@ pub mod renderer_status {
     /// successful draw; pixel output for imported surface sources awaits
     /// the capture-producer slice.
     pub const ERR_UNSUPPORTED_SOURCE: i32 = -11;
+    /// The operation was refused because the renderer is recovering
+    /// from a device loss (the pin's `skip_draws` gate: draw, render,
+    /// present and render-to-image skip while the replacement device's
+    /// resources are not yet rebuilt; the port makes the skip
+    /// observable instead of silently returning success — the Go model
+    /// treats it as "frame skipped, redraw pending", matching the
+    /// pin's forced-redraw recovery flow). Clear the gate with
+    /// `renderer_device_mark_drawable` (the pin's `mark_drawable`).
+    pub const ERR_RECOVERING: i32 = -12;
     /// The scene handle of a draw entry did not resolve to a finished,
     /// healthy scene (stale, malformed, unfinished or failed).
     pub const ERR_SCENE: i32 = -12;
@@ -326,6 +340,74 @@ pub struct GpuiGoRetireRecord {
     pub record_size: u32,
 }
 
+/// Device-loss state for `renderer_device_state_check`. Layout: `lost`
+/// @0, `injected` @4, `recovering` @8, `removed_reason` @12,
+/// `device_generation` @16, `record_size` @20; size 24, alignment 4.
+///
+/// Real and injected loss are recorded separately (the ticket's
+/// requirement): `injected` marks the test injection
+/// (`renderer_device_inject_loss`); `removed_reason` is the driver's
+/// HRESULT for real loss, the `DXGI_ERROR_DEVICE_REMOVED` marker for
+/// injected loss, or 0 when the device is alive. `device_generation`
+/// counts completed rebuilds (fresh generation handles for GPU caches).
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct GpuiGoDeviceStateRecord {
+    /// 1 when the device is lost (real or injected).
+    pub lost: u32,
+    /// 1 when the loss is the test injection, not a driver event.
+    pub injected: u32,
+    /// 1 while a rebuild has completed but the first forced draw has
+    /// not yet marked the renderer drawable (the pin's skip_draws).
+    pub recovering: u32,
+    /// The removal reason HRESULT (0 = alive).
+    pub removed_reason: i32,
+    /// The count of completed device rebuilds.
+    pub device_generation: u32,
+    /// `size_of::<GpuiGoDeviceStateRecord>()` self-check.
+    pub record_size: u32,
+}
+
+const _: () = assert!(std::mem::size_of::<GpuiGoDeviceStateRecord>() == 24);
+const _: () = assert!(std::mem::align_of::<GpuiGoDeviceStateRecord>() == 4);
+
+/// The rebuild result record for `renderer_device_rebuild` (the pin's
+/// `handle_gpu_device_lost` outcome). Layout: `attempts` @0,
+/// `rebuilt_surfaces` @4, `failed_surfaces` @8, `aborted_submissions`
+/// @12, `cleared_views` @16, `device_generation` @20, `fail_reason_hr`
+/// @24 (i32), `record_size` @28; size 32, alignment 4.
+///
+/// Pending submissions at rebuild time are ABORTED (their records are
+/// removed; later poll/retire of their handles reports
+/// [`renderer_status::ERR_STALE_HANDLE`]) — the safe abort of the
+/// release path: the backend guarantees no further use of the old
+/// device, so the in-flight markers cannot complete.
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct GpuiGoRebuildRecord {
+    /// Device-creation attempts used (the pin's 5-attempt bounded
+    /// retry).
+    pub attempts: u32,
+    /// Surfaces whose swap chains were rebuilt in place.
+    pub rebuilt_surfaces: u32,
+    /// Surfaces whose swap-chain recreation failed (their handles stay
+    /// valid but unusable until a later rebuild succeeds).
+    pub failed_surfaces: u32,
+    /// Pending submissions aborted by the rebuild.
+    pub aborted_submissions: u32,
+    /// Capture surface views dropped from the cache (old-device SRVs).
+    pub cleared_views: u32,
+    /// The new device generation (GPU caches must invalidate below it).
+    pub device_generation: u32,
+    /// The HRESULT that failed the rebuild (0 = success).
+    pub fail_reason_hr: i32,
+    /// `size_of::<GpuiGoRebuildRecord>()` self-check.
+    pub record_size: u32,
+}
+
+const _: () = assert!(std::mem::size_of::<GpuiGoRebuildRecord>() == 32);
+const _: () = assert!(std::mem::align_of::<GpuiGoRebuildRecord>() == 4);
+
 /// Device/environment identity. The three strings (adapter description,
 /// driver name, driver version) are UTF-8, packed contiguously in that
 /// order into the caller-provided byte buffer; the offset/length pairs
@@ -380,7 +462,7 @@ const _: () = assert!(std::mem::size_of::<GpuiGoRetireRecord>() == 20);
 const _: () = assert!(std::mem::align_of::<GpuiGoRetireRecord>() == 4);
 const _: () = assert!(std::mem::size_of::<GpuiGoDeviceInfoRecord>() == 64);
 const _: () = assert!(std::mem::align_of::<GpuiGoDeviceInfoRecord>() == 8);
-const _: () = assert!(std::mem::size_of::<GpuiGoRendererTable>() == 128);
+const _: () = assert!(std::mem::size_of::<GpuiGoRendererTable>() == 176);
 const _: () = assert!(std::mem::align_of::<GpuiGoRendererTable>() == 8);
 
 // ---------------------------------------------------------------------------
@@ -492,7 +574,6 @@ enum SubmissionState {
 /// One surface: a swap chain in one of the two pinned modes plus its
 /// tracked submissions.
 struct SurfaceState {
-    #[expect(dead_code)]
     hwnd: u64,
     mode: u32,
     width: u32,
@@ -511,7 +592,6 @@ struct SurfaceState {
     /// after creation) so the swap chain stays attached to the window for
     /// the surface's lifetime, exactly like the pin's DirectXRenderer
     /// holds its DirectComposition field.
-    #[expect(dead_code)]
     composition: Option<CompositionTree>,
     submissions: HashMap<u64, SubmissionRecord>,
     next_seq: u64,
@@ -537,6 +617,18 @@ impl SurfaceSlot {
 /// ever held across a callback (the service has none).
 struct RendererState {
     device: Option<DeviceShared>,
+    /// Ticket29: the test-injected device-loss flag (recorded
+    /// separately from real loss; cleared by a completed rebuild).
+    injected_lost: bool,
+    /// Ticket29: the pin's `skip_draws` — set by a completed rebuild,
+    /// cleared by `renderer_device_mark_drawable` (the pin's
+    /// `mark_drawable`, called on the first forced draw after
+    /// recovery).
+    recovering: bool,
+    /// Ticket29: the count of completed rebuilds (fresh generation
+    /// handles for GPU caches — the atlas's tile generation and the
+    /// capture view cache invalidate at this boundary).
+    device_generation: u32,
     /// Ticket16: the device-global draw state (pipelines and global
     /// elements), created lazily at the first scene draw and leased out
     /// for each draw so instance-buffer updates never alias the state
@@ -545,8 +637,14 @@ struct RendererState {
     slots: Vec<SurfaceSlot>,
 }
 
-static GLOBAL: Mutex<RendererState> =
-    Mutex::new(RendererState { device: None, draw: None, slots: Vec::new() });
+static GLOBAL: Mutex<RendererState> = Mutex::new(RendererState {
+    device: None,
+    injected_lost: false,
+    recovering: false,
+    device_generation: 0,
+    draw: None,
+    slots: Vec::new(),
+});
 
 // SAFETY: the renderer state contains raw COM interface wrappers, which
 // the windows crate conservatively treats as !Send (COM objects may be
@@ -586,6 +684,32 @@ pub(super) struct DeviceHandles {
 pub(super) fn shared_device() -> Result<DeviceHandles, i32> {
     let mut state = lock_global();
     ensure_device(&mut state)
+}
+
+/// Ticket28/29: takes the renderer state lock, ensures the shared
+/// device, and runs `f` with the device and immediate context WHILE
+/// the lock is held — the specified immediate-context protection for
+/// cross-service GPU work (the capture service's frame copies). The
+/// ONLY nesting direction allowed from here is renderer-lock ->
+/// capture-lock (never the reverse).
+pub(super) fn with_shared_device_context<T>(
+    f: impl FnOnce(&ID3D11Device, &ID3D11DeviceContext) -> T,
+) -> Result<T, i32> {
+    let mut state = lock_global();
+    let device = ensure_device(&mut state)?;
+    Ok(f(&device.device, &device.context))
+}
+
+/// Ticket29: the loss probe consulted by poll/retire and the state
+/// check. Real loss comes from the driver (`GetDeviceRemovedReason`);
+/// injected loss reports the `DXGI_ERROR_DEVICE_REMOVED` marker so the
+/// retire-time confirmation releases failed submissions through the
+/// documented loss path. None = alive.
+fn confirmed_removed_reason(state: &RendererState) -> Option<i32> {
+    if state.injected_lost {
+        return Some(DXGI_ERROR_DEVICE_REMOVED.0 as i32);
+    }
+    state.device.as_ref().and_then(|shared| device_removed_reason(&shared.device))
 }
 
 // ---------------------------------------------------------------------------
@@ -1130,6 +1254,38 @@ pub struct GpuiGoRendererTable {
     pub surface_read_pixels: Option<
         unsafe extern "system" fn(u64, *mut u8, u32, *mut u32) -> i32,
     >,
+    /// `renderer_surface_render_to_image` (ticket32): the pinned
+    /// test-support path — render the scene without presenting, then
+    /// stage-copy the render target into owned RGBA bytes (the pin's
+    /// `render_to_image`, including its device-recovery refusal).
+    pub surface_render_to_image: Option<
+        unsafe extern "system" fn(
+            surface: u64,
+            scene: u64,
+            appearance: u32,
+            atlas: u64,
+            out_bytes: *mut u8,
+            capacity: u32,
+            out_needed: *mut u32,
+        ) -> i32,
+    >,
+    /// `renderer_device_state_check` (ticket29): the live device-loss
+    /// state (real + injected + recovering, the removal reason, the
+    /// device generation).
+    pub device_state_check:
+        Option<unsafe extern "system" fn(out: *mut GpuiGoDeviceStateRecord) -> i32>,
+    /// `renderer_device_inject_loss` (ticket29, test-only): arm the
+    /// injected-loss flag (recorded separately from real loss).
+    pub device_inject_loss: Option<unsafe extern "system" fn() -> i32>,
+    /// `renderer_device_rebuild` (ticket29): the pin's bounded-retry
+    /// device recovery — recreate the device, rebuild every surface's
+    /// swap chain in place, abort in-flight submissions, drop the draw
+    /// globals and the capture view cache, arm the recovery gate.
+    pub device_rebuild: Option<unsafe extern "system" fn(out: *mut GpuiGoRebuildRecord) -> i32>,
+    /// `renderer_device_mark_drawable` (ticket29): clear the recovery
+    /// gate (the pin's `mark_drawable`, called on the first forced
+    /// draw after recovery).
+    pub device_mark_drawable: Option<unsafe extern "system" fn() -> i32>,
     /// Renderer ABI version (see [`GPUI_GO_RENDERER_SERVICE_VERSION`]).
     pub service_version: u32,
     /// `size_of::<GpuiGoRendererTable>()` self-check.
@@ -1144,6 +1300,10 @@ pub struct GpuiGoRendererTable {
     pub size_of_retire_record: u32,
     /// `size_of::<GpuiGoDeviceInfoRecord>()` self-check.
     pub size_of_device_info: u32,
+    /// `size_of::<GpuiGoDeviceStateRecord>()` self-check (ticket29).
+    pub size_of_device_state: u32,
+    /// `size_of::<GpuiGoRebuildRecord>()` self-check (ticket29).
+    pub size_of_rebuild_record: u32,
     /// [`MAX_PENDING_SUBMISSIONS`] — the bounded pending-submission cap,
     /// mirrored for the Go-side backpressure check.
     pub max_pending_submissions: u32,
@@ -1167,6 +1327,11 @@ pub(crate) static RENDERER_TABLE: GpuiGoRendererTable = GpuiGoRendererTable {
     surface_draw_scene: Some(renderer_surface_draw_scene),
     surface_render_scene: Some(renderer_surface_render_scene),
     surface_read_pixels: Some(renderer_surface_read_pixels),
+    surface_render_to_image: Some(renderer_surface_render_to_image),
+    device_state_check: Some(renderer_device_state_check),
+    device_inject_loss: Some(renderer_device_inject_loss),
+    device_rebuild: Some(renderer_device_rebuild),
+    device_mark_drawable: Some(renderer_device_mark_drawable),
     service_version: GPUI_GO_RENDERER_SERVICE_VERSION,
     size_of_table: std::mem::size_of::<GpuiGoRendererTable>() as u32,
     align_of_table: std::mem::align_of::<GpuiGoRendererTable>() as u32,
@@ -1174,6 +1339,8 @@ pub(crate) static RENDERER_TABLE: GpuiGoRendererTable = GpuiGoRendererTable {
     size_of_submission_state: std::mem::size_of::<GpuiGoSubmissionStateRecord>() as u32,
     size_of_retire_record: std::mem::size_of::<GpuiGoRetireRecord>() as u32,
     size_of_device_info: std::mem::size_of::<GpuiGoDeviceInfoRecord>() as u32,
+    size_of_device_state: std::mem::size_of::<GpuiGoDeviceStateRecord>() as u32,
+    size_of_rebuild_record: std::mem::size_of::<GpuiGoRebuildRecord>() as u32,
     max_pending_submissions: MAX_PENDING_SUBMISSIONS,
     max_instance_buffer_bytes: MAX_INSTANCE_BUFFER_SIZE as u32,
     path_multisample_count: PATH_MULTISAMPLE_COUNT,
@@ -1481,6 +1648,10 @@ fn surface_present_body(surface: u64, rgba_bits: *const u32, out_submission: *mu
         Ok(device) => device,
         Err(code) => return code,
     };
+    // Ticket29: the recovery gate (the pin's skip_draws in `draw`).
+    if state.recovering {
+        return renderer_status::ERR_RECOVERING;
+    }
     let surface_state = match resolve_slot_mut(&mut state, slot_index, slot_generation) {
         Ok(surface) => surface,
         Err(code) => return code,
@@ -1627,7 +1798,7 @@ fn submission_poll_body(submission: u64, out: *mut GpuiGoSubmissionStateRecord) 
         };
         // One bounded, nonblocking GetData call.
         let hr = poll_get_data_raw(&context, &query);
-        let device_probe = state.device.as_ref().map(|device| device.device.clone());
+        let confirmed = confirmed_removed_reason(&state);
         let record: &mut SubmissionRecord = match find_submission_mut(&mut state, submission) {
             Ok(record) => record,
             Err(code) => return code,
@@ -1641,7 +1812,7 @@ fn submission_poll_body(submission: u64, out: *mut GpuiGoSubmissionStateRecord) 
         } else {
             // A query error is not by itself a safe-abort proof: confirm
             // device loss with the pin's check.
-            record.state = match device_probe.as_ref().and_then(device_removed_reason) {
+            record.state = match confirmed {
                 Some(reason) => SubmissionState::Failed { reason },
                 None => SubmissionState::Failed { reason: hr },
             };
@@ -1674,7 +1845,7 @@ fn submission_retire_body(submission: u64, out: *mut GpuiGoRetireRecord) -> i32 
     }
     let (slot_index, slot_generation, sequence) = submission_handle_parts(submission);
     let mut state = lock_global();
-    let device_probe = state.device.as_ref().map(|device| device.device.clone());
+    let confirmed = confirmed_removed_reason(&state);
     let surface = match resolve_slot_mut(&mut state, slot_index, slot_generation) {
         Ok(surface) => surface,
         Err(code) => return code,
@@ -1694,7 +1865,7 @@ fn submission_retire_body(submission: u64, out: *mut GpuiGoRetireRecord) -> i32 
             // Quarantine semantics: retirement of a failed submission is
             // only allowed on CONFIRMED device loss (the documented
             // release path); otherwise the record stays tracked.
-            let Some(reason) = device_probe.as_ref().and_then(device_removed_reason) else {
+            let Some(reason) = confirmed else {
                 return renderer_status::ERR_QUARANTINE;
             };
             surface.submissions.remove(&sequence);
@@ -1978,6 +2149,296 @@ unsafe extern "system" fn renderer_surface_read_pixels(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Ticket29: device loss, recovery and rebuild
+// ---------------------------------------------------------------------------
+
+/// `renderer_device_state_check`.
+fn device_state_check_body(out: *mut GpuiGoDeviceStateRecord) -> i32 {
+    if out.is_null() {
+        return renderer_status::ERR_NULL_ARG;
+    }
+    let state = lock_global();
+    let confirmed = confirmed_removed_reason(&state);
+    unsafe {
+        *out = GpuiGoDeviceStateRecord {
+            lost: u32::from(confirmed.is_some()),
+            injected: u32::from(state.injected_lost),
+            recovering: u32::from(state.recovering),
+            removed_reason: confirmed.unwrap_or(0),
+            device_generation: state.device_generation,
+            record_size: std::mem::size_of::<GpuiGoDeviceStateRecord>() as u32,
+        };
+    }
+    renderer_status::OK
+}
+
+/// `renderer_device_inject_loss` (test-only).
+fn device_inject_loss_body() -> i32 {
+    let mut state = lock_global();
+    state.injected_lost = true;
+    renderer_status::OK
+}
+
+/// `renderer_device_rebuild`: the pin's `handle_gpu_device_lost` +
+/// `handle_device_lost_impl` (platform.rs 1427-1475, window.rs
+/// 452-530) adapted to this service's single-device/multi-surface
+/// shape:
+///
+/// * the pin's 350ms settle before the recovery loop;
+/// * `try_to_recover_from_device_lost`'s 5-attempt bounded retry
+///   (100ms + i*10ms backoff between attempts);
+/// * the old state is torn down (unbound targets, ClearState, Flush),
+///   the device is recreated, every surface's swap chain and
+///   composition tree are rebuilt IN PLACE (the pin rebuilds each
+///   window's renderer object's resources — surface identity and
+///   handles persist), the draw globals and capture surface views are
+///   dropped for lazy rebuild, in-flight submissions are aborted (the
+///   old device guarantees no further use);
+/// * `skip_draws` is armed (this service's `recovering`) for the first
+///   forced draw to clear via `renderer_device_mark_drawable`.
+fn device_rebuild_body(out: *mut GpuiGoRebuildRecord) -> i32 {
+    if out.is_null() {
+        return renderer_status::ERR_NULL_ARG;
+    }
+    unsafe {
+        *out = GpuiGoRebuildRecord {
+            attempts: 0,
+            rebuilt_surfaces: 0,
+            failed_surfaces: 0,
+            aborted_submissions: 0,
+            cleared_views: 0,
+            device_generation: 0,
+            fail_reason_hr: 0,
+            record_size: std::mem::size_of::<GpuiGoRebuildRecord>() as u32,
+        };
+    }
+    // The pin's settle: give the system time to recover from the lost
+    // state ("if we don't wait, the final drawing result will be
+    // blank").
+    std::thread::sleep(std::time::Duration::from_millis(350));
+    let mut state = lock_global();
+    // Tear down the old device state (the pin's handle_device_lost_impl
+    // head: unbind, ClearState, Flush).
+    if let Some(shared) = state.device.as_ref() {
+        unsafe {
+            shared.context.OMSetRenderTargets(None, None);
+            shared.context.ClearState();
+            shared.context.Flush();
+        }
+    }
+    // Drop the draw globals and the capture surface views (both are
+    // lazily rebuilt on the replacement device).
+    state.draw = None;
+    let cleared_views = draw::clear_surface_views(&mut state);
+    // Abort every in-flight submission: their queries reference the
+    // lost device; the rebuild is the backend's safe-abort guarantee.
+    let mut aborted_submissions = 0u32;
+    for slot in state.slots.iter_mut() {
+        if let Some(surface) = slot.surface.as_mut() {
+            aborted_submissions += surface.submissions.drain().count() as u32;
+        }
+    }
+    // Recreate the device with the pin's bounded retry
+    // (try_to_recover_from_device_lost: 5 attempts, the first without
+    // delay, 100ms + i*10ms between the rest).
+    state.device = None;
+    let mut attempts = 0u32;
+    let mut fail_reason = 0i32;
+    loop {
+        attempts += 1;
+        match ensure_device(&mut state) {
+            Ok(_) => break,
+            Err(code) => {
+                fail_reason = code;
+                if attempts >= 5 {
+                    // Terminal: the rebuild failed; the old device is
+                    // gone, surfaces stay unusable until a later
+                    // rebuild succeeds.
+                    unsafe {
+                        (*out).attempts = attempts;
+                        (*out).fail_reason_hr = fail_reason;
+                        (*out).aborted_submissions = aborted_submissions;
+                        (*out).cleared_views = cleared_views;
+                    }
+                    return renderer_status::ERR_DEVICE;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(
+                    100 + (attempts as u64) * 10,
+                ));
+            }
+        }
+    }
+    // Rebuild every occupied surface's swap chain, views and
+    // composition tree in place (the pin rebuilds each renderer's
+    // resources; handles persist). The shared device handles are
+    // cloned once (AddRef'd) so the loop body borrows the slots
+    // mutably without aliasing the device borrow.
+    let (dxgi_factory, device, context) = match state.device.as_ref() {
+        Some(shared) => (
+            shared.dxgi_factory.clone(),
+            shared.device.clone(),
+            shared.context.clone(),
+        ),
+        None => {
+            return renderer_status::ERR_DEVICE;
+        }
+    };
+    let mut rebuilt_surfaces = 0u32;
+    let mut failed_surfaces = 0u32;
+    for slot in state.slots.iter_mut() {
+        let Some(surface) = slot.surface.as_mut() else {
+            continue;
+        };
+        let hwnd_handle = HWND(surface.hwnd as *mut core::ffi::c_void);
+        let mode = surface.mode;
+        let width = surface.width;
+        let height = surface.height;
+        let swap_chain = match mode {
+            surface_mode::DCOMP_PREMULTIPLIED => create_swap_chain_for_composition(
+                &dxgi_factory,
+                &device,
+                width,
+                height,
+            ),
+            _ => create_swap_chain(&dxgi_factory, &device, hwnd_handle, width, height),
+        };
+        let swap_chain = match swap_chain {
+            Ok(chain) => chain,
+            Err(code) => {
+                failed_surfaces += 1;
+                if fail_reason == 0 {
+                    fail_reason = code;
+                }
+                continue;
+            }
+        };
+        let (render_target, render_target_view) =
+            match create_render_target_and_its_view(&swap_chain, &device) {
+                Ok(pair) => pair,
+                Err(code) => {
+                    failed_surfaces += 1;
+                    if fail_reason == 0 {
+                        fail_reason = code;
+                    }
+                    continue;
+                }
+            };
+        let composition = match mode {
+            surface_mode::DCOMP_PREMULTIPLIED => {
+                match create_composition_tree(&device, hwnd_handle, &swap_chain) {
+                    Ok(tree) => Some(tree),
+                    Err(code) => {
+                        failed_surfaces += 1;
+                        if fail_reason == 0 {
+                            fail_reason = code;
+                        }
+                        continue;
+                    }
+                }
+            }
+            _ => None,
+        };
+        surface.swap_chain = swap_chain;
+        surface.render_target = Some(render_target);
+        surface.render_target_view = render_target_view;
+        surface.viewport = set_viewport(&context, width as f32, height as f32);
+        surface.composition = composition;
+        surface.draw_targets = draw::DrawTargets::default();
+        surface.resize_generation = surface.resize_generation.saturating_add(1);
+        rebuilt_surfaces += 1;
+    }
+    // The recovery gate: the pin's skip_draws = true (armed until the
+    // first forced draw's mark_drawable).
+    state.recovering = true;
+    state.injected_lost = false;
+    state.device_generation = state.device_generation.saturating_add(1);
+    unsafe {
+        (*out).attempts = attempts;
+        (*out).rebuilt_surfaces = rebuilt_surfaces;
+        (*out).failed_surfaces = failed_surfaces;
+        (*out).aborted_submissions = aborted_submissions;
+        (*out).cleared_views = cleared_views;
+        (*out).device_generation = state.device_generation;
+        (*out).fail_reason_hr = fail_reason;
+    }
+    renderer_status::OK
+}
+
+/// `renderer_device_mark_drawable` (the pin's `mark_drawable`).
+fn device_mark_drawable_body() -> i32 {
+    let mut state = lock_global();
+    state.recovering = false;
+    renderer_status::OK
+}
+
+unsafe extern "system" fn renderer_device_state_check(
+    out: *mut GpuiGoDeviceStateRecord,
+) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| device_state_check_body(out)));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            renderer_status::ERR_PANIC
+        }
+    }
+}
+
+unsafe extern "system" fn renderer_device_inject_loss() -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| device_inject_loss_body()));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            renderer_status::ERR_PANIC
+        }
+    }
+}
+
+unsafe extern "system" fn renderer_device_rebuild(out: *mut GpuiGoRebuildRecord) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| device_rebuild_body(out)));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            renderer_status::ERR_PANIC
+        }
+    }
+}
+
+unsafe extern "system" fn renderer_device_mark_drawable() -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| device_mark_drawable_body()));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            renderer_status::ERR_PANIC
+        }
+    }
+}
+
+unsafe extern "system" fn renderer_surface_render_to_image(
+    surface: u64,
+    scene: u64,
+    appearance: u32,
+    atlas: u64,
+    out_bytes: *mut u8,
+    capacity: u32,
+    out_needed: *mut u32,
+) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        draw::surface_render_to_image_body(surface, scene, appearance, atlas, out_bytes, capacity, out_needed)
+    }));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            renderer_status::ERR_PANIC
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2010,6 +2471,14 @@ mod tests {
             std::mem::size_of::<GpuiGoDeviceInfoRecord>()
         );
         assert_eq!(RENDERER_TABLE.max_pending_submissions, MAX_PENDING_SUBMISSIONS);
+        assert_eq!(
+            RENDERER_TABLE.size_of_device_state as usize,
+            std::mem::size_of::<GpuiGoDeviceStateRecord>()
+        );
+        assert_eq!(
+            RENDERER_TABLE.size_of_rebuild_record as usize,
+            std::mem::size_of::<GpuiGoRebuildRecord>()
+        );
     }
 
     #[test]
@@ -2023,6 +2492,11 @@ mod tests {
             RENDERER_TABLE.submission_poll.map(|f| f as usize).unwrap_or(0),
             RENDERER_TABLE.submission_retire.map(|f| f as usize).unwrap_or(0),
             RENDERER_TABLE.device_info.map(|f| f as usize).unwrap_or(0),
+            RENDERER_TABLE.surface_render_to_image.map(|f| f as usize).unwrap_or(0),
+            RENDERER_TABLE.device_state_check.map(|f| f as usize).unwrap_or(0),
+            RENDERER_TABLE.device_inject_loss.map(|f| f as usize).unwrap_or(0),
+            RENDERER_TABLE.device_rebuild.map(|f| f as usize).unwrap_or(0),
+            RENDERER_TABLE.device_mark_drawable.map(|f| f as usize).unwrap_or(0),
         ];
         assert!(slots.iter().all(|slot| *slot != 0));
     }
@@ -2053,6 +2527,7 @@ mod tests {
             renderer_status::ERR_QUARANTINE,
             renderer_status::ERR_PRESENT,
             renderer_status::ERR_CAPACITY,
+            renderer_status::ERR_RECOVERING,
             renderer_status::ERR_PANIC,
         ];
         for (i, code) in codes.iter().enumerate() {

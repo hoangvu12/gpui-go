@@ -4,8 +4,8 @@ Parent: ../plan.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: wave-4 orchestrator chat (Roboco)
 Blocked by: 19, 20, 22, 24, 25, 26, 27, 29
 
 ## Question

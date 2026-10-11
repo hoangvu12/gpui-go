@@ -845,6 +845,7 @@ func releaseMouseButton() {
 // client point (the drag simulation's client-area scan).
 var (
 	procWindowFromPoint = modUser32.NewProc("WindowFromPoint")
+	procGetWindow        = modUser32.NewProc("GetWindow")
 	procSetCursorPos    = modUser32.NewProc("SetCursorPos")
 	procClientToScreen  = modUser32.NewProc("ClientToScreen")
 )

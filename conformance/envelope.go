@@ -72,6 +72,36 @@ type FixtureInputs struct {
 	// kinds that do not use it, so existing fixtures' wire shape is
 	// unaffected.
 	PathFilterCases *PathFilterInputs `json:"path_filter_cases,omitempty"`
+	// ImageCases carries the per-case inputs of the image-codecs-v1
+	// fixture kind (fx-0008, ticket17's recorded harness follow-up).
+	// It is nil for fixture kinds that do not use it.
+	ImageCases *ImageCodecsInputs `json:"image_cases,omitempty"`
+}
+
+// FixtureKindImageCodecs identifies the image-codecs fixture kind
+// (fx-0008, ticket17's recorded harness follow-up, landed with the
+// wave-4 rebuild).
+const FixtureKindImageCodecs = "image-codecs-v1"
+
+// ImageCodecsInputs carries the per-case inputs of the
+// image-codecs-v1 fixture kind.
+type ImageCodecsInputs struct {
+	// Cases are executed in order.
+	Cases []ImageCodecCase `json:"cases"`
+}
+
+// ImageCodecCase is one labeled image byte sequence (hex-encoded; the
+// envelope is self-contained — the same bytes feed the reference
+// decode and the Go native service).
+type ImageCodecCase struct {
+	Label string `json:"label"`
+	Bytes string `json:"bytes"`
+}
+
+// IsImageCodecsKind reports whether the envelope declares the
+// image-codecs fixture kind.
+func (env *Envelope) IsImageCodecsKind() bool {
+	return env != nil && env.FixtureKind == FixtureKindImageCodecs
 }
 
 // SizeInput is a definite size in logical pixels.

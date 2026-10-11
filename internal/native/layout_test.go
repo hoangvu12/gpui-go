@@ -818,9 +818,9 @@ func TestLayoutManifestIdentity(t *testing.T) {
 	// ticket17 added the image codec capability (bit 8); ticket19 added
 	// the SVG capability (bit 9); the mask is
 	// the cumulative set of landed services, recorded by tools/measure.
-	wantMask := capBootstrapBufferRoundTrip | capLayoutTaffy | capRendererD3D11 | capSceneKernel | capTextParley | capGlyphRaster | capAtlasD3D11 | capSceneDrawPaths | capImageCodecs | capSvgResvg
+	wantMask := capBootstrapBufferRoundTrip | capLayoutTaffy | capRendererD3D11 | capSceneKernel | capTextParley | capGlyphRaster | capAtlasD3D11 | capSceneDrawPaths | capImageCodecs | capSvgResvg | capA11yAccesskit | capCaptureWGC
 	if auth.CapabilitiesMask != wantMask {
-		t.Errorf("manifest capabilities mask = %#x, want %#x (bootstrap + layout + renderer + scene + text + glyph + atlas + scene-draw + image + svg)", auth.CapabilitiesMask, wantMask)
+		t.Errorf("manifest capabilities mask = %#x, want %#x (bootstrap + layout + renderer + scene + text + glyph + atlas + scene-draw + image + svg + a11y + capture)", auth.CapabilitiesMask, wantMask)
 	}
 	if auth.NativeRevision != nativeRevision {
 		t.Errorf("manifest native revision = %d, want %d", auth.NativeRevision, nativeRevision)

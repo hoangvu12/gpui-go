@@ -657,19 +657,17 @@ func svgMaskFontIdentity(params RenderSvgParams) uint64 {
 }
 
 // svgMaskAtlasKey builds the monochrome-pool key record for the SVG
-// params (the pinned From<RenderSvgParams> for AtlasKey, adapted per
-// the module docs).
-func svgMaskAtlasKey(params RenderSvgParams) native.AtlasKeyRecord {
+// params (the pinned From<RenderSvgParams> for AtlasKey — the distinct
+// AtlasKey::Svg variant since the wave-4 rebuild: the identity hash in
+// the font-id slot with bit 62 set, the raster width/height in the
+// glyph-id/subpixel-x slots, every other field zero; the pre-rebuild
+// glyph-key AlphaMask ride with the same hash is retired).
+func svgMaskAtlasKey(params RenderSvgParams, width, height int) native.AtlasKeyRecord {
 	key := native.NewAtlasKeyRecord()
-	key.Kind = uint32(native.AtlasKeyGlyph)
+	key.Kind = uint32(native.AtlasKeySvg)
 	key.FontID = svgMaskFontIdentity(params)
-	// The zeroed glyph raster identity: font size 0.0, scale 1.0,
-	// grayscale/independent style, AlphaMask format (the monochrome
-	// pool, one byte per pixel).
-	key.FontSizeBits = 0
-	key.ScaleBits = math.Float32bits(1)
-	key.Style = native.NewRasterStyleRecord()
-	key.Format = uint32(RasterFormatAlphaMask)
+	key.GlyphID = uint32(width)
+	key.SubpixelX = uint32(height)
 	return key
 }
 
@@ -688,7 +686,7 @@ func (a *Atlas) InsertSvgMask(params RenderSvgParams, width, height int, mask []
 	if mask == nil {
 		return AtlasTile{}, fmt.Errorf("gpui: InsertSvgMask: nil mask")
 	}
-	key := svgMaskAtlasKey(params)
+	key := svgMaskAtlasKey(params, width, height)
 	tile, err := a.svc.Insert(a.handle, key, int32(width), int32(height), mask)
 	if err != nil {
 		return AtlasTile{}, fmt.Errorf("gpui: InsertSvgMask: %w", err)
@@ -709,11 +707,11 @@ func (a *Atlas) InsertSvgMask(params RenderSvgParams, width, height int, mask []
 // RemoveSvgMask removes the SVG params' tile, deallocating its atlas
 // space (PlatformAtlas::remove). Cache release and GPU completion are
 // separate prerequisites, exactly like the glyph and image removals.
-func (a *Atlas) RemoveSvgMask(params RenderSvgParams) error {
+func (a *Atlas) RemoveSvgMask(params RenderSvgParams, width, height int) error {
 	if a == nil {
 		return fmt.Errorf("gpui: RemoveSvgMask: nil atlas")
 	}
-	key := svgMaskAtlasKey(params)
+	key := svgMaskAtlasKey(params, width, height)
 	if err := a.svc.Remove(a.handle, key); err != nil {
 		return fmt.Errorf("gpui: RemoveSvgMask: %w", err)
 	}
@@ -722,11 +720,11 @@ func (a *Atlas) RemoveSvgMask(params RenderSvgParams) error {
 
 // SvgMaskTile returns the live tile of the SVG params identity (the
 // get_or_insert_with cache-hit probe; false when no tile is live).
-func (a *Atlas) SvgMaskTile(params RenderSvgParams) (AtlasTile, bool, error) {
+func (a *Atlas) SvgMaskTile(params RenderSvgParams, width, height int) (AtlasTile, bool, error) {
 	if a == nil {
 		return AtlasTile{}, false, fmt.Errorf("gpui: SvgMaskTile: nil atlas")
 	}
-	key := svgMaskAtlasKey(params)
+	key := svgMaskAtlasKey(params, width, height)
 	tile, err := a.svc.Query(a.handle, key)
 	if err != nil {
 		if isNativeError(err, native.ErrAtlasNotFound) {

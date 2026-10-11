@@ -297,13 +297,13 @@ func TestSvgResourceRetirement(t *testing.T) {
 
 	// The removal: exactly once — the first deallocates, the second is
 	// the pinned absent-key no-op, and the query misses afterwards.
-	if err := atlas.RemoveSvgMask(params); err != nil {
+	if err := atlas.RemoveSvgMask(params, width, height); err != nil {
 		t.Fatalf("RemoveSvgMask: %v", err)
 	}
-	if err := atlas.RemoveSvgMask(params); err != nil {
+	if err := atlas.RemoveSvgMask(params, width, height); err != nil {
 		t.Fatalf("the second RemoveSvgMask = %v, want the absent-key no-op", err)
 	}
-	if _, found, err := atlas.SvgMaskTile(params); err != nil || found {
+	if _, found, err := atlas.SvgMaskTile(params, width, height); err != nil || found {
 		t.Fatalf("the removed identity's query = (%v, %v), want (false, nil)", found, err)
 	}
 	count, err = atlas.TileCount()

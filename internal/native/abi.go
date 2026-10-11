@@ -24,8 +24,13 @@ const (
 	// service in reserved slot 7) bumped it to 8; ticket19 (the SVG
 	// service in reserved slot 8, extending the reserved slot array from
 	// 8 to 16 entries — an additive ABI record growth, 152→216 bytes,
-	// mirrored here in lockstep) bumped it to 9.
-	nativeRevision uint32 = 9
+	// mirrored here in lockstep) bumped it to 9; the wave-4 rebuild
+	// (tickets 22/28/29/32: the a11y provider service in reserved slot 9
+	// with capability bit 10, the capture service in reserved slot 10
+	// with capability bit 11, the renderer service v3 device-loss and
+	// render-to-image entries, the distinct AtlasKey::Svg variant)
+	// bumped it to 10.
+	nativeRevision uint32 = 10
 	// maxBufferLen mirrors GPUI_GO_MAX_BUFFER_LEN.
 	maxBufferLen = 4096
 	// maxTextLen mirrors the text service's MAX_TEXT_BYTES (1 MiB text
@@ -41,15 +46,17 @@ const (
 // forward-compatible, never rejected.
 const (
 	capBootstrapBufferRoundTrip uint64 = 1 << 0
-	capLayoutTaffy              uint64 = 1 << 1 // "layout-taffy-0-13-0"
-	capRendererD3D11            uint64 = 1 << 2 // "renderer-d3d11"
-	capSceneKernel              uint64 = 1 << 3 // "scene-kernel-v1"
-	capTextParley               uint64 = 1 << 4 // "text-parley-0-11-1"
-	capGlyphRaster              uint64 = 1 << 5 // "glyph-raster-dwrite"
-	capAtlasD3D11               uint64 = 1 << 6 // "glyph-atlas-d3d11"
-	capSceneDrawPaths           uint64 = 1 << 7 // "scene-draw-paths" (ticket16)
-	capImageCodecs              uint64 = 1 << 8 // "image-codecs-image-0-25" (ticket17)
-	capSvgResvg                 uint64 = 1 << 9 // "svg-resvg-0-48" (ticket19)
+	capLayoutTaffy              uint64 = 1 << 1  // "layout-taffy-0-13-0"
+	capRendererD3D11            uint64 = 1 << 2  // "renderer-d3d11"
+	capSceneKernel              uint64 = 1 << 3  // "scene-kernel-v1"
+	capTextParley               uint64 = 1 << 4  // "text-parley-0-11-1"
+	capGlyphRaster              uint64 = 1 << 5  // "glyph-raster-dwrite"
+	capAtlasD3D11               uint64 = 1 << 6  // "glyph-atlas-d3d11"
+	capSceneDrawPaths           uint64 = 1 << 7  // "scene-draw-paths" (ticket16)
+	capImageCodecs              uint64 = 1 << 8  // "image-codecs-image-0-25" (ticket17)
+	capSvgResvg                 uint64 = 1 << 9  // "svg-resvg-0-48" (ticket19)
+	capA11yAccesskit            uint64 = 1 << 10 // "a11y-accesskit" (ticket22)
+	capCaptureWGC               uint64 = 1 << 11 // "capture-wgc" (ticket28)
 
 	// requiredCapabilities is the mask the loader demands of every artifact
 	// it accepts. Unknown extra bits are forward-compatible, never rejected.

@@ -53,16 +53,22 @@ const (
 	// landed with native revision 9 and capability bit 9, extending the
 	// reserved slot array from 8 to 16 entries (an additive ABI record
 	// growth, 152 -> 216 bytes, mirrored in lockstep by the Go loader).
+	// The wave-4 rebuild (tickets 22/28/29/32 + the ticket-19 SVG-key
+	// follow-up) landed with native revision 10: the a11y provider
+	// service in slot 9 (bit 10) and the capture service in slot 10
+	// (bit 11) — both reusing the existing 16-entry reserved array —
+	// plus the renderer service v3 and the AtlasKey::Svg variant.
 	// Keep these in sync with reference/native/src/lib.rs
 	// (GPUI_GO_NATIVE_REVISION and the capabilities module).
-	nativeRevision = 9
+	nativeRevision = 10
 
 	// bit 0 bootstrap, bit 1 layout-taffy-0-13-0, bit 2 renderer-d3d11,
 	// bit 3 scene-kernel-v1, bit 4 text-parley-0-11-1, bit 5
 	// glyph-raster-dwrite, bit 6 glyph-atlas-d3d11, bit 7
 	// scene-draw-paths (ticket16), bit 8 image-codecs-image-0-25
-	// (ticket17), bit 9 svg-resvg-0-48 (ticket19).
-	capabilitiesMask = 1023
+	// (ticket17), bit 9 svg-resvg-0-48 (ticket19), bit 10
+	// a11y-accesskit (ticket22), bit 11 capture-wgc (ticket28).
+	capabilitiesMask = 4095
 )
 
 // The pinned Taffy engine of the layout service (docs/layout-contract.md).
@@ -99,8 +105,15 @@ var windowsFeatures = []string{
 	"Win32_Graphics_DirectWrite",
 	"Win32_Graphics_Dxgi",
 	"Win32_Graphics_Dxgi_Common",
+	"Win32_Graphics_Gdi",
+	"Win32_System_Com",
 	"Win32_System_LibraryLoader",
+	"Win32_System_WinRT",
+	"Win32_System_WinRT_Direct3D11",
+	"Win32_System_WinRT_Graphics_Capture",
 	"Win32_UI_WindowsAndMessaging",
+	"Graphics_Capture",
+	"Graphics_DirectX_Direct3D11",
 }
 
 // The pinned glyph/atlas stack of the raster and atlas services
@@ -161,6 +174,7 @@ type provenance struct {
 	Glyph               glyphMeasure   `json:"glyph"`
 	Image               imageMeasure   `json:"image"`
 	Svg                 svgMeasure     `json:"svg"`
+	A11y                a11yMeasure    `json:"a11y"`
 	CargoLockSHA256     string         `json:"cargo_lock_sha256"`
 	ReproducibilityNote string         `json:"reproducibility_note"`
 }
@@ -265,6 +279,16 @@ type imageMeasure struct {
 // (default-features off), resolved through the same workspace lock the
 // pinned checkout builds with; the native crate adds no new crate (the
 // gpui-ce path dependency already pulls the graph into the DLL).
+// a11yMeasure records the resolved AccessKit adapter stack of the a11y
+// provider service (ticket22): accesskit (the shared instance the
+// gpui-ce path dependency already compiles) and accesskit_windows (the
+// UIA platform adapter; the one new crate of the rebuild — resolving
+// against the SAME windows 0.62.2 family).
+type a11yMeasure struct {
+	Accesskit         registryMeasure `json:"accesskit"`
+	AccesskitWindows  registryMeasure `json:"accesskit_windows"`
+}
+
 type svgMeasure struct {
 	Resvg        registryMeasure `json:"resvg"`
 	Usvg         registryMeasure `json:"usvg"`
@@ -288,6 +312,7 @@ type manifestOut struct {
 	Text               textMeasure    `json:"text"`
 	Glyph              glyphMeasure   `json:"glyph"`
 	Image              imageMeasure   `json:"image"`
+	A11y               a11yMeasure    `json:"a11y"`
 	Target             string         `json:"target"`
 	Machine            string         `json:"machine"`
 	BuiltAt            string         `json:"built_at"`
@@ -371,6 +396,9 @@ func main() {
 	// The SVG service's resolved resvg/usvg stack (ticket19).
 	svg := measureSvg(*lockPath)
 
+	// The a11y provider service's resolved AccessKit stack (ticket22).
+	a11y := measureA11y(*lockPath)
+
 	prov := provenance{
 		Schema:             "gpui-go/native-bootstrap@2",
 		BuiltAt:            time.Now().UTC().Format(time.RFC3339),
@@ -389,13 +417,14 @@ func main() {
 			GzipMethod: "Go stdlib compress/gzip, level 9 (BestCompression)",
 		},
 		PE:              *peM,
-		ABI:             abiMeasure{ABIVersion: abiVersion, NativeRevision: nativeRevision, CECommit: ceCommit, CapabilitiesMask: capabilitiesMask, Capabilities: []string{"bootstrap-buffer-roundtrip", "layout-taffy-0-13-0", "renderer-d3d11", "scene-kernel-v1", "text-parley-0-11-1", "glyph-raster-dwrite", "glyph-atlas-d3d11", "scene-draw-paths", "image-codecs-image-0-25", "svg-resvg-0-48"}},
+		ABI:             abiMeasure{ABIVersion: abiVersion, NativeRevision: nativeRevision, CECommit: ceCommit, CapabilitiesMask: capabilitiesMask, Capabilities: []string{"bootstrap-buffer-roundtrip", "layout-taffy-0-13-0", "renderer-d3d11", "scene-kernel-v1", "text-parley-0-11-1", "glyph-raster-dwrite", "glyph-atlas-d3d11", "scene-draw-paths", "image-codecs-image-0-25", "svg-resvg-0-48", "a11y-accesskit", "capture-wgc"}},
 		Taffy:           taffy,
 		Windows:         windows,
 		Text:            text,
 		Glyph:           glyph,
 		Image:           image,
 		Svg:             svg,
+		A11y:            a11y,
 		CargoLockSHA256: lockHex,
 		ReproducibilityNote: "Single build; byte reproducibility not claimed and not expected: the distribution " +
 			"contract states \"Two builds have not yet demonstrated byte reproducibility\", and the MSVC link embeds a " +
@@ -426,12 +455,13 @@ func main() {
 		ABIVersion:         abiVersion,
 		NativeRevision:     nativeRevision,
 		CapabilitiesMask:   capabilitiesMask,
-		Capabilities:       []string{"bootstrap-buffer-roundtrip", "layout-taffy-0-13-0", "renderer-d3d11", "scene-kernel-v1", "text-parley-0-11-1", "glyph-raster-dwrite", "glyph-atlas-d3d11", "scene-draw-paths", "image-codecs-image-0-25", "svg-resvg-0-48"},
+		Capabilities:       []string{"bootstrap-buffer-roundtrip", "layout-taffy-0-13-0", "renderer-d3d11", "scene-kernel-v1", "text-parley-0-11-1", "glyph-raster-dwrite", "glyph-atlas-d3d11", "scene-draw-paths", "image-codecs-image-0-25", "svg-resvg-0-48", "a11y-accesskit", "capture-wgc"},
 		Taffy:              taffy,
 		Windows:            windows,
 		Text:               text,
 		Glyph:              glyph,
 		Image:              image,
+		A11y:               a11y,
 		Target:             targetTriple,
 		Machine:            "amd64",
 		BuiltAt:            prov.BuiltAt,
@@ -657,6 +687,33 @@ func measureSvg(lockPath string) svgMeasure {
 	}
 	m.FeatureGraph = cmdOutputIn(filepath.Dir(lockPath), "cargo", "tree", "-p", "gpui-go-native",
 		"--target", targetTriple, "--edges", "features", "-i", "resvg")
+	return m
+}
+
+// measureA11y records the resolved AccessKit adapter stack of the a11y
+// provider service (ticket22): accesskit and accesskit_windows from the
+// workspace lock plus the feature graph through accesskit_windows.
+func measureA11y(lockPath string) a11yMeasure {
+	m := a11yMeasure{}
+	if lockBytes, err := os.ReadFile(lockPath); err == nil {
+		lines := strings.Split(string(lockBytes), "\n")
+		accesskitVersion, accesskitChecksum := lockEntry(lines, "accesskit")
+		m.Accesskit = registryMeasure{
+			Version:  accesskitVersion,
+			Checksum: accesskitChecksum,
+			// The workspace declares "0.24.0"; the lock resolves 0.24.1
+			// — the shared instance the pinned checkout compiles with.
+			PinSatisfied: strings.HasPrefix(accesskitVersion, "0.24."),
+		}
+		accesskitWindowsVersion, accesskitWindowsChecksum := lockEntry(lines, "accesskit_windows")
+		m.AccesskitWindows = registryMeasure{
+			Version:  accesskitWindowsVersion,
+			Checksum: accesskitWindowsChecksum,
+			// The workspace declares "0.33.1" and the lock resolves the
+			// same version.
+			PinSatisfied: strings.HasPrefix(accesskitWindowsVersion, "0.33."),
+		}
+	}
 	return m
 }
 

@@ -55,7 +55,9 @@
 //! table (slot 0's `buffer_round_trip` field and reserved slot 1's layout
 //! service table), which is how the loader is required to call them.
 
+pub mod a11y;
 pub mod atlas;
+pub mod capture;
 pub mod glyph;
 pub mod image;
 pub mod layout;
@@ -76,15 +78,17 @@ pub const GPUI_GO_ABI_MAGIC: u32 = 0x4750_474F; // "GPGO"
 pub const GPUI_GO_ABI_VERSION: u32 = 1;
 
 /// Revision of the native bridge source itself (bumped on any native-side
-/// change, independently of `abi_version`). Ticket02 shipped revision 1;
-/// ticket06 (layout service) bumped it to 2; ticket07 (renderer service)
-/// bumped it to 3; ticket08 (scene kernel service) bumped it to 4;
-/// ticket09 (text geometry service) bumped it to 5; ticket10 (glyph
+/// Ticket09 (text geometry service) bumped it to 5; ticket10 (glyph
 /// raster + atlas services, scene sprite primitives) bumped it to 6;
 /// ticket16 (path primitives + the pinned PathBuilder tessellation in
 /// the scene service, the scene drawing pipeline in the renderer
-/// service) bumped it to 7.
-pub const GPUI_GO_NATIVE_REVISION: u32 = 9;
+/// service) bumped it to 7. The wave-4 rebuild (tickets 22/28/29/32 +
+/// the ticket-19 SVG-key follow-up) bumped it to 10: the a11y
+/// provider service (slot 9, bit 10), the capture service (slot 10,
+/// bit 11), the renderer service v3 (the device-loss entries, the
+/// render-to-image entry, the real capture surface import) and the
+/// atlas `AtlasKey::Svg` variant.
+pub const GPUI_GO_NATIVE_REVISION: u32 = 10;
 
 /// gpui-CE source pin this artifact family is built against (ASCII hex,
 /// zero-padded to 40 bytes in the table).
@@ -147,9 +151,24 @@ pub mod capabilities {
     /// premultiplied-RGBA→BGRA output, the alpha-mask entry) plus the
     /// owned font-asset surface for Go orchestration (ticket19).
     pub const SVG_RESGV_0_48: u64 = 1 << 9;
+    /// Bit 10: accessibility provider service, the pinned
+    /// `accesskit` 0.24.1 / `accesskit_windows` 0.33.1 UIA adapter
+    /// (adapter lifetime, published tree updates with
+    /// activation-before-complete-tree behavior, WM_GETOBJECT
+    /// handling with the nested-message lock discipline, the queued
+    /// action handoff) (ticket22).
+    pub const A11Y_ACCESSKIT: u64 = 1 << 10;
+    /// Bit 11: capture service, the Windows Graphics Capture producer
+    /// on the renderer service's D3D11 device (monitor source
+    /// enumeration, the free-threaded frame pool + session, bounded
+    /// frame-arrival notifications, foreground checkout/copy into
+    /// immutable destination textures, stop/destroy lifecycle) plus
+    /// the renderer's real capture surface import in the scene draw
+    /// path (ticket28).
+    pub const CAPTURE_WGC: u64 = 1 << 11;
     // Reserved for the planned service tables (bits assigned when those
     // tickets land; do not pre-assign):
-    //   bit 10+: accessibility/COM service and later
+    //   bit 12+: later services
     //   unassigned bits remain 0
 }
 
@@ -261,8 +280,10 @@ pub struct GpuiGoAbiTable {
     /// (ticket09); slot 5 carries the glyph raster service table
     /// (ticket10); slot 6 carries the atlas service table (ticket10);
     /// slot 7 carries the image codec service table (ticket17); slot 8
-    /// carries the SVG service table (ticket19); slot 0 and slots 9-15
-    /// remain null for future services.
+    /// carries the SVG service table (ticket19); slot 9 carries the
+    /// a11y provider table (ticket22); slot 10 carries the capture
+    /// table (ticket28); slot 0 and slots 11-15 remain null for
+    /// future services.
     pub reserved: [ServiceTablePtr; 16],
     /// [`GPUI_GO_ABI_MAGIC`].
     pub magic: u32,
@@ -349,8 +370,12 @@ static ABI_TABLE: GpuiGoAbiTable = GpuiGoAbiTable {
         ServiceTablePtr(
             &svg::SVG_TABLE as *const svg::GpuiGoSvgTable as *const core::ffi::c_void,
         ),
-        ServiceTablePtr(core::ptr::null()),
-        ServiceTablePtr(core::ptr::null()),
+        ServiceTablePtr(
+            &a11y::A11Y_TABLE as *const a11y::GpuiGoA11yTable as *const core::ffi::c_void,
+        ),
+        ServiceTablePtr(
+            &capture::CAPTURE_TABLE as *const capture::GpuiGoCaptureTable as *const core::ffi::c_void,
+        ),
         ServiceTablePtr(core::ptr::null()),
         ServiceTablePtr(core::ptr::null()),
         ServiceTablePtr(core::ptr::null()),
@@ -370,7 +395,9 @@ static ABI_TABLE: GpuiGoAbiTable = GpuiGoAbiTable {
         | capabilities::GLYPH_RASTER_DIRECTWRITE
         | capabilities::ATLAS_D3D11
         | capabilities::SCENE_DRAW_PATHS
-        | capabilities::SVG_RESGV_0_48,
+        | capabilities::SVG_RESGV_0_48
+        | capabilities::A11Y_ACCESSKIT
+        | capabilities::CAPTURE_WGC,
     size_of_table: size_of::<GpuiGoAbiTable>() as u32,
     align_of_table: align_of::<GpuiGoAbiTable>() as u32,
     size_of_buffer_request: size_of::<GpuiGoBufferRequest>() as u32,
@@ -540,6 +567,8 @@ mod tests {
                 | capabilities::SCENE_DRAW_PATHS
                 | capabilities::IMAGE_CODECS_IMAGE_0_25
                 | capabilities::SVG_RESGV_0_48
+                | capabilities::A11Y_ACCESSKIT
+                | capabilities::CAPTURE_WGC
         );
         assert!(ABI_TABLE.buffer_round_trip.is_some());
         assert!(
@@ -578,9 +607,17 @@ mod tests {
             !ABI_TABLE.reserved[8].0.is_null(),
             "slot 8 carries the SVG table (ticket19)"
         );
-        // Slots 9-15 stay unassigned for future services (slot 0 stays
+        assert!(
+            !ABI_TABLE.reserved[9].0.is_null(),
+            "slot 9 carries the a11y provider table (ticket22)"
+        );
+        assert!(
+            !ABI_TABLE.reserved[10].0.is_null(),
+            "slot 10 carries the capture table (ticket28)"
+        );
+        // Slots 11-15 stay unassigned for future services (slot 0 stays
         // the bootstrap-only null slot).
-        for slot in 9..16 {
+        for slot in 11..16 {
             assert!(
                 ABI_TABLE.reserved[slot].0.is_null(),
                 "slot {slot} must stay unassigned"

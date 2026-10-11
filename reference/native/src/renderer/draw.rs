@@ -67,7 +67,11 @@ use gpui_render::{
     },
     path_types::{PathRasterizationVertex, PathSprite},
     shaders::{
-        common::{FontRasterizationUniforms, GlobalUniforms},
+        common::{
+            Bounds as ShaderBounds, ContentMask as ShaderContentMask,
+            Edges as ShaderEdges, FontRasterizationUniforms, GlobalUniforms,
+            SurfaceColorFormat,
+        },
         interface as shader_interface,
         surface::SurfaceUniforms,
     },
@@ -84,8 +88,8 @@ use windows::Win32::Graphics::Dxgi::Common::*;
 use windows::Win32::Graphics::Dxgi::DXGI_PRESENT;
 
 use crate::scene::{
-    SceneRenderSnapshot, SceneRenderSnapshot as Snapshot, batch_primitive_kind, command_kind,
-    scene_render_snapshot,
+    GpuiGoSceneSurfaceRecord, SceneRenderSnapshot, SceneRenderSnapshot as Snapshot,
+    batch_primitive_kind, command_kind, scene_render_snapshot, surface_source_kind,
 };
 
 use super::{
@@ -111,9 +115,8 @@ const PRIMARY_TEXTURE_REGISTER: u32 =
     shader_interface::PRIMARY_TEXTURE_BINDING + GROUP_1_REGISTER_OFFSET;
 const PRIMARY_SAMPLER_REGISTER: u32 =
     shader_interface::PRIMARY_SAMPLER_BINDING + GROUP_1_REGISTER_OFFSET;
-/// The surface sampler register of the SURFACES pipeline — reserved for
-/// the imported-surface draw path (the capture-producer slice).
-#[expect(dead_code)]
+/// The surface sampler register of the SURFACES pipeline (bound per
+/// imported capture surface — ticket28).
 const SURFACE_SAMPLER_REGISTER: u32 =
     shader_interface::SURFACE_SAMPLER_BINDING + GROUP_1_REGISTER_OFFSET;
 
@@ -529,10 +532,8 @@ impl InstancePipeline {
 
 /// The pin's `SurfacePipeline`: one draw per surface with per-draw
 /// uniforms. Constructed exactly like the pin's; the ABI surface source
-/// is the `SurfaceSource::Unsupported` stand-in, so the draw path takes
-/// the pinned import-error branch before binding these (they await the
-/// capture-producer slice).
-#[expect(dead_code)]
+/// The pin's `SurfacePipeline`: one draw per surface with per-draw
+/// uniforms; bound per imported capture surface (ticket28).
 struct SurfacePipeline {
     vertex: ID3D11VertexShader,
     fragment: ID3D11PixelShader,
@@ -550,10 +551,8 @@ pub(super) struct DrawPipelines {
     mono_sprites: InstancePipeline,
     subpixel_sprites: InstancePipeline,
     poly_sprites: InstancePipeline,
-    /// Constructed like the pin's; the draw path takes the pinned
-    /// import-error branch for the ABI's Unsupported surface sources
-    /// before binding it.
-    #[expect(dead_code)]
+    /// Constructed like the pin's; the surface draw path binds it per
+    /// imported capture surface (ticket28).
     surfaces: SurfacePipeline,
     // Blur: not the generic pipeline, since these sample a texture
     // instead of reading a structured instance buffer; parameters live
@@ -703,6 +702,25 @@ impl DrawPipelines {
 pub(super) struct DrawGlobal {
     globals: GlobalElements,
     pipelines: DrawPipelines,
+    /// Ticket28: the capture surface view cache — the pin's
+    /// `surface_views: FxHashMap<usize, CachedSurfaceView>` keyed by
+    /// the texture's raw pointer (the COM identity). The cache is
+    /// device-global (dropped wholesale by a device rebuild —
+    /// `clear_surface_views`), and retained per drawn scene (the pin's
+    /// `retain_surface_views`).
+    pub(super) surface_views: std::collections::HashMap<usize, CachedSurfaceView>,
+}
+
+/// Ticket28: the pin's `CachedSurfaceView` — an owned texture clone
+/// (keeping the frame's destination texture alive while the view is
+/// cached) plus its shader-resource view on this device.
+pub(super) struct CachedSurfaceView {
+    /// The owned texture clone — the pin's lifetime holder: the cache
+    /// keeps the capture frame's destination texture alive while the
+    /// view is cached (the field is held, not read).
+    #[expect(dead_code)]
+    pub(super) texture: ID3D11Texture2D,
+    pub(super) srv: ID3D11ShaderResourceView,
 }
 
 // ---------------------------------------------------------------------------
@@ -1212,6 +1230,7 @@ pub(super) fn ensure_draw_global(state: &mut RendererState) -> Result<(), i32> {
     state.draw = Some(DrawGlobal {
         globals,
         pipelines,
+        surface_views: std::collections::HashMap::new(),
     });
     Ok(())
 }
@@ -1461,7 +1480,12 @@ fn render_scene(
                 }
                 batch_primitive_kind::SURFACES => {
                     draw_surfaces(
+                        state,
+                        draw,
+                        &frame,
+                        &viewport,
                         &snapshot.surfaces[range.clone()],
+                        &snapshot.surface_opacities[range.clone()],
                     )?;
                     // Restore the current target for subsequent batches
                     // (the pinned loop's post-draw rebinding).
@@ -1559,6 +1583,10 @@ fn render_scene(
         // Inline filter groups and inline begin/end commands draw
         // nothing (the pinned plan's Inline arms are no-ops).
     }
+
+    // The pin's retain_surface_views: after the command loop, keep
+    // only the capture views this scene still references.
+    retain_surface_views(draw, &snapshot.surfaces);
 
     // Present the offscreen scene by blitting it into the swapchain.
     if use_offscreen {
@@ -1880,18 +1908,163 @@ fn draw_paths_from_intermediate(
     Ok(())
 }
 
-/// The pin's `draw_surfaces` import path: the pinned renderer imports
+/// The pin's `draw_surfaces` (directx_renderer.rs 1174-1248): one draw
+/// per surface with per-draw uniforms. The pinned renderer imports
 /// exactly one source kind (`SurfaceSource::WindowsCapture`); the ABI
-/// surface record carries the pinned `SurfaceSource::Unsupported`
-/// stand-in, so a surface batch follows the pinned *error* path
-/// (`bail!("unsupported surface source")`) — explicit, not a blank
-/// successful draw. Pixel output for imported surface sources awaits
-/// the capture-producer slice.
-fn draw_surfaces(surfaces: &[gpui::PaintSurface]) -> Result<(), i32> {
+/// surface record carries tag 1 = a capture frame handle (resolved
+/// through the capture service's frame registry under the renderer
+/// lock — the allowed renderer->capture nesting) or the pinned
+/// `SurfaceSource::Unsupported` stand-in (tag 0), which draws nothing
+/// and fails the whole draw with the pinned import error ("DirectX
+/// renderer cannot import this surface source" →
+/// `renderer_status::ERR_UNSUPPORTED_SOURCE`).
+#[allow(clippy::too_many_arguments)]
+fn draw_surfaces(
+    state: &mut RendererState,
+    draw: &mut DrawGlobal,
+    frame: &FrameBindings<'_>,
+    viewport: &D3D11_VIEWPORT,
+    surfaces: &[GpuiGoSceneSurfaceRecord],
+    opacities: &[f32],
+) -> Result<(), i32> {
     if surfaces.is_empty() {
         return Ok(());
     }
-    Err(renderer_status::ERR_UNSUPPORTED_SOURCE)
+    let device = state
+        .device
+        .as_ref()
+        .ok_or(renderer_status::ERR_DEVICE)?
+        .device
+        .clone();
+    let ctx = frame.device_context;
+    let surface_cb = [Some(draw.pipelines.surfaces.params_buffer.clone())];
+    let sampler = [draw.globals.sampler.clone()];
+
+    for (index, surface) in surfaces.iter().enumerate() {
+        if surface.source_tag != surface_source_kind::CAPTURE_FRAME {
+            // The pin's Unsupported import bail (the whole draw fails —
+            // an explicit error, never a silent blank surface).
+            return Err(renderer_status::ERR_UNSUPPORTED_SOURCE);
+        }
+        let frame_handle = surface.source_reserved[0] as u64;
+        // Resolve the frame's texture through the capture service (an
+        // owned clone; the lock order is renderer -> capture).
+        let (texture, _frame_width, _frame_height) =
+            crate::capture::frame_texture_for_draw(frame_handle)?;
+        let key = Interface::as_raw(&texture) as usize;
+        if !draw.surface_views.contains_key(&key) {
+            let mut srv: Option<ID3D11ShaderResourceView> = None;
+            unsafe {
+                device
+                    .CreateShaderResourceView(&texture, None, Some(&mut srv))
+                    .map_err(|e| e.code().0)?;
+            }
+            let Some(srv) = srv else {
+                return Err(renderer_status::ERR_DEVICE);
+            };
+            draw.surface_views
+                .insert(key, CachedSurfaceView { texture: texture.clone(), srv });
+        }
+        let texture_srv = &draw
+            .surface_views
+            .get(&key)
+            .ok_or(renderer_status::ERR_DEVICE)?
+            .srv;
+        // The surface shader declares both planes; RGBA captures bind
+        // one view to both (the pin's comment).
+        let texture_srvs = [Some(texture_srv.clone()), Some(texture_srv.clone())];
+
+        let bounds = surface.bounds;
+        let mask = surface.content_mask;
+        let uniforms = SurfaceUniforms {
+            bounds: ShaderBounds {
+                origin: vec2f(f32::from_bits(bounds.x), f32::from_bits(bounds.y)),
+                size: vec2f(f32::from_bits(bounds.w), f32::from_bits(bounds.h)),
+            },
+            content_mask: ShaderContentMask {
+                bounds: ShaderBounds {
+                    origin: vec2f(f32::from_bits(mask.x), f32::from_bits(mask.y)),
+                    size: vec2f(f32::from_bits(mask.w), f32::from_bits(mask.h)),
+                },
+                // The scene ABI carries hard masks (no fade edges), so
+                // the shader mask's fade is zero — the same value the
+                // ABI's other masked primitives use.
+                fade_out: ShaderEdges {
+                    top: 0.0,
+                    right: 0.0,
+                    bottom: 0.0,
+                    left: 0.0,
+                },
+            },
+            color_format: SurfaceColorFormat::Rgba,
+            opacity: opacities.get(index).copied().unwrap_or(1.0),
+            padding0: 0,
+            padding1: 0,
+            padding2: 0,
+            padding3: 0,
+            padding4: 0,
+            padding5: 0,
+        };
+        update_buffer(ctx, &draw.pipelines.surfaces.params_buffer, &[uniforms])?;
+
+        unsafe {
+            ctx.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+            ctx.RSSetViewports(Some(std::slice::from_ref(viewport)));
+            ctx.VSSetShader(&draw.pipelines.surfaces.vertex, None);
+            ctx.PSSetShader(&draw.pipelines.surfaces.fragment, None);
+            let cbuffers = frame.globals.cbuffers();
+            ctx.VSSetConstantBuffers(0, Some(&cbuffers));
+            ctx.PSSetConstantBuffers(0, Some(&cbuffers));
+            ctx.VSSetConstantBuffers(DATA_REGISTER, Some(&surface_cb));
+            ctx.PSSetConstantBuffers(DATA_REGISTER, Some(&surface_cb));
+            ctx.PSSetShaderResources(PRIMARY_TEXTURE_REGISTER, Some(&texture_srvs));
+            ctx.PSSetSamplers(SURFACE_SAMPLER_REGISTER, Some(&sampler));
+            ctx.OMSetBlendState(&draw.pipelines.surfaces.blend, None, 0xFFFFFFFF);
+            ctx.DrawInstanced(4, 1, 0, 0);
+        }
+    }
+    Ok(())
+}
+
+/// The pin's `retain_surface_views` (directx_renderer.rs 1599-1613):
+/// after a scene's draw, keep only the views whose textures the scene
+/// still references; the rest drop (the frame textures the caller
+/// released die with their last reference).
+fn retain_surface_views(draw: &mut DrawGlobal, surfaces: &[GpuiGoSceneSurfaceRecord]) {
+    let active_keys: std::collections::HashSet<u64> = surfaces
+        .iter()
+        .filter(|surface| surface.source_tag == surface_source_kind::CAPTURE_FRAME)
+        .map(|surface| surface.source_reserved[0] as u64)
+        .collect();
+    // Key by the frame handle's resolved texture pointer: resolve once
+    // (the capture registry is under its own lock; renderer->capture
+    // nesting is allowed here because the draw path already holds the
+    // renderer lock... this retention runs OUTSIDE the renderer lock in
+    // the render flow's tail, so the capture lock alone is taken).
+    let mut resolved: std::collections::HashMap<u64, usize> =
+        std::collections::HashMap::new();
+    for handle in &active_keys {
+        if let Ok((texture, _, _)) = crate::capture::frame_texture_for_draw(*handle) {
+            resolved.insert(*handle, Interface::as_raw(&texture) as usize);
+        }
+    }
+    let keep: std::collections::HashSet<usize> =
+        resolved.values().copied().collect();
+    draw.surface_views.retain(|key, _| keep.contains(key));
+}
+
+/// Ticket29: drops every cached capture surface view (the old
+/// device's SRVs) — called by the device rebuild. Returns the count.
+pub(super) fn clear_surface_views(state: &mut RendererState) -> u32 {
+    // The DrawGlobal is lazily recreated; the views live inside it.
+    match state.draw.as_mut() {
+        Some(draw) => {
+            let count = draw.surface_views.len() as u32;
+            draw.surface_views.clear();
+            count
+        }
+        None => 0,
+    }
 }
 
 /// Run a single blur pass (the pin's `dx_blur_pass`): a fullscreen (or
@@ -2166,6 +2339,11 @@ fn render_scene_entry(
         scene_render_snapshot(scene).map_err(map_scene_status)?;
 
     let mut state = lock_global();
+    // Ticket29: the recovery gate (the pin's skip_draws in `draw` —
+    // the skip is observable here instead of silent).
+    if state.recovering {
+        return Err(renderer_status::ERR_RECOVERING);
+    }
     ensure_device(&mut state)?;
     ensure_draw_global(&mut state)?;
     let mut lease = DrawLease::take(&mut state)?;
@@ -2307,6 +2485,129 @@ fn submit_draw_frame(surface: u64, out_submission: *mut u64) -> Result<i32, i32>
         return Ok(renderer_status::ERR_PRESENT);
     }
     Ok(renderer_status::OK)
+}
+
+/// `renderer_surface_render_to_image` (ticket32): the pinned
+/// test-support path VERBATIM (directx_renderer.rs 788-860): render the
+/// scene WITHOUT presenting (the pin's `render`), then stage-copy the
+/// CURRENT render target into owned RGBA bytes (staging texture with
+/// the source desc, `CopyResource`, `Map(READ)`, the row-pitch copy,
+/// the BGRA->RGBA swap), dimensions out — and the pin's
+/// device-recovery refusal FIRST ("render_to_image unavailable while
+/// recovering from a lost device").
+pub(super) fn surface_render_to_image_body(
+    surface: u64,
+    scene: u64,
+    appearance: u32,
+    atlas: u64,
+    out_bytes: *mut u8,
+    capacity: u32,
+    out_needed: *mut u32,
+) -> i32 {
+    if out_needed.is_null() {
+        return renderer_status::ERR_NULL_ARG;
+    }
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        // The pin's ensure!( !self.skip_draws, ...): the recovery
+        // refusal fires before any GPU work.
+        {
+            let state = lock_global();
+            if state.recovering {
+                return Ok(renderer_status::ERR_RECOVERING);
+            }
+        }
+        // Render without presenting (the pin's `render` call — the
+        // readback test path).
+        render_scene_entry(surface, scene, appearance, atlas)?;
+        // The readback tail (the pin's render_to_image body).
+        let (slot_index, slot_generation) = super::surface_handle_parts(surface);
+        let mut state = lock_global();
+        let device = ensure_device(&mut state)?;
+        let surface_state = resolve_slot_mut(&mut state, slot_index, slot_generation)?;
+        let render_target = surface_state
+            .render_target
+            .as_ref()
+            .ok_or(renderer_status::ERR_DEVICE)?
+            .clone();
+
+        let mut source_desc = D3D11_TEXTURE2D_DESC::default();
+        unsafe { render_target.GetDesc(&mut source_desc) };
+        let width = source_desc.Width;
+        let height = source_desc.Height;
+        let row_bytes = width as usize * 4;
+        let needed = (row_bytes * height as usize) as u32;
+        unsafe { *out_needed = needed };
+        if needed > capacity {
+            return Ok(renderer_status::ERR_CAPACITY);
+        }
+        if capacity > 0 && out_bytes.is_null() {
+            return Ok(renderer_status::ERR_NULL_ARG);
+        }
+
+        let staging_desc = D3D11_TEXTURE2D_DESC {
+            Usage: D3D11_USAGE_STAGING,
+            BindFlags: 0,
+            CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
+            MiscFlags: 0,
+            MipLevels: 1,
+            ArraySize: 1,
+            SampleDesc: DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            ..source_desc
+        };
+        let mut staging = None;
+        unsafe {
+            device
+                .device
+                .CreateTexture2D(&staging_desc, None, Some(&mut staging))
+                .map_err(|e| e.code().0)?;
+        }
+        let staging = staging.ok_or(renderer_status::ERR_DEVICE)?;
+        unsafe {
+            device.context.CopyResource(&staging, &render_target);
+        }
+
+        let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+        unsafe {
+            device
+                .context
+                .Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
+                .map_err(|e| e.code().0)?;
+        }
+        let mut pixels = vec![0u8; row_bytes * height as usize];
+        // SAFETY: a successful `Map` exposes `RowPitch * height`
+        // readable bytes until `Unmap`; each destination row is
+        // disjoint within the exactly-sized output allocation.
+        unsafe {
+            let source = mapped.pData.cast::<u8>();
+            for row in 0..height as usize {
+                std::ptr::copy_nonoverlapping(
+                    source.add(row * mapped.RowPitch as usize),
+                    pixels.as_mut_ptr().add(row * row_bytes),
+                    row_bytes,
+                );
+            }
+            device.context.Unmap(&staging, 0);
+        }
+        for pixel in pixels.chunks_exact_mut(4) {
+            pixel.swap(0, 2);
+        }
+        unsafe {
+            let out = std::slice::from_raw_parts_mut(out_bytes, needed as usize);
+            out.copy_from_slice(&pixels);
+        }
+        Ok(renderer_status::OK)
+    }));
+    match result {
+        Ok(Ok(code)) => code,
+        Ok(Err(code)) => code,
+        Err(payload) => {
+            drop(payload);
+            renderer_status::ERR_PANIC
+        }
+    }
 }
 
 /// `renderer_surface_read_pixels`: staging readback of the surface's

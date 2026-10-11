@@ -29,6 +29,7 @@ fn main() -> Result<()> {
         "text-geometry-v1" => fixtures::text_geometry::run(&envelope),
         "glyph-raster-v1" => fixtures::glyph_raster::run(&envelope),
         "authoring-counter-v1" => fixtures::authoring_counter::run(&envelope),
+        "image-codecs-v1" => fixtures::image_codecs::run(&envelope)?,
         other => bail!("unknown fixture kind {other:?}"),
     };
 

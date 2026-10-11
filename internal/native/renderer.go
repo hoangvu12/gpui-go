@@ -59,7 +59,7 @@ const (
 // rendererServiceVersion mirrors GPUI_GO_RENDERER_SERVICE_VERSION.
 // Version 2 (ticket16) added the scene drawing entries and the draw
 // scalars.
-const rendererServiceVersion uint32 = 2
+const rendererServiceVersion uint32 = 3
 
 func rendererStatusName(code int32) string {
 	switch code {
@@ -344,27 +344,34 @@ type DeviceInfo struct {
 // rendererTable mirrors the native GpuiGoRendererTable: 8 function
 // pointers then 8 self-check scalars; 96 bytes, alignment 8.
 type rendererTable struct {
-	surfaceCreate      uintptr
-	surfaceResize      uintptr
-	surfaceInfo        uintptr
-	surfacePresent     uintptr
-	surfaceDestroy     uintptr
-	submissionPoll     uintptr
-	submissionRetire   uintptr
-	deviceInfo         uintptr
-	surfaceDrawScene   uintptr
-	surfaceRenderScene uintptr
-	surfaceReadPixels  uintptr
-	serviceVersion     uint32
-	sizeOfTable        uint32
-	alignOfTable       uint32
-	sizeOfSurfaceInfo  uint32
-	sizeOfSubmission   uint32
-	sizeOfRetire       uint32
-	sizeOfDeviceInfo   uint32
-	maxPending         uint32
-	maxInstanceBuffer  uint32
-	pathMultisample    uint32
+	surfaceCreate        uintptr
+	surfaceResize        uintptr
+	surfaceInfo          uintptr
+	surfacePresent       uintptr
+	surfaceDestroy       uintptr
+	submissionPoll       uintptr
+	submissionRetire     uintptr
+	deviceInfo           uintptr
+	surfaceDrawScene     uintptr
+	surfaceRenderScene   uintptr
+	surfaceReadPixels    uintptr
+	surfaceRenderToImage uintptr
+	deviceStateCheck     uintptr
+	deviceInjectLoss     uintptr
+	deviceRebuild        uintptr
+	deviceMarkDrawable   uintptr
+	serviceVersion       uint32
+	sizeOfTable          uint32
+	alignOfTable         uint32
+	sizeOfSurfaceInfo    uint32
+	sizeOfSubmission     uint32
+	sizeOfRetire         uint32
+	sizeOfDeviceInfo     uint32
+	sizeOfDeviceState    uint32
+	sizeOfRebuildRecord  uint32
+	maxPending           uint32
+	maxInstanceBuffer    uint32
+	pathMultisample      uint32
 }
 
 // rendererTableFromSlot reinterprets a reserved-slot word (the address of

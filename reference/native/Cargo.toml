@@ -21,32 +21,11 @@ taffy = "=0.13.0"
 # Ticket07 (renderer service): the windows crate for D3D11/DXGI/
 # DirectComposition device + swap-chain + present + query retirement, the
 # same crate and version family the pinned gpui_windows uses (workspace
-# dependency `windows 0.62.2`). ONLY the features this service needs are
-# enabled (the pin enables a much broader set for its full platform):
-#   - Win32_Foundation: HWND, HMODULE, BOOL
-#   - Win32_Graphics_Direct3D: driver/feature-level enums
-#   - Win32_Graphics_Direct3D11: device/context/query/multithread
-#   - Win32_Graphics_DirectComposition: DComp visual tree
-#   - Win32_Graphics_Dxgi: factory/adapter/swap chain/present
-#   - Win32_Graphics_Dxgi_Common: formats, alpha modes
-#   - Win32_System_LibraryLoader: the pinned driver-version probes
-#     (LoadLibraryA/GetProcAddress/FreeLibrary for nvapi/AGS)
-# The resolved version and feature graph are recorded by tools/measure in
-# the artifact manifest.
-# The artifact is a Windows AMD64 cdylib by contract; this dependency is
-# unconditional and the crate does not build elsewhere.
-windows = { version = "0.62.2", features = [
-    "Win32_Foundation",
-    "Win32_Graphics_Direct3D",
-    "Win32_Graphics_Direct3D11",
-    "Win32_Graphics_DirectComposition",
-    "Win32_Graphics_DirectWrite",
-    "Win32_Graphics_Dxgi",
-    "Win32_Graphics_Dxgi_Common",
-    "Win32_System_LibraryLoader",
-    "Win32_UI_WindowsAndMessaging",
-] }
-
+# dependency `windows 0.62.2`). The full feature list now lives in the
+# merged windows entry near the end of this file (ticket28 grew it with
+# the WinRT capture features); the resolved version and feature graph
+# are recorded by tools/measure in the artifact manifest.
+#
 # Ticket09 (text service): the pinned Parley text stack. The windows
 # platform contract pins Parley 0.11.1 / Fontique 0.11.1 / HarfRust 0.12.0 /
 # Skrifa 0.44.0 / Swash 0.2.10 (the CE workspace lock resolution, recorded
@@ -140,6 +119,46 @@ etagere = "=0.2.15"
 # declares `windows-numerics = "0.3"`; the workspace lock resolves
 # 0.3.1).
 windows-numerics = "0.3"
+
+# Ticket22 (a11y provider): the pinned AccessKit adapter stack. Both
+# resolve against the SAME `windows` 0.62.2 crate family the artifact
+# already uses (the CE workspace's accesskit_windows 0.33.1 resolves
+# windows 0.62.2 per its Cargo.lock entry), so no second windows
+# version enters the graph. `accesskit` 0.24.1 is already compiled via
+# the gpui-ce path dependency (the shared instance); `accesskit_windows`
+# (the UIA platform adapter: Adapter::new / update_if_active /
+# handle_wm_getobject with UiaReturnRawElementProvider) is the one new
+# crate. The versions are the CE workspace lock resolutions.
+accesskit = "0.24.1"
+accesskit_windows = "0.33.1"
+
+# Ticket28 (capture service): the WinRT Windows.Graphics.Capture
+# producer driven through the EXISTING windows 0.62.2 crate's bindings
+# (no windows-capture crate, no second windows version): the added
+# features bring the WinRT activation factory path, the free-threaded
+# frame pool, the capture session, the Direct3D11 interop
+# (CreateDirect3D11DeviceFromDXGIDevice from the renderer service's
+# IDXGIDevice — the ticket's "WinRT producer from IDXGIDevice queried
+# from the actual D3D11 device"), the GraphicsCaptureItem interop
+# (CreateForMonitor), and Gdi monitor enumeration.
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_DirectComposition",
+    "Win32_Graphics_DirectWrite",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Com",
+    "Win32_System_LibraryLoader",
+    "Win32_System_WinRT",
+    "Win32_System_WinRT_Direct3D11",
+    "Win32_System_WinRT_Graphics_Capture",
+    "Win32_UI_WindowsAndMessaging",
+    "Graphics_Capture",
+    "Graphics_DirectX_Direct3D11",
+] }
 
 [lib]
 # One cdylib: the exact native artifact loaded by the Go-only consumer.
