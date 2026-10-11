@@ -36,15 +36,6 @@ package gpui
 //
 // Bounded deviations, recorded honestly:
 //
-//   - This slice publishes Go-side semantic trees only. There is no
-//     native AccessKit adapter and no UIA interop (ticket22); the
-//     published snapshot is the observable seam the native provider
-//     will consume.
-//   - The Click fallback that synthesizes MouseDown/MouseUp at the node
-//     bounds center is NOT implemented: the port's input dispatch for
-//     synthetic mouse events belongs to the input/UIA tickets. Click
-//     works through registered listeners, which is how CE's
-//     .on_click() wires AccessibleAction::Click anyway.
 //   - Node ids are FNV-1a-64 over a canonical encoding of the global
 //     element id path (the reference hashes with Rust's DefaultHasher;
 //     the exact integers differ by design, the derivation policy —
@@ -53,6 +44,13 @@ package gpui
 //   - set_focus/set_focusable misuse does not panic (the reference
 //     panics only in debug builds); it is recorded as a diagnostic on
 //     the published snapshot.
+//
+// Ticket22 (a11yprovider.go) completes this slice: the native UIA
+// provider consumes every completed frame's snapshot through
+// PublishWindowA11y (the per-frame publication), routes WM_GETOBJECT
+// through the window procedure, drains the queued native actions into
+// the dispatch below (including the built-in Click fallback's
+// synthetic mouse events), and destroys the adapter at window close.
 //
 // FILE OWNERSHIP: this file owns the accessibility runtime. It does not
 // modify the element/div/window files; it calls their existing seams
@@ -178,10 +176,15 @@ func (a A11yAction) String() string {
 }
 
 // A11yActionData is the data payload of an action request (the
-// accesskit ActionData::Value string slice of the pinned surface).
+// accesskit ActionData slice the native provider decodes: the Value
+// string, and the SetTextSelection positions for the text-selection
+// action).
 type A11yActionData struct {
 	// Value is the requested value (SetValue/ReplaceSelectedText).
 	Value string
+	// TextSelection carries the SetTextSelection payload (nil for every
+	// other action).
+	TextSelection *A11yTextSelection
 }
 
 // A11yActionListener responds to one semantic action on one node (the
@@ -603,6 +606,14 @@ type windowA11yState struct {
 	title      string
 	active     bool
 	generation uint64
+	// provider is the window's native UIA provider half (a11yprovider.go,
+	// ticket22): created at activation for real (host-leased) windows,
+	// published per completed frame, destroyed at window close. nil for
+	// test windows and before activation.
+	provider *a11yProvider
+	// providerErr records why the provider could not be created (the
+	// first failure sticks; surfaced through A11yProviderState).
+	providerErr error
 	// building marks an in-flight frame build; framePtr identifies the
 	// draw the pending build belongs to (an unpublished build from a
 	// completed frame is discarded when a new frame starts pushing).
@@ -654,6 +665,11 @@ func ActivateWindowA11y(w *Window) *A11ySnapshot {
 	if st.title == "" {
 		st.title = w.title
 	}
+	// Ticket22 (the pin's a11y_init at window setup): the native adapter
+	// is created now, on the window's message thread, with the initial
+	// minimal tree labeled by the window title (host-leased windows
+	// only; test windows keep the pure Go snapshot model).
+	st.ensureA11yProvider(w)
 	// The minimal valid root, immediately (activation pattern).
 	minimal := &A11ySnapshot{
 		windowID:   st.windowID,
@@ -703,9 +719,10 @@ func stateFor(w *Window) *windowA11yState {
 
 // CloseWindowA11y retires the window's accessibility runtime: the
 // generation is bumped so every outstanding token goes stale, listeners
-// and the published snapshot are dropped, and later dispatch attempts
-// are rejected without touching application state. The native teardown
-// (adapter release, outstanding COM references) is ticket22.
+// and the published snapshot are dropped, later dispatch attempts
+// are rejected without touching application state, and the native
+// adapter is destroyed (the pin's A11yState drop; apartment-affine UIA
+// reference release on the message thread).
 func CloseWindowA11y(w *Window) {
 	if w == nil {
 		return
@@ -716,6 +733,7 @@ func CloseWindowA11y(w *Window) {
 		st.listeners = nil
 		st.published = nil
 		st.nodeGenerations = nil
+		st.destroyA11yProvider()
 		delete(windowA11yStates, w)
 	}
 }
@@ -1223,6 +1241,13 @@ func PublishWindowA11y(w *Window) (*A11ySnapshot, error) {
 	st.published = snapshot
 	st.pendingCollisions = nil
 	st.pendingDiagnostics = nil
+	// Ticket22 (the pin's a11y_tree_update at the end of the frame): the
+	// completed frame's snapshot is sent to the native adapter with
+	// update_if_active semantics — serialized and applied only when an
+	// assistive technology has connected, then the queued actions drain.
+	// A publication with no completed build (the early-return path above
+	// returning the last snapshot) sends nothing, exactly like the pin.
+	st.publishA11yProviderNative(w, snapshot)
 	return snapshot, nil
 }
 
@@ -1377,8 +1402,35 @@ func dispatchA11yActionForeground(app *App, token A11yToken, action A11yAction, 
 		}
 	}
 
-	// Built-in fallbacks (window.rs handle_a11y_action).
+	// Built-in fallbacks (window.rs handle_a11y_action 7138-7192).
 	switch action {
+	case A11yActionClick:
+		// The built-in Click fallback (window.rs 7138-7156): synthesize
+		// MouseDown/MouseUp at the node bounds center and dispatch them
+		// through the real input pipeline (dispatch_event). A node with
+		// no recorded bounds (zero extent) has no fallback.
+		node, ok := st.published.Node(token.node)
+		if !ok {
+			return ErrA11yNodeRemoved
+		}
+		if node.Bounds.Size.Width <= 0 || node.Bounds.Size.Height <= 0 {
+			return ErrA11yNoHandler
+		}
+		center := Point{
+			X: node.Bounds.Origin.X + node.Bounds.Size.Width/2,
+			Y: node.Bounds.Origin.Y + node.Bounds.Size.Height/2,
+		}
+		w.dispatchInput(&MouseDownEvent{
+			Button:     MouseButtonLeft,
+			Position:   center,
+			ClickCount: 1,
+		}, app)
+		w.dispatchInput(&MouseUpEvent{
+			Button:     MouseButtonLeft,
+			Position:   center,
+			ClickCount: 1,
+		}, app)
+		return nil
 	case A11yActionFocus:
 		focusID, ok := st.focusable[token.node]
 		if !ok {

@@ -41,6 +41,15 @@ import (
 //     native entry (mirroring the native per-surface cap).
 //   - Two-window serialization is native (the service's device mutex) plus
 //     the Go-side surface table.
+//   - Device loss (ticket29, gpui/deviceloss.go): the pacing worker
+//     probes the device state each few rounds (the pin's vsync-thread
+//     check_device_lost); a lost device triggers the recovery sequence
+//     (rebuild -> atlas invalidation -> per-window forced redraw ->
+//     mark-drawable). A present or draw while the recovery gate is armed
+//     refuses with ErrRendererRecovering and lands in the ledger as a
+//     skipped frame — never a silent success. Submissions aborted by the
+//     rebuild are closed through the loss-abort terminal (their native
+//     handles go stale; acceptance is still not completion).
 
 // ---------------------------------------------------------------------------
 // Typed errors
@@ -109,6 +118,12 @@ const (
 	// LedgerDropped: the submission handle was abandoned without
 	// retirement (surface destroyed with pending work, renderer closed).
 	LedgerDropped
+	// LedgerSkipped: a present or draw was refused while the renderer
+	// was recovering from device loss (the pin's skip_draws frame):
+	// no submission token was accepted, so the event's Submission
+	// identity is 0, and a forced redraw is pending. The skip is
+	// observable — never a silent success.
+	LedgerSkipped
 )
 
 func (k LedgerEventKind) String() string {
@@ -127,6 +142,8 @@ func (k LedgerEventKind) String() string {
 		return "quarantined"
 	case LedgerDropped:
 		return "dropped"
+	case LedgerSkipped:
+		return "skipped"
 	default:
 		return "unknown"
 	}
@@ -194,6 +211,9 @@ type ledger struct {
 	retired int
 	// quarantined counts refused retires that stay tracked.
 	quarantined int
+	// skipped counts recovery-gate refusals (the pin's skip_draws
+	// frames: "skipped, redraw pending").
+	skipped int
 }
 
 func newLedger() *ledger {
@@ -312,6 +332,90 @@ func (l *ledger) retireRefused(handle native.SubmissionHandle, foreground bool) 
 	})
 }
 
+// markRetiring records that the native retire of a tracked submission
+// succeeded and its terminal record is being dispatched: the device
+// rebuild's abort bookkeeping must not claim it (the native retire
+// already produced the terminal record). The state transition is
+// written synchronously; the LedgerRetired event still comes from the
+// (possibly foreground-dispatched) terminal record.
+func (l *ledger) markRetiring(handle native.SubmissionHandle) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	id, ok := l.byHand[handle]
+	if !ok {
+		return
+	}
+	entry := l.entries[id]
+	switch entry.State {
+	case "retired", "retiring", "dropped":
+		return
+	}
+	entry.State = "retiring"
+}
+
+// retireAborted records the terminal retire of a submission aborted by
+// the device rebuild (the safe-abort release: the rebuild drained every
+// in-flight native submission and their handles are stale afterwards).
+// It runs on the recovery goroutine; entries already terminal (retired,
+// retiring — a native retire already succeeded — or dropped) are left
+// alone. It returns the ledger identity of the closed record.
+func (l *ledger) retireAborted(handle native.SubmissionHandle, reason int32, foreground bool) (uint64, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	id, ok := l.byHand[handle]
+	if !ok {
+		return 0, false
+	}
+	entry := l.entries[id]
+	switch entry.State {
+	case "retired", "retiring", "dropped":
+		return 0, false
+	}
+	entry.State = "retired"
+	entry.RetiredAt = time.Now()
+	entry.Terminal = native.RetireAbortedLoss
+	if reason != 0 {
+		entry.DeviceRemovedReason = reason
+	}
+	l.retired++
+	delete(l.byHand, handle)
+	l.events = append(l.events, LedgerEvent{
+		Kind:                LedgerRetired,
+		Submission:          entry.ID,
+		Window:              entry.Window,
+		At:                  entry.RetiredAt,
+		Terminal:            native.RetireAbortedLoss,
+		DeviceRemovedReason: reason,
+		Foreground:          foreground,
+	})
+	return entry.ID, true
+}
+
+// recordSkipped records one skipped frame: a present or draw refused
+// while the renderer was recovering from device loss (the pin's
+// skip_draws frame, "skipped, redraw pending"). No submission token
+// was accepted, so the event's Submission identity is 0 and the skip
+// never counts as acceptance.
+func (l *ledger) recordSkipped(window WindowID, foreground bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.skipped++
+	l.events = append(l.events, LedgerEvent{
+		Kind:       LedgerSkipped,
+		Submission: 0,
+		Window:     window,
+		At:         time.Now(),
+		Foreground: foreground,
+	})
+}
+
+// skippedCount returns the recorded skipped-frame count.
+func (l *ledger) skippedCount() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.skipped
+}
+
 // drop records an abandoned submission (no retirement).
 func (l *ledger) drop(handle native.SubmissionHandle) {
 	l.mu.Lock()
@@ -426,6 +530,10 @@ const rendererPollInterval = 2 * time.Millisecond
 type Renderer struct {
 	svc    *native.RendererService
 	ledger *ledger
+	// loss is the device-loss detection/recovery controller (ticket29,
+	// gpui/deviceloss.go): the pacing worker probes it each few
+	// rounds; a lost device triggers the recovery sequence.
+	loss *deviceLoss
 
 	// app is set once (first surface attach) and read from the pacing
 	// worker, hence the atomic pointer.
@@ -453,14 +561,16 @@ func NewRenderer() (*Renderer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Renderer{
+	r := &Renderer{
 		svc:            svc,
 		ledger:         newLedger(),
 		surfaces:       make(map[WindowID]*Surface),
 		inFlightWindow: make(map[native.SubmissionHandle]WindowID),
 		inFlightCount:  make(map[WindowID]int),
 		pacing:         true,
-	}, nil
+	}
+	r.loss = newDeviceLoss(r)
+	return r, nil
 }
 
 // NewRendererManual creates a renderer without the background pacing
@@ -471,13 +581,15 @@ func NewRendererManual() (*Renderer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Renderer{
+	r := &Renderer{
 		svc:            svc,
 		ledger:         newLedger(),
 		surfaces:       make(map[WindowID]*Surface),
 		inFlightWindow: make(map[native.SubmissionHandle]WindowID),
 		inFlightCount:  make(map[WindowID]int),
-	}, nil
+	}
+	r.loss = newDeviceLoss(r)
+	return r, nil
 }
 
 // DeviceInfo returns the environment identity of the shared device:
@@ -670,6 +782,15 @@ func (s *Surface) PresentClear(color Color) (*Submission, error) {
 		}
 	}
 	handle, err := r.svc.PresentClear(s.handle, color.toNative())
+	if err != nil && r.isRecoveryRefusal(err) {
+		// The pin's skip_draws: the frame is skipped while the
+		// replacement device's resources are not rebuilt. The skip is
+		// observable in the ledger ("skipped, redraw pending") — never
+		// a silent success — and the typed refusal carries to the
+		// caller.
+		r.ledger.recordSkipped(s.windowID, r.isForeground())
+		return nil, fmt.Errorf("gpui: PresentClear window %d: %w", s.windowID, ErrRendererRecovering)
+	}
 	if err != nil && !errors.Is(err, native.ErrRendererPresent) {
 		// Rejected before acceptance (or a hard failure): no token.
 		return nil, fmt.Errorf("gpui: PresentClear window %d: %w", s.windowID, err)
@@ -766,6 +887,10 @@ func (sub *Submission) Retire() (native.RetireRecord, error) {
 		}
 		return record, err
 	}
+	// The native retire succeeded; the terminal record follows (sync,
+	// or dispatched to the foreground) — mark it so the device
+	// rebuild's abort bookkeeping cannot claim it.
+	r.ledger.markRetiring(sub.handle)
 	sub.recordRetire(record)
 	return record, nil
 }
@@ -887,6 +1012,11 @@ func (r *Renderer) paceLoop(stop chan struct{}) {
 
 // paceOnce performs one polling round.
 func (r *Renderer) paceOnce(stop chan struct{}) {
+	// The device-loss probe (the pin's vsync-thread check_device_lost):
+	// one device-state check every few rounds; a lost device triggers
+	// the recovery sequence on a dedicated goroutine (never this worker
+	// inline, never the foreground thread).
+	r.loss.pollDetection()
 	for _, handle := range r.ledger.pending() {
 		select {
 		case <-stop:
@@ -913,6 +1043,10 @@ func (r *Renderer) paceOnce(stop chan struct{}) {
 				}
 				continue
 			}
+			// The native retire succeeded; the terminal record is
+			// dispatched (possibly to the foreground) — mark it so the
+			// device rebuild's abort bookkeeping cannot claim it.
+			r.ledger.markRetiring(handle)
 			// Dispatch the terminal record to the foreground via
 			// App.Update: the pacing worker never runs app code inline.
 			r.dispatchRetire(handle, record)
@@ -922,6 +1056,7 @@ func (r *Renderer) paceOnce(stop chan struct{}) {
 			// (quarantine keeps the record tracked).
 			record, err := r.svc.Retire(handle)
 			if err == nil {
+				r.ledger.markRetiring(handle)
 				r.dispatchRetire(handle, record)
 			} else if errors.Is(err, native.ErrRendererQuarantine) {
 				r.ledger.retireRefused(handle, false)
@@ -1048,6 +1183,13 @@ func (s *Surface) DrawScene(scene *Scene, atlas *Atlas, appearance BackgroundApp
 		return nil, fmt.Errorf("gpui: DrawScene: %w", err)
 	}
 	handle, err := r.svc.DrawScene(s.handle, native.SceneHandle(scene.Handle()), native.BackgroundAppearance(appearance), atlasHandle)
+	if err != nil && r.isRecoveryRefusal(err) {
+		// The pin's skip_draws on the draw path: refused before any GPU
+		// work while the gate is armed; the ledger records the skipped
+		// frame ("skipped, redraw pending") — never a silent success.
+		r.ledger.recordSkipped(s.windowID, r.isForeground())
+		return nil, fmt.Errorf("gpui: DrawScene window %d: %w", s.windowID, ErrRendererRecovering)
+	}
 	if err != nil && !errors.Is(err, native.ErrRendererPresent) {
 		return nil, fmt.Errorf("gpui: DrawScene window %d: %w", s.windowID, err)
 	}
@@ -1087,6 +1229,12 @@ func (s *Surface) RenderScene(scene *Scene, atlas *Atlas, appearance BackgroundA
 		return fmt.Errorf("gpui: RenderScene: %w", err)
 	}
 	if err := r.svc.RenderScene(s.handle, native.SceneHandle(scene.Handle()), native.BackgroundAppearance(appearance), atlasHandle); err != nil {
+		if r.isRecoveryRefusal(err) {
+			// The pin's ensure!(!skip_draws) of render_to_image: the
+			// render path's skip is the typed refusal (no submission
+			// identity exists to record in the ledger).
+			return fmt.Errorf("gpui: RenderScene window %d: %w", s.windowID, ErrRendererRecovering)
+		}
 		return fmt.Errorf("gpui: RenderScene window %d: %w", s.windowID, err)
 	}
 	return nil
