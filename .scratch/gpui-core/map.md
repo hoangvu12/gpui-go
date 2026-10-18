@@ -48,6 +48,8 @@ Execution remains: capability enumeration, native feasibility and artifact size,
 - 2026-10-11 — [Ticket 28](../gpui-core-implementation/issues/28-capture.md) resolved: the Windows Graphics Capture chain with the pixel-verified full draw loop ([evidence](../../../evidence/ticket28-capture.json)).
 - 2026-10-11 — [Ticket 29](../gpui-core-implementation/issues/29-device-loss.md) resolved: the device-loss recovery with the bounded-retry rebuild ([evidence](../../../evidence/ticket29-device-loss.json)).
 - 2026-10-11 — [Ticket 32](../gpui-core-implementation/issues/32-render-to-image.md) resolved: the test-support render-to-image path with the headless profile trace ([evidence](../../../evidence/ticket32-render-to-image.json)).
+- 2026-10-11 — [Ticket 30](../gpui-core-implementation/issues/30-shutdown-integration.md) resolved: the cross-service close/cancellation/shutdown corpus ([evidence](../../../evidence/ticket30-shutdown-integration.json)).
+- 2026-10-11 — [Ticket 33](../gpui-core-implementation/issues/33-full-core-acceptance.md) resolved: the full-core audit — the ledger reconciliation COMPLETE (6911/6911), the visual calibration (noise 0, defects detected, threshold 0 justified, the 98% intent stays intent), the complete corpus on the final artifact ([evidence](../../../evidence/ticket33-full-core-audit.json)).
 
 ## Out of scope
 
