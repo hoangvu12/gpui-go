@@ -2,6 +2,7 @@ package authoring_test
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -44,14 +45,14 @@ func TestChainsPreserveDifferentExternalComponentTypes(t *testing.T) {
 	if !present || left != authoring.Rem(0.75) {
 		t.Fatalf("padding = %v, present = %v", left, present)
 	}
-	gap, present := b.Style().Gap.Get()
+	gap, present := b.Style().GapWidth.Get()
 	if !present || gap != authoring.Rem(0.5) {
 		t.Fatalf("gap = %v, present = %v", gap, present)
 	}
 }
 
 func TestRefinementPresenceAndSnapshots(t *testing.T) {
-	b := NewButton().Flex().PaddingX(authoring.Px(12)).Opacity(1)
+	b := NewButton().Flex().Px(authoring.Px(12)).Opacity(1)
 	snapshot := b.Style()
 	b.Refine(authoring.StyleRefinement{Opacity: authoring.Some(float32(0))})
 	current := b.Style()
@@ -69,7 +70,7 @@ func TestRefinementPresenceAndSnapshots(t *testing.T) {
 		t.Fatal("absent refinement erased padding or changed units")
 	}
 	b.Refine(authoring.StyleRefinement{})
-	if b.Style() != current {
+	if !reflect.DeepEqual(b.Style(), current) {
 		t.Fatal("empty refinement changed existing style")
 	}
 	if value, present := authoring.Some(false).Get(); !present || value {
@@ -128,6 +129,6 @@ func wantPanic(t *testing.T, message string, f func()) {
 func ExampleBindStyled() {
 	button := NewButton().Flex().Px3().Disabled(true).Gap2()
 	padding, _ := button.Style().PaddingLeft.Get()
-	fmt.Println(button.disabled, padding.Value, padding.Unit == authoring.Rems)
+	fmt.Println(button.disabled, padding.Value, padding.Kind == authoring.Rems)
 	// Output: true 0.75 true
 }

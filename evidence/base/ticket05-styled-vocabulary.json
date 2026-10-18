@@ -1,0 +1,43 @@
+{
+  "ticket": "05-styled-vocabulary",
+  "effort": "gpui-base",
+  "date": "2026-10-19",
+  "result": "resolved",
+  "summary": "Full pinned Styled vocabulary: Style paint/interaction fields with pinned defaults, flattened Refineable StyleRefinement/TextStyleRefinement over gpui.Optional, the Styled[Self] mixin (140 hand-ported styled.rs functions + 3,124 generated gpui_macros family methods via the maintainer tool cmd/stylegen), FluentBuilder (Map/When/WhenElse/WhenSome/WhenNone), Parent/Interactive/Component mixins; the div paints background/border/radii/shadows/rings/filters with the pinned order and OverflowMask; Div.ID accepts any ElementID.",
+  "base_coverage": "all 118 distinct pinned Styled names Base calls exist",
+  "pinned_sources": [
+    "reference/ce-source/crates/gpui/src/style.rs:173-230,233-406,450-477,590-671,793-850,874-1015,1024-1083",
+    "reference/ce-source/crates/gpui/src/styled.rs",
+    "reference/ce-source/crates/gpui_macros/src/styles.rs",
+    "reference/ce-source/crates/gpui/src/util.rs:11-61",
+    "reference/ce-source/crates/gpui/src/element.rs:228-249",
+    "reference/ce-source/crates/gpui/src/elements/div.rs:3021-3031",
+    "reference/ce-source/crates/gpui/src/geometry.rs:2511"
+  ],
+  "implementation": {
+    "files": ["gpui/div.go", "gpui/style.go", "gpui/paint.go", "authoring/style.go", "authoring/style_test.go", "authoring/doc.go", "authoring/README.md", "gpui/styled.go (new)", "gpui/styled_generated.go (new, generated)", "gpui/styled_refinement.go (new)", "gpui/styled_cursor.go (new)", "gpui/fluent.go (new)", "gpui/styled_test.go (new)", "gpui/styled_internal_test.go (new)", "gpui/fluent_test.go (new)", "cmd/stylegen/main.go (new)"]
+  },
+  "tests": {
+    "added": 22,
+    "upstream_ported": 6,
+    "upstream_deviated": 3,
+    "upstream_not_applicable": 2,
+    "notes": "deviated: border-color + both ring tests use solid colors (no gradients, ticket 02); n/a: the two HighlightStyle tests (ticket 10)",
+    "orchestrator_rerun": [
+      {"command": "CGO_ENABLED=0 go test ./authoring ./gpui -run 'TestStyled|TestStyleRefinementPinned|TestStyleSnapshot|TestDivPaint|TestInvisibleDiv|TestOverflowMask|TestDebugOutline|TestGridColsMaxContent|TestOuterRing|TestInsetRing|TestComponent|TestFluent|TestDivID|TestChains|TestRefinement|TestCopies|TestBinding|Example' -count=1", "result": "ok"},
+      {"command": "CGO_ENABLED=0 go test ./internal/layoutspec ./internal/scenespec ./internal/inlinespec ./internal/glyphspec ./internal/textspec -count=1", "result": "ok"},
+      {"command": "go generate in gpui/ then diff styled_generated.go", "result": "byte-identical"}
+    ]
+  },
+  "deviations": [
+    "import direction reversed: gpui no longer imports authoring; authoring re-exports the gpui types under the old names (the non-pinned PaddingX helper removed; pinned spelling Px)",
+    "Size/Gap variadic so both the pinned 1-arg and the old 2-arg forms work; Justify/AlignItems/GridTemplateCols/Rows/GridAt kept as port setters",
+    "Go-forced renames: StyleMut/TextStyleMut, TextStyleRefinement.Merge, WithBlurRadius/WithSpreadRadius/WithInset; WhenSome/WhenNone take *T",
+    "impl Styled for StyleRefinement not ported; RoundedSmoothing does not panic out of range",
+    "filter chains become nested filter groups (one blur per native record)",
+    "stored but not yet applied: overflow fade, scroll-axis flags (ticket 07), mouse cursor (ticket 06), new text fields (ticket 10)",
+    "hidden divs skip paint but still register listeners (ticket 06)",
+    "four cursor styles declared in styled_cursor.go fall back to the arrow (ticket 06 moves them to desktop.go)"
+  ],
+  "native_artifact": "unchanged (rev 11)"
+}

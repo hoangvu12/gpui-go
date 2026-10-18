@@ -36,14 +36,8 @@ package gpui
 import (
 	"fmt"
 	"reflect"
-
-	"github.com/hoangvu12/gpui-go/authoring"
+	"slices"
 )
-
-// StyleRefinement is the authoring style refinement the div composes
-// with (the shared authoring type identity, avoiding a root/authoring
-// dependency cycle).
-type StyleRefinement = authoring.StyleRefinement
 
 // ---------------------------------------------------------------------------
 // The text style stack (style.rs TextStyle / TextStyleRefinement)
@@ -73,31 +67,56 @@ const (
 	WhiteSpaceNowrap
 )
 
-// TextStyle is the resolved text style of an element (the reference
-// TextStyle): the fields this slice's text element consumes.
+// TextStyle is the resolved text style of an element (style.rs:590-646
+// TextStyle). The text element consumes the color, font, size, line
+// height, alignment and white space; the remaining pinned fields
+// (background color, underline, strikethrough, truncation, line clamp,
+// letter spacing, case transform) are resolved and cascaded here for
+// the text tickets that consume them.
 type TextStyle struct {
 	// Color is the text color.
 	Color Hsla
 	// FontFamily is the font family (".SystemUIFont" by default).
 	FontFamily string
-	// FontWeight is the font weight (400 by default).
-	FontWeight float32
-	// FontStyle is the font style (Normal by default).
-	FontStyle FontStyle
+	// FontFeatures are the OpenType feature settings.
+	FontFeatures []FontFeature
+	// FontFallbacks are the fallback families (nil is the pinned None).
+	FontFallbacks []string
 	// FontSize is the font size in pixels or rems (1rem by default).
 	FontSize AbsoluteLength
 	// LineHeight is the line height in pixels, rems or a relative
 	// fraction (the golden ratio by default).
 	LineHeight DefiniteLength
-	// TextAlign is the alignment within the element.
-	TextAlign TextAlign
+	// FontWeight is the font weight (400 by default).
+	FontWeight float32
+	// FontStyle is the font style (Normal by default).
+	FontStyle FontStyle
+	// BackgroundColor is the text background color (nil = None).
+	BackgroundColor *Hsla
+	// Underline is the underline style (nil = None).
+	Underline *UnderlineStyle
+	// Strikethrough is the strikethrough style (nil = None).
+	Strikethrough *StrikethroughStyle
 	// WhiteSpace is the wrapping mode.
 	WhiteSpace WhiteSpace
+	// TextOverflow is the truncation behavior (nil = None).
+	TextOverflow *TextOverflow
+	// TextAlign is the alignment within the element.
+	TextAlign TextAlign
+	// LineClamp is the number of lines shown before truncating (nil =
+	// None).
+	LineClamp *int
+	// LetterSpacing is the extra spacing between characters in pixels
+	// (nil = None).
+	LetterSpacing *float32
+	// TextTransform is the layout-time case mapping (nil = None).
+	TextTransform *TextTransform
 }
 
-// DefaultTextStyle returns the reference TextStyle::default(): black
-// text, the system UI font at 1rem, the golden-ratio line height,
-// left-aligned normal white space.
+// DefaultTextStyle returns the reference TextStyle::default()
+// (style.rs:648-671): black text, the system UI font at 1rem, the
+// golden-ratio line height, normal weight and style, left-aligned
+// normal white space, and every optional field None.
 func DefaultTextStyle() TextStyle {
 	return TextStyle{
 		Color:      Hsla{H: 0, S: 0, L: 0, A: 1},
@@ -112,53 +131,106 @@ func DefaultTextStyle() TextStyle {
 }
 
 // TextStyleRefinement is the text style refinement an element cascades
-// to its children (the reference TextStyleRefinement; the fields this
-// slice consumes). Absent fields leave the previous values unchanged.
+// to its children (the derived TextStyleRefinement of style.rs:591).
+// Absent fields leave the previous values unchanged; the pinned Option
+// fields of TextStyle refine as Optional of their inner type.
 type TextStyleRefinement struct {
-	// Color refines the text color.
-	Color *Hsla
-	// FontFamily refines the font family.
-	FontFamily *string
-	// FontWeight refines the font weight.
-	FontWeight *float32
-	// FontStyle refines the font style.
-	FontStyle *FontStyle
-	// FontSize refines the font size.
-	FontSize *AbsoluteLength
-	// LineHeight refines the line height.
-	LineHeight *DefiniteLength
-	// TextAlign refines the alignment.
-	TextAlign *TextAlign
-	// WhiteSpace refines the wrapping mode.
-	WhiteSpace *WhiteSpace
+	Color           Optional[Hsla]
+	FontFamily      Optional[string]
+	FontFeatures    Optional[[]FontFeature]
+	FontFallbacks   Optional[[]string]
+	FontSize        Optional[AbsoluteLength]
+	LineHeight      Optional[DefiniteLength]
+	FontWeight      Optional[float32]
+	FontStyle       Optional[FontStyle]
+	BackgroundColor Optional[Hsla]
+	Underline       Optional[UnderlineStyle]
+	Strikethrough   Optional[StrikethroughStyle]
+	WhiteSpace      Optional[WhiteSpace]
+	TextOverflow    Optional[TextOverflow]
+	TextAlign       Optional[TextAlign]
+	LineClamp       Optional[int]
+	LetterSpacing   Optional[float32]
+	TextTransform   Optional[TextTransform]
 }
 
-// Refine applies the explicitly supplied fields onto style.
+// Refine applies the explicitly supplied fields onto style (the derived
+// Refineable::refine for TextStyle).
 func (r *TextStyleRefinement) Refine(style *TextStyle) {
-	if r.Color != nil {
-		style.Color = *r.Color
+	refineValue(&style.Color, r.Color)
+	refineValue(&style.FontFamily, r.FontFamily)
+	if v, ok := r.FontFeatures.Get(); ok {
+		style.FontFeatures = slices.Clone(v)
 	}
-	if r.FontFamily != nil {
-		style.FontFamily = *r.FontFamily
+	if v, ok := r.FontFallbacks.Get(); ok {
+		style.FontFallbacks = slices.Clone(v)
 	}
-	if r.FontWeight != nil {
-		style.FontWeight = *r.FontWeight
+	refineValue(&style.FontSize, r.FontSize)
+	refineValue(&style.LineHeight, r.LineHeight)
+	refineValue(&style.FontWeight, r.FontWeight)
+	refineValue(&style.FontStyle, r.FontStyle)
+	refinePointer(&style.BackgroundColor, r.BackgroundColor)
+	refinePointer(&style.Underline, r.Underline)
+	refinePointer(&style.Strikethrough, r.Strikethrough)
+	refineValue(&style.WhiteSpace, r.WhiteSpace)
+	refinePointer(&style.TextOverflow, r.TextOverflow)
+	refineValue(&style.TextAlign, r.TextAlign)
+	refinePointer(&style.LineClamp, r.LineClamp)
+	refinePointer(&style.LetterSpacing, r.LetterSpacing)
+	refinePointer(&style.TextTransform, r.TextTransform)
+}
+
+// Merge applies the present fields of other onto r (the derived
+// Refineable::refine for TextStyleRefinement; named Merge because Refine
+// applies a refinement onto a TextStyle).
+func (r *TextStyleRefinement) Merge(other *TextStyleRefinement) {
+	if other == nil {
+		return
 	}
-	if r.FontStyle != nil {
-		style.FontStyle = *r.FontStyle
+	mergeOptional(&r.Color, other.Color)
+	mergeOptional(&r.FontFamily, other.FontFamily)
+	if v, ok := other.FontFeatures.Get(); ok {
+		r.FontFeatures = Some(slices.Clone(v))
 	}
-	if r.FontSize != nil {
-		style.FontSize = *r.FontSize
+	if v, ok := other.FontFallbacks.Get(); ok {
+		r.FontFallbacks = Some(slices.Clone(v))
 	}
-	if r.LineHeight != nil {
-		style.LineHeight = *r.LineHeight
+	mergeOptional(&r.FontSize, other.FontSize)
+	mergeOptional(&r.LineHeight, other.LineHeight)
+	mergeOptional(&r.FontWeight, other.FontWeight)
+	mergeOptional(&r.FontStyle, other.FontStyle)
+	mergeOptional(&r.BackgroundColor, other.BackgroundColor)
+	mergeOptional(&r.Underline, other.Underline)
+	mergeOptional(&r.Strikethrough, other.Strikethrough)
+	mergeOptional(&r.WhiteSpace, other.WhiteSpace)
+	mergeOptional(&r.TextOverflow, other.TextOverflow)
+	mergeOptional(&r.TextAlign, other.TextAlign)
+	mergeOptional(&r.LineClamp, other.LineClamp)
+	mergeOptional(&r.LetterSpacing, other.LetterSpacing)
+	mergeOptional(&r.TextTransform, other.TextTransform)
+}
+
+// IsSome reports whether any field is present (the derived
+// Refineable is_some, used by Style::text_style).
+func (r *TextStyleRefinement) IsSome() bool {
+	return r.Color.present || r.FontFamily.present || r.FontFeatures.present ||
+		r.FontFallbacks.present || r.FontSize.present || r.LineHeight.present ||
+		r.FontWeight.present || r.FontStyle.present || r.BackgroundColor.present ||
+		r.Underline.present || r.Strikethrough.present || r.WhiteSpace.present ||
+		r.TextOverflow.present || r.TextAlign.present || r.LineClamp.present ||
+		r.LetterSpacing.present || r.TextTransform.present
+}
+
+// Clone returns an independent copy (the slice-valued fields copied).
+func (r TextStyleRefinement) Clone() TextStyleRefinement {
+	out := r
+	if v, ok := r.FontFeatures.Get(); ok {
+		out.FontFeatures = Some(slices.Clone(v))
 	}
-	if r.TextAlign != nil {
-		style.TextAlign = *r.TextAlign
+	if v, ok := r.FontFallbacks.Get(); ok {
+		out.FontFallbacks = Some(slices.Clone(v))
 	}
-	if r.WhiteSpace != nil {
-		style.WhiteSpace = *r.WhiteSpace
-	}
+	return out
 }
 
 // FontSizePixels resolves the font size against the window rem size
@@ -182,12 +254,15 @@ func (t TextStyle) LineHeightPixels(fontSize, rem float32) float32 {
 }
 
 // FontDescriptorOf builds the shaping font descriptor of this text
-// style (TextStyle::font / to_run).
+// style (style.rs:708 TextStyle::font / to_run: family, features,
+// fallbacks, weight, style).
 func (t TextStyle) FontDescriptorOf() FontDescriptor {
 	return FontDescriptor{
-		Family: t.FontFamily,
-		Weight: t.FontWeight,
-		Style:  t.FontStyle,
+		Family:    t.FontFamily,
+		Weight:    t.FontWeight,
+		Style:     t.FontStyle,
+		Features:  slices.Clone(t.FontFeatures),
+		Fallbacks: slices.Clone(t.FontFallbacks),
 	}
 }
 
@@ -599,22 +674,17 @@ func (s *divFrameState) standaloneInline() *inlineDivFrameState {
 // spelling: the Div() constructor returns *DivElement because a type and
 // a function cannot share the package-level identifier Div).
 type DivElement struct {
+	// Styled is the div's base style refinement and the whole pinned
+	// Styled vocabulary (div.rs Interactivity::base_style, refined by
+	// every Styled method; ticket base-05).
+	Styled[*DivElement]
 	// elementID is the optional element identity (div.rs
 	// Interactivity::element_id).
-	elementID *string
+	elementID *ElementID
 	// focusHandle is the tracked focus handle (ticket13 routes it).
 	focusHandle *FocusHandle
 	// keyContext is the key context name (ticket13's keymap layer).
 	keyContext *string
-	// style is the layout style (the interactivity base style refined by
-	// the fluent methods).
-	style Style
-	// textStyle is the text style refinement cascaded to children.
-	textStyle TextStyleRefinement
-	// background is the box background (painted when non-transparent).
-	background *Background
-	// opacity is the element opacity applied at paint.
-	opacity *float32
 	// children are the converted child elements.
 	children []AnyElement
 	// clickListeners are the registered click listeners (ticket13
@@ -669,14 +739,35 @@ type DivElement struct {
 
 // Div creates a new div element (the fixture constructor spelling).
 func Div() *DivElement {
-	return &DivElement{style: DefaultStyle()}
+	return BindStyled(&DivElement{})
 }
 
-// ID assigns this element a string identity (DivElement::id): identity
-// participates in the global element id path and keys retained element
-// state.
-func (d *DivElement) ID(value string) *DivElement {
-	d.elementID = &value
+// IntoElementID is the set of values convertible to an element identity
+// (the pinned `impl Into<ElementId>`): a name string (ElementId::Name) or
+// any ElementID (named integers, named children, code locations, ...).
+type IntoElementID interface {
+	string | ElementID
+}
+
+// ElementIDOf converts a string or ElementID into an ElementID (a string
+// is NameElementID).
+func ElementIDOf[I IntoElementID](value I) ElementID {
+	switch v := any(value).(type) {
+	case string:
+		return NameElementID(v)
+	case ElementID:
+		return v
+	}
+	panic("gpui: unreachable IntoElementID")
+}
+
+// ID assigns this element an identity (div.rs InteractiveElement::id,
+// `impl Into<ElementId>`): a string names it; any ElementID is used as
+// is. Identity participates in the global element id path and keys
+// retained element state.
+func (d *DivElement) ID[I IntoElementID](value I) *DivElement {
+	id := ElementIDOf(value)
+	d.elementID = &id
 	return d
 }
 
@@ -694,237 +785,92 @@ func (d *DivElement) KeyContext(value string) *DivElement {
 	return d
 }
 
-// Flex sets the display type to flex (Styled::flex).
-func (d *DivElement) Flex() *DivElement {
-	d.style.Display = DisplayFlex
+// The Styled vocabulary is promoted from the embedded Styled[*DivElement]
+// (styled.go, styled_generated.go). The methods below are the port's own
+// div builders that predate it: Size and Gap keep their legacy
+// two-argument form next to the pinned one-argument form, and Justify,
+// AlignItems, GridTemplateCols, GridTemplateRows and GridAt are the
+// port's direct setters of the corresponding style fields.
+
+// Size sets the width and height (styles.rs:1348 `size`): one argument
+// sets both, as pinned; two arguments set width then height (the port's
+// original Size(width, height) form). Any other count panics.
+func (d *DivElement) Size[L IntoLength](lengths ...L) *DivElement {
+	style := d.StyleMut()
+	switch len(lengths) {
+	case 1:
+		v := LengthOf(lengths[0])
+		style.SizeWidth, style.SizeHeight = Some(v), Some(v)
+	case 2:
+		style.SizeWidth, style.SizeHeight = Some(LengthOf(lengths[0])), Some(LengthOf(lengths[1]))
+	default:
+		panic(fmt.Sprintf("gpui: DivElement.Size takes one or two lengths, got %d", len(lengths)))
+	}
 	return d
 }
 
-// Block sets the display type to block (Styled::block): the div's
-// text and inline children are collected into paragraphs.
-func (d *DivElement) Block() *DivElement {
-	d.style.Display = DisplayBlock
-	return d
-}
-
-// Inline sets the display type to inline (Styled::inline): the div's
-// contents join the surrounding paragraph; standalone it lays out its
-// contents in block flow.
-func (d *DivElement) Inline() *DivElement {
-	d.style.Display = DisplayInline
-	return d
-}
-
-// InlineFlex sets the display type to inline-flex (Styled::inline_flex):
-// an atomic inline box whose children use flex layout.
-func (d *DivElement) InlineFlex() *DivElement {
-	d.style.Display = DisplayInlineFlex
-	return d
-}
-
-// Grid sets the display type to grid (Styled::grid): children place
-// into the tracks defined by GridTemplateCols/GridTemplateRows.
-func (d *DivElement) Grid() *DivElement {
-	d.style.Display = DisplayGrid
+// Gap sets the gap between children (styles.rs:1396 `gap`): one argument
+// sets both axes, as pinned; two arguments set the column (width) then
+// row (height) gap (the port's original Gap(width, height) form). Any
+// other count panics.
+func (d *DivElement) Gap[L IntoDefiniteLength](lengths ...L) *DivElement {
+	style := d.StyleMut()
+	switch len(lengths) {
+	case 1:
+		v := DefiniteLengthFrom(lengths[0])
+		style.GapWidth, style.GapHeight = Some(v), Some(v)
+	case 2:
+		style.GapWidth, style.GapHeight = Some(DefiniteLengthFrom(lengths[0])), Some(DefiniteLengthFrom(lengths[1]))
+	default:
+		panic(fmt.Sprintf("gpui: DivElement.Gap takes one or two lengths, got %d", len(lengths)))
+	}
 	return d
 }
 
 // GridTemplateCols sets the column track template
 // (grid-template-columns: repeat(n, minmax(min, 1fr)) in the pinned
-// simplified form).
+// simplified form; the pinned builders are GridCols and its variants).
 func (d *DivElement) GridTemplateCols(template GridTemplate) *DivElement {
-	d.style.GridCols = &template
+	d.StyleMut().GridCols = Some(template)
 	return d
 }
 
 // GridTemplateRows sets the row track template (grid-template-rows).
 func (d *DivElement) GridTemplateRows(template GridTemplate) *DivElement {
-	d.style.GridRows = &template
+	d.StyleMut().GridRows = Some(template)
 	return d
 }
 
 // GridAt places this item in its parent grid (the reference
-// col_row/row_col placement).
+// col_row/row_col placement; the pinned builders are ColStart, RowSpan
+// and their variants).
 func (d *DivElement) GridAt(location GridLocation) *DivElement {
-	d.style.GridLocation = &location
+	d.StyleMut().GridLocation = Some(location)
 	return d
 }
 
-// Absolute sets the position to absolute (Styled::absolute): the
-// item offsets from its closest positioned ancestor and leaves the
-// inline/block flow.
-func (d *DivElement) Absolute() *DivElement {
-	d.style.Position = PositionAbsolute
-	return d
-}
-
-// Left sets the left inset (Styled::left).
-func (d *DivElement) Left(offset Length) *DivElement {
-	d.style.Inset.Left = offset
-	return d
-}
-
-// Top sets the top inset (Styled::top).
-func (d *DivElement) Top(offset Length) *DivElement {
-	d.style.Inset.Top = offset
-	return d
-}
-
-// Right sets the right inset (Styled::right).
-func (d *DivElement) Right(offset Length) *DivElement {
-	d.style.Inset.Right = offset
-	return d
-}
-
-// Bottom sets the bottom inset (Styled::bottom).
-func (d *DivElement) Bottom(offset Length) *DivElement {
-	d.style.Inset.Bottom = offset
-	return d
-}
-
-// W sets the width (Styled::w).
-func (d *DivElement) W(width Length) *DivElement {
-	d.style.Size.Width = width
-	return d
-}
-
-// H sets the height (Styled::h).
-func (d *DivElement) H(height Length) *DivElement {
-	d.style.Size.Height = height
-	return d
-}
-
-// Size sets the width and height (Styled::size).
-func (d *DivElement) Size(width, height Length) *DivElement {
-	d.style.Size = LengthSize{Width: width, Height: height}
-	return d
-}
-
-// AlignBaseline aligns this inline box's bottom with the text baseline
-// (Styled::align_baseline).
-func (d *DivElement) AlignBaseline() *DivElement {
-	d.style.VerticalAlign = VerticalAlignBaseline
-	return d
-}
-
-// AlignTop aligns this inline box's top with the line's top
-// (Styled::align_top).
-func (d *DivElement) AlignTop() *DivElement {
-	d.style.VerticalAlign = VerticalAlignTop
-	return d
-}
-
-// AlignBottom aligns this inline box's bottom with the line's bottom
-// (Styled::align_bottom).
-func (d *DivElement) AlignBottom() *DivElement {
-	d.style.VerticalAlign = VerticalAlignBottom
-	return d
-}
-
-// AlignMiddle centers this inline box on the text's x-height midpoint
-// (Styled::align_middle).
-func (d *DivElement) AlignMiddle() *DivElement {
-	d.style.VerticalAlign = VerticalAlignMiddle
-	return d
-}
-
-// Gap2 sets the gap to 0.5rem (Styled::gap_2).
-func (d *DivElement) Gap2() *DivElement {
-	d.style.Gap = DefiniteLengthSize{Width: DefiniteRem(0.5), Height: DefiniteRem(0.5)}
-	return d
-}
-
-// Gap sets the gap between children.
-func (d *DivElement) Gap(width, height DefiniteLength) *DivElement {
-	d.style.Gap = DefiniteLengthSize{Width: width, Height: height}
-	return d
-}
-
-// P sets the padding on all four edges (Styled::p).
-func (d *DivElement) P(padding DefiniteLength) *DivElement {
-	d.style.Padding = DefiniteLengthEdges{Top: padding, Right: padding, Bottom: padding, Left: padding}
-	return d
-}
-
-// SizeFull sets the size to 100% of the parent (Styled::size_full).
-func (d *DivElement) SizeFull() *DivElement {
-	d.style.Size = LengthSize{Width: DefiniteLengthOf(Fraction(1.0)), Height: DefiniteLengthOf(Fraction(1.0))}
-	return d
-}
-
-// Justify sets the main-axis content distribution (Styled::justify).
+// Justify sets the main-axis content distribution (the justify_content
+// field; the pinned builders are the Justify* methods).
 func (d *DivElement) Justify(justify AlignContent) *DivElement {
-	d.style.JustifyContent = &justify
+	d.StyleMut().JustifyContent = Some(justify)
 	return d
 }
 
-// AlignItems sets the cross-axis item alignment.
+// AlignItems sets the cross-axis item alignment (the align_items field;
+// the pinned builders are the Items* methods).
 func (d *DivElement) AlignItems(align AlignItems) *DivElement {
-	d.style.AlignItems = &align
+	d.StyleMut().AlignItems = Some(align)
 	return d
 }
 
-// Bg sets the background color of the box (Styled::bg).
-func (d *DivElement) Bg(color Hsla) *DivElement {
-	d.background = &[]Background{SolidBackground(color)}[0]
+// Extend appends already-converted children (element.rs:230
+// ParentElement::extend), e.g. a component's collected Parent children.
+func (d *DivElement) Extend(elements []AnyElement) *DivElement {
+	if len(elements) == 0 {
+		return d
+	}
+	d.commitChildren("DivElement.Extend", len(elements), elements)
 	return d
-}
-
-// Opacity sets the element opacity applied at paint (Styled::opacity).
-func (d *DivElement) Opacity(opacity float32) *DivElement {
-	d.opacity = &opacity
-	return d
-}
-
-// TextSize sets the text font size cascading to children
-// (Styled::text_size).
-func (d *DivElement) TextSize(size AbsoluteLength) *DivElement {
-	d.textStyle.FontSize = &size
-	return d
-}
-
-// TextColor sets the text color cascading to children
-// (Styled::text_color).
-func (d *DivElement) TextColor(color Hsla) *DivElement {
-	d.textStyle.Color = &color
-	return d
-}
-
-// Refine applies the authoring style refinement onto this element (the
-// fixture Refine method; the authoring Styled helper's snapshot composes
-// through it).
-func (d *DivElement) Refine(value StyleRefinement) *DivElement {
-	if display, ok := value.Display.Get(); ok {
-		if display == authoring.DisplayFlex {
-			d.style.Display = DisplayFlex
-		} else {
-			d.style.Display = DisplayBlock
-		}
-	}
-	if padding, ok := value.PaddingLeft.Get(); ok {
-		d.style.Padding.Left = authoringLengthToDefinite(padding)
-	}
-	if padding, ok := value.PaddingRight.Get(); ok {
-		d.style.Padding.Right = authoringLengthToDefinite(padding)
-	}
-	if gap, ok := value.Gap.Get(); ok {
-		converted := authoringLengthToDefinite(gap)
-		d.style.Gap = DefiniteLengthSize{Width: converted, Height: converted}
-	}
-	if opacity, ok := value.Opacity.Get(); ok {
-		opacity := opacity
-		d.opacity = &opacity
-	}
-	return d
-}
-
-// authoringLengthToDefinite converts an authoring length into a port
-// definite length.
-func authoringLengthToDefinite(length authoring.Length) DefiniteLength {
-	if length.Unit == authoring.Rems {
-		return DefiniteRem(length.Value)
-	}
-	return DefinitePx(length.Value)
 }
 
 // DebugSelector sets the test-support bounds key of this element (the
@@ -1278,7 +1224,7 @@ func (e *divElement) ID() (ElementID, bool) {
 	if e.builder.elementID == nil {
 		return ElementID{}, false
 	}
-	return NameElementID(*e.builder.elementID), true
+	return *e.builder.elementID, true
 }
 
 // SourceLocation implements Element.
@@ -1329,36 +1275,12 @@ type divPrepaintState struct {
 	debugBounds bool
 }
 
-// computeStyle returns the div's complete layout style (the reference
-// compute_style: Style::default().refine(base_style)).
+// computeStyle returns the div's complete style (div.rs:3882
+// compute_style: Style::default() refined by the base style).
 func (d *DivElement) computeStyle() Style {
-	return d.style
-}
-
-// textStyleSheet builds the div's text style refinement scope (the
-// reference style.text_style()).
-func (d *DivElement) textStyleSheet() *TextStyleRefinement {
-	return &d.textStyle
-}
-
-// overflowMask computes the div's content-mask refinement for its
-// overflow style (the reference Style::overflow_mask): visible overflow
-// returns nil.
-func (d *DivElement) overflowMask(bounds Bounds, rem float32) *Bounds {
-	if d.style.OverflowX == OverflowVisible && d.style.OverflowY == OverflowVisible {
-		return nil
-	}
-	// Clip/hidden/scroll overflow intersects the mask with the bounds.
-	mask := bounds
-	if d.style.OverflowX == OverflowVisible {
-		mask.Origin.X = bounds.Origin.X - 1e9
-		mask.Size.Width = 2e9
-	}
-	if d.style.OverflowY == OverflowVisible {
-		mask.Origin.Y = bounds.Origin.Y - 1e9
-		mask.Size.Height = 2e9
-	}
-	return &mask
+	style := DefaultStyle()
+	style.Refine(d.Styled.storage())
+	return style
 }
 
 // RequestLayout implements Element (the div.rs Div::request_layout +
@@ -1373,7 +1295,7 @@ func (d *DivElement) requestLayout(global *GlobalElementID, inspector *Inspector
 	d.lastStyle = style
 	state := divFrameState{}
 	var layoutID LayoutID
-	WithTextStyleVoid(w, d.textStyleSheet(), func(w *Window) {
+	WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
 		childLayoutIDs := make([]LayoutID, 0, len(d.children))
 		for i := range d.children {
 			childLayoutIDs = append(childLayoutIDs, d.children[i].RequestLayout(w, app))
@@ -1417,8 +1339,9 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 		recordDebugBounds(w, d.debugSelector, bounds)
 		state.debugBounds = true
 	}
-	WithTextStyleVoid(w, d.textStyleSheet(), func(w *Window) {
-		WithContentMaskVoid(w, d.overflowMask(bounds, RemSize(w)), func(w *Window) {
+	style := d.computeStyle()
+	WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
+		WithContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
 			registerDivElementDispatch(w, d)
 			registerDivElementMouseState(w, d, bounds, inspector)
 			if standalone := layout.standaloneInline(); standalone != nil {
@@ -1626,16 +1549,21 @@ func invokeTypedActionListener(listener typedActionListener, action any, phase D
 	handler.Call([]reflect.Value{payload, reflect.ValueOf(w), reflect.ValueOf(app)})
 }
 
-// Paint implements Element (the Interactivity::paint + Style::paint
-// path, bounded): scope the element opacity, paint the background quad
-// when non-transparent, paint the children (through the inline frame
-// state — the children first, then the paragraphs — when it owns them),
-// then paint the border when visible.
+// Paint implements Element (div.rs:2986-3110 Interactivity::paint +
+// style.rs:874-1015 Style::paint, bounded): compute the style; a hidden
+// element paints nothing (div.rs:3021); otherwise scope the element
+// opacity and paint the style's box around the text-style and
+// overflow-mask scoped children (through the inline frame state — the
+// children first, then the paragraphs — when it owns them).
 func (d *DivElement) paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *divFrameState, prepaint *divPrepaintState, w *Window, app *App) {
-	WithElementOpacityVoid(w, d.opacity, func(w *Window) {
-		paintDivElementBox(d, bounds, w, func(w *Window) {
-			WithTextStyleVoid(w, d.textStyleSheet(), func(w *Window) {
-				WithContentMaskVoid(w, d.overflowMask(bounds, RemSize(w)), func(w *Window) {
+	style := d.computeStyle()
+	if style.Visibility == VisibilityHidden {
+		return
+	}
+	WithElementOpacityVoid(w, style.Opacity, func(w *Window) {
+		style.paint(bounds, w, app, func(w *Window) {
+			WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
+				WithContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
 					if standalone := layout.standaloneInline(); standalone != nil {
 						standalone.paintChildren(d.children, w, app)
 						return
@@ -1649,27 +1577,145 @@ func (d *DivElement) paint(global *GlobalElementID, inspector *InspectorElementI
 	})
 }
 
-// paintDivElementBox paints the div's own box: the background quad
-// before the continuation and the border quad after it (the reference
-// Style::paint_box, bounded to background and border).
-func paintDivElementBox(d *DivElement, bounds Bounds, w *Window, continuation func(*Window)) {
-	frame := currentFrame(w)
-	if d.background != nil && !d.background.IsTransparent() {
-		background := *d.background
-		borderColor := background.Opacity(0)
-		pq := PaintQuad{
-			Bounds:             bounds,
-			Background:         background,
-			BorderColor:        borderColor,
-			CornerRadii:        Corners{},
-			BorderWidths:       Edges{},
-			BorderStyle:        BorderStyleSolid,
-			BorderDashedLength: DefaultBorderDashedLength,
-			BorderDashedGap:    DefaultBorderDashedGap,
+// paint is style.rs:874 Style::paint: inside a parent paragraph every
+// placed fragment gets the box (with an empty continuation) before the
+// continuation runs once; otherwise the element bounds get the box.
+func (s *Style) paint(bounds Bounds, w *Window, app *App, continuation func(*Window)) {
+	if fragments := currentFrame(w).currentInlineFragments; fragments != nil {
+		for _, fragment := range fragments {
+			s.paintBox(fragment, w, app, func(*Window) {})
 		}
-		if err := frame.scene.PaintQuad(pq, 0, frame.paint); err != nil {
-			panic(fmt.Sprintf("gpui: DivElement background paint: %v", err))
+		continuation(w)
+		return
+	}
+	s.paintBox(bounds, w, app, continuation)
+}
+
+// debugBelowDepth counts the DebugBelow scopes open per application
+// (the pinned DebugBelow global set and removed around paint_box,
+// style.rs:901-909 and 1011-1014).
+var debugBelowDepth = map[*App]int{}
+
+// paintBox is style.rs:894-1015 Style::paint_box: the debug outline,
+// the drop shadows and the outer ring, the backdrop filter, then — inside
+// the content filter group when the style has filters — the background
+// quad, the inset ring and inset shadows, the continuation, and the
+// border quad.
+func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*Window)) {
+	frame := currentFrame(w)
+	mustPaint := func(err error, what string) {
+		if err != nil {
+			panic(fmt.Sprintf("gpui: DivElement %s paint: %v", what, err))
 		}
 	}
-	continuation(w)
+	if s.DebugBelow {
+		debugBelowDepth[app]++
+		defer func() {
+			if debugBelowDepth[app]--; debugBelowDepth[app] <= 0 {
+				delete(debugBelowDepth, app)
+			}
+		}()
+	}
+	if s.Debug || debugBelowDepth[app] > 0 {
+		mustPaint(frame.scene.PaintQuad(Outline(bounds, SolidBackground(Red()), BorderStyleSolid), 0, frame.paint), "debug outline")
+	}
+
+	rem := RemSize(w)
+	radii := s.CornerRadii.ToPixels(rem).ClampRadiiForQuadSize(bounds.Size)
+	var smoothing float32
+	if s.CornerSmoothing != nil {
+		smoothing = *s.CornerSmoothing
+	}
+	currentColor := WindowTextStyle(w).Color
+	if color, ok := s.Text.Color.Get(); ok {
+		currentColor = color
+	}
+
+	// paint_drop_shadows_with_corner_smoothing (window.rs:4375): the
+	// non-inset shadows, before the background.
+	for _, shadow := range s.BoxShadow {
+		if !shadow.Inset {
+			mustPaint(frame.scene.PaintShadow(bounds, shadow, radii, smoothing, frame.paint), "drop shadow")
+		}
+	}
+	if ring, ok := s.Ring.outerQuad(bounds, radii, currentColor); ok {
+		mustPaint(frame.scene.PaintQuad(ring, smoothing, frame.paint), "ring")
+	}
+	// paint_backdrop_filter_with_corner_smoothing (window.rs:4487): the
+	// identity filters are dropped; the port's backdrop record carries
+	// one blur, so a chain paints one record per filter in order.
+	for _, filter := range s.BackdropFilter {
+		if !filter.IsIdentity() {
+			mustPaint(frame.scene.PaintBackdropFilterCornerSmoothing(bounds, filter.BlurRadius, radii, smoothing, frame.paint), "backdrop filter")
+		}
+	}
+
+	paintUnit := func(w *Window) {
+		frame := currentFrame(w)
+		if s.Background != nil && !s.Background.IsTransparent() {
+			background := *s.Background
+			mustPaint(frame.scene.PaintQuad(PaintQuad{
+				Bounds:             bounds,
+				CornerRadii:        radii,
+				Background:         background,
+				BorderColor:        background.Opacity(0),
+				BorderStyle:        s.BorderStyle,
+				BorderDashedLength: DefaultBorderDashedLength,
+				BorderDashedGap:    DefaultBorderDashedGap,
+			}, smoothing, frame.paint), "background")
+		}
+		if ring, ok := s.InsetRing.insetShadow(currentColor); ok {
+			mustPaint(frame.scene.PaintShadow(bounds, ring, radii, smoothing, frame.paint), "inset ring")
+		}
+		// paint_inset_shadows_with_corner_smoothing (window.rs:4424).
+		for _, shadow := range s.BoxShadow {
+			if shadow.Inset {
+				mustPaint(frame.scene.PaintShadow(bounds, shadow, radii, smoothing, frame.paint), "inset shadow")
+			}
+		}
+
+		continuation(w)
+
+		if s.isBorderVisible() {
+			borderColor := *s.BorderColor
+			mustPaint(currentFrame(w).scene.PaintQuad(PaintQuad{
+				Bounds:             bounds,
+				CornerRadii:        radii,
+				Background:         borderColor.Opacity(0),
+				BorderWidths:       s.BorderWidths.ToPixels(rem),
+				BorderColor:        borderColor,
+				BorderStyle:        s.BorderStyle,
+				BorderDashedLength: s.BorderDashedLength,
+				BorderDashedGap:    s.BorderDashedGap,
+			}, smoothing, currentFrame(w).paint), "border")
+		}
+	}
+
+	if len(s.Filter) == 0 {
+		paintUnit(w)
+		return
+	}
+	// with_filter_layer_with_corner_smoothing (window.rs:4537): the port's
+	// filter group carries one blur, so a chain nests one group per
+	// filter (outermost last, applying the filters in order); identity
+	// filters run inline inside WithFilterLayerCornerSmoothing.
+	s.withFilterChain(s.Filter, bounds, radii, smoothing, w, paintUnit)
+}
+
+// withFilterChain runs f inside one content-filter group per filter,
+// the first filter innermost.
+func (s *Style) withFilterChain(filters []Filter, bounds Bounds, radii Corners, smoothing float32, w *Window, f func(*Window)) {
+	if len(filters) == 0 {
+		f(w)
+		return
+	}
+	last := filters[len(filters)-1]
+	frame := currentFrame(w)
+	err := frame.scene.WithFilterLayerCornerSmoothing(bounds, last.BlurRadius, radii, smoothing, frame.paint, func() error {
+		s.withFilterChain(filters[:len(filters)-1], bounds, radii, smoothing, w, f)
+		return nil
+	})
+	if err != nil {
+		panic(fmt.Sprintf("gpui: DivElement filter paint: %v", err))
+	}
 }
