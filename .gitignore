@@ -21,3 +21,4 @@ Desktop.ini
 # Measure tool build output
 reference/native/tools/measure/measure.exe
 visualcalib.exe
+*.exe
