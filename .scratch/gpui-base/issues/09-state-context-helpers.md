@@ -4,7 +4,7 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: base-port orchestrator (wave 1a)
 Blocked by: none
 
@@ -18,11 +18,11 @@ Base can use the small pinned App/Window/Context helpers it calls everywhere.
 
 ## Acceptance criteria
 
-- [ ] Unit tests per helper derived from pinned semantics; keyed state releases on frame-end eviction.
-- [ ] Every ported behavior cites the pinned Base source (`upstream-base/ce/crates/base/src/...`, c0820693) or the core pin (`reference/ce-source/crates/gpui/src/...`, 254b5dbd); no invented APIs.
-- [ ] Upstream tests in scope are ported (count ported / deviated / not-applicable recorded with reasons); real-window tests FAIL rather than skip.
-- [ ] No native artifact change (rev 11 stays frozen); any genuine native need is stopped and surfaced to the user with evidence.
-- [ ] `CGO_ENABLED=0 go test` for the touched packages is green, `go vet` + gofmt clean, and the core regression packages stay green; executed evidence in `evidence/base/ticketNN-*.json`.
+- [x] Unit tests per helper derived from pinned semantics; keyed state releases on frame-end eviction.
+- [x] Every ported behavior cites the pinned Base source (`upstream-base/ce/crates/base/src/...`, c0820693) or the core pin (`reference/ce-source/crates/gpui/src/...`, 254b5dbd); no invented APIs.
+- [x] Upstream tests in scope are ported (count ported / deviated / not-applicable recorded with reasons); real-window tests FAIL rather than skip.
+- [x] No native artifact change (rev 11 stays frozen); any genuine native need is stopped and surfaced to the user with evidence.
+- [x] `CGO_ENABLED=0 go test` for the touched packages is green, `go vet` + gofmt clean, and the core regression packages stay green; executed evidence in `evidence/base/ticketNN-*.json`.
 
 ## Research
 
@@ -33,3 +33,7 @@ Base can use the small pinned App/Window/Context helpers it calls everywhere.
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+
+## Answer
+
+Resolved 2026-10-19 (wave 1a worker, verified by the orchestrator: 21 TestHelper tests + focusspec/listspec/actionspec/dropspec). All listed helpers landed with pinned citations; keyed state releases at frame end and on window close; window-free focus handles work across windows. Cross-file wiring the worker could not touch is carried by [ticket 33](33-frame-loop-default.md). Evidence: [evidence/base/ticket09-state-context-helpers.json](../../../evidence/base/ticket09-state-context-helpers.json).

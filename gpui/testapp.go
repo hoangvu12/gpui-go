@@ -19,6 +19,31 @@ import "time"
 type TestApp struct {
 	app   *App
 	sched *scheduler
+	// frameLoop enables the simulated frame loop (Base ticket 03): see
+	// SetFrameLoop.
+	frameLoop bool
+}
+
+// SetFrameLoop enables or disables the simulated frame loop. When
+// enabled, RunUntilParked and AdvanceClock finish by drawing every dirty
+// test window that has a root view, repeating (and re-running the
+// scheduler) until no window is dirty — the reference test-support flush
+// branch that draws dirty windows (app.rs 1800-1812). Next-frame
+// callbacks are not delivered there (an animation loop would never
+// park): Window.SimulateNextFrame and Window.SimulateFrameRequest
+// deliver them (window.rs 2643-2650, platform/test/window.rs 196-206).
+//
+// Deviation: the loop is opt-in. The reference test platform draws dirty
+// windows at every effect flush; the port's existing specs observe the
+// refresh seam (Window.RefreshRequested) after RunUntilParked and draw
+// explicitly, so enabling it by default would change them.
+func (ta *TestApp) SetFrameLoop(enabled bool) { ta.frameLoop = enabled }
+
+// serveFrames runs the simulated frame loop when enabled.
+func (ta *TestApp) serveFrames() {
+	if ta.frameLoop {
+		drawDirtyTestWindows(ta.app, ta.sched.run)
+	}
 }
 
 // NewTestApp creates a deterministic test application.
@@ -47,11 +72,21 @@ func (ta *TestApp) Update(f func(*App)) { ta.app.Update(f) }
 
 // RunUntilParked runs tasks until the scheduler would park. Timers that
 // have not yet fired keep their tasks parked.
-func (ta *TestApp) RunUntilParked() { ta.sched.run() }
+// With the frame loop enabled (SetFrameLoop) it then draws dirty test
+// windows until they settle.
+func (ta *TestApp) RunUntilParked() {
+	ta.sched.run()
+	ta.serveFrames()
+}
 
 // AdvanceClock moves the virtual clock forward by ms, running ready
-// timers and their foreground continuations synchronously.
-func (ta *TestApp) AdvanceClock(ms int64) { ta.sched.advanceClock(ms) }
+// timers and their foreground continuations synchronously. With the
+// frame loop enabled (SetFrameLoop) it then draws dirty test windows
+// until they settle.
+func (ta *TestApp) AdvanceClock(ms int64) {
+	ta.sched.advanceClock(ms)
+	ta.serveFrames()
+}
 
 // Tick drives at most one queued task to its next park point, reporting
 // whether work remained.

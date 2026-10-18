@@ -33,6 +33,7 @@ package gpui
 import (
 	"fmt"
 	"reflect"
+	"sort"
 )
 
 // ---------------------------------------------------------------------------
@@ -51,6 +52,17 @@ const (
 	ElementIDView
 	// ElementIDInteger is a numeric identity.
 	ElementIDInteger
+	// ElementIDNamedInteger is a name plus an integer (the reference
+	// ElementId::NamedInteger, window.rs:7667; e.g. ("item", ix)).
+	ElementIDNamedInteger
+	// ElementIDNamedChild is a labeled child of another element id (the
+	// reference ElementId::NamedChild(Arc<ElementId>, SharedString),
+	// window.rs:7673).
+	ElementIDNamedChild
+	// ElementIDCodeLocation is a source-location identity (the reference
+	// ElementId::CodeLocation, window.rs:7671; Window.UseState keys its
+	// state with the caller's location).
+	ElementIDCodeLocation
 )
 
 // ElementID is the identity of one element within its parent's child
@@ -65,8 +77,35 @@ type ElementID struct {
 	Name string
 	// Entity carries the view identity (Kind == ElementIDView).
 	Entity EntityID
-	// Integer carries the numeric identity (Kind == ElementIDInteger).
+	// Integer carries the numeric identity (Kind == ElementIDInteger, and
+	// the integer half of ElementIDNamedInteger).
 	Integer uint64
+	// Parent carries the labeled element of an ElementIDNamedChild (the
+	// child's label is Name).
+	Parent *ElementID
+}
+
+// NamedIntegerElementID builds a name+integer identity (the reference
+// ElementId::NamedInteger and its From<(&str, usize|u64|u32)> /
+// named_usize conversions, window.rs:7667,7680-7682,7770-7798).
+func NamedIntegerElementID(name string, value uint64) ElementID {
+	return ElementID{Kind: ElementIDNamedInteger, Name: name, Integer: value}
+}
+
+// NamedChildElementID builds a labeled child of parent (the reference
+// From<(ElementId, T: Into<SharedString>)> for ElementId, window.rs:7800-7803,
+// which produces ElementId::NamedChild).
+func NamedChildElementID(parent ElementID, name string) ElementID {
+	p := parent
+	return ElementID{Kind: ElementIDNamedChild, Name: name, Parent: &p}
+}
+
+// codeLocationElementID builds the caller-location identity used by
+// Window.UseState (the reference ElementId::CodeLocation built from
+// core::panic::Location::caller(), window.rs:4127-4131). Go has no
+// column information, so the location renders as "file:line".
+func codeLocationElementID(location string) ElementID {
+	return ElementID{Kind: ElementIDCodeLocation, Name: location}
 }
 
 // NameElementID builds a string identity.
@@ -91,6 +130,19 @@ func (id ElementID) String() string {
 		return id.Name
 	case ElementIDView:
 		return fmt.Sprintf("view-%d", uint64(id.Entity))
+	case ElementIDNamedInteger:
+		// window.rs:7692 `{}-{}` (name, integer).
+		return fmt.Sprintf("%s-%d", id.Name, id.Integer)
+	case ElementIDNamedChild:
+		// window.rs:7696 `{}-{}` (parent id, label).
+		parent := ""
+		if id.Parent != nil {
+			parent = id.Parent.String()
+		}
+		return parent + "-" + id.Name
+	case ElementIDCodeLocation:
+		// window.rs:7695 renders the Location (file:line:col; Go has no column).
+		return id.Name
 	default:
 		return fmt.Sprintf("%d", id.Integer)
 	}
@@ -1078,6 +1130,21 @@ func dropDrawState(w *Window) {
 			_ = ds.engine.Dispose()
 		}
 		delete(windowDrawStates, w)
+		// Dropping the window's element states drops their resources (the
+		// reference drops the frames with the window): keyed-state leases
+		// release here (idempotent when the window scope already closed
+		// them); the queued releases flush at the next update boundary.
+		keys := make([]string, 0, len(ds.elementStates))
+		for key := range ds.elementStates {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			for _, r := range releasersOf(ds.elementStates[key]) {
+				r.releaseElementState()
+			}
+		}
+		ds.elementStates = nil
 	}
 	// Retire the per-window diagnostic runtimes with the element
 	// runtime (ticket27: the inspector state — generation bumped so
@@ -1448,14 +1515,68 @@ func recordElementStateAccess(w *Window, key string) {
 // Frame::finish's carry-over loop): state of elements that did not
 // draw this frame is dropped, so removal followed by reinsertion
 // starts fresh.
+//
+// Evicted states that hold framework resources (Window.UseKeyedState's
+// entity lease) are released: the reference drops the previous frame's
+// unaccessed ElementStateBox values when the frames swap (window.rs
+// Frame::finish 1225-1231 then next_frame.clear() at 3237), which drops
+// their Entity handles. The Go port has no drop, so eviction calls the
+// state's release hook explicitly (sorted by key for determinism).
+//
+// This is also the port's frame-finish seam (window.rs draw 3233-3263):
+// render.go calls it at completion, so the focus phase (focus listener
+// dispatch, helpers_frame.go) runs from here.
 func retainElementStates(ds *windowDrawState, accessed map[string]struct{}) {
 	retained := make(map[string]map[reflect.Type]any, len(accessed))
-	for key := range accessed {
-		if byType, ok := ds.elementStates[key]; ok {
+	var evictedKeys []string
+	for key, byType := range ds.elementStates {
+		if _, keep := accessed[key]; keep {
 			retained[key] = byType
+			continue
 		}
+		evictedKeys = append(evictedKeys, key)
+	}
+	sort.Strings(evictedKeys)
+	var evicted []elementStateReleaser
+	for _, key := range evictedKeys {
+		evicted = append(evicted, releasersOf(ds.elementStates[key])...)
 	}
 	ds.elementStates = retained
+	finishFrame(windowOfDrawState(ds), evicted)
+}
+
+// elementStateReleaser is implemented by retained element states that own
+// framework resources released on eviction (keyedstate.go).
+type elementStateReleaser interface {
+	releaseElementState()
+}
+
+// releasersOf returns the releasable states of one key, ordered by type
+// name for determinism.
+func releasersOf(byType map[reflect.Type]any) []elementStateReleaser {
+	types := make([]reflect.Type, 0, len(byType))
+	for t := range byType {
+		types = append(types, t)
+	}
+	sort.Slice(types, func(i, j int) bool { return types[i].String() < types[j].String() })
+	var out []elementStateReleaser
+	for _, t := range types {
+		if r, ok := byType[t].(elementStateReleaser); ok {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// windowOfDrawState resolves the window owning a draw state (the registry
+// is keyed by window; the frame-finish seam only receives the state).
+func windowOfDrawState(ds *windowDrawState) *Window {
+	for w, candidate := range windowDrawStates {
+		if candidate == ds {
+			return w
+		}
+	}
+	return nil
 }
 
 // takeElementStateSlot removes and returns the retained *S slot for the

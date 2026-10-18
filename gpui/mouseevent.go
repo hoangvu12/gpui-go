@@ -109,6 +109,12 @@ type MouseMoveEvent struct {
 	Modifiers Modifiers
 }
 
+// Dragging reports whether the left mouse button is held during the
+// move (interactive.rs:513-518 MouseMoveEvent::dragging).
+func (e MouseMoveEvent) Dragging() bool {
+	return e.PressedButton != nil && *e.PressedButton == MouseButtonLeft
+}
+
 // MouseDownEvent reports a mouse press (interactive.rs
 // MouseDownEvent).
 type MouseDownEvent struct {
@@ -157,6 +163,20 @@ func ScrollDeltaPixels(dx, dy float32) ScrollDelta {
 // ScrollDeltaLines builds the Lines variant.
 func ScrollDeltaLines(dx, dy float32) ScrollDelta {
 	return ScrollDelta{Lines: Point{X: dx, Y: dy}}
+}
+
+// Precise reports whether this is an exact pixel delta
+// (interactive.rs:605-611 ScrollDelta::precise).
+func (d ScrollDelta) Precise() bool { return d.IsPixels }
+
+// PixelDelta converts the delta into exact pixels: pixel deltas pass
+// through, line deltas scale by lineHeight (interactive.rs:613-619
+// ScrollDelta::pixel_delta).
+func (d ScrollDelta) PixelDelta(lineHeight float32) Point {
+	if d.IsPixels {
+		return d.Pixels
+	}
+	return Point{X: lineHeight * d.Lines.X, Y: lineHeight * d.Lines.Y}
 }
 
 // ScrollWheelEvent reports a scroll (interactive.rs

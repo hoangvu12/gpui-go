@@ -109,9 +109,17 @@ type WindowOptions struct {
 	OnResize func(size Size, scale float32)
 	// OnMoved reports window moves (WM_MOVE), synchronously.
 	OnMoved func()
-	// OnRedraw is the paint hook: WM_PAINT records the window dirty and
-	// calls this hook instead of drawing (the renderer arrives with
-	// ticket07; reference draw_window -> request_frame).
+	// OnRedraw is the window's present hook (Base ticket 03; the
+	// reference Window::present, window.rs:3325, which hands the
+	// rendered scene to the platform window). WM_PAINT delivers the
+	// window's frame request (draw_window -> request_frame,
+	// window.rs:1715-1843): pending next-frame callbacks run, a dirty
+	// window with a root view is drawn, and then this hook runs whenever
+	// a drawn frame awaits presentation — present LastDrawnScene(w)
+	// through the window's Surface. Installing the hook enrolls the
+	// window in the frame loop: notify, Refresh, RefreshWindows and
+	// animation frames then redraw it without explicit DrawWindowFrame
+	// calls. Without the hook the window keeps the explicit-draw model.
 	OnRedraw func()
 	// OnKey receives keyboard platform events (ticket13: *KeyDownEvent,
 	// *KeyUpEvent, *ModifiersChangedEvent from the Win32 translation).
@@ -219,6 +227,12 @@ type Window struct {
 	// counter). Created on first use; touched only on the foreground
 	// thread.
 	input *windowInputState
+
+	// frames is the window's frame-loop state (Base ticket 03,
+	// frameloop.go: the invalidator's dirty flag, next-frame callbacks,
+	// needs-present and the tracked rendered views). Touched only on the
+	// foreground thread.
+	frames *windowFrameState
 }
 
 // ID returns the window's logical identity. Identities are assigned in
@@ -529,7 +543,15 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 			return func() { a.Update(func(*App) { user() }) }
 		}
 		hostOpts.OnMoved = wrap(opts.OnMoved)
-		hostOpts.OnRedraw = wrap(opts.OnRedraw)
+		// WM_PAINT delivers the window's frame request (Base ticket 03,
+		// frameloop.go; events.rs draw_window -> request_frame). The user
+		// OnRedraw hook is the present step the request runs.
+		hostOpts.OnRedraw = func() {
+			if window == nil {
+				return
+			}
+			window.requestFrame()
+		}
 		hostOpts.OnAppearanceChanged = wrap(opts.OnAppearanceChanged)
 		if opts.OnHoverStatusChange != nil {
 			user := opts.OnHoverStatusChange
@@ -573,11 +595,23 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 				a.Update(func(*App) { user(layout) })
 			}
 		}
-		if opts.OnResize != nil {
-			user := opts.OnResize
-			hostOpts.OnResize = func(size Size, scale float32) {
-				a.Update(func(*App) { user(size, scale) })
+		// A size or scale change refreshes the window (Window::bounds_changed
+		// calls refresh, window.rs:2694-2705) before the user hook runs.
+		userResize := opts.OnResize
+		hostOpts.OnResize = func(size Size, scale float32) {
+			if window == nil && userResize == nil {
+				// WM_SIZE during creation, before registration: nothing to
+				// refresh yet (the window starts dirty) and no user hook.
+				return
 			}
+			a.Update(func(*App) {
+				if window != nil {
+					window.Refresh()
+				}
+				if userResize != nil {
+					userResize(size, scale)
+				}
+			})
 		}
 		if opts.OnActivate != nil {
 			user := opts.OnActivate
@@ -628,6 +662,9 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 				handle: handle,
 				scope:  a.rootScope.Child(),
 				title:  opts.Title,
+				// The frame loop drives windows with a present hook; the
+				// window starts dirty (window.rs:178).
+				frames: newWindowFrameState(opts.OnRedraw, opts.OnRedraw != nil),
 			}
 			a.windows[window.id] = window
 			res <- openResult{window: window}

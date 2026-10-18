@@ -2,6 +2,7 @@ package gpui
 
 import (
 	"fmt"
+	"reflect"
 )
 
 // This file is the port's view runtime (ticket11): the Render/RenderOnce
@@ -169,6 +170,57 @@ func retainForFrame[S any](entity Entity[S]) Entity[S] {
 		owner = w.Scope()
 	}
 	return entity.RetainInto(owner)
+}
+
+// entityBackedView is implemented by the entity view adapters: it
+// reports the backing entity's identity, application and state type (the
+// reference AnyView's entity + entity_type, view.rs:53-71).
+type entityBackedView interface {
+	backingEntity() (EntityID, *App, reflect.Type)
+}
+
+func (v *viewAdapter[S, PS]) backingEntity() (EntityID, *App, reflect.Type) {
+	return v.entity.id, v.entity.app, reflect.TypeFor[S]()
+}
+
+func (v *managedViewAdapter[S, PS]) backingEntity() (EntityID, *App, reflect.Type) {
+	return v.entity.id, v.entity.app, reflect.TypeFor[S]()
+}
+
+// DowncastView converts a view to the entity of state T backing it
+// (view.rs:53-61 AnyView::downcast). It reports false for recipes
+// (stateless views) and views backed by another state type.
+//
+// The returned handle is a non-releasable facade over the view's lease
+// (Read/Update/Downgrade work while the entity is live; Release panics):
+// retain it with RetainInto to own it independently — the reference
+// returns a strong clone.
+func DowncastView[T any](view View) (Entity[T], bool) {
+	backed, ok := view.(entityBackedView)
+	if !ok {
+		return Entity[T]{}, false
+	}
+	id, app, stateType := backed.backingEntity()
+	if stateType != reflect.TypeFor[T]() {
+		return Entity[T]{}, false
+	}
+	return Entity[T]{
+		id:    id,
+		app:   app,
+		lease: &entityLease{kind: leaseBorrow, id: id, app: app, valid: &borrowValidity{}},
+	}, true
+}
+
+// Root returns the window's root view as the entity of state T
+// (window.rs:2272-2279 Window::root). It reports false when the window
+// has no root view or the root is not backed by T; RootView
+// distinguishes the two (the reference's outer Option).
+func (w *Window) Root[T any]() (Entity[T], bool) {
+	root, ok := w.RootView()
+	if !ok {
+		return Entity[T]{}, false
+	}
+	return DowncastView[T](root)
 }
 
 // statelessView wraps a RenderOnce recipe as a View without identity

@@ -307,6 +307,12 @@ func (a *App) Update(f func(*App)) {
 		panic("gpui: Update called with a nil callback")
 	}
 	a.startUpdate()
+	if w := activeFrame; w != nil && w.app == a {
+		// A view's render is an entity update inside the frame draw: the
+		// rendering view is tracked by its window (Base ticket 03,
+		// frameloop.go recordRenderedView).
+		recordRenderedView(w)
+	}
 	completed := false
 	defer func() {
 		if !completed && a.updateDepth > 0 {
@@ -330,9 +336,11 @@ func (a *App) Defer(f func(*App)) {
 	a.pushEffect(effect{kind: effDefer, callback: f})
 }
 
-// RefreshWindows schedules all windows for redraw. It can be called
-// repeatedly in one update cycle and still results in a single redraw
-// pass; the effect is not coalesced in the queue, matching the reference.
+// RefreshWindows schedules all windows for redraw (App::refresh_windows,
+// app.rs 1132-1136). It can be called repeatedly in one update cycle and
+// still results in a single redraw pass; the effect is not coalesced in
+// the queue, matching the reference. Applying it marks every window
+// dirty (frameloop.go).
 func (a *App) RefreshWindows() {
 	a.effects = append(a.effects, effect{kind: effRefresh})
 }
@@ -405,6 +413,10 @@ func (a *App) flushEffects() {
 		if len(a.effects) > 0 {
 			continue
 		}
+
+		// The quiet queue schedules a frame for every window with frame
+		// demand (app.rs 1814-1822; Base ticket 03, frameloop.go).
+		a.scheduleWindowFrames()
 
 		if a.retireEventArena() {
 			// Retirement produced pending releases. They are not drained
@@ -499,8 +511,9 @@ func (a *App) applyEffect(e effect) {
 	case effDefer:
 		e.callback(a)
 	case effRefresh:
-		// Window refresh: the draw hook observes dirtiness; real window
-		// invalidation belongs to the window tickets.
+		// Window refresh marks every window dirty (apply_refresh_effect,
+		// app.rs 1896-1903; Base ticket 03); the draw hook still observes.
+		a.refreshAllWindows()
 		if a.drawHook != nil {
 			_ = a.drawHook.DirtyWindows()
 		}
@@ -511,8 +524,11 @@ func (a *App) applyEffect(e effect) {
 	}
 }
 
-// notify queues a Notify effect for id, coalesced while pending.
+// notify queues a Notify effect for id, coalesced while pending, and
+// invalidates every window whose last frame rendered the entity
+// (App::notify, app.rs 2920-2953; Base ticket 03, frameloop.go).
 func (a *App) notify(id EntityID) {
+	a.invalidateViewWindows(id)
 	a.pushEffect(effect{kind: effNotify, emitter: id})
 }
 

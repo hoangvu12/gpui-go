@@ -2373,14 +2373,18 @@ func (d *platformDispatcher) wake() {
 // drive drains the scheduler on the host thread. Blocking here mirrors
 // the reference: its main thread runs foreground runnables to
 // completion; task bodies park on their own goroutines and their update
-// requests execute inline here.
+// requests execute inline here. The drain first fires every wall-clock
+// timer that came due (the reference timer completion arriving through
+// dispatch_after, gpui_windows/src/dispatcher.rs:147-149, then waking
+// its awaiter onto the main thread, dispatcher.rs:118-132) and re-arms
+// the timer driver afterwards (clock.go).
 func (d *platformDispatcher) drive() {
 	defer func() {
 		if r := recover(); r != nil {
 			d.host.recordPanic(r)
 		}
 	}()
-	d.app.sched.run()
+	d.app.sched.runRealtime()
 }
 
 // attach wires the host into the application as its foreground
@@ -2397,5 +2401,9 @@ func (h *Host) attach(a *App) error {
 	h.app = a
 	h.dispatcher = &platformDispatcher{app: a, host: h}
 	a.platformWake = h.dispatcher.wake
+	// Real applications run on wall-clock time: TaskRun.Sleep, background
+	// timers and App.Now follow the platform clock (the reference
+	// PlatformScheduler's PlatformClock, platform_scheduler.rs:177-190).
+	a.sched.useWallClock(h.dispatcher.wake)
 	return nil
 }

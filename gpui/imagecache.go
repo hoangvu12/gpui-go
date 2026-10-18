@@ -951,12 +951,26 @@ func NeedsAnimationFrame(image *RenderImage, hasElementID bool, policy ImagePlay
 	return hasElementID && image.FrameCount() > 1 && policy.WindowActive && !policy.ReduceMotion
 }
 
-// RequestAnimationFrame marks the window for another frame (the pinned
-// Window::request_animation_frame, window.rs lines 2633-2638, called by
-// animated images): the port's redraw seam is the refresh request the
-// explicit DrawWindowFrame path consumes.
+// RequestAnimationFrame schedules a frame to be drawn on the next
+// animation frame (the pinned Window::request_animation_frame,
+// window.rs lines 2633-2636, called by animated images): the currently
+// rendering view is notified on the window's next frame
+// (on_next_frame(move |_, cx| cx.notify(entity))), which redraws the
+// window through the frame loop (frameloop.go). Called outside a view's
+// render it refreshes the whole window on the next frame (the documented
+// "Otherwise, it will refresh the entire window", window.rs line 2626).
+// A loop that stops requesting stops drawing: the frame source goes
+// idle once no callback is pending and no window is dirty.
 func RequestAnimationFrame(w *Window) {
-	if w != nil {
-		w.requestRefresh()
+	if w == nil {
+		return
 	}
+	view, ok := currentViewOf(w)
+	w.OnNextFrame(func(w *Window, app *App) {
+		if ok {
+			app.notify(view)
+		} else {
+			w.Refresh()
+		}
+	})
 }

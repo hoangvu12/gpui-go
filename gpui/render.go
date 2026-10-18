@@ -47,7 +47,9 @@ func activeFrameWindow() *Window { return activeFrame }
 
 // DrawWindowFrame draws one frame of the window's root view through the
 // full element phase pipeline and returns the finished scene (the
-// reference Window::draw + draw_roots). The frame's paint operations go
+// reference Window::draw + draw_roots). Windows enrolled in the frame
+// loop (frameloop.go) are drawn by their frame requests; an explicit call
+// remains valid and leaves the frame awaiting presentation. The frame's paint operations go
 // into a fresh scene; the scene is finished (sorted, plan compiled) and
 // becomes the window's last drawn scene; per-window retained element
 // state survives across frames keyed by element identity paths.
@@ -99,6 +101,10 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 	// (focus.go/key_dispatch.go): the completed tree and tab stops swap
 	// into the rendered state when the frame completes.
 	beginDispatchFrame(w)
+	// The frame loop's rendered-view collection (Base ticket 03,
+	// frameloop.go): the views rendered by this frame become the
+	// window's tracked entities when it completes.
+	beginFrameTracking(w)
 
 	baseMask := Bounds{Origin: Point{}, Size: viewport}
 	frame := &frameDrawState{
@@ -151,8 +157,12 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 			// CapFrameOverlay capability).
 			RecordDebugFrame(w, time.Since(drawStart))
 			ds.refreshRequested = false
+			// The frame loop: tracked views swap in, the window is clean
+			// and the frame awaits presentation (window.rs 3276/3287).
+			completeFrameTracking(w, ds.root)
 		} else {
 			discardDispatchFrame(w)
+			abandonFrameTracking(w)
 		}
 	}()
 
