@@ -1,0 +1,25 @@
+{
+    "ticket": "32-render-to-image",
+    "date": "2026-10-11",
+    "authorization": "The user's 2026-10-11 standing pre-authorization for the wave-4 orchestrator (including the native rebuilds). Native surface: the batch-8 rebuild + the rev-11 fix-up (the status split).",
+    "session": "Wave 4. The native entry (renderer_surface_render_to_image) + the Go FFI client were implemented by the orchestrator in-session (batch 8); the Go model/trace/spec were implemented by the background implementer subagent (clean completion); the orchestrator applied the rev-11 status split and resolved.",
+    "git_state": "Branch implement-core-remaining; committed with this evidence (batch 10).",
+    "native": "renderer.rs v3: renderer_surface_render_to_image — the pinned test-support path VERBATIM (directx_renderer.rs 788-860): render the scene WITHOUT presenting, then the staging copy with the source desc, Map(READ), the row-pitch copy, the BGRA→RGBA swap, the dims out, and the pin's recovery refusal FIRST ('render_to_image unavailable while recovering from a lost device'). Rev-11: the ERR_RECOVERING status split to -13 (the -12 collided with rendererErrScene — the refusals are now unambiguous at the ABI).",
+    "implementation": {
+        "model": "gpui/headless.go: Surface.RenderToImage / Renderer.RenderToImage — the scene + appearance → an owned immutable RenderedImage (RGBA8 packed rows with the exact Width/Height/Format/SourceFormat (DXGI 87)/Appearance/SurfaceMode/BytesPerRow/Len metadata), rendered through a real window surface without presenting, the appearance mapped via the pin's is_opaque() match, the internal capacity retry, the extent sync at a safe point, and the surface-info cross-check (needed == w·h·4).",
+        "trace": "Renderer.HeadlessTrace() — the canceled/partial-failure record (one event per attempt: capacity-probe / completed / recovering / failed, with the dims, byte counts and error text; survives Close for post-mortem inspection). gpui.HeadlessProfileRecords() — the per-profile applicability trace (native-windows, test-support, wgpu, apple-metal, platform-default) with the pinned source refs, the source-supported errors SEPARATE from the port's implemented path, the port status (implemented/partial/missing/not-applicable) and the bounded follow-ups (the windowless test-support factory shape; the Window-level render_to_image needing frame-loop integration)."
+    },
+    "gates": {
+        "headlessspec": "internal/headlessspec (9 tests over real windows, FAIL not skip): solid quads with computable expected pixels (±8, the pin's tolerance); opaque/transparent/blurred clears (full-buffer exact scans) + opaque content over transparent; odd widths 61/161 with per-row color checks + the ABI capacity protocol (nil → needed, short → needed, exact/oversized → needed bytes); the default_image/custom_image dashed-border port (both quad pipelines, the pin's own test patterns from directx_renderer.rs 2963-3064) on a native 40×20 surface (the pin's renderer.resize shape); repeated readback determinism + buffer-ownership independence + RenderScene+ReadPixels ≡ RenderToImage + the trace invariants; two windows on the one shared device (the adapter identity logged: RTX 5050, FL 0xB100); teardown with pending readback (the typed stale-handle refusal, the failed trace events); the recovery gate (inject → Lost/Injected → rebuild → gate armed → the refusal → mark-drawable → the fresh-surface capture byte-identical to the baseline); the profile-record assertions incl. a source-file existence audit.",
+        "regressions": "rendererspec + pathspec green; the full rotated-artifact regression set green."
+    },
+    "executed_results": {
+        "go": "CGO_ENABLED=0 go test ./internal/headlessspec -count=1: ok (9/9, ~1.1s)."
+    },
+    "limitations": [
+        "No independent reference RUN on this machine (no cargo): the expected pixels are computed from the pin's own test expectations (the tolerance, the dashed-border patterns) — the reference-comparison criterion is partially met; the dashed-border port exercises the port's real shader pipeline live.",
+        "Real captioned windows cannot reach 40×20/61-wide client extents (the system minimum tracking size ≈120px width), so small extents run through native-client explicit-extent surfaces (the same renderer.resize shape as the pin's tests); the gpui-model odd-width coverage uses a 161×37 window.",
+        "The Window-level render_to_image (the pin's pub window.rs render_to_image over the rendered_frame) needs frame-loop integration beyond this slice — the surface-level path (the pinned DirectXRenderer::render_to_image itself) is the implemented adapter; the bounded follow-up is recorded in the profile trace.",
+        "The pre-existing ReadPixels capacity-probe quirk (its zero-capacity leg drops the status code, so a stale handle surfaces as 'zero-sized back buffer') is a native-client detail outside this slice's files; render-to-image returns the typed stale-handle error properly."
+    ]
+}

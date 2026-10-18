@@ -434,6 +434,10 @@ type SurfaceRecord struct {
 	Bounds      Bounds
 	ContentMask Bounds
 	Source      SurfaceSourceTag
+	// SourceHandle is the capture frame handle when Source is the
+	// capture-frame tag (the packed two-word payload, unpacked here;
+	// 0 otherwise).
+	SourceHandle uint64
 }
 
 // Surfaces returns the finished scene's surfaces in draw order together

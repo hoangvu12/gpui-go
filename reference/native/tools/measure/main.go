@@ -57,10 +57,13 @@ const (
 	// follow-up) landed with native revision 10: the a11y provider
 	// service in slot 9 (bit 10) and the capture service in slot 10
 	// (bit 11) — both reusing the existing 16-entry reserved array —
-	// plus the renderer service v3 and the AtlasKey::Svg variant.
+	// plus the renderer service v3 and the AtlasKey::Svg variant. The
+	// wave-4 fix-up (the Go workers' honest findings) bumped it to 11
+	// (the scene surface export gate, the ERR_RECOVERING status move,
+	// the device-rebuild order, the a11y action-mask decode).
 	// Keep these in sync with reference/native/src/lib.rs
 	// (GPUI_GO_NATIVE_REVISION and the capabilities module).
-	nativeRevision = 10
+	nativeRevision = 11
 
 	// bit 0 bootstrap, bit 1 layout-taffy-0-13-0, bit 2 renderer-d3d11,
 	// bit 3 scene-kernel-v1, bit 4 text-parley-0-11-1, bit 5

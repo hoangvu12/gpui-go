@@ -874,8 +874,8 @@ func TestScenePanicContainment(t *testing.T) {
 	// raised it to 9; the wave-4 rebuild raised it to 10; the
 	// cumulative capability mask is 0xFFF (the
 	// additive pattern: every landed service raises both).
-	if identity.NativeRevision != 10 {
-		t.Errorf("native revision = %d, want 10 (wave-4 cumulative)", identity.NativeRevision)
+	if identity.NativeRevision != 11 {
+		t.Errorf("native revision = %d, want 11 (wave-4 fix-up)", identity.NativeRevision)
 	}
 	if identity.Capabilities&0xFFF != 0xFFF {
 		t.Errorf("capabilities mask = %#x, want the ten assigned bits set", identity.Capabilities)

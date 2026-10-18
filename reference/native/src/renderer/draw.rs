@@ -1946,7 +1946,11 @@ fn draw_surfaces(
             // an explicit error, never a silent blank surface).
             return Err(renderer_status::ERR_UNSUPPORTED_SOURCE);
         }
-        let frame_handle = surface.source_reserved[0] as u64;
+        // The 64-bit capture frame handle is packed across the two
+        // reserved words (low 32 in [0], high 32 in [1] — the scene
+        // record's payload is u32 words).
+        let frame_handle = (surface.source_reserved[0] as u64)
+            | ((surface.source_reserved[1] as u64) << 32);
         // Resolve the frame's texture through the capture service (an
         // owned clone; the lock order is renderer -> capture).
         let (texture, _frame_width, _frame_height) =

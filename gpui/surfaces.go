@@ -34,8 +34,10 @@ const (
 	// surface.rs From<WindowsScreenCaptureFrame>): the renderer's draw
 	// path resolves the handle through the capture service under its
 	// device lock and imports the frame's destination texture directly
-	// (the same-device adapter). The frame handle travels in the
-	// surface record's 32-bit source payload word.
+	// (the same-device adapter). The 64-bit frame handle travels packed
+	// across the surface record's two reserved words (low 32 in
+	// reserved[0], high 32 in reserved[1] — the rev-11 fix-up; the
+	// rev-10 artifact carried only the low word).
 	SurfaceSourceCaptureFrame SurfaceSourceKind = 1
 )
 
@@ -44,16 +46,12 @@ var (
 	// ErrCaptureFrameHandleZero reports a capture surface painted with
 	// no published frame handle (the scene ABI rejects a zero payload).
 	ErrCaptureFrameHandleZero = errors.New("gpui: a capture surface requires a published frame handle")
-	// ErrCaptureFrameHandlePayload reports a capture frame handle that
-	// cannot travel through the scene surface record's source payload:
-	// the frozen ABI carries the handle in one 32-bit reserved word, so
-	// only handles with no bits above 32 (slot-0 streams) are paintable.
-	// The native slot registry appends a new slot per created stream
-	// until sixteen exist, so in a fresh process only the first stream
-	// ever created is paintable (a second concurrently live stream, or a
-	// later one before sixteen slots exist, lands in an unpaintable
-	// slot).
-	ErrCaptureFrameHandlePayload = errors.New("gpui: the capture frame handle does not fit the surface record's 32-bit source payload")
+	// ErrCaptureFrameHandlePayload is RETIRED (kept as an alias for
+	// compatibility): the rev-11 fix-up packs the full 64-bit handle
+	// across the record's two reserved words, so every stream's frames
+	// are paintable. The rev-10 frozen ABI carried only the low word
+	// (slot-0 streams only); nothing returns this error anymore.
+	ErrCaptureFrameHandlePayload = errors.New("gpui: RETIRED (rev-11): the capture frame handle now travels in two reserved words")
 )
 
 // PaintSurface paints a surface into the scene at the current z-index
@@ -116,13 +114,11 @@ func (s *Scene) PaintCaptureSurface(bounds Bounds, frame ScreenCaptureFrame, ctx
 	if frame.Handle == 0 {
 		return fmt.Errorf("gpui: PaintCaptureSurface: %w", ErrCaptureFrameHandleZero)
 	}
-	// The scene ABI carries the frame handle in a single 32-bit
-	// reserved word (source_reserved[0]; the remaining words must stay
-	// zero), so a handle with bits above 32 would be corrupted in
-	// transit — reject it before insertion.
-	if frame.Handle > 0xFFFFFFFF {
-		return fmt.Errorf("gpui: PaintCaptureSurface: frame handle %#x: %w", frame.Handle, ErrCaptureFrameHandlePayload)
-	}
+	// The scene ABI packs the 64-bit frame handle across the two
+	// reserved words (low 32 in source_reserved[0], high 32 in
+	// source_reserved[1], the third word zero) since the rev-11 fix-up;
+	// the rev-10 artifact carried only the low word, which restricted
+	// paintable handles to the first stream's early sequence numbers.
 	if s.kernel == nil || s.kernel.scene == nil {
 		return fmt.Errorf("gpui: PaintCaptureSurface: %w", ErrSceneClosed)
 	}
@@ -135,6 +131,7 @@ func (s *Scene) PaintCaptureSurface(bounds Bounds, frame ScreenCaptureFrame, ctx
 	rec.ContentMask = sceneBoundsRecord(mask)
 	rec.SourceTag = uint32(SurfaceSourceCaptureFrame)
 	rec.SourceReserved[0] = uint32(frame.Handle)
+	rec.SourceReserved[1] = uint32(frame.Handle >> 32)
 	if err := s.kernel.scene.InsertSurface(&rec, ctx.ElementOpacity); err != nil {
 		return fmt.Errorf("gpui: scene insert surface: %w", err)
 	}

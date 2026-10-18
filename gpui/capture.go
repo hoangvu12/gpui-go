@@ -66,15 +66,11 @@ package gpui
 //     frame; painting a frame the stream advanced past fails the draw
 //     with the renderer's typed bad-handle error (the explicit record,
 //     never a silent blank).
-//   - The scene surface record carries the capture frame handle in one
-//     32-bit reserved word; the native frame handle is 64-bit (the slot
-//     index lives at bits 44+), so only slot-0 stream frames are
-//     paintable (PaintCaptureSurface rejects the rest with a typed
-//     error). The native registry APPENDS a new slot per created stream
-//     until sixteen exist (vacancy-first recycling starts only after
-//     that), so in a fresh process only the FIRST stream ever created
-//     is paintable; after sixteen stream lifetimes slot 0 recycles with
-//     a bumped generation (still 32-bit) and becomes paintable again.
+//   - The scene surface record packs the 64-bit frame handle across
+//     its two reserved words (the rev-11 fix-up): every stream's
+//     frames are paintable. (The rev-10 frozen ABI carried only the
+//     low 32 bits, which restricted paintable frames to slot-0
+//     streams; that limitation is gone.)
 //   - The Surface element's style refinement carries no opacity in
 //     this port yet (Style has no opacity field), so the element paints
 //     with the ambient element opacity of the paint context instead of

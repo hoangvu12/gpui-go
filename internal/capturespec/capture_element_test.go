@@ -26,7 +26,6 @@ import (
 	"testing"
 
 	"gpui-go/gpui"
-	"gpui-go/internal/native"
 )
 
 // closeFloat compares two logical floats at a 1e-4 tolerance (the
@@ -285,21 +284,20 @@ func TestSurfaceElementCoverCropsThroughTheMask(t *testing.T) {
 	}
 }
 
-// TestSurfaceElementCaptureFrameSourceFrozenGate records the frozen
-// rev-10 answer for the capture-frame source: the element paints
-// through PaintCaptureSurface, whose tag-1 payload record is rejected
-// by the artifact's scene_insert_surface export (the pre-ticket28
-// check_surface demands zero reserved words), so the element's frame
-// paints no surface and the scene-level call surfaces the typed scene
-// bad-value error. The state-level insert validation and the
-// renderer's capture-surface draw path both accept exactly this
-// record, so the approved native one-line fix (check_surface) flips
-// this gate — the Go half needs no change.
-func TestSurfaceElementCaptureFrameSourceFrozenGate(t *testing.T) {
-	// The element path: the frame's paint error is logged (the pinned
-	// element surface has no error path), leaving no surface record.
+// TestSurfaceElementCaptureFrameSourceRecord pins the capture-frame
+// source record through the FIXED artifact (the rev-11 fix-up): the
+// element paints through PaintCaptureSurface, whose tag-1 payload
+// record (the 64-bit frame handle packed across the two reserved
+// words) is accepted by the scene insert, so the element's frame
+// paints exactly one surface record carrying the full handle and the
+// pinned snapped bounds/mask. (The rev-10 artifact rejected the tag-1
+// payload at the export gate — the frozen-gate record this test
+// replaced.)
+func TestSurfaceElementCaptureFrameSourceRecord(t *testing.T) {
+	// The element path: one surface record carrying the frame handle.
+	frame := syntheticFrame(100, 100)
 	scene := drawSurfaceWindow(t, func() gpui.AnyElement {
-		return gpui.NewSurfaceElement(gpui.CaptureSurfaceSource(syntheticFrame(100, 100))).
+		return gpui.NewSurfaceElement(gpui.CaptureSurfaceSource(frame)).
 			ID("surface").
 			ObjectFit(gpui.ObjectFitContain).
 			Size(gpui.PxLength(200), gpui.PxLength(100)).
@@ -309,29 +307,44 @@ func TestSurfaceElementCaptureFrameSourceFrozenGate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("scene.Surfaces: %v", err)
 	}
-	if len(records) != 0 {
-		t.Fatalf("the capture-frame element painted %d surfaces, want 0 (the frozen insert gate rejected the payload record)", len(records))
+	if len(records) != 1 {
+		t.Fatalf("the capture-frame element painted %d surfaces, want 1 (the fixed insert accepts the tag-1 payload)", len(records))
+	}
+	record := records[0]
+	if uint32(record.Source) != uint32(gpui.SurfaceSourceCaptureFrame) {
+		t.Fatalf("the record's source tag = %d, want the capture-frame tag", record.Source)
+	}
+	if record.SourceHandle != frame.Handle {
+		t.Fatalf("the record's source handle = %#x, want the frame handle %#x (the two-word packing)", record.SourceHandle, frame.Handle)
 	}
 
-	// The scene-level record: the typed bad-value error of the frozen
-	// gate (a future approved rebuild replaces this with success and
-	// the record's bounds assertions above become the capture frame's).
+	// The scene-level record: the same payload accepted directly.
 	direct, err := gpui.NewScene()
 	if err != nil {
 		t.Fatalf("gpui.NewScene: %v", err)
 	}
 	t.Cleanup(func() { _ = direct.Dispose() })
 	ctx := gpui.NewPaintContext(2, gpui.Bounds{Size: gpui.Size{Width: 200, Height: 100}}, 1)
-	err = direct.PaintCaptureSurface(gpui.Bounds{Size: gpui.Size{Width: 200, Height: 100}}, syntheticFrame(100, 100), ctx)
-	if !errors.Is(err, native.ErrSceneBadValue) {
-		t.Fatalf("PaintCaptureSurface with the capture-frame payload = %v, want the frozen-gate scene bad-value error", err)
+	if err := direct.PaintCaptureSurface(gpui.Bounds{Size: gpui.Size{Width: 200, Height: 100}}, frame, ctx); err != nil {
+		t.Fatalf("PaintCaptureSurface with the capture-frame payload = %v, want nil (the fixed insert accepts the tag-1 record)", err)
 	}
-	t.Logf("the frozen rev-10 gate: scene_insert_surface rejects the tag-1 payload record (%v); the state-level validation and the renderer's draw path both accept it — the native one-line fix lands the full loop", err)
+	if err := direct.Finish(); err != nil {
+		t.Fatalf("direct.Finish: %v", err)
+	}
+	records, _, err = direct.Surfaces()
+	if err != nil {
+		t.Fatalf("direct.Surfaces: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("the direct scene painted %d surfaces, want 1", len(records))
+	}
 }
 
 // TestSurfaceElementPayloadGuards pins the Go-side payload guards: a
-// zero handle and a handle that does not fit the scene ABI's 32-bit
-// source payload are typed errors before any native work.
+// zero handle is a typed error before any native work, and a FULL
+// 64-bit handle (bits above 32 — a higher-slot stream) now travels
+// through the two reserved words since the rev-11 fix-up (the rev-10
+// 32-bit guard is retired).
 func TestSurfaceElementPayloadGuards(t *testing.T) {
 	guardScene, err := gpui.NewScene()
 	if err != nil {
@@ -343,11 +356,28 @@ func TestSurfaceElementPayloadGuards(t *testing.T) {
 	if err := guardScene.PaintCaptureSurface(bounds, gpui.ScreenCaptureFrame{}, ctx); !errors.Is(err, gpui.ErrCaptureFrameHandleZero) {
 		t.Fatalf("PaintCaptureSurface with a zero handle = %v, want the typed zero-handle error", err)
 	}
-	outOfPayload := gpui.ScreenCaptureFrame{Handle: 1 << 44, ContentWidth: 100, ContentHeight: 100}
-	if err := guardScene.PaintCaptureSurface(bounds, outOfPayload, ctx); !errors.Is(err, gpui.ErrCaptureFrameHandlePayload) {
-		t.Fatalf("PaintCaptureSurface with a handle above 32 bits = %v, want the typed payload error", err)
-	}
 	if err := guardScene.PaintCaptureSurface(bounds, gpui.ScreenCaptureFrame{}, nil); err == nil {
 		t.Fatal("PaintCaptureSurface with a nil paint context = nil, want the nil-context error")
+	}
+	// The full 64-bit handle (a higher-slot stream frame): accepted and
+	// packed across the two reserved words.
+	wideHandle, err := gpui.NewScene()
+	if err != nil {
+		t.Fatalf("gpui.NewScene (wide): %v", err)
+	}
+	t.Cleanup(func() { _ = wideHandle.Dispose() })
+	full := gpui.ScreenCaptureFrame{Handle: (5 << 44) | (7 << 24) | 9, ContentWidth: 100, ContentHeight: 100}
+	if err := wideHandle.PaintCaptureSurface(bounds, full, ctx); err != nil {
+		t.Fatalf("PaintCaptureSurface with a full 64-bit handle = %v, want nil (the two-word packing)", err)
+	}
+	if err := wideHandle.Finish(); err != nil {
+		t.Fatalf("wideHandle.Finish: %v", err)
+	}
+	records, _, err := wideHandle.Surfaces()
+	if err != nil {
+		t.Fatalf("wideHandle.Surfaces: %v", err)
+	}
+	if len(records) != 1 || records[0].SourceHandle != full.Handle {
+		t.Fatalf("the wide-handle record = %+v, want the handle %#x packed", records, full.Handle)
 	}
 }

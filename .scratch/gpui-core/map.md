@@ -44,6 +44,11 @@ No unresolved planning decision prevents the specification. [Define conformance 
 
 Execution remains: capability enumeration, native feasibility and artifact size, the caret-coordinate oracle, real Windows/driver/IME/UIA behavior and numerical visual calibration. These have explicit owners in the implementation backlog. Reopen a contradicted decision with evidence; pending implementation proof is not a completed parity gate.
 
+- 2026-10-11 — [Ticket 22](../gpui-core-implementation/issues/22-uia-provider.md) resolved: the AccessKit UIA provider live end-to-end ([evidence](../../../evidence/ticket22-uia-provider.json)).
+- 2026-10-11 — [Ticket 28](../gpui-core-implementation/issues/28-capture.md) resolved: the Windows Graphics Capture chain with the pixel-verified full draw loop ([evidence](../../../evidence/ticket28-capture.json)).
+- 2026-10-11 — [Ticket 29](../gpui-core-implementation/issues/29-device-loss.md) resolved: the device-loss recovery with the bounded-retry rebuild ([evidence](../../../evidence/ticket29-device-loss.json)).
+- 2026-10-11 — [Ticket 32](../gpui-core-implementation/issues/32-render-to-image.md) resolved: the test-support render-to-image path with the headless profile trace ([evidence](../../../evidence/ticket32-render-to-image.json)).
+
 ## Out of scope
 
 - GPUI Base and other component-library ports: separate work after the core.

@@ -29,8 +29,11 @@ const (
 	// with capability bit 10, the capture service in reserved slot 10
 	// with capability bit 11, the renderer service v3 device-loss and
 	// render-to-image entries, the distinct AtlasKey::Svg variant)
-	// bumped it to 10.
-	nativeRevision uint32 = 10
+	// bumped it to 10; the wave-4 fix-up (the Go workers' honest
+	// findings: the scene surface export gate, the ERR_RECOVERING
+	// status move to -13, the device-rebuild resource order, the a11y
+	// action-mask decode) bumped it to 11.
+	nativeRevision uint32 = 11
 	// maxBufferLen mirrors GPUI_GO_MAX_BUFFER_LEN.
 	maxBufferLen = 4096
 	// maxTextLen mirrors the text service's MAX_TEXT_BYTES (1 MiB text

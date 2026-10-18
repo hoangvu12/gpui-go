@@ -592,21 +592,17 @@ func a11yActionTag(action A11yAction) (uint32, error) {
 	}
 }
 
-// a11yMaskBit encodes one action tag into the serialized actions mask
-// under the FROZEN native decode (a11y.rs decode_update: the bit at
-// index i is read as the action whose tag equals the bit's value, so a
-// tag is representable exactly when it is a power of two >= 2 — the
-// bit itself IS the tag). Non-representable tags (Click, Blur,
-// Decrement, SetValue, ReplaceSelectedText, ShowContextMenu) return
-// zero: the frozen decoder cannot advertise them at all, so the
-// serializer omits them rather than fail the publication.
+// a11yMaskBit encodes one action tag into the serialized actions
+// mask: bit i-1 set means the action with tag i is advertised (the
+// tag-PRESENCE set the rev-11 fix-up established; the rev-10 decoder
+// misread the bit VALUE as the tag, which only worked for power-of-two
+// tags and silently excluded Click, Blur, Decrement, SetValue,
+// ReplaceSelectedText and ShowContextMenu from the advertisement).
 func a11yMaskBit(tag uint32) uint32 {
-	switch tag {
-	case 2, 4, 8: // Focus, Increment, SetTextSelection
-		return tag
-	default:
+	if tag < 1 || tag > 9 {
 		return 0
 	}
+	return 1 << (tag - 1)
 }
 
 // a11yActionOfTag maps a native action tag back to the port's action.

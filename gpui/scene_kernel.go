@@ -435,6 +435,9 @@ func (k *SceneKernel) Surfaces() ([]SurfaceRecord, []float32, error) {
 			ContentMask: sceneBoundsValue(rec.ContentMask),
 			Source:      SurfaceSourceTag(rec.SourceTag),
 		}
+		if rec.SourceTag == uint32(SurfaceSourceCaptureFrame) {
+			out[i].SourceHandle = uint64(rec.SourceReserved[0]) | uint64(rec.SourceReserved[1])<<32
+		}
 	}
 	return out, opacities, nil
 }

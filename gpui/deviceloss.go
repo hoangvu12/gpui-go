@@ -101,12 +101,11 @@ import (
 // ([Renderer.MarkDrawable], the pin's mark_drawable).
 var ErrRendererRecovering = fmt.Errorf("gpui: frame skipped: the renderer is recovering from device loss; a forced redraw is pending: %w", native.ErrRendererRecovering)
 
-// recoveryGateStatus is the native ERR_RECOVERING status code. It
-// shares -12 with ERR_SCENE (the native-side collision recorded above),
-// so the refusal is confirmed by the armed recovery gate: the gate
-// check precedes every other -12 source in the native present/draw
-// entries.
-const recoveryGateStatus = -12
+// recoveryGateStatus is the native ERR_RECOVERING status code (-13
+// since the rev-11 fix-up; the rev-10 value -12 collided with
+// ERR_SCENE, which this probe used to disambiguate). The gate probe
+// stays as a belt-and-braces confirmation.
+const recoveryGateStatus = -13
 
 // isRecoveryRefusal reports whether a native renderer error is the
 // recovery-gate refusal rather than the colliding scene rejection.
