@@ -4,7 +4,7 @@
 
 Build a Go port with full 1:1 GPUI-CE core behavior, familiar typed/fluent authoring and approximately 98% visual closeness. The user already likes GPUI-CE; Rust development build time and disk consumption motivate the port. The visual intent is not a pixel-match or SSIM threshold. Base and other component libraries come after core; implementation stages do not reduce the destination to a showcase or app-specific subset.
 
-The permanent workspace is `C:\Users\ADMIN\Desktop\nguyenvu\gpui-go`. The local module is `gpui-go`, with root package name `gpui` and Go floor 1.27.0. Public branding, module publication and project licensing remain future publication work.
+The permanent workspace is `C:\Users\ADMIN\Desktop\nguyenvu\gpui-go`. The module is `github.com/hoangvu12/gpui-go` (package `gpui` under `gpui/`), with Go floor 1.27.0. It is published under the Apache-2.0 license, starting at tag v0.1.0.
 
 ## Current phase
 
@@ -52,4 +52,4 @@ No numerical visual threshold is frozen before measuring reference repeatability
 
 ## References
 
-[Research index](README.md), [glossary](CONTEXT.md), [Wayfinder map](.scratch/gpui-core/map.md), [specification](.scratch/gpui-core/spec.md), [implementation plan](.scratch/gpui-core-implementation/plan.md), and [validation evidence](evidence/README.md).
+[Research index](docs/research-index.md), [glossary](CONTEXT.md), [Wayfinder map](.scratch/gpui-core/map.md), [specification](.scratch/gpui-core/spec.md), [implementation plan](.scratch/gpui-core-implementation/plan.md), and [validation evidence](evidence/README.md).
