@@ -4,7 +4,7 @@ Parent: ../plan.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: wave-4 orchestrator chat (Roboco)
 Blocked by: 19, 20, 22, 24, 25, 26, 27, 29
 
@@ -39,4 +39,14 @@ Deliver this complete observable path against the [implementation specification]
 ## Comments
 
 - 2026-10-05 — Created under the user's authorization to finish Wayfinder, the specification and local implementation tickets. Routine details are delegated; a discovered scope or architecture contradiction must reopen the affected decision with evidence.
+
+## Answer
+
+RESOLVED (2026-10-18, wave 4). The cross-service close/cancellation/shutdown corpus is live:
+
+- **Corpus**: internal/shutdownspec — 11 tests over the deterministic test app, real Win32 windows and the real GPU/capture/UIA/modal services (FAIL not skip, synthetic messages only). Deterministic: the window-close cascade (scope close → lease release → focus release → element-runtime teardown, at the flush boundary), the two-window shared-entity close with exactly-once release, the window-scope delivery racing the window close, the shutdown drain (effect flushing at update boundaries, the unresolved-execution record that survives GC/time, new-work rejection, the late terminal completion, idempotence), the abandoned frame build. Real: the multiwindow close/reopen with delayed GPU completion (submissions retiring after window removal — the ledger's post-close exactly-once terminal record, the stale-lease generation refusals, the surface-detach ordering, the double-close guards, the ledger reconciliation), the capture stream stopping/destroying under a live scene reference (stop is not release; the destroy is the typed bad-handle record; GC/time is not release), both a11y teardowns (the adapter destroyed exactly once at window close; the explicit teardown's late WM_GETOBJECT falling to DefWindowProc; the generation-checked dispatch refusals), the modal prompt pumping during a full close cascade (both scopes closed during the pump, the outcome discarded, the quit-on-last during the pump, App.Run's clean return), and the honest quarantine record (the native ERR_QUARANTINE not forceable — the surrounding guards pinned).
+- **Fixed in this slice**: the terminal retirement records were lost across App.Shutdown (a queued App.Spawn task cancelled by the drain — `Submission.WaitForRetirement` stuck in `retiring`; minimized reproducer retained) and a post-shutdown dispatch panicked the pacing worker; the records now ride the host's foreground queue, which survives app shutdown. The window-close element-runtime teardown (render.go's RemoveWindowView path) was unwired for real windows — now hooked in removeWindow.
+- **Recorded, not fixed (frozen DLL)**: the pre-existing native heap corruption under mixed COM churn (a real IFileDialog + a11y adapters + WGC in one process; minimized reproducers in TRACES.md), the 8-slot atlas budget, the undisposed abandoned/last-scene handles, the real-mode virtual-clock timer limitation. Trace notes with pin citations: internal/shutdownspec/TRACES.md.
+
+Evidence: [evidence/ticket30-shutdown-integration.json](../../../evidence/ticket30-shutdown-integration.json) (executed results; the honest blocked rows; the machine's mouse discipline).
 
