@@ -18,7 +18,7 @@ import (
 	"errors"
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // The shape fixtures (the native suite's oracle documents; pixel

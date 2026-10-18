@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // This file ports the executed-behavior controls of the authoring round

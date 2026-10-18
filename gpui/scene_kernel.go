@@ -5,7 +5,7 @@ import (
 	"math"
 	"sync"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // This file is the kernel seam of the scene slice (ticket08):

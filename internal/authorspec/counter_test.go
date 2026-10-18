@@ -3,7 +3,7 @@ package authorspec
 import (
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // counterView is a window root view over the Counter entity: it renders

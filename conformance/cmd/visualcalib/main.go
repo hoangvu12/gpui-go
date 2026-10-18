@@ -16,7 +16,7 @@ import (
 	"os"
 	"time"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // nativeManifestIdentity reads the embedded manifest's recorded

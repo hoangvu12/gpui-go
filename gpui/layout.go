@@ -7,7 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // This file is the Go layout adapter over the native Taffy service

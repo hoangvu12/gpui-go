@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // counterFixture is a small helper app with one entity per test.

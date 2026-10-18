@@ -87,7 +87,7 @@ import (
 	"sync"
 	"time"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // ---------------------------------------------------------------------------

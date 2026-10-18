@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // newCacheFixture builds an app with one embedded asset, a test window

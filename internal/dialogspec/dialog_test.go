@@ -17,7 +17,7 @@ import (
 	"strings"
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // errBoom is the injected platform failure.

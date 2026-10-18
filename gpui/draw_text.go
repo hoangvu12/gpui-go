@@ -51,7 +51,7 @@ import (
 	"fmt"
 	"math"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // subpixelVariantsX/Y mirror the pinned SUBPIXEL_VARIANTS_X/Y (4, 1).

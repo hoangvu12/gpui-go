@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"math"
 
-	"gpui-go/conformance"
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/conformance"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // RunScenePainting executes the envelope's scene cases against the real

@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"math"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // ---------------------------------------------------------------------------

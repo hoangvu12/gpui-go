@@ -7,8 +7,8 @@ package portfixture
 // stops compiling.
 
 import (
-	"gpui-go/conformance"
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/conformance"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 var (

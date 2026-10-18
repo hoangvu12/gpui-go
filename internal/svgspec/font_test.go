@@ -26,7 +26,7 @@ import (
 	"os"
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // The pinned bundled-font asset paths (svg_renderer.rs

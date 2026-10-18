@@ -25,7 +25,7 @@ import (
 	"errors"
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // closeFloat compares two logical floats at a 1e-4 tolerance (the

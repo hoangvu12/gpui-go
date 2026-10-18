@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"gpui-go/gpui"
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // The real-window composite draw of ticket16: a scene with a background

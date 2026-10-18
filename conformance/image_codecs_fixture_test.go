@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"testing"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // imageCodecsFixturePath is the fx-0008 fixture envelope, and

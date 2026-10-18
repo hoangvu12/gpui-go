@@ -33,7 +33,7 @@ import (
 	"time"
 	"unicode/utf16"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // ---------------------------------------------------------------------------

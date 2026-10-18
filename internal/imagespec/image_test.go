@@ -22,7 +22,7 @@ import (
 	"os"
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // mustCodec constructs the codec (the native image service + atlas).

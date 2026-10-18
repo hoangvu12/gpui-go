@@ -3,8 +3,8 @@ package layoutspec
 import (
 	"testing"
 
-	"gpui-go/authoring"
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/authoring"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // This file is ticket15's authoring-path layout capability slice: the

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // This file drives the asset surfaces from REAL elements through the

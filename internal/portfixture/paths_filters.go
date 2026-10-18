@@ -25,9 +25,9 @@ import (
 	"fmt"
 	"math"
 
-	"gpui-go/conformance"
-	"gpui-go/gpui"
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/conformance"
+	"github.com/hoangvu12/gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // RunPathsFilters executes the envelope's paths-filters cases against

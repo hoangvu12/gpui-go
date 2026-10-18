@@ -11,7 +11,7 @@ import (
 	"os"
 	"strings"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 func main() {

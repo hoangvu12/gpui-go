@@ -15,7 +15,7 @@ package focusspec
 import (
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // ---------------------------------------------------------------------------

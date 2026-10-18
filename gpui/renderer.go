@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // This file owns the renderer slice of the runtime (ticket07): the Go

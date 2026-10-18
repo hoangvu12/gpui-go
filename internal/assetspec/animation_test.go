@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // animatedImage builds a synthetic decoded image with exact rational

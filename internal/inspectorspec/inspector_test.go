@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // This file is the inspector corpus (ticket27): the element-id paths

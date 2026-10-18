@@ -30,7 +30,7 @@ import (
 	"time"
 	"unsafe"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // Win32 message-pump bindings (the dialogspec real corpus pattern:

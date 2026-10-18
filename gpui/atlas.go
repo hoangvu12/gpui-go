@@ -25,7 +25,7 @@ import (
 	"math"
 	"sync"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // AtlasTextureKind selects the atlas pool (the pinned

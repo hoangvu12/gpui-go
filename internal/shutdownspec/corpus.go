@@ -43,7 +43,7 @@ import (
 	"testing"
 	"time"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // ---------------------------------------------------------------------------

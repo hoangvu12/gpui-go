@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // This file closes ticket14's retained-callback and large-list

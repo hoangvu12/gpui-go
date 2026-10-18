@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"gpui-go/conformance/ledger"
+	"github.com/hoangvu12/gpui-go/conformance/ledger"
 )
 
 func main() {

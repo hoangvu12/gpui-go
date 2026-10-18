@@ -4,7 +4,7 @@ Read [PROJECT.md](PROJECT.md) for confirmed intent and current scope before star
 
 When resuming after compaction, read [the resume note](handoff/resume.md) for the active decision, completed work, validation limits, and next step.
 
-For source facts and architecture tradeoffs, use the [research index](README.md) and its pinned evidence. Research recommendations are proposals until accepted by the user.
+For source facts and architecture tradeoffs, use the [research index](docs/research-index.md) and its pinned evidence. Research recommendations are proposals until accepted by the user.
 
 ## Agent skills
 

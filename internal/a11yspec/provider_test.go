@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // Win32 bindings the corpus brings itself (the desktopspec pattern:

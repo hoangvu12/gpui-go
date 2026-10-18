@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // Renderer tests (ticket07): real windows through the real Win32 host,

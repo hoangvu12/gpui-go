@@ -25,8 +25,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"gpui-go/conformance"
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/conformance"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // The render-mode spellings (the fixture input names).

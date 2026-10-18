@@ -1,0 +1,10 @@
+gpui-go
+Copyright (c) 2026 hoangvu12
+
+gpui-go is a Go port of GPUI-CE (https://github.com/gpui-ce/gpui-ce),
+Copyright 2022 - 2025 Zed Industries, Inc., licensed under the Apache
+License, Version 2.0.
+
+The native library embedded at internal/native/artifacts/gpui_go_native.dll
+is built from GPUI-CE and other third-party crates. Their licenses and
+notices are listed in THIRD_PARTY_NOTICES.md.

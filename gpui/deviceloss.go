@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // This file is ticket29's Go half: the device-loss detection and

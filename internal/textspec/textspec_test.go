@@ -31,8 +31,8 @@ import (
 	"runtime"
 	"testing"
 
-	"gpui-go/conformance"
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/conformance"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // The recorded fx-0004 observations these tests pin
