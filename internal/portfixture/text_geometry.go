@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"strings"
 
-	"gpui-go/conformance"
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/conformance"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // The pinned Windows platform's text stack construction facts

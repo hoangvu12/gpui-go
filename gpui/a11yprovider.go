@@ -81,7 +81,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // wmGetObject is WM_GETOBJECT (winuser.h 0x003D): the assistive

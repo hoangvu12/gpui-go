@@ -15,7 +15,7 @@ import (
 	"runtime"
 	"testing"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // TestDefaultLineHeightGoldenRatio pins the reference text style's

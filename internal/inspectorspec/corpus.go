@@ -21,7 +21,7 @@ package inspectorspec
 import (
 	"fmt"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // listHeight is the virtualized list's definite height: 30px header +

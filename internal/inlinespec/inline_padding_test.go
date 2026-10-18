@@ -3,8 +3,8 @@ package inlinespec
 import (
 	"testing"
 
-	"gpui-go/authoring"
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/authoring"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // paddedView is the proportional-padding corpus: a baseline-aligned

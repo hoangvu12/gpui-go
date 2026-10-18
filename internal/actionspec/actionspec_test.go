@@ -17,7 +17,7 @@ import (
 	"strings"
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // increment is a unit action declared from an external package with the

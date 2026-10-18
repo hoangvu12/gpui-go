@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // This file is the port's Go half of ticket32: the render-to-image

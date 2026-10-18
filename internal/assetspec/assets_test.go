@@ -27,7 +27,7 @@ import (
 	"sort"
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // pngBytes encodes a WxH RGBA image with red/blue vertical halves (the

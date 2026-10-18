@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // This file pins the layout adapter's pure unit semantics: the ported

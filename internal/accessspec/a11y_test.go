@@ -3,7 +3,7 @@ package accessspec
 import (
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // The accessibility corpus (ticket21): a real counter/editor drawn

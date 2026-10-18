@@ -17,15 +17,15 @@ import (
 )
 
 type ledgerRow struct {
-	Symbol   string   `json:"symbol"`
-	Kind     string   `json:"kind"`
-	Crate    string   `json:"crate"`
-	Source   string   `json:"source"`
-	Profile  []string `json:"profile"`
-	WinApp   bool     `json:"windows_applicable"`
-	Owner    string   `json:"owner"`
-	State    string   `json:"state"`
-	Disposition string `json:"disposition"`
+	Symbol      string   `json:"symbol"`
+	Kind        string   `json:"kind"`
+	Crate       string   `json:"crate"`
+	Source      string   `json:"source"`
+	Profile     []string `json:"profile"`
+	WinApp      bool     `json:"windows_applicable"`
+	Owner       string   `json:"owner"`
+	State       string   `json:"state"`
+	Disposition string   `json:"disposition"`
 }
 
 type ledgerFile struct {
@@ -37,42 +37,42 @@ type ledgerFile struct {
 // file and the gate class that evidence records (the ticket-33 audit
 // basis: every resolved family's executed gates).
 var ticketEvidence = map[string]struct {
-	Evidence   string
-	GateClass  string
+	Evidence  string
+	GateClass string
 }{
-	"01": {"ticket01-reference-harness.json", "exact: the recorded reference fixtures (fx-0001..fx-0008 byte-deterministic, bit-exact through CompareTraces) + the capability ledger itself"},
-	"02": {"ticket02-native-bootstrap.json", "exact: the loader round trips + 16 loader tests over the real DLL"},
-	"03": {"ticket03-scoped-entities.json", "exact: fx-0001 effects 47/47 + 39 ownership tests"},
-	"04": {"ticket04-scoped-tasks.json", "behavior: 24 scoped-task tests (exactly-once, generations, drain)"},
-	"05": {"ticket05-win32-window.json", "behavior: 7 real-window tests, 10/10 runs, the deadlock fix"},
-	"06": {"ticket06-layout-roundtrip.json", "exact: fx-0001 54/54 + fx-0002 63/63 bit-exact + layoutspec"},
-	"07": {"ticket07-present-and-retire.json", "behavior: the real-GPU ledger proofs (pending-then-completed retirement)"},
-	"08": {"ticket08-scene-kernel.json", "exact: fx-0003 142/142 + scenespec"},
-	"09": {"ticket09-text-geometry.json", "exact: fx-0004 339/339 + textspec"},
-	"10": {"ticket10-draw-text.json", "exact: fx-0005 + the real-window pixel verification"},
-	"11": {"ticket11-authoring-counter.json", "exact: fx-0006 108/108 + authorspec"},
-	"12": {"ticket12-action-registry.json", "behavior: 27 registry tests"},
-	"13": {"ticket13-focus-keyboard.json", "behavior: 17 reference test ports + focusspec 12"},
-	"14": {"ticket14-retained-scroll.json", "behavior: 18 listspec tests"},
-	"15": {"ticket15-inline-layout.json", "behavior: 11 inlinespec (6 deterministic + 4 real-window) + 5 authoring"},
-	"16": {"ticket16-paths-filters.json", "exact: fx-0007 428/428 + the pixel-verified composite draw"},
-	"17": {"ticket17-image-decode.json", "exact: fx-0008 (landed, bit-exact) + 20 codec tests incl. every EXIF orientation"},
-	"18": {"ticket18-asset-loading.json", "behavior: assetspec 46 + gpui 150"},
-	"19": {"ticket19-svg-fonts.json", "exact: 6 native + 14 svgspec (the distinct AtlasKey::Svg key since rev 11)"},
-	"20": {"ticket20-ime-editor.json", "behavior: real-window caret/DPI/reentry/teardown fixtures; CJK availability recorded"},
-	"21": {"ticket21-accessibility-tree.json", "behavior: 12 accessspec + the identity-policy tests"},
-	"22": {"ticket22-uia-provider.json", "behavior: a11yspec 9 + the real Narrator evidence"},
-	"23": {"ticket23-clipboard.json", "behavior: clipspec 11 (the real system clipboard)"},
-	"24": {"ticket24-drop-touchpad.json", "behavior: 16 tests; the touchpad honestly recorded unavailable (no hardware)"},
-	"25": {"ticket25-dialogs-credentials.json", "behavior: 34 tests (the real COM dialogs + advapi32 credentials)"},
-	"26": {"ticket26-desktop-operations.json", "behavior: 18 real-window + 20 in-package"},
-	"27": {"ticket27-inspector.json", "behavior: 30 tests (25 spec + 5 unit)"},
-	"28": {"ticket28-capture.json", "behavior+exact: capturespec 11 incl. the pixel-verified full capture→draw loop"},
-	"29": {"ticket29-device-loss.json", "behavior: devicelossspec 10 (the injected-loss end-to-end recovery)"},
-	"30": {"ticket30-shutdown-integration.json", "behavior: shutdownspec 11 + TRACES.md (the cross-service corpus)"},
-	"31": {"ticket31-consumer-delivery.json", "delivery: the clean consumer gates (the embed/verify pipeline)"},
-	"32": {"ticket32-render-to-image.json", "exact: headlessspec 9 (the pinned test patterns, the row-pitch gates)"},
-	"34": {"ticket34-triage.json", "exact: the 351 support rows dispositioned (the ledger's own families)"},
+	"01":             {"ticket01-reference-harness.json", "exact: the recorded reference fixtures (fx-0001..fx-0008 byte-deterministic, bit-exact through CompareTraces) + the capability ledger itself"},
+	"02":             {"ticket02-native-bootstrap.json", "exact: the loader round trips + 16 loader tests over the real DLL"},
+	"03":             {"ticket03-scoped-entities.json", "exact: fx-0001 effects 47/47 + 39 ownership tests"},
+	"04":             {"ticket04-scoped-tasks.json", "behavior: 24 scoped-task tests (exactly-once, generations, drain)"},
+	"05":             {"ticket05-win32-window.json", "behavior: 7 real-window tests, 10/10 runs, the deadlock fix"},
+	"06":             {"ticket06-layout-roundtrip.json", "exact: fx-0001 54/54 + fx-0002 63/63 bit-exact + layoutspec"},
+	"07":             {"ticket07-present-and-retire.json", "behavior: the real-GPU ledger proofs (pending-then-completed retirement)"},
+	"08":             {"ticket08-scene-kernel.json", "exact: fx-0003 142/142 + scenespec"},
+	"09":             {"ticket09-text-geometry.json", "exact: fx-0004 339/339 + textspec"},
+	"10":             {"ticket10-draw-text.json", "exact: fx-0005 + the real-window pixel verification"},
+	"11":             {"ticket11-authoring-counter.json", "exact: fx-0006 108/108 + authorspec"},
+	"12":             {"ticket12-action-registry.json", "behavior: 27 registry tests"},
+	"13":             {"ticket13-focus-keyboard.json", "behavior: 17 reference test ports + focusspec 12"},
+	"14":             {"ticket14-retained-scroll.json", "behavior: 18 listspec tests"},
+	"15":             {"ticket15-inline-layout.json", "behavior: 11 inlinespec (6 deterministic + 4 real-window) + 5 authoring"},
+	"16":             {"ticket16-paths-filters.json", "exact: fx-0007 428/428 + the pixel-verified composite draw"},
+	"17":             {"ticket17-image-decode.json", "exact: fx-0008 (landed, bit-exact) + 20 codec tests incl. every EXIF orientation"},
+	"18":             {"ticket18-asset-loading.json", "behavior: assetspec 46 + gpui 150"},
+	"19":             {"ticket19-svg-fonts.json", "exact: 6 native + 14 svgspec (the distinct AtlasKey::Svg key since rev 11)"},
+	"20":             {"ticket20-ime-editor.json", "behavior: real-window caret/DPI/reentry/teardown fixtures; CJK availability recorded"},
+	"21":             {"ticket21-accessibility-tree.json", "behavior: 12 accessspec + the identity-policy tests"},
+	"22":             {"ticket22-uia-provider.json", "behavior: a11yspec 9 + the real Narrator evidence"},
+	"23":             {"ticket23-clipboard.json", "behavior: clipspec 11 (the real system clipboard)"},
+	"24":             {"ticket24-drop-touchpad.json", "behavior: 16 tests; the touchpad honestly recorded unavailable (no hardware)"},
+	"25":             {"ticket25-dialogs-credentials.json", "behavior: 34 tests (the real COM dialogs + advapi32 credentials)"},
+	"26":             {"ticket26-desktop-operations.json", "behavior: 18 real-window + 20 in-package"},
+	"27":             {"ticket27-inspector.json", "behavior: 30 tests (25 spec + 5 unit)"},
+	"28":             {"ticket28-capture.json", "behavior+exact: capturespec 11 incl. the pixel-verified full capture→draw loop"},
+	"29":             {"ticket29-device-loss.json", "behavior: devicelossspec 10 (the injected-loss end-to-end recovery)"},
+	"30":             {"ticket30-shutdown-integration.json", "behavior: shutdownspec 11 + TRACES.md (the cross-service corpus)"},
+	"31":             {"ticket31-consumer-delivery.json", "delivery: the clean consumer gates (the embed/verify pipeline)"},
+	"32":             {"ticket32-render-to-image.json", "exact: headlessspec 9 (the pinned test patterns, the row-pitch gates)"},
+	"34":             {"ticket34-triage.json", "exact: the 351 support rows dispositioned (the ledger's own families)"},
 	"core-structure": {"wave4-native-rotation.json", "structure: the module/ABI rows the bootstrap owns"},
 }
 

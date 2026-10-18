@@ -4,7 +4,7 @@ import (
 	"runtime"
 	"testing"
 
-	"gpui-go/conformance"
+	"github.com/hoangvu12/gpui-go/conformance"
 )
 
 const (

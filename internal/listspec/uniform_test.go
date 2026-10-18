@@ -3,7 +3,7 @@ package listspec
 import (
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // This file exercises the uniform list (ticket14's virtualized-list

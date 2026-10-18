@@ -37,7 +37,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"gpui-go/authoring"
+	"github.com/hoangvu12/gpui-go/authoring"
 )
 
 // StyleRefinement is the authoring style refinement the div composes

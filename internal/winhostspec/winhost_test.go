@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // waitFor polls cond until it holds or the timeout expires. Conditions

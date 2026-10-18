@@ -19,7 +19,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"gpui-go/conformance"
+	"github.com/hoangvu12/gpui-go/conformance"
 )
 
 func fatal(err error) {

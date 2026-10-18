@@ -3,7 +3,7 @@ package inspectorspec
 import (
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // inspectorFixture is one test window with its virtualized corpus.

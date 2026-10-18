@@ -24,7 +24,7 @@ package a11yspec
 import (
 	"fmt"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // ---------------------------------------------------------------------------

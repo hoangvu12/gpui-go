@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"gpui-go/authoring"
+	"github.com/hoangvu12/gpui-go/authoring"
 )
 
 // These types deliberately live outside package authoring. Promoted methods

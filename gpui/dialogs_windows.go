@@ -33,7 +33,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	wincred "gpui-go/internal/wincred"
+	wincred "github.com/hoangvu12/gpui-go/internal/wincred"
 )
 
 // ---------------------------------------------------------------------------

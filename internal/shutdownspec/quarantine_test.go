@@ -28,8 +28,8 @@ import (
 	"testing"
 	"time"
 
-	"gpui-go/gpui"
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // TestRendererCloseGuardsAndAbandonmentRecord pins the close-side

@@ -18,8 +18,8 @@ import (
 	"errors"
 	"testing"
 
-	"gpui-go/gpui"
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // newEngine creates a layout engine, disposed at cleanup.

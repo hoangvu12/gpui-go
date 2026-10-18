@@ -5,7 +5,7 @@ import (
 	"image/jpeg"
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // The full EXIF orientation suite: one committed JPEG per orientation

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // This file is the port's surface half of ticket16 and ticket28: the

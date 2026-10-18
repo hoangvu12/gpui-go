@@ -26,7 +26,7 @@ import (
 	"time"
 	"unsafe"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // ---------------------------------------------------------------------------

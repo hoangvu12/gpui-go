@@ -288,8 +288,8 @@ type imageMeasure struct {
 // UIA platform adapter; the one new crate of the rebuild — resolving
 // against the SAME windows 0.62.2 family).
 type a11yMeasure struct {
-	Accesskit         registryMeasure `json:"accesskit"`
-	AccesskitWindows  registryMeasure `json:"accesskit_windows"`
+	Accesskit        registryMeasure `json:"accesskit"`
+	AccesskitWindows registryMeasure `json:"accesskit_windows"`
 }
 
 type svgMeasure struct {

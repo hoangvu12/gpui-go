@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"strings"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // a11yHandlerRuns counts listener invocations independent of entity

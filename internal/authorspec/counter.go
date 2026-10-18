@@ -17,8 +17,8 @@ package authorspec
 import (
 	"fmt"
 
-	"gpui-go/authoring"
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/authoring"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // Increment is the counter's command: please increment.

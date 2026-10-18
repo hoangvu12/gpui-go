@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // resolvedDraw draws one frame, drains the scheduler (completing any

@@ -37,7 +37,7 @@ import (
 	"sort"
 	"strings"
 
-	"gpui-go/internal/consumerspec"
+	"github.com/hoangvu12/gpui-go/internal/consumerspec"
 )
 
 func main() {

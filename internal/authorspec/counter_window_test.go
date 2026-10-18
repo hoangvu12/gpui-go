@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // This file is the ticket11 acceptance slice: a REAL two-window counter

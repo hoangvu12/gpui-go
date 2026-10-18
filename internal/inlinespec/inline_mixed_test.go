@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // realMixedView is the mixed-font-size corpus: normal text, an Inline

@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"gpui-go/conformance"
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/conformance"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // pinnedGpuiCommit is the GPUI-CE source the port targets; it must match

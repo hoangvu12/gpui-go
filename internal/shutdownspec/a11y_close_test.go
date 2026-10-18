@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/gpui"
 )
 
 // wmGetObject is WM_GETOBJECT (winuser.h 0x003D).

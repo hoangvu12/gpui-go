@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // This file is the port's path half of ticket16: the PathBuilder API of
