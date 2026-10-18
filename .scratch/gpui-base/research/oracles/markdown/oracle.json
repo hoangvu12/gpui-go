@@ -1,0 +1,596 @@
+{
+  "t01_same": [
+    "Root 0..22 ",
+    "  Paragraph 0..22 ",
+    "    Strong 0..8 ",
+    "      Text 2..6 \"same\"",
+    "    Text 8..14 \" then \"",
+    "    Strong 14..22 ",
+    "      Text 16..20 \"same\""
+  ],
+  "t02_same": [
+    "Root 0..22 ",
+    "  Paragraph 0..22 ",
+    "    Strong 0..8 ",
+    "      Text 2..6 \"same\"",
+    "    Text 8..14 \" then \"",
+    "    Strong 14..22 ",
+    "      Text 16..20 \"same\""
+  ],
+  "t03_plain": [
+    "Root 0..10 ",
+    "  Paragraph 0..10 ",
+    "    Text 0..10 \"plain text\""
+  ],
+  "t08_code": [
+    "Root 0..8199 ",
+    "  Code 0..8199 lang=None \"x\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\\nx\""
+  ],
+  "t08_long": [
+    "Root 0..8195 ",
+    "  Paragraph 0..8195 ",
+    "    Text 0..8195 \"a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a end\""
+  ],
+  "t09_escape_entity": [
+    "Root 0..11 ",
+    "  Paragraph 0..11 ",
+    "    Text 0..11 \"a* & b\""
+  ],
+  "t10_cross": [
+    "Root 0..19 ",
+    "  Paragraph 0..19 ",
+    "    Text 0..5 \"left \"",
+    "    Strong 5..13 ",
+    "      Text 7..11 \"bold\"",
+    "    Text 13..19 \" right\""
+  ],
+  "t11_code_in_strong": [
+    "Root 0..21 ",
+    "  Paragraph 0..21 ",
+    "    Strong 0..21 ",
+    "      Text 2..7 \"left \"",
+    "      InlineCode 7..13 \"code\"",
+    "      Text 13..19 \" right\""
+  ],
+  "t12_code": [
+    "Root 0..8 ",
+    "  Paragraph 0..8 ",
+    "    InlineCode 0..6 \"code\"",
+    "    Text 6..8 \" x\""
+  ],
+  "t12_entity": [
+    "Root 0..7 ",
+    "  Paragraph 0..7 ",
+    "    InlineCode 0..7 \"&amp;\""
+  ],
+  "t12_padded": [
+    "Root 0..18 ",
+    "  Paragraph 0..18 ",
+    "    InlineCode 0..18 \"code ` value\""
+  ],
+  "t13_footnote": [
+    "Root 0..34 ",
+    "  Paragraph 0..19 ",
+    "    Text 0..6 \"before\"",
+    "    FootnoteReference 6..13 id=\"note\"",
+    "    Text 13..19 \" after\"",
+    "  FootnoteDefinition 21..34 id=\"note\"",
+    "    Paragraph 30..34 ",
+    "      Text 30..34 \"body\""
+  ],
+  "t14_mdx_text": [
+    "Root 0..24 ",
+    "  Paragraph 0..24 ",
+    "    Text 0..7 \"before \"",
+    "    MdxTextExpression 7..18 \"value + 1\"",
+    "    Text 18..24 \" after\""
+  ],
+  "t15_mdx_flow": [
+    "Root 0..15 ",
+    "  MdxFlowExpression 0..15 \"\\nvalue + 1\\n\""
+  ],
+  "t16_math_block": [
+    "Root 0..11 ",
+    "  Math 0..11 \"x + y\""
+  ],
+  "t17_two_paras": [
+    "Root 0..17 ",
+    "  Paragraph 0..6 ",
+    "    Text 0..6 \"mapped\"",
+    "  Paragraph 8..17 ",
+    "    Text 8..17 \"A & B\""
+  ],
+  "t18_fence_info": [
+    "Root 0..16 ",
+    "  Code 0..16 lang=Some(\"rust\") \"rust\""
+  ],
+  "t19_close_candidate": [
+    "Root 0..17 ",
+    "  Code 0..17 lang=Some(\"text\") \"```\""
+  ],
+  "t20_indented": [
+    "Root 0..8 ",
+    "  Code 0..8 lang=None \"rust\""
+  ],
+  "t21_indented_multi": [
+    "Root 0..25 ",
+    "  Code 0..25 lang=None \"one\\ntwo\\nthree\""
+  ],
+  "t22_fence_in_list": [
+    "Root 0..27 ",
+    "  List 0..27 ordered=false start=None spread=false",
+    "    ListItem 0..27 checked=None spread=false",
+    "      Code 2..27 lang=Some(\"rust\") \"one\\ntwo\""
+  ],
+  "t23_fence_in_quote": [
+    "Root 0..23 ",
+    "  Blockquote 0..23 ",
+    "    Code 2..23 lang=None \"one\\ntwo\""
+  ],
+  "t24_fence_blank": [
+    "Root 0..18 ",
+    "  Code 0..18 lang=None \"same\\n\\nsame\""
+  ],
+  "t25_escape": [
+    "Root 0..2 ",
+    "  Paragraph 0..2 ",
+    "    Text 1..2 \"*\""
+  ],
+  "t26_esc_bs": [
+    "Root 0..4 ",
+    "  Paragraph 0..4 ",
+    "    Text 0..4 \"a\\\\b\""
+  ],
+  "t26_esc_bs2": [
+    "Root 0..5 ",
+    "  Paragraph 0..5 ",
+    "    Text 1..5 \"\\\\\\\\b\""
+  ],
+  "t27_esc_math": [
+    "Root 0..6 ",
+    "  Paragraph 0..6 ",
+    "    Text 0..3 \"a\\\\\"",
+    "    InlineMath 3..6 \"x\""
+  ],
+  "t28_esc_hardbreak": [
+    "Root 0..7 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..3 \"a\\\\\"",
+    "    Break 3..6 ",
+    "    Text 6..7 \"b\""
+  ],
+  "t29_trailing_img": [
+    "Root 0..24 ",
+    "  Paragraph 0..24 ",
+    "    Text 0..7 \"before \"",
+    "    Image 7..24 url=\"image.png\" alt=\"alt\" title=None"
+  ],
+  "t30_leading_img": [
+    "Root 0..23 ",
+    "  Paragraph 0..23 ",
+    "    Image 0..17 url=\"image.png\" alt=\"alt\" title=None",
+    "    Text 17..23 \" after\""
+  ],
+  "t31_enclosed_img": [
+    "Root 0..30 ",
+    "  Paragraph 0..30 ",
+    "    Text 0..7 \"before \"",
+    "    Image 7..24 url=\"image.png\" alt=\"alt\" title=None",
+    "    Text 24..30 \" after\""
+  ],
+  "t32_unreached_img": [
+    "Root 0..30 ",
+    "  Paragraph 0..30 ",
+    "    Text 0..7 \"before \"",
+    "    Image 7..24 url=\"image.png\" alt=\"alt\" title=None",
+    "    Text 24..30 \" after\""
+  ],
+  "t33_two_imgs": [
+    "Root 0..41 ",
+    "  Paragraph 0..41 ",
+    "    Image 0..17 url=\"one.png\" alt=\"first\" title=None",
+    "    Image 17..35 url=\"two.png\" alt=\"second\" title=None",
+    "    Text 35..41 \" after\""
+  ],
+  "t34_entity": [
+    "Root 0..9 ",
+    "  Paragraph 0..9 ",
+    "    Text 0..9 \"A & B\""
+  ],
+  "t35_entities": [
+    "Root 0..38 ",
+    "  Paragraph 0..38 ",
+    "    Text 0..38 \"Copyright © 😀 © 2024\""
+  ],
+  "t36_soft_indent": [
+    "Root 0..6 ",
+    "  Paragraph 0..6 ",
+    "    Text 0..6 \"a\\nb\""
+  ],
+  "t36_soft_list": [
+    "Root 0..7 ",
+    "  List 0..7 ordered=false start=None spread=false",
+    "    ListItem 0..7 checked=None spread=false",
+    "      Paragraph 2..7 ",
+    "        Text 2..7 \"a\\nb\""
+  ],
+  "t36_soft_quote": [
+    "Root 0..7 ",
+    "  Blockquote 0..7 ",
+    "    Paragraph 2..7 ",
+    "      Text 2..7 \"a\\nb\""
+  ],
+  "t37_crlf": [
+    "Root 0..4 ",
+    "  Paragraph 0..4 ",
+    "    Text 0..4 \"a\\r\\nb\""
+  ],
+  "t37_trailing_sp": [
+    "Root 0..4 ",
+    "  Paragraph 0..4 ",
+    "    Text 0..4 \"a\\nb\""
+  ],
+  "t37_trailing_sp_crlf": [
+    "Root 0..5 ",
+    "  Paragraph 0..5 ",
+    "    Text 0..5 \"a\\r\\nb\""
+  ],
+  "t38_nested_emph": [
+    "Root 0..36 ",
+    "  Paragraph 0..36 ",
+    "    Text 0..9 \"This has \"",
+    "    Strong 9..30 ",
+    "      Emphasis 11..28 ",
+    "        Text 12..27 \"bold and italic\"",
+    "    Text 30..36 \" text.\""
+  ],
+  "t39_html_img": [
+    "Root 0..94 ",
+    "  Paragraph 0..94 ",
+    "    Text 0..7 \"Before \"",
+    "    Html 7..87 \"<img src=\\\"https://example.com/avatar.png\\\" alt=\\\"Avatar\\\" width=\\\"32\\\" height=\\\"32\\\" />\"",
+    "    Text 87..94 \" after.\""
+  ],
+  "t40_html_img2": [
+    "Root 0..70 ",
+    "  Paragraph 0..70 ",
+    "    Text 0..7 \"Before \"",
+    "    Html 7..63 \"<img src=\\\"https://avatars.githubusercontent.com/u/5518\\\">\"",
+    "    Text 63..70 \" after.\""
+  ],
+  "t41_soft_cr": [
+    "Root 0..38 ",
+    "  Paragraph 0..38 ",
+    "    Text 0..38 \"this sentence\\rcontinues as a soft wrap\""
+  ],
+  "t41_soft_crlf": [
+    "Root 0..39 ",
+    "  Paragraph 0..39 ",
+    "    Text 0..39 \"this sentence\\r\\ncontinues as a soft wrap\""
+  ],
+  "t41_soft_lf": [
+    "Root 0..38 ",
+    "  Paragraph 0..38 ",
+    "    Text 0..38 \"this sentence\\ncontinues as a soft wrap\""
+  ],
+  "t42_soft_hard": [
+    "Root 0..7 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..3 \"a\\nb\"",
+    "    Break 3..6 ",
+    "    Text 6..7 \"c\""
+  ],
+  "t43_hard_bs": [
+    "Root 0..31 ",
+    "  Paragraph 0..31 ",
+    "    Text 0..11 \"Owner: Jane\"",
+    "    Break 11..13 ",
+    "    Text 13..31 \"Persona: assistant\""
+  ],
+  "t43_hard_spaces": [
+    "Root 0..32 ",
+    "  Paragraph 0..32 ",
+    "    Text 0..11 \"Owner: Jane\"",
+    "    Break 11..14 ",
+    "    Text 14..32 \"Persona: assistant\""
+  ],
+  "t44_fm_off": [
+    "Root 0..17 ",
+    "  ThematicBreak 0..3 ",
+    "  Heading 4..17 depth=2",
+    "    Text 4..13 \"Some text\""
+  ],
+  "t45_fm_on": [
+    "Root 0..23 ",
+    "  Yaml 0..23 \"- name: example\""
+  ],
+  "t46_fenced_yaml": [
+    "Root 0..25 ",
+    "  Code 0..25 lang=Some(\"yaml\") \"name: example\""
+  ],
+  "t47_ticker": [
+    "Root 0..8 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..8 \"$TSLA.US\""
+  ],
+  "t48_math_code_esc": [
+    "Root 0..24 ",
+    "  Paragraph 0..24 ",
+    "    InlineMath 0..3 \"x\"",
+    "    Text 3..4 \" \"",
+    "    InlineCode 4..12 \"$code$\"",
+    "    Text 12..24 \" $escaped$\""
+  ],
+  "t49_math_in_strong": [
+    "Root 0..45 ",
+    "  Paragraph 0..45 ",
+    "    Text 0..7 \"中文 \"",
+    "    Strong 7..29 ",
+    "      Text 9..16 \"before \"",
+    "      InlineMath 16..21 \"x^2\"",
+    "      Text 21..27 \" after\"",
+    "    Text 29..34 \" and \"",
+    "    InlineCode 34..45 \"$ignored$\""
+  ],
+  "t50_math_block": [
+    "Root 0..22 ",
+    "  Math 0..22 \"\\\\sum_{i=1}^{n} i\""
+  ],
+  "t51_unclaimed": [
+    "Root 0..80 ",
+    "  Paragraph 0..80 ",
+    "    Text 0..7 \"EPS of \"",
+    "    Html 7..15 \"<strong>\"",
+    "    InlineMath 15..48 \"1.56</strong> beat the <strong>\"",
+    "    Text 48..52 \"1.50\"",
+    "    Html 52..61 \"</strong>\"",
+    "    Text 61..73 \" consensus, \"",
+    "    Emphasis 73..80 ",
+    "      Text 74..79 \"up $2\""
+  ],
+  "t52_claimed": [
+    "Root 0..27 ",
+    "  Paragraph 0..27 ",
+    "    Text 0..5 \"area \"",
+    "    InlineMath 5..10 \"x^2\"",
+    "    Text 10..17 \" costs \"",
+    "    InlineMath 17..25 \"5 and \"",
+    "    Text 25..27 \"10\""
+  ],
+  "t53_html_pairs": [
+    "Root 0..90 ",
+    "  Paragraph 0..90 ",
+    "    Text 0..2 \"a \"",
+    "    Html 2..10 \"<strong>\"",
+    "    Text 10..12 \"b \"",
+    "    Emphasis 12..15 ",
+    "      Text 13..14 \"c\"",
+    "    Text 15..16 \" \"",
+    "    Html 16..20 \"<em>\"",
+    "    Text 20..21 \"d\"",
+    "    Html 21..26 \"</em>\"",
+    "    Html 26..35 \"</strong>\"",
+    "    Text 35..38 \" e \"",
+    "    Html 38..41 \"<b>\"",
+    "    Text 41..42 \"f\"",
+    "    Html 42..46 \"</b>\"",
+    "    Text 46..47 \" \"",
+    "    Html 47..50 \"<i>\"",
+    "    Text 50..51 \"g\"",
+    "    Html 51..55 \"</i>\"",
+    "    Text 55..56 \" \"",
+    "    Html 56..61 \"<del>\"",
+    "    Text 61..62 \"h\"",
+    "    Html 62..68 \"</del>\"",
+    "    Text 68..69 \" \"",
+    "    Html 69..73 \"<br>\"",
+    "    Text 73..74 \" \"",
+    "    Html 74..82 \"<strong>\"",
+    "    Text 82..90 \"unclosed\""
+  ],
+  "t54_dollars": [
+    "Root 0..22 ",
+    "  Paragraph 0..22 ",
+    "    Text 0..6 \"spent \"",
+    "    InlineMath 6..14 \"5 and \"",
+    "    Text 14..22 \"10 today\""
+  ],
+  "t55_rt1": [
+    "Root 0..18 ",
+    "  Paragraph 0..18 ",
+    "    Emphasis 0..18 ",
+    "      Text 1..8 \"before \"",
+    "      InlineMath 8..11 \"x\"",
+    "      Text 11..17 \" after\""
+  ],
+  "t55_rt2": [
+    "Root 0..22 ",
+    "  Paragraph 0..22 ",
+    "    Emphasis 0..22 ",
+    "      Text 1..8 \"before \"",
+    "      Strong 8..15 ",
+    "        InlineMath 10..13 \"x\"",
+    "      Text 15..21 \" after\""
+  ],
+  "t55_rt3": [
+    "Root 0..22 ",
+    "  Paragraph 0..22 ",
+    "    Strong 0..22 ",
+    "      Text 2..9 \"before \"",
+    "      Emphasis 9..14 ",
+    "        InlineMath 10..13 \"x\"",
+    "      Text 14..20 \" after\""
+  ],
+  "t56_cjk_code": [
+    "Root 0..8 ",
+    "  Paragraph 0..8 ",
+    "    InlineCode 0..8 \"原子\""
+  ],
+  "t57_ticker": [
+    "Root 0..8 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..8 \"$TSLA.US\""
+  ],
+  "x_autolink": [
+    "Root 0..71 ",
+    "  Paragraph 0..71 ",
+    "    Text 0..4 \"see \"",
+    "    Link 4..25 url=\"https://example.com/x\" title=None",
+    "      Text 4..25 \"https://example.com/x\"",
+    "    Text 25..30 \" and \"",
+    "    Link 30..45 url=\"http://www.example.org\" title=None",
+    "      Text 30..45 \"www.example.org\"",
+    "    Text 45..47 \", \"",
+    "    Link 47..59 url=\"http://a.b\" title=None",
+    "      Text 48..58 \"http://a.b\"",
+    "    Text 59..64 \" and \"",
+    "    Link 64..71 url=\"mailto:me@x.io\" title=None",
+    "      Text 64..71 \"me@x.io\""
+  ],
+  "x_crlf_doc": [
+    "Root 0..19 ",
+    "  Heading 0..3 depth=1",
+    "    Text 2..3 \"T\"",
+    "  Paragraph 7..17 ",
+    "    Text 7..17 \"para\\r\\nline\""
+  ],
+  "x_fm_toml": [
+    "Root 0..22 ",
+    "  Toml 0..17 \"title = 1\"",
+    "  Paragraph 18..22 ",
+    "    Text 18..22 \"body\""
+  ],
+  "x_fm_yaml_ok": [
+    "Root 0..21 ",
+    "  Yaml 0..16 \"title: x\"",
+    "  Heading 17..21 depth=1",
+    "    Text 19..21 \"Hi\""
+  ],
+  "x_footnote_multi": [
+    "Root 0..31 ",
+    "  Paragraph 0..5 ",
+    "    Text 0..1 \"x\"",
+    "    FootnoteReference 1..5 id=\"a\"",
+    "  FootnoteDefinition 7..25 id=\"a\"",
+    "    Paragraph 13..24 ",
+    "      Text 13..24 \"one\\ntwo\"",
+    "  Paragraph 26..31 ",
+    "    Text 26..31 \"after\""
+  ],
+  "x_headings": [
+    "Root 0..23 ",
+    "  Heading 0..6 depth=1",
+    "    Text 2..4 \"H1\"",
+    "  Heading 8..18 depth=1",
+    "    Text 8..14 \"Setext\"",
+    "  ThematicBreak 20..23 "
+  ],
+  "x_html_block": [
+    "Root 0..22 ",
+    "  Html 0..16 \"<div>\\n*x*\\n</div>\"",
+    "  Paragraph 18..22 ",
+    "    Text 18..22 \"para\""
+  ],
+  "x_link": [
+    "Root 0..41 ",
+    "  Paragraph 0..41 ",
+    "    Link 0..25 url=\"http://x.y\" title=Some(\"t\")",
+    "      Text 1..3 \"a \"",
+    "      Strong 3..8 ",
+    "        Text 5..6 \"b\"",
+    "    Text 25..30 \" and \"",
+    "    Image 30..41 url=\"p.png\" alt=\"i\" title=None"
+  ],
+  "x_math_multiline": [
+    "Root 0..15 ",
+    "  Paragraph 0..15 ",
+    "    Text 0..2 \"a \"",
+    "    InlineMath 2..7 \"x\\ny\"",
+    "    Text 7..10 \" b \"",
+    "    InlineMath 10..15 \"z\""
+  ],
+  "x_nested": [
+    "Root 0..28 ",
+    "  Blockquote 0..28 ",
+    "    List 2..28 ordered=false start=None spread=false",
+    "      ListItem 2..28 checked=None spread=false",
+    "        Paragraph 4..5 ",
+    "          Text 4..5 \"a\"",
+    "        List 10..28 ordered=false start=None spread=false",
+    "          ListItem 10..28 checked=None spread=false",
+    "            Paragraph 12..28 ",
+    "              Strong 12..17 ",
+    "                Text 14..15 \"b\"",
+    "              Text 17..18 \" \"",
+    "              Link 18..24 url=\"d\" title=None",
+    "                Text 19..20 \"c\"",
+    "              Text 24..28 \"\\ne\""
+  ],
+  "x_ordered": [
+    "Root 0..15 ",
+    "  List 0..15 ordered=true start=Some(3) spread=false",
+    "    ListItem 0..4 checked=None spread=false",
+    "      Paragraph 3..4 ",
+    "        Text 3..4 \"a\"",
+    "    ListItem 5..15 checked=None spread=true",
+    "      Paragraph 8..9 ",
+    "        Text 8..9 \"b\"",
+    "      Paragraph 14..15 ",
+    "        Text 14..15 \"c\""
+  ],
+  "x_reflinks": [
+    "Root 0..48 ",
+    "  Paragraph 0..31 ",
+    "    LinkReference 0..11 id=\"ref\"",
+    "      Text 1..5 \"full\"",
+    "    Text 11..26 \" [collapsed][] \"",
+    "    LinkReference 26..31 id=\"ref\"",
+    "      Text 27..30 \"ref\"",
+    "  Definition 33..48 id=\"ref\" url=\"/url\" title=Some(\"T\")"
+  ],
+  "x_strike": [
+    "Root 0..19 ",
+    "  Paragraph 0..19 ",
+    "    Text 0..2 \"a \"",
+    "    Delete 2..9 ",
+    "      Text 4..7 \"del\"",
+    "    Text 9..12 \" b \"",
+    "    Delete 12..17 ",
+    "      Text 13..16 \"one\"",
+    "    Text 17..19 \" c\""
+  ],
+  "x_table": [
+    "Root 0..39 ",
+    "  Table 0..39 align=[Left, Right]",
+    "    TableRow 0..9 ",
+    "      TableCell 0..4 ",
+    "        Text 2..3 \"a\"",
+    "      TableCell 4..9 ",
+    "        Text 6..7 \"b\"",
+    "    TableRow 20..33 ",
+    "      TableCell 20..26 ",
+    "        Emphasis 22..25 ",
+    "          Text 23..24 \"c\"",
+    "      TableCell 26..33 ",
+    "        InlineCode 28..31 \"d\"",
+    "    TableRow 34..39 ",
+    "      TableCell 34..39 ",
+    "        Text 36..37 \"e\""
+  ],
+  "x_tasklist": [
+    "Root 0..29 ",
+    "  List 0..29 ordered=false start=None spread=false",
+    "    ListItem 0..10 checked=Some(true) spread=false",
+    "      Paragraph 6..10 ",
+    "        Text 6..10 \"done\"",
+    "    ListItem 11..29 checked=Some(false) spread=true",
+    "      Paragraph 17..21 ",
+    "        Text 17..21 \"todo\"",
+    "      Paragraph 25..29 ",
+    "        Text 25..29 \"para\""
+  ],
+  "x_unclosed_fence": [
+    "Root 0..8 ",
+    "  Code 0..8 lang=None \"open\""
+  ]
+}

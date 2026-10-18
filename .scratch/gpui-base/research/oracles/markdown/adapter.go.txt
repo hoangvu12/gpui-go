@@ -1,0 +1,702 @@
+package main
+
+// Adapter: goldmark v1.8.6 AST -> mdast-shaped tree with start AND end byte
+// offsets, matching markdown-rs 1.0.0 to_mdast as closely as possible.
+// Every place that reconstructs information goldmark does not store records
+// a flag, so the report can separate "direct" from "adapter" facts.
+
+import (
+	"bytes"
+	"fmt"
+	"sort"
+	"strings"
+
+	mathjax "github.com/litao91/goldmark-mathjax"
+	"github.com/yuin/goldmark/ast"
+	east "github.com/yuin/goldmark/extension/ast"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/util"
+	"go.abhg.dev/goldmark/frontmatter"
+)
+
+type M struct {
+	Kind string
+	S, E int
+	D    string
+	C    []*M
+}
+
+type adapter struct {
+	src   []byte
+	flags map[string]int
+}
+
+func (a *adapter) flag(f string) { a.flags[f]++ }
+
+func q(s string) string { return fmt.Sprintf("%q", s) }
+
+func optq(b []byte, present bool) string {
+	if !present {
+		return "None"
+	}
+	return "Some(" + q(string(b)) + ")"
+}
+
+func isWS(c byte) bool { return c == ' ' || c == '\t' || c == '\r' || c == '\n' }
+
+func (a *adapter) trimEnd(e int) int {
+	for e > 0 && isWS(a.src[e-1]) {
+		e--
+	}
+	return e
+}
+
+// lineEnd returns the offset of the line ending (or EOF) for the line containing p.
+func (a *adapter) lineEnd(p int) int {
+	for p < len(a.src) && a.src[p] != '\n' && a.src[p] != '\r' {
+		p++
+	}
+	return p
+}
+
+// nextLineStart returns the start of the line after the one containing p.
+func (a *adapter) nextLineStart(p int) int {
+	p = a.lineEnd(p)
+	if p < len(a.src) && a.src[p] == '\r' {
+		p++
+	}
+	if p < len(a.src) && a.src[p] == '\n' {
+		p++
+	}
+	return p
+}
+
+func normID(b []byte) string {
+	return strings.ToLower(strings.Join(strings.Fields(string(b)), " "))
+}
+
+func (a *adapter) decode(seg []byte) string {
+	v := util.UnescapePunctuations(seg)
+	v = util.ResolveNumericReferences(v)
+	v = util.ResolveEntityNames(v)
+	return string(v)
+}
+
+func toMdast(src []byte, doc ast.Node, pc parser.Context) (*M, map[string]int) {
+	a := &adapter{src: src, flags: map[string]int{}}
+	root := &M{Kind: "Root", S: 0, E: len(src)}
+	if d := frontmatter.Get(pc); d != nil {
+		root.C = append(root.C, a.frontmatter())
+	}
+	var footnotes []*M
+	for ch := doc.FirstChild(); ch != nil; ch = ch.NextSibling() {
+		if fl, ok := ch.(*east.FootnoteList); ok {
+			for f := fl.FirstChild(); f != nil; f = f.NextSibling() {
+				footnotes = append(footnotes, a.block(f))
+			}
+			continue
+		}
+		if m := a.block(ch); m != nil {
+			root.C = append(root.C, m)
+		}
+	}
+	if len(footnotes) > 0 {
+		// goldmark moves definitions into a FootnoteList at the end; mdast keeps them in place.
+		a.flag("footnote-reorder")
+		root.C = append(root.C, footnotes...)
+		sort.SliceStable(root.C, func(i, j int) bool { return root.C[i].S < root.C[j].S })
+	}
+	return root, a.flags
+}
+
+// frontmatter: goldmark-frontmatter deletes its node; rebuild it from source.
+func (a *adapter) frontmatter() *M {
+	a.flag("frontmatter-rebuild")
+	delim := string(a.src[:3])
+	kind := map[string]string{"---": "Yaml", "+++": "Toml"}[delim]
+	bodyStart := a.nextLineStart(0)
+	p := bodyStart
+	for p < len(a.src) {
+		le := a.lineEnd(p)
+		if strings.TrimRight(string(a.src[p:le]), " \t") == delim {
+			body := strings.TrimRight(string(a.src[bodyStart:p]), "\r\n")
+			return &M{Kind: kind, S: 0, E: le, D: q(body)}
+		}
+		p = a.nextLineStart(p)
+	}
+	return &M{Kind: kind, S: 0, E: len(a.src)}
+}
+
+func (a *adapter) linesValue(n ast.Node) string {
+	var b strings.Builder
+	l := n.Lines()
+	for i := 0; i < l.Len(); i++ {
+		s := l.At(i)
+		b.WriteString(strings.Repeat(" ", s.Padding))
+		b.Write(s.Value(a.src))
+	}
+	return strings.TrimRight(b.String(), "\r\n")
+}
+
+// closingFence finds a closing fence line right after `from` (skipping container
+// prefixes '>' and spaces); returns its trimmed end or -1.
+func (a *adapter) closingFence(from int, ch byte, min int) int {
+	if from >= len(a.src) {
+		return -1
+	}
+	p := from
+	le := a.lineEnd(p)
+	for p < le && (a.src[p] == ' ' || a.src[p] == '>' || a.src[p] == '\t') {
+		p++
+	}
+	n := 0
+	for p+n < le && a.src[p+n] == ch {
+		n++
+	}
+	if n < min || strings.TrimSpace(string(a.src[p+n:le])) != "" {
+		return -1
+	}
+	return a.trimEnd(le)
+}
+
+func (a *adapter) block(n ast.Node) *M {
+	src := a.src
+	switch v := n.(type) {
+	case *ast.Paragraph, *ast.TextBlock:
+		l := n.Lines()
+		if l.Len() == 0 {
+			return nil
+		}
+		m := &M{Kind: "Paragraph", S: l.At(0).Start, E: a.trimEnd(l.At(l.Len() - 1).Stop)}
+		if _, ok := n.(*ast.TextBlock); ok {
+			a.flag("textblock-as-paragraph")
+		}
+		m.C = a.inlines(n)
+		if n.FirstChild() != nil {
+			if _, ok := n.FirstChild().(*east.TaskCheckBox); ok && len(m.C) > 0 {
+				a.flag("tasklist-paragraph-start")
+				m.S = m.C[0].S
+			}
+		}
+		return m
+	case *ast.Heading:
+		m := &M{Kind: "Heading", D: fmt.Sprintf("depth=%d", v.Level)}
+		if src[v.Pos()] == '#' {
+			m.S = a.blockStart(v.Pos())
+			m.E = a.lineEnd(v.Pos())
+		} else {
+			l := v.Lines()
+			m.S = l.At(0).Start
+			m.E = a.trimEnd(a.lineEnd(a.nextLineStart(l.At(l.Len()-1).Start)))
+		}
+		a.flag("end-scan:heading")
+		m.C = a.inlines(n)
+		return m
+	case *ast.ThematicBreak:
+		a.flag("end-scan:thematic")
+		return &M{Kind: "ThematicBreak", S: a.blockStart(v.Pos()), E: a.trimEnd(a.lineEnd(v.Pos()))}
+	case *ast.FencedCodeBlock:
+		fch := src[v.Pos()]
+		flen := 0
+		for v.Pos()+flen < len(src) && src[v.Pos()+flen] == fch {
+			flen++
+		}
+		lang := "None"
+		if v.Info != nil {
+			if l := v.Language(src); len(l) > 0 {
+				lang = optq(l, true)
+			}
+		}
+		m := &M{Kind: "Code", S: a.blockStart(v.Pos())}
+		m.D = "lang=" + lang + " " + q(a.linesValue(v))
+		after := a.nextLineStart(v.Pos())
+		lastEnd := a.trimEnd(a.lineEnd(v.Pos()))
+		if l := v.Lines(); l.Len() > 0 {
+			after = l.At(l.Len() - 1).Stop
+			lastEnd = a.trimEnd(l.At(l.Len() - 1).Stop)
+		}
+		a.flag("end-scan:closing-fence")
+		if e := a.closingFence(after, fch, flen); e >= 0 {
+			m.E = e
+		} else {
+			m.E = lastEnd
+		}
+		return m
+	case *mathjax.MathBlock:
+		a.flag("end-scan:closing-fence")
+		m := &M{Kind: "Math", S: v.Pos(), D: q(a.linesValue(v))}
+		after := a.nextLineStart(v.Pos())
+		if l := v.Lines(); l.Len() > 0 {
+			after = l.At(l.Len() - 1).Stop
+		}
+		if e := a.closingFence(after, '$', 2); e >= 0 {
+			m.E = e
+		} else {
+			m.E = a.trimEnd(after)
+		}
+		return m
+	case *ast.CodeBlock:
+		l := v.Lines()
+		s := v.Pos()
+		for s > 0 && (src[s-1] == ' ' || src[s-1] == '\t') {
+			s--
+		}
+		a.flag("start-fix:indented-code")
+		return &M{Kind: "Code", S: s, E: a.trimEnd(l.At(l.Len() - 1).Stop), D: "lang=None " + q(a.linesValue(v))}
+	case *ast.Blockquote:
+		m := &M{Kind: "Blockquote", S: v.Pos()}
+		m.C = a.blocks(n)
+		m.E = a.containerEnd(m, v.Pos())
+		return m
+	case *ast.List:
+		start := "None"
+		if v.IsOrdered() {
+			start = fmt.Sprintf("Some(%d)", v.Start)
+		}
+		m := &M{Kind: "List", S: v.Pos()}
+		m.C = a.blocks(n)
+		m.E = a.containerEnd(m, v.Pos())
+		a.flag("spread-recompute")
+		m.D = fmt.Sprintf("ordered=%v start=%s spread=%v", v.IsOrdered(), start, a.gapSpread(m.C))
+		return m
+	case *ast.ListItem:
+		m := &M{Kind: "ListItem", S: v.Pos()}
+		m.C = a.blocks(n)
+		m.E = a.containerEnd(m, v.Pos())
+		checked := "None"
+		if fc := n.FirstChild(); fc != nil {
+			if cb, ok := fc.FirstChild().(*east.TaskCheckBox); ok {
+				checked = fmt.Sprintf("Some(%v)", cb.IsChecked)
+			}
+		}
+		m.D = fmt.Sprintf("checked=%s spread=%v", checked, a.gapSpread(m.C))
+		return m
+	case *ast.HTMLBlock:
+		l := v.Lines()
+		s := a.blockStart(l.At(0).Start)
+		e := l.At(l.Len() - 1).Stop
+		if v.HasClosure() {
+			e = v.ClosureLine.Stop
+		}
+		e = a.trimEnd(e)
+		return &M{Kind: "Html", S: s, E: e, D: q(string(src[s:e]))}
+	case *ast.LinkReferenceDefinition:
+		l := v.Lines()
+		e := a.trimEnd(l.At(l.Len() - 1).Stop)
+		return &M{Kind: "Definition", S: v.Pos(), E: e,
+			D: fmt.Sprintf("id=%s url=%s title=%s", q(normID(v.Label)), q(a.decode(v.Destination)), optq([]byte(a.decode(v.Title)), v.Title != nil))}
+	case *east.Table:
+		al := []string{}
+		for _, x := range v.Alignments {
+			al = append(al, map[east.Alignment]string{east.AlignLeft: "Left", east.AlignRight: "Right", east.AlignCenter: "Center", east.AlignNone: "None"}[x])
+		}
+		m := &M{Kind: "Table", S: v.Pos(), D: "align=[" + strings.Join(al, ", ") + "]"}
+		for r := n.FirstChild(); r != nil; r = r.NextSibling() {
+			row := &M{Kind: "TableRow", S: r.Pos(), E: a.trimEnd(a.lineEnd(r.Pos()))}
+			a.flag("end-scan:table-row")
+			prev := row.S
+			for c := r.FirstChild(); c != nil; c = c.NextSibling() {
+				if c.Pos() < 0 {
+					a.flag("drop-padding-cell") // goldmark pads short rows; mdast does not
+					continue
+				}
+				cell := &M{Kind: "TableCell", S: prev}
+				cell.C = a.inlines(c)
+				if c.NextSibling() == nil || c.NextSibling().Pos() < 0 {
+					cell.E = row.E
+				} else {
+					p := c.Pos()
+					if len(cell.C) > 0 {
+						p = cell.C[len(cell.C)-1].E
+					}
+					for p < row.E && src[p] != '|' {
+						p++
+					}
+					cell.E = p
+				}
+				prev = cell.E
+				row.C = append(row.C, cell)
+			}
+			m.C = append(m.C, row)
+		}
+		m.E = m.C[len(m.C)-1].E
+		return m
+	case *east.Footnote:
+		m := &M{Kind: "FootnoteDefinition", S: v.Pos(), D: "id=" + q(normID(v.Ref))}
+		m.C = a.blocks(n)
+		m.E = a.containerEnd(m, v.Pos())
+		// markdown-rs quirk: a definition followed by more input keeps its line ending.
+		if m.E < len(a.src)-1 && isEOL(a.src[m.E]) {
+			a.flag("footnote-def-eol-quirk")
+			m.E = a.nextLineStart(m.E)
+		}
+		return m
+	}
+	return &M{Kind: "UNMAPPED:" + n.Kind().String(), S: n.Pos(), E: -1}
+}
+
+func (a *adapter) blocks(n ast.Node) []*M {
+	var out []*M
+	for ch := n.FirstChild(); ch != nil; ch = ch.NextSibling() {
+		if m := a.block(ch); m != nil {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func (a *adapter) containerEnd(m *M, pos int) int {
+	a.flag("end-derive:container")
+	if len(m.C) > 0 {
+		return m.C[len(m.C)-1].E
+	}
+	return a.trimEnd(a.lineEnd(pos))
+}
+
+// gapSpread: a blank line between consecutive children.
+func (a *adapter) gapSpread(c []*M) bool {
+	for i := 1; i < len(c); i++ {
+		gap := a.src[c[i-1].E:c[i].S]
+		lines := 0
+		for _, b := range gap {
+			if b == '\n' {
+				lines++
+			}
+		}
+		if lines >= 2 {
+			return true
+		}
+	}
+	return false
+}
+
+// ---- inlines ----
+
+type run struct {
+	on   bool
+	s, e int
+	v    strings.Builder
+}
+
+func (a *adapter) inlines(parent ast.Node) []*M {
+	src := a.src
+	var out []*M
+	var r run
+	parts := 0
+	flush := func() {
+		if r.on {
+			if parts > 1 {
+				a.flag("text-merge")
+			}
+			out = append(out, &M{Kind: "Text", S: r.s, E: r.e, D: q(r.v.String())})
+		}
+		r = run{}
+		parts = 0
+	}
+	for ch := parent.FirstChild(); ch != nil; ch = ch.NextSibling() {
+		switch v := ch.(type) {
+		case *ast.Text:
+			seg := v.Segment
+			if !r.on {
+				r.on, r.s = true, seg.Start
+				// markdown-rs starts a text that opens with a character escape after the backslash.
+				if seg.Stop-seg.Start >= 2 && src[seg.Start] == '\\' && util.IsPunct(src[seg.Start+1]) {
+					a.flag("escape-start-quirk")
+					r.s++
+				}
+			}
+			parts++
+			if seg.Stop > r.e {
+				r.e = seg.Stop
+			}
+			r.v.WriteString(a.decode(seg.Value(src)))
+			if v.SoftLineBreak() {
+				p := seg.Stop
+				for p < len(src) && (src[p] == ' ' || src[p] == '\t') {
+					p++
+				}
+				le := a.nextLineStart(p)
+				r.v.Write(src[p:le])
+				a.flag("softbreak-value")
+			}
+			if v.HardLineBreak() {
+				flush()
+				e := a.nextLineStart(seg.Stop)
+				a.flag("end-scan:break")
+				out = append(out, &M{Kind: "Break", S: seg.Stop, E: e})
+			}
+		case *ast.String:
+			a.flag("string-node")
+			if !r.on {
+				r.on = true
+			}
+			r.v.Write(v.Value)
+		case *east.FootnoteBacklink:
+		case *east.TaskCheckBox:
+			// mdast drops the checkbox; ListItem.checked carries it.
+		default:
+			flush()
+			if m := a.inline(ch); m != nil {
+				out = append(out, m)
+			}
+		}
+	}
+	flush()
+	return out
+}
+
+func (a *adapter) lastE(c []*M, dflt int) int {
+	if len(c) > 0 {
+		return c[len(c)-1].E
+	}
+	return dflt
+}
+
+// linkTail scans an inline link destination/title starting at '(' and returns the end.
+func (a *adapter) linkTail(p int) int {
+	src := a.src
+	p++ // (
+	skip := func() {
+		for p < len(src) && isWS(src[p]) {
+			p++
+		}
+	}
+	skip()
+	if p < len(src) && src[p] == '<' {
+		for p < len(src) && src[p] != '>' {
+			if src[p] == '\\' {
+				p++
+			}
+			p++
+		}
+		p++
+	} else {
+		depth := 0
+		for p < len(src) && !isWS(src[p]) {
+			c := src[p]
+			if c == '\\' {
+				p += 2
+				continue
+			}
+			if c == '(' {
+				depth++
+			} else if c == ')' {
+				if depth == 0 {
+					break
+				}
+				depth--
+			}
+			p++
+		}
+	}
+	skip()
+	if p < len(src) && (src[p] == '"' || src[p] == '\'' || src[p] == '(') {
+		cl := src[p]
+		if cl == '(' {
+			cl = ')'
+		}
+		p++
+		for p < len(src) && src[p] != cl {
+			if src[p] == '\\' {
+				p++
+			}
+			p++
+		}
+		p++
+		skip()
+	}
+	return p + 1 // )
+}
+
+func plain(c []*M) string {
+	var b strings.Builder
+	for _, m := range c {
+		if m.Kind == "Text" || m.Kind == "InlineCode" {
+			var s string
+			fmt.Sscanf(m.D, "%q", &s)
+			b.WriteString(s)
+		}
+		b.WriteString(plain(m.C))
+	}
+	return b.String()
+}
+
+func (a *adapter) inline(n ast.Node) *M {
+	src := a.src
+	switch v := n.(type) {
+	case *ast.CodeSpan:
+		a.flag("end-scan:codespan")
+		s := v.Pos()
+		k := 0
+		for s+k < len(src) && src[s+k] == '`' {
+			k++
+		}
+		p := s + k
+		for p < len(src) {
+			if src[p] == '`' {
+				j := p
+				for j < len(src) && src[j] == '`' {
+					j++
+				}
+				if j-p == k {
+					break
+				}
+				p = j
+				continue
+			}
+			p++
+		}
+		body := strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ").Replace(string(src[s+k : p]))
+		if len(body) >= 2 && body[0] == ' ' && body[len(body)-1] == ' ' && strings.TrimSpace(body) != "" {
+			body = body[1 : len(body)-1]
+		}
+		return &M{Kind: "InlineCode", S: s, E: p + k, D: q(body)}
+	case *ast.Emphasis:
+		kind := "Emphasis"
+		if v.Level == 2 {
+			kind = "Strong"
+		}
+		m := &M{Kind: kind, S: v.Pos()}
+		m.C = a.inlines(n)
+		a.flag("end-derive:emphasis")
+		m.E = a.lastE(m.C, v.Pos()+v.Level) + v.Level
+		// goldmark's Pos is the start of the whole delimiter run, not the consumed part.
+		if len(m.C) > 0 && m.C[0].S-v.Level > m.S {
+			a.flag("start-fix:emphasis-run")
+			m.S = m.C[0].S - v.Level
+		}
+		return m
+	case *east.Strikethrough:
+		m := &M{Kind: "Delete", S: v.Pos()}
+		m.C = a.inlines(n)
+		p := a.lastE(m.C, v.Pos())
+		for p < len(src) && src[p] == '~' {
+			p++
+		}
+		a.flag("end-scan:delete")
+		m.E = p
+		return m
+	case *ast.Link, *ast.Image:
+		var bl *ast.Link
+		isImg := false
+		if l, ok := n.(*ast.Link); ok {
+			bl = l
+		} else {
+			bl = &ast.Link{}
+			im := n.(*ast.Image)
+			bl.Destination, bl.Title, bl.Reference = im.Destination, im.Title, im.Reference
+			isImg = true
+		}
+		s := n.Pos()
+		open := 1
+		if isImg {
+			open = 2
+		}
+		c := a.inlines(n)
+		b := a.lastE(c, s+open) // ']'
+		var e int
+		a.flag("end-scan:link-tail")
+		kind := "Link"
+		d := fmt.Sprintf("url=%s title=%s", q(a.decode(bl.Destination)), optq([]byte(a.decode(bl.Title)), bl.Title != nil))
+		if bl.Reference != nil {
+			a.flag("link-reference-kind")
+			kind = "LinkReference"
+			if isImg {
+				kind = "ImageReference"
+			}
+			id := normID(src[s+open : b])
+			switch bl.Reference.Type {
+			case ast.ReferenceLinkFull:
+				p := bytes.IndexByte(src[b+2:], ']') + b + 2
+				id = normID(src[b+2 : p])
+				e = p + 1
+			case ast.ReferenceLinkCollapsed:
+				e = b + 3
+			default:
+				e = b + 1
+			}
+			d = "id=" + q(id)
+		} else {
+			e = a.linkTail(b + 1)
+		}
+		if isImg {
+			if kind == "Image" || kind == "Link" {
+				kind = "Image"
+				d = fmt.Sprintf("url=%s alt=%s title=%s", q(a.decode(bl.Destination)), q(plain(c)), optq([]byte(a.decode(bl.Title)), bl.Title != nil))
+			}
+			return &M{Kind: kind, S: s, E: e, D: d}
+		}
+		return &M{Kind: kind, S: s, E: e, D: d, C: c}
+	case *ast.AutoLink:
+		label := v.Label(src)
+		url := string(v.URL(src))
+		if v.AutoLinkType == ast.AutoLinkEmail && !strings.HasPrefix(url, "mailto:") {
+			url = "mailto:" + url
+		}
+		if src[v.Pos()] == '<' {
+			s := v.Pos()
+			return &M{Kind: "Link", S: s, E: s + len(label) + 2, D: fmt.Sprintf("url=%s title=None", q(url)),
+				C: []*M{{Kind: "Text", S: s + 1, E: s + 1 + len(label), D: q(string(label))}}}
+		}
+		a.flag("pos-fix:linkify")
+		s := v.Pos() + bytes.Index(src[v.Pos():], label)
+		if v.Protocol == nil && !strings.Contains(url, "://") && v.AutoLinkType == ast.AutoLinkURL {
+			url = "http://" + url
+		}
+		return &M{Kind: "Link", S: s, E: s + len(label), D: fmt.Sprintf("url=%s title=None", q(url)),
+			C: []*M{{Kind: "Text", S: s, E: s + len(label), D: q(string(label))}}}
+	case *ast.RawHTML:
+		s := v.Segments.At(0).Start
+		e := v.Segments.At(v.Segments.Len() - 1).Stop
+		return &M{Kind: "Html", S: s, E: e, D: q(string(src[s:e]))}
+	case *east.FootnoteLink:
+		a.flag("end-scan:footnote-ref")
+		s := v.Pos()
+		e := bytes.IndexByte(src[s:], ']') + s + 1
+		return &M{Kind: "FootnoteReference", S: s, E: e, D: "id=" + q(normID(src[s+2:e-1]))}
+	case *mathjax.InlineMath:
+		s := v.Pos()
+		k := 0
+		for s+k < len(src) && src[s+k] == '$' {
+			k++
+		}
+		var b strings.Builder
+		last := s + k
+		for c := n.FirstChild(); c != nil; c = c.NextSibling() {
+			t := c.(*ast.Text)
+			b.Write(t.Segment.Value(src))
+			last = t.Segment.Stop
+		}
+		a.flag("end-derive:inline-math")
+		return &M{Kind: "InlineMath", S: s, E: last + k, D: q(b.String())}
+	}
+	return &M{Kind: "UNMAPPED:" + n.Kind().String(), S: n.Pos(), E: -1}
+}
+
+func flatten(m *M, d int, out *[]string) {
+	*out = append(*out, fmt.Sprintf("%s%s %d..%d %s", strings.Repeat("  ", d), m.Kind, m.S, m.E, m.D))
+	for _, c := range m.C {
+		flatten(c, d+1, out)
+	}
+}
+
+func isEOL(c byte) bool { return c == 10 || c == 13 }
+
+// blockStart: mdast block positions include up-to-3-space indentation after
+// the container prefix ("> " or line start).
+func (a *adapter) blockStart(p int) int {
+	s := p
+	for s > 0 && (a.src[s-1] == ' ' || a.src[s-1] == '\t') {
+		s--
+	}
+	if s == 0 || a.src[s-1] == '\n' || a.src[s-1] == '\r' {
+		return s
+	}
+	if a.src[s-1] == '>' {
+		if s < p && a.src[s] == ' ' {
+			return s + 1
+		}
+		return s
+	}
+	return p
+}
