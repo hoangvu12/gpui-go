@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: grilling
 Labels: wayfinder:grilling
 Triage: ready-for-human
-Status: open
-Assignee: unassigned
+Status: resolved
+Assignee: user (via the Base port chat)
 Blocked by: none
 
 ## Question
@@ -19,7 +19,7 @@ Base's Rust crate uses markdown-rs, html5ever, ropey, unicode-segmentation, chro
 
 ## Acceptance criteria
 
-- [ ] The user's choice per dependency is recorded under `## Answer`; dependent tickets (15, 24, 27, 30) are updated accordingly.
+- [x] The user's choice per dependency is recorded under `## Answer`; dependent tickets (15, 24, 27, 30) are updated accordingly.
 
 ## Research
 
@@ -38,3 +38,12 @@ Base's Rust crate uses markdown-rs, html5ever, ropey, unicode-segmentation, chro
   - **recreate (no usable Go library):** ropey rope (~1.3–1.7k + tests; candidates are LGPL/GPL/bytes-only/no UTF-16), sum-tree (~700–900, or the slice pattern from `gpui/listelement.go`), lsp-types structs (~400; go.lsp.dev/protocol drags ~230 modules into go.sum), strftime subset (~150, prototype matches chrono on 45/45; best lib itchyny/timefmt-go misses 2), aho-corasick single-pattern (~40), data-url (~140).
   - **stdlib:** regexp, time, encoding/json, log/slog. **not needed:** syntect, palette, rust_decimal, schemars, smallvec, itertools, num-traits, anyhow, futures/smol.
   - **gpui macros/derives:** IntoElement/actions!/#[gpui::test] need nothing new; the Refineable/style-macro vocabulary (~175 distinct methods Base calls), Interactive/Parent/FluentBuilder and accesskit properties are core gaps already owned by tickets 05, 06, 11 (a maintainer `go:generate` for the style methods is allowed by `research/09-fluent-authoring-methods.md:52`).
+
+## Answer
+
+Resolved 2026-10-19 — the user, after the executed fit research: "sounds good then" (accepting the recommendation as presented).
+
+- **Add as Go modules:** `github.com/yuin/goldmark` (markdown, with the in-repo mdast adapter; math + frontmatter hand-written; MDX deferred), `github.com/clipperhouse/uax29/v2` (word/grapheme segmentation), `golang.org/x/net` (its `html` package). Each lands in go.mod when its first consuming ticket does (15, 27, 30), with THIRD_PARTY_NOTICES updated.
+- **Recreate in-repo:** the ropey-compatible rope, sum tree (or the slice pattern), lsp-types structs, strftime subset, single-pattern ASCII-folding search, data-url.
+- **Stdlib:** regexp, time, encoding/json, log/slog. **Not needed:** syntect, palette, rust_decimal, schemars, smallvec, itertools, num-traits, anyhow, futures/smol.
+- Recorded deviations to carry: uax29 vs unicode-segmentation 1.13.3 on 5 ZWJ-emoji word cases; goldmark GFM edge cases outside Base's tests; MDX deferred.

@@ -1,7 +1,7 @@
 # Port GPUI Base to Go
 
 Labels: wayfinder:map
-Status: open (plan written 2026-10-19; awaiting the user's go and the two decision tickets)
+Status: in progress (implementation authorized 2026-10-19)
 
 ## Destination
 
@@ -77,12 +77,13 @@ Blocking edges live in each ticket's `Blocked by:`; the frontier is computed fro
 ## Decisions so far
 
 - Pin: `gpui-ce/gpui-component` c0820693 `crates/base` (CE rebase written for the gpui-ce 0.2.2 line); Kit 4c7f1350 comparison only — [baseline](research/00-baseline.md).
+- [Third-party dependency policy](issues/01-dependency-policy.md) — goldmark, uax29, x/net/html as modules; rope, sum tree, lsp types, strftime, search, data-url recreated; stdlib for the rest.
+- [Frozen-artifact gaps](issues/02-native-gap-policy.md) — Go-side fallbacks: a11y nearest-role publication, per-run paint clipped by selection rects, solid backgrounds; recorded deviations, no native revision.
 - Package layout (orchestrator, routine): one `base` package mirroring the single crate; dependency-free data structures (rope, sum tree, segmentation) in subpackages under `base/`.
 
 ## Not yet specified
 
-- [Decide the third-party dependency policy for Base](issues/01-dependency-policy.md)
-- [Decide how Base handles the frozen-artifact gaps](issues/02-native-gap-policy.md)
+- none (implementation authorized 2026-10-19: "sounds good then")
 
 ## Out of scope
 

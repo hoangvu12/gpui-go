@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: grilling
 Labels: wayfinder:grilling
 Triage: ready-for-human
-Status: open
-Assignee: unassigned
+Status: resolved
+Assignee: user (via the Base port chat)
 Blocked by: none
 
 ## Question
@@ -20,7 +20,7 @@ Three capabilities Base needs are limited by the frozen rev-11 DLL. Accept the G
 
 ## Acceptance criteria
 
-- [ ] The user's choice per gap is recorded; tickets 10 and 11 follow it.
+- [x] The user's choice per gap is recorded; tickets 10 and 11 follow it.
 
 ## Research
 
@@ -32,3 +32,11 @@ Three capabilities Base needs are limited by the frozen rev-11 DLL. Accept the G
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+
+## Answer
+
+Resolved 2026-10-19 — the user accepted the presented plan ("sounds good then"), which proposed the Go-side fallbacks below; no native revision.
+
+- **A11y:** full roles/states live in the Go snapshot (what upstream tests read); publication maps roles the rev-11 ABI lacks to the nearest supported role (else GenericContainer) and drops unrepresentable states instead of failing the publish. Recorded as a screen-reader fidelity deviation per affected component.
+- **Per-run text paint:** shape once, paint each run clipped to its `SelectionRects`; a ligature spanning a color boundary takes one color; strikethrough offset derived from font metrics. Recorded deviation.
+- **Gradients/patterns:** `Background` stays solid-only; documented.
