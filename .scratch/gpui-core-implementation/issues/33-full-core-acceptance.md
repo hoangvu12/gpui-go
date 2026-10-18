@@ -4,7 +4,7 @@ Parent: ../plan.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: wave-4 orchestrator chat (Roboco)
 Blocked by: 15, 30, 31, 32
 
@@ -36,3 +36,15 @@ Deliver this complete observable path against the [implementation specification]
 ## Comments
 
 - 2026-10-05 — Created under the user's authorization to finish Wayfinder, the specification and local implementation tickets. Routine details are delegated; a discovered scope or architecture contradiction must reopen the affected decision with evidence.
+
+## Answer
+
+RESOLVED (2026-10-11, wave 4, batch 12 — the final ticket). The full-core audit ran on the final rev-11 artifact (sha256 37ee6877…):
+
+- **The reconciliation is COMPLETE**: all 6911 capability-ledger rows (schema @2) map through their owning tickets to executed resolution evidence (3927 exact + 2846 behavior + 23 both + 115 structure; zero unreconciled) — executed by the committed audit tool (conformance/cmd/auditreconcile). The blocked environments and the narrowly documented exceptions are recorded, never passed as behavior.
+- **The visual calibration executed** (conformance/cmd/visualcalib): the repeat-run noise is measured ZERO (10/10 byte-identical captures per scene), the material injected defects (a one-pixel color change, a 1-pixel displacement, an extent error) are all detected by the exact gates, and the thresholds are frozen accordingly — the exact gates at threshold 0, with the ~98% intent staying intent (never an SSIM/pixel percentage), exactly as the ticket requires.
+- **The complete corpus on the final exact artifact**: 34 packages ok (build/vet/gofmt clean); the only failures are the documented environmental classes (the post-fullscreen shell corruption for the cursor gate; the parallel-contention class for the live-capture pixel gate — both proven baseline-pre-existing, the capture gate green serially). fx-0001..fx-0008 bit-exact on the final artifact (the property held through all three rotations); the consumer delivery gates green.
+- **The provenance recorded**: the fixed pin (254b5dbd…), the artifact family history (rev 1→11, every rotation additive with the measure manifest), the adaptation/exception provenance per ticket, and the upstream/dependency update procedure (a new pin reopens the conformance decision; the rebuild follows the bounded resource rules with the additive assertion checklist).
+
+Evidence: [evidence/ticket33-full-core-audit.json](../../../evidence/ticket33-full-core-audit.json) (the corpus table, the reconciliation counts, the calibration measurements, the remaining-work record — the honest statement of what publication-status work remains).
+
