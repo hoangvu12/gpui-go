@@ -1719,7 +1719,6 @@ func (w *hostWindow) restoreCursorAfterHide() {
 // start_tracking_mouse). Only the cursor slice's tracking is installed
 // here; mouse input routing belongs to the input tickets.
 func (w *hostWindow) startMouseLeaveTracking(flags uint32) {
-	println("DIAG: startMouseLeaveTracking hwnd", w.hwnd, "hovered", w.hovered)
 	if w.hovered {
 		return
 	}

@@ -842,14 +842,17 @@ unsafe fn decode_update(
                     y1: f64::from_bits(record.bounds_y1_bits),
                 });
             }
+            // The actions mask is a tag-PRESENCE set: bit i set means
+            // the action with tag i+1 is advertised (all nine tags
+            // representable; the rev-10 decoder misread the bit VALUE
+            // as the tag, which only worked for power-of-two tags —
+            // the a11y Go worker's finding).
             let mut mask = record.actions_mask;
             while mask != 0 {
-                let tag = mask.trailing_zeros();
-                mask &= !(1 << tag);
-                if tag == 0 {
-                    return Err(a11y_status::ERR_BAD_VALUE);
-                }
-                node.add_action(action_from_tag(1 << tag)?);
+                let index = mask.trailing_zeros();
+                mask &= !(1 << index);
+                let tag = index + 1;
+                node.add_action(action_from_tag(tag)?);
             }
             if record.children_count > 0 {
                 let start = record.children_offset as usize;

@@ -53,7 +53,12 @@ const (
 	rendererErrCapacity         int32 = -10
 	rendererErrUnsupportedScene int32 = -11
 	rendererErrScene            int32 = -12
-	rendererErrPanic            int32 = 101
+	// rendererErrRecovering (-13, the rev-11 fix-up): the pin's
+	// skip_draws gate — draw, render, present and render-to-image
+	// refuse while the replacement device's resources are not yet
+	// rebuilt. (The rev-10 value -12 collided with rendererErrScene.)
+	rendererErrRecovering int32 = -13
+	rendererErrPanic      int32 = 101
 )
 
 // rendererServiceVersion mirrors GPUI_GO_RENDERER_SERVICE_VERSION.
@@ -89,6 +94,8 @@ func rendererStatusName(code int32) string {
 		return "unsupported surface source (the pinned import error)"
 	case rendererErrScene:
 		return "scene handle rejected (stale, unfinished or failed)"
+	case rendererErrRecovering:
+		return "recovering from device loss (the pin's skip_draws; clear with MarkDrawable)"
 	case rendererErrPanic:
 		return "native panic contained"
 	default:

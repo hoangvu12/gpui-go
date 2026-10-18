@@ -226,7 +226,7 @@ pub mod renderer_status {
     /// treats it as "frame skipped, redraw pending", matching the
     /// pin's forced-redraw recovery flow). Clear the gate with
     /// `renderer_device_mark_drawable` (the pin's `mark_drawable`).
-    pub const ERR_RECOVERING: i32 = -12;
+    pub const ERR_RECOVERING: i32 = -13;
     /// The scene handle of a draw entry did not resolve to a finished,
     /// healthy scene (stale, malformed, unfinished or failed).
     pub const ERR_SCENE: i32 = -12;
@@ -2269,11 +2269,24 @@ fn device_rebuild_body(out: *mut GpuiGoRebuildRecord) -> i32 {
             }
         }
     }
-    // Rebuild every occupied surface's swap chain, views and
-    // composition tree in place (the pin rebuilds each renderer's
-    // resources; handles persist). The shared device handles are
-    // cloned once (AddRef'd) so the loop body borrows the slots
-    // mutably without aliasing the device borrow.
+    // The pin's rebuild ORDER (handle_device_lost_impl 459-483): the
+    // old resources are TAKEN (dropped) BEFORE the new ones are
+    // created — recreating a swap chain while the old chain and its
+    // DirectComposition tree are still attached fails with
+    // D3DERR_INVALIDCALL/E_ACCESSDENIED (the rev-10 defect the
+    // device-loss Go worker found: FailedSurfaces=1, 0x88980800).
+    // Take pass first, recreate pass second; handles persist.
+    for slot in state.slots.iter_mut() {
+        if let Some(surface) = slot.surface.as_mut() {
+            surface.composition.take();
+            surface.render_target_view.take();
+            surface.render_target.take();
+            surface.draw_targets = draw::DrawTargets::default();
+        }
+    }
+    // The shared device handles are cloned once (AddRef'd) so the
+    // loop body borrows the slots mutably without aliasing the device
+    // borrow.
     let (dxgi_factory, device, context) = match state.device.as_ref() {
         Some(shared) => (
             shared.dxgi_factory.clone(),

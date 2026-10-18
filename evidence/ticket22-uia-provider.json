@@ -1,0 +1,31 @@
+{
+    "ticket": "22-uia-provider",
+    "date": "2026-10-11",
+    "authorization": "The user's 2026-10-11 standing pre-authorization for the wave-4 orchestrator ('try to implement everything ... just implement everything', including the native rebuilds). Native surface: the batch-8 rebuild + the rev-11 fix-up.",
+    "session": "Wave 4. The native service (a11y.rs, slot 9, bit 10) + the Go FFI client were implemented by the orchestrator in-session (batch 8); the Go model/wiring/spec were implemented by the background implementer subagent (clean completion); the orchestrator verified every gate, applied the rev-11 action-mask protocol fix and resolved.",
+    "git_state": "Branch implement-core-remaining; committed with this evidence (batch 10).",
+    "native": "a11y.rs: the pinned AccessKit adapter stack — accesskit 0.24.1 (the shared gpui-ce graph instance) + accesskit_windows 0.33.1 (the one new crate, SAME windows 0.62.2 family). Adapter create with the stored pending initial tree (the pin's minimal Role::Window root + title — the activation-before-complete-tree behavior without a Go trampoline), publish with update_if_active semantics (decode only when an AT connected; events raised outside the service lock — the nested-WM_GETOBJECT reentrancy rule), handle_wm_getobject with the LRESULT conversion outside the lock (UiaReturnRawElementProvider's nested message), the queued action handoff (the pin's async_channel dispatch — do_action only queues; the foreground polls), is_active, destroy. Rev-11 fix: the action mask decodes as a tag-presence set (bit i-1 = tag i — all nine actions representable; the rev-10 decoder misread the bit value as the tag, excluding the non-power-of-two tags).",
+    "implementation": {
+        "provider": "gpui/a11yprovider.go: the A11yProvider model over App — adapter creation at the window's a11y activation (marshaled onto the window's message thread, never inside WM_GETOBJECT), the per-frame publication of the ticket-21 A11ySnapshot (serialized nodes/children/UTF-8 pool, physical f64 bounds = logical × scale, the actions mask) gated by the native active flag with the false→true edge forcing a redraw (the pin's forced frame), the action drain (per-frame + on-demand) routed to the generation-checked ticket-21 listeners with the built-ins: Click → synthetic MouseDown/MouseUp at the node bounds center through the real dispatchInput, Focus → the bound handle, Blur → window blur.",
+        "routing": "gpui/win32host_windows.go: one WM_GETOBJECT case in the WndProc (the provider registry consulted with the lock dropped before the native call; unhandled → DefWindowProc). gpui/accessibility.go: the provider hooks in the ticket-21 runtime lifecycle + the built-in Click fallback.",
+        "lifecycle": "Window close destroys the adapter through a window-scope sentinel entity's release callback (the adapter deregistered before the drop so late/nested queries fall to DefWindowProc)."
+    },
+    "gates": {
+        "a11yspec": "internal/a11yspec (9 tests over real windows, FAIL not skip): the setup-at-activation (including the unactivated DefWindowProc fall-through), the activation-before-complete-tree flow (skip-before-activation, the -25/OBJID_CLIENT/OBJID_CARET routing, the activation edge, the forced redraw, post-activation applied+events-raised), the publication semantics, the action routing (listeners, payloads, Focus/Blur, Click's synthetic mouse at the bounds center), the stale-request/generation behavior, the close/reopen adapter lifetime, concurrent queries+updates+actions (4 goroutines × 25 queries concurrent with 5 publication frames), and the opt-in Narrator evidence.",
+        "narrator": "REAL evidence: a real UIA client (Narrator, launched via cmd /c start) connected and queried the window 3 times (LRESULT 0x10000 from UiaReturnRawElementProvider) with the deterministic activation record following. Narrator cannot be terminated from this non-elevated session (a protected process — the user can toggle it off with Win+Ctrl+Enter); later runs record the ambient reader honestly. Deterministic tests use hidden windows so the ambient reader cannot sweep them.",
+        "regressions": "internal/accessspec, winhostspec, desktopspec, dropspec, imespec, focusspec, inlinespec, inspectorspec, authorspec, actionspec all green; the full gpui package green apart from the documented environmental cursor gate."
+    },
+    "executed_results": {
+        "go": "CGO_ENABLED=0 go test ./internal/a11yspec -count=1: ok (also with -shuffle=on and with the ambient Narrator running). go build/vet clean.",
+        "native": "The rev-11 artifact (sha256 37ee6877…): the action-mask protocol verified through the provider publication."
+    },
+    "limitations": [
+        "The advertised actions = listener-registered + Focus for focus-bound nodes; the pin's extra Click advertisement for plain div click-listeners is not surfaced by the port's element layer yet.",
+        "Adapter creation happens at the window's a11y activation (ActivateWindowA11y), not unconditionally at Window::new — the port's a11y runtime is inert until activation.",
+        "The action drain is polled (per-frame + on demand) rather than the pin's continuously-receiving channel task — the same queue-then-dispatch semantics.",
+        "isFocused at creation reads the host's is_active (GetActiveWindow) rather than GetForegroundWindow — the foreground binding lives outside the touched files.",
+        "The native service flips its active flag on any routed WM_GETOBJECT (including object ids the adapter declines); the pin flips it only in the activation closure — mirrored and documented.",
+        "A UIA read-back client (reading the live provider tree programmatically) was not built; Narrator's real query is the read evidence, and the snapshot-model comparison is the deterministic gate.",
+        "No reference-harness a11y fixture exists in this repo (the fx family covers layout/scene/text/glyph/paths/authoring/image); the comparison basis is the ticket-21 snapshot model + the pinned source citations."
+    ]
+}

@@ -421,7 +421,9 @@ pub struct GpuiGoSceneSurfaceRecord {
     pub bounds: GpuiGoSceneBounds,
     /// Content mask bounds.
     pub content_mask: GpuiGoSceneBounds,
-    /// Source kind tag (payload; 0 = none/unsupported).
+    /// Source kind tag (payload; 0 = none/unsupported, 1 = a capture
+    /// frame handle packed across `source_reserved[0]` (low 32) and
+    /// `source_reserved[1]` (high 32)).
     pub source_tag: u32,
     /// Reserved source payload; must be zero.
     pub source_reserved: [u32; 3],
@@ -1584,10 +1586,11 @@ impl SceneState {
                 }
             }
             surface_source_kind::CAPTURE_FRAME => {
-                if rec.source_reserved[0] == 0
-                    || rec.source_reserved[1] != 0
-                    || rec.source_reserved[2] != 0
-                {
+                // The 64-bit frame handle packed across the two
+                // reserved words (low 32 in [0], high 32 in [1] — the
+                // rev-11 fix-up; [1] may be zero for a small handle),
+                // the third word zero.
+                if rec.source_reserved[0] == 0 || rec.source_reserved[2] != 0 {
                     return Err(scene_status::ERR_BAD_VALUE);
                 }
             }
@@ -2567,8 +2570,26 @@ fn check_surface(rec: &GpuiGoSceneSurfaceRecord) -> Result<(), i32> {
     if rec.order != 0 {
         return Err(scene_status::ERR_BAD_VALUE);
     }
-    if rec.source_reserved != [0u32; 3] {
-        return Err(scene_status::ERR_BAD_VALUE);
+    // The source payload: tag 0 (Unsupported) demands the zeroed
+    // reserved words; tag 1 (the capture frame import, ticket28)
+    // carries the 64-bit frame handle packed across reserved[0]
+    // (low 32 bits) and reserved[1] (high 32 bits), with reserved[2]
+    // zero. The rev-10 artifact rejected every tag-1 payload at this
+    // gate (the state-level insert and the renderer draw path accepted
+    // them); the rev-11 fix aligns the export gate with the state
+    // level.
+    match rec.source_tag {
+        surface_source_kind::UNSUPPORTED => {
+            if rec.source_reserved != [0u32; 3] {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+        }
+        surface_source_kind::CAPTURE_FRAME => {
+            if rec.source_reserved[0] == 0 || rec.source_reserved[2] != 0 {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+        }
+        _ => return Err(scene_status::ERR_BAD_VALUE),
     }
     Ok(())
 }

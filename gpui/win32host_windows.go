@@ -842,6 +842,23 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
 		return r
 
+	case wmGetObject:
+		// WM_GETOBJECT (ticket22, events.rs 855-871 handle_wm_getobject):
+		// route the query to the window's accessibility provider
+		// (a11yprovider.go's routeWindowWmGetObject — the native adapter
+		// answers the UIA root/client object ids and converts the LRESULT
+		// outside every lock, because that conversion may deliver a
+		// nested WM_GETOBJECT back into this same procedure). An
+		// unhandled query (no provider, or the adapter declining the
+		// object id) falls to DefWindowProcW exactly like the pin's None
+		// arm. The route touches no application state: the native tree
+		// serves the query from the last published snapshot.
+		if result, handled := routeWindowWmGetObject(w.host, hwnd, wparam, lp); handled {
+			return result
+		}
+		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
+		return r
+
 	case wmClose:
 		if w.shouldClose != nil {
 			if !w.shouldClose() {

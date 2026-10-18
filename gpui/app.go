@@ -18,6 +18,7 @@ package gpui
 
 import (
 	"fmt"
+	"gpui-go/internal/native"
 	"reflect"
 	"strings"
 )
@@ -177,6 +178,16 @@ type App struct {
 	// failure sticks.
 	svgRenderer    *SvgRenderer
 	svgRendererErr error
+	// a11yAdapterService is the application's native a11y provider
+	// service handle (ticket22; lazily resolved once, the first
+	// failure sticks — the accessor lives in a11yprovider.go).
+	a11yAdapterService *native.A11yService
+	a11yServiceErr     error
+	// captureService is the application's native capture service
+	// handle (ticket28; lazily resolved once, the first failure
+	// sticks — the accessor lives in capture.go).
+	captureService *native.CaptureService
+	captureErr     error
 }
 
 // newApp builds the headless application core wired to scheduler.

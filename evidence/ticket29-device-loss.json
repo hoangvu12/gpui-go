@@ -1,0 +1,28 @@
+{
+    "ticket": "29-device-loss",
+    "date": "2026-10-11",
+    "authorization": "The user's 2026-10-11 standing pre-authorization for the wave-4 orchestrator (including the native rebuilds). Native surface: the batch-8 rebuild + the rev-11 fix-up (the rebuild resource order + the status split).",
+    "session": "Wave 4. The native entries (renderer v3's device_state_check/inject_loss/rebuild/mark_drawable) + the Go FFI client were implemented by the orchestrator in-session (batch 8); the Go controller/model/spec were implemented by the background implementer subagent (clean completion); the orchestrator applied the rev-11 fixes (the rebuild order + the -13 status), verified every gate and resolved.",
+    "git_state": "Branch implement-core-remaining; committed with this evidence (batch 10).",
+    "native": "renderer.rs v3: device_state_check (real + injected loss recorded separately — the driver's GetDeviceRemovedReason vs the test injection's DXGI_ERROR_DEVICE_REMOVED marker; the recovery gate; the device generation), device_inject_loss (test-only), device_rebuild (the pin's handle_gpu_device_lost: the 350ms settle, the 5-attempt bounded device recreation with 100+i*10ms backoff, the old state torn down with ClearState+Flush, every surface's swap chain + composition rebuilt IN PLACE — handles persist like the pin's renderer objects —, the draw globals and the capture surface-view cache dropped, in-flight submissions ABORTED with stale handles — the safe-abort release path, the recovery gate armed until mark_drawable), device_mark_drawable. Rev-11 fixes: the rebuild takes the old composition/views/targets BEFORE recreating (the pin's handle_device_lost_impl order — the rev-10 in-place recreation failed with D3DERR_INVALIDCALL/E_ACCESSDENIED while the old chain was attached), and ERR_RECOVERING moved to -13 (the -12 collided with rendererErrScene).",
+    "implementation": {
+        "controller": "gpui/deviceloss.go: the deviceLoss controller — pacing-cadence detection (one DeviceState probe per 8 pacing rounds ≈16ms, the pin's vblank check), the once-only auto-trigger with a 3-sequence terminal bound (the pin panics; the port reports TerminalFailure), the recovery sequence (RebuildDevice → the ledger abort bookkeeping → atlas invalidation over the registered atlases + each window's text-system atlas → the per-window gate probes → MarkDrawable → the fresh-surface fallback when the rebuild reports failed surfaces → the forced redraws), the registered-atlas seam, the forced-redraw callback seam, the skip accounting.",
+        "renderer": "gpui/renderer.go: the detection probe in the pacing loop, the LedgerSkipped event + the skipped count ('skipped, redraw pending' — never a silent success, never counted as acceptance), the loss-abort retire terminal (stale handles after), the ERR_RECOVERING branches in PresentClear/DrawScene (ledger skip + typed refusal) and RenderScene (the pin's ensure)."
+    },
+    "gates": {
+        "devicelossspec": "internal/devicelossspec (10 tests over real windows with INJECTED loss, FAIL not skip): the identity (real/injected separate), the raw gate refusals + the observable skips + MarkDrawable, the full end-to-end (refused retire → abort → atlas invalidation → re-insert → the gate skip → mark → the fresh redraw with the red→blue pixel change on a real root-view window → the ledger 3/3/0/0), multiple windows redraw, the pacing-worker auto-detection, the 64-bound submission pressure freed by the abort, close/reopen during recovery, resize during recovery (the extent re-sync on the rebuilt chain), renderer shutdown mid-recovery, the closed-renderer guard.",
+        "rebuild_order": "The rev-11 order fix verified directly: the in-place rebuild now SUCCEEDS (Rebuilt=1 Failed=0 Recreated=0 attempts=1 — the orchestrator's probe on the final artifact); the worker's fresh-surface compensation remains as dormant robustness (it engages only when the rebuild reports failed surfaces).",
+        "regressions": "rendererspec, pathspec, glyphspec, scenespec, headlessspec + the full rotated-artifact regression set green."
+    },
+    "executed_results": {
+        "go": "CGO_ENABLED=0 go test ./internal/devicelossspec -count=1: ok (stable at -count=2).",
+        "native": "The rev-11 artifact (sha256 37ee6877…): the rebuild order + the -13 status split verified through the controller."
+    },
+    "limitations": [
+        "Real driver removal is not forceable on healthy hardware — the injected identity is kept separate everywhere (the state record, the removal-reason marker, the report), and its semantics are pinned: presents while lost-but-not-rebuilt still succeed; the injection arms the retire confirmation, the state record and the post-rebuild gate.",
+        "Upload-during-loss only fails under real removal (the injection is a state flag, not a broken device).",
+        "The terminal-failure path (the 3-sequence bound) is implemented but not forceable on healthy hardware (no fake paths, per the repo convention).",
+        "Capture-copy injection during loss belongs to the capture service's foreground poll discipline (the renderer lock); the rebuild's ClearedViews covers the native side of the view cache.",
+        "The controller's detection probe cadence is the pacing loop's (≈16ms), not a dedicated vsync thread like the pin (the port has no vsync thread; the observable recovery latency is bounded by the same cadence)."
+    ]
+}

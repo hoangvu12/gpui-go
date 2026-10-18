@@ -80,15 +80,18 @@ pub const GPUI_GO_ABI_VERSION: u32 = 1;
 /// Revision of the native bridge source itself (bumped on any native-side
 /// Ticket09 (text geometry service) bumped it to 5; ticket10 (glyph
 /// raster + atlas services, scene sprite primitives) bumped it to 6;
-/// ticket16 (path primitives + the pinned PathBuilder tessellation in
-/// the scene service, the scene drawing pipeline in the renderer
-/// service) bumped it to 7. The wave-4 rebuild (tickets 22/28/29/32 +
-/// the ticket-19 SVG-key follow-up) bumped it to 10: the a11y
-/// provider service (slot 9, bit 10), the capture service (slot 10,
-/// bit 11), the renderer service v3 (the device-loss entries, the
-/// render-to-image entry, the real capture surface import) and the
-/// atlas `AtlasKey::Svg` variant.
-pub const GPUI_GO_NATIVE_REVISION: u32 = 10;
+/// renderer service) bumped it to 7. The wave-4 rebuild (tickets
+/// 22/28/29/32 + the ticket-19 SVG-key follow-up) bumped it to 10: the a11y
+/// provider service (slot 9, bit 10), the capture service (slot 10, bit 11),
+/// the renderer service v3 (the device-loss entries, the render-to-image
+/// entry, the real capture surface import) and the atlas `AtlasKey::Svg`
+/// variant. The wave-4 fix-up (the Go workers' honest findings) bumped it
+/// to 11: the scene surface export gate now accepts the capture payload,
+/// the renderer's ERR_RECOVERING moved to -13 (the -12 collided with the
+/// scene service's status space), the device rebuild takes the old
+/// resources before recreating (the pin's order), and the a11y action mask
+/// decodes as a tag-presence set (all nine actions representable).
+pub const GPUI_GO_NATIVE_REVISION: u32 = 11;
 
 /// gpui-CE source pin this artifact family is built against (ASCII hex,
 /// zero-padded to 40 bytes in the table).

@@ -4,7 +4,7 @@ Parent: ../plan.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: wave-4 orchestrator chat (Roboco)
 Blocked by: 16, 29
 
@@ -33,3 +33,14 @@ Deliver the pinned Windows render-to-image path from a Go scene to immutable own
 ## Comments
 
 - 2026-10-05 — Added after GLM-5.3's final read-only audit identified the headless/render-to-image family. Main confirmed PlatformHeadlessRenderer and the Windows test-support render_to_image path in pinned snapshots. No implementation or readback has executed.
+
+## Answer
+
+RESOLVED (2026-10-11, wave 4, batches 8+10). The test-support render-to-image path is live over the rev-11 native artifact:
+
+- **Native (batch 8)**: renderer_surface_render_to_image — the pinned path verbatim (render without presenting + the staging readback with the row-pitch handling and the BGRA→RGBA swap; the pin's device-recovery refusal first).
+- **Go (batch 9)**: the RenderToImage model (the scene + appearance → the owned immutable RGBA image with the exact metadata; the capacity retry; the extent sync), Renderer.HeadlessTrace (the canceled/partial-failure record) and gpui.HeadlessProfileRecords (the per-profile applicability trace — the source-supported errors separate from the port's implemented path, the bounded follow-ups recorded).
+- **Rev-11 fix**: the ERR_RECOVERING status split to -13 (the refusals unambiguous at the ABI).
+- **Gates**: internal/headlessspec — 9 tests over real windows: computable expected pixels (the pin's ±8 tolerance), opaque/transparent/blurred appearances, odd widths (61/161) with per-row checks (the row-pitch validation), the pin's own default_image/custom_image dashed-border test patterns, repeated-readback determinism + RenderScene+ReadPixels ≡ RenderToImage, two windows on the one device, teardown with pending readback, the recovery gate, and the profile-record assertions with a source-file existence audit.
+
+Evidence: [evidence/ticket32-render-to-image.json](../../../evidence/ticket32-render-to-image.json) (executed results; the reference-comparison basis; the honest deviations).

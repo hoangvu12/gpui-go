@@ -27,7 +27,7 @@ import (
 //   - evidence/ticket22-uia-provider.json, evidence/ticket28-capture.json,
 //     evidence/ticket29-device-loss.json and
 //     evidence/ticket32-render-to-image.json (the wave-4 evidence
-//     recording: "18,860,544 bytes; sha256 6442f00a…; static CRT
+//     recording: "18,861,056 bytes; sha256 37ee6877…; static CRT
 //     (OS-only imports)", native revision 10, capability mask 0xFFF).
 //
 // When the maintainer artifact rotates, these constants, the embedded
@@ -35,11 +35,11 @@ import (
 // loudly instead of accepting a silent identity drift.
 const (
 	// EvidenceArtifactSHA256 is the recorded SHA-256 of the DLL.
-	EvidenceArtifactSHA256 = "6442f00acb8064a91a6d8aabb3996d47b1a93d4f7745df616fd3cbb1782258ce"
+	EvidenceArtifactSHA256 = "37ee6877023dda0635544555639c9a68100e44d5c3790aad8613e4c938ed712e"
 	// EvidenceArtifactBytes is the recorded DLL size.
-	EvidenceArtifactBytes = 18860544
+	EvidenceArtifactBytes = 18861056
 	// EvidenceNativeRevision is the recorded native bridge revision.
-	EvidenceNativeRevision = 10
+	EvidenceNativeRevision = 11
 	// EvidenceCECommit is the pinned gpui-CE commit of the artifact.
 	EvidenceCECommit = "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a"
 	// EvidenceCRTOutcome is the recorded static-CRT outcome string.

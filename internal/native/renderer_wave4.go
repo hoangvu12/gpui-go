@@ -53,8 +53,10 @@ type RebuildRecord struct {
 	RecordSize uint32
 }
 
-// rendererStatusRecovering mirrors renderer_status::ERR_RECOVERING.
-const rendererStatusRecovering int32 = -12
+// rendererStatusRecovering aliases rendererErrRecovering
+// (renderer_status::ERR_RECOVERING, -13 since the rev-11 fix-up: the
+// rev-10 value -12 collided with rendererErrScene).
+const rendererStatusRecovering = rendererErrRecovering
 
 // ErrRendererRecovering reports the recovery-gate refusal (the pin's
 // skip_draws: draw, render, present and render-to-image skip while the
