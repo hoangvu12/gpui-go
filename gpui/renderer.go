@@ -898,7 +898,11 @@ func (sub *Submission) Retire() (native.RetireRecord, error) {
 // recordRetire records the terminal state: through App.Update when this
 // is a pacing renderer retiring off the foreground thread (the pacing
 // worker and background callers dispatch the record to the foreground),
-// or directly otherwise.
+// or directly otherwise. A dispatch attempted after App.Shutdown began
+// is rejected (new application work is rejected while terminal
+// completion/retirement messages keep being accepted), so the record
+// lands directly in the ledger instead of panicking the retiring
+// goroutine through App.Spawn's rejection.
 func (sub *Submission) recordRetire(record native.RetireRecord) {
 	r := sub.renderer
 	if r.pacing && !r.isForeground() {
@@ -907,17 +911,15 @@ func (sub *Submission) recordRetire(record native.RetireRecord) {
 			handle := sub.handle
 			terminal := record.Terminal
 			reason := record.DeviceRemovedReason
-			app.Spawn(func(cx *AsyncApp) struct{} {
-				cx.Update(func(*App) {
-					r.ledger.retireComplete(handle, native.RetireRecord{
-						Terminal:            terminal,
-						DeviceRemovedReason: reason,
-					}, true)
-				})
-				return struct{}{}
-			})
-			r.finishInFlight(sub.handle)
-			return
+			if dispatchRetireToApp(app, func() {
+				r.ledger.retireComplete(handle, native.RetireRecord{
+					Terminal:            terminal,
+					DeviceRemovedReason: reason,
+				}, true)
+			}) {
+				r.finishInFlight(sub.handle)
+				return
+			}
 		}
 	}
 	r.ledger.retireComplete(sub.handle, record, r.isForeground())
@@ -1065,8 +1067,51 @@ func (r *Renderer) paceOnce(stop chan struct{}) {
 	}
 }
 
-// dispatchRetire hands the terminal record to the foreground (App.Spawn +
-// cx.Update) and removes the handle from the in-flight table.
+// dispatchRetireToApp posts one foreground dispatch of a terminal
+// retirement record, reporting whether it was accepted.
+//
+// The dispatch goes through the host's foreground queue when the
+// application has one: posted closures survive App.Shutdown (whose
+// drain cancels every queued Spawn task — a terminal record dispatched
+// as a task would be cancelled before running and lost), and the
+// host's final drain runs them even after the message loop exited.
+// This is the contract's "shutdown continues accepting terminal
+// completion/retirement messages after rejecting new application
+// work": the record is a retirement message, not new application
+// work, so it rides the foreground queue instead of the task system.
+//
+// A hostless application keeps the App.Spawn path; the pre-check and
+// the recover backstop catch a shutdown that began after the flag was
+// read (the only panic App.Spawn can raise here is the shutdown
+// rejection — the posted body runs later, on the dispatcher), and the
+// caller then records the terminal record directly.
+func dispatchRetireToApp(app *App, record func()) (accepted bool) {
+	if h := app.Host(); h != nil {
+		return h.Post(func() {
+			app.Update(func(*App) { record() })
+		})
+	}
+	if app.sched.shuttingDown {
+		return false
+	}
+	defer func() {
+		if recover() != nil {
+			accepted = false
+		}
+	}()
+	app.Spawn(func(cx *AsyncApp) struct{} {
+		cx.Update(func(*App) { record() })
+		return struct{}{}
+	})
+	return true
+}
+
+// dispatchRetire hands the terminal record to the foreground queue (the
+// host's posted-closure path when the application has a host, App.Spawn
+// otherwise) and removes the handle from the in-flight table. A dispatch
+// rejected because the application is shutting down records the terminal
+// record directly instead: shutdown continues accepting terminal
+// completion/retirement messages after rejecting new application work.
 func (r *Renderer) dispatchRetire(handle native.SubmissionHandle, record native.RetireRecord) {
 	app := r.app.Load()
 	if app == nil {
@@ -1074,15 +1119,17 @@ func (r *Renderer) dispatchRetire(handle native.SubmissionHandle, record native.
 	} else {
 		terminal := record.Terminal
 		reason := record.DeviceRemovedReason
-		app.Spawn(func(cx *AsyncApp) struct{} {
-			cx.Update(func(*App) {
-				r.ledger.retireComplete(handle, native.RetireRecord{
-					Terminal:            terminal,
-					DeviceRemovedReason: reason,
-				}, true)
-			})
-			return struct{}{}
-		})
+		if !dispatchRetireToApp(app, func() {
+			r.ledger.retireComplete(handle, native.RetireRecord{
+				Terminal:            terminal,
+				DeviceRemovedReason: reason,
+			}, true)
+		}) {
+			// The application is shutting down and its foreground queue
+			// is gone: the terminal record still lands (recorded off the
+			// foreground, like the no-app arm).
+			r.ledger.retireComplete(handle, record, false)
+		}
 	}
 	r.finishInFlight(handle)
 }

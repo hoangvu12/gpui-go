@@ -385,9 +385,12 @@ func (a *App) Window(id WindowID) (*Window, bool) {
 }
 
 // removeWindow retires a destroyed window: the registry entry is
-// removed and the window's scope closes, cancelling its registrations
+// removed, the window's scope closes, cancelling its registrations
 // and tasks while independent windows and shared entities are
-// untouched. The caller must hold the update (the host's WM_DESTROY
+// untouched, and the window's element runtime is dropped (render.go's
+// RemoveWindowView path — the reference window removal drops the
+// window's frame state with the registry entry, app.rs 1978-1985's
+// trail). The caller must hold the update (the host's WM_DESTROY
 // path wraps this in App.Update).
 func (a *App) removeWindow(id WindowID) {
 	w, ok := a.windows[id]
@@ -397,6 +400,11 @@ func (a *App) removeWindow(id WindowID) {
 	delete(a.windows, id)
 	// Close runs inline: we are already inside the update boundary.
 	w.scope.Close()
+	// The element runtime retires with the window (idempotent; the
+	// test-window close path calls it again as a no-op). Lease
+	// releases queued by the scope close flush at this update's
+	// boundary, after removeWindow returned.
+	dropDrawState(w)
 }
 
 // ---------------------------------------------------------------------------
