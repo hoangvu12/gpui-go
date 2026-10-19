@@ -364,6 +364,13 @@ func wrapTextError(op string, err error) error {
 // behind its own state mutex.
 type TextSystem struct {
 	svc *native.TextService
+	// liveHandles counts the native shaping handles issued through
+	// this system and not yet disposed: the Go-side mirror of the
+	// native service's live-handle count (the native ABI exposes only
+	// its bound, MaxShapingHandles). Atomic: the system is
+	// process-global and safe for concurrent use, so the counter must
+	// be too.
+	liveHandles atomic.Int64
 }
 
 var (
@@ -395,6 +402,17 @@ func DefaultTextSystem() (*TextSystem, error) {
 // MaxShapingHandles is the native live shaping-handle bound (256).
 func (ts *TextSystem) MaxShapingHandles() int {
 	return ts.svc.MaxShapingHandles()
+}
+
+// LiveShapingHandles reports how many native shaping handles this
+// system has issued and not disposed — the Go-side mirror of the
+// native service's live-handle count, bounded by MaxShapingHandles
+// (the native ABI exposes only the bound). A redrawing window whose
+// text goes through the element pipeline reuses cached shaped lines
+// (text_cache.go), so its count stays flat across frames instead of
+// growing with every redraw (ticket 02's observable).
+func (ts *TextSystem) LiveShapingHandles() int {
+	return int(ts.liveHandles.Load())
 }
 
 // FontNames returns the system font family names: the pinned
@@ -588,6 +606,9 @@ func (ts *TextSystem) ShapeText(request TextLayoutRequest) (*WrappedLine, error)
 		return nil, wrapTextError("ShapeText", err)
 	}
 	line := &WrappedLine{system: ts, handle: handle}
+	// The handle counts as live before the summary fetch so the failure
+	// path's own Dispose balances the counter.
+	ts.liveHandles.Add(1)
 	if err := line.refreshSummary(); err != nil {
 		_ = line.Dispose()
 		return nil, err
@@ -1240,5 +1261,6 @@ func (l *WrappedLine) Dispose() error {
 	if err := l.system.svc.Dispose(l.handle); err != nil {
 		return wrapTextError("Dispose", err)
 	}
+	l.system.liveHandles.Add(-1)
 	return nil
 }

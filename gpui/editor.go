@@ -314,6 +314,15 @@ func (e *Editor) currentDocument() (*WrappedLine, error) {
 		return nil, e.layoutErr
 	}
 	line, err := e.shape(e.text)
+	// The superseded document's native shaping handle releases here: the
+	// reference's version-gated refresh drops the old Arc (the layout
+	// dies with its last reference); the port owns the handle explicitly,
+	// so the replaced line disposes before the new one takes its place
+	// (ticket 02 — the editor's document otherwise accumulated one live
+	// handle per text change).
+	if e.layout != nil && e.layout != line {
+		_ = e.layout.Dispose()
+	}
 	e.layout = line
 	e.layoutErr = err
 	e.layoutAt = e.version

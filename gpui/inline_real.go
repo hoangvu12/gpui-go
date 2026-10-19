@@ -80,12 +80,12 @@ func (r *realWindowTextSystem) inlineMetrics(font FontDescriptor, fontSize float
 // paintLine implements shapedText: paint one visual line of the shaped
 // document at the given origin and baseline (the inline piece paint
 // path; the piece's native line supplies the fragments and glyphs). The
-// shaped handle is registered for frame-end disposal.
+// line is owned by the window's line-layout cache: its lifetime spans
+// frames while the paragraph keeps re-requesting it, and the cache
+// disposes it when superseded (text_cache.go; the earlier frame-scoped
+// registration here is retired with it).
 func (s *realShapedText) paintLine(w *Window, lineIndex int, origin Point, baseline float32, color Hsla) error {
 	frame := currentFrame(w)
-	if frame.inlineShapedLines != nil {
-		frame.inlineShapedLines[s.line] = struct{}{}
-	}
 	return frame.scene.PaintShapedTextLine(s.line, lineIndex, origin, baseline, color, s.system, s.atlas, frame.paint)
 }
 
@@ -441,9 +441,14 @@ func (r *realWindowTextSystem) layoutInline(request inlineLayoutRequest) (inline
 
 // shapeRuns shapes one segment with its covering runs at the
 // segment's font size (the paragraph document seam: the native
-// shaping request with explicit runs).
+// shaping request with explicit runs). The shape resolves through the
+// window's line-layout cache like every real shaped line (the
+// reference's platform layout_text call sits under the same
+// LineLayoutCache), so a paragraph whose text, runs and row budgets
+// repeat across frames reuses its pieces' lines instead of re-shaping
+// them.
 func (r *realWindowTextSystem) shapeRuns(text string, fontSize float32, runs []TextRun, wrapWidth *float32, lineClamp *uint32) (shapedText, error) {
-	line, err := r.system.ShapeText(TextLayoutRequest{
+	line, err := r.lines.layoutWrappedLine(r.system, TextLayoutRequest{
 		Text:      text,
 		FontSize:  fontSize,
 		Runs:      runs,

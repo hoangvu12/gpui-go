@@ -281,6 +281,12 @@ type windowTextSystem interface {
 	// shape shapes the text at the resolved font size with one style run
 	// of the given font, under the optional wrap width and line clamp.
 	shape(text string, fontSize float32, font FontDescriptor, wrapWidth *float32, lineClamp *uint32) (shapedText, error)
+	// finishFrame ends one frame's shaped-line usage (the reference
+	// WindowTextSystem::finish_frame, called by the window draw's tail):
+	// the window's line-layout cache rotates — the lines the frame
+	// requested survive into the next frame's previous-frame cache, the
+	// rest release. A stateless test system has nothing to rotate.
+	finishFrame()
 	// layoutInline lays out one inline document (text plus atomic
 	// element boxes) in one inline formatting context (the reference
 	// PlatformTextSystem::layout_inline). Go owns the algorithm on both
@@ -331,14 +337,23 @@ type shapedText interface {
 
 // realWindowTextSystem is the real text stack seam: shaping through the
 // port's TextSystem and painting through the scene's shaped-text paint
-// path (PaintShapedText) with the window's atlas.
+// path (PaintShapedText) with the window's atlas. It is the reference
+// WindowTextSystem: one per window, carrying the window's line-layout
+// cache (text_cache.go, the reference LineLayoutCache) so shaped lines
+// are reused across frames instead of re-shaped every frame.
 type realWindowTextSystem struct {
 	system *TextSystem
 	atlas  *Atlas
+	// lines is the window's line-layout cache (the reference
+	// WindowTextSystem's line_layout_cache): shaped lines cached across
+	// frames, disposed when superseded (ticket 02).
+	lines shapedLineCache
 }
 
-// windowTextSystemOf returns the real text system seam, constructing the
-// shared text system and atlas once per process.
+// windowTextSystemOf returns the real text system seam for one
+// window: the process-global TextSystem plus a fresh per-window atlas
+// and line-layout cache (the reference WindowTextSystem::new per
+// window).
 func windowTextSystemOf() (windowTextSystem, error) {
 	system, err := DefaultTextSystem()
 	if err != nil {
@@ -353,20 +368,30 @@ func windowTextSystemOf() (windowTextSystem, error) {
 
 // shape implements windowTextSystem.
 func (r *realWindowTextSystem) shape(text string, fontSize float32, font FontDescriptor, wrapWidth *float32, lineClamp *uint32) (shapedText, error) {
-	run := TextRun{Len: len(text), Font: font}
 	request := TextLayoutRequest{
 		Text:      text,
 		FontSize:  fontSize,
-		Runs:      []TextRun{run},
+		Runs:      []TextRun{{Len: len(text), Font: font}},
 		WrapWidth: wrapWidth,
 		LineClamp: lineClamp,
 	}
-	line, err := r.system.ShapeText(request)
+	// The reference shape_text resolves through the window's
+	// line-layout cache (WindowTextSystem::shape_text →
+	// LineLayoutCache::layout_wrapped_line): the same text, font size,
+	// runs, wrap width and line clamp reuse the shaped line across
+	// frames, and the superseded lines release at the frame rotation.
+	line, err := r.lines.layoutWrappedLine(r.system, request)
 	if err != nil {
 		return nil, err
 	}
 	return &realShapedText{line: line, system: r.system, atlas: r.atlas}, nil
 }
+
+// finishFrame implements windowTextSystem: rotate the window's
+// line-layout cache (WindowTextSystem::finish_frame →
+// LineLayoutCache::finish_frame), invoked by the window draw's
+// completion (render.go completeFrame, window.rs:3230).
+func (r *realWindowTextSystem) finishFrame() { r.lines.finishFrame() }
 
 // realShapedText adapts the port's WrappedLine into the shapedText seam.
 type realShapedText struct {
