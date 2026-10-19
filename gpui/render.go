@@ -381,6 +381,48 @@ func LastDrawnScene(w *Window) *Scene {
 	return ds.lastScene
 }
 
+// GlyphAtlas returns the atlas that holds the window's glyphs: the
+// atlas its text system rasterized every frame's glyph sprites into
+// (the element pipeline's per-window atlas; the reference's window
+// text system owns the atlas behind the platform renderer).
+//
+// A consumer-owned present loop passes it to Surface.DrawScene and
+// Surface.RenderScene whenever it presents LastDrawnScene(w): the
+// scene's sprite batches resolve their textures against exactly this
+// atlas, and a draw that does not receive it fails with the typed
+// ErrSceneSpriteAtlas (a nil atlas presents only sprite-free scenes,
+// which is why sprite-free windows present unchanged). The atlas is
+// created with the window's text system (lazily, on first use), stays
+// the same for the window's lifetime and is rebuilt after device loss
+// by the renderer's recovery (the atlas invalidation + forced redraw).
+//
+// Like every window accessor it must be called on the foreground
+// (host) thread. Deterministic test windows never rasterize glyphs,
+// so they answer ErrNoGlyphAtlas.
+func (w *Window) GlyphAtlas() (*Atlas, error) {
+	if w == nil {
+		return nil, fmt.Errorf("gpui: GlyphAtlas requires a window")
+	}
+	ds, ok := windowDrawStates[w]
+	if !ok {
+		return nil, fmt.Errorf("gpui: GlyphAtlas: the window has no element runtime")
+	}
+	if ds.text == nil {
+		// The same lazy creation the frame draw and Window.ShapeText
+		// use: a present loop may ask before the first frame.
+		text, err := windowTextSystemOf()
+		if err != nil {
+			return nil, fmt.Errorf("gpui: GlyphAtlas: text system: %w", err)
+		}
+		ds.text = text
+	}
+	rts, ok := ds.text.(*realWindowTextSystem)
+	if !ok || rts.atlas == nil {
+		return nil, fmt.Errorf("gpui: GlyphAtlas: %w (deterministic test windows shape no glyph sprites)", ErrNoGlyphAtlas)
+	}
+	return rts.atlas, nil
+}
+
 // WindowPrimitiveCounts returns the current frame's quad and glyph
 // sprite counts (the reference Window::rendered_primitive_counts:
 // quads, monochrome sprites, subpixel sprites, polychrome sprites).

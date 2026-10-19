@@ -1,4 +1,5 @@
-// Command hello opens one window whose root view is a centered box.
+// Command hello opens one window whose root view is a centered box
+// with a label.
 //
 // The window is driven by the frame loop: the framework draws the root
 // view whenever the window needs a frame (it opens dirty; a resize,
@@ -24,8 +25,14 @@ func (h *hello) Render(w *gpui.Window, cx *gpui.Context[hello]) gpui.AnyElement 
 		AlignItems(gpui.AlignItemsCenter).
 		Bg(gpui.RgbaToHsla(0x1e293bff)).
 		Child(gpui.Div().
+			Flex().
+			Justify(gpui.AlignContentCenter).
+			AlignItems(gpui.AlignItemsCenter).
 			Size(gpui.PxLength(160), gpui.PxLength(96)).
-			Bg(gpui.RgbaToHsla(0x2563ebff))).
+			Bg(gpui.RgbaToHsla(0x2563ebff)).
+			TextColor(gpui.RgbaToHsla(0xffffffff)).
+			TextLg().
+			Child("Hello!")).
 		IntoElement()
 }
 
@@ -62,8 +69,15 @@ func main() {
 			log.Print(err)
 			return
 		}
-		// The scene has no glyph sprites, so it needs no atlas.
-		if _, err := target.DrawScene(scene, nil, gpui.BackgroundOpaque); err != nil {
+		// The scene's glyph sprites reference the atlas the window's
+		// text system rasterized them into: pass that atlas along with
+		// the scene (a sprite-free scene would ignore it).
+		atlas, err := shown.GlyphAtlas()
+		if err != nil {
+			log.Print(err)
+			return
+		}
+		if _, err := target.DrawScene(scene, atlas, gpui.BackgroundOpaque); err != nil {
 			log.Print(err)
 		}
 	}

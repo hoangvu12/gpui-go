@@ -71,6 +71,13 @@ var (
 	// whose completion was never observed by a poll (acceptance is not
 	// completion).
 	ErrRendererRetireNotCompleted = errors.New("gpui: submission is still pending; poll until completion before retiring")
+	// ErrSceneSpriteAtlas reports a draw of a scene whose glyph sprites
+	// reference an atlas the surface draw did not receive: either no
+	// atlas was passed (a nil atlas presents only sprite-free scenes) or
+	// the passed atlas is not the one the scene's sprites were
+	// rasterized into (each window's glyphs live in that window's text
+	// atlas — pass Window.GlyphAtlas).
+	ErrSceneSpriteAtlas = errors.New("gpui: the scene's sprites reference an atlas the draw did not receive")
 )
 
 // ---------------------------------------------------------------------------
@@ -1229,6 +1236,23 @@ func (s *Surface) DrawScene(scene *Scene, atlas *Atlas, appearance BackgroundApp
 	if err := scene.FinishIfNeeded(); err != nil {
 		return nil, fmt.Errorf("gpui: DrawScene: %w", err)
 	}
+	// A sprite scene names its atlas: guard the atlas seam BEFORE the
+	// native draw so a missing (or foreign) atlas answers with the typed,
+	// actionable error instead of failing inside the native render (a
+	// sprite scene's batches resolve their textures against the atlas
+	// handle; a nil handle only presents sprite-free scenes).
+	needsAtlas, err := sceneNeedsSpriteAtlas(scene)
+	if err != nil {
+		return nil, fmt.Errorf("gpui: DrawScene window %d: %w", s.windowID, err)
+	}
+	if needsAtlas {
+		if atlas == nil {
+			return nil, fmt.Errorf("gpui: DrawScene window %d: %w: pass the window's GlyphAtlas() (a nil atlas presents only sprite-free scenes)", s.windowID, ErrSceneSpriteAtlas)
+		}
+		if err := sceneAtlasServesSprites(scene, atlas); err != nil {
+			return nil, fmt.Errorf("gpui: DrawScene window %d: %w", s.windowID, err)
+		}
+	}
 	handle, err := r.svc.DrawScene(s.handle, native.SceneHandle(scene.Handle()), native.BackgroundAppearance(appearance), atlasHandle)
 	if err != nil && r.isRecoveryRefusal(err) {
 		// The pin's skip_draws on the draw path: refused before any GPU
@@ -1236,6 +1260,13 @@ func (s *Surface) DrawScene(scene *Scene, atlas *Atlas, appearance BackgroundApp
 		// frame ("skipped, redraw pending") — never a silent success.
 		r.ledger.recordSkipped(s.windowID, r.isForeground())
 		return nil, fmt.Errorf("gpui: DrawScene window %d: %w", s.windowID, ErrRendererRecovering)
+	}
+	if err != nil && needsAtlas && errors.Is(err, native.ErrRendererBadHandle) {
+		// A sprite scene's textures did not resolve against the passed
+		// atlas handle (a disposed atlas): answer with the typed,
+		// actionable mismatch while keeping the native record in the
+		// chain.
+		return nil, fmt.Errorf("gpui: DrawScene window %d: %w: the atlas does not resolve this scene's sprite textures (%w); pass the window's GlyphAtlas()", s.windowID, ErrSceneSpriteAtlas, err)
 	}
 	if err != nil && !errors.Is(err, native.ErrRendererPresent) {
 		return nil, fmt.Errorf("gpui: DrawScene window %d: %w", s.windowID, err)
@@ -1275,6 +1306,23 @@ func (s *Surface) RenderScene(scene *Scene, atlas *Atlas, appearance BackgroundA
 	if err := scene.FinishIfNeeded(); err != nil {
 		return fmt.Errorf("gpui: RenderScene: %w", err)
 	}
+	// The same typed atlas-seam guard as DrawScene: a sprite scene
+	// needs the atlas its tiles were rasterized into (the staging
+	// readback path — RenderScene + ReadPixels — is the consumer's
+	// verification route, so the missing-atlas failure must be the
+	// actionable error, not a failure inside the native render).
+	needsAtlas, err := sceneNeedsSpriteAtlas(scene)
+	if err != nil {
+		return fmt.Errorf("gpui: RenderScene window %d: %w", s.windowID, err)
+	}
+	if needsAtlas {
+		if atlas == nil {
+			return fmt.Errorf("gpui: RenderScene window %d: %w: pass the window's GlyphAtlas() (a nil atlas presents only sprite-free scenes)", s.windowID, ErrSceneSpriteAtlas)
+		}
+		if err := sceneAtlasServesSprites(scene, atlas); err != nil {
+			return fmt.Errorf("gpui: RenderScene window %d: %w", s.windowID, err)
+		}
+	}
 	if err := r.svc.RenderScene(s.handle, native.SceneHandle(scene.Handle()), native.BackgroundAppearance(appearance), atlasHandle); err != nil {
 		if r.isRecoveryRefusal(err) {
 			// The pin's ensure!(!skip_draws) of render_to_image: the
@@ -1282,7 +1330,64 @@ func (s *Surface) RenderScene(scene *Scene, atlas *Atlas, appearance BackgroundA
 			// identity exists to record in the ledger).
 			return fmt.Errorf("gpui: RenderScene window %d: %w", s.windowID, ErrRendererRecovering)
 		}
+		if needsAtlas && errors.Is(err, native.ErrRendererBadHandle) {
+			// A disposed atlas: the typed, actionable mismatch with the
+			// native record kept in the chain.
+			return fmt.Errorf("gpui: RenderScene window %d: %w: the atlas does not resolve this scene's sprite textures (%w); pass the window's GlyphAtlas()", s.windowID, ErrSceneSpriteAtlas, err)
+		}
 		return fmt.Errorf("gpui: RenderScene window %d: %w", s.windowID, err)
+	}
+	return nil
+}
+
+// sceneAtlasServesSprites verifies the atlas can resolve every sprite
+// batch's texture of the finished scene's compiled plan: each sprite
+// batch carries the atlas pool (monochrome/subpixel/polychrome) and the
+// texture index its tiles were packed into, and the native draw
+// resolves that view through the atlas service — an atlas that never
+// received this scene's tiles (a fresh public atlas, another window's
+// atlas) cannot draw them. The typed refusal names the mismatch so the
+// consumer passes the window's own atlas (Window.GlyphAtlas) before any
+// GPU work is accepted.
+//
+// The check is a precondition, not a proof of ownership: an atlas with
+// the same texture counts as the rasterizing atlas passes it (its
+// tiles differ, so the draw would show wrong glyphs); the scene's
+// owning atlas is the only one guaranteed to be correct.
+func sceneAtlasServesSprites(scene *Scene, atlas *Atlas) error {
+	commands, err := scene.SpriteCommands()
+	if err != nil {
+		return fmt.Errorf("%w: reading the scene's plan: %w", ErrSceneSpriteAtlas, err)
+	}
+	counts := make(map[AtlasTextureKind]int)
+	for _, command := range commands {
+		if command.Kind != spriteCommandBatch {
+			continue
+		}
+		var kind AtlasTextureKind
+		switch command.PrimitiveKind {
+		case spriteBatchKindMonochrome:
+			kind = AtlasTextureMonochrome
+		case spriteBatchKindSubpixel:
+			kind = AtlasTextureSubpixel
+		case spriteBatchKindPolychrome:
+			kind = AtlasTexturePolychrome
+		default:
+			// Non-sprite batches (quads, shadows, underlines, paths,
+			// surfaces, filter boundaries) resolve no atlas texture.
+			continue
+		}
+		count, cached := counts[kind]
+		if !cached {
+			count, err = atlas.TextureCount(kind)
+			if err != nil {
+				return fmt.Errorf("%w: resolving the atlas's %s pool: %w (pass the window's GlyphAtlas())", ErrSceneSpriteAtlas, kind, err)
+			}
+			counts[kind] = count
+		}
+		if int(command.TextureIndex) >= count {
+			return fmt.Errorf("%w: the scene's %s sprite batch needs texture %d but the atlas holds %d %s texture(s) — the sprites were rasterized into another atlas; pass the window's GlyphAtlas()", ErrSceneSpriteAtlas, kind, command.TextureIndex, count, kind)
+		}
 	}
 	return nil
 }

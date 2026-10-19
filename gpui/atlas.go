@@ -41,6 +41,21 @@ const (
 	AtlasTextureSubpixel AtlasTextureKind = 2
 )
 
+// String renders the pool the way the reference names its texture
+// kinds.
+func (k AtlasTextureKind) String() string {
+	switch k {
+	case AtlasTextureMonochrome:
+		return "monochrome"
+	case AtlasTexturePolychrome:
+		return "polychrome"
+	case AtlasTextureSubpixel:
+		return "subpixel"
+	default:
+		return fmt.Sprintf("AtlasTextureKind(%d)", uint32(k))
+	}
+}
+
 // AtlasTile is a placed atlas tile (the pinned AtlasTile minus the
 // generation bookkeeping the ABI adds): the texture pool index, the
 // tile id within that texture and the tile bounds inside the texture.
@@ -83,6 +98,10 @@ var (
 	// ErrAtlasTile is a placeholder alias of the stale-tile error (kept
 	// for future draw-side consumers).
 	ErrAtlasTile = errors.New("gpui: atlas tile unavailable")
+	// ErrNoGlyphAtlas reports a window whose text system owns no glyph
+	// atlas (deterministic test windows rasterize no glyphs, so their
+	// scenes carry no sprites and need no atlas).
+	ErrNoGlyphAtlas = errors.New("gpui: the window's text system owns no glyph atlas")
 )
 
 // Atlas is a native texture atlas instance. Its methods are safe for

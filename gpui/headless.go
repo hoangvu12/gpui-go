@@ -234,6 +234,27 @@ func (s *Surface) RenderToImage(scene *Scene, atlas *Atlas, appearance WindowBac
 	if err := scene.FinishIfNeeded(); err != nil {
 		return nil, fmt.Errorf("gpui: RenderToImage: %w", err)
 	}
+	// The same typed atlas-seam guard as DrawScene/RenderScene: a
+	// sprite scene's tiles resolve against the atlas that rasterized
+	// them, and the capture path answers the missing (or foreign) atlas
+	// with the actionable error instead of a failure inside the native
+	// render.
+	needsAtlas, err := sceneNeedsSpriteAtlas(scene)
+	if err != nil {
+		return nil, fmt.Errorf("gpui: RenderToImage window %d: %w", s.windowID, err)
+	}
+	if needsAtlas {
+		if atlas == nil {
+			err := fmt.Errorf("gpui: RenderToImage window %d: %w: pass the window's GlyphAtlas() (a nil atlas renders only sprite-free scenes)", s.windowID, ErrSceneSpriteAtlas)
+			r.recordHeadless(s, appearance, HeadlessRenderFailed, 0, 0, 0, err)
+			return nil, err
+		}
+		if err := sceneAtlasServesSprites(scene, atlas); err != nil {
+			err = fmt.Errorf("gpui: RenderToImage window %d: %w", s.windowID, err)
+			r.recordHeadless(s, appearance, HeadlessRenderFailed, 0, 0, 0, err)
+			return nil, err
+		}
+	}
 	// The pinned appearance match: opaque clears white, everything else
 	// clears transparent (directx_renderer.rs render's
 	// `appearance.is_opaque()` arm).
