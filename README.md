@@ -47,6 +47,47 @@ func (h *hello) Render(w *gpui.Window, cx *gpui.Context[hello]) gpui.AnyElement 
 
 The rest of the example creates the app and its Win32 host, opens the window with `App.OpenWindowView`, and presents frames. The present loop is still explicit. `gpui.DrawWindowFrame` builds the scene, and the window's `Surface.DrawScene` puts it on screen. The example repeats both steps from the window's `OnRedraw` hook. The public API does not yet expose the atlas that holds a window's glyphs, so a hand-written loop like this one can only present scenes without text. For larger programs, the real-window tests under `internal/*spec` exercise each subsystem against live windows. The [two-window counter](internal/authorspec/counter_window_test.go) is a good place to start.
 
+## Updating the view from a listener
+
+Listeners run after `Render` returns, so a listener must not capture the entity handle that `cx.Entity()` hands out: in Go a borrow cannot keep a lease alive the way Rust's `Entity<T>` clone does, so that handle is callback-borrowed and expires when the render callback returns. The view's strong self-handle replaces the reference's `cx.entity()` capture pattern:
+
+```go
+type counter struct {
+	count int
+}
+
+func (v *counter) Render(w *gpui.Window, cx *gpui.Context[counter]) gpui.AnyElement {
+	self := cx.StrongSelf()
+	return gpui.Div().
+		ID("increment").
+		Flex().
+		SizeFull().
+		Justify(gpui.AlignContentCenter).
+		AlignItems(gpui.AlignItemsCenter).
+		OnClick(func(_ *gpui.ClickEvent, _ *gpui.Window, app *gpui.App) {
+			self.Update(app, func(v *counter, cx *gpui.Context[counter]) {
+				v.count++
+				cx.Notify() // queues the redraw that re-renders this view
+			})
+		}).
+		Child(fmt.Sprintf("Count: %d", v.count)).
+		IntoElement()
+}
+```
+
+`cx.StrongSelf()` is only valid inside the view's `Render` — it panics elsewhere with a misuse diagnostic. The window drawing the view owns one lease for the handle (shared by every render, so repeated renders do not accumulate leases), and that lease releases when the window closes. Never `Release` or `TransferInto` the self-handle; call `RetainInto` if you need an independently owned copy with its own lifetime, or `Downgrade` for a weak identity.
+
+When a listener only needs to update the view's own state, `cx.Listener` is the lighter and preferred shape — it captures a weak identity, hands your callback the fresh state and context, and becomes a no-op after the view releases:
+
+```go
+OnClick(cx.Listener(func(v *counter, _ *gpui.ClickEvent, _ *gpui.Window, cx *gpui.Context[counter]) {
+	v.count++
+	cx.Notify()
+}))
+```
+
+Use `cx.StrongSelf()` when porting GPUI code that captured `cx.entity()` into a closure and calls `Update` on it, or when a callback needs the handle as a value (for example to spawn work that updates the view from its result). Both shapes update the entity through an update — never mutate the state pointer captured in a closure directly. The real-window proof of both shapes is the [self-handle corpus](internal/authorspec/self_handle_window_test.go); the deterministic lease and release rules live in [internal/portfixture](internal/portfixture/self_handle_test.go).
+
 ## Status
 
 Version 0.1.0 is the first tagged release. All 34 tickets in the core backlog are closed. The test suite drives real windows on a real GPU device, and the accessibility tree was checked with Narrator. Because this is a 0.x release, the API can still change. The planning record and the upstream research are linked from the [research index](docs/research-index.md).

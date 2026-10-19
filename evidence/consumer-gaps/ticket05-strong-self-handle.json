@@ -1,0 +1,48 @@
+{
+ "ticket": "05-strong-self-entity-handle",
+ "effort": "gpui-consumer-gaps",
+ "date": "2026-10-19",
+ "result": "resolved",
+ "summary": "Views get a strong self-handle: Context.StrongSelf() returns the view's own Entity[S] for listener capture during Render, mirroring the reference Context::entity (strong in Rust through clone-owned ref counts). The lease behind it is retained once per (window, view) in the rendering window's scope, shared by every later read, and releases deterministically at window close — the conforming adaptation of the reference's closure-owned strong handle under the recorded ownership contract (Context.Entity stays a callback-borrowed facade; saving an owned handle requires RetainInto, and facades do not leak one owned lease per render). OpenWindowView now builds the root view with the window as the active frame-construction boundary (the reference open_window window_update_stack), so the root placement's ViewOf lease is the window's and closes with it instead of leaking to the app root scope until shutdown.",
+ "pinned_sources": [
+  "reference/ce-source/crates/gpui/src/app/context.rs:50-56 (Context::entity: \"Returns a handle to the entity belonging to this context\")",
+  "reference/ce-source/crates/gpui/src/app/context.rs:252-267 (Context::listener captures self.entity().downgrade(); processor captures the strong handle)",
+  "reference/ce-source/crates/gpui/src/app.rs:1339-1374 (open_window pushes window_update_stack around build_root_view; window.root.replace owns the root view)",
+  "docs/runtime-ownership-contract.md (\"Borrowing and retained callbacks\": Context.Entity is callback-borrowed; \"Keep capture strength explicit\"; no self-retaining lease in the entity's own dependent scope; external graph-owner scopes break strong cycles)"
+ ],
+ "changes": [
+  "gpui/context.go: Context.StrongSelf() — the view self-handle accessor (valid only inside a view render in a window frame; returns a never-expiring facade over the window-owned lease); Context.Entity() doc cross-references the listener patterns",
+  "gpui/view.go: installViewSelfHandle (one lease per (window, view entity), registered in the window's scope, cached in the draw state); OpenWindowView sets activeFrame around the root-view build (the window construction boundary)",
+  "gpui/entity.go: leaseSelfHandle lease kind with Release/TransferInto misuse diagnostics (\"the window rendering the view owns its lease; use RetainInto\")",
+  "gpui/app.go: entityLeaseOf accepts the self-handle facade (access while the entity is live)",
+  "gpui/element.go: windowDrawState.selfLeases install cache, retired in dropDrawState",
+  "README.md: \"Updating the view from a listener\" authoring section (the strong self-handle pattern and the cx.Listener weak alternative)",
+  "CONTEXT.md: \"View self-handle\" glossary entry"
+ ],
+ "api": {
+  "added": [
+   "func (cx *Context[S]) StrongSelf() Entity[S]"
+  ],
+  "changed": [
+   "OpenWindowView retains the root view's ViewOf lease in the window's scope (release at window close instead of app-root-scope survival)"
+  ]
+ },
+ "tests": [
+  "internal/portfixture/self_handle_test.go: 7 tests — click after Render returns through the captured handle; borrowed-facade contrast; one shared lease across renders (OwnershipReport lease count stable at 3 over 6 renders); release with the window (release hook + AssertEntityReleased + AssertNoNewLeaks clean); per-window leases (close one window, the view survives and the other window's listener still works, last close releases); misuse diagnostics (outside a frame, Release/TransferInto panic, RetainInto/Downgrade available); wrong-entity StrongSelf inside Render panics and the abandoned frame preserves the published one",
+  "internal/authorspec/self_handle_window_test.go: 2 REAL-window tests — TestRealWindowStrongSelfHandleClick (a synthetic WM_LBUTTONDOWN/UP pair through SendMessageW on the host thread drives the whole platform path: window-procedure translation, the mouse input callback, the element listener and the frame-loop redraw; the listener updates the view through the handle captured in Render, twice); TestRealWindowStrongSelfHandleRelease (leak-detector snapshot before the view, click, close the window, release hook fired, AssertEntityReleased and AssertNoNewLeaks clean, the second window survives)"
+ ],
+ "executed": {
+  "date": "2026-10-19",
+  "commands": [
+   "CGO_ENABLED=0 go test ./internal/portfixture ./internal/authorspec -count=1 → ok (0.81s / 1.26s)",
+   "CGO_ENABLED=0 go test ./gpui -count=1 → one failure: TestSetCursorMessagePolicy (desktop_windows_test.go:1269, the documented interactive-session cursor class; fails identically on the pre-change commit ec22d53, verified by stashing the change and re-running)",
+   "CGO_ENABLED=0 go test ./... -count=1 → 33 packages ok; three failures, all environmental and re-verified: gpui TestSetCursorMessagePolicy (identical on ec22d53), capturespec TestCaptureDrawLoop (the documented parallel pixel gate — passes isolated with -p 1), headlessspec (needs the gitignored reference/ce-source, absent in a fresh worktree — passes after copying it from the main checkout)"
+  ]
+ },
+ "deviations": [
+  "Context.Entity() remains a callback-borrowed facade (the recorded ownership decision); the ticket's first option (Entity() retaining an independent lease) conflicts with that recorded contract, so the ticket's second option — the window-owned strong self-handle read in Render — is the implemented conforming pattern.",
+  "The reference's listener closures own strong Entity clones released when the element tree drops them; Go has no closure-drop release, so the window's scope owns ONE shared lease per (window, view) instead of one lease per captured closure. The observable difference: a view stays alive until its window closes even if a placement stops rendering mid-window (upstream would drop the subtree's closures at the next frame build); leases never accumulate per render.",
+  "The self-handle facade is never expiring but not owned by the caller: Release/TransferInto panic with the window-ownership diagnostic; RetainInto supplies an independently owned copy and Downgrade a weak identity, matching DowncastView's facade precedent.",
+  "A view entity rendered by two windows holds one self-handle lease per window (plus each window's placement lease): closing one window leaves the other working; the last close releases the view when no independent owner remains."
+ ]
+}

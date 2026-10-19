@@ -34,6 +34,9 @@ The association between an emitting state type and an entity-event payload type.
 **Ownership lease**:
 One independently releasable claim keeping an entity or resource logically alive. Aliases of one lease share its release state; retaining creates another lease.
 
+**View self-handle**:
+The strong handle a view reads in Render for its own entity, usable in listeners after the render callback returns. The window rendering the view owns its lease, so the handle lives as long as that placement and releases at window close. Distinct from a callback-borrowed context facade.
+
 **Owner scope**:
 A named lifetime that groups leases, registrations and tasks for deterministic cancellation and release. Closing one scope does not release independent leases held by another.
 

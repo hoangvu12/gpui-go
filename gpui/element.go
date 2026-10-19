@@ -1040,6 +1040,15 @@ type windowDrawState struct {
 	// clientInset is the window's client inset (window.rs client_inset:
 	// Option<Pixels>, set by Window.SetClientInset; paintapi.go).
 	clientInset *float32
+	// selfLeases caches the window-owned strong self-handle leases of
+	// the views this window renders (Context.StrongSelf): one lease per
+	// view entity, retained on the view's first self-handle read during
+	// a render and registered in this window's scope, so it — and every
+	// alias the view hands to its listeners — releases deterministically
+	// when the window closes. The leases themselves are owned by the
+	// window's scope; this map is the per-window install cache, dropped
+	// with the element runtime (dropDrawState).
+	selfLeases map[EntityID]*entityLease
 }
 
 // frameDrawState is one frame's draw state (the reference next_frame
@@ -1179,6 +1188,10 @@ func dropDrawState(w *Window) {
 			}
 		}
 		ds.elementStates = nil
+		// The window's view self-handle leases released with the window's
+		// scope (removeWindow / CloseTestWindow close it before the element
+		// runtime drops); the install cache retires here with the runtime.
+		ds.selfLeases = nil
 	}
 	// Retire the per-window diagnostic runtimes with the element
 	// runtime (ticket27: the inspector state — generation bumped so
