@@ -31,8 +31,10 @@ package gpui
 // mouse listener dispatch with ticket24, inline layout with ticket15.
 // Base ticket 06 (interact.go) adds the interactive element state, click
 // synthesis, the mouse-down / up-out / hover / drag builders, the state
-// styles and the cursor requests; scroll handles remain ticket14 /
-// Base ticket 07.
+// styles and the cursor requests; Base ticket 07 (scroll_element.go)
+// adds overflow scrolling: the scroll offset resolved at request layout,
+// the content size and clamp at prepaint (children prepaint and paint
+// under the scroll offset), and the default wheel listener at paint.
 
 import (
 	"fmt"
@@ -747,6 +749,17 @@ type DivElement struct {
 	// tabStop records an interactivity tab-stop request (div.rs
 	// tab_stop; explicit track_focus handles carry their own).
 	tabStop bool
+	// trackedScrollHandle is the tracked scroll handle (div.rs:2582
+	// tracked_scroll_handle; Base ticket 07, scroll_element.go).
+	trackedScrollHandle *ScrollHandle
+	// scroll is this frame's resolved scroll slice (div.rs:2584-2585
+	// scroll_offset / ongoing_scroll, assigned at request layout,
+	// div.rs:2735-2755); nil when the element does not scroll.
+	scroll *elementScroll
+	// scrollStateful records a StatefulInteractiveElement scroll builder
+	// (OverflowScroll / OverflowXScroll / OverflowYScroll /
+	// RestrictScrollToAxis / TrackScroll), which requires an element ID.
+	scrollStateful bool
 	// debugSelector is the test-support bounds key.
 	debugSelector string
 	// converting guards reentrant child mutation/conversion (the
@@ -1308,6 +1321,10 @@ type divPrepaintState struct {
 	hitbox *Hitbox
 	// debugBounds records whether the debug selector was recorded.
 	debugBounds bool
+	// scrollOffset is the clamped scroll offset the children prepainted
+	// under (div.rs:2876-2878, 2460); paint re-applies it because the
+	// port's drawables re-resolve their bounds at paint.
+	scrollOffset Point
 }
 
 // computeStyle returns the div's base style (Style::default() refined by
@@ -1344,6 +1361,8 @@ func interactiveStateOf(global *GlobalElementID, state *InteractiveElementState)
 // collection) — and the node's container inline content is published
 // (the reference publishes Container for every div).
 func (d *DivElement) requestLayout(global *GlobalElementID, inspector *InspectorElementID, w *Window, app *App) (LayoutID, divFrameState) {
+	// The scroll offset and gesture cells (div.rs:2735-2755).
+	d.scroll = resolveElementScroll(d.trackedScrollHandle, d.Styled.storage(), global, w)
 	style := WithOptionalElementState(w, global, func(slot *InteractiveElementState, w *Window) (Style, *InteractiveElementState) {
 		es := interactiveStateOf(global, slot)
 		if es != nil && app.HasActiveDrag() {
@@ -1410,8 +1429,18 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 	// call (the reference commits contents_in_parent_paragraph at
 	// prepaint from window.current_inline_fragments).
 	layout.contentsInParentParagraph = currentFrame(w).currentInlineFragments != nil
+	// The content size the scroll clamp measures against, with the
+	// tracked handle's child bounds (div.rs:2383-2413), then the handle's
+	// deferred scroll-to-item (div.rs:2415-2417).
+	var contentSize Size
 	if standalone := layout.standaloneInline(); standalone != nil {
-		standalone.prepareLayout(bounds, layout.childLayoutIDs, w)
+		contentSize = standalone.prepareLayout(bounds, layout.childLayoutIDs, w)
+		d.trackInlineChildBounds(layout.childLayoutIDs, w)
+	} else if d.scroll != nil || d.trackedScrollHandle != nil {
+		contentSize = d.scrollContentSize(bounds, layout.childLayoutIDs, w)
+	}
+	if d.trackedScrollHandle != nil {
+		d.trackedScrollHandle.scrollToActiveItem()
 	}
 	if d.debugSelector != "" {
 		recordDebugBounds(w, d.debugSelector, bounds)
@@ -1419,6 +1448,9 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 	}
 	if global == nil && d.requiresElementState() {
 		panic("gpui: OnClick, OnAuxClick, OnDrag, OnHover, Active and GroupActive require an element ID (the pinned StatefulInteractiveElement methods, div.rs:1495-1899)")
+	}
+	if global == nil && d.scrollStateful {
+		panic("gpui: OverflowScroll, OverflowXScroll, OverflowYScroll, RestrictScrollToAxis and TrackScroll require an element ID (the pinned StatefulInteractiveElement methods, div.rs:1746-1777)")
 	}
 	WithOptionalElementState(w, global, func(slot *InteractiveElementState, w *Window) (struct{}, *InteractiveElementState) {
 		es := interactiveStateOf(global, slot)
@@ -1430,7 +1462,9 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 		suppressed := hidden || hiddenPrepaintDepth(w) > 0
 		WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
 			WithContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
-				if d.shouldInsertHitbox(&style, w) {
+				// should_insert_hitbox's scroll_offset.is_some() arm
+				// (div.rs:2892) joins interact.go's predicate here.
+				if d.shouldInsertHitbox(&style, w) || d.scroll != nil {
 					box := w.InsertHitbox(bounds, d.hitboxBehavior)
 					state.hitbox = &box
 					// insert_inspector_hitbox (div.rs:3100-3111, the
@@ -1439,6 +1473,9 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 					// its element's inspector id.
 					w.InsertInspectorHitbox(box, inspector)
 				}
+				// clamp_scroll_position (div.rs:2876-2877).
+				scrollOffset := d.scroll.clamp(bounds, &style, contentSize, w)
+				state.scrollOffset = scrollOffset
 				tree := currentDispatchTree(w)
 				endGroup := registerDivElementDispatch(w, d, suppressed, state.hitbox, es)
 				defer func() {
@@ -1452,13 +1489,17 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 					return
 				}
 				withHiddenPrepaint(w, hidden, func() {
-					if standalone := layout.standaloneInline(); standalone != nil {
-						standalone.prepaintChildren(d.children, w, app)
-						return
-					}
-					for i := range d.children {
-						d.children[i].Prepaint(w, app)
-					}
+					// The children prepaint under the scroll offset
+					// (div.rs:2460; inline.rs:454 for the inline path).
+					withElementOffsetVoid(w, scrollOffset, func(w *Window) {
+						if standalone := layout.standaloneInline(); standalone != nil {
+							standalone.prepaintChildren(d.children, w, app)
+							return
+						}
+						for i := range d.children {
+							d.children[i].Prepaint(w, app)
+						}
+					})
 				})
 			})
 		})
@@ -1632,17 +1673,25 @@ func (d *DivElement) paint(global *GlobalElementID, inspector *InspectorElementI
 								defer groupHitboxPop(*d.group, app)
 							}
 							d.paintMouseListeners(*hitbox, es, w, app)
+							// paint_scroll_listener (div.rs:3081).
+							d.scroll.paintListener(*hitbox, &style, w)
 						}
 						if style.Display == DisplayNone {
 							return
 						}
-						if standalone := layout.standaloneInline(); standalone != nil {
-							standalone.paintChildren(d.children, w, app)
-							return
-						}
-						for i := range d.children {
-							d.children[i].Paint(w, app)
-						}
+						// The children paint under the offset they
+						// prepainted under (the port's drawables re-resolve
+						// their bounds at paint; the pin reuses the
+						// prepainted bounds).
+						withElementOffsetVoid(w, prepaint.scrollOffset, func(w *Window) {
+							if standalone := layout.standaloneInline(); standalone != nil {
+								standalone.paintChildren(d.children, w, app)
+								return
+							}
+							for i := range d.children {
+								d.children[i].Paint(w, app)
+							}
+						})
 					})
 				})
 			})

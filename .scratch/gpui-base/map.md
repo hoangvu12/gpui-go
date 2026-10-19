@@ -84,6 +84,7 @@ Blocking edges live in each ticket's `Blocked by:`; the frontier is computed fro
 - [State and context helpers](issues/09-state-context-helpers.md) — keyed state, globals, notify-by-id, window-bound context, focus/activation observers, ids, geometry.
 - [Styled vocabulary](issues/05-styled-vocabulary.md) — full pinned Styled surface (generated families via cmd/stylegen), refinements, FluentBuilder, Component mixins; div paints every box style.
 - [Div interactivity](issues/06-div-interactivity.md) — pinned click/hover/drag/state styles/cursor/capture; real-window mouse routing found missing → [34](issues/34-real-window-input.md).
+- [Scrolling](issues/07-scrolling.md) — div/uniform-list/list wheel scrolling with pinned clamping and scrollbar metrics; real-window wheel via 34.
 - Package layout (orchestrator, routine): one `base` package mirroring the single crate; dependency-free data structures (rope, sum tree, segmentation) in subpackages under `base/`.
 
 ## Not yet specified

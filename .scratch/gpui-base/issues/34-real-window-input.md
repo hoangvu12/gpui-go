@@ -22,6 +22,8 @@ On a real Win32 window, clicking, hovering and dragging over divs dispatch throu
 
 - Harden `TestFrameLoopRealWindowNotifyRepaints`: under the full `./gpui` run it once saw one extra frame inside its 250ms idle window (10/10 isolated passes) — attribute repaints from neighbouring real-window tests or OS-initiated WM_PAINT instead of assuming exactness.
 
+- From ticket 07: WM_MOUSEWHEEL/WM_MOUSEHWHEEL routing (gpui_windows events.rs:150-151,562-651) with a real-window wheel test over a tracked scroll div; expose the scroll builders through the Interactive mixin.
+
 ## Acceptance criteria
 
 - [ ] Real-window tests with synthetic Win32 messages (never the real mouse) prove click, hover-style, drag-with-preview and cursor changes end to end; they FAIL not skip.
