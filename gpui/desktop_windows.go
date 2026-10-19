@@ -1717,8 +1717,9 @@ func (w *hostWindow) restoreCursorAfterHide() {
 
 // startMouseLeaveTracking marks the window hovered and requests
 // WM_MOUSELEAVE / WM_NCMOUSELEAVE delivery (events.rs
-// start_tracking_mouse). Only the cursor slice's tracking is installed
-// here; mouse input routing belongs to the input tickets.
+// start_tracking_mouse). The mouse input delivery that follows it is
+// win32input_windows.go's handleMouseMoveMsg (Base ticket 34). The pin
+// reports the hover-status change here too (events.rs:1399-1405).
 func (w *hostWindow) startMouseLeaveTracking(flags uint32) {
 	if w.hovered {
 		return
@@ -1731,6 +1732,9 @@ func (w *hostWindow) startMouseLeaveTracking(flags uint32) {
 		dwHoverTime: hoverDefault,
 	}
 	procTrackMouseEvent.Call(uintptr(unsafe.Pointer(&event)))
+	if w.onHoverStatusChange != nil {
+		w.onHoverStatusChange(true)
+	}
 }
 
 // handleMouseLeaveMsg is WM_MOUSELEAVE / WM_NCMOUSELEAVE (events.rs
@@ -1764,6 +1768,9 @@ func (w *hostWindow) handleCursorStyleChangedMsg(lp uintptr) uintptr {
 // change path.
 func (w *hostWindow) handleSettingChangeMsg(wparam uintptr, lparam unsafe.Pointer) (uintptr, bool) {
 	if wparam != 0 {
+		// The double-click tolerances and interval refresh first
+		// (events.rs:1220 click_state.system_update; Base ticket 34).
+		w.clickState().systemUpdate(wparam)
 		w.updateBorderOffset()
 		w.host.updateSystemSettings(uint32(wparam))
 		return 0, true

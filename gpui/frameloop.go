@@ -115,6 +115,11 @@ type windowFrameState struct {
 	// requesting reports a frame request in progress for this window;
 	// the flush tail leaves its demand to the request's own tail.
 	requesting bool
+	// onWake observes every frame-source wake (each clean-to-armed edge
+	// that will cost a frame request). Test support only: real-window
+	// tests attribute the frames they did not cause (OS activation,
+	// resize, mouse input) to the wakes' origins. nil in production.
+	onWake func()
 }
 
 // newWindowFrameState builds a window's frame state. The window starts
@@ -189,6 +194,9 @@ func (w *Window) wakeFrameSource() {
 	}
 	fs.armed = true
 	fs.wakeCount++
+	if fs.onWake != nil {
+		fs.onWake()
+	}
 	if w.handle.Hwnd() != 0 {
 		scheduleHostFrame(w)
 	}

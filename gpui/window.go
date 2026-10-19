@@ -157,6 +157,16 @@ type WindowOptions struct {
 	// *ScrollWheelEvent and *PinchEvent with gesture phases, drained at
 	// the window's paint entry).
 	OnGesture func(event any)
+	// OnMouseInput receives the client-area mouse events of the window
+	// (Base ticket 34; gpui_windows events.rs:114, 138-151, 371-398,
+	// 489-651): *MouseMoveEvent, *MouseDownEvent, *MouseUpEvent and
+	// *ScrollWheelEvent, translated from WM_MOUSEMOVE, the eight
+	// WM_[LRMX]BUTTON(DOWN|UP) messages, WM_MOUSEWHEEL and WM_MOUSEHWHEEL.
+	// Returning true reports the event handled (the message result 0).
+	// App.OpenWindow always routes these events through the window's
+	// element dispatch (Window.DispatchInput); an optional user hook runs
+	// first and consumes the event by returning true, like OnKey.
+	OnMouseInput func(event any) bool
 }
 
 // Typed window errors.
@@ -660,6 +670,31 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 				}
 				window.dispatchInput(event, a)
 			})
+		}
+		// The mouse input callback routes the client-area mouse events
+		// through the window's dispatch_event (Base ticket 34; the pin's
+		// platform input callback, window.rs:5739, whose answer the host
+		// turns into the message result: handled = !propagate,
+		// events.rs:394). An optional user OnMouseInput hook runs first
+		// and can consume the event like OnKey's interceptor. A message
+		// delivered before the window joined the registry is not handled.
+		userMouse := opts.OnMouseInput
+		hostOpts.OnMouseInput = func(event any) bool {
+			if window == nil {
+				return false
+			}
+			var handled bool
+			a.Update(func(a *App) {
+				if userMouse != nil && userMouse(event) {
+					handled = true
+					return
+				}
+				if _, open := a.windows[window.id]; !open {
+					return
+				}
+				handled = !window.dispatchInput(event, a).Propagate
+			})
+			return handled
 		}
 
 		handle, err := h.OpenWindow(hostOpts)

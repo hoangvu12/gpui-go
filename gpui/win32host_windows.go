@@ -539,6 +539,10 @@ func platformWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe
 //   - WM_MOUSEMOVE / WM_NCMOUSEMOVE restore a hidden cursor and track
 //     the leave; WM_MOUSELEAVE / WM_NCMOUSELEAVE clear hover and the
 //     shared cursor flag.
+//   - WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_MOUSEHWHEEL and the eight client
+//     button messages deliver mouse events through the mouse input
+//     callback (Base ticket 34).
+//   - WM_NCDESTROY also forgets the window's ClickState.
 //   - WM_GPUI_CURSOR_STYLE_CHANGED adopts the platform's new cursor.
 //   - WM_SHOWWINDOW draws a shown window.
 //   - WM_ENDSESSION forwards a real session end to the platform window.
@@ -796,14 +800,17 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
 		return r
 
-	case wmMouseMove:
-		// WM_MOUSEMOVE: restore a hidden cursor and track the leave so
-		// hide-until-move stays exact (ticket26). Mouse input routing
-		// itself arrives with the input tickets.
-		w.restoreCursorAfterHide()
-		w.startMouseLeaveTracking(tmeLeave)
-		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
-		return r
+	case wmMouseMove, wmMouseWheel, wmMouseHWheel,
+		wmLButtonDown, wmRButtonDown, wmMButtonDown, wmXButtonDown,
+		wmLButtonUp, wmRButtonUp, wmMButtonUp, wmXButtonUp:
+		// Base ticket 34: the client-area mouse messages reach element
+		// dispatch through the mouse input callback (events.rs:114,
+		// 138-151; win32input_windows.go). WM_MOUSEMOVE also starts the
+		// leave tracking and restores a hidden cursor (ticket26,
+		// events.rs:372-373). Every arm returns the pin's Some(0|1); none
+		// reaches DefWindowProcW.
+		result, _ := w.handleMouseInputMsg(message, wparam, lp)
+		return result
 
 	case wmNcMouseMove:
 		// WM_NCMOUSEMOVE: the same cursor restore plus non-client leave
@@ -901,6 +908,9 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		// its Weak box at WM_NCDESTROY).
 		unbindWindow(hwnd)
 		delete(w.host.windows, hwnd)
+		// The window's ClickState retires with it (the pin's
+		// WindowsWindowState::click_state drops with the state).
+		forgetWin32ClickState(w)
 		return r
 	}
 	r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
@@ -1023,6 +1033,11 @@ type hostWindow struct {
 	// onGesture receives the Direct Manipulation events (drain_events
 	// through the input callback: *ScrollWheelEvent / *PinchEvent).
 	onGesture func(event any)
+	// onMouseInput receives the client-area mouse events (Base ticket
+	// 34: *MouseMoveEvent, *MouseDownEvent, *MouseUpEvent and
+	// *ScrollWheelEvent — the pin's callbacks.input for the mouse arms);
+	// returning true reports the event handled (!propagate).
+	onMouseInput func(event any) bool
 	// dmRecord records the Direct Manipulation setup outcome for
 	// diagnostics (the honest COM-call record).
 	dmRecord string
@@ -2049,6 +2064,7 @@ func (h *Host) openWindowOnHostThread(opts WindowOptions) (WindowHandle, error) 
 	w.onHoverStatusChange = opts.OnHoverStatusChange
 	w.onFileDrop = opts.OnFileDrop
 	w.onGesture = opts.OnGesture
+	w.onMouseInput = opts.OnMouseInput
 	w.updateBorderOffset()
 
 	// Ticket24: the per-window Direct Manipulation handler

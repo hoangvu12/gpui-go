@@ -311,15 +311,19 @@ func (i *Interactive[Self]) OnModifiersChanged(f func(*ModifiersChangedEvent, *W
 	return i.self
 }
 
-// OnMouseMove binds a mouse-move listener (DivElement.OnMouseMove).
-func (i *Interactive[Self]) OnMouseMove(f func(*MouseMoveEvent, DispatchPhase, *Hitbox, *Window, *App)) Self {
+// OnMouseMove binds a hover-gated bubble mouse-move listener
+// (DivElement.OnMouseMove, div.rs:1155). OnMouseMoveAll receives every
+// move.
+func (i *Interactive[Self]) OnMouseMove(f func(*MouseMoveEvent, *Window, *App)) Self {
 	i.Interactivity().OnMouseMove(f)
 	return i.self
 }
 
-// OnMouseUp binds a mouse-up listener (DivElement.OnMouseUp).
-func (i *Interactive[Self]) OnMouseUp(f func(*MouseUpEvent, DispatchPhase, *Hitbox, *Window, *App)) Self {
-	i.Interactivity().OnMouseUp(f)
+// OnMouseUp binds a hover-gated bubble mouse-up listener for one button
+// (DivElement.OnMouseUp, div.rs:1051). OnMouseUpAll receives every mouse
+// up.
+func (i *Interactive[Self]) OnMouseUp(button MouseButton, f func(*MouseUpEvent, *Window, *App)) Self {
+	i.Interactivity().OnMouseUp(button, f)
 	return i.self
 }
 

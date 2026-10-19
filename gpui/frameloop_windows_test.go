@@ -3,6 +3,8 @@
 package gpui
 
 import (
+	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -89,7 +91,17 @@ func TestFrameLoopRealWindowNotifyRepaints(t *testing.T) {
 	}
 
 	// An animation-frame loop: the notify frame plus 4 requested frames,
-	// then idle.
+	// then idle. Every frame-source wake from here on is attributed to its
+	// origin (Base ticket 34's hardening): frames the test did not cause —
+	// an OS activation report (window.rs:1887-1902), a WM_SIZE refresh, a
+	// real mouse over the window, a UIA query's activation edge, all
+	// arriving through the window procedure — are tolerated one frame per
+	// attributed wake; a wake of any other origin while idle fails.
+	ledger := newFrameWakeLedger()
+	if !h.runForegroundSync(func() { frameStateOf(window).onWake = ledger.record }) {
+		t.Fatal("the host stopped")
+	}
+	t.Cleanup(func() { h.runForegroundSync(func() { frameStateOf(window).onWake = nil }) })
 	h.runForegroundSync(func() {
 		entity.Update(app, func(v *frameLoopView, cx *Context[frameLoopView]) {
 			v.animate = 4
@@ -97,29 +109,112 @@ func TestFrameLoopRealWindowNotifyRepaints(t *testing.T) {
 		})
 	})
 	want := afterNotify.draws + 5
-	activationsBefore := activations.Load()
 	desktopWaitFor(t, "the animation frames to be drawn", func() bool { return read().draws >= want })
 	desktopWaitFor(t, "the animation loop to go idle", func() bool {
 		f := read()
 		return !f.demand && f.pending == 0
 	})
-	// Idle means idle: no further frames are drawn.
+	// Idle means idle: no further frames are drawn unless the platform
+	// caused them.
 	settled := read()
+	idleMark := ledger.mark()
 	time.Sleep(250 * time.Millisecond)
 	final := read()
-	// An OS activation change refreshes the window (window.rs:1887-1902,
-	// forwarded by OpenWindow since Base ticket 33), so a window activated
-	// by the shell mid-test may draw one extra frame per activation report.
-	extra := uint64(activations.Load() - activationsBefore)
-	if final.draws != settled.draws || final.draws < want || final.draws > want+extra {
-		t.Fatalf("animation draws = %d (settled %d), want exactly %d (+%d activation refreshes)", final.draws-afterNotify.draws, settled.draws-afterNotify.draws, 5, extra)
+	idleExternal, idleOther := ledger.since(idleMark)
+	if len(idleOther) != 0 {
+		t.Fatalf("an idle window was woken by a non-platform origin: %v", idleOther)
 	}
-	if final.presents != settled.presents {
-		t.Fatalf("an idle window kept presenting (%d -> %d)", settled.presents, final.presents)
+	if idle := final.draws - settled.draws; idle > uint64(idleExternal) {
+		t.Fatalf("an idle window drew %d frames, only %d attributable to platform events", idle, idleExternal)
+	}
+	if idle := final.presents - settled.presents; idle > int64(idleExternal) {
+		t.Fatalf("an idle window kept presenting (%d -> %d, %d platform wakes)", settled.presents, final.presents, idleExternal)
+	}
+	external, _ := ledger.since(0)
+	if settled.draws < want || settled.draws > want+uint64(external) {
+		t.Fatalf("animation draws = %d, want exactly %d (+%d platform-caused wakes: %v)", settled.draws-afterNotify.draws, 5, external, ledger.origins())
 	}
 	if final.pending != 0 || final.demand {
 		t.Fatalf("idle window still has frame demand (pending callbacks %d, demand %v)", final.pending, final.demand)
 	}
+}
+
+// frameWakeLedger attributes a real window's frame-source wakes to their
+// origin by the host-thread call stack (frameloop.go's onWake seam):
+//   - "frame": the frame loop re-arming itself (Window.requestFrame);
+//   - "activation": the OS activation forwarding (Window.activationChanged,
+//     posted by the host's WM_ACTIVATE handler);
+//   - "platform": any other wake raised while the window procedure handles
+//     a message (WM_SIZE, mouse input, WM_GETOBJECT, ...);
+//   - anything else is the test's own (or an unexplained) wake.
+type frameWakeLedger struct {
+	mu      sync.Mutex
+	entries []string
+}
+
+func newFrameWakeLedger() *frameWakeLedger { return &frameWakeLedger{} }
+
+// record classifies one wake; it runs on the host thread.
+func (l *frameWakeLedger) record() {
+	pcs := make([]uintptr, 64)
+	n := runtime.Callers(2, pcs)
+	frames := runtime.CallersFrames(pcs[:n])
+	origin := ""
+	var top []string
+	for {
+		frame, more := frames.Next()
+		fn := frame.Function
+		if len(top) < 4 {
+			top = append(top, fn[strings.LastIndex(fn, "/")+1:])
+		}
+		switch {
+		case strings.HasSuffix(fn, ".(*Window).requestFrame"):
+			origin = "frame"
+		case strings.HasSuffix(fn, ".(*Window).activationChanged"):
+			origin = "activation"
+		case strings.HasSuffix(fn, ".windowWndProc") && origin == "":
+			origin = "platform"
+		}
+		if origin == "frame" || origin == "activation" || !more {
+			break
+		}
+	}
+	if origin == "" {
+		origin = "other:" + strings.Join(top, "<")
+	}
+	l.mu.Lock()
+	l.entries = append(l.entries, origin)
+	l.mu.Unlock()
+}
+
+// mark returns the ledger position.
+func (l *frameWakeLedger) mark() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.entries)
+}
+
+// since counts the platform-caused wakes (activation + platform) after
+// the mark and returns the unexplained ones.
+func (l *frameWakeLedger) since(mark int) (external int, other []string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, origin := range l.entries[mark:] {
+		switch {
+		case origin == "activation" || origin == "platform":
+			external++
+		case strings.HasPrefix(origin, "other:"):
+			other = append(other, origin)
+		}
+	}
+	return external, other
+}
+
+// origins returns every recorded origin.
+func (l *frameWakeLedger) origins() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]string(nil), l.entries...)
 }
 
 // TestFrameLoopRealWindowWithoutPresentHookDraws checks the default-on

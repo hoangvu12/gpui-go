@@ -738,6 +738,12 @@ func (w *Window) DispatchKeyEvent(event any, cx AppContext) bool {
 }
 
 func (w *Window) dispatchKeyEvent(event any, app *App) (propagate bool) {
+	// dispatch_event's head runs for keyboard events too
+	// (window.rs:5746-5760; Base ticket 34): a key down switches the input
+	// modality to the keyboard (refreshing the window for focus-visible
+	// styles and hover suppression), propagation starts enabled and the
+	// prevent-default flag clears.
+	w.beginPlatformInputDispatch(event, app)
 	w.dispatchKeyEventInner(event, app)
 	return app.propagateEvent
 }

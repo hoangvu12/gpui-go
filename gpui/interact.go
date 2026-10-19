@@ -906,18 +906,16 @@ func (d *DivElement) OnAnyMouseUp(f func(*MouseUpEvent, *Window, *App)) *DivElem
 }
 
 // OnMouseUpAll binds a listener to every mouse up, regardless of phase,
-// button or position (div.rs:331-336, 1143). It is the same
-// registration as the port's OnMouseUp, which predates the pinned
-// button-filtered on_mouse_up.
+// button or position (div.rs:331-336, 1143). OnMouseUp is the pinned
+// button-filtered, hover-gated bubble registration.
 func (d *DivElement) OnMouseUpAll(f func(*MouseUpEvent, DispatchPhase, *Hitbox, *Window, *App)) *DivElement {
 	requireListener("OnMouseUpAll", f == nil)
 	return d.appendMouseUp(f)
 }
 
 // OnMouseMoveAll binds a listener to every mouse move, inside or outside
-// this element (div.rs:358-363, 1167). It is the same registration as
-// the port's OnMouseMove, which predates the pinned hover-gated
-// on_mouse_move.
+// this element (div.rs:358-363, 1167). OnMouseMove is the pinned
+// hover-gated bubble registration.
 func (d *DivElement) OnMouseMoveAll(f func(*MouseMoveEvent, DispatchPhase, *Hitbox, *Window, *App)) *DivElement {
 	requireListener("OnMouseMoveAll", f == nil)
 	d.mouseMoveListeners = append(d.mouseMoveListeners, typedMouseListener[MouseMoveEvent]{f: f})

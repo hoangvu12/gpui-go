@@ -502,7 +502,8 @@ func (t *textElement) A11yRole() (Role, bool) {
 	if t.id == nil {
 		return 0, false
 	}
-	return Role(1), true
+	// A text element with an id is a Label (elements/text.rs:189-191).
+	return RoleLabel, true
 }
 
 // WriteA11yInfo implements the property capability (Text::write_a11y_info:
@@ -1042,31 +1043,31 @@ type typedDropListener struct {
 	onDrop func(value any, event *MouseUpEvent, w *Window, app *App)
 }
 
-// OnMouseMove binds a mouse-move listener: the listener receives the
-// event, the dispatch phase and this element's hitbox; the typical
-// listener checks hitbox.IsHovered(w). This port spelling predates Base
-// ticket 06 and has the shape of the pinned on_mouse_move_all
-// (div.rs:1167, OnMouseMoveAll); the pinned on_mouse_move (div.rs:1155)
-// gates on the bubble phase and the hover itself.
-func (d *DivElement) OnMouseMove(f func(*MouseMoveEvent, DispatchPhase, *Hitbox, *Window, *App)) *DivElement {
-	if f == nil {
-		panic("gpui: OnMouseMove requires a non-nil listener")
-	}
-	d.mouseMoveListeners = append(d.mouseMoveListeners, typedMouseListener[MouseMoveEvent]{f: f})
+// OnMouseMove binds a listener to the mouse moves over this element, in
+// the bubble phase (div.rs:342-352 Interactivity::on_mouse_move, fluent
+// div.rs:1155-1161). OnMouseMoveAll receives every move with the phase and
+// hitbox.
+func (d *DivElement) OnMouseMove(f func(*MouseMoveEvent, *Window, *App)) *DivElement {
+	requireListener("OnMouseMove", f == nil)
+	d.mouseMoveListeners = append(d.mouseMoveListeners, typedMouseListener[MouseMoveEvent]{f: func(e *MouseMoveEvent, phase DispatchPhase, hitbox *Hitbox, w *Window, app *App) {
+		if phase == DispatchBubble && hitbox.IsHovered(w) {
+			f(e, w, app)
+		}
+	}})
 	return d
 }
 
-// OnMouseUp binds a mouse-up listener receiving every mouse up with the
-// phase and hitbox. This port spelling predates Base ticket 06 and has
-// the shape of the pinned on_mouse_up_all (div.rs:1143, OnMouseUpAll);
-// the pinned on_mouse_up (div.rs:1051) filters one button in the bubble
-// phase while hovered.
-func (d *DivElement) OnMouseUp(f func(*MouseUpEvent, DispatchPhase, *Hitbox, *Window, *App)) *DivElement {
-	if f == nil {
-		panic("gpui: OnMouseUp requires a non-nil listener")
-	}
-	d.mouseUpListeners = append(d.mouseUpListeners, typedMouseListener[MouseUpEvent]{f: f})
-	return d
+// OnMouseUp binds a listener to the mouse up of the given button over
+// this element, in the bubble phase (div.rs:223-236
+// Interactivity::on_mouse_up, fluent div.rs:1051-1058). OnMouseUpAll
+// receives every mouse up with the phase and hitbox.
+func (d *DivElement) OnMouseUp(button MouseButton, f func(*MouseUpEvent, *Window, *App)) *DivElement {
+	requireListener("OnMouseUp", f == nil)
+	return d.appendMouseUp(func(e *MouseUpEvent, phase DispatchPhase, hitbox *Hitbox, w *Window, app *App) {
+		if phase == DispatchBubble && e.Button == button && hitbox.IsHovered(w) {
+			f(e, w, app)
+		}
+	})
 }
 
 // OnScrollWheel binds a scroll listener
@@ -1277,7 +1278,7 @@ func (e *divElement) SourceLocation() *SourceLocation { return nil }
 
 // A11yRole implements the accessibility role capability: the div carries
 // no role (the reference filters GenericContainer).
-func (e *divElement) A11yRole() (Role, bool) { return 0, false }
+func (e *divElement) A11yRole() (Role, bool) { return e.builder.A11yRole() }
 
 // RequestLayout implements Element (div.rs Div::request_layout +
 // Interactivity::request_layout, bounded).
@@ -1309,6 +1310,11 @@ func (d *DivElement) ChildCount() int { return len(d.children) }
 // IntoElement implements IntoElement: the div builder converts into its
 // element (the reference IntoElement for Div wraps the builder).
 func (d *DivElement) IntoElement() AnyElement {
+	// An a11y-authored div joins the semantic tree through its companion
+	// (div.rs:2261-2269, 4065-4162; Base ticket 11).
+	if d.hasA11yAuthoring() {
+		return divIntoA11yElement(d)
+	}
 	return CustomElement[divFrameState, divPrepaintState](&divElement{builder: d})
 }
 

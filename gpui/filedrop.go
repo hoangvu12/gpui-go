@@ -439,20 +439,15 @@ func (w *Window) dispatchInput(event any, app *App) DispatchEventResult {
 	// (window.rs promote_external_drag_to_platform).
 	w.promoteExternalDragToPlatform(translated, app)
 
-	result := DispatchEventResult{
+	// The pin resets default_prevented at the start of every
+	// dispatch_event, keyboard included (window.rs:5760); since Base
+	// ticket 34 the keyboard entry (key_dispatch.go dispatchKeyEvent) runs
+	// beginPlatformInputDispatch too, so the flag stays as the listeners
+	// left it until the next event, like the pin.
+	return DispatchEventResult{
 		Propagate:        app.propagateEvent,
 		DefaultPrevented: is.defaultPrevented,
 	}
-	// The pin resets default_prevented at the start of EVERY
-	// dispatch_event, keyboard included (window.rs:5760). The port's
-	// keyboard entry (key_dispatch.go) does not route through
-	// beginPlatformInputDispatch yet, so the flag a mouse listener set
-	// (e.g. the focus transfer's prevent_default, div.rs:3279) would
-	// leak into the next key event and suppress the keyboard click
-	// (div.rs:3525, 3541). Clearing it once the mouse result is captured
-	// gives key events the pinned clean start.
-	is.defaultPrevented = false
-	return result
 }
 
 // translateFileDrop is the FileDrop arm of dispatch_event's

@@ -1,0 +1,49 @@
+{
+  "ticket": "12-test-harness",
+  "effort": "gpui-base",
+  "date": "2026-10-19",
+  "result": "resolved",
+  "summary": "Base-shaped test input simulation: Window.DispatchKeystroke, the shared simulate path (key events to dispatchKeyEvent, others to dispatchInput, inside one update then RunUntilParked), pinned keystroke splitting, TestApp AddWindowView/AddEmptyWindow (1920x1080 test display), OpenWindow(WithOptions), DispatchAction, SimulateKeystrokes/Input, SimulateWindowResize; VisualTestContext (mouse move/down/up/click, modifiers/capslock, resize, DebugBounds, SimulateEvent); TestAppWindow[S]; A11ySnapshot/A11yNode; DivElement.ComputeStyle.",
+  "pinned_sources": [
+    "reference/ce-source/crates/gpui/src/window.rs:1919-1927,2694-2705,5697-5720",
+    "reference/ce-source/crates/gpui/src/app/test_context.rs:295-336,503-550,754-1005",
+    "reference/ce-source/crates/gpui/src/app/test_app.rs:157-195,320-494",
+    "reference/ce-source/crates/gpui/src/platform/test/window.rs:208-217",
+    "reference/ce-source/crates/gpui/src/platform/keystroke.rs:120-220",
+    "reference/ce-source/crates/gpui/src/elements/div.rs:3882-3901"
+  ],
+  "implementation": {
+    "files": [
+      "gpui/testapp.go",
+      "gpui/testsim.go (new)",
+      "gpui/visualtest.go (new)",
+      "gpui/visualtest_test.go (new)"
+    ]
+  },
+  "tests": {
+    "added": 18,
+    "upstream_ported": 1,
+    "upstream_deviated": 2,
+    "upstream_not_applicable": "6+ (system notifications / path prompts; macOS visual context)",
+    "orchestrator_rerun": [
+      {
+        "command": "staged 12+34 snapshot (without ticket 08's in-progress files): CGO_ENABLED=0 go test ./gpui -count=1",
+        "result": "ok"
+      },
+      {
+        "command": "every internal/*, authoring, conformance package serially on the snapshot",
+        "result": "ok except headlessspec (snapshot lacks the gitignored reference/ce-source it resolves citations against; ok on the live tree) and one clipspec run (real system clipboard; ok on rerun in snapshot and live tree)"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./gpui -run 'TestVisualTestContext|TestSimulate|TestDivComputeStyle|TestTestApp|TestKeystrokeSplitting' (passes with ticket 34's keyboard-modality hook; TestTestAppWindowSimulation's hover(false)-after-keystroke expectation depends on it)",
+        "result": "ok"
+      }
+    ]
+  },
+  "deviations": [
+    "not ported: VisualTestContext::draw, deactivate_window, simulate_close, window_title/document_path, the VisualContext impl, condition, notification/event streams",
+    "OpenWindowWithOptions reads only Bounds.Size (zero falls back to 1920x1080)",
+    "A11ySnapshot reads the internal active flag (a public check would replace it)"
+  ],
+  "native_artifact": "unchanged (rev 11)"
+}

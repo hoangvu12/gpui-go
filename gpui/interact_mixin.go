@@ -174,3 +174,39 @@ func (i *Interactive[Self]) OnDragAlt(f func(cursorOffset Point, cursorStyle *Cu
 	i.Interactivity().OnDragAlt(f)
 	return i.self
 }
+
+// OverflowScroll scrolls the inner div on both axes
+// (DivElement.OverflowScroll, div.rs:1746-1751; Base ticket 07's builder,
+// forwarded by Base ticket 34). Requires an ID on the inner div.
+func (i *Interactive[Self]) OverflowScroll() Self {
+	i.Interactivity().OverflowScroll()
+	return i.self
+}
+
+// OverflowXScroll scrolls the inner div horizontally
+// (DivElement.OverflowXScroll, div.rs:1753-1757).
+func (i *Interactive[Self]) OverflowXScroll() Self {
+	i.Interactivity().OverflowXScroll()
+	return i.self
+}
+
+// OverflowYScroll scrolls the inner div vertically
+// (DivElement.OverflowYScroll, div.rs:1759-1763).
+func (i *Interactive[Self]) OverflowYScroll() Self {
+	i.Interactivity().OverflowYScroll()
+	return i.self
+}
+
+// RestrictScrollToAxis restricts the inner div's scrolling to the
+// gesture's axis (DivElement.RestrictScrollToAxis, div.rs:1765-1771).
+func (i *Interactive[Self]) RestrictScrollToAxis() Self {
+	i.Interactivity().RestrictScrollToAxis()
+	return i.self
+}
+
+// TrackScroll tracks the inner div's scroll state with the handle
+// (DivElement.TrackScroll, div.rs:1773-1777).
+func (i *Interactive[Self]) TrackScroll(handle ScrollHandle) Self {
+	i.Interactivity().TrackScroll(handle)
+	return i.self
+}

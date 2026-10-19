@@ -4,7 +4,7 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: base-port orchestrator (wave 1c)
 Blocked by: 06, 33
 
@@ -26,9 +26,13 @@ On a real Win32 window, clicking, hovering and dragging over divs dispatch throu
 
 ## Acceptance criteria
 
-- [ ] Real-window tests with synthetic Win32 messages (never the real mouse) prove click, hover-style, drag-with-preview and cursor changes end to end; they FAIL not skip.
-- [ ] Full corpus green apart from the documented environmental classes; evidence in `evidence/base/ticket34-*.json`.
+- [x] Real-window tests with synthetic Win32 messages (never the real mouse) prove click, hover-style, drag-with-preview and cursor changes end to end; they FAIL not skip.
+- [x] Full corpus green apart from the documented environmental classes; evidence in `evidence/base/ticket34-*.json`.
 
 ## Comments
 
 - 2026-10-19 — Opened by the orchestrator from ticket 06's report.
+
+## Answer
+
+Resolved 2026-10-19 (wave 1c worker + orchestrator fixes, verified on the staged snapshot: `go test ./gpui` ok, every spec package ok apart from snapshot-only/clipboard artifacts). Real windows route button, move and wheel messages into element dispatch (gpui_windows events.rs), with click state, hover tracking, keyboard modality, the pinned hover-gated OnMouseMove / button-filtered OnMouseUp, mixin scroll builders and a hardened frame-loop real-window test; real-window synthetic-message tests prove click, hover, cursor, drag-with-preview and wheel scrolling. Evidence: [evidence/base/ticket34-real-window-input.json](../../../evidence/base/ticket34-real-window-input.json).

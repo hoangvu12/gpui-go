@@ -150,7 +150,7 @@ func (v *dropTestSurface) RenderOnce(w *Window, app *App) AnyElement {
 			recorder.mu.Unlock()
 		}
 	})
-	d = d.OnMouseMove(func(event *MouseMoveEvent, phase DispatchPhase, hitbox *Hitbox, w *Window, app *App) {
+	d = d.OnMouseMoveAll(func(event *MouseMoveEvent, phase DispatchPhase, hitbox *Hitbox, w *Window, app *App) {
 		if phase == DispatchBubble && hitbox.IsHovered(w) {
 			recorder.mu.Lock()
 			recorder.focuses = append(recorder.focuses, fmt.Sprintf("move(%.1f,%.1f)", event.Position.X, event.Position.Y))
