@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: base-port orchestrator (wave 1c)
 Blocked by: 03, 06
 
 ## Question
