@@ -66,6 +66,15 @@ type a11yFixture struct {
 // Narrator evidence test shows a window.
 func bootA11yFixture(t *testing.T, title string) *a11yFixture {
 	t.Helper()
+	return bootA11yFixtureView(t, title, func(model gpui.Entity[a11yModel]) gpui.View {
+		return &a11yRootView{model: model}
+	})
+}
+
+// bootA11yFixtureView is bootA11yFixture with a caller-chosen root view
+// over the same model (Base ticket 11's role corpus reuses the boot).
+func bootA11yFixtureView(t *testing.T, title string, root func(model gpui.Entity[a11yModel]) gpui.View) *a11yFixture {
+	t.Helper()
 	host := gpui.NewHost()
 	if err := host.Start(); err != nil {
 		t.Fatalf("host start: %v — this session is expected to create real windows", err)
@@ -91,7 +100,7 @@ func bootA11yFixture(t *testing.T, title string) *a11yFixture {
 			Show:   false,
 		}, func(w *gpui.Window, app *gpui.App) gpui.View {
 			model = newA11yModel(app, w)
-			return &a11yRootView{model: model}
+			return root(model)
 		})
 		if err != nil {
 			done <- err
