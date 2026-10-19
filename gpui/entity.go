@@ -209,7 +209,7 @@ func (m *entityMap) reclaim(id EntityID) {
 }
 
 // leaseKind distinguishes an owned lease from a callback-borrowed facade
-// token.
+// token and from a view self-handle facade.
 type leaseKind uint8
 
 const (
@@ -219,6 +219,13 @@ const (
 	// leaseBorrow is a callback-borrowed facade token: valid during the
 	// callback, expiring on return, never releasable or transferable.
 	leaseBorrow
+	// leaseSelfHandle is the never-expiring facade of a view's strong
+	// self-handle (Context.StrongSelf): the lease that keeps the view
+	// entity alive is owned by the window rendering the view, so the
+	// facade itself allows access while the entity is live but is never
+	// releasable or transferable — RetainInto creates an independently
+	// owned copy when a caller needs its own lifetime.
+	leaseSelfHandle
 )
 
 // borrowValidity is the shared validity token of callback-borrowed
@@ -478,6 +485,9 @@ func (h Entity[S]) TransferInto(owner *Scope) {
 		panic("gpui: TransferInto requires a non-nil owner scope")
 	}
 	lease := entityLeaseOf(h, "TransferInto")
+	if lease.kind == leaseSelfHandle {
+		panic("gpui: cannot transfer a view's strong self-handle: the window rendering the view owns its lease; use RetainInto to own an independent copy")
+	}
 	if lease.kind == leaseBorrow {
 		panic("gpui: cannot transfer a callback-borrowed entity handle; use RetainInto")
 	}
@@ -497,10 +507,14 @@ func (h Entity[S]) TransferInto(owner *Scope) {
 // count reaches zero the release is queued and processed at the next
 // effect-flush boundary; logical zero is irreversible.
 //
-// Releasing a callback-borrowed facade is misuse and panics.
+// Releasing a callback-borrowed facade or a view's strong self-handle
+// is misuse and panics.
 func (h Entity[S]) Release() {
 	if h.lease == nil {
 		panic("gpui: zero entity handle is invalid (used by Release)")
+	}
+	if h.lease.kind == leaseSelfHandle {
+		panic("gpui: cannot release a view's strong self-handle: the window rendering the view owns its lease; use RetainInto to own an independent copy")
 	}
 	if h.lease.kind == leaseBorrow {
 		if h.lease.valid.expired {

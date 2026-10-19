@@ -23,6 +23,8 @@ A consumer Windows app built only on gpui-go's public API (mordbard, a Go deskto
 
 ## Decisions so far
 
+- [Give views a strong self-handle](issues/05-strong-self-entity-handle.md) — `Context.StrongSelf()` is the window-owned strong self-handle for listener capture (the conforming alternative to a retaining `Context.Entity()`); one lease per (window, view), released at window close.
+
 ## Not yet specified
 
 ## Out of scope

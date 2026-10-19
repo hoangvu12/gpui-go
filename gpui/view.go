@@ -172,6 +172,33 @@ func retainForFrame[S any](entity Entity[S]) Entity[S] {
 	return entity.RetainInto(owner)
 }
 
+// installViewSelfHandle installs the window-owned strong self-handle
+// lease of a view being rendered by w (Context.StrongSelf): one lease
+// per (window, view entity), retained on the first read and shared by
+// every later read, registered in the window's scope so it releases
+// when the window closes. The reference's listener closures own strong
+// Entity clones that drop with the element tree (R:app/context.rs:50-56
+// with Rust's Arc ref-counting); the window-owned lease is the port's
+// deterministic equivalent — the element tree and its closures live as
+// long as the window's placement, and the lease follows that lifetime
+// instead of GC timing.
+func installViewSelfHandle(w *Window, id EntityID) *entityLease {
+	ds := drawState(w)
+	if lease := ds.selfLeases[id]; lease != nil && !lease.dead {
+		return lease
+	}
+	owner := w.Scope()
+	owner.requireOpen()
+	lease := &entityLease{id: id, app: w.app, kind: leaseOwned, owner: owner}
+	owner.addLease(lease)
+	w.app.entities.addLease(id)
+	if ds.selfLeases == nil {
+		ds.selfLeases = make(map[EntityID]*entityLease)
+	}
+	ds.selfLeases[id] = lease
+	return lease
+}
+
 // entityBackedView is implemented by the entity view adapters: it
 // reports the backing entity's identity, application and state type (the
 // reference AnyView's entity + entity_type, view.rs:53-71).
@@ -416,6 +443,15 @@ func (w *Window) RootView() (View, bool) {
 // the window's first frame before returning (the reference
 // App::open_window: the root view is built before the first draw, and
 // the window draws at least once so the frame is complete).
+//
+// The build runs with the window as the active frame-construction
+// boundary (the reference pushes the window onto window_update_stack
+// around build_root_view, app.rs:1346-1350): ViewOf placements made
+// while opening the window — the root view above all — retain their
+// independent leases in the window's scope, mirroring the reference
+// window owning its root AnyView (app.rs:1360 window.root.replace), so
+// closing the window releases the root placement instead of leaking it
+// to the application root scope until shutdown.
 func (a *App) OpenWindowView(opts WindowOptions, build func(w *Window, app *App) View) (*Window, error) {
 	if build == nil {
 		return nil, fmt.Errorf("gpui: OpenWindowView requires a root view builder")
@@ -432,6 +468,9 @@ func (a *App) OpenWindowView(opts WindowOptions, build func(w *Window, app *App)
 	}
 	if !h.runForegroundSync(func() {
 		a.Update(func(app *App) {
+			previousActive := activeFrame
+			activeFrame = window
+			defer func() { activeFrame = previousActive }()
 			window.SetRootView(build(window, app))
 			if _, err := DrawWindowFrame(window); err != nil {
 				panic(fmt.Sprintf("gpui: OpenWindowView initial draw: %v", err))

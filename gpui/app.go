@@ -774,10 +774,15 @@ func (a *App) removeDetachedTask(t *taskRun) {
 
 // entityLeaseOf returns the lease of an owned handle, or panics with the
 // programmer-misuse diagnostic when the handle is zero, stale, or an
-// expired borrow.
+// expired borrow. A view self-handle facade never expires: its lease is
+// owned by the rendering window, so access is valid while the entity is
+// live (Context.StrongSelf).
 func entityLeaseOf[S any](h Entity[S], op string) *entityLease {
 	if h.lease == nil {
 		panic(fmt.Sprintf("gpui: zero entity handle is invalid (used by %s)", op))
+	}
+	if h.lease.kind == leaseSelfHandle {
+		return h.lease
 	}
 	if h.lease.kind == leaseBorrow {
 		if h.lease.valid.expired {
