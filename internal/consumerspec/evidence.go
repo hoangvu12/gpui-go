@@ -20,26 +20,26 @@ import (
 // ---------------------------------------------------------------------------
 
 // The artifact identity recorded for the current native build (native
-// revision 10, the wave-4 rebuild). These constants are the evidence
-// values the delivery checks compare the module's embedded artifact
-// against; they cite:
+// revision 12, the consumer-gaps font-registration rebuild). These
+// constants are the evidence values the delivery checks compare the
+// module's embedded artifact against; they cite:
 //
-//   - evidence/ticket22-uia-provider.json, evidence/ticket28-capture.json,
-//     evidence/ticket29-device-loss.json and
-//     evidence/ticket32-render-to-image.json (the wave-4 evidence
-//     recording: "18,861,056 bytes; sha256 37ee6877…; static CRT
-//     (OS-only imports)", native revision 10, capability mask 0xFFF).
+//   - evidence/consumer-gaps-03-register-fonts.json (this rebuild's
+//     evidence recording: "18,866,688 bytes; sha256 88595f13…; static
+//     CRT (OS-only imports)", native revision 12, capability mask
+//     0xFFF), which supersedes the wave-4 recording of the previous
+//     identity (18,861,056 bytes; sha256 37ee6877…, revision 11).
 //
 // When the maintainer artifact rotates, these constants, the embedded
 // manifest pair and the evidence records move together: the tests fail
 // loudly instead of accepting a silent identity drift.
 const (
 	// EvidenceArtifactSHA256 is the recorded SHA-256 of the DLL.
-	EvidenceArtifactSHA256 = "37ee6877023dda0635544555639c9a68100e44d5c3790aad8613e4c938ed712e"
+	EvidenceArtifactSHA256 = "88595f1332a26f4e2e9bc5d2d899e8abe330b6290078747a0fb2a738e654a941"
 	// EvidenceArtifactBytes is the recorded DLL size.
-	EvidenceArtifactBytes = 18861056
+	EvidenceArtifactBytes = 18866688
 	// EvidenceNativeRevision is the recorded native bridge revision.
-	EvidenceNativeRevision = 11
+	EvidenceNativeRevision = 12
 	// EvidenceCECommit is the pinned gpui-CE commit of the artifact.
 	EvidenceCECommit = "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a"
 	// EvidenceCRTOutcome is the recorded static-CRT outcome string.

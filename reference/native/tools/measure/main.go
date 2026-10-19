@@ -60,10 +60,14 @@ const (
 	// plus the renderer service v3 and the AtlasKey::Svg variant. The
 	// wave-4 fix-up (the Go workers' honest findings) bumped it to 11
 	// (the scene surface export gate, the ERR_RECOVERING status move,
-	// the device-rebuild order, the a11y action-mask decode).
+	// the device-rebuild order, the a11y action-mask decode). The
+	// consumer-gaps font-registration rebuild bumped it to 12: the text
+	// service v2 (text_font_add in table slot 15 registering font bytes
+	// through the pinned add_fonts path, the font record's family_found
+	// diagnostic, the max_font_bytes scalar).
 	// Keep these in sync with reference/native/src/lib.rs
 	// (GPUI_GO_NATIVE_REVISION and the capabilities module).
-	nativeRevision = 11
+	nativeRevision = 12
 
 	// bit 0 bootstrap, bit 1 layout-taffy-0-13-0, bit 2 renderer-d3d11,
 	// bit 3 scene-kernel-v1, bit 4 text-parley-0-11-1, bit 5

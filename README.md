@@ -47,6 +47,16 @@ func (h *hello) Render(w *gpui.Window, cx *gpui.Context[hello]) gpui.AnyElement 
 
 The rest of the example creates the app and its Win32 host, opens the window with `App.OpenWindowView`, and presents frames. The present loop is still explicit. `gpui.DrawWindowFrame` builds the scene, and the window's `Surface.DrawScene` puts it on screen. The example repeats both steps from the window's `OnRedraw` hook. The public API does not yet expose the atlas that holds a window's glyphs, so a hand-written loop like this one can only present scenes without text. For larger programs, the real-window tests under `internal/*spec` exercise each subsystem against live windows. The [two-window counter](internal/authorspec/counter_window_test.go) is a good place to start.
 
+**Embedded fonts.** Apps that ship their own typefaces (embedded with `go:embed`, for instance) register the bytes before the first text layout:
+
+```go
+ts, err := gpui.DefaultTextSystem()
+if err != nil { /* ... */ }
+if _, err := ts.AddFont(geistBytes); err != nil { /* the bytes hold no font face */ }
+```
+
+`TextSystem.AddFont` mirrors GPUI's `add_fonts`: family names come from each font's embedded name table, they appear in `FontNames`, and `FontDescriptor{Family: "Geist"}` resolves to the registered face for shaping and rasterization. Fonts are process-stable; there is no unregister. If a family resolves nowhere — an embedded font that failed to register, or a name that differs from the font's internal family name — `ResolveFont` still returns the fallback font (GPUI's behavior), but `FontIdentity.FamilyFound` is `false`, so the missing font is diagnosable.
+
 ## Status
 
 Version 0.1.0 is the first tagged release. All 34 tickets in the core backlog are closed. The test suite drives real windows on a real GPU device, and the accessibility tree was checked with Narrator. Because this is a 0.x release, the API can still change. The planning record and the upstream research are linked from the [research index](docs/research-index.md).

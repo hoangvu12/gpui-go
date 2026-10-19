@@ -98,6 +98,25 @@ func callTextFontMetrics(fn uintptr, fontID uint64, out *FontMetricsRecord) (int
 	return callStatus(r1), nil
 }
 
+func callTextFontAdd(fn uintptr, data []byte, outGeneration *uint64) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("text_font_add")
+	}
+	var dataPtr uintptr
+	if len(data) > 0 {
+		dataPtr = uintptr(unsafe.Pointer(&data[0]))
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		dataPtr,
+		uintptr(len(data)),
+		uintptr(unsafe.Pointer(outGeneration)),
+	)
+	runtime.KeepAlive(data)
+	runtime.KeepAlive(outGeneration)
+	return callStatus(r1), nil
+}
+
 func callTextShape(
 	fn uintptr,
 	text []byte,

@@ -23,6 +23,8 @@ A consumer Windows app built only on gpui-go's public API (mordbard, a Go deskto
 
 ## Decisions so far
 
+- [Register fonts from memory](issues/03-register-fonts-from-memory.md) — resolved: `TextSystem.AddFont` surfaces the pinned `add_fonts` path through a rev-12 native rebuild (text service v2), registered families resolve by name for shaping and rasterization, and `FontIdentity.FamilyFound` makes the silent fallback diagnosable.
+
 ## Not yet specified
 
 ## Out of scope
