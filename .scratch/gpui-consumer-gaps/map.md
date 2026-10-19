@@ -23,6 +23,8 @@ A consumer Windows app built only on gpui-go's public API (mordbard, a Go deskto
 
 ## Decisions so far
 
+- [Present element-tree text through the consumer present loop](issues/01-present-element-tree-text.md): `Window.GlyphAtlas()` exposes the window's text atlas to `Surface.DrawScene`/`RenderScene`/`RenderToImage`, and a nil/foreign atlas on a sprite scene answers the typed `ErrSceneSpriteAtlas` (pool/texture-index precondition) instead of a native bad-handle; hello example, README and the `internal/presentspec` real-window gate updated.
+
 ## Not yet specified
 
 ## Out of scope

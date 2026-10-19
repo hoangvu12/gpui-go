@@ -39,13 +39,19 @@ func (h *hello) Render(w *gpui.Window, cx *gpui.Context[hello]) gpui.AnyElement 
 		AlignItems(gpui.AlignItemsCenter).
 		Bg(gpui.RgbaToHsla(0x1e293bff)).
 		Child(gpui.Div().
+			Flex().
+			Justify(gpui.AlignContentCenter).
+			AlignItems(gpui.AlignItemsCenter).
 			Size(gpui.PxLength(160), gpui.PxLength(96)).
-			Bg(gpui.RgbaToHsla(0x2563ebff))).
+			Bg(gpui.RgbaToHsla(0x2563ebff)).
+			TextColor(gpui.RgbaToHsla(0xffffffff)).
+			TextLg().
+			Child("Hello!")).
 		IntoElement()
 }
 ```
 
-The rest of the example creates the app and its Win32 host, opens the window with `App.OpenWindowView`, and presents frames. The present loop is still explicit. `gpui.DrawWindowFrame` builds the scene, and the window's `Surface.DrawScene` puts it on screen. The example repeats both steps from the window's `OnRedraw` hook. The public API does not yet expose the atlas that holds a window's glyphs, so a hand-written loop like this one can only present scenes without text. For larger programs, the real-window tests under `internal/*spec` exercise each subsystem against live windows. The [two-window counter](internal/authorspec/counter_window_test.go) is a good place to start.
+The rest of the example creates the app and its Win32 host, opens the window with `App.OpenWindowView`, and presents frames. The present loop is still explicit. The window's `OnRedraw` hook hands the last drawn scene to the window's surface: `gpui.LastDrawnScene` returns the scene the frame loop built, and the window's `Surface.DrawScene` puts it on screen. Text drawn by the element tree presents too: the scene's glyph sprites live in the atlas the window's text system rasterized them into, so the loop passes `Window.GlyphAtlas()` alongside the scene (a scene without sprites ignores it, and drawing a sprite scene with a nil or foreign atlas fails with the typed `ErrSceneSpriteAtlas`). For larger programs, the real-window tests under `internal/*spec` exercise each subsystem against live windows. The [two-window counter](internal/authorspec/counter_window_test.go) is a good place to start, and [the consumer present loop](internal/presentspec/present_spec_test.go) shows element-tree text presented and read back pixel by pixel.
 
 ## Status
 
