@@ -272,6 +272,13 @@ func (t *testTextSystem) inlineMetrics(font FontDescriptor, fontSize float32) In
 	}
 }
 
+// finishFrame implements windowTextSystem: the deterministic test
+// system shapes no native handles, so the frame's line-usage rotation
+// is a no-op (the cache exists to keep native shaping handles alive
+// exactly as long as frames re-request them; the stub's results are
+// free to rebuild).
+func (t *testTextSystem) finishFrame() {}
+
 // testTextXHeight is the stub's x_height (516 font units).
 const testTextXHeight = 516.0
 

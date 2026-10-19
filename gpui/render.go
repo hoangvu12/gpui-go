@@ -108,15 +108,14 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 
 	baseMask := Bounds{Origin: Point{}, Size: viewport}
 	frame := &frameDrawState{
-		scene:             scene,
-		paint:             NewPaintContext(scale, baseMask, 1.0),
-		viewport:          viewport,
-		scale:             scale,
-		rem:               ds.rem,
-		contentMask:       baseMask,
-		elementOffset:     Point{},
-		text:              ds.text,
-		inlineShapedLines: make(map[*WrappedLine]struct{}),
+		scene:         scene,
+		paint:         NewPaintContext(scale, baseMask, 1.0),
+		viewport:      viewport,
+		scale:         scale,
+		rem:           ds.rem,
+		contentMask:   baseMask,
+		elementOffset: Point{},
+		text:          ds.text,
 	}
 	ds.frame = frame
 	previousActive := activeFrame
@@ -175,6 +174,16 @@ var finishingFrames int
 // and a focus move made by a focus listener refreshes the window
 // afterwards (window.rs:3279-3285) so that frame is not lost.
 func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawStart time.Time) {
+	// The frame's line-layout cache rotation (window.rs:3230
+	// self.text_system().finish_frame(), the tail of Window::draw after
+	// draw_roots): the shaped lines this frame requested survive into
+	// the next frame's previous-frame cache; the lines no frame
+	// requested release their native handles. An abandoned build does
+	// not finish the frame, like the reference: its entries stay for the
+	// next completed frame's rotation (nothing leaks either way).
+	if ds.text != nil {
+		ds.text.finishFrame()
+	}
 	var focusMoved bool
 	func() {
 		ds.finishing = true

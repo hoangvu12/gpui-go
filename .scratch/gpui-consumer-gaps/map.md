@@ -23,6 +23,8 @@ A consumer Windows app built only on gpui-go's public API (mordbard, a Go deskto
 
 ## Decisions so far
 
+- [Ticket 02 resolved: a per-window line-layout cache (the reference `LineLayoutCache` port) makes shaped lines reusable across frames and disposes them at rotation/teardown](issues/02-text-shaping-handle-leak.md)
+
 ## Not yet specified
 
 ## Out of scope

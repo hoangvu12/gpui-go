@@ -1086,10 +1086,6 @@ type frameDrawState struct {
 	// Some — including an empty list — means the element's content
 	// lives inside a parent paragraph; nil means standalone).
 	currentInlineFragments []Bounds
-	// inlineShapedLines tracks the real WrappedLines referenced by this
-	// frame's inline paint pieces (frame-scoped native shaping handles;
-	// disposed when the frame completes).
-	inlineShapedLines map[*WrappedLine]struct{}
 	// renderedViews is the rendered-view stack
 	// (window.rendered_entity_stack).
 	renderedViews []EntityID
@@ -1156,12 +1152,18 @@ func dropDrawState(w *Window) {
 			_ = ds.engine.Dispose()
 		}
 		// A real window's text system owns one native atlas slot (the
-		// service bounds live atlases at 8): it retires with the window's
-		// element runtime, like the engine above (Base ticket 33 — with
-		// every real window drawn by the frame loop, leaked slots exhausted
-		// the bound across a test process).
-		if rts, ok := ds.text.(*realWindowTextSystem); ok && rts.atlas != nil {
-			_ = rts.atlas.Dispose()
+		// service bounds live atlases at 8) and a line-layout cache of
+		// native shaping handles: both retire with the window's element
+		// runtime, like the engine above (Base ticket 33 — with every real
+		// window drawn by the frame loop, leaked slots exhausted the bound
+		// across a test process; the cache's lines dispose the same way,
+		// the reference window's Arc-held lines dying with its
+		// WindowTextSystem).
+		if rts, ok := ds.text.(*realWindowTextSystem); ok {
+			rts.lines.dispose()
+			if rts.atlas != nil {
+				_ = rts.atlas.Dispose()
+			}
 		}
 		delete(windowDrawStates, w)
 		// Dropping the window's element states drops their resources (the
