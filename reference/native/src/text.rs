@@ -8,6 +8,15 @@
 //! *rasterization* (DirectWrite/Swash pixel output) is a later ticket and is
 //! deliberately not exercised by any entry here.
 //!
+//! Font registration (the consumer-gaps embedded-font ticket): the
+//! `text_font_add` entry registers in-memory font bytes through the pinned
+//! `PlatformTextSystem::add_fonts` (the code path behind
+//! `TextSystem::add_fonts`), so families embedded in a Go binary resolve by
+//! name through the same catalog that shapes and rasterizes. The v2 font
+//! record reports `family_found` — whether the descriptor's primary family
+//! is present in the catalog — so a family that resolves nowhere (the
+//! silent fallback) is diagnosable.
+//!
 //! # Construction path (the decision the ticket asked to record)
 //!
 //! The service owns ONE process-global text stack, created lazily behind the
@@ -155,8 +164,11 @@ use gpui::{
 use gpui_ce_parley::{ParleyTextSystem, SystemFonts};
 
 /// Text service ABI version (bumped only on record/table layout changes of
-/// the text service).
-pub const GPUI_GO_TEXT_SERVICE_VERSION: u32 = 1;
+/// the text service). Version 2 (the consumer-gaps font-registration
+/// ticket): the font record's v1 `reserved` word became `family_found`, and
+/// the table gained the `font_add` entry (slot 15) plus the
+/// `max_font_bytes` capacity scalar (200 → 216 bytes).
+pub const GPUI_GO_TEXT_SERVICE_VERSION: u32 = 2;
 
 /// Maximum simultaneously live shaping handles. Exceeding the bound fails
 /// `text_shape` with [`text_status::ERR_SHAPING_LIMIT`] before any shaping
@@ -178,6 +190,12 @@ pub const MAX_STRINGS_BYTES: u32 = 64 << 10;
 
 /// Maximum total bytes of the packed family-name dump.
 pub const MAX_FONT_NAMES_BYTES: u32 = 1 << 20;
+
+/// Maximum accepted font-data length for one `text_font_add` call
+/// (caller memory is copied into service-owned state before registration,
+/// so the bound keeps that copy bounded; 64 MiB covers the largest real
+/// faces and font collections).
+pub const MAX_FONT_BYTES: u32 = 64 << 20;
 
 /// Text service status codes. 0 is success; negative values are
 /// caller/argument errors; 100+ are internal failures.
@@ -206,6 +224,10 @@ pub mod text_status {
     /// A dump capacity was too small; `out_needed` carries the required
     /// count (records) or byte count (font names).
     pub const ERR_CAPACITY: i32 = -7;
+    /// The font bytes submitted to `text_font_add` were rejected: they
+    /// contain no supported font face (the pinned `add_fonts` failure —
+    /// `register_blobs` bails when the data holds no face).
+    pub const ERR_FONT_DATA: i32 = -8;
     /// A native panic was contained by `catch_unwind` during this call.
     pub const ERR_PANIC: i32 = 101;
 }
@@ -259,7 +281,7 @@ pub struct GpuiGoTextFontRequest {
 ///
 /// Layout (x86-64): `font_id` @0 (u64), `generation` @8 (u64),
 /// `weight_bits` @16, `style` @20, `feature_count` @24,
-/// `fallback_count` @28, `reserved` @32, `record_size` @36; size 40,
+/// `fallback_count` @28, `family_found` @32, `record_size` @36; size 40,
 /// alignment 8.
 #[derive(Clone, Copy)]
 #[repr(C)]
@@ -276,8 +298,15 @@ pub struct GpuiGoTextFontRecord {
     pub feature_count: u32,
     /// Echo of the requested fallback count.
     pub fallback_count: u32,
-    /// Must be zero (forward compatibility).
-    pub reserved: u32,
+    /// 1 when the descriptor's primary family is present in the font
+    /// catalog (system-installed or registered through `text_font_add`);
+    /// 0 when the id resolved through the fallback chain. This is the
+    /// port's observability surface for a family that resolves nowhere
+    /// (the missing-embedded-font diagnostic): the pinned resolve chain
+    /// silently falls back, and the pinned public API exposes no
+    /// matched-family report, so the service computes presence against
+    /// `all_font_names` (cached per catalog generation).
+    pub family_found: u32,
     /// `size_of::<GpuiGoTextFontRecord>()` self-check.
     pub record_size: u32,
 }
@@ -538,7 +567,7 @@ pub struct GpuiGoTextFragmentRecord {
 /// it.
 ///
 /// Layout (x86-64): 5 u32 fields; size 20, alignment 4.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(C)]
 pub struct GpuiGoTextGlyphRecord {
     /// The glyph id (`GlyphId.0`).
@@ -585,8 +614,8 @@ const _: () = assert!(std::mem::align_of::<GpuiGoTextGlyphRecord>() == 4);
 // Service table
 // ---------------------------------------------------------------------------
 
-/// The text service table: 15 function pointers then 20 self-check/capacity
-/// scalars; size 200, alignment 8. Installed in reserved slot 4 of the
+/// The text service table: 16 function pointers then 21 self-check/capacity
+/// scalars; size 216, alignment 8. Installed in reserved slot 4 of the
 /// bootstrap table and advertised with capability bit 4
 /// (`text-parley-0-11-1`).
 #[derive(Clone, Copy)]
@@ -673,6 +702,12 @@ pub struct GpuiGoTextTable {
     pub glyphs: Option<
         unsafe extern "system" fn(u64, *mut GpuiGoTextGlyphRecord, u32, *mut u32) -> i32,
     >,
+    /// `text_font_add` (the pinned `TextSystem::add_fonts`: register font
+    /// bytes; the families appear in `text_font_names` and resolve by
+    /// name).
+    pub font_add: Option<
+        unsafe extern "system" fn(data: *const u8, data_len: u32, out_generation: *mut u64) -> i32,
+    >,
     /// Text ABI version (see [`GPUI_GO_TEXT_SERVICE_VERSION`]).
     pub service_version: u32,
     /// `size_of::<GpuiGoTextTable>()` self-check.
@@ -713,9 +748,12 @@ pub struct GpuiGoTextTable {
     pub max_shaping_handles: u32,
     /// Text length bound ([`MAX_TEXT_BYTES`]).
     pub max_text_bytes: u32,
+    /// Font-data length bound for one `text_font_add` call
+    /// ([`MAX_FONT_BYTES`]).
+    pub max_font_bytes: u32,
 }
 
-const _: () = assert!(std::mem::size_of::<GpuiGoTextTable>() == 200);
+const _: () = assert!(std::mem::size_of::<GpuiGoTextTable>() == 216);
 const _: () = assert!(std::mem::align_of::<GpuiGoTextTable>() == 8);
 
 /// The one static text service table. Its address is stable for the process
@@ -736,6 +774,7 @@ pub(crate) static TEXT_TABLE: GpuiGoTextTable = GpuiGoTextTable {
     cluster: Some(text_cluster),
     fragments: Some(text_fragments),
     glyphs: Some(text_glyphs),
+    font_add: Some(text_font_add),
     service_version: GPUI_GO_TEXT_SERVICE_VERSION,
     size_of_table: std::mem::size_of::<GpuiGoTextTable>() as u32,
     align_of_table: std::mem::align_of::<GpuiGoTextTable>() as u32,
@@ -756,6 +795,7 @@ pub(crate) static TEXT_TABLE: GpuiGoTextTable = GpuiGoTextTable {
     size_of_glyph_record: std::mem::size_of::<GpuiGoTextGlyphRecord>() as u32,
     max_shaping_handles: MAX_SHAPING_SLOTS,
     max_text_bytes: MAX_TEXT_BYTES,
+    max_font_bytes: MAX_FONT_BYTES,
 };
 
 // ---------------------------------------------------------------------------
@@ -841,12 +881,23 @@ struct TextServiceState {
     /// generation at registration. Metrics queries validate against this
     /// instead of relying on the store's `expect`.
     fonts: HashMap<u64, u64>,
+    /// Cache of the catalog's family-name set, keyed by the catalog
+    /// generation it was built from (`all_font_names` enumerates and sorts
+    /// the whole catalog, so the resolve path must not call it per
+    /// resolve). Invalidated by `text_font_add` (the only generation
+    /// mutator); rebuilt lazily on the next `family_found` query.
+    family_names: Option<(u64, std::collections::HashSet<String>)>,
     slots: Vec<ShapingSlot>,
 }
 
 static GLOBAL: std::sync::LazyLock<Mutex<TextServiceState>> =
     std::sync::LazyLock::new(|| {
-        Mutex::new(TextServiceState { stack: None, fonts: HashMap::new(), slots: Vec::new() })
+        Mutex::new(TextServiceState {
+            stack: None,
+            fonts: HashMap::new(),
+            family_names: None,
+            slots: Vec::new(),
+        })
     });
 
 fn lock_global() -> MutexGuard<'static, TextServiceState> {
@@ -899,6 +950,30 @@ fn register_font(state: &mut TextServiceState, stack: &TextStack, font_id: FontI
         let generation = stack.parley.font_generation();
         state.fonts.insert(key, generation);
     }
+}
+
+/// Whether the descriptor's primary family is present in the font catalog
+/// (`all_font_names`: system families plus families registered through
+/// `text_font_add`, plus the `.SystemUIFont` alias). The set is cached per
+/// catalog generation; `text_font_add` bumps the generation, so the cache
+/// stays correct across registrations.
+fn family_present(state: &mut TextServiceState, stack: &TextStack, family: &str) -> bool {
+    let generation = stack.parley.font_generation();
+    let cached = state
+        .family_names
+        .as_ref()
+        .is_some_and(|(cached_generation, _)| *cached_generation == generation);
+    if !cached {
+        let names: std::collections::HashSet<String> =
+            stack.system.all_font_names().into_iter().collect();
+        state.family_names = Some((generation, names));
+    }
+    state
+        .family_names
+        .as_ref()
+        .expect("the family-name cache was just ensured")
+        .1
+        .contains(family)
 }
 
 // ---------------------------------------------------------------------------
@@ -1290,6 +1365,14 @@ fn text_font_resolve_body(
             .get(&(font_id.0 as u64))
             .copied()
             .unwrap_or_default();
+        // The family-presence diagnostic: 1 when the primary family is in
+        // the catalog, 0 when the fallback chain answered (the silent
+        // fallback stays behaviorally pinned — this only reports it).
+        let family_found = u32::from(family_present(
+            &mut state,
+            &stack,
+            std::str::from_utf8(family_bytes).unwrap_or(""),
+        ));
         let out: &mut GpuiGoTextFontRecord = &mut *out;
         out.font_id = font_id.0 as u64;
         out.generation = generation;
@@ -1297,9 +1380,56 @@ fn text_font_resolve_body(
         out.style = request.style;
         out.feature_count = request.feature_count;
         out.fallback_count = request.fallback_count;
-        out.reserved = 0;
+        out.family_found = family_found;
         out.record_size = std::mem::size_of::<GpuiGoTextFontRecord>() as u32;
         text_status::OK
+    }
+}
+
+/// Shared body of `text_font_add`: registers in-memory font bytes with
+/// the catalog through the pinned `PlatformTextSystem::add_fonts` path
+/// (`fontique::Blob` → `register_blobs`, exactly the code the pinned
+/// `TextSystem::add_fonts` runs; family names come from each font's
+/// embedded name table). Registration is visible to every later
+/// resolve/shape/rasterize call on the same stack (one Fontique catalog
+/// for the whole process). The bytes are copied into service-owned state
+/// before registration, so no caller pointer is retained.
+///
+/// One blob per call: the pinned `add_fonts` takes a `Vec` of sources and
+/// registers them as one batch; the ABI registers one blob per call, so
+/// N calls produce N registration batches (N generation bumps). The
+/// observable outcomes — FontIds, family names, resolution — are
+/// unaffected.
+fn add_font_body(data: *const u8, data_len: u32, out_generation: *mut u64) -> i32 {
+    if out_generation.is_null() {
+        return text_status::ERR_NULL_ARG;
+    }
+    if data_len == 0 || data_len > MAX_FONT_BYTES {
+        return text_status::ERR_BAD_VALUE;
+    }
+    if data.is_null() {
+        return text_status::ERR_NULL_ARG;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(data, data_len as usize) };
+    let mut state = lock_global();
+    let stack = ensure_stack(&mut state);
+    // The pinned registration: any failure (no supported face in the data,
+    // Skrifa parse failure) is the typed font-data error, never a panic at
+    // the ABI.
+    match stack.parley.add_fonts(vec![std::borrow::Cow::Owned(bytes.to_vec())]) {
+        Ok(()) => {
+            // The generation bumps with every successful registration
+            // batch; report it so a caller can observe the registration
+            // happened (the catalog generation the next resolve reports).
+            let generation = stack.parley.font_generation();
+            // The family-name cache is keyed by generation, so it is
+            // already invalidated by construction; drop it eagerly to free
+            // the stale set.
+            state.family_names = None;
+            unsafe { *out_generation = generation };
+            text_status::OK
+        }
+        Err(_) => text_status::ERR_FONT_DATA,
     }
 }
 
@@ -2078,6 +2208,14 @@ unsafe extern "system" fn text_font_resolve(
     )
 }
 
+unsafe extern "system" fn text_font_add(
+    data: *const u8,
+    data_len: u32,
+    out_generation: *mut u64,
+) -> i32 {
+    text_entry!("text_font_add", add_font_body(data, data_len, out_generation))
+}
+
 unsafe extern "system" fn text_font_metrics(
     font_id: u64,
     out: *mut GpuiGoTextFontMetricsRecord,
@@ -2511,7 +2649,7 @@ pub(crate) mod tests {
             style: 0,
             feature_count: 0,
             fallback_count: 0,
-            reserved: 0,
+            family_found: 0,
             record_size: 0,
         };
         let code = unsafe {
@@ -2627,6 +2765,245 @@ pub(crate) mod tests {
         };
         let code = unsafe { text_font_metrics(1, &mut metrics) };
         assert_eq!(code, text_status::ERR_BAD_HANDLE);
+
+        // The family-presence diagnostic: an installed family reports 1,
+        // the bogus family reports 0 (the fallback answered — observable
+        // now, still behaviorally the pinned silent fallback).
+        assert_eq!(out.family_found, 0, "the bogus family must report family_found = 0");
+        let mut installed = out;
+        let code = unsafe {
+            text_font_resolve(
+                &request,
+                b"Segoe UI".as_ptr(),
+                b"Segoe UI".len() as u32,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                0,
+                &mut installed,
+            )
+        };
+        assert_eq!(code, text_status::OK);
+        assert_eq!(installed.family_found, 1, "Segoe UI must report family_found = 1");
+    }
+
+    /// The pinned checkout's bundled Lilex face (SIL OFL; the same bytes
+    /// the Go module commits under internal/native/testdata). Lilex is a
+    /// service-fallback family NOT installed on this machine, so
+    /// registering it is observable: the family appears in the catalog
+    /// and resolves to Lilex itself instead of the Arial fallback.
+    const LILEX_BYTES: &[u8] =
+        include_bytes!("../../ce-source/assets/fonts/lilex/Lilex-Regular.ttf");
+
+    /// Resolves a family through the ABI, returning (status, record).
+    fn resolve_family(family: &str) -> (i32, GpuiGoTextFontRecord) {
+        let request = GpuiGoTextFontRequest {
+            weight_bits: 400.0f32.to_bits(),
+            style: 0,
+            feature_count: 0,
+            fallback_count: 0,
+            reserved: [0; 3],
+        };
+        let mut out = GpuiGoTextFontRecord {
+            font_id: 0,
+            generation: 0,
+            weight_bits: 0,
+            style: 0,
+            feature_count: 0,
+            fallback_count: 0,
+            family_found: 0,
+            record_size: 0,
+        };
+        let code = unsafe {
+            text_font_resolve(
+                &request,
+                family.as_ptr(),
+                family.len() as u32,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                0,
+                &mut out,
+            )
+        };
+        (code, out)
+    }
+
+    /// Adds font bytes through the ABI, returning (status, generation).
+    fn add_font(data: &[u8]) -> (i32, u64) {
+        let mut generation = 0u64;
+        let code = unsafe {
+            text_font_add(
+                data.as_ptr(),
+                data.len() as u32,
+                &mut generation,
+            )
+        };
+        (code, generation)
+    }
+
+    /// The font-names dump as a Vec<String> (the capacity protocol).
+    fn font_names() -> Vec<String> {
+        let mut count = 0u32;
+        let mut needed = 0u32;
+        let code =
+            unsafe { text_font_names(std::ptr::null_mut(), 0, &mut count, &mut needed) };
+        assert_eq!(code, text_status::ERR_CAPACITY);
+        let mut buf = vec![0u8; needed as usize];
+        let code = unsafe { text_font_names(buf.as_mut_ptr(), needed, &mut count, &mut needed) };
+        assert_eq!(code, text_status::OK);
+        String::from_utf8_lossy(&buf)
+            .trim_end_matches('\0')
+            .split('\0')
+            .map(str::to_owned)
+            .collect()
+    }
+
+    #[test]
+    fn font_add_registers_family_and_makes_it_resolvable() {
+        // Pre-registration state: Lilex is a service fallback, not an
+        // installed family, so it resolves through the chain (to Arial on
+        // this machine) with family_found = 0. A machine that HAS Lilex
+        // installed reports 1 — both states are recorded honestly.
+        let (code, before) = resolve_family("Lilex");
+        assert_eq!(code, text_status::OK, "the fallback chain must resolve");
+        assert_ne!(before.font_id & FONT_ID_CANONICAL_BIT, 0);
+        assert!(
+            !font_names().contains(&"Lilex".to_owned()) || before.family_found == 1,
+            "Lilex listed in the catalog must report family_found = 1"
+        );
+
+        // Registration: the pinned add_fonts path, one blob per call.
+        let (code, generation) = add_font(LILEX_BYTES);
+        assert_eq!(code, text_status::OK, "registering the bundled Lilex face");
+        assert!(generation > 0, "a successful registration bumps the generation");
+
+        // The family is now in the catalog and resolves to Lilex itself.
+        assert!(font_names().contains(&"Lilex".to_owned()));
+        let (code, after) = resolve_family("Lilex");
+        assert_eq!(code, text_status::OK);
+        assert_eq!(after.family_found, 1, "the registered family must report family_found = 1");
+        assert_ne!(after.font_id & FONT_ID_CANONICAL_BIT, 0);
+        if before.family_found == 0 {
+            assert_ne!(
+                after.font_id, before.font_id,
+                "registering Lilex must change the resolved id (was the Arial fallback)"
+            );
+        }
+
+        // Re-registration of the same bytes succeeds (Fontique has no
+        // duplicate-family rule on this path, unlike the SVG service's
+        // path-keyed registry) and bumps the generation again.
+        let (code, generation2) = add_font(LILEX_BYTES);
+        assert_eq!(code, text_status::OK);
+        assert!(generation2 > generation);
+
+        // The re-resolve stays stable and the cache tracks the new
+        // generation (no stale family-presence answers).
+        let (code, again) = resolve_family("Lilex");
+        assert_eq!(code, text_status::OK);
+        assert_eq!(again.font_id, after.font_id);
+        assert_eq!(again.family_found, 1);
+    }
+
+    #[test]
+    fn font_add_rejects_bad_data_and_arguments() {
+        let (_, generation) = add_font(LILEX_BYTES);
+
+        // Bytes with no supported font face: the typed font-data error,
+        // not a panic, and the catalog is untouched.
+        let (code, after) = add_font(b"definitely not a font file");
+        assert_eq!(code, text_status::ERR_FONT_DATA);
+        assert_eq!(after, generation, "a rejected registration must not bump the generation");
+        assert!(!font_names().contains(&"Definitely Not A Font 12345".to_owned()));
+
+        // Empty and oversize data, null pointers.
+        let (code, _) = add_font(&[]);
+        assert_eq!(code, text_status::ERR_BAD_VALUE);
+        let (code, _) = add_font(&[0u8; (MAX_FONT_BYTES + 1) as usize]);
+        assert_eq!(code, text_status::ERR_BAD_VALUE);
+        let code = unsafe { text_font_add(LILEX_BYTES.as_ptr(), LILEX_BYTES.len() as u32, std::ptr::null_mut()) };
+        assert_eq!(code, text_status::ERR_NULL_ARG);
+        let code = unsafe { text_font_add(std::ptr::null(), LILEX_BYTES.len() as u32, &mut 0u64) };
+        assert_eq!(code, text_status::ERR_NULL_ARG);
+
+        // A family that resolves nowhere reports the fallback through
+        // family_found = 0 (the diagnosable silent fallback).
+        let (code, bogus) = resolve_family("Definitely Not A Font 12345");
+        assert_eq!(code, text_status::OK, "the pinned chain resolves through fallback");
+        assert_eq!(bogus.family_found, 0);
+    }
+
+    #[test]
+    fn registered_family_shapes_distinct_from_system_default() {
+        let (code, _) = add_font(LILEX_BYTES);
+        assert_eq!(code, text_status::OK);
+
+        // Shape the same text with the registered family and with the
+        // installed system family: different resolved fonts, different
+        // glyph ids and different advances.
+        const TEXT: &str = "The quick brown fox";
+        let shape_with_family = |family: &str| -> (GpuiGoTextLayoutRecord, u64, Vec<GpuiGoTextGlyphRecord>) {
+            let run = GpuiGoTextRunRecord {
+                len: TEXT.len() as u32,
+                family_offset: 0,
+                family_len: family.len() as u32,
+                fallbacks_offset: 0,
+                fallbacks_len: 0,
+                weight_bits: 400.0f32.to_bits(),
+                style: 0,
+                feature_offset: 0,
+                feature_count: 0,
+                letter_spacing_present: 0,
+                letter_spacing_bits: 0,
+                reserved: 0,
+            };
+            let strings = family.as_bytes().to_vec();
+            let mut handle = 0u64;
+            let code = unsafe {
+                text_shape(
+                    TEXT.as_ptr(),
+                    TEXT.len() as u32,
+                    &run,
+                    1,
+                    std::ptr::null(),
+                    0,
+                    strings.as_ptr(),
+                    strings.len() as u32,
+                    FONT_SIZE.to_bits(),
+                    0.0f32.to_bits(),
+                    0,
+                    0,
+                    0,
+                    &mut handle,
+                )
+            };
+            assert_eq!(code, text_status::OK, "shaping with {family}");
+            let info = layout_info(handle);
+            let fragments = dump_fragments(handle);
+            assert!(!fragments.is_empty(), "shaping with {family} produced no fragments");
+            let font_id = fragments[0].font_id;
+            let glyphs = dump_glyphs(handle);
+            unsafe { text_dispose(handle) };
+            (info, font_id, glyphs)
+        };
+
+        let (lilex_info, lilex_font, lilex_glyphs) = shape_with_family("Lilex");
+        let (system_info, system_font, system_glyphs) = shape_with_family("Segoe UI");
+
+        assert_ne!(lilex_font, system_font, "the registered family must resolve to its own face");
+        assert_ne!(
+            lilex_glyphs, system_glyphs,
+            "the registered family must shape different glyphs than the system default"
+        );
+        assert!(bits(lilex_info.width_bits) > 0.0);
+        assert!(bits(system_info.width_bits) > 0.0);
+        // Deterministic: shaping again with the registered family is
+        // bit-identical (the store interns, the layout is pure).
+        let (repeat_info, repeat_font, repeat_glyphs) = shape_with_family("Lilex");
+        assert_eq!(repeat_font, lilex_font);
+        assert_eq!(repeat_glyphs, lilex_glyphs);
+        assert_eq!(bits(repeat_info.width_bits), bits(lilex_info.width_bits));
     }
 
     #[test]

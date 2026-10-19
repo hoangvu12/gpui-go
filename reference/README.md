@@ -136,6 +136,30 @@ and refreshes the embedded pair `internal/native/artifacts/
 MSVC linker embeds a timestamp, so identical sources produce different
 SHA-256s (observed during this ticket).
 
+### Recorded measurements (2026-10-19, the consumer-gaps font-registration rebuild)
+
+- Toolchain: `rustc 1.97.0`, host/target `x86_64-pc-windows-msvc`,
+  `RUSTFLAGS=-C target-feature=+crt-static`. The pinned CE source was
+  re-fetched into `ce-source/` at `254b5dbd…` for this rebuild (the
+  worktree's fresh checkout; the oracle tree is never modified).
+- DLL: 18,866,688 bytes, SHA-256
+  `88595f1332a26f4e2e9bc5d2d899e8abe330b6290078747a0fb2a738e654a941`,
+  gzip-9 7,534,757 bytes. Native revision 12, capability mask `0xFFF`.
+  CRT outcome: **static** — only OS system DLLs imported. The text
+  service is v2: `text_font_add` (slot 15) registers font bytes through
+  the pinned `add_fonts` path, the font record reports `family_found`,
+  and the table gained `max_font_bytes` (216 bytes, service version 2).
+- Known breakage, recorded honestly (pre-existing, NOT this rebuild's):
+  `cargo test -p gpui-go-native` does not compile the lib test target
+  on this checkout — five errors in the wave-4 test code
+  (a11y.rs:1361/1367/1385, capture.rs:1510/1531: a missing
+  `accesskit::ActionHandler` trait import, `ID3D11Texture2D::default()`
+  which windows 0.62.2 does not provide, and two unsafe calls outside
+  `unsafe` blocks). The text-service behavior is verified through the
+  Go gates against this artifact instead (`internal/native`,
+  `internal/fontspec`); the Rust text tests are in place and will run
+  once that debt is fixed by its owners.
+
 ### Recorded measurements (2026-10-10, ticket17 rebuild)
 
 - Toolchain: `rustc 1.97.0`, host/target `x86_64-pc-windows-msvc`,

@@ -26,6 +26,7 @@ A consumer Windows app built only on gpui-go's public API (mordbard, a Go deskto
 - [Window minimum size](issues/04-window-minimum-size.md) — `WindowOptions.MinSize` (logical, zero = unconstrained) enforced via WM_GETMINMAXINFO's ptMinTrackSize (scaled + frame offset, re-derived per DPI) plus the SetBounds/initial-placement clamp; zero falls to DefWindowProcW exactly as before.
 - [Give views a strong self-handle](issues/05-strong-self-entity-handle.md) — `Context.StrongSelf()` is the window-owned strong self-handle for listener capture (the conforming alternative to a retaining `Context.Entity()`); one lease per (window, view), released at window close.
 - [Present element-tree text through the consumer present loop](issues/01-present-element-tree-text.md): `Window.GlyphAtlas()` exposes the window's text atlas to `Surface.DrawScene`/`RenderScene`/`RenderToImage`, and a nil/foreign atlas on a sprite scene answers the typed `ErrSceneSpriteAtlas` (pool/texture-index precondition) instead of a native bad-handle; hello example, README and the `internal/presentspec` real-window gate updated.
+- [Register fonts from memory](issues/03-register-fonts-from-memory.md) — resolved: `TextSystem.AddFont` surfaces the pinned `add_fonts` path through a rev-12 native rebuild (text service v2), registered families resolve by name for shaping and rasterization, and `FontIdentity.FamilyFound` makes the silent fallback diagnosable.
 
 ## Not yet specified
 

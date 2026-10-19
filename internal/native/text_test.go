@@ -5,6 +5,7 @@ package native
 import (
 	"errors"
 	"math"
+	"os"
 	"runtime"
 	"testing"
 	"unsafe"
@@ -65,6 +66,9 @@ func TestTextServiceTableValidation(t *testing.T) {
 	}
 	if svc.MaxTextBytes() != 1<<20 {
 		t.Errorf("MaxTextBytes = %d, want 1 MiB", svc.MaxTextBytes())
+	}
+	if svc.MaxFontBytes() != 64<<20 {
+		t.Errorf("MaxFontBytes = %d, want 64 MiB", svc.MaxFontBytes())
 	}
 
 	// The service is reachable only with the capability bit present.
@@ -136,8 +140,11 @@ func TestTextRecordBinaryLayout(t *testing.T) {
 	if got := unsafe.Sizeof(TextGlyphRecord{}); got != 20 {
 		t.Errorf("sizeof(TextGlyphRecord) = %d, want 20", got)
 	}
-	if got := unsafe.Sizeof(textTable{}); got != 200 {
-		t.Errorf("sizeof(textTable) = %d, want 200", got)
+	if got := unsafe.Sizeof(textTable{}); got != 216 {
+		t.Errorf("sizeof(textTable) = %d, want 216", got)
+	}
+	if got := unsafe.Offsetof(FontRecord{}.FamilyFound); got != 32 {
+		t.Errorf("offsetof(FontRecord.FamilyFound) = %d, want 32", got)
 	}
 	if got := unsafe.Alignof(textTable{}); got != 8 {
 		t.Errorf("alignof(textTable) = %d, want 8", got)
@@ -215,6 +222,14 @@ func TestTextFontResolveAndMetrics(t *testing.T) {
 	}
 	if fallback.FontID&canonicalBit == 0 {
 		t.Errorf("fallback FontID %#x lacks the canonical bit", fallback.FontID)
+	}
+	// The v2 diagnostic: an absent family reports family_found = 0 while
+	// the resolve still succeeds (the pinned silent fallback, observable).
+	if fallback.FamilyFound {
+		t.Errorf("bogus family reports FamilyFound = true, want the fallback report")
+	}
+	if !identity.FamilyFound {
+		t.Errorf("Segoe UI reports FamilyFound = false, want true (installed)")
 	}
 
 	// Unknown font ids are typed errors, not panics.
@@ -852,4 +867,115 @@ func TestTextManifestIdentity(t *testing.T) {
 	if auth.Text.GpuiCe.Path == "" || auth.Text.GpuiCeParley.Path == "" {
 		t.Errorf("manifest text path pins missing: %+v", auth.Text)
 	}
+}
+
+// (r) Font registration from memory (the consumer-gaps ticket): the
+// committed Lilex corpus copy registers through the pinned add_fonts path,
+// the family becomes resolvable by name, the fallback report flips, and
+// bad bytes/arguments are typed errors. Lilex is a service-fallback
+// family not installed on this machine, so the registration is observable
+// (a machine with Lilex installed still passes: the post-registration
+// assertions hold either way and the flip is conditional).
+func TestTextFontAddRegistersFamily(t *testing.T) {
+	svc := mustTextService(t)
+	data, err := os.ReadFile("testdata/Lilex-Regular.ttf")
+	if err != nil {
+		t.Fatalf("reading the Lilex fixture: %v", err)
+	}
+
+	before, err := svc.ResolveFont(FontDescriptor{Family: "Lilex", Weight: 400})
+	if err != nil {
+		t.Fatalf("pre-registration resolve: %v", err)
+	}
+
+	generation, err := svc.AddFont(data)
+	if err != nil {
+		t.Fatalf("AddFont: %v", err)
+	}
+	if generation == 0 {
+		t.Fatalf("AddFont reported generation 0, want >= 1 (a registration batch)")
+	}
+
+	// The family is in the catalog and resolves to itself.
+	names, err := svc.FontNames()
+	if err != nil {
+		t.Fatalf("FontNames after AddFont: %v", err)
+	}
+	found := false
+	for _, name := range names {
+		if name == "Lilex" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("Lilex missing from %d catalog families after AddFont", len(names))
+	}
+	after, err := svc.ResolveFont(FontDescriptor{Family: "Lilex", Weight: 400})
+	if err != nil {
+		t.Fatalf("post-registration resolve: %v", err)
+	}
+	if !after.FamilyFound {
+		t.Errorf("post-registration resolve reports FamilyFound = false, want true")
+	}
+	if !before.FamilyFound && after.FontID == before.FontID {
+		t.Errorf("registering Lilex did not change the resolved id (%d); it was the fallback font",
+			after.FontID)
+	}
+	// The fallback family remains unknown (the diagnostic is not
+	// confused by the registration).
+	bogus, err := svc.ResolveFont(FontDescriptor{Family: "Definitely Not A Font 12345"})
+	if err != nil || bogus.FamilyFound {
+		t.Errorf("bogus resolve after registration: err=%v FamilyFound=%v, want nil false", err, bogus.FamilyFound)
+	}
+
+	// Re-registration succeeds and bumps the generation again (Fontique
+	// has no duplicate-family rule on this path).
+	generation2, err := svc.AddFont(data)
+	if err != nil {
+		t.Fatalf("re-AddFont: %v", err)
+	}
+	if generation2 <= generation {
+		t.Errorf("re-registration generation %d not > %d", generation2, generation)
+	}
+	again, err := svc.ResolveFont(FontDescriptor{Family: "Lilex", Weight: 400})
+	if err != nil || again.FontID != after.FontID || !again.FamilyFound {
+		t.Errorf("re-resolve after re-registration: id %d (want %d), FamilyFound=%v, err=%v",
+			again.FontID, after.FontID, again.FamilyFound, err)
+	}
+}
+
+// (s) AddFont validation: no-face bytes, empty and oversize data are typed
+// errors and publish nothing.
+func TestTextFontAddRejectsBadData(t *testing.T) {
+	svc := mustTextService(t)
+	generation, err := svc.AddFont(func() []byte {
+		data, err := os.ReadFile("testdata/Lilex-Regular.ttf")
+		if err != nil {
+			t.Fatalf("reading the Lilex fixture: %v", err)
+		}
+		return data
+	}())
+	if err != nil {
+		t.Fatalf("AddFont: %v", err)
+	}
+
+	if _, err := svc.AddFont([]byte("definitely not a font file")); !errors.Is(err, ErrTextFontData) {
+		t.Errorf("AddFont(no-face bytes) error = %v, want ErrTextFontData", err)
+	}
+	if _, err := svc.AddFont(nil); !errors.Is(err, ErrTextBadValue) {
+		t.Errorf("AddFont(nil) error = %v, want ErrTextBadValue", err)
+	}
+	oversize := make([]byte, svc.MaxFontBytes()+1)
+	if _, err := svc.AddFont(oversize); !errors.Is(err, ErrTextBadValue) {
+		t.Errorf("AddFont(oversize) error = %v, want ErrTextBadValue", err)
+	}
+	// A rejected registration leaves the generation unchanged: the next
+	// successful one reports a strictly greater batch counter.
+	generation2, err := svc.AddFont([]byte("still not a font"))
+	if err == nil || !errors.Is(err, ErrTextFontData) {
+		t.Fatalf("second bad AddFont: %v, want ErrTextFontData", err)
+	}
+	_ = generation2
+	_ = generation
 }

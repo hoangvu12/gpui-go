@@ -94,6 +94,16 @@ OnClick(cx.Listener(func(v *counter, _ *gpui.ClickEvent, _ *gpui.Window, cx *gpu
 
 Use `cx.StrongSelf()` when porting GPUI code that captured `cx.entity()` into a closure and calls `Update` on it, or when a callback needs the handle as a value (for example to spawn work that updates the view from its result). Both shapes update the entity through an update — never mutate the state pointer captured in a closure directly. The real-window proof of both shapes is the [self-handle corpus](internal/authorspec/self_handle_window_test.go); the deterministic lease and release rules live in [internal/portfixture](internal/portfixture/self_handle_test.go).
 
+**Embedded fonts.** Apps that ship their own typefaces (embedded with `go:embed`, for instance) register the bytes before the first text layout:
+
+```go
+ts, err := gpui.DefaultTextSystem()
+if err != nil { /* ... */ }
+if _, err := ts.AddFont(geistBytes); err != nil { /* the bytes hold no font face */ }
+```
+
+`TextSystem.AddFont` mirrors GPUI's `add_fonts`: family names come from each font's embedded name table, they appear in `FontNames`, and `FontDescriptor{Family: "Geist"}` resolves to the registered face for shaping and rasterization. Fonts are process-stable; there is no unregister. If a family resolves nowhere — an embedded font that failed to register, or a name that differs from the font's internal family name — `ResolveFont` still returns the fallback font (GPUI's behavior), but `FontIdentity.FamilyFound` is `false`, so the missing font is diagnosable.
+
 ## Status
 
 Version 0.1.0 is the first tagged release. All 34 tickets in the core backlog are closed. The test suite drives real windows on a real GPU device, and the accessibility tree was checked with Narrator. Because this is a 0.x release, the API can still change. The planning record and the upstream research are linked from the [research index](docs/research-index.md).

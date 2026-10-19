@@ -1075,9 +1075,11 @@ func TestGlyphAndAtlasCapabilityIdentity(t *testing.T) {
 	// revision to 7 and added bit 7 (scene-draw-paths); ticket17 (the
 	// image codec service) raised it to 8 with bit 8
 	// (image-codecs-image-0-25); ticket19 (the SVG service in reserved
-	// slot 8) raised it to 9 with bit 9 (svg-resvg-0-48).
-	if identity.NativeRevision != 11 {
-		t.Errorf("native revision = %d, want 11 (wave-4 fix-up)", identity.NativeRevision)
+	// slot 8) raised it to 9 with bit 9 (svg-resvg-0-48); the wave-4
+	// fix-up raised it to 11; the consumer-gaps font-registration rebuild
+	// (the text service v2: text_font_add + family_found) raised it to 12.
+	if identity.NativeRevision != 12 {
+		t.Errorf("native revision = %d, want 12 (consumer-gaps font registration)", identity.NativeRevision)
 	}
 	if identity.Capabilities&0xFFF != 0xFFF {
 		t.Errorf("capabilities mask = %#x, want the ten assigned bits set", identity.Capabilities)

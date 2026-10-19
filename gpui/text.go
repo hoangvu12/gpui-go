@@ -236,6 +236,15 @@ type FontIdentity struct {
 	FeatureCount int
 	// FallbackCount echoes the requested fallback count.
 	FallbackCount int
+	// FamilyFound reports whether the descriptor's primary family is
+	// present in the font catalog — a system-installed family or one
+	// registered through AddFont. False means the FontId resolved
+	// through the fallback chain (the descriptor fallbacks, then the
+	// service fallbacks Lilex/IBM Plex Sans/Arial): the pinned resolve
+	// behavior, silently falling back, is unchanged — this field makes
+	// the fallback observable so a missing embedded font is diagnosable
+	// (check it after resolving a family you registered).
+	FamilyFound bool
 }
 
 // FontMetrics is the pinned gpui::FontMetrics in font units: the full
@@ -309,6 +318,9 @@ var (
 	// ErrTextFontUnresolved reports that the whole pinned fallback chain
 	// failed for a descriptor.
 	ErrTextFontUnresolved = errors.New("gpui: font unresolved")
+	// ErrTextFontData reports that font bytes submitted to AddFont contain
+	// no supported font face (the pinned add_fonts registration failure).
+	ErrTextFontData = errors.New("gpui: font data rejected")
 	// ErrTextShapingLimit reports the native live shaping-handle
 	// capacity is exhausted.
 	ErrTextShapingLimit = errors.New("gpui: text shaping handle limit exceeded")
@@ -328,6 +340,8 @@ func wrapTextError(op string, err error) error {
 		return fmt.Errorf("gpui: %s: %w", op, ErrTextValue)
 	case errors.Is(err, native.ErrTextFontUnresolved):
 		return fmt.Errorf("gpui: %s: %w", op, ErrTextFontUnresolved)
+	case errors.Is(err, native.ErrTextFontData):
+		return fmt.Errorf("gpui: %s: %w", op, ErrTextFontData)
 	case errors.Is(err, native.ErrTextShapingLimit):
 		return fmt.Errorf("gpui: %s: %w", op, ErrTextShapingLimit)
 	default:
@@ -386,7 +400,8 @@ func (ts *TextSystem) MaxShapingHandles() int {
 // FontNames returns the system font family names: the pinned
 // all_font_names (catalog families plus ".SystemUIFont", sorted,
 // deduplicated). The first call creates the native text stack
-// (Fontique's DirectWrite-backed system font enumeration).
+// (Fontique's DirectWrite-backed system font enumeration). Families
+// registered through AddFont are included from the next call on.
 func (ts *TextSystem) FontNames() ([]string, error) {
 	names, err := ts.svc.FontNames()
 	if err != nil {
@@ -399,7 +414,10 @@ func (ts *TextSystem) FontNames() ([]string, error) {
 // resolve_canonical_font chain (family, descriptor fallbacks, then the
 // service fallbacks Lilex/IBM Plex Sans/Arial). The returned FontID is
 // process-stable: the store only interns, and resolving the same
-// descriptor again yields the same id.
+// descriptor again yields the same id. A family absent from the
+// catalog (system-installed or AddFont-registered) still resolves —
+// through the fallback chain, exactly like the pin — and reports it
+// through FontIdentity.FamilyFound (false = a fallback font answered).
 func (ts *TextSystem) ResolveFont(descriptor FontDescriptor) (FontIdentity, error) {
 	if descriptor.Family == "" {
 		return FontIdentity{}, fmt.Errorf("gpui: ResolveFont: %w: empty family", ErrTextValue)
@@ -415,7 +433,53 @@ func (ts *TextSystem) ResolveFont(descriptor FontDescriptor) (FontIdentity, erro
 		Style:         FontStyle(identity.Style),
 		FeatureCount:  identity.FeatureCount,
 		FallbackCount: identity.FallbackCount,
+		FamilyFound:   identity.FamilyFound,
 	}, nil
+}
+
+// FontRegistration is the outcome of one AddFont call.
+type FontRegistration struct {
+	// Generation is the font catalog generation after this registration
+	// (the registration-batch counter: every successful AddFont call
+	// bumps it, so 0 → 1 → 2 … tracks registration batches). A resolved
+	// FontIdentity.Generation or a TextLayoutSummary.FontGeneration at
+	// or above this value saw the registered families.
+	Generation uint64
+}
+
+// AddFont registers in-memory font bytes with the text system's font
+// catalog, mirroring the pinned gpui::TextSystem::add_fonts: the bytes
+// (an OpenType/TrueType face or collection, e.g. loaded from an
+// embedded asset) are registered into the same Fontique-backed catalog
+// that resolves, shapes and rasterizes every other font — family names
+// come from each font's embedded name table, appear in FontNames and
+// resolve by name through ResolveFont from the next call on.
+//
+// Fonts are process-stable: there is no unregister, and registered
+// families need no dispose. Register early (before the first text
+// layout) so every window's shaping sees them; registration after
+// shaping still applies to every later shape/rasterize call.
+//
+// One font per call, mirroring the ticket's AddFont(bytes []byte)
+// sketch; the pinned add_fonts takes a batch, so N calls are N
+// registration batches (N generation bumps — observable only through
+// the Generation counters, never through FontIds or resolution).
+//
+// A family that fails to appear (wrong name inside the bytes, a
+// registration that errored) is diagnosable two ways: AddFont errors
+// (ErrTextFontData when the bytes contain no supported font face,
+// ErrTextValue for empty or oversize data), and ResolveFont reports
+// the fallback through FontIdentity.FamilyFound (false = the family is
+// absent and a fallback font answered).
+func (ts *TextSystem) AddFont(data []byte) (FontRegistration, error) {
+	if len(data) == 0 {
+		return FontRegistration{}, fmt.Errorf("gpui: AddFont: %w: empty font data", ErrTextValue)
+	}
+	generation, err := ts.svc.AddFont(data)
+	if err != nil {
+		return FontRegistration{}, wrapTextError("AddFont", err)
+	}
+	return FontRegistration{Generation: generation}, nil
 }
 
 // FontMetrics returns the full face metrics (font units) for a font the
