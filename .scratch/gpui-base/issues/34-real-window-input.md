@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: base-port orchestrator (wave 1c)
 Blocked by: 06, 33
 
 ## Question
@@ -16,7 +16,7 @@ On a real Win32 window, clicking, hovering and dragging over divs dispatch throu
 
 - Finding (ticket 06, confirmed by the orchestrator): `gpui/win32host_windows.go` routes no `WM_*BUTTONDOWN/UP` messages into element dispatch; the core's input evidence drove dispatch synthetically.
 - Ticket 06's wiring: route the eight button messages to `w.handleMouseButtonMsg(...)`, add `hostWindow.onMouseInput` / `WindowOptions.OnMouseInput`, `forgetWin32ClickState` at WM_NCDESTROY, `clickState().systemUpdate` at WM_SETTINGCHANGE (gpui_windows events.rs:138-149,489-559,1220); port the WM_MOUSEMOVE translation (events.rs:371-398) and wheel routing if missing; `window.go` OpenWindow dispatches through `window.dispatchInput` inside `a.Update`.
-- `render.go`: drag-preview prepaint/paint in `drawRoots` (window.rs:3451-3456,3474-3475); `w.resetCursorStyle(app)` at frame completion (window.rs:3277).
+- (moved to ticket 08, which owns render.go) `render.go`: drag-preview prepaint/paint in `drawRoots` (window.rs:3451-3456,3474-3475); `w.resetCursorStyle(app)` at frame completion (window.rs:3277).
 - `key_dispatch.go`: `w.beginPlatformInputDispatch(event, app)` at the start of key dispatch (window.rs:5746-5760).
 - Ticket 06 deviation to close: the pinned hover-gated `on_mouse_move` and button-filtered `on_mouse_up` names (move existing receive-everything callers to the `...All` names).
 

@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: base-port orchestrator (wave 1c)
 Blocked by: 05
 
 ## Question
@@ -16,6 +16,8 @@ A package outside `gpui` can write custom elements that paint quads/paths/underl
 
 - The frame scene is reachable only through unexported `currentFrame(w)`; only `PaintSvg` is exported (`gpui/svgelement.go:383`).
 - Port: `Window.PaintQuad/PaintPath/PaintUnderline/PaintStrikethrough/PaintImage/PaintLayer` (R:window.rs:4339,4634,4732,4771,5057); `Canvas` (R:elements/canvas.rs); `Deferred` + `DeferDraw(priority)` over the existing order floor (R:elements/deferred.rs; R:window.rs:4310); `Anchored` + viewport/layout-bounds exports (R:elements/anchored.rs; R:window.rs:2779,5303); `img()` + `ImageSource` + MIME formats over the ticket-18 cache (R:elements/img.rs; R:platform.rs:3508); `AnimationElement`/`with_animation` (R:elements/animation.rs).
+
+- From ticket 34 (render.go ownership): drag-preview prepaint/paint in `drawRoots` via ticket 06's `prepaintActiveDragPreview`/`paintActiveDragPreview` (window.rs:3451-3456,3474-3475) and `w.resetCursorStyle(app)` at frame completion (window.rs:3277).
 
 ## Acceptance criteria
 
