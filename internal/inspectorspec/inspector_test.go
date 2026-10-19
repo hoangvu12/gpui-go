@@ -871,17 +871,23 @@ func TestAbandonedFramePreservesPriorPublishedTree(t *testing.T) {
 	}
 
 	// The abandoned build: the view flips to the panicking child. The
-	// panic propagates out of DrawWindowFrame (the build fails after
+	// panic propagates out of the frame draw (the build fails after
 	// mutating app state).
-	f.mutate(t, func(m *PanelModel, cx *gpui.Context[PanelModel]) {
-		m.panicNextRender = true
-	})
+	//
+	// Migrated by Base ticket 33 (the default frame loop): the selection
+	// refreshed the window, so the mutation's own update flush draws the
+	// panicking frame (app.rs:1800-1812) and the panic propagates out of
+	// that update; an explicit DrawWindowFrame covers the case where the
+	// flush did not draw. Either way exactly one abandoned build runs.
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
 				t.Fatal("the panicking build did not propagate")
 			}
 		}()
+		f.mutate(t, func(m *PanelModel, cx *gpui.Context[PanelModel]) {
+			m.panicNextRender = true
+		})
 		_, _ = gpui.DrawWindowFrame(f.window)
 	}()
 	if got := gpui.WindowDrawCount(f.window); got != draws {
@@ -900,11 +906,15 @@ func TestAbandonedFramePreservesPriorPublishedTree(t *testing.T) {
 		t.Error("the preserved tree lost the selected node")
 	}
 
-	// Recovery: the next successful draw republishes.
+	// Recovery: the next successful draw republishes. The abandoned
+	// frame left the window dirty, so the recovery update's flush draws
+	// it (the default frame loop); draw explicitly only if it did not.
 	f.mutate(t, func(m *PanelModel, cx *gpui.Context[PanelModel]) {
 		m.panicNextRender = false
 	})
-	f.draw(t)
+	if gpui.WindowDrawCount(f.window) == draws {
+		f.draw(t)
+	}
 	if got := gpui.InspectorTreeSnapshotOf(f.window); got == published || got.Frame() != draws+1 {
 		t.Errorf("the recovery draw did not republish: frame=%d", got.Frame())
 	}

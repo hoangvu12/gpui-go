@@ -4,7 +4,7 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: base-port orchestrator (wave 1b)
 Blocked by: 05
 
@@ -19,11 +19,11 @@ Div `OnClick` fires for mouse and keyboard (Enter/Space) clicks; divs support mo
 
 ## Acceptance criteria
 
-- [ ] Deterministic dispatch transcripts for click/hover/drag ordering; real-window synthetic-message tests (never the real mouse).
-- [ ] Every ported behavior cites the pinned Base source (`upstream-base/ce/crates/base/src/...`, c0820693) or the core pin (`reference/ce-source/crates/gpui/src/...`, 254b5dbd); no invented APIs.
-- [ ] Upstream tests in scope are ported (count ported / deviated / not-applicable recorded with reasons); real-window tests FAIL rather than skip.
-- [ ] No native artifact change (rev 11 stays frozen); any genuine native need is stopped and surfaced to the user with evidence.
-- [ ] `CGO_ENABLED=0 go test` for the touched packages is green, `go vet` + gofmt clean, and the core regression packages stay green; executed evidence in `evidence/base/ticketNN-*.json`.
+- [x] Deterministic dispatch transcripts for click/hover/drag ordering; real-window synthetic-message tests (never the real mouse).
+- [x] Every ported behavior cites the pinned Base source (`upstream-base/ce/crates/base/src/...`, c0820693) or the core pin (`reference/ce-source/crates/gpui/src/...`, 254b5dbd); no invented APIs.
+- [x] Upstream tests in scope are ported (count ported / deviated / not-applicable recorded with reasons); real-window tests FAIL rather than skip.
+- [x] No native artifact change (rev 11 stays frozen); any genuine native need is stopped and surfaced to the user with evidence.
+- [x] `CGO_ENABLED=0 go test` for the touched packages is green, `go vet` + gofmt clean, and the core regression packages stay green; executed evidence in `evidence/base/ticketNN-*.json`.
 
 ## Research
 
@@ -33,3 +33,7 @@ Div `OnClick` fires for mouse and keyboard (Enter/Space) clicks; divs support mo
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+
+## Answer
+
+Resolved 2026-10-19 (wave 1b worker, verified by the orchestrator: 21 TestInteract tests incl. a real-window capture test + dropspec/focusspec/scenespec/layoutspec). The pinned ClickEvent (mouse pairing + Enter/Space keyboard click), the full mouse-listener/hover/active/group/focus-visible builder set, drag sources with the 2px threshold and DragMoveEvent, state-style computation, per-hitbox cursor + pointer capture (SetCapture), the double-click counter, and a fixed dispatch-node pop bug. Upstream tests: 10 ported, 2 deviated, 4 n/a (tooltips). **Finding:** real windows never route mouse button messages into element dispatch; that and the remaining render/key/window wiring are [ticket 34](34-real-window-input.md). Evidence: [evidence/base/ticket06-div-interactivity.json](../../../evidence/base/ticket06-div-interactivity.json).

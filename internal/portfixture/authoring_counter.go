@@ -8,14 +8,15 @@ package portfixture
 // records (reference/harness/src/fixtures/authoring_counter.rs, run_case
 // op for op).
 //
-// The port mirror of the reference test-support app's draw driving: the
-// reference app redraws every dirty window at each update boundary
-// (app.rs flush_effects under cfg(test, feature "test-support")), so an
-// increment update's flush redraws each window whose root view was
-// notified — exactly one draw per dirty window. The port fixture tracks
-// the same dirtiness (a window is dirty when its root view's observer
-// fired since the window's last draw) and draws those windows after the
-// increment update, before capturing.
+// The reference test-support app's draw driving: the reference app
+// redraws every dirty window at each update boundary (app.rs
+// flush_effects under cfg(test, feature "test-support"), lines
+// 1800-1812), so an increment update's flush redraws each window whose
+// tracked entities were notified — exactly one draw per dirty window.
+// Since Base ticket 33 the port's own flush does the same
+// (frameloop.go drawDirtyTestWindowsInFlush), so the fixture no longer
+// mirrors the dirtiness itself: the increment update's flush draws, and
+// the capture follows.
 //
 // The gate (authoring_counter_test.go) compares the port trace against
 // the recorded reference trace with CompareTraces: every event must
@@ -134,9 +135,6 @@ type fixtureWindow struct {
 	// style is the case's resolved counter style (the capture derives
 	// the text facts from it).
 	style resolvedCounterStyle
-	// lastNotified is the view's notified count at the window's last
-	// draw (the dirty mirror of the reference flush-draw).
-	lastNotified int
 }
 
 // viewFacts reads the view entity's render and notification counts.
@@ -275,19 +273,8 @@ func runAuthoringCounterCase(c *conformance.AuthoringCounterCase, rec *recorder)
 					})
 				}
 			})
-			// The flush-draw mirror: every open window whose root view
-			// was notified since its last draw redraws (the reference
-			// test-support app's automatic dirty-window redraw at the
-			// update boundary).
-			for _, open := range windows {
-				_, notified := open.viewFacts(app)
-				if notified > open.lastNotified {
-					open.lastNotified = notified
-					if _, err := gpui.DrawWindowFrame(open.window); err != nil {
-						return fmt.Errorf("redrawing window %q: %w", open.label, err)
-					}
-				}
-			}
+			// The update's flush redrew every dirty window (the
+			// test-support flush draw, app.rs 1800-1812).
 			value := model.Read(app, func(m *counterModel, _ *gpui.App) uint64 { return m.value })
 			for _, open := range windows {
 				if err := captureCounterWindow(app, open, model, rec, countText(value)); err != nil {

@@ -354,10 +354,13 @@ func (v *viewElement) LayoutNodeStyle() (Style, bool) {
 }
 
 // withRenderedView pushes the entity onto the window's rendered-view
-// stack around f (the reference window.with_rendered_view).
+// stack around f (the reference window.with_rendered_view). The pushed
+// view is tracked by the window's frame loop (frameloop.go
+// recordRenderedView; R:window.rs:3302-3314).
 func withRenderedView[R any](w *Window, id EntityID, f func(*Window) R) R {
 	frame := currentFrame(w)
 	frame.renderedViews = append(frame.renderedViews, id)
+	recordRenderedView(w)
 	defer func() { frame.renderedViews = frame.renderedViews[:len(frame.renderedViews)-1] }()
 	return f(w)
 }

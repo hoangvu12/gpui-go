@@ -753,6 +753,11 @@ func (w *Window) dispatchKeyEventInner(event any, app *App) {
 	app.propagateEvent = true
 
 	if modifiers, ok := event.(*ModifiersChangedEvent); ok {
+		// dispatch_event's translation arm tracks the window's modifier
+		// state from the event (window.rs:5787-5790), read back by
+		// Window.Modifiers. The pin's KeyDown/KeyUp arms do not touch it
+		// (the platform reports modifier changes as ModifiersChanged).
+		inputState(w).modifiers = modifiers.Modifiers
 		if modifiers.Modifiers.NumberOfModifiers() == 0 &&
 			fs.pendingModifier.modifiers.NumberOfModifiers() == 1 &&
 			!fs.pendingModifier.sawOtherInput {

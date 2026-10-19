@@ -138,28 +138,7 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 		// frame; application mutations made during the failed build are
 		// NOT rolled back.
 		if completed {
-			ds.draws++
-			ds.lastDebugBounds = frame.debugBounds
-			ds.lastScene = scene
-			ds.lastInlineFacts = frame.inlineFacts
-			retainElementStates(ds, frame.accessedElementStates)
-			// Swap the completed dispatch frame into the rendered state
-			// (the focus/dispatch runtime reads it for input dispatch).
-			endDispatchFrame(w)
-			// Publish the inspector tree of the completed frame and swap
-			// its hitbox map into the window state (ticket27; window.rs
-			// Frame::finish + mem::swap(next_frame, rendered_frame) carry
-			// the inspector members over). An abandoned build below keeps
-			// the previously published tree.
-			inspectorFinishFrame(w, frame, ds.draws)
-			// Record the draw duration as one overlay sample (window.rs
-			// 3291-3298, cfg(feature = "profiler") → the port's
-			// CapFrameOverlay capability).
-			RecordDebugFrame(w, time.Since(drawStart))
-			ds.refreshRequested = false
-			// The frame loop: tracked views swap in, the window is clean
-			// and the frame awaits presentation (window.rs 3276/3287).
-			completeFrameTracking(w, ds.root)
+			completeFrame(w, ds, frame, drawStart)
 		} else {
 			discardDispatchFrame(w)
 			abandonFrameTracking(w)
@@ -168,6 +147,10 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 
 	app := w.app
 	app.Update(func(app *App) {
+		// Entity accesses are tracked while the element phases run, not
+		// during the flush that closes this update (frameloop.go).
+		frame.trackingAccess = true
+		defer func() { frame.trackingAccess = false }()
 		drawErr = drawRoots(w, app, ds, frame)
 	})
 	if drawErr != nil {
@@ -179,6 +162,55 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 	}
 	completed = true
 	return scene, nil
+}
+
+// finishingFrames counts frame completions in progress (completeFrame):
+// the test flush does not start another draw while one is finishing.
+var finishingFrames int
+
+// completeFrame publishes a completed frame (the tail of Window::draw,
+// window.rs:3233-3290). While it runs the window still counts as drawing
+// (isDrawing), so invalidations raised by the frame-end work are ignored
+// like the reference's draw phase; the frame is then published as clean,
+// and a focus move made by a focus listener refreshes the window
+// afterwards (window.rs:3279-3285) so that frame is not lost.
+func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawStart time.Time) {
+	var focusMoved bool
+	func() {
+		ds.finishing = true
+		finishingFrames++
+		defer func() {
+			ds.finishing = false
+			finishingFrames--
+		}()
+		ds.draws++
+		ds.lastDebugBounds = frame.debugBounds
+		ds.lastScene = frame.scene
+		ds.lastInlineFacts = frame.inlineFacts
+		evicted := retainElementStates(ds, frame.accessedElementStates)
+		// The frame-finish hook (helpers_frame.go): the completed dispatch
+		// frame swaps into the rendered state through endDispatchFrame (the
+		// focus/dispatch runtime reads it for input dispatch), the evicted
+		// element states release and the focus listeners run.
+		focusMoved = finishFrame(w, evicted)
+		// Publish the inspector tree of the completed frame and swap its
+		// hitbox map into the window state (ticket27; window.rs
+		// Frame::finish + mem::swap(next_frame, rendered_frame) carry the
+		// inspector members over). An abandoned build keeps the previously
+		// published tree.
+		inspectorFinishFrame(w, frame, ds.draws)
+		// Record the draw duration as one overlay sample (window.rs
+		// 3291-3298, cfg(feature = "profiler") → the port's
+		// CapFrameOverlay capability).
+		RecordDebugFrame(w, time.Since(drawStart))
+	}()
+	// The frame loop: tracked entities swap in, the window is clean and the
+	// frame awaits presentation (window.rs 3276/3287).
+	ds.refreshRequested = false
+	completeFrameTracking(w, ds.root)
+	if focusMoved {
+		w.Refresh()
+	}
 }
 
 // drawRoots is the reference Window::draw_roots: request the root

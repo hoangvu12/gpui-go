@@ -79,10 +79,11 @@ Blocking edges live in each ticket's `Blocked by:`; the frontier is computed fro
 - Pin: `gpui-ce/gpui-component` c0820693 `crates/base` (CE rebase written for the gpui-ce 0.2.2 line); Kit 4c7f1350 comparison only — [baseline](research/00-baseline.md).
 - [Third-party dependency policy](issues/01-dependency-policy.md) — goldmark, uax29, x/net/html as modules; rope, sum tree, lsp types, strftime, search, data-url recreated; stdlib for the rest.
 - [Frozen-artifact gaps](issues/02-native-gap-policy.md) — Go-side fallbacks: a11y nearest-role publication, per-run paint clipped by selection rects, solid backgrounds; recorded deviations, no native revision.
-- [Automatic redraw](issues/03-frame-loop.md) — notify/refresh/animation frames wake and redraw; opt-in for now, default via [33](issues/33-frame-loop-default.md).
+- [Automatic redraw](issues/03-frame-loop.md) — notify/refresh/animation frames wake and redraw; default-on since [33](issues/33-frame-loop-default.md) (upstream draw-on-flush; corpora migrated).
 - [Production timers](issues/04-wall-clock-timers.md) — wall clock on the real host via an AfterFunc-armed wake; TestApp stays virtual.
 - [State and context helpers](issues/09-state-context-helpers.md) — keyed state, globals, notify-by-id, window-bound context, focus/activation observers, ids, geometry.
 - [Styled vocabulary](issues/05-styled-vocabulary.md) — full pinned Styled surface (generated families via cmd/stylegen), refinements, FluentBuilder, Component mixins; div paints every box style.
+- [Div interactivity](issues/06-div-interactivity.md) — pinned click/hover/drag/state styles/cursor/capture; real-window mouse routing found missing → [34](issues/34-real-window-input.md).
 - Package layout (orchestrator, routine): one `base` package mirroring the single crate; dependency-free data structures (rope, sum tree, segmentation) in subpackages under `base/`.
 
 ## Not yet specified

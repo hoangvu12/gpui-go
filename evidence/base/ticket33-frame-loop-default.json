@@ -1,0 +1,154 @@
+{
+  "ticket": "33-frame-loop-default",
+  "effort": "gpui-base",
+  "date": "2026-10-19",
+  "result": "resolved",
+  "summary": "Automatic redraw is the default like upstream: every window is driven by its frame demand (no OnRedraw / SetFrameLoop opt-in); the effect flush draws dirty test windows; real windows are drawn by their WM_PAINT frame requests with or without a present hook. Accessed-entity tracking (reads, updates, creations during a frame's element phases, plus rendered views) feeds the invalidation. Ticket 03/09 cross-file follow-ups wired.",
+  "pinned_sources": [
+    "reference/ce-source/crates/gpui/src/app.rs:1189-1216,1800-1822,1896-1903,2920-2953",
+    "reference/ce-source/crates/gpui/src/app/entity_map.rs:120-160",
+    "reference/ce-source/crates/gpui/src/window.rs:189-240,1715-1843,1887-1902,2287-2292,3149-3175,3233-3314,5739-5800,7655-7675"
+  ],
+  "changes": [
+    "gpui/frameloop.go: drivesFrames removed (every window drives frames); trackedEntities replace renderedViews; recordEntityAccess/trackEntity; App.drawDirtyTestWindowsInFlush (R:app.rs:1800-1812); drawDirtyTestWindows limited to test windows; re-entrant frame request also skipped while a frame completes",
+    "gpui/app.go: flushEffects draws dirty test windows when the queue is quiet (and continues when the draws queued effects); App.Update no longer records rendered views; withEntityUpdate records entity access",
+    "gpui/entity.go: Read, Update (access) and NewEntity record entity access during a frame (R:app/entity_map.rs:120-160)",
+    "gpui/view.go: withRenderedView calls recordRenderedView after pushing the view",
+    "gpui/render.go: completeFrame — the frame-finish hook (finishFrame) is called explicitly from render.go (it swaps through endDispatchFrame), the window counts as drawing while finishing, then the frame is published clean and a focus move made by a focus listener refreshes the window afterwards (R:window.rs:3279-3285); entity access tracked only while drawRoots runs",
+    "gpui/element.go: retainElementStates returns the evicted states (no longer calls finishFrame); frameDrawState.trackingAccess; windowDrawState.finishing; unused windowOfDrawState removed; dropDrawState disposes a real window's text atlas (pre-existing slot leak exposed by repeated real-window runs: atlas status -2 after 8 windows)",
+    "gpui/helpers_frame.go, gpui/helpers_focus.go: finishFrame/dispatchFocusPhase report a focus move instead of requesting a refresh that the completing frame cleared",
+    "gpui/focus.go: requestRefresh is Window::refresh — markFrameDirty (wakes the frame source), no-op while drawing",
+    "gpui/window.go: frame state for every window; OnActivate always installed — OS activation reaches Window.activationChanged (active flag, ObserveWindowActivation observers, refresh) before the user hook (R:window.rs:1887-1902); OnRedraw/OnActivate docs",
+    "gpui/testapp.go: SetFrameLoop removed; RunUntilParked/AdvanceClock always serve frames",
+    "gpui/testwindow.go: frame state constructor",
+    "gpui/key_dispatch.go: ModifiersChanged updates the window's tracked modifiers (R:window.rs:5787-5790)",
+    "gpui/accessibility.go: canonicalElementID encodes NamedInteger/NamedChild/CodeLocation distinctly (R:window.rs:7655-7675); Name/View/Integer encodings unchanged",
+    "gpui/imagecache.go: notifyViewLoaded doc (comment only)"
+  ],
+  "tests_added": [
+    "TestFrameLoopTracksAccessedEntities",
+    "TestKeyDispatchTracksModifiers",
+    "TestCanonicalElementIDCoversEveryKind",
+    "TestRealWindowActivationReachesObservers (real window, SendMessage WM_ACTIVATE, no input simulation)"
+  ],
+  "migrations": [
+    {
+      "test": "gpui TestFrameLoopNotifyRedrawsRenderedView",
+      "now_proves": "notify outside an update dirties only the tracking window and a frame request redraws it; a notifying update redraws at its flush; an unaccessed model never redraws"
+    },
+    {
+      "test": "gpui TestFrameLoopTracksNestedRenderedViews",
+      "now_proves": "nested rendered view tracked; notify dirties + request redraws; notifying update redraws at flush"
+    },
+    {
+      "test": "gpui TestWindowRefreshAndRefreshWindows",
+      "now_proves": "dirty flags before any flush (Refresh outside an update, refresh effect applied directly); the flush draws exactly the refreshed windows; refresh suppressed during a draw"
+    },
+    {
+      "test": "gpui TestTestAppFrameLoopDrawsDirtyWindows",
+      "now_proves": "the default loop: flush draws, RunUntilParked/AdvanceClock draw windows dirtied outside an update, animation loops still park"
+    },
+    {
+      "test": "gpui TestHelperFocusMovedByFocusListenerIsDispatched",
+      "now_proves": "the pin's shape: the listener's refresh survives the completing frame (window dirty), RunUntilParked draws the follow-up frame, b focused once (the explicit follow-up draw deviation is gone)"
+    },
+    {
+      "test": "gpui TestFrameLoopRealWindowNotifyRepaints",
+      "now_proves": "unchanged; exact animation frame count tolerates one extra frame per OS activation report (activation now refreshes, R:window.rs:1898)"
+    },
+    {
+      "test": "gpui TestFrameLoopRealWindowWithoutPresentHookKeepsExplicitDraws -> TestFrameLoopRealWindowWithoutPresentHookDraws",
+      "now_proves": "a hookless real window is redrawn by its frame request on notify (exactly the demanded frames, one render per frame); next-frame callbacks still delivered"
+    },
+    {
+      "test": "internal/accessspec TestStableNodeIdentityAndPropertyUpdates",
+      "now_proves": "published snapshot immutable across a mutation AND the redraw/republish it causes; republish without a draw returns the same snapshot"
+    },
+    {
+      "test": "internal/assetspec TestImageElementAsyncLoadStates",
+      "now_proves": "completion notifies once and redraws exactly one frame that renders the decoded image; no atlas tile before that frame (RefreshRequested assert replaced by the draw-count assert)"
+    },
+    {
+      "test": "internal/assetspec TestImageElementErrorState / AnimatedPlayback / ReduceMotionFreezesAnimation",
+      "now_proves": "same state sequences; the completion's own redraw replaces the explicit draw after RunUntilParked"
+    },
+    {
+      "test": "internal/assetspec TestImageElementTwoWindowsShareAppAsset",
+      "now_proves": "one shared load, only the first requester notified and redrawn, the second window resolves on its own next render without a new load"
+    },
+    {
+      "test": "internal/assetspec TestImageElementLoadingDelayTimer",
+      "now_proves": "the upstream outcome: the completion's frame resolves the image and cancels the loading-delay timer (1 notification, none later); the timer firing at the deadline stays pinned by TestLoadingDelayStateMachine"
+    },
+    {
+      "test": "internal/svgspec TestSvgFontOrchestration",
+      "now_proves": "w1's opening frame (flush-drawn by w2's creation) is the pending-font frame; the completion notifies once and redraws once; that frame paints the mask (RefreshRequested assert replaced)"
+    },
+    {
+      "test": "internal/svgspec TestSvgElementExternalPath",
+      "now_proves": "completion notifies and redraws the window (RefreshRequested assert replaced)"
+    },
+    {
+      "test": "internal/authorspec TestCounterViewDrawsThroughElementPhases",
+      "now_proves": "the increment's flush draw is the one extra frame/render (explicit second draw removed)"
+    },
+    {
+      "test": "internal/authorspec TestRealTwoWindowCounterSharedModel",
+      "now_proves": "redrawAndPresent awaits the frame loop's redraw of each real window then presents it; render counts, sprite/quad counts, ledger 4/4/0/0 unchanged"
+    },
+    {
+      "test": "internal/inspectorspec TestAbandonedFramePreservesPriorPublishedTree",
+      "now_proves": "the panicking build (now drawn by the mutation's flush) leaves draws/tree/selection at the prior frame; recovery republishes"
+    },
+    {
+      "test": "internal/listspec drawList/drawUniform/drawStateView + newListCorpus + TestListItemKeyedElementStateRetention",
+      "now_proves": "each helper call draws exactly one frame (explicit draw only if the update's flush drew nothing); stateful switch applied in the drawing update"
+    },
+    {
+      "test": "internal/portfixture RunAuthoringCounter",
+      "now_proves": "the fixture's hand-rolled flush-draw mirror removed: the port's own flush draw matches the recorded reference trace (fx-0006)"
+    }
+  ],
+  "runs": [
+    {
+      "command": "CGO_ENABLED=0 go vet ./gpui ./internal/...",
+      "result": "ok"
+    },
+    {
+      "command": "CGO_ENABLED=0 go test ./gpui -count=1",
+      "result": "ok (one earlier run hit TestCursorHideUntilMoveOnRealWindow, the ticket26 cursor gate; passes alone)"
+    },
+    {
+      "command": "CGO_ENABLED=0 go test ./gpui -run 'TestFrame|TestRealWindowActivation|TestHelper|TestKeyDispatchTracksModifiers|TestCanonicalElementID|TestTestApp' -count=3",
+      "result": "ok"
+    },
+    {
+      "command": "CGO_ENABLED=0 go test ./internal/<pkg> -count=1, each of the 31 internal packages individually",
+      "result": "ok for 30; desktopspec FAIL only TestCursorStyleAndVisibilityAppLevel (timed out waiting for the cursor to hide: the ticket26 cursor/hover environmental class)"
+    },
+    {
+      "command": "CGO_ENABLED=0 go test -p 1 ./internal/capturespec -count=1",
+      "result": "ok"
+    },
+    {
+      "command": "CGO_ENABLED=0 go build ./examples/...",
+      "result": "ok"
+    }
+  ],
+  "deviations": [
+    "Real windows without OnRedraw are drawn but not presented (the renderer is application-owned; presenting LastDrawnScene is the app's job)",
+    "The test flush draws only NewTestWindow windows; a failing flush draw (returned error) is logged and clears the demand (upstream unwraps)",
+    "Accesses made by the flush that closes a draw's update are not tracked",
+    "Notify during a draw still queues the Notify effect (upstream drops it)",
+    "Modifiers: only ModifiersChanged updates them, per the pin (window.rs:5787-5790); the ticket text's KeyDown/KeyUp do not touch modifiers upstream; capslock is not tracked (no Window.Capslock surface); KeyDown keyboard-modality tracking not added",
+    "notifyViewLoaded still notifies immediately instead of deferring to on_next_frame (window.rs:4023)",
+    "Div.ID accepting the new id kinds: ticket 05's surface (not touched here)",
+    "gpui/listelement.go's comment about the 'explicit DrawWindowFrame model' is stale but the file is owned by ticket 07"
+  ],
+  "native_artifact": "unchanged (rev 11)",
+  "orchestrator_verification": {
+    "live_tree": "CGO_ENABLED=0 go test ./gpui -count=1 ok; every internal/*, authoring, conformance package ok serially except desktopspec TestCursorStyleAndVisibilityAppLevel",
+    "environmental_proof": "TestCursorStyleAndVisibilityAppLevel fails identically on the pre-wave commit 5684a70 (worktree run) - the documented cursor class",
+    "commit_snapshot": "the staged 06+33 index (without ticket 07's in-progress files) built, vetted and passed listspec/authorspec/assetspec/portfixture; gpui failed TestCursorHideUntilMoveOnRealWindow + TestSetCursorMessagePolicy (cursor class) and once TestFrameLoopRealWindowNotifyRepaints (one extra frame during the 250ms idle check under full-package real-window load; 10/10 passes isolated) - hardening carried by ticket 34"
+  }
+}

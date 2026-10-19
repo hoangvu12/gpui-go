@@ -34,25 +34,34 @@ package gpui
 //   - the test platform window's frame waker counter and
 //     simulate_frame_request (R:platform/test/window.rs:192-206, 377-385).
 //
+// Ticket 33 (the follow-up of ticket 03) made the frame loop the
+// default: every window — test or real, with or without a present hook —
+// is driven by its frame demand, and the test-support flush draws dirty
+// test windows (R:app.rs:1800-1812).
+//
 // Deviations, recorded honestly:
 //
 //   - Entity tracking: the reference records every entity ACCESSED
-//     during a draw (reads included). The port records the views rendered
-//     in the frame (the root view plus every view whose render ran inside
-//     the frame's update boundary, see recordRenderedView). A notify of a
-//     model entity that a view merely reads does not invalidate the window
-//     unless a rendered view observes it (the usual cx.Observe+Notify
-//     pattern does).
-//   - A notification of a rendered view while its window is drawing does
-//     not dirty the window (the reference's draw-phase guard), but the
-//     port still queues the Notify effect so observers run (the reference
-//     drops it; the port's existing observers rely on the delivery).
+//     during a draw (EntityMap::read/lease/insert, R:app/entity_map.rs:
+//     120-160, taken by Window::record_entities_accessed,
+//     R:window.rs:3302-3314). The port records the entities read,
+//     updated or created while the frame's element phases run (entity.go
+//     recordEntityAccess) plus every view rendered in the frame
+//     (recordRenderedView, from withRenderedView). Accesses made by the
+//     effect flush that closes the draw's update (observers reacting to
+//     notifications emitted while rendering) are not tracked: the
+//     reference's draw has no such inner flush.
+//   - A notification of a tracked entity while its window is drawing
+//     does not dirty the window (the reference's draw-phase guard), but
+//     the port still queues the Notify effect so observers run (the
+//     reference drops it; the port's existing observers rely on the
+//     delivery).
 //   - Presentation: the reference presents through the platform window's
 //     renderer. The port's renderer is application-owned, so the window's
 //     WindowOptions.OnRedraw hook is the present step. A real window
-//     without that hook keeps the explicit-draw model: its dirtiness does
-//     not wake the frame source (nothing would present the frame), only
-//     pending next-frame callbacks do.
+//     without the hook is still drawn by its frame requests (its
+//     LastDrawnScene is current); its present step is empty and the
+//     application presents the scene through its own surface.
 //   - The Windows frame source: the reference's VSyncProvider thread
 //     invalidates every window on every vblank (gpui_windows platform.rs
 //     306-345) and request_frame no-ops on clean windows. The port is
@@ -62,6 +71,10 @@ package gpui
 //   - Throttling (inactive-window / thermal frame intervals,
 //     R:window.rs:1748-1784) is not ported: every request serves its
 //     demand.
+//   - The test flush draws only test windows (NewTestWindow); real
+//     windows keep their platform frame source even in tests. A failing
+//     flush draw (a returned error, not a panic) is logged and clears the
+//     demand like a real frame request; the reference unwraps.
 
 import (
 	"log"
@@ -82,18 +95,16 @@ type windowFrameState struct {
 	// nextFrameCallbacks are the callbacks scheduled for the next frame
 	// (R:window.rs:1288, :2613).
 	nextFrameCallbacks []func(*Window, *App)
-	// renderedViews are the views rendered by the last completed frame
+	// trackedEntities are the entities the last completed frame accessed
 	// (the tracked entities of R:app.rs:1189-1216).
-	renderedViews map[EntityID]struct{}
-	// nextRenderedViews collects the views rendered by the frame under
-	// construction.
-	nextRenderedViews map[EntityID]struct{}
+	trackedEntities map[EntityID]struct{}
+	// nextTrackedEntities collects the entities accessed by the frame
+	// under construction.
+	nextTrackedEntities map[EntityID]struct{}
 	// present is the window's present hook (WindowOptions.OnRedraw for
-	// real windows; nil for test windows, whose present is a no-op).
+	// real windows; nil for test windows and real windows without the
+	// hook, whose present step is empty).
 	present func()
-	// drivesFrames reports whether frame demand from dirtiness wakes the
-	// frame source: test windows and real windows with a present hook.
-	drivesFrames bool
 	// armed reports a wake delivered and not yet served by a frame
 	// request (coalesces wakes the way an invalid region coalesces
 	// InvalidateRect calls).
@@ -108,15 +119,15 @@ type windowFrameState struct {
 
 // newWindowFrameState builds a window's frame state. The window starts
 // dirty, like the reference invalidator (R:window.rs:178).
-func newWindowFrameState(present func(), drivesFrames bool) *windowFrameState {
-	return &windowFrameState{dirty: true, present: present, drivesFrames: drivesFrames}
+func newWindowFrameState(present func()) *windowFrameState {
+	return &windowFrameState{dirty: true, present: present}
 }
 
 // frameStateOf returns the window's frame state, creating a test-window
 // style state for windows registered before the frame loop existed.
 func frameStateOf(w *Window) *windowFrameState {
 	if w.frames == nil {
-		w.frames = newWindowFrameState(nil, true)
+		w.frames = newWindowFrameState(nil)
 	}
 	return w.frames
 }
@@ -125,7 +136,7 @@ func frameStateOf(w *Window) *windowFrameState {
 // (the invalidator's draw phase is not None).
 func (w *Window) isDrawing() bool {
 	ds, ok := windowDrawStates[w]
-	return ok && ds.frame != nil
+	return ok && (ds.frame != nil || ds.finishing)
 }
 
 // isFrameDirty reports the invalidator's dirty flag: the frame-loop flag
@@ -155,7 +166,7 @@ func (w *Window) markFrameDirty() {
 	if ds, ok := windowDrawStates[w]; ok {
 		ds.refreshRequested = true
 	}
-	if became && frameStateOf(w).drivesFrames {
+	if became {
 		w.wakeFrameSource()
 	}
 }
@@ -189,9 +200,6 @@ func (w *Window) hasFrameDemand() bool {
 	fs := frameStateOf(w)
 	if len(fs.nextFrameCallbacks) > 0 {
 		return true
-	}
-	if !fs.drivesFrames {
-		return false
 	}
 	return w.isFrameDirty() || fs.needsPresent
 }
@@ -286,7 +294,7 @@ func (w *Window) requestFrame() {
 	}
 	fs := frameStateOf(w)
 	fs.armed = false
-	if activeFrame != nil {
+	if activeFrame != nil || finishingFrames > 0 {
 		// A request that arrived re-entrantly while a draw is on this
 		// thread's stack is skipped (R:window.rs:1733-1737); the frame
 		// source is re-armed so the frame is still drawn.
@@ -311,7 +319,7 @@ func (w *Window) requestFrame() {
 	}
 
 	// Draw a dirty window, then present (R:window.rs:1805-1824).
-	if fs.drivesFrames && w.isFrameDirty() {
+	if w.isFrameDirty() {
 		ds, ok := windowDrawStates[w]
 		if ok && ds.root != nil && !ds.closed {
 			if _, err := DrawWindowFrame(w); err != nil {
@@ -327,7 +335,7 @@ func (w *Window) requestFrame() {
 			fs.needsPresent = true
 		}
 	}
-	if fs.drivesFrames && fs.needsPresent {
+	if fs.needsPresent {
 		fs.needsPresent = false
 		if present := fs.present; present != nil {
 			app.Update(func(*App) { present() })
@@ -340,7 +348,7 @@ func (w *Window) requestFrame() {
 	// Re-arm the frame source when demand remains: the window was
 	// re-invalidated mid-frame or the frame scheduled next-frame
 	// callbacks (R:window.rs:1826-1843).
-	if (fs.drivesFrames && w.isFrameDirty()) || len(fs.nextFrameCallbacks) > 0 {
+	if w.isFrameDirty() || len(fs.nextFrameCallbacks) > 0 {
 		w.wakeFrameSource()
 	}
 }
@@ -361,7 +369,7 @@ func (a *App) sortedWindows() []*Window {
 
 // invalidateViewWindows is the window half of App::notify
 // (R:app.rs:2920-2953 with invalidate_view, R:window.rs:189-214): every
-// window whose last frame rendered the entity becomes dirty, unless it is
+// window whose last frame accessed the entity becomes dirty, unless it is
 // drawing right now.
 func (a *App) invalidateViewWindows(id EntityID) {
 	if len(a.windows) == 0 {
@@ -372,7 +380,7 @@ func (a *App) invalidateViewWindows(id EntityID) {
 		if fs == nil {
 			continue
 		}
-		if _, rendered := fs.renderedViews[id]; !rendered {
+		if _, tracked := fs.trackedEntities[id]; !tracked {
 			continue
 		}
 		if w.isDrawing() {
@@ -413,10 +421,10 @@ func (a *App) scheduleWindowFrames() {
 }
 
 // recordRenderedView records the view rendering in the active frame (the
-// top of the rendered-view stack) as tracked by its window — the port's
-// form of the accessed-entity tracking (R:window.rs:3302-3314,
-// R:app.rs:1189-1216). It runs at every update boundary entered during a
-// frame draw: a view's render is an entity update.
+// top of the rendered-view stack) as tracked by its window — the
+// rendered-entity half of the accessed-entity tracking
+// (R:window.rs:3302-3314, R:app.rs:1189-1216). withRenderedView calls it
+// after pushing the view (view.go).
 func recordRenderedView(w *Window) {
 	ds, ok := windowDrawStates[w]
 	if !ok || ds.frame == nil {
@@ -426,50 +434,114 @@ func recordRenderedView(w *Window) {
 	if len(views) == 0 {
 		return
 	}
-	fs := frameStateOf(w)
-	if fs.nextRenderedViews == nil {
-		fs.nextRenderedViews = make(map[EntityID]struct{})
-	}
-	fs.nextRenderedViews[views[len(views)-1]] = struct{}{}
+	trackEntity(w, views[len(views)-1])
 }
 
-// beginFrameTracking starts the frame's rendered-view collection.
+// recordEntityAccess is the access half of the tracking: an entity read,
+// updated or created while a window's frame runs its element phases is
+// tracked by that window (EntityMap::read/lease/insert record into
+// accessed_entities, R:app/entity_map.rs:120-160). Called by entity.go
+// and app.go's withEntityUpdate.
+func recordEntityAccess(app *App, id EntityID) {
+	w := activeFrame
+	if w == nil || w.app != app {
+		return
+	}
+	ds, ok := windowDrawStates[w]
+	if !ok || ds.frame == nil || !ds.frame.trackingAccess {
+		return
+	}
+	trackEntity(w, id)
+}
+
+// trackEntity adds one entity to the frame's tracked collection.
+func trackEntity(w *Window, id EntityID) {
+	fs := frameStateOf(w)
+	if fs.nextTrackedEntities == nil {
+		fs.nextTrackedEntities = make(map[EntityID]struct{})
+	}
+	fs.nextTrackedEntities[id] = struct{}{}
+}
+
+// beginFrameTracking starts the frame's tracked-entity collection
+// (Window::draw clears the accessed entities first, R:window.rs:3162).
 func beginFrameTracking(w *Window) {
-	frameStateOf(w).nextRenderedViews = make(map[EntityID]struct{})
+	frameStateOf(w).nextTrackedEntities = make(map[EntityID]struct{})
 }
 
 // completeFrameTracking publishes a completed frame to the frame loop:
-// the rendered views (plus the root view) become the window's tracked
+// the accessed entities (plus the root view) become the window's tracked
 // entities, the window is clean and its frame needs presenting
 // (R:window.rs:3164, :3276, :3287).
 func completeFrameTracking(w *Window, root View) {
 	fs := frameStateOf(w)
-	rendered := fs.nextRenderedViews
-	if rendered == nil {
-		rendered = make(map[EntityID]struct{})
+	tracked := fs.nextTrackedEntities
+	if tracked == nil {
+		tracked = make(map[EntityID]struct{})
 	}
 	if root != nil {
 		if id, ok := root.EntityID(); ok {
-			rendered[id] = struct{}{}
+			tracked[id] = struct{}{}
 		}
 	}
-	fs.renderedViews = rendered
-	fs.nextRenderedViews = nil
+	fs.trackedEntities = tracked
+	fs.nextTrackedEntities = nil
 	fs.dirty = false
 	fs.needsPresent = true
 }
 
 // abandonFrameTracking drops an abandoned frame's collection.
 func abandonFrameTracking(w *Window) {
-	frameStateOf(w).nextRenderedViews = nil
+	frameStateOf(w).nextTrackedEntities = nil
 }
 
-// drawDirtyTestWindows is the test-support flush branch that draws every
-// dirty window (R:app.rs:1800-1812), served from TestApp's
-// RunUntilParked/AdvanceClock when the frame loop is enabled. Drawing can
-// queue more work (tasks, notifications); the loop runs until no window
-// is dirty. Next-frame callbacks are not run here (an animation loop
-// would never park); SimulateNextFrame/SimulateFrameRequest deliver them.
+// flushDrawLimit bounds the frames one effect flush may draw before the
+// port reports a window that never settles (the reference would loop).
+const flushDrawLimit = 1000
+
+// drawDirtyTestWindowsInFlush is the test-support branch of the flush
+// loop (R:app.rs:1800-1812): when the effect queue is quiet, every dirty
+// test window with a root view is drawn inside the flush, so the effects
+// the draw queues are applied by the same loop. It reports whether any
+// window drew; drawn counts the flush's draws against flushDrawLimit. A
+// draw already on the stack (an explicit DrawWindowFrame whose own update
+// is flushing) leaves the frame to a later flush, like the reference's
+// draw_in_progress guard (R:window.rs:1733-1737).
+func (a *App) drawDirtyTestWindowsInFlush(drawn *int) bool {
+	if len(a.windows) == 0 || activeFrame != nil || finishingFrames > 0 {
+		return false
+	}
+	drew := false
+	for _, w := range a.sortedWindows() {
+		ds, ok := windowDrawStates[w]
+		if !ok || !ds.testWindow || ds.root == nil || ds.closed || w.isDrawing() || !w.isFrameDirty() {
+			continue
+		}
+		*drawn++
+		if *drawn > flushDrawLimit {
+			panic("gpui: the test frame loop did not settle: a window stayed dirty after 1000 frames in one flush")
+		}
+		if _, err := DrawWindowFrame(w); err != nil {
+			// Platform frame requests log failed frames (log_err); clearing
+			// the demand keeps a failing draw from spinning.
+			log.Printf("gpui: test window %d flush draw: %v", uint64(w.id), err)
+			w.clearFrameDirty()
+		}
+		// The test window's present step is empty.
+		frameStateOf(w).needsPresent = false
+		drew = true
+	}
+	return drew
+}
+
+// drawDirtyTestWindows draws every dirty test window until none is dirty,
+// re-running the scheduler between passes. TestApp's RunUntilParked and
+// AdvanceClock serve it after their work: it catches windows a draw
+// re-dirtied without queuing an effect (a focus listener's refresh,
+// R:window.rs:3266-3270), which the flush-level draw leaves for the next
+// flush exactly like the reference. Next-frame callbacks are not run here
+// (an animation loop would never park); SimulateNextFrame and
+// SimulateFrameRequest deliver them.
 func drawDirtyTestWindows(a *App, runScheduler func()) {
 	for pass := 0; ; pass++ {
 		if pass > 1000 {
@@ -479,6 +551,9 @@ func drawDirtyTestWindows(a *App, runScheduler func()) {
 		for _, w := range a.sortedWindows() {
 			ds, ok := windowDrawStates[w]
 			if !ok || ds.root == nil || ds.closed || !w.isFrameDirty() {
+				continue
+			}
+			if !ds.testWindow {
 				continue
 			}
 			if _, err := DrawWindowFrame(w); err != nil {

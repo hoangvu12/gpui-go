@@ -167,10 +167,11 @@ type AnyDrag struct {
 	// Value is the drag payload (an ExternalPaths for a platform file
 	// drag; any application value for an internal drag).
 	Value any
-	// View renders the drag preview. This slice leaves it nil: drag
-	// preview painting belongs to the draw path (window.rs
-	// draw_window's active-drag element), and the Windows platform
-	// renders the file drag image through the OLE drag helper instead.
+	// View renders the drag preview (window.rs:3451-3456 prepaints it as
+	// a root at mouse_position - cursor_offset; interact.go's
+	// prepaintActiveDragPreview). Element drags (DivElement.OnDrag) set
+	// it; a platform file drag leaves it nil because the Windows
+	// platform renders the file drag image through the OLE drag helper.
 	View View
 	// CursorOffset is the offset from the mouse position where the
 	// preview anchors.
@@ -396,24 +397,9 @@ func (w *Window) DispatchInput(event any, cx AppContext) DispatchEventResult {
 func (w *Window) dispatchInput(event any, app *App) DispatchEventResult {
 	is := inputState(w)
 
-	// Track the input modality for hover suppression (window.rs
-	// last_input_modality).
-	oldModality := is.lastInputModality
-	switch event.(type) {
-	case *MouseMoveEvent, *MouseDownEvent:
-		is.lastInputModality = inputModalityMouse
-		is.lastInputWasKeyboard = false
-	case *ScrollWheelEvent, *PinchEvent:
-		is.lastInputModality = inputModalityMouse
-		is.lastInputWasKeyboard = false
-	}
-	if is.lastInputModality != oldModality {
-		w.requestRefresh()
-	}
-
-	// Handlers may stop propagation; default actions start enabled.
-	app.propagateEvent = true
-	is.defaultPrevented = false
+	// The input modality (hover suppression, focus-visible), propagation
+	// and prevent-default reset (window.rs:5746-5760; interact.go).
+	w.beginPlatformInputDispatch(event, app)
 
 	// The translation arm (window.rs:5764-5855): track the mouse
 	// position and modifiers from the event, and translate the
@@ -453,10 +439,20 @@ func (w *Window) dispatchInput(event any, app *App) DispatchEventResult {
 	// (window.rs promote_external_drag_to_platform).
 	w.promoteExternalDragToPlatform(translated, app)
 
-	return DispatchEventResult{
+	result := DispatchEventResult{
 		Propagate:        app.propagateEvent,
 		DefaultPrevented: is.defaultPrevented,
 	}
+	// The pin resets default_prevented at the start of EVERY
+	// dispatch_event, keyboard included (window.rs:5760). The port's
+	// keyboard entry (key_dispatch.go) does not route through
+	// beginPlatformInputDispatch yet, so the flag a mouse listener set
+	// (e.g. the focus transfer's prevent_default, div.rs:3279) would
+	// leak into the next key event and suppress the keyboard click
+	// (div.rs:3525, 3541). Clearing it once the mouse result is captured
+	// gives key events the pinned clean start.
+	is.defaultPrevented = false
+	return result
 }
 
 // translateFileDrop is the FileDrop arm of dispatch_event's

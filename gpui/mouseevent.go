@@ -35,13 +35,13 @@ package gpui
 //     default_prevented; App::stop_propagation maps to the existing
 //     propagateEvent flag (key_dispatch.go).
 //
-// Bounded to ticket24's needs (deliberate, separate tickets): mouse
-// capture (window.rs captured_hitbox is carried but only the
-// auto-release-on-up rule is wired; SetCapture arrives with the mouse
-// input ticket), click synthesis (ClickEvent's MouseUp/Keyboard
-// dispatch — ticket13 landed the keyboard click path), hover styling
-// and cursor-style reset. Mouse-pressure, touch, long-press and
-// mouse-exited events belong to the mouse/touch input tickets.
+// Base ticket 06 completes the element side: pointer capture
+// (window.rs:3098-3110 capture_pointer / release_pointer /
+// captured_hitbox, interact.go), click synthesis, hover/active styling
+// and the cursor-style reset on a hit-test change (window.rs:6083-6086
+// → reset_cursor_style, window.rs:5684-5693). Mouse-pressure, touch,
+// long-press and mouse-exited events belong to the mouse/touch input
+// tickets.
 
 // ---------------------------------------------------------------------------
 // Mouse event vocabulary (interactive.rs)
@@ -262,35 +262,55 @@ func (h *Hitbox) Contains(point Point) bool {
 	return boundsContain(h.contentMask, point) && boundsContain(h.Bounds, point)
 }
 
-// IsHovered reports whether this hitbox is currently hovered: false
-// while the last input modality is keyboard (so keyboard navigation
-// suppresses hover highlights), true when this hitbox captured the
-// pointer, and otherwise the hit-test answer (Hitbox::is_hovered).
-func (h *Hitbox) IsHovered(w *Window) bool {
+// HitboxID is a hitbox identity (window.rs:867 HitboxId; Hitbox's
+// public `id` field). Pointer capture and group hover track hitboxes by
+// identity.
+type HitboxID uint64
+
+// ID returns the hitbox identity (window.rs Hitbox::id).
+func (h *Hitbox) ID() HitboxID { return HitboxID(h.id) }
+
+// IsHovered reports whether the hitbox with this identity is hovered
+// (window.rs:887-897 HitboxId::is_hovered): true when it captured the
+// pointer, false while the last input modality is keyboard, otherwise
+// the window's last hit-test answer.
+func (id HitboxID) IsHovered(w *Window) bool {
 	if w == nil {
 		return false
 	}
 	is := inputState(w)
-	if is.capturedHitbox == h.id {
+	if is.capturedHitbox == uint64(id) {
 		return true
 	}
 	if is.lastInputWasKeyboard {
 		return false
 	}
-	return is.mouseHitTest.contains(h.id)
+	return is.mouseHitTest.contains(uint64(id))
 }
 
-// IsHoveredIgnoringLastInput is IsHovered without the keyboard
-// suppression (HitboxId::is_hovered_ignoring_last_input).
-func (h *Hitbox) IsHoveredIgnoringLastInput(w *Window) bool {
+// isHoveredIgnoringLastInput is window.rs:902-908
+// HitboxId::is_hovered_ignoring_last_input.
+func (id HitboxID) isHoveredIgnoringLastInput(w *Window) bool {
 	if w == nil {
 		return false
 	}
 	is := inputState(w)
-	if is.capturedHitbox == h.id {
+	if is.capturedHitbox == uint64(id) {
 		return true
 	}
-	return is.mouseHitTest.contains(h.id)
+	return is.mouseHitTest.contains(uint64(id))
+}
+
+// IsHovered reports whether this hitbox is currently hovered: false
+// while the last input modality is keyboard (so keyboard navigation
+// suppresses hover highlights), true when this hitbox captured the
+// pointer, and otherwise the hit-test answer (Hitbox::is_hovered).
+func (h *Hitbox) IsHovered(w *Window) bool { return HitboxID(h.id).IsHovered(w) }
+
+// IsHoveredIgnoringLastInput is IsHovered without the keyboard
+// suppression (HitboxId::is_hovered_ignoring_last_input).
+func (h *Hitbox) IsHoveredIgnoringLastInput(w *Window) bool {
+	return HitboxID(h.id).isHoveredIgnoringLastInput(w)
 }
 
 // ShouldHandleScroll reports whether this hitbox contains the mouse
@@ -437,8 +457,8 @@ type windowInputState struct {
 	// (Window::last_input_was_keyboard).
 	lastInputWasKeyboard bool
 	// capturedHitbox is the hitbox that captured the pointer, or 0
-	// (window.rs captured_hitbox; the capture setter arrives with the
-	// mouse input ticket, the auto-release rule is wired here).
+	// (window.rs:1330 captured_hitbox; set by Window.CapturePointer,
+	// interact.go, and auto-released on mouse up here).
 	capturedHitbox uint64
 	// nextHitboxID assigns hitbox identities (window.rs
 	// next_hitbox_id).
@@ -555,33 +575,35 @@ func (w *Window) TrackedMousePosition() Point {
 	return inputState(w).mousePosition
 }
 
-// dispatchMouseEvent is the port of window.rs dispatch_mouse_event:
-// recompute the hit test (recording the change like the pin, whose
-// cursor-style reset arrives with the cursor ticket), then run the
-// rendered frame's mouse listeners — capture in registration order,
-// bubble in reverse — stopping at propagation breaks, and finish with
-// the active-drag bookkeeping (refresh on move, cancel on up) and the
-// pointer-capture auto-release on mouse up.
+// dispatchMouseEvent is the port of window.rs:6081-6136
+// dispatch_mouse_event: recompute the hit test and, when it changed,
+// reset the platform cursor from the rendered frame's cursor requests
+// (window.rs:6083-6086), then run the rendered frame's mouse listeners —
+// capture in registration order, bubble in reverse — stopping at
+// propagation breaks, and finish with the active-drag bookkeeping
+// (refresh on move, cancel on up) and the pointer-capture auto-release
+// on mouse up.
 func (w *Window) dispatchMouseEvent(event any, app *App) {
+	fs := focusState(w)
+	is := inputState(w)
+	if fs.rendered != nil {
+		if hit := fs.rendered.hitTestAt(is.mousePosition); !hit.equal(&is.mouseHitTest) {
+			is.mouseHitTest = hit
+			w.resetCursorStyle(app)
+		}
+	}
 	// Inspector picking replaces the normal mouse dispatch while active
-	// (window.rs dispatch_mouse_event 6088-6092: handle_inspector_mouse
-	// _event first; all other mouse handling is skipped when it reports
+	// (window.rs:6088-6092: handle_inspector_mouse_event after the hit
+	// test; all other mouse handling is skipped when it reports
 	// picking). Wired by the orchestrator at the slice's recorded seam
 	// (inspector.go's InspectorDispatchMouseEvent).
 	if InspectorDispatchMouseEvent(w, app, event) {
 		return
 	}
-	fs := focusState(w)
 	if fs.rendered == nil {
 		// No completed frame: nothing is listening (the pin dispatches
 		// against the rendered frame's listener list).
 		return
-	}
-	is := inputState(w)
-	if hit := fs.rendered.hitTestAt(is.mousePosition); !hit.equal(&is.mouseHitTest) {
-		is.mouseHitTest = hit
-		// reset_cursor_style (window.rs) arrives with the cursor input
-		// ticket; the change is still recorded so hover answers flip.
 	}
 
 	listeners := append([]mouseListener(nil), fs.rendered.mouseListeners...)

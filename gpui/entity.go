@@ -306,6 +306,9 @@ func NewEntity[S any](cx AppContext, owner *Scope, build func(*S, *Context[S])) 
 			build(state, cx)
 			slot.state = state
 			published = true
+			// An entity created during a frame is tracked by the drawing
+			// window (EntityMap::insert, app/entity_map.rs:120-125).
+			recordEntityAccess(app, id)
 			app.pushEffect(effect{kind: effEntityCreated, emitter: id, entityType: reflect.TypeFor[S]()})
 			handle = Entity[S]{id: id, app: app, lease: lease}
 		}()
@@ -363,6 +366,9 @@ func (h Entity[S]) Read[R any](cx AppContext, f func(*S, *App) R) R {
 	if !ok {
 		panic(fmt.Sprintf("gpui: entity %d holds state of type %T, not %T", uint64(h.id), slot.state, new(S)))
 	}
+	// A read during a frame is tracked by the drawing window
+	// (EntityMap::read, app/entity_map.rs:156-159; frameloop.go).
+	recordEntityAccess(app, h.id)
 	slot.readers++
 	defer func() { slot.readers-- }()
 	return f(state, app)
@@ -422,6 +428,9 @@ func (h Entity[S]) access(app *App, f func(*S, *Context[S])) {
 	if !ok {
 		panic(fmt.Sprintf("gpui: entity %d holds state of type %T, not %T", uint64(h.id), slot.state, new(S)))
 	}
+	// An update during a frame is tracked by the drawing window
+	// (EntityMap::lease, app/entity_map.rs:134-137; frameloop.go).
+	recordEntityAccess(app, h.id)
 	cx := &Context[S]{app: app, entity: h.id, valid: &borrowValidity{}}
 	slot.writer = true
 	defer func() {

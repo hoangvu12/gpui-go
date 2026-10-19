@@ -443,9 +443,8 @@ func (w *Window) Focus(handle FocusHandle) {
 	fs.focusGeneration++
 	w.clearPendingKeystrokes()
 
-	// The reference refreshes the invalidation and redraws; the port
-	// records the dirty state through the draw state's frame count on
-	// the next draw (DrawWindowFrame is the explicit draw path).
+	// The reference refreshes the window (window.rs Window::focus →
+	// refresh): the frame loop redraws it.
 	w.requestRefresh()
 }
 
@@ -596,19 +595,22 @@ func (s *focusLostSubscription) Cancel() {
 }
 
 // requestRefresh records that this window's content changed and a new
-// frame should be drawn (the invalidation seam; the draw itself is the
-// explicit DrawWindowFrame path in this port).
+// frame should be drawn: it is Window::refresh (window.rs:2287-2292) —
+// the window is marked dirty and its frame source wakes on the
+// clean→dirty edge (frameloop.go markFrameDirty, Base ticket 33). Like
+// the reference it has no effect while the window's frame is being drawn
+// (the completed frame clears the request anyway).
 func (w *Window) requestRefresh() {
-	if w == nil {
+	if w == nil || w.isDrawing() {
 		return
 	}
-	if ds, ok := windowDrawStates[w]; ok {
-		ds.refreshRequested = true
-	}
+	w.markFrameDirty()
 }
 
 // RefreshRequested reports whether a refresh was requested since the
-// last completed draw (test support).
+// last completed draw (test support). With the frame loop on by default,
+// a test window's request is normally served by the next effect flush,
+// which draws it; the flag is then clear again.
 func (w *Window) RefreshRequested() bool {
 	if w == nil {
 		return false

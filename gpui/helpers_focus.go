@@ -244,11 +244,11 @@ func (cx *Context[S]) OnFocusOut(handle FocusHandle, w *Window, listener func(*S
 // run after the completed frame swapped in: when the focus path or the
 // window activation changed, deliver the WindowFocusEvent (paths blanked
 // for an inactive side) to the focus listeners in registration order.
-// When a listener moved focus, the window is refreshed (window.rs:
-// 3262-3264).
-func dispatchFocusPhase(w *Window, app *App, previous []uint64, previousActive bool, current []uint64, currentActive bool) {
+// It reports whether a listener moved focus; the caller refreshes the
+// window once the frame is published (window.rs:3279-3285).
+func dispatchFocusPhase(w *Window, app *App, previous []uint64, previousActive bool, current []uint64, currentActive bool) bool {
 	if equalFocusPaths(previous, current) && previousActive == currentActive {
-		return
+		return false
 	}
 	fs := focusState(w)
 	focusBefore := fs.focused
@@ -262,9 +262,7 @@ func dispatchFocusPhase(w *Window, app *App, previous []uint64, previousActive b
 	if fs.focusListeners != nil {
 		app.deliverSubs(fs.focusListeners, nil, 0, focusDelivery{event: event, window: w})
 	}
-	if fs.focused != focusBefore {
-		w.requestRefresh()
-	}
+	return fs.focused != focusBefore
 }
 
 func equalFocusPaths(a, b []uint64) bool {
@@ -323,8 +321,8 @@ func (w *Window) isWindowActiveCached() bool {
 // activationChanged is the platform active-status change path
 // (window.rs:1887-1902): record the activation, run the activation
 // observers in registration order, then refresh the window. The platform
-// seam that calls it is window.go's OnActivate wiring (see the ticket 09
-// report: OpenWindow must forward activation here).
+// seam that calls it is window.go's OnActivate wiring (OpenWindow
+// forwards every OS activation change here before the user hook).
 func (w *Window) activationChanged(active bool, app *App) {
 	fs := focusState(w)
 	fs.inactive = !active

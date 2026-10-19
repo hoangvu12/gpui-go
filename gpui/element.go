@@ -1021,9 +1021,12 @@ type windowDrawState struct {
 	draws uint64
 	// closed marks a removed window.
 	closed bool
+	// finishing reports a completed frame being published (render.go
+	// completeFrame): the window still counts as drawing.
+	finishing bool
 	// refreshRequested records that focus or window state requested a
-	// redraw since the last completed draw (the invalidation seam; the
-	// draw itself is the explicit DrawWindowFrame path).
+	// redraw since the last completed draw (the invalidation seam; it is
+	// half of the frame loop's dirty flag, frameloop.go isFrameDirty).
 	refreshRequested bool
 	// inspectorHitboxes is the LAST COMPLETED frame's inspector
 	// hitbox map (the pin's rendered_frame.inspector_hitboxes; ticket27
@@ -1082,6 +1085,11 @@ type frameDrawState struct {
 	// renderedViews is the rendered-view stack
 	// (window.rendered_entity_stack).
 	renderedViews []EntityID
+	// trackingAccess reports that the frame's element phases are running:
+	// entity accesses are then tracked by the window (Base ticket 33,
+	// frameloop.go recordEntityAccess). It is off during the effect flush
+	// that closes the draw's update.
+	trackingAccess bool
 	// inspectorInstanceIDs is the per-frame inspector path instance
 	// counter (window.rs Frame::next_inspector_instance_ids, cleared
 	// by Frame::clear each frame; ticket27).
@@ -1128,6 +1136,14 @@ func dropDrawState(w *Window) {
 	if ds, ok := windowDrawStates[w]; ok {
 		if ds.engine != nil {
 			_ = ds.engine.Dispose()
+		}
+		// A real window's text system owns one native atlas slot (the
+		// service bounds live atlases at 8): it retires with the window's
+		// element runtime, like the engine above (Base ticket 33 — with
+		// every real window drawn by the frame loop, leaked slots exhausted
+		// the bound across a test process).
+		if rts, ok := ds.text.(*realWindowTextSystem); ok && rts.atlas != nil {
+			_ = rts.atlas.Dispose()
 		}
 		delete(windowDrawStates, w)
 		// Dropping the window's element states drops their resources (the
@@ -1523,10 +1539,10 @@ func recordElementStateAccess(w *Window, key string) {
 // their Entity handles. The Go port has no drop, so eviction calls the
 // state's release hook explicitly (sorted by key for determinism).
 //
-// This is also the port's frame-finish seam (window.rs draw 3233-3263):
-// render.go calls it at completion, so the focus phase (focus listener
-// dispatch, helpers_frame.go) runs from here.
-func retainElementStates(ds *windowDrawState, accessed map[string]struct{}) {
+// It returns the evicted releasable states; render.go hands them to the
+// frame-finish hook (helpers_frame.go finishFrame), which releases them
+// when the frames swap.
+func retainElementStates(ds *windowDrawState, accessed map[string]struct{}) []elementStateReleaser {
 	retained := make(map[string]map[reflect.Type]any, len(accessed))
 	var evictedKeys []string
 	for key, byType := range ds.elementStates {
@@ -1542,7 +1558,7 @@ func retainElementStates(ds *windowDrawState, accessed map[string]struct{}) {
 		evicted = append(evicted, releasersOf(ds.elementStates[key])...)
 	}
 	ds.elementStates = retained
-	finishFrame(windowOfDrawState(ds), evicted)
+	return evicted
 }
 
 // elementStateReleaser is implemented by retained element states that own
@@ -1566,17 +1582,6 @@ func releasersOf(byType map[reflect.Type]any) []elementStateReleaser {
 		}
 	}
 	return out
-}
-
-// windowOfDrawState resolves the window owning a draw state (the registry
-// is keyed by window; the frame-finish seam only receives the state).
-func windowOfDrawState(ds *windowDrawState) *Window {
-	for w, candidate := range windowDrawStates {
-		if candidate == ds {
-			return w
-		}
-	}
-	return nil
 }
 
 // takeElementStateSlot removes and returns the retained *S slot for the

@@ -96,11 +96,19 @@ func CustomProbe(access func(state *int, w *gpui.Window) (struct{}, int)) gpui.A
 
 // drawStateView draws one frame of the state corpus and returns the
 // observed state.
+//
+// Migrated by Base ticket 33 (the default frame loop): the update's flush
+// draws a dirty window by itself (app.rs:1800-1812); the explicit draw
+// runs only when that flush drew nothing, so each call draws exactly one
+// frame.
 func drawStateView(t *testing.T, window *gpui.Window, app *gpui.App, view gpui.Entity[stateView]) int {
 	t.Helper()
+	before := gpui.WindowDrawCount(window)
 	view.Update(app, func(v *stateView, cx *gpui.Context[stateView]) {})
-	if _, err := gpui.DrawWindowFrame(window); err != nil {
-		t.Fatalf("DrawWindowFrame: %v", err)
+	if gpui.WindowDrawCount(window) == before {
+		if _, err := gpui.DrawWindowFrame(window); err != nil {
+			t.Fatalf("DrawWindowFrame: %v", err)
+		}
 	}
 	return view.Read(app, func(v *stateView, _ *gpui.App) int { return *v.probeView })
 }

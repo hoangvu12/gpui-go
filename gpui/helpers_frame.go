@@ -7,23 +7,25 @@ package gpui
 // frame's unaccessed element states drop (releasing keyed state), and the
 // focus phase dispatches the window focus listeners.
 //
-// It is called from retainElementStates (element.go), which render.go
-// invokes when a frame completes, BEFORE render.go's own
-// endDispatchFrame. To deliver the focus listeners against the swapped
-// (current) dispatch tree like the reference (the swap at 3236 precedes
-// the listeners at 3270), finishFrame performs the swap itself through
-// endDispatchFrame; render.go's following call is then a no-op
-// (endDispatchFrame returns when no frame is pending).
+// render.go calls it explicitly when a frame completes (Base ticket 33;
+// before, retainElementStates called it): it swaps the completed dispatch
+// frame in through endDispatchFrame — the swap at 3236 precedes the
+// listeners at 3270, so the focus listeners see the current tree — then
+// releases the evicted states and dispatches the focus listeners. It
+// reports whether a listener moved focus; render.go then refreshes the
+// window AFTER the frame is published as clean (window.rs:3279-3285:
+// Window::focus suppresses refresh while a draw is in progress, so the
+// draw schedules the follow-up frame itself), so that refresh is not lost.
 //
 // Releases and listener callbacks run inside one application update so
 // their effects (entity release hooks, notifies) flush before the draw
 // returns.
-func finishFrame(w *Window, evicted []elementStateReleaser) {
+func finishFrame(w *Window, evicted []elementStateReleaser) (focusMoved bool) {
 	if w == nil || w.app == nil {
 		for _, r := range evicted {
 			r.releaseElementState()
 		}
-		return
+		return false
 	}
 	fs := focusState(w)
 	if fs.next == nil {
@@ -33,7 +35,7 @@ func finishFrame(w *Window, evicted []elementStateReleaser) {
 				r.releaseElementState()
 			}
 		})
-		return
+		return false
 	}
 
 	// window.rs:3234-3240: the previous rendered frame's focus path and
@@ -55,6 +57,7 @@ func finishFrame(w *Window, evicted []elementStateReleaser) {
 		for _, r := range evicted {
 			r.releaseElementState()
 		}
-		dispatchFocusPhase(w, a, previous, previousActive, current, currentActive)
+		focusMoved = dispatchFocusPhase(w, a, previous, previousActive, current, currentActive)
 	})
+	return focusMoved
 }

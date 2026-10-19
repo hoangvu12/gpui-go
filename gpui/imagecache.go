@@ -791,9 +791,11 @@ func currentViewOf(w *Window) (EntityID, bool) {
 
 // notifyViewLoaded delivers the redraw nudge (the pinned
 // cx.on_next_frame(move |_, cx| cx.notify(entity))): the requesting
-// view is notified and the window's refresh seam is marked. The port's
-// redraw path is the explicit DrawWindowFrame, so the pinned frame-tick
-// deferral becomes the refresh request.
+// view is notified and the window is refreshed; the frame loop
+// (frameloop.go, on by default since Base ticket 33) redraws it at the
+// next effect flush (test windows) or frame request (real windows).
+// Deviation kept: the notify is immediate instead of deferred to the
+// next frame's callbacks.
 func notifyViewLoaded(w *Window, view EntityID, cx *App) {
 	if view != 0 {
 		cx.notify(view)

@@ -57,8 +57,9 @@ func NewTestWindow(app *App, size Size) *Window {
 			// The test window's frame loop (Base ticket 03): it starts
 			// dirty (window.rs:178) and its frame waker counts wakes
 			// (platform/test/window.rs:377-385); frames are delivered by
-			// SimulateFrameRequest or the TestApp frame loop.
-			frames: newWindowFrameState(nil, true),
+			// SimulateFrameRequest and the test-support flush, which
+			// draws dirty test windows (app.rs:1800-1812).
+			frames: newWindowFrameState(nil),
 		}
 		app.windows[window.id] = window
 	})

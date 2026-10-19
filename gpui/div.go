@@ -27,11 +27,12 @@ package gpui
 //     bounds layer, the row placement (baseline = (line_height - ascent -
 //     descent)/2 + ascent) and the per-glyph paint calls.
 //
-// Bounds of this slice (deliberate, separate tickets): hitboxes, mouse
-// listeners, focus routing and key contexts are ticket13; scroll handles
-// are ticket14; inline layout is ticket15. The div stores what those
-// tickets need (the focus handle, the key context, the listeners) without
-// dispatching anything.
+// Focus routing and key contexts landed with ticket13, hitboxes and the
+// mouse listener dispatch with ticket24, inline layout with ticket15.
+// Base ticket 06 (interact.go) adds the interactive element state, click
+// synthesis, the mouse-down / up-out / hover / drag builders, the state
+// styles and the cursor requests; scroll handles remain ticket14 /
+// Base ticket 07.
 
 import (
 	"fmt"
@@ -612,13 +613,6 @@ func (t *textElement) LayoutNodeStyle() (Style, bool) { return DefaultStyle(), t
 // Div (elements/div.rs Div / Interactivity, bounded to this slice)
 // ---------------------------------------------------------------------------
 
-// ClickEvent is the click event payload of OnClick listeners (the
-// reference ClickEvent; the payload fields arrive with the input ticket).
-type ClickEvent struct {
-	// Button is the mouse button (0 primary).
-	Button uint8
-}
-
 // typedKeyListener is one registered key listener: the raw callback
 // and its phase (capture or bubble).
 type typedKeyListener struct {
@@ -687,9 +681,35 @@ type DivElement struct {
 	keyContext *string
 	// children are the converted child elements.
 	children []AnyElement
-	// clickListeners are the registered click listeners (ticket13
-	// dispatch).
+	// clickListeners are the registered click listeners (div.rs:2615
+	// click_listeners; delivered by the mouse-up pairing and the
+	// keyboard activation, interact.go).
 	clickListeners []func(*ClickEvent, *Window, *App)
+	// auxClickListeners are the non-primary click listeners (div.rs:2616
+	// aux_click_listeners).
+	auxClickListeners []func(*ClickEvent, *Window, *App)
+	// mouseDownListeners are the registered mouse-down listeners
+	// (div.rs:2602 mouse_down_listeners).
+	mouseDownListeners []typedMouseListener[MouseDownEvent]
+	// dragListener starts a drag once the mouse moves past the drag
+	// threshold (div.rs:2617 drag_listener).
+	dragListener func(cursorOffset Point, cursorStyle *CursorStyle, w *Window, app *App) AnyDrag
+	// hoverListeners observe hover transitions (div.rs:2618
+	// hover_listeners).
+	hoverListeners []func(*bool, *Window, *App)
+	// group names this element's hitbox for group styles (div.rs:2586).
+	group *string
+	// hoverStyle, activeStyle, focusStyle, inFocusStyle and
+	// focusVisibleStyle are the state style refinements (div.rs:2591-2596).
+	hoverStyle        *StyleRefinement
+	activeStyle       *StyleRefinement
+	focusStyle        *StyleRefinement
+	inFocusStyle      *StyleRefinement
+	focusVisibleStyle *StyleRefinement
+	// groupHoverStyle and groupActiveStyle refine this element while its
+	// named group is hovered / pressed (div.rs:2595, 2597).
+	groupHoverStyle  *GroupStyle
+	groupActiveStyle *GroupStyle
 	// actionListeners are the registered action listeners (dispatch
 	// routed by the dispatch tree since ticket13).
 	actionListeners []typedActionListener
@@ -881,8 +901,14 @@ func (d *DivElement) DebugSelector(selector string) *DivElement {
 	return d
 }
 
-// OnClick binds a click listener to this element (the fluent spelling
-// of Interactivity::on_click; delivery arrives with the input ticket).
+// OnClick binds a click listener to this element (div.rs:1814
+// StatefulInteractiveElement::on_click, Interactivity::on_click at
+// div.rs:674). A left mouse press and release over the element fires a
+// ClickEvent of kind Mouse (div.rs:3467-3626); Enter/Space pressed and
+// released while the element's tracked focus handle is focused fires a
+// Keyboard click (div.rs:3512-3577). The pin restricts on_click to
+// stateful elements: the element needs an ID (an ID-less div keeps no
+// interactive state, so its click listeners never fire).
 func (d *DivElement) OnClick(f func(*ClickEvent, *Window, *App)) *DivElement {
 	if f == nil {
 		panic("gpui: OnClick requires a non-nil listener")
@@ -1003,10 +1029,12 @@ type typedDropListener struct {
 	onDrop func(value any, event *MouseUpEvent, w *Window, app *App)
 }
 
-// OnMouseMove binds a mouse-move listener
-// (InteractiveElement::on_mouse_move): the listener receives the
+// OnMouseMove binds a mouse-move listener: the listener receives the
 // event, the dispatch phase and this element's hitbox; the typical
-// listener checks hitbox.IsHovered(w).
+// listener checks hitbox.IsHovered(w). This port spelling predates Base
+// ticket 06 and has the shape of the pinned on_mouse_move_all
+// (div.rs:1167, OnMouseMoveAll); the pinned on_mouse_move (div.rs:1155)
+// gates on the bubble phase and the hover itself.
 func (d *DivElement) OnMouseMove(f func(*MouseMoveEvent, DispatchPhase, *Hitbox, *Window, *App)) *DivElement {
 	if f == nil {
 		panic("gpui: OnMouseMove requires a non-nil listener")
@@ -1015,7 +1043,11 @@ func (d *DivElement) OnMouseMove(f func(*MouseMoveEvent, DispatchPhase, *Hitbox,
 	return d
 }
 
-// OnMouseUp binds a mouse-up listener (InteractiveElement::on_mouse_up).
+// OnMouseUp binds a mouse-up listener receiving every mouse up with the
+// phase and hitbox. This port spelling predates Base ticket 06 and has
+// the shape of the pinned on_mouse_up_all (div.rs:1143, OnMouseUpAll);
+// the pinned on_mouse_up (div.rs:1051) filters one button in the bubble
+// phase while hovered.
 func (d *DivElement) OnMouseUp(f func(*MouseUpEvent, DispatchPhase, *Hitbox, *Window, *App)) *DivElement {
 	if f == nil {
 		panic("gpui: OnMouseUp requires a non-nil listener")
@@ -1267,31 +1299,63 @@ func (d *DivElement) IntoElement() AnyElement {
 	return CustomElement[divFrameState, divPrepaintState](&divElement{builder: d})
 }
 
-// divPrepaintState is the div's prepaint state (the reference
-// Option<Hitbox>; hitboxes arrive with the input ticket, so this slice
-// records whether the frame recorded the element bounds).
+// divPrepaintState is the div's prepaint state (div.rs:2362 the
+// reference Option<Hitbox>): the hitbox inserted for this frame, when
+// the element needs one (div.rs:2887-2911 should_insert_hitbox), plus
+// whether the frame recorded the debug-selector bounds.
 type divPrepaintState struct {
+	// hitbox is this frame's hitbox, or nil.
+	hitbox *Hitbox
 	// debugBounds records whether the debug selector was recorded.
 	debugBounds bool
 }
 
-// computeStyle returns the div's complete style (div.rs:3882
-// compute_style: Style::default() refined by the base style).
+// computeStyle returns the div's base style (Style::default() refined by
+// the base style, the first step of div.rs:3904 compute_style_internal).
 func (d *DivElement) computeStyle() Style {
 	style := DefaultStyle()
 	style.Refine(d.Styled.storage())
 	return style
 }
 
-// RequestLayout implements Element (the div.rs Div::request_layout +
-// Interactivity::request_layout path, bounded): compute the style, scope
-// the text style, request the children, then request this element's
-// layout node with the children — a Block/Inline div routes through the
-// inline frame state (paragraph collection) — and publish the node's
-// container inline content (the reference publishes Container for every
-// div).
+// interactiveStateOf resolves the element's retained interactive state
+// inside WithOptionalElementState (the pinned
+// `element_state.map(|s| s.unwrap_or_default())`): an element with an id
+// gets its retained state or a fresh default; an id-less element has
+// none.
+func interactiveStateOf(global *GlobalElementID, state *InteractiveElementState) *InteractiveElementState {
+	if global == nil {
+		return nil
+	}
+	if state == nil {
+		return &InteractiveElementState{}
+	}
+	return state
+}
+
+// RequestLayout implements Element (div.rs:2288-2351 Div::request_layout
+// + div.rs:2672-2763 Interactivity::request_layout, bounded): inside the
+// element's interactive state, a drag in progress clears the pending
+// mouse down and the pressed state (div.rs:2703-2712), the style is
+// computed with the state styles (compute_style_internal without a
+// hitbox, div.rs:2757-2758), then the text style is scoped, the children
+// are requested and this element's layout node is requested with them —
+// a Block/Inline div routes through the inline frame state (paragraph
+// collection) — and the node's container inline content is published
+// (the reference publishes Container for every div).
 func (d *DivElement) requestLayout(global *GlobalElementID, inspector *InspectorElementID, w *Window, app *App) (LayoutID, divFrameState) {
-	style := d.computeStyle()
+	style := WithOptionalElementState(w, global, func(slot *InteractiveElementState, w *Window) (Style, *InteractiveElementState) {
+		es := interactiveStateOf(global, slot)
+		if es != nil && app.HasActiveDrag() {
+			if es.pendingMouseDown != nil {
+				es.pendingMouseDown.event = nil
+			}
+			if es.clickedState != nil {
+				*es.clickedState = ElementClickedState{}
+			}
+		}
+		return d.computeStyleInternal(nil, es, w, app), es
+	})
 	d.lastStyle = style
 	state := divFrameState{}
 	var layoutID LayoutID
@@ -1317,14 +1381,28 @@ func (d *DivElement) requestLayout(global *GlobalElementID, inspector *Inspector
 	return layoutID, state
 }
 
-// Prepaint implements Element (the Interactivity::prepaint path,
-// bounded): a standalone inline div first places its paragraphs' boxes
-// and span fragments (prepare_layout, outside the style/mask scopes —
-// the reference computes the content size before the interactivity
-// prepaint), then scopes the text style and the overflow content mask,
-// records the debug-selector bounds, registers the dispatch state, and
-// prepaints the children (through the inline frame state when it owns
-// them).
+// Prepaint implements Element (div.rs:2354-2482 Div::prepaint +
+// div.rs:2766-2885 Interactivity::prepaint, bounded): a standalone
+// inline div first places its paragraphs' boxes and span fragments
+// (prepare_layout, outside the style/mask scopes — the reference
+// computes the content size before the interactivity prepaint); then,
+// inside the element's interactive state, the style is computed, the
+// hover state is initialized for hover styles (div.rs:2846-2850), and
+// inside the text style and overflow content mask the hitbox is
+// inserted when needed (div.rs:2865-2874), the dispatch state is
+// registered and the children are prepainted (through the inline frame
+// state when it owns them). The div's dispatch node is popped and its
+// tab group closed after the children (the pinned Drawable::prepaint
+// pop_node, element.rs:505, and the with_tab_group scope, div.rs:3036).
+//
+// The port registers the dispatch-tree state (key listeners, actions,
+// tab stops, the keyboard click) during prepaint so the completed frame
+// carries the tree (key_dispatch.go's header); the pin registers them in
+// paint after its Visibility::Hidden early return (div.rs:3021-3023), so
+// a hidden div — and everything inside it, whose paint never runs —
+// registers none of them here either (interact.go hiddenPrepaintDepth).
+// The mouse listeners and cursor requests register in paint, like the
+// pin (div.rs:3048-3082).
 func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *divFrameState, w *Window, app *App) divPrepaintState {
 	state := divPrepaintState{}
 	// Contents participating in a parent paragraph are detected here:
@@ -1339,39 +1417,101 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 		recordDebugBounds(w, d.debugSelector, bounds)
 		state.debugBounds = true
 	}
-	style := d.computeStyle()
-	WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
-		WithContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
-			registerDivElementDispatch(w, d)
-			registerDivElementMouseState(w, d, bounds, inspector)
-			if standalone := layout.standaloneInline(); standalone != nil {
-				standalone.prepaintChildren(d.children, w, app)
-				return
-			}
-			for i := range d.children {
-				d.children[i].Prepaint(w, app)
-			}
+	if global == nil && d.requiresElementState() {
+		panic("gpui: OnClick, OnAuxClick, OnDrag, OnHover, Active and GroupActive require an element ID (the pinned StatefulInteractiveElement methods, div.rs:1495-1899)")
+	}
+	WithOptionalElementState(w, global, func(slot *InteractiveElementState, w *Window) (struct{}, *InteractiveElementState) {
+		es := interactiveStateOf(global, slot)
+		style := d.computeStyleInternal(nil, es, w, app)
+		if es != nil && (d.hoverStyle != nil || d.groupHoverStyle != nil) && es.hoverState == nil {
+			es.hoverState = &ElementHoverState{}
+		}
+		hidden := style.Visibility == VisibilityHidden
+		suppressed := hidden || hiddenPrepaintDepth(w) > 0
+		WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
+			WithContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
+				if d.shouldInsertHitbox(&style, w) {
+					box := w.InsertHitbox(bounds, d.hitboxBehavior)
+					state.hitbox = &box
+					// insert_inspector_hitbox (div.rs:3100-3111, the
+					// ticket27 integration): while the window's inspector
+					// is picking, register this hitbox as selectable for
+					// its element's inspector id.
+					w.InsertInspectorHitbox(box, inspector)
+				}
+				tree := currentDispatchTree(w)
+				endGroup := registerDivElementDispatch(w, d, suppressed, state.hitbox, es)
+				defer func() {
+					if endGroup {
+						currentTabStops(w).EndGroup()
+					}
+					tree.PopNode()
+				}()
+				if style.Display == DisplayNone {
+					// skip children (div.rs:2428-2430)
+					return
+				}
+				withHiddenPrepaint(w, hidden, func() {
+					if standalone := layout.standaloneInline(); standalone != nil {
+						standalone.prepaintChildren(d.children, w, app)
+						return
+					}
+					for i := range d.children {
+						d.children[i].Prepaint(w, app)
+					}
+				})
+			})
 		})
+		return struct{}{}, es
 	})
 	return state
 }
 
 // registerDivElementDispatch pushes the div's dispatch node and
-// registers its interactive state on the frame under construction
-// (div.rs Interactivity paint: with_tab_group + tab_stops.insert + the
-// dispatch-tree registrations; the port registers during prepaint so
-// the completed frame carries the tree — see key_dispatch.go's
-// header).
-func registerDivElementDispatch(w *Window, d *DivElement) {
+// registers its dispatch-tree state on the frame under construction
+// (the pinned Drawable::prepaint push_node, element.rs:468; the focus
+// identity of Interactivity::prepaint's set_focus_handle, div.rs:2800;
+// then Interactivity::paint's with_tab_group + tab_stops.insert,
+// div.rs:3025-3047, the keyboard click of paint_mouse_listeners,
+// div.rs:3512-3577, and paint_keyboard_listeners, div.rs:3766-3796, in
+// that order). The port registers during prepaint so the completed
+// frame carries the tree (key_dispatch.go's header). suppressed is the
+// pin's Visibility::Hidden early return (div.rs:3021-3023) for this div
+// or a hidden ancestor: only the node and its focus identity register.
+// It reports whether a tab group was opened; the caller closes it and
+// pops the node after the children.
+func registerDivElementDispatch(w *Window, d *DivElement, suppressed bool, hitbox *Hitbox, es *InteractiveElementState) (endGroup bool) {
 	tree := currentDispatchTree(w)
 	tree.PushNode()
+	if d.focusHandle != nil {
+		tree.SetFocusID(d.focusHandle.id)
+	}
+	if suppressed {
+		return false
+	}
+
+	// with_tab_group (div.rs:3025-3036): the group opens before the
+	// children (their paths carry the group index); the container's own
+	// handle is inserted inside the group (div.rs:3037-3047).
+	if d.tabGroup && d.tabIndex != nil {
+		currentTabStops(w).BeginGroup(*d.tabIndex)
+		endGroup = true
+	}
+	if d.focusHandle != nil {
+		registerFocusStop(w, *d.focusHandle)
+	}
+
+	// The keyboard click (div.rs:3512-3577) registers before the
+	// element's own key listeners, as paint_mouse_listeners runs before
+	// paint_keyboard_listeners (div.rs:3075, 3084).
+	if hitbox != nil {
+		registerDivKeyboardClick(w, d, *hitbox, es)
+	}
+
 	if d.keyContext != nil {
 		if context, err := ParseKeyContext(*d.keyContext); err == nil {
 			tree.SetKeyContext(context)
 		}
-	}
-	if d.focusHandle != nil {
-		tree.SetFocusID(d.focusHandle.id)
 	}
 
 	// Key listeners (phase-routed by the tree).
@@ -1398,104 +1538,7 @@ func registerDivElementDispatch(w *Window, d *DivElement) {
 			invokeTypedActionListener(listener, action, phase, w, app)
 		})
 	}
-
-	// The tab group opens before the children (their paths carry the
-	// group index); the container's own handle is inserted inside the
-	// group (div.rs: the container sorts with its children). The group
-	// is closed and the node popped by prepaint after the children.
-	if d.focusHandle != nil {
-		if d.tabGroup && d.tabIndex != nil {
-			currentTabStops(w).BeginGroup(*d.tabIndex)
-		}
-		registerFocusStop(w, *d.focusHandle)
-	}
-}
-
-// registerDivElementMouseState inserts the div's hitbox and registers
-// its mouse-family listeners on the frame under construction
-// (ticket24; div.rs Interactivity prepaint's insert_hitbox +
-// paint_mouse_listeners). The port registers both during prepaint —
-// parent before children — which preserves the pin's ordering: the
-// hitbox walk and the listener capture phase both run parents first,
-// so children (inserted later) hit-test and dispatch in front of
-// their parents.
-func registerDivElementMouseState(w *Window, d *DivElement, bounds Bounds, inspector *InspectorElementID) {
-	// insert_hitbox (div.rs Interactivity::prepaint): the bounds plus
-	// the content mask active at insertion.
-	box := w.InsertHitbox(bounds, d.hitboxBehavior)
-	// insert_inspector_hitbox (div.rs:3100-3111, the ticket27
-	// integration): while the window's inspector is picking, register
-	// this hitbox as selectable for its element's inspector id.
-	w.InsertInspectorHitbox(box, inspector)
-
-	// A focusable element transfers focus on a hovered mouse down
-	// unless the default action was prevented (div.rs
-	// paint_mouse_listeners's tracked_focus_handle arm).
-	if d.focusHandle != nil {
-		handle := *d.focusHandle
-		hitbox := box
-		w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
-			if _, isDown := event.(*MouseDownEvent); !isDown {
-				return
-			}
-			if phase == DispatchBubble && hitbox.IsHovered(w) && !w.DefaultPrevented() {
-				w.Focus(handle)
-				// If there is a parent that is also focusable, prevent it
-				// from transferring focus because we already did so.
-				w.PreventDefault()
-			}
-		})
-	}
-
-	// The typed mouse-family listeners (div.rs's per-kind arms: the
-	// registration closure captures this element's hitbox and forwards
-	// the phase; the listener decides what the hitbox gates).
-	for _, listener := range d.mouseMoveListeners {
-		registerMouseListener(w, listener, box)
-	}
-	for _, listener := range d.mouseUpListeners {
-		registerMouseListener(w, listener, box)
-	}
-	for _, listener := range d.scrollWheelListeners {
-		registerMouseListener(w, listener, box)
-	}
-	for _, listener := range d.pinchListeners {
-		registerMouseListener(w, listener, box)
-	}
-
-	// The drop listeners (div.rs paint_mouse_listeners's drop arm): on
-	// a bubbled mouse up with an active drag whose value matches a
-	// listener's payload type and this element hovered, stop the drag,
-	// deliver the value, refresh and stop propagation.
-	if len(d.dropListeners) > 0 {
-		listeners := append([]typedDropListener(nil), d.dropListeners...)
-		hitbox := box
-		w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
-			up, isUp := event.(*MouseUpEvent)
-			if !isUp || phase != DispatchBubble {
-				return
-			}
-			drag := app.ActiveDrag()
-			if drag == nil {
-				return
-			}
-			for _, listener := range listeners {
-				if !dropListenerPayloadMatches(drag.Value, listener.payloadType) {
-					continue
-				}
-				// Without a listener-level can-drop predicate the hitbox
-				// must be hovered (div.rs: the default drop eligibility).
-				if !hitbox.IsHovered(w) {
-					continue
-				}
-				value, _ := app.StopDrag(w)
-				listener.onDrop(value, up, w, app)
-				w.requestRefresh()
-				app.StopPropagation()
-				break
-			}
-		})
-	}
+	return endGroup
 }
 
 // registerMouseListener wraps one typed mouse-family listener as a
@@ -1549,31 +1592,62 @@ func invokeTypedActionListener(listener typedActionListener, action any, phase D
 	handler.Call([]reflect.Value{payload, reflect.ValueOf(w), reflect.ValueOf(app)})
 }
 
-// Paint implements Element (div.rs:2986-3110 Interactivity::paint +
-// style.rs:874-1015 Style::paint, bounded): compute the style; a hidden
-// element paints nothing (div.rs:3021); otherwise scope the element
-// opacity and paint the style's box around the text-style and
-// overflow-mask scoped children (through the inline frame state — the
-// children first, then the paragraphs — when it owns them).
+// Paint implements Element (div.rs:2485-2525 Div::paint + div.rs:2986-3125
+// Interactivity::paint + style.rs:874-1015 Style::paint, bounded): inside
+// the element's interactive state, compute the style with this frame's
+// hitbox (hover, active, focus and group styles; div.rs:3003-3009) and
+// register the group-hover refresh handler (div.rs:3019); a hidden
+// element paints nothing more (div.rs:3021); otherwise scope the
+// element opacity and paint the style's box around the text-style and
+// overflow-mask scoped content: with a hitbox, the cursor request
+// (div.rs:3054-3062), the group hitbox push (div.rs:3064-3066) and the
+// mouse listeners (div.rs:3075-3080, interact.go); then the children
+// (through the inline frame state — the children first, then the
+// paragraphs — when it owns them; none when Display is None,
+// div.rs:2510-2512) and the group pop (div.rs:3111-3113).
 func (d *DivElement) paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *divFrameState, prepaint *divPrepaintState, w *Window, app *App) {
-	style := d.computeStyle()
-	if style.Visibility == VisibilityHidden {
-		return
-	}
-	WithElementOpacityVoid(w, style.Opacity, func(w *Window) {
-		style.paint(bounds, w, app, func(w *Window) {
-			WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
-				WithContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
-					if standalone := layout.standaloneInline(); standalone != nil {
-						standalone.paintChildren(d.children, w, app)
-						return
-					}
-					for i := range d.children {
-						d.children[i].Paint(w, app)
-					}
+	ensurePaintHitTest(w)
+	hitbox := prepaint.hitbox
+	WithOptionalElementState(w, global, func(slot *InteractiveElementState, w *Window) (struct{}, *InteractiveElementState) {
+		es := interactiveStateOf(global, slot)
+		style := d.computeStyleInternal(hitbox, es, w, app)
+		d.paintHoverGroupHandler(w, app)
+		if style.Visibility == VisibilityHidden {
+			return struct{}{}, es
+		}
+		WithElementOpacityVoid(w, style.Opacity, func(w *Window) {
+			style.paint(bounds, w, app, func(w *Window) {
+				WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
+					WithContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
+						if hitbox != nil {
+							if drag := app.ActiveDrag(); drag != nil {
+								if drag.CursorStyle != nil {
+									w.SetWindowCursorStyle(*drag.CursorStyle)
+								}
+							} else if style.MouseCursor != nil {
+								w.SetCursorStyle(*style.MouseCursor, hitbox)
+							}
+							if d.group != nil {
+								groupHitboxPush(*d.group, hitbox.ID(), app)
+								defer groupHitboxPop(*d.group, app)
+							}
+							d.paintMouseListeners(*hitbox, es, w, app)
+						}
+						if style.Display == DisplayNone {
+							return
+						}
+						if standalone := layout.standaloneInline(); standalone != nil {
+							standalone.paintChildren(d.children, w, app)
+							return
+						}
+						for i := range d.children {
+							d.children[i].Paint(w, app)
+						}
+					})
 				})
 			})
 		})
+		return struct{}{}, es
 	})
 }
 

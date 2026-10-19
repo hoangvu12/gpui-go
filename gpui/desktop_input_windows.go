@@ -21,9 +21,17 @@ package gpui
 // reference's own unit vectors), the partial-send cleanup construction
 // and the inactive-window guard are exercised instead, with the send
 // itself behind a seam whose default is the real syscall.
+//
+// Base ticket 06 adds the client-area mouse button messages
+// (gpui_windows/src/events.rs:138-149, 489-559): SetCapture on a press
+// and ReleaseCapture on a release (through user32, not the native
+// artifact), the ClickState double-click counter (window.rs:1351-1418)
+// and the translation into MouseDownEvent / MouseUpEvent delivered to
+// an input callback.
 
 import (
 	"fmt"
+	"time"
 	"unsafe"
 )
 
@@ -31,7 +39,232 @@ var (
 	procSendInput           = modUser32.NewProc("SendInput")
 	procGetAsyncKeyState    = modUser32.NewProc("GetAsyncKeyState")
 	procGetForegroundWindow = modUser32.NewProc("GetForegroundWindow")
+
+	// Base ticket 06's pointer capture and click counting (user32
+	// through the Go host's lazy DLL, not the native artifact).
+	procSetCapture            = modUser32.NewProc("SetCapture")
+	procReleaseCapture        = modUser32.NewProc("ReleaseCapture")
+	procGetCapture            = modUser32.NewProc("GetCapture")
+	procGetDoubleClickTime    = modUser32.NewProc("GetDoubleClickTime")
+	procGetSystemMetricsInput = modUser32.NewProc("GetSystemMetrics")
 )
+
+// Mouse button messages and metrics (winuser.h).
+const (
+	wmLButtonDown = 0x0201 // WM_LBUTTONDOWN
+	wmLButtonUp   = 0x0202 // WM_LBUTTONUP
+	wmRButtonDown = 0x0204 // WM_RBUTTONDOWN
+	wmRButtonUp   = 0x0205 // WM_RBUTTONUP
+	wmMButtonDown = 0x0207 // WM_MBUTTONDOWN
+	wmMButtonUp   = 0x0208 // WM_MBUTTONUP
+	wmXButtonDown = 0x020B // WM_XBUTTONDOWN
+	wmXButtonUp   = 0x020C // WM_XBUTTONUP
+
+	xButton1 = 0x0001 // XBUTTON1
+	xButton2 = 0x0002 // XBUTTON2
+
+	smCxDoubleClk = 36 // SM_CXDOUBLECLK
+	smCyDoubleClk = 37 // SM_CYDOUBLECLK
+
+	spiSetDoubleClkWidth  = 29 // SPI_SETDOUBLECLKWIDTH
+	spiSetDoubleClkHeight = 30 // SPI_SETDOUBLECLKHEIGHT
+	spiSetDoubleClickTime = 32 // SPI_SETDOUBLECLICKTIME
+)
+
+// ---------------------------------------------------------------------------
+// Mouse button messages (gpui_windows/src/events.rs:138-149, 489-559)
+// ---------------------------------------------------------------------------
+
+// win32ClickState is the pinned ClickState (gpui_windows/src/window.rs:
+// 1351-1418): the last pressed button, time and device-pixel position,
+// the system double-click tolerances and interval, and the running
+// click count. Host thread only.
+type win32ClickState struct {
+	button       MouseButton
+	lastClick    time.Time
+	lastX, lastY int32
+	toleranceW   int32
+	toleranceH   int32
+	interval     time.Duration
+	currentCount int
+	// now is the clock (time.Now; tests pin it).
+	now func() time.Time
+}
+
+// newWin32ClickState is ClickState::new (window.rs:1362-1376): the
+// tolerances from GetSystemMetrics(SM_CX/CYDOUBLECLK) and the interval
+// from GetDoubleClickTime.
+func newWin32ClickState() *win32ClickState {
+	w, _, _ := procGetSystemMetricsInput.Call(smCxDoubleClk)
+	h, _, _ := procGetSystemMetricsInput.Call(smCyDoubleClk)
+	ms, _, _ := procGetDoubleClickTime.Call()
+	return &win32ClickState{
+		button:     MouseButtonLeft,
+		lastClick:  time.Now(),
+		toleranceW: int32(w),
+		toleranceH: int32(h),
+		interval:   time.Duration(ms) * time.Millisecond,
+		now:        time.Now,
+	}
+}
+
+// update is ClickState::update (window.rs:1379-1390): the same button
+// pressed again inside the interval and tolerances continues the count,
+// anything else restarts it at 1.
+func (c *win32ClickState) update(button MouseButton, x, y int32) int {
+	now := c.now()
+	if c.button == button && c.isDoubleClick(now, x, y) {
+		c.currentCount++
+	} else {
+		c.currentCount = 1
+	}
+	c.lastClick = now
+	c.lastX, c.lastY = x, y
+	c.button = button
+	return c.currentCount
+}
+
+// systemUpdate is ClickState::system_update (window.rs:1392-1408), the
+// WM_SETTINGCHANGE refresh of the tolerances and the interval
+// (events.rs:1220).
+func (c *win32ClickState) systemUpdate(wparam uintptr) {
+	switch wparam {
+	case spiSetDoubleClkWidth:
+		w, _, _ := procGetSystemMetricsInput.Call(smCxDoubleClk)
+		c.toleranceW = int32(w)
+	case spiSetDoubleClkHeight:
+		h, _, _ := procGetSystemMetricsInput.Call(smCyDoubleClk)
+		c.toleranceH = int32(h)
+	case spiSetDoubleClickTime:
+		ms, _, _ := procGetDoubleClickTime.Call()
+		c.interval = time.Duration(ms) * time.Millisecond
+	}
+}
+
+// isDoubleClick is ClickState::is_double_click (window.rs:1411-1417).
+func (c *win32ClickState) isDoubleClick(now time.Time, x, y int32) bool {
+	dx, dy := c.lastX-x, c.lastY-y
+	if dx < 0 {
+		dx = -dx
+	}
+	if dy < 0 {
+		dy = -dy
+	}
+	return now.Sub(c.lastClick) < c.interval && dx <= c.toleranceW && dy <= c.toleranceH
+}
+
+// win32ClickStates holds each window's click state (the pinned
+// WindowsWindowState::click_state), kept beside the host record because
+// the record's struct belongs to the host slice. Host thread only; the
+// host's WM_NCDESTROY retirement is expected to call
+// forgetWin32ClickState.
+var win32ClickStates = map[*hostWindow]*win32ClickState{}
+
+// clickState returns (creating) the window's click state.
+func (w *hostWindow) clickState() *win32ClickState {
+	if c, ok := win32ClickStates[w]; ok {
+		return c
+	}
+	c := newWin32ClickState()
+	win32ClickStates[w] = c
+	return c
+}
+
+// forgetWin32ClickState drops a destroyed window's click state.
+func forgetWin32ClickState(w *hostWindow) { delete(win32ClickStates, w) }
+
+// win32LogicalPoint is util.rs:147-152 logical_point.
+func win32LogicalPoint(x, y int32, scale float32) Point {
+	if scale <= 0 {
+		scale = 1
+	}
+	return Point{X: float32(x) / scale, Y: float32(y) / scale}
+}
+
+// handleMouseDownMsg is events.rs:489-517 handle_mouse_down_msg: capture
+// the mouse to this window (SetCapture, so the release and the drag
+// moves arrive here even outside the client area), then translate the
+// press — device-pixel position to logical, the live modifiers, the
+// click count — and deliver it through the input callback. It returns 0
+// when the application handled the event and 1 otherwise; a missing
+// callback reports 1 after the capture, like the pin.
+func (w *hostWindow) handleMouseDownMsg(button MouseButton, lp uintptr, input func(event any) bool) uintptr {
+	procSetCapture.Call(w.hwnd)
+	if input == nil {
+		return 1
+	}
+	x, y := signedLoword(lp), signedHiword(lp)
+	clickCount := w.clickState().update(button, x, y)
+	event := &MouseDownEvent{
+		Button:     button,
+		Position:   win32LogicalPoint(x, y, w.scale),
+		Modifiers:  win32CurrentModifiers(),
+		ClickCount: clickCount,
+	}
+	if input(event) {
+		return 0
+	}
+	return 1
+}
+
+// handleMouseUpMsg is events.rs:519-544 handle_mouse_up_msg: release the
+// mouse capture, then translate and deliver the release with the
+// current click count.
+func (w *hostWindow) handleMouseUpMsg(button MouseButton, lp uintptr, input func(event any) bool) uintptr {
+	procReleaseCapture.Call()
+	if input == nil {
+		return 1
+	}
+	x, y := signedLoword(lp), signedHiword(lp)
+	event := &MouseUpEvent{
+		Button:     button,
+		Position:   win32LogicalPoint(x, y, w.scale),
+		Modifiers:  win32CurrentModifiers(),
+		ClickCount: w.clickState().currentCount,
+	}
+	if input(event) {
+		return 0
+	}
+	return 1
+}
+
+// handleMouseButtonMsg routes the client-area button messages
+// (events.rs:138-149, with handle_xbutton_msg at 546-559: XBUTTON1 is
+// the back navigation button, XBUTTON2 forward — the port's Button4 and
+// Button5; another X button is not handled and reports 1). It reports
+// false for any other message. This is the single call the host window
+// procedure needs.
+func (w *hostWindow) handleMouseButtonMsg(message uint32, wparam, lp uintptr, input func(event any) bool) (uintptr, bool) {
+	switch message {
+	case wmLButtonDown:
+		return w.handleMouseDownMsg(MouseButtonLeft, lp, input), true
+	case wmRButtonDown:
+		return w.handleMouseDownMsg(MouseButtonRight, lp, input), true
+	case wmMButtonDown:
+		return w.handleMouseDownMsg(MouseButtonMiddle, lp, input), true
+	case wmLButtonUp:
+		return w.handleMouseUpMsg(MouseButtonLeft, lp, input), true
+	case wmRButtonUp:
+		return w.handleMouseUpMsg(MouseButtonRight, lp, input), true
+	case wmMButtonUp:
+		return w.handleMouseUpMsg(MouseButtonMiddle, lp, input), true
+	case wmXButtonDown, wmXButtonUp:
+		var button MouseButton
+		switch hiword(wparam) {
+		case xButton1:
+			button = MouseButtonButton4
+		case xButton2:
+			button = MouseButtonButton5
+		default:
+			return 1, true
+		}
+		if message == wmXButtonDown {
+			return w.handleMouseDownMsg(button, lp, input), true
+		}
+		return w.handleMouseUpMsg(button, lp, input), true
+	}
+	return 0, false
+}
 
 // Input constants (winuser.h).
 const (

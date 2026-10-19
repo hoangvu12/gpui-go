@@ -243,13 +243,30 @@ const RootA11yNodeID A11yNodeID = 0
 // String renders the id for traces.
 func (id A11yNodeID) String() string { return fmt.Sprintf("#%016x", uint64(id)) }
 
-// canonicalElementID encodes one path component unambiguously.
+// canonicalElementID encodes one path component unambiguously: one tag
+// byte per ElementId variant (window.rs:7655-7675), names
+// length-prefixed where more data follows them. The Name/View/Integer
+// encodings are unchanged, so their node ids stay stable.
 func canonicalElementID(id ElementID) string {
 	switch id.Kind {
 	case ElementIDName:
 		return "\x01" + id.Name
 	case ElementIDView:
 		return "\x02" + strconv.FormatUint(uint64(id.Entity), 10)
+	case ElementIDNamedInteger:
+		// ElementId::NamedInteger(name, integer).
+		return "\x04" + strconv.Itoa(len(id.Name)) + ":" + id.Name + strconv.FormatUint(id.Integer, 10)
+	case ElementIDNamedChild:
+		// ElementId::NamedChild(parent, label): the label, then the
+		// parent's own encoding as the remainder.
+		parent := ""
+		if id.Parent != nil {
+			parent = canonicalElementID(*id.Parent)
+		}
+		return "\x05" + strconv.Itoa(len(id.Name)) + ":" + id.Name + parent
+	case ElementIDCodeLocation:
+		// ElementId::CodeLocation(location).
+		return "\x06" + id.Name
 	default:
 		return "\x03" + strconv.FormatUint(id.Integer, 10)
 	}

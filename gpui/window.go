@@ -102,7 +102,10 @@ type WindowOptions struct {
 	OnClose func()
 	// OnActivate reports activation changes (WM_ACTIVATE), deferred to
 	// the foreground queue like the reference's handle_activate_msg
-	// (which spawns the callback on the foreground executor).
+	// (which spawns the callback on the foreground executor). The window's
+	// own activation handling (the cached active flag, the
+	// ObserveWindowActivation observers and the refresh) runs first,
+	// whether or not this hook is set.
 	OnActivate func(active bool)
 	// OnResize reports client size and scale changes (WM_SIZE and
 	// WM_DPICHANGED), delivered synchronously on the foreground thread.
@@ -111,15 +114,16 @@ type WindowOptions struct {
 	OnMoved func()
 	// OnRedraw is the window's present hook (Base ticket 03; the
 	// reference Window::present, window.rs:3325, which hands the
-	// rendered scene to the platform window). WM_PAINT delivers the
-	// window's frame request (draw_window -> request_frame,
-	// window.rs:1715-1843): pending next-frame callbacks run, a dirty
-	// window with a root view is drawn, and then this hook runs whenever
-	// a drawn frame awaits presentation — present LastDrawnScene(w)
-	// through the window's Surface. Installing the hook enrolls the
-	// window in the frame loop: notify, Refresh, RefreshWindows and
-	// animation frames then redraw it without explicit DrawWindowFrame
-	// calls. Without the hook the window keeps the explicit-draw model.
+	// rendered scene to the platform window). Every window is driven by
+	// the frame loop (Base ticket 33): notify of an entity its last frame
+	// accessed, Refresh, RefreshWindows and animation frames wake it, and
+	// WM_PAINT delivers the window's frame request (draw_window ->
+	// request_frame, window.rs:1715-1843): pending next-frame callbacks
+	// run, a dirty window with a root view is drawn, and then this hook
+	// runs whenever a drawn frame awaits presentation — present
+	// LastDrawnScene(w) through the window's Surface. Without the hook the
+	// window is still drawn; presenting the scene is up to the
+	// application (the port's renderer is application-owned).
 	OnRedraw func()
 	// OnKey receives keyboard platform events (ticket13: *KeyDownEvent,
 	// *KeyUpEvent, *ModifiersChangedEvent from the Win32 translation).
@@ -613,11 +617,20 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 				}
 			})
 		}
-		if opts.OnActivate != nil {
-			user := opts.OnActivate
-			hostOpts.OnActivate = func(active bool) {
-				a.Update(func(*App) { user(active) })
-			}
+		// Activation changes reach the window's own handling before the
+		// user hook (the platform on_active_status_change callback,
+		// window.rs:1887-1902: the active flag, the activation observers,
+		// then a refresh).
+		userActivate := opts.OnActivate
+		hostOpts.OnActivate = func(active bool) {
+			a.Update(func(a *App) {
+				if window != nil {
+					window.activationChanged(active, a)
+				}
+				if userActivate != nil {
+					userActivate(active)
+				}
+			})
 		}
 		// The file-drop callback routes the OLE drop target's events
 		// through the window's input dispatch (ticket24: the pin's
@@ -662,9 +675,9 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 				handle: handle,
 				scope:  a.rootScope.Child(),
 				title:  opts.Title,
-				// The frame loop drives windows with a present hook; the
-				// window starts dirty (window.rs:178).
-				frames: newWindowFrameState(opts.OnRedraw, opts.OnRedraw != nil),
+				// The frame loop drives every window; OnRedraw is its present
+				// step. The window starts dirty (window.rs:178).
+				frames: newWindowFrameState(opts.OnRedraw),
 			}
 			a.windows[window.id] = window
 			res <- openResult{window: window}

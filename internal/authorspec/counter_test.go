@@ -173,15 +173,17 @@ func TestCounterViewDrawsThroughElementPhases(t *testing.T) {
 	// An increment from within the window re-renders: the entity update
 	// notifies the observer (the view entity), and the next draw renders
 	// the new count.
+	//
+	// Migrated by Base ticket 33 (the default frame loop): the next draw
+	// is the increment update's own flush draw (app.rs:1800-1812) instead
+	// of an explicit DrawWindowFrame; still exactly one more frame and one
+	// more render.
 	counter.Update(tv.app, func(c *Counter, cx *gpui.Context[Counter]) {
 		c.increment(cx)
 	})
 	_, notified := tv.viewFacts()
 	if notified != 1 {
 		t.Errorf("view notified = %d, want 1 (coalesced notify delivery)", notified)
-	}
-	if _, err := gpui.DrawWindowFrame(w); err != nil {
-		t.Fatalf("second DrawWindowFrame: %v", err)
 	}
 	if got := gpui.WindowDrawCount(w); got != 2 {
 		t.Errorf("draw count = %d, want 2", got)

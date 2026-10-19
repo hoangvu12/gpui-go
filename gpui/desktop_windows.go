@@ -436,9 +436,10 @@ func (h *Host) setDesktopCallback[T any](project func(*desktopCallbacks) *T, cb 
 // ---------------------------------------------------------------------------
 
 // cursorResourceID maps a cursor style to its system cursor resource
-// (util.rs load_cursor's match arms). Styles that the reference's
-// catch-all arm maps to the arrow (every not-listed style, including
-// ClosedHand/OpenHand) load IDC_ARROW here too.
+// (util.rs:99-115 load_cursor's match arms). Styles that the
+// reference's catch-all arm (util.rs:114) maps to the arrow — Arrow
+// itself plus ClosedHand, OpenHand, DragCopy and ContextualMenu — load
+// IDC_ARROW here too.
 func cursorResourceID(style CursorStyle) uintptr {
 	switch style {
 	case CursorIBeam, CursorIBeamVertical:

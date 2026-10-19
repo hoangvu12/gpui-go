@@ -307,12 +307,6 @@ func (a *App) Update(f func(*App)) {
 		panic("gpui: Update called with a nil callback")
 	}
 	a.startUpdate()
-	if w := activeFrame; w != nil && w.app == a {
-		// A view's render is an entity update inside the frame draw: the
-		// rendering view is tracked by its window (Base ticket 03,
-		// frameloop.go recordRenderedView).
-		recordRenderedView(w)
-	}
 	completed := false
 	defer func() {
 		if !completed && a.updateDepth > 0 {
@@ -395,6 +389,9 @@ func (a *App) pushEffect(e effect) {
 // pending releases requests a subsequent flush instead of draining those
 // releases in this cycle.
 func (a *App) flushEffects() {
+	// flushDraws counts the test-window frames this flush drew
+	// (frameloop.go drawDirtyTestWindowsInFlush).
+	flushDraws := 0
 	for {
 		a.releaseDroppedEntities()
 
@@ -411,6 +408,13 @@ func (a *App) flushEffects() {
 			_ = hook.DirtyWindows()
 		}
 		if len(a.effects) > 0 {
+			continue
+		}
+
+		// The test-support branch draws every dirty test window
+		// (app.rs 1800-1812; Base ticket 33, frameloop.go); the effects the
+		// draws queued are applied by this loop.
+		if a.drawDirtyTestWindowsInFlush(&flushDraws) && len(a.effects) > 0 {
 			continue
 		}
 
@@ -809,6 +813,7 @@ func withEntityUpdate[S any](a *App, id EntityID, f func(state *S, cx *Context[S
 		if !ok {
 			panic(fmt.Sprintf("gpui: entity %d holds state of type %T, not %T", uint64(id), slot.state, new(S)))
 		}
+		recordEntityAccess(a, id)
 		cx := &Context[S]{app: a, entity: id, valid: &borrowValidity{}}
 		slot.writer = true
 		defer func() {

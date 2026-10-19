@@ -189,9 +189,13 @@ func (f *focusForwarder) Render(w *Window, cx *Context[focusForwarder]) AnyEleme
 // app-level focus handles (cx.focus_handle(), app.rs:2796): a listener
 // on a moves focus to b, and b's listener runs exactly once.
 //
-// Deviation: the pin redraws automatically after the listener moved
-// focus (window.rs:3262-3264 refresh + run_until_parked); the port's
-// frame loop is ticket 03's, so the follow-up frame is drawn explicitly.
+// Migrated by Base ticket 33 to the pin's shape: the focus update's flush
+// draws the frame whose focus phase runs a's listener; the listener's
+// focus move refreshes the window after the frame is published
+// (window.rs:3279-3285), so the window is dirty again and
+// run_until_parked draws the follow-up frame that dispatches b's focus.
+// (Before, the refresh was cleared by the completing frame and the
+// follow-up frame was drawn explicitly.)
 func TestHelperFocusMovedByFocusListenerIsDispatched(t *testing.T) {
 	ta := NewTestApp()
 	app := ta.App()
@@ -213,9 +217,11 @@ func TestHelperFocusMovedByFocusListenerIsDispatched(t *testing.T) {
 
 	var a, b FocusHandle
 	view.Read(app, func(f *focusForwarder, _ *App) struct{} { a, b = f.a, f.b; return struct{}{} })
-	app.Update(func(*App) { w.Focus(a) })
-	drawHelperFrame(t, w) // a's listener forwards focus to b
-	drawHelperFrame(t, w) // the follow-up frame dispatches b's focus
+	app.Update(func(*App) { w.Focus(a) }) // the flush draws: a's listener forwards focus to b
+	if !w.isFrameDirty() {
+		t.Fatal("the focus listener's refresh was lost by the completing frame")
+	}
+	ta.RunUntilParked() // the follow-up frame dispatches b's focus
 
 	if !b.IsFocused(w) {
 		t.Fatal("b is not focused after the forwarding listener")

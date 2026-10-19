@@ -90,16 +90,35 @@ func (v *listView) Render(w *gpui.Window, cx *gpui.Context[listView]) gpui.AnyEl
 // drawList draws one frame of the corpus and reports the item indices
 // rendered during it and, for the stateful corpus, the keyed-state
 // probes recorded during it.
+//
+// Migrated by Base ticket 33 (the default frame loop): the sink update's
+// flush draws a dirty window by itself (app.rs:1800-1812); the explicit
+// draw then runs only when that flush drew nothing, so every drawList
+// call still draws exactly one frame into fresh sinks.
 func drawList(t *testing.T, window *gpui.Window, app *gpui.App, view gpui.Entity[listView]) ([]int, []itemProbe) {
+	t.Helper()
+	return drawListWith(t, window, app, view, nil)
+}
+
+// drawListWith is drawList with a view configuration applied in the same
+// update that installs the sinks (so the configuring update's flush draw,
+// when it happens, is the observed frame).
+func drawListWith(t *testing.T, window *gpui.Window, app *gpui.App, view gpui.Entity[listView], configure func(v *listView)) ([]int, []itemProbe) {
 	t.Helper()
 	rendered := []int{}
 	probes := []itemProbe{}
+	before := gpui.WindowDrawCount(window)
 	view.Update(app, func(v *listView, cx *gpui.Context[listView]) {
+		if configure != nil {
+			configure(v)
+		}
 		v.rendered = &rendered
 		v.probes = &probes
 	})
-	if _, err := gpui.DrawWindowFrame(window); err != nil {
-		t.Fatalf("DrawWindowFrame: %v", err)
+	if gpui.WindowDrawCount(window) == before {
+		if _, err := gpui.DrawWindowFrame(window); err != nil {
+			t.Fatalf("DrawWindowFrame: %v", err)
+		}
 	}
 	return rendered, probes
 }
@@ -112,7 +131,12 @@ func newListCorpus(t *testing.T, state *gpui.ListState, items []listItemSpec, wi
 	app := ta.App()
 	window := gpui.NewTestWindow(app, gpui.Size{Width: itemWidth, Height: windowHeight})
 	var sink []int
+	// The probe sink too: with the default frame loop (Base ticket 33)
+	// a configuring update's flush may draw the window before drawList
+	// installs its fresh sinks.
+	var probeSink []itemProbe
 	view := gpui.NewEntity(app, window.Scope(), func(v *listView, cx *gpui.Context[listView]) {
+		v.probes = &probeSink
 		v.state = state
 		v.items = items
 		// The reference List's default sizing (the parent's layout
@@ -437,11 +461,12 @@ func assertProbes(t *testing.T, probes []itemProbe, want []itemProbe) {
 func TestListItemKeyedElementStateRetention(t *testing.T) {
 	state := gpui.NewListState(10, 0)
 	app, window, view := newListCorpus(t, state, variableItemSpecs(10), 100)
-	view.Update(app, func(v *listView, cx *gpui.Context[listView]) { v.stateful = true })
 
 	// First draw: the visible items' states are fresh (renders 0
-	// before the increment).
-	_, probes := drawList(t, window, app, view)
+	// before the increment). Migrated by Base ticket 33: the stateful
+	// switch is applied in the drawing update (its flush draws the dirty
+	// window), so the first stateful frame is the observed one.
+	_, probes := drawListWith(t, window, app, view, func(v *listView) { v.stateful = true })
 	assertProbes(t, probes, []itemProbe{{0, 0}, {1, 0}, {2, 0}, {3, 0}})
 
 	// A redraw of the same range: the states survive (renders 1).
