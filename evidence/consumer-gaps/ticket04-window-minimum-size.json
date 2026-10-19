@@ -1,0 +1,48 @@
+{
+  "ticket": "04-window-minimum-size",
+  "effort": "gpui-consumer-gaps",
+  "date": "2026-10-19",
+  "result": "resolved",
+  "summary": "WindowOptions.MinSize Size (logical client pixels, per-dimension, zero = unconstrained) mirroring the reference WindowOptions::window_min_size; the Win32 host handles WM_GETMINMAXINFO (ported handle_get_min_max_info_msg): a set minimum raises MINMAXINFO.ptMinTrackSize to the logical minimum scaled at the current scale factor plus the frame offset (client-area adjusted), re-derived on every message so a scale-factor change re-clamps; a zero minimum falls to DefWindowProcW (exactly the pre-change path). SetBounds and the initial placement additionally clamp the client size explicitly; verified that Windows also clamps raw SetWindowPos to ptMinTrackSize, so the programmatic and interactive floors agree by construction.",
+  "pinned_sources": [
+    "reference/ce-source/crates/gpui/src/platform.rs:2595 (WindowOptions::window_min_size: Option<Size<Pixels>>)",
+    "reference/ce-source/crates/gpui_windows/src/window.rs:512 (WindowCreateContext min_size from params)",
+    "reference/ce-source/crates/gpui_windows/src/events.rs:101,224-237 (WM_GETMINMAXINFO -> handle_get_min_max_info_msg: ptMinTrackSize = min_size.scale(scale_factor) + border_offset, Some(0); None -> default processing)"
+  ],
+  "public_api": ["gpui.WindowOptions.MinSize gpui.Size (logical client pixels; zero dimension = unconstrained; zero value keeps today's behavior)"],
+  "implementation": {
+    "files": [
+      "gpui/window.go (WindowOptions.MinSize field + docs)",
+      "gpui/win32host_windows.go (wmGetMinMaxInfo constant, minMaxInfo struct, WM_GETMINMAXINFO case in windowWndProc, hostWindow.minSize, handleGetMinMaxInfoMsg, clampClientDeviceSize, option wiring, SetBounds + initial-placement clamps)",
+      "gpui/win32minsize_windows_test.go (new; unit tests of the floor derivation at five scales, the zero-minimum fall-through, the per-dimension policy and the client-size clamp)",
+      "internal/winhostspec/minsize_test.go (new; real-window tests)"
+    ],
+    "deviation_from_upstream": "upstream carries Option<Size> (all-or-nothing); the Go zero-value option is per-dimension (a zero dimension keeps the system's pre-filled ptMinTrackSize axis), documented on the field"
+  },
+  "tests": {
+    "unit": [
+      {"command": "CGO_ENABLED=0 go test ./gpui -run 'TestHandleGetMinMaxInfoMsg|TestClampClientDeviceSize' -count=3", "result": "ok (floor = int32(min*scale)+border at scales 1, 1.25, 1.5, 1.75, 2; zero minimum unhandled and untouched; per-dimension raises only the set axis; clamp identity without a minimum)"}
+    ],
+    "real_window": [
+      {"test": "TestWindowMinSizeClampsSetBounds", "result": "PASS: SetBounds(200x200) on a MinSize(600,640) window clamps to exactly 600x640 logical; a partial (500x700) clamps only the width to 600; above-floor sizes unchanged; initial bounds 300x300 with MinSize open at 600x640"},
+      {"test": "TestWindowMinSizeDragFloor", "result": "PASS: WM_GETMINMAXINFO through the real window procedure answers ptMinTrackSize=(616, 679) = 600x640 logical + frame (16, 39) at scale 1, result 0 (Some(0)), other fields untouched — the value Windows enforces during an interactive resize drag"},
+      {"test": "TestWindowWithoutMinSizeKeepsTodayBehavior", "result": "PASS: SetBounds(200x200) produces exactly 200x200 (the ticket's verified gap fact); WM_GETMINMAXINFO leaves the pre-filled sentinels untouched (result 0, no floor introduced)"},
+      {"test": "TestWindowMinSizeFloorTracksDPIChange", "result": "PASS: synthetic WM_DPICHANGED 96->144 DPI (repo convention, imespec) moves the scale 1.0->1.5 and the floor re-derives (616, 679) -> (916, 999) = 600x640 logical at the new scale + frame; a below-floor SetBounds then clamps to 600x640 logical at the new scale"}
+    ],
+    "regression": [
+      {"command": "CGO_ENABLED=0 go test ./gpui ./internal/winhostspec -count=1", "result": "ok, ok"},
+      {"command": "CGO_ENABLED=0 go test -p 1 ./... -count=1", "result": "all packages ok except two known cursor-class flakes (TestCursorHideUntilMoveOnRealWindow in gpui, TestCursorStyleAndVisibilityAppLevel in desktopspec) that fail identically on the clean stashed branch in this live session (physical-mouse-state dependent, documented flake class in evidence/base/ticket07-scrolling.json); isolated reruns of every failing package pass"},
+      {"command": "CGO_ENABLED=0 go test ./internal/winhostspec -count=3", "result": "ok (the whole host suite is stable at -count=3 with the new tests)"}
+    ]
+  },
+  "empirical_observations": [
+    "Windows itself clamps raw SetWindowPos to ptMinTrackSize: a probe calling SetWindowPos(200x200 outer) directly on the HWND of a MinSize(600,640) window returned a 600x640 client — the WM_GETMINMAXINFO floor alone already covers programmatic SetWindowPos; the explicit SetBounds/initial-placement clamp uses the identical derivation so both floors agree by construction",
+    "DefWindowProcW called directly with WM_GETMINMAXINFO does not write the MINMAXINFO buffer (stays zeroed) and the zero-MinSize fall-through leaves a caller's pre-filled values untouched: the system, not DefWindowProc, pre-fills the struct before its real deliveries — so the no-minimum regression is proven by surviving sentinels, not by a DefWindowProc oracle"
+  ],
+  "environment": [
+    "reference/ce-source (gitignored pinned checkout) is absent in this worktree; a read-only directory junction to the main checkout's identical pinned bytes was created so internal/headlessspec's source-existence checks pass (junction is gitignored, not committed, nothing in the main checkout modified)",
+    "machine DPI scale 1.0 (96 DPI); higher scales exercised through the unit table and the synthetic WM_DPICHANGED convention (real multi-DPI monitor transitions are not automatable in this session, as recorded by internal/imespec)",
+    "go vet clean; gofmt clean for all touched files (60 pre-existing .scratch/signature-validation findings unchanged)"
+  ],
+  "native_artifact": "unchanged"
+}

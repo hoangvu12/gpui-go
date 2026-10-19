@@ -83,6 +83,17 @@ type WindowOptions struct {
 	// Resizable adds the thick frame and maximize box (reference
 	// WS_THICKFRAME|WS_MAXIMIZEBOX in WindowsWindow::new).
 	Resizable bool
+	// MinSize is the window's minimum client size in logical pixels
+	// (reference WindowOptions::window_min_size,
+	// platform.rs:2595). Zero dimensions are unconstrained; the zero
+	// value keeps the system default minimum. The Win32 host enforces
+	// it on interactive resizing (WM_GETMINMAXINFO raises
+	// MINMAXINFO.ptMinTrackSize to the scaled size plus the frame
+	// offset, reference events.rs handle_get_min_max_info_msg) and on
+	// programmatic sizing (SetBounds and the initial placement clamp
+	// the client area). The device-pixel floor is re-derived at the
+	// current scale factor, so a per-monitor DPI change re-clamps.
+	MinSize Size
 	// MinimizeBox adds WS_MINIMIZEBOX.
 	MinimizeBox bool
 	// Show shows the window once created.

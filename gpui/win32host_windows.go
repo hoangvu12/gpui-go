@@ -16,6 +16,7 @@ package gpui
 //   - crates/gpui_windows/src/events.rs — the message policies:
 //     WM_CLOSE veto, WM_DESTROY close + registry removal post,
 //     WM_DPICHANGED suggested rectangle, WM_SIZE minimized handling,
+//     WM_GETMINMAXINFO minimum tracking size (WindowOptions.MinSize),
 //     WM_PAINT validation.
 //
 // Pure Go: every Win32 call goes through the stdlib syscall package
@@ -151,6 +152,11 @@ const (
 	wmDPICHanged = 0x02E0
 	wmUser       = 0x0400
 
+	// wmGetMinMaxInfo is WM_GETMINMAXINFO (winuser.h): the system
+	// queries the window's minimum/maximum tracking sizes during
+	// creation, interactive resizing and sizing operations.
+	wmGetMinMaxInfo = 0x0024
+
 	wmGPUICloseOneWindow = wmUser + 2 // reference WM_GPUI_CLOSE_ONE_WINDOW
 	wmGPUIWake           = wmUser + 3 // reference WM_GPUI_TASK_DISPATCHED_ON_MAIN_THREAD
 
@@ -267,6 +273,18 @@ type monitorInfo struct {
 	rcMonitor rect
 	rcWork    rect
 	dwFlags   uint32
+}
+
+// minMaxInfo is Win32 MINMAXINFO (40 bytes: five POINTs). Only
+// ptMinTrackSize is written, by the WM_GETMINMAXINFO minimum-size
+// handler; the system pre-fills the struct with defaults before
+// sending the message.
+type minMaxInfo struct {
+	ptReserved     point
+	ptMaxSize      point
+	ptMaxPosition  point
+	ptMinTrackSize point
+	ptMaxTrackSize point
 }
 
 // Message-word helpers.
@@ -522,6 +540,9 @@ func platformWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe
 //   - WM_DPICHANGED records the new scale and applies the suggested
 //     rectangle (SetWindowPos; WM_SIZE/WM_MOVE update the rest).
 //   - WM_SIZE skips the resize report while minimized.
+//   - WM_GETMINMAXINFO raises the minimum tracking size when the
+//     window was opened with a minimum size (WindowOptions.MinSize);
+//     otherwise the message falls to default processing.
 //   - WM_ACTIVATE defers the activation callback to the foreground
 //     queue (reference spawns it on the foreground executor); ticket26
 //     adds the synchronous cursor-visibility/modifier-reset part.
@@ -550,9 +571,9 @@ func platformWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe
 // Input, IME, accessibility and dialog messages arrive with their
 // tickets; they fall through to DefWindowProcW here. lparam is
 // unsafe.Pointer-typed because it is a pointer for the messages this
-// procedure dereferences (WM_NCCREATE's CREATESTRUCTW and
-// WM_DPICHANGED's suggested RECT); integer reinterpretations use
-// uintptr(lparam).
+// procedure dereferences (WM_NCCREATE's CREATESTRUCTW,
+// WM_GETMINMAXINFO's MINMAXINFO and WM_DPICHANGED's suggested RECT);
+// integer reinterpretations use uintptr(lparam).
 func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.Pointer) (result uintptr) {
 	lp := uintptr(lparam)
 	tracef("window msg hwnd=%x id=0x%x w=%x", hwnd, message, wparam)
@@ -631,6 +652,18 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		}
 		w.applySizeChange(width, height)
 		return 0
+
+	case wmGetMinMaxInfo:
+		// WM_GETMINMAXINFO: raise the minimum tracking size to the
+		// window's minimum (reference events.rs handle_get_min_max_info
+		// returning Some(0), which Windows consults to clamp interactive
+		// resizing). A window without a minimum falls to DefWindowProcW —
+		// exactly the pre-MinSize behavior.
+		if result, handled := w.handleGetMinMaxInfoMsg(lparam); handled {
+			return result
+		}
+		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
+		return r
 
 	case wmDPICHanged:
 		newDPI := float32(loword(wparam))
@@ -938,9 +971,14 @@ type hostWindow struct {
 	// borderW/H is the window-minus-client frame extent (reference
 	// WindowBorderOffset), updated after creation and DPI changes.
 	borderW, borderH int32
-	minimized        bool
-	dirty            bool
-	title            string
+	// minSize is the window's minimum client size in logical pixels
+	// (WindowOptions.MinSize; a zero dimension is unconstrained). The
+	// WM_GETMINMAXINFO floor and the programmatic sizing clamps derive
+	// from it at the current scale factor.
+	minSize   Size
+	minimized bool
+	dirty     bool
+	title     string
 
 	// Callbacks from WindowOptions (nil keeps the default policy).
 	shouldClose func() bool
@@ -1220,6 +1258,56 @@ func (w *hostWindow) clientSize() Size {
 		Width:  float32(w.clientW) / w.scale,
 		Height: float32(w.clientH) / w.scale,
 	}
+}
+
+// handleGetMinMaxInfoMsg is WM_GETMINMAXINFO (reference events.rs
+// handle_get_min_max_info_msg): a set minimum raises the minimum
+// tracking size to the logical minimum scaled to device pixels at the
+// current scale factor plus the frame offset (ptMinTrackSize bounds
+// the OUTER window, so a client-area minimum needs the border added;
+// the reference's handle_get_min_max_info_msg computes the same
+// `min_size.scale(scale_factor) + border_offset`). The floor is
+// re-derived on every message, so a scale-factor change
+// (WM_DPICHANGED updates w.scale and the border offset) re-clamps
+// automatically. A dimension with a zero minimum keeps the system's
+// pre-filled value; a window without any minimum reports the message
+// unhandled (handled=false mirrors the reference's None), falling to
+// DefWindowProcW — today's behavior.
+func (w *hostWindow) handleGetMinMaxInfoMsg(lparam unsafe.Pointer) (uintptr, bool) {
+	if w.minSize.Width <= 0 && w.minSize.Height <= 0 {
+		return 0, false
+	}
+	info := (*minMaxInfo)(lparam)
+	if w.minSize.Width > 0 {
+		info.ptMinTrackSize.x = int32(w.minSize.Width*w.scale) + w.borderW
+	}
+	if w.minSize.Height > 0 {
+		info.ptMinTrackSize.y = int32(w.minSize.Height*w.scale) + w.borderH
+	}
+	// The reference returns Some(0): the rest of the struct stays as
+	// the system pre-filled it.
+	return 0, true
+}
+
+// clampClientDeviceSize raises a requested client size in device
+// pixels to the window's minimum (the logical minimum scaled at the
+// current scale factor); a zero dimension is unconstrained. The
+// WM_GETMINMAXINFO floor enforces the same minimum on interactive
+// resizing; this clamp covers the programmatic SetWindowPos sizing
+// paths (SetBounds and the initial placement), which must clamp to
+// the floor as well.
+func (w *hostWindow) clampClientDeviceSize(cx, cy int32) (int32, int32) {
+	if w.minSize.Width > 0 {
+		if min := int32(w.minSize.Width * w.scale); cx < min {
+			cx = min
+		}
+	}
+	if w.minSize.Height > 0 {
+		if min := int32(w.minSize.Height * w.scale); cy < min {
+			cy = min
+		}
+	}
+	return cx, cy
 }
 
 // windowRectFromClient computes the outer window rect for a desired
@@ -2065,6 +2153,7 @@ func (h *Host) openWindowOnHostThread(opts WindowOptions) (WindowHandle, error) 
 	w.onFileDrop = opts.OnFileDrop
 	w.onGesture = opts.OnGesture
 	w.onMouseInput = opts.OnMouseInput
+	w.minSize = opts.MinSize
 	w.updateBorderOffset()
 
 	// Ticket24: the per-window Direct Manipulation handler
@@ -2109,6 +2198,10 @@ func (h *Host) openWindowOnHostThread(opts WindowOptions) (WindowHandle, error) 
 		if cy < 1 {
 			cy = 120
 		}
+		// The initial placement clamps to the minimum like SetBounds
+		// (a window opened smaller than its own floor opens at the
+		// floor).
+		cx, cy = w.clampClientDeviceSize(cx, cy)
 		r := w.windowRectFromClient(x, y, cx, cy)
 		procSetWindowPos.Call(hwnd, 0,
 			uintptr(int64(r.left)), uintptr(int64(r.top)),
@@ -2318,7 +2411,8 @@ func (wh WindowHandle) Bounds() (Bounds, error) {
 // SetBounds moves and resizes the window to the requested logical
 // bounds. The client area becomes the requested size (the frame offset
 // is added like the reference's calculate_window_rect); the position is
-// the requested origin.
+// the requested origin. A size below WindowOptions.MinSize clamps up
+// to the minimum, like the interactive-resize floor.
 func (wh WindowHandle) SetBounds(bounds Bounds) {
 	wh.host.runForegroundAsync(func() {
 		w := wh.record()
@@ -2335,6 +2429,7 @@ func (wh WindowHandle) SetBounds(bounds Bounds) {
 		if cy < 1 {
 			cy = w.clientH
 		}
+		cx, cy = w.clampClientDeviceSize(cx, cy)
 		r := w.windowRectFromClient(x, y, cx, cy)
 		procSetWindowPos.Call(wh.hwnd, 0,
 			uintptr(int64(r.left)), uintptr(int64(r.top)),

@@ -23,6 +23,8 @@ A consumer Windows app built only on gpui-go's public API (mordbard, a Go deskto
 
 ## Decisions so far
 
+- [Window minimum size](issues/04-window-minimum-size.md) — `WindowOptions.MinSize` (logical, zero = unconstrained) enforced via WM_GETMINMAXINFO's ptMinTrackSize (scaled + frame offset, re-derived per DPI) plus the SetBounds/initial-placement clamp; zero falls to DefWindowProcW exactly as before.
+
 ## Not yet specified
 
 ## Out of scope
