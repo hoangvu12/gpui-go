@@ -88,6 +88,7 @@ Blocking edges live in each ticket's `Blocked by:`; the frontier is computed fro
 - [A11y authoring](issues/11-a11y-authoring.md) — pinned div aria builders, 27 roles, snapshot states; nearest-role publication per decision 02.
 - [Test harness — Base-shaped simulate helpers (keystrokes, mouse, drag, a11y node, ComputeStyle)](issues/12-test-harness.md)
 - [Real-window input — button/move/wheel messages routed into element dispatch](issues/34-real-window-input.md)
+- [Element paint API](issues/08-element-paint-api.md) — external painting, Canvas, Deferred, Anchored, Img, animation element, drag preview.
 - Package layout (orchestrator, routine): one `base` package mirroring the single crate; dependency-free data structures (rope, sum tree, segmentation) in subpackages under `base/`.
 
 ## Not yet specified

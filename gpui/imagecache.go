@@ -15,14 +15,12 @@ package gpui
 // driven through App/Window/Scope, and a subpackage would import-cycle
 // with the App wiring.
 //
-// Deferred pieces (owned by later tickets): the img element itself and
-// its interactivity/object-fit/sprite painting (the scene/sprite
-// tickets), the window image_cache_stack and ImageCacheElement
-// (window.rs/element machinery), the ImageDecoder asset behind
-// ImageSource::Image — the pinned to_image_data path that routes WebP
-// through static decode, deliberately separate from this resource
-// loader's animated path (the distribution contract's mode distinction)
-// — the SVG renderer behind the format fallback (ticket19), and wiring
+// Deferred pieces (owned by later tickets): the img element's
+// interactivity (its object fit and sprite painting landed with Base
+// ticket 08, img.go / paintapi.go), the window image_cache_stack and
+// ImageCacheElement
+// (window.rs/element machinery), the SVG renderer behind the format
+// fallback (ticket19), and wiring
 // is_window_active to real platform activation (the window tickets —
 // the playback policy carries the flag as a parameter).
 
@@ -426,6 +424,17 @@ func utf8Lossy(data []byte) string {
 // newLoadedImage wraps one decoded frame model with a fresh identity.
 func newLoadedImage(image *RenderImage) *LoadedImage {
 	return &LoadedImage{id: nextImageID.Add(1), image: image}
+}
+
+// NewLoadedImage wraps decoded frames with a fresh image identity (the
+// pinned RenderImage::new, assets.rs:240-246, which assigns the next
+// ImageId): the in-memory image an img element paints through
+// ImageSourceRender (Base ticket 08, img.go). The frames are BGRA8.
+func NewLoadedImage(image *RenderImage) *LoadedImage {
+	if image == nil {
+		panic("gpui: NewLoadedImage requires decoded frames")
+	}
+	return newLoadedImage(image)
 }
 
 // ---------------------------------------------------------------------------

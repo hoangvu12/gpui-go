@@ -187,6 +187,7 @@ func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawSt
 		ds.lastDebugBounds = frame.debugBounds
 		ds.lastScene = frame.scene
 		ds.lastInlineFacts = frame.inlineFacts
+		ds.lastDeferredPriorities = deferredPrioritiesOf(frame)
 		evicted := retainElementStates(ds, frame.accessedElementStates)
 		// The frame-finish hook (helpers_frame.go): the completed dispatch
 		// frame swaps into the rendered state through endDispatchFrame (the
@@ -208,6 +209,10 @@ func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawSt
 	// frame awaits presentation (window.rs 3276/3287).
 	ds.refreshRequested = false
 	completeFrameTracking(w, ds.root)
+	// reset_cursor_style after recording the accessed entities
+	// (window.rs 3276-3277; Base ticket 06's interact.go helper): the
+	// completed frame's cursor requests resolve the window cursor.
+	w.resetCursorStyle(w.app)
 	if focusMoved {
 		w.Refresh()
 	}
@@ -222,7 +227,11 @@ func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawSt
 // prepaints after the root and paints after the root, the hovered
 // pick highlight paints after that, and the debug frame overlay
 // paints into the frame's scene (window.rs 3187-3197, the
-// cfg(feature = "profiler") call site).
+// cfg(feature = "profiler") call site). Base ticket 08: the deferred
+// draws prepaint after the inspector (window.rs 3436) and paint after it
+// above a raised order floor (3470, deferred.go); the active drag's
+// preview prepaints after them (3451-3456) and paints after the deferred
+// draws (3474-3475).
 func drawRoots(w *Window, app *App, ds *windowDrawState, frame *frameDrawState) error {
 	root := viewElementOf(ds.root)
 	layoutID := root.RequestLayout(w, app)
@@ -262,11 +271,34 @@ func drawRoots(w *Window, app *App, ds *windowDrawState, frame *frameDrawState) 
 	// element out in the panel region after the root's prepaint.
 	inspectorElement := prepaintInspectorElement(w, app, frame.viewport)
 
+	// prepaint_deferred_draws (window.rs 3436; Base ticket 08,
+	// deferred.go).
+	prepaintDeferredDraws(w, app)
+
+	// The active drag's preview prepaints as a root at
+	// mouse_position - cursor_offset (window.rs 3451-3456; the port has no
+	// in-window prompt and no tooltips, the branches before and after it).
+	// The port's drawables re-resolve their bounds at paint, so the same
+	// absolute offset is re-applied around the preview's paint.
+	var dragOffset Point
+	if drag := app.ActiveDrag(); drag != nil && drag.View != nil {
+		mouse := w.TrackedMousePosition()
+		dragOffset = Point{X: mouse.X - drag.CursorOffset.X, Y: mouse.Y - drag.CursorOffset.Y}
+	}
+	dragElement, hasDragElement := prepaintActiveDragPreview(w, app)
+
 	root.Paint(w, app)
 
-	// paint_inspector (window.rs 3467-3468) then the hovered pick
-	// highlight (paint_inspector_hitbox, 3480-3482).
+	// paint_inspector (window.rs 3467-3468), paint_deferred_draws (3470),
+	// the drag preview (3474-3475), then the hovered pick highlight
+	// (paint_inspector_hitbox, 3480-3482).
 	paintInspectorElement(w, app, inspectorElement)
+	paintDeferredDraws(w, app)
+	if hasDragElement {
+		WithAbsoluteElementOffsetVoid(w, dragOffset, func(w *Window) {
+			paintActiveDragPreview(dragElement, w, app)
+		})
+	}
 	paintInspectorHighlight(w, app)
 
 	// The debug frame overlay (window.rs 3187-3197: painted after

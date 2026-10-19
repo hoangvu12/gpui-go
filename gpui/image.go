@@ -56,6 +56,92 @@ func NewImage(format ImageFormat, bytes []byte) Image {
 	return Image{Format: format, Bytes: bytes, ID: imageContentHash(bytes)}
 }
 
+// AssetHash is the image's asset-cache identity: the pinned Hash for
+// Image writes only the id (platform.rs:3565-3569), so the decoded-image
+// asset (img.rs ImageDecoder, img.go) is shared by equal-content images.
+func (i Image) AssetHash() uint64 { return i.ID }
+
+// imageFormatsPinnedOrder is the pinned ImageFormat declaration order
+// (platform.rs:3452-3474, "sorted from most to least likely to be
+// pasted"), the strum EnumIter order from_mime_type walks.
+var imageFormatsPinnedOrder = []ImageFormat{
+	ImageFormatPNG, ImageFormatJPEG, ImageFormatWebP, ImageFormatGIF, ImageFormatSVG,
+	ImageFormatBMP, ImageFormatTIFF, ImageFormatICO, ImageFormatPNM,
+}
+
+// ImageFormatMimeType returns the mime type for the format
+// (platform.rs:3478-3490 ImageFormat::mime_type); "" for a tag outside
+// the pinned enum.
+func ImageFormatMimeType(format ImageFormat) string {
+	switch format {
+	case ImageFormatPNG:
+		return "image/png"
+	case ImageFormatJPEG:
+		return "image/jpeg"
+	case ImageFormatWebP:
+		return "image/webp"
+	case ImageFormatGIF:
+		return "image/gif"
+	case ImageFormatSVG:
+		return "image/svg+xml"
+	case ImageFormatBMP:
+		return "image/bmp"
+	case ImageFormatTIFF:
+		return "image/tiff"
+	case ImageFormatICO:
+		return "image/ico"
+	case ImageFormatPNM:
+		return "image/x-portable-anymap"
+	}
+	return ""
+}
+
+// ImageFormatExtension returns the file extension for the format,
+// without the leading dot (platform.rs:3493-3505
+// ImageFormat::extension); "" for a tag outside the pinned enum.
+func ImageFormatExtension(format ImageFormat) string {
+	switch format {
+	case ImageFormatPNG:
+		return "png"
+	case ImageFormatJPEG:
+		return "jpg"
+	case ImageFormatWebP:
+		return "webp"
+	case ImageFormatGIF:
+		return "gif"
+	case ImageFormatSVG:
+		return "svg"
+	case ImageFormatBMP:
+		return "bmp"
+	case ImageFormatTIFF:
+		return "tiff"
+	case ImageFormatICO:
+		return "ico"
+	case ImageFormatPNM:
+		return "pnm"
+	}
+	return ""
+}
+
+// ImageFormatFromMimeType returns the format for the mime type, including
+// the known aliases (platform.rs:3508-3524 ImageFormat::from_mime_type +
+// from_mime_type_alias: "image/jpg" and "image/tif"). The match is exact,
+// like the pin's string comparison.
+func ImageFormatFromMimeType(mimeType string) (ImageFormat, bool) {
+	for _, format := range imageFormatsPinnedOrder {
+		if ImageFormatMimeType(format) == mimeType {
+			return format, true
+		}
+	}
+	switch mimeType {
+	case "image/jpg":
+		return ImageFormatJPEG, true
+	case "image/tif":
+		return ImageFormatTIFF, true
+	}
+	return 0, false
+}
+
 // ImageFrame is one decoded frame: BGRA pixels, dimensions and the
 // rational delay from the previous frame.
 type ImageFrame struct {

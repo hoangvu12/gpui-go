@@ -1032,6 +1032,14 @@ type windowDrawState struct {
 	// hitbox map (the pin's rendered_frame.inspector_hitboxes; ticket27
 	// — picking dispatch reads it between draws).
 	inspectorHitboxes map[uint64]InspectorElementID
+	// lastDeferredPriorities holds the last COMPLETED frame's deferred
+	// draw priorities in push order (the pinned
+	// rendered_frame.deferred_draws observable the deferred.rs tests read;
+	// Base ticket 08).
+	lastDeferredPriorities []int
+	// clientInset is the window's client inset (window.rs client_inset:
+	// Option<Pixels>, set by Window.SetClientInset; paintapi.go).
+	clientInset *float32
 }
 
 // frameDrawState is one frame's draw state (the reference next_frame
@@ -1101,6 +1109,16 @@ type frameDrawState struct {
 	// inspectorTree is the frame's inspector tree build (ticket27's
 	// UI surface; see inspector.go).
 	inspectorTree *inspectorTreeBuild
+	// deferredDraws are the frame's deferred draws (window.rs
+	// Frame::deferred_draws, pushed by Window.DeferDraw during prepaint and
+	// drawn by drawRoots after the root; Base ticket 08, deferred.go).
+	deferredDraws []*deferredDraw
+	// deferredPriorities is the pinned DeferredPriorityStackCache
+	// (elements/deferred.rs:138-155): the priorities of the deferred draws
+	// whose prepaint is running, innermost last. The pin keeps it in an app
+	// global that is only non-empty inside prepaint_deferred_draws; the
+	// port scopes it to the frame under construction.
+	deferredPriorities []int
 }
 
 // windowDrawStates is the per-window element runtime registry.
