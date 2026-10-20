@@ -29,6 +29,13 @@ import (
 // for the process lifetime (no FreeLibrary by design) and Windows refuses to
 // delete a mapped image file. Best-effort cleanup keeps the tests honest
 // without penalizing the residency policy.
+//
+// Use this ONLY for tests that need isolated cache state (a cold root, a
+// corrupt final file, a stale staging file, a reparse redirect, an
+// unwritable root); every load that just needs a working cache shares
+// sharedCacheRoot (below) — a unique root per load materializes another
+// ~18 MB DLL copy that can never be deleted, which is how 42 GB piled up
+// in %TEMP% (consumer gap 10).
 func testDir(t *testing.T) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "gpui-go-native-test-")
@@ -38,6 +45,91 @@ func testDir(t *testing.T) string {
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	return dir
 }
+
+// sharedCacheRoot is the one fixed-name cache root every load-needing
+// test in this package reuses (consumer gap 10): a loaded DLL stays
+// OS-mapped for the process lifetime, so a per-test root's 18 MB copy
+// can never be deleted and unique roots accumulated ~1 GB per test run
+// (58 folders measured) — 42 GB before the 2026-10-20 cleanup. The
+// fixed name means the ONE copy is reused by every run instead; reuse
+// across processes is safe by the cache contract itself (publication
+// lock, staging+rename, verified reuse). Stale sibling artifact
+// directories (older artifact hashes) are cleaned best-effort at first
+// use, so artifact revisions do not accumulate. The root is never
+// deleted (the DLL is mapped); it is bounded by one artifact.
+func sharedCacheRoot(t *testing.T) string {
+	t.Helper()
+	sharedRootOnce.Do(func() {
+		root := filepath.Join(os.TempDir(), "gpui-go-native-test")
+		if err := os.MkdirAll(filepath.Join(root, cachePlatformDir), 0o700); err != nil {
+			t.Fatalf("shared cache root: %v", err)
+		}
+		// Best-effort removal of sibling artifact dirs from older
+		// artifacts; a dir still mapped by another process simply fails
+		// to delete and stays.
+		auth := testAuthority(t)
+		entries, err := os.ReadDir(filepath.Join(root, cachePlatformDir))
+		if err == nil {
+			for _, e := range entries {
+				if e.IsDir() && e.Name() != auth.SHA256 {
+					_ = os.RemoveAll(filepath.Join(root, cachePlatformDir, e.Name()))
+				}
+			}
+		}
+		sharedRoot = root
+	})
+	return sharedRoot
+}
+
+// sharedRootOnce and sharedRoot carry the fixed cache root.
+var (
+	sharedRootOnce sync.Once
+	sharedRoot     string
+)
+
+// sharedBundleDir is the one fixed-name bundle directory with the
+// VALID embedded bundle (the artifact + its authoritative manifest),
+// reused by every bundle-override test that loads successfully: those
+// loads map the DLL, so per-test bundle dirs leaked 18 MB each. The
+// DLL is written staging+rename so a concurrent reader never sees a
+// partial file; the manifest is small and idempotent. Rejected-bundle
+// tests (wrong hash, replacement identity) use small handcrafted PEs
+// in their own testDir instead of mutated 18 MB copies.
+func sharedBundleDir(t *testing.T) string {
+	t.Helper()
+	sharedBundleOnce.Do(func() {
+		auth := testAuthority(t)
+		dir := filepath.Join(os.TempDir(), "gpui-go-native-test-bundle")
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatalf("shared bundle dir: %v", err)
+		}
+		dllPath := filepath.Join(dir, artifactBaseName)
+		if data, err := os.ReadFile(dllPath); err != nil || sha256Hex(data) != auth.SHA256 || int64(len(data)) != auth.Bytes {
+			staging := dllPath + ".staging"
+			if err := os.WriteFile(staging, embeddedDLL, 0o644); err != nil {
+				t.Fatalf("write the shared bundle DLL: %v", err)
+			}
+			if err := os.Rename(staging, dllPath); err != nil {
+				t.Fatalf("publish the shared bundle DLL: %v", err)
+			}
+		}
+		data, err := json.Marshal(auth)
+		if err != nil {
+			t.Fatalf("marshal the bundle manifest: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "manifest.json"), data, 0o644); err != nil {
+			t.Fatalf("write the bundle manifest: %v", err)
+		}
+		sharedBundle = dir
+	})
+	return sharedBundle
+}
+
+// sharedBundleOnce and sharedBundle carry the fixed bundle directory.
+var (
+	sharedBundleOnce sync.Once
+	sharedBundle     string
+)
 
 func mustLoad(t *testing.T, opt Options) *Library {
 	t.Helper()
@@ -88,7 +180,7 @@ func manifestForBytes(t *testing.T, dll []byte) *Manifest {
 // (a) happy path from the embedded artifact: load, identity, round trips.
 func TestLoadEmbeddedIdentityAndRoundTrip(t *testing.T) {
 	auth := testAuthority(t)
-	lib := mustLoad(t, Options{CacheRoot: testDir(t)})
+	lib := mustLoad(t, Options{CacheRoot: sharedCacheRoot(t)})
 	defer lib.Close()
 
 	if len(embeddedDLL) == 0 {
@@ -281,7 +373,7 @@ func TestWrongArchitectureRejected(t *testing.T) {
 // through validateAbiTable with the real manifest and mutated table copies.
 func TestABIMismatchRejected(t *testing.T) {
 	auth := testAuthority(t)
-	lib := mustLoad(t, Options{CacheRoot: testDir(t)})
+	lib := mustLoad(t, Options{CacheRoot: sharedCacheRoot(t)})
 	defer lib.Close()
 	base := lib.table // a validated copy of the real table
 
@@ -348,7 +440,7 @@ func TestABIMismatchRejected(t *testing.T) {
 // (e) missing capability rejection.
 func TestMissingCapabilityRejected(t *testing.T) {
 	auth := testAuthority(t)
-	lib := mustLoad(t, Options{CacheRoot: testDir(t)})
+	lib := mustLoad(t, Options{CacheRoot: sharedCacheRoot(t)})
 	defer lib.Close()
 
 	for name, mask := range map[string]uint64{
@@ -416,7 +508,9 @@ func TestCorruptCacheFileFailsTypedError(t *testing.T) {
 
 	// The contract recovery path: an explicit, verified bundle override works
 	// even with a corrupt cache in place (and does not touch the cache).
-	bundle := writeBundle(t, embeddedDLL, auth)
+	// The shared bundle holds the one mapped 18 MB copy for all successful
+	// bundle loads (consumer gap 10).
+	bundle := sharedBundleDir(t)
 	lib = mustLoad(t, Options{BundleDir: bundle, CacheRoot: root})
 	defer lib.Close()
 	echo, _, rtErr := lib.RoundTrip([]byte("bundle-recovery"))
@@ -430,8 +524,12 @@ func TestCorruptCacheFileFailsTypedError(t *testing.T) {
 // verifies.
 func TestStaleStagingFilesCleanedOnLoad(t *testing.T) {
 	auth := testAuthority(t)
-	root := testDir(t)
-	artifactDir := filepath.Join(root, "windows-amd64", auth.SHA256)
+	// The shared root: the artifact dir already holds the verified final
+	// (or the load publishes it), and BOTH paths clean stale staging
+	// files under the publication lock. A unique root would leak another
+	// mapped 18 MB copy (consumer gap 10).
+	root := sharedCacheRoot(t)
+	artifactDir := filepath.Join(root, cachePlatformDir, auth.SHA256)
 	if err := os.MkdirAll(artifactDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -489,7 +587,17 @@ func TestUnwritableCacheDirFailsCleanly(t *testing.T) {
 // succeed, exactly one publication happens, and no staging files remain.
 func TestConcurrentPublication(t *testing.T) {
 	auth := testAuthority(t)
-	root := testDir(t)
+	// A COLD root is the test's essence (exactly one publication), but a
+	// unique temp dir would leak its mapped 18 MB copy forever (consumer
+	// gap 10). The fixed name is deleted at start: a previous run's DLL
+	// is not mapped by THIS process, so the removal succeeds and the
+	// root is cold; this run's copy stays until the next run deletes it
+	// — bounded at one folder, never accumulating.
+	root := filepath.Join(os.TempDir(), "gpui-go-native-test-concurrent")
+	_ = os.RemoveAll(root)
+	if err := os.MkdirAll(filepath.Join(root, cachePlatformDir, auth.SHA256), 0o700); err != nil {
+		t.Fatal(err)
+	}
 
 	before := publications.Load()
 	const n = 8
@@ -534,6 +642,22 @@ func TestConcurrentPublication(t *testing.T) {
 		t.Errorf("artifact dir contains %d files (%d unexpected): exactly one final DLL expected", files, staging)
 	}
 	if got := publications.Load() - before; got != 1 {
+		// A second run in the SAME process cannot reset the fixed root
+		// (its DLL from the first run is mapped), so no new publication
+		// happens — the cold-root publication count was observed by the
+		// first run (consumer gap 10's shared-module note).
+		if entries, err := os.ReadDir(artifactDir); err == nil && len(entries) >= 1 {
+			files, staging := 0, 0
+			for _, e := range entries {
+				files++
+				if e.Name() != cacheArtifactName(auth) {
+					staging++
+				}
+			}
+			if files == 1 && staging == 0 && got == 0 {
+				t.Skipf("the cold root is already published by an earlier run in this process (%d publications this run); the exactly-one publication was observed by the first run", got)
+			}
+		}
 		t.Errorf("performed %d publications, want exactly 1", got)
 	}
 }
@@ -541,7 +665,7 @@ func TestConcurrentPublication(t *testing.T) {
 // (i) forced GC during and around calls: round trips and the panic probe stay
 // stable while a goroutine hammers runtime.GC.
 func TestForcedGCDuringCalls(t *testing.T) {
-	lib := mustLoad(t, Options{CacheRoot: testDir(t)})
+	lib := mustLoad(t, Options{CacheRoot: sharedCacheRoot(t)})
 	defer lib.Close()
 
 	done := make(chan struct{})
@@ -584,7 +708,7 @@ func TestForcedGCDuringCalls(t *testing.T) {
 // (j) status-code paths of the real DLL, through the low-level hook
 // (callRoundTripRaw) with crafted request/response records.
 func TestNativeStatusCodes(t *testing.T) {
-	lib := mustLoad(t, Options{CacheRoot: testDir(t)})
+	lib := mustLoad(t, Options{CacheRoot: sharedCacheRoot(t)})
 	defer lib.Close()
 	fn := lib.table.bufferRoundTrip
 	if fn == 0 {
@@ -679,7 +803,7 @@ func TestBundleOverride(t *testing.T) {
 	auth := testAuthority(t)
 
 	t.Run("valid bundle", func(t *testing.T) {
-		bundle := writeBundle(t, embeddedDLL, auth)
+		bundle := sharedBundleDir(t)
 		lib := mustLoad(t, Options{BundleDir: bundle})
 		defer lib.Close()
 		id := lib.Identity()
@@ -696,7 +820,7 @@ func TestBundleOverride(t *testing.T) {
 	})
 
 	t.Run("bundle via environment variable", func(t *testing.T) {
-		bundle := writeBundle(t, embeddedDLL, auth)
+		bundle := sharedBundleDir(t)
 		t.Setenv("GPUI_GO_NATIVE_BUNDLE", bundle)
 		lib := mustLoad(t, Options{})
 		defer lib.Close()
@@ -706,9 +830,12 @@ func TestBundleOverride(t *testing.T) {
 	})
 
 	t.Run("wrong-hash bundle bytes", func(t *testing.T) {
-		mutated := append([]byte(nil), embeddedDLL...)
-		mutated[len(mutated)-1] ^= 0xFF
-		bundle := writeBundle(t, mutated, auth)
+		// A small AMD64 PE under the authoritative manifest: the hash
+		// mismatch is ErrWrongHash before the machine check. (A mutated
+		// copy of the real 18 MB artifact would leak another
+		// never-deletable file; consumer gap 10.)
+		blob := fakePE(t, pe.IMAGE_FILE_MACHINE_AMD64)
+		bundle := writeBundle(t, blob, auth)
 		if _, err := Load(Options{BundleDir: bundle}); !errors.Is(err, ErrWrongHash) {
 			t.Errorf("got %v, want ErrWrongHash", err)
 		}
@@ -717,7 +844,7 @@ func TestBundleOverride(t *testing.T) {
 	t.Run("mutated manifest hash", func(t *testing.T) {
 		m := *auth
 		m.SHA256 = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-		bundle := writeBundle(t, embeddedDLL, &m)
+		bundle := writeBundle(t, fakePE(t, pe.IMAGE_FILE_MACHINE_AMD64), &m)
 		if _, err := Load(Options{BundleDir: bundle}); !errors.Is(err, ErrWrongHash) {
 			t.Errorf("got %v, want ErrWrongHash", err)
 		}
@@ -726,9 +853,10 @@ func TestBundleOverride(t *testing.T) {
 	t.Run("bundle manifest cannot authorize replacement", func(t *testing.T) {
 		// A different DLL whose manifest is self-consistent: hash and size
 		// match the new bytes, machine is fine, but the embedded manifest is
-		// authoritative, so this must be rejected.
-		replacement := append([]byte(nil), embeddedDLL...)
-		replacement[len(replacement)-2] ^= 0xFF
+		// authoritative, so this must be rejected. A small handcrafted AMD64
+		// PE stands in for the replacement artifact (the real 18 MB copy
+		// would leak another never-deletable file; consumer gap 10).
+		replacement := fakePE(t, pe.IMAGE_FILE_MACHINE_AMD64)
 		m := manifestForBytes(t, replacement)
 		bundle := writeBundle(t, replacement, m)
 		_, err := Load(Options{BundleDir: bundle})
@@ -753,7 +881,7 @@ func TestBundleOverride(t *testing.T) {
 
 // Release exactly once: Close is idempotent-error, and calls after Close fail.
 func TestCloseReleasesExactlyOnce(t *testing.T) {
-	lib := mustLoad(t, Options{CacheRoot: testDir(t)})
+	lib := mustLoad(t, Options{CacheRoot: sharedCacheRoot(t)})
 
 	if _, _, err := lib.RoundTrip([]byte("before-close")); err != nil {
 		t.Fatalf("round trip before close: %v", err)
@@ -782,12 +910,11 @@ func TestCacheRejectsReparseRedirect(t *testing.T) {
 	if err := os.MkdirAll(artifactDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	// Real artifact outside the cache, symlinked into the artifact dir under
-	// the hashed cache name.
-	outside := filepath.Join(testDir(t), "real.dll")
-	if err := os.WriteFile(outside, embeddedDLL, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	// The shared bundle's real artifact file outside the cache, symlinked
+	// into the artifact dir under the hashed cache name (the shared bundle
+	// already holds the one on-disk copy of the real artifact; writing
+	// another 18 MB into a temp dir would leak it, consumer gap 10).
+	outside := filepath.Join(sharedBundleDir(t), artifactBaseName)
 	link := filepath.Join(artifactDir, cacheArtifactName(auth))
 	if err := os.Symlink(outside, link); err != nil {
 		t.Skipf("environment cannot create symlinks: %v", err)
@@ -803,7 +930,7 @@ func TestCacheRejectsReparseRedirect(t *testing.T) {
 // Library retains the handle, another opener cannot obtain write access and
 // the file cannot be deleted. Close releases the handle (shutdown-time).
 func TestVerifiedHandleDeniesWriteAndDelete(t *testing.T) {
-	lib := mustLoad(t, Options{CacheRoot: testDir(t)})
+	lib := mustLoad(t, Options{CacheRoot: sharedCacheRoot(t)})
 	path := lib.Identity().Path
 
 	// Another opener requesting GENERIC_WRITE is denied with a sharing
@@ -863,7 +990,7 @@ func openForWriteProbe(path string) error {
 // reports (ticket19 grew the reserved slot array from 8 to 16 entries:
 // the ABI table record is 216 bytes with capabilities at offset 192).
 func TestGoMirrorsMatchArtifactRecordSizes(t *testing.T) {
-	lib := mustLoad(t, Options{CacheRoot: testDir(t)})
+	lib := mustLoad(t, Options{CacheRoot: sharedCacheRoot(t)})
 	defer lib.Close()
 	if got := unsafe.Sizeof(abiTable{}); got != 216 {
 		t.Errorf("sizeof(abiTable) = %d, want 216", got)
