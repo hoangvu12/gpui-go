@@ -29,6 +29,8 @@ A consumer Windows app built only on gpui-go's public API (mordbard, a Go deskto
 
 ## Decisions so far
 
+- [Ticket 08 resolved: the parent-relative layout path adds the element offset exactly once](issues/08-drag-preview-text-offset.md) — drag preview (and any prepaint-under-offset) text paints inside the card; verified deterministically, on a real window through the consumer present path, and red on the unfixed line.
+
 - [Window minimum size](issues/04-window-minimum-size.md) — `WindowOptions.MinSize` (logical, zero = unconstrained) enforced via WM_GETMINMAXINFO's ptMinTrackSize (scaled + frame offset, re-derived per DPI) plus the SetBounds/initial-placement clamp; zero falls to DefWindowProcW exactly as before.
 - [Give views a strong self-handle](issues/05-strong-self-entity-handle.md) — `Context.StrongSelf()` is the window-owned strong self-handle for listener capture (the conforming alternative to a retaining `Context.Entity()`); one lease per (window, view), released at window close.
 - [Present element-tree text through the consumer present loop](issues/01-present-element-tree-text.md): `Window.GlyphAtlas()` exposes the window's text atlas to `Surface.DrawScene`/`RenderScene`/`RenderToImage`, and a nil/foreign atlas on a sprite scene answers the typed `ErrSceneSpriteAtlas` (pool/texture-index precondition) instead of a native bad-handle; hello example, README and the `internal/presentspec` real-window gate updated.
