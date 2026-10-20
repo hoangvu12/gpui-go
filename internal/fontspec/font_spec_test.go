@@ -36,6 +36,7 @@ import (
 // ticket names ("font bytes loaded from an embedded asset").
 //
 //go:embed testdata/Geist-Regular.ttf
+//go:embed testdata/Geist-Medium.ttf
 //go:embed testdata/GeistMono-Regular.ttf
 var embeddedFonts embed.FS
 
@@ -526,4 +527,52 @@ func TestRegisteredFontRendersDistinctPixels(t *testing.T) {
 // reports the scale factor as bits).
 func float32FromBits(bits uint32) float32 {
 	return math.Float32frombits(bits)
+}
+
+// TestAddFontReportsTheLandedFamilies is the consumer-gap 06 gate: the
+// registration reports the family name(s) the bytes landed under —
+// with the catalog's own precedence (the typographic family when the
+// legacy family differs), so a Geist Medium registration visibly lands
+// under "Geist", never "Geist Medium", and the legacy-name descriptor
+// resolving through the fallback (FamilyFound false) is checkable
+// without guessing. The bytes come from the same embed.FS the
+// consumer uses.
+func TestAddFontReportsTheLandedFamilies(t *testing.T) {
+	ts, err := gpui.DefaultTextSystem()
+	if err != nil {
+		t.Fatalf("text system: %v", err)
+	}
+
+	// Geist Medium's name table: nameID 1 "Geist Medium", nameID 16
+	// "Geist" — the mismatch that silently fell back before.
+	reg := mustAddFont(t, ts, "Geist-Medium.ttf")
+	if len(reg.Families) != 1 || reg.Families[0] != "Geist" {
+		t.Fatalf("AddFont(Geist-Medium) families = %v, want [Geist] (the typographic family; the legacy name is \"Geist Medium\")", reg.Families)
+	}
+
+	// The reported family resolves; the legacy name reports the
+	// fallback — the mismatch is observable from the registration's own
+	// report, exactly the probe that motivated the ticket.
+	if _, err := ts.ResolveFont(gpui.FontDescriptor{Family: "Geist", Weight: 500}); err != nil {
+		t.Fatalf("resolve the reported family: %v", err)
+	}
+	if identity, err := ts.ResolveFont(gpui.FontDescriptor{Family: "Geist", Weight: 500}); err != nil || !identity.FamilyFound {
+		t.Errorf("resolve Geist@500: %+v err=%v, want FamilyFound true (the registered family)", identity, err)
+	}
+	if identity, err := ts.ResolveFont(gpui.FontDescriptor{Family: "Geist Medium", Weight: 500}); err != nil || identity.FamilyFound {
+		t.Errorf("resolve \"Geist Medium\"@500: %+v err=%v, want FamilyFound false (the legacy name is absent — the reported family is the one to request)", identity, err)
+	}
+
+	// A face whose names agree reports that family.
+	if reg := mustAddFont(t, ts, "GeistMono-Regular.ttf"); len(reg.Families) != 1 || reg.Families[0] != "Geist Mono" {
+		t.Errorf("AddFont(GeistMono) families = %v, want [Geist Mono]", reg.Families)
+	}
+
+	// A rejected registration reports NO families: the report never
+	// invents names for bytes the catalog refuses.
+	if reg, err := ts.AddFont([]byte("MZ not a font")); err == nil {
+		t.Fatalf("AddFont(garbage) succeeded: %+v", reg)
+	} else if reg.Families != nil {
+		t.Errorf("the rejected registration reported families %v, want none", reg.Families)
+	}
 }
