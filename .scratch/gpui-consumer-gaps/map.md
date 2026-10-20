@@ -29,6 +29,8 @@ A consumer Windows app built only on gpui-go's public API (mordbard, a Go deskto
 
 ## Decisions so far
 
+- [Ticket 07 resolved: background App.Update marshals onto the foreground thread](issues/07-update-marshal-foreground.md) — post-and-block on a started host (panics re-raised on the caller), inline on the foreground thread / test apps / pre-Start / mid-drive (task bodies keep AsyncApp.Update) / exited loops; the close-while-updating trampoline panic is gone.
+
 - [Ticket 06 resolved: AddFont reports the families the bytes landed under (the pinned fontique precedence, typographic family when it differs)](issues/06-addfont-family-names.md) — `FontRegistration.Families`, one entry per face in file order, deduplicated, never invented for rejected bytes; dual-family registration deliberately not done (the pin registers one family per face).
 
 - [Ticket 09 resolved: inset shadows cast from the padding edge like CSS (recorded deviation from the pin)](issues/09-inset-shadow-padding-edge.md) — the hard `inset 0 1px 0` band paints just inside the border where the reference frames draw it; borderless records and the drop-shadow/direct-seam paths keep the pinned geometry.
