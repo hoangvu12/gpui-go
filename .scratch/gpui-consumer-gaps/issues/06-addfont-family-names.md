@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: resolved
+Assignee: pi worker
 Blocked by: none
 
 ## Question
@@ -52,16 +52,79 @@ its `FamilyFound` diagnostic (ticket 03).
 
 ## Acceptance criteria
 
-- [ ] `AddFont` on a font whose nameID 1 differs from nameID 16
+- [x] `AddFont` on a font whose nameID 1 differs from nameID 16
       (Geist Medium) reports the typographic family ("Geist"), and a
       follow-up `ResolveFont` for the legacy name ("Geist Medium")
       reports `FamilyFound == false` — the mismatch is visible without
       guessing.
-- [ ] `AddFont` on a font whose nameID 1 and 16 agree (Geist Regular)
+- [x] `AddFont` on a font whose nameID 1 and 16 agree (Geist Regular)
       reports that family; a font carrying only the legacy name
       reports it.
-- [ ] A blob with multiple faces (a collection) reports one entry per
+- [x] A blob with multiple faces (a collection) reports one entry per
       face, in file order, deduplicated.
-- [ ] Malformed font data still fails with the typed error and
+- [x] Malformed font data still fails with the typed error and
       reports no families (the report never invents names for rejected
       bytes).
+
+## Answer
+
+Resolved 2026-10-20 on `consumer-gaps-2` (commit "Report the families
+an AddFont registration landed under"). The report option of the
+ticket's suggested fixes; registration behavior itself stays pinned.
+
+**What landed**: `FontRegistration.Families []string` — the family
+names the submitted bytes landed under, one entry per face in file
+order (deduplicated), parsed from the font's own name table by a new
+Go-side reader (gpui/fontname.go) that reproduces the pinned
+fontique precedence exactly: `english_or_first_name(TYPOGRAPHIC_
+FAMILY_NAME)` (nameID 16) or else `english_or_first_name(FAMILY_NAME)`
+(nameID 1), including fontique's english_or_first ranking (0x0409
+wins outright, language 0 next, only the first record can rank
+otherwise, other languages skipped). Collections ('ttcf') contribute
+one entry per face. A rejected registration reports NO families (the
+report never invents names for bytes the catalog would refuse); an
+sfnt the catalog accepts whose name table cannot be decoded registers
+normally and reports none. `AddFont`'s doc names the precedence and
+the mismatch shape.
+
+**Deliberately not done** (recorded): registering the face under BOTH
+family names — the pinned `add_fonts`/fontique registers one family
+per face, and dual registration would deviate from the pin for a
+convenience mordbard does not need (both Geist weights are reachable
+through the typographic family, which is what its `RegisterFonts`
+already resolves). The resolve-side `FamilyFound` diagnostic (ticket
+03) stays the fallback observable.
+
+**Verification** (all green; red-by-construction for the report —
+before the change `FontRegistration` carried no names at all):
+- `gpui TestFontFamilyNames*` (7 tests): Geist Medium reports ["Geist"]
+  (typographic wins over the legacy "Geist Medium"); Geist
+  Regular/Mono report their families; non-fonts, truncated
+  directories and out-of-range name tables are rejected (never
+  guessed); the english-or-first ranking pins (0x0409, language 0,
+  first-record, and the non-first non-English skip); a hand-built
+  two-family 'ttcf' reports both in file order, and two faces of one
+  family deduplicate to one entry.
+- `internal/fontspec TestAddFontReportsTheLandedFamilies` (the public
+  API gate, real catalog): Geist Medium's registration reports
+  ["Geist"]; the reported family resolves at weight 500 with
+  `FamilyFound` true; the legacy name "Geist Medium" reports
+  `FamilyFound` false (the mismatch is checkable from the
+  registration's own report — the ticket's probe); Geist Mono reports
+  its family; garbage bytes error AND report no families.
+- `go build ./...`, `go vet ./...`, `go test ./... -count=1` green
+  except the documented environmental gates (`internal/headlessspec`
+  needs the gitignored `reference/ce-source`; the a11y concurrent
+  query gate flakes under full-suite load and passes isolated —
+  re-verified twice).
+
+**What mordbard should change**: nothing required — the "Geist"
+family request is already right (the ticket filed it that way).
+Optional: `ui.RegisterFonts` can now assert each intended family is
+IN the registration's `Families` report instead of resolving it after
+the fact, and any future embedded face with differing names surfaces
+at registration time instead of as an Arial render.
+
+## Comments
+
+- 2026-10-20 (pi worker): claimed, implemented, verified, resolved.
