@@ -321,3 +321,64 @@ func TestLayoutBoundsElementOffset(t *testing.T) {
 		t.Errorf("bounds with a snapped offset = %+v, want origin (0.5,0.5)", snappedUp)
 	}
 }
+
+// TestParentRelativeLayoutBoundsOffsetsOnce pins the window.rs
+// contract the drag preview depends on (consumer gap 08): the engine's
+// parent-relative bounds are computed from the parent's RAW bounds —
+// window.rs adds the pixel-snapped element offset exactly once, after
+// the engine call. A parent chain queried under an element offset
+// (prepaint_as_root of a drag preview, a scrolled container) must not
+// add the offset once per ancestor hop.
+func TestParentRelativeLayoutBoundsOffsetsOnce(t *testing.T) {
+	engine := newEngine(t)
+	ctx := gpui.NewTestLayoutContext() // scale 2
+
+	// A 20x10 root at (0,0) with one 10x10 child placed at (4,6)
+	// (padding-driven, computed against definite space).
+	rootStyle := sizedBox(20, 10)
+	rootStyle.Padding = gpui.DefiniteLengthEdges{
+		Top:    gpui.DefinitePx(6),
+		Right:  gpui.DefinitePx(0),
+		Bottom: gpui.DefinitePx(0),
+		Left:   gpui.DefinitePx(4),
+	}
+	child, err := engine.RequestLayout(ctx, sizedBox(10, 10))
+	if err != nil {
+		t.Fatalf("RequestLayout(child): %v", err)
+	}
+	root, err := engine.RequestLayout(ctx, rootStyle, child)
+	if err != nil {
+		t.Fatalf("RequestLayout(root): %v", err)
+	}
+	computeDefinite(t, engine, ctx, root, 20, 10)
+
+	// The child's raw parent-relative origin is the padding offset.
+	plain, err := engine.ParentRelativeLayoutBounds(ctx, child)
+	if err != nil {
+		t.Fatalf("ParentRelativeLayoutBounds(child): %v", err)
+	}
+	if plain.Origin.X != 4 || plain.Origin.Y != 6 {
+		t.Fatalf("parent-relative origin without offset = %v, want (4,6)", plain.Origin)
+	}
+
+	// Under a whole-device element offset (100,80): the snapped offset
+	// is added exactly once — origin (104,86), never (204,166).
+	offset := ctx.WithElementOffset(gpui.Point{X: 100, Y: 80})
+	withOffset, err := engine.ParentRelativeLayoutBounds(offset, child)
+	if err != nil {
+		t.Fatalf("ParentRelativeLayoutBounds(child, offset): %v", err)
+	}
+	if withOffset.Origin.X != 104 || withOffset.Origin.Y != 86 {
+		t.Errorf("parent-relative origin under offset = %v, want (104,86) — the offset added exactly once", withOffset.Origin)
+	}
+
+	// The parentless root falls back to its ordinary bounds: raw + the
+	// one offset (the reference's fallback arm).
+	rootOffset, err := engine.ParentRelativeLayoutBounds(offset, root)
+	if err != nil {
+		t.Fatalf("ParentRelativeLayoutBounds(root, offset): %v", err)
+	}
+	if rootOffset.Origin.X != 100 || rootOffset.Origin.Y != 80 {
+		t.Errorf("root parent-relative origin under offset = %v, want (100,80)", rootOffset.Origin)
+	}
+}
