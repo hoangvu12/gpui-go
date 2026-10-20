@@ -29,6 +29,8 @@ A consumer Windows app built only on gpui-go's public API (mordbard, a Go deskto
 
 ## Decisions so far
 
+- [Ticket 09 resolved: inset shadows cast from the padding edge like CSS (recorded deviation from the pin)](issues/09-inset-shadow-padding-edge.md) — the hard `inset 0 1px 0` band paints just inside the border where the reference frames draw it; borderless records and the drop-shadow/direct-seam paths keep the pinned geometry.
+
 - [Ticket 08 resolved: the parent-relative layout path adds the element offset exactly once](issues/08-drag-preview-text-offset.md) — drag preview (and any prepaint-under-offset) text paints inside the card; verified deterministically, on a real window through the consumer present path, and red on the unfixed line.
 
 - [Window minimum size](issues/04-window-minimum-size.md) — `WindowOptions.MinSize` (logical, zero = unconstrained) enforced via WM_GETMINMAXINFO's ptMinTrackSize (scaled + frame offset, re-derived per DPI) plus the SetBounds/initial-placement clamp; zero falls to DefWindowProcW exactly as before.
