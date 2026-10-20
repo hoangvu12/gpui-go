@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/hoangvu12/gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/internal/realinput"
 )
 
 // Win32 bindings the corpus brings itself (the desktopspec pattern:
@@ -783,6 +784,7 @@ func TestA11yConcurrentQueriesUpdatesAndActions(t *testing.T) {
 // it (the deterministic corpus keeps its windows hidden).
 func bootShownA11yFixture(t *testing.T, title string) *a11yFixture {
 	t.Helper()
+	realinput.Require(t) // the shown fixture activates its window
 	host := gpui.NewHost()
 	if err := host.Start(); err != nil {
 		t.Fatalf("host start: %v — this session is expected to create real windows", err)
@@ -834,6 +836,7 @@ func TestA11yNarratorActivationEvidence(t *testing.T) {
 	if os.Getenv("GPUI_A11Y_NARRATOR") != "1" {
 		t.Skip("opt-in evidence test: set GPUI_A11Y_NARRATOR=1 to run the real Narrator session")
 	}
+	realinput.Require(t) // activates the window into the foreground
 	f := bootShownA11yFixture(t, "Narrator Evidence")
 	gpui.ActivateWindowA11y(f.window)
 	f.drawAndPublish(t)

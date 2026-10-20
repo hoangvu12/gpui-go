@@ -44,6 +44,7 @@ import (
 	"time"
 
 	"github.com/hoangvu12/gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/internal/realinput"
 )
 
 // ---------------------------------------------------------------------------
@@ -174,6 +175,10 @@ func (f *realFixture) sync(t *testing.T, run func()) {
 // with an optional close hook fired from the WM_DESTROY path.
 func (f *realFixture) openShown(t *testing.T, title string, w, h float32, onClose func()) *gpui.Window {
 	t.Helper()
+	// The shown fixture activates its window (the close corpora verify
+	// real activation-aware teardown), so the real corpus is gated
+	// behind GPUI_REAL_INPUT_TESTS.
+	realinput.Require(t)
 	window, err := f.app.OpenWindow(gpui.WindowOptions{
 		Title:     title,
 		Show:      true,

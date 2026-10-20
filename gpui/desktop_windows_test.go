@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 	"unsafe"
+
+	"github.com/hoangvu12/gpui-go/internal/realinput"
 )
 
 // ---------------------------------------------------------------------------
@@ -948,6 +950,7 @@ func TestAnchoredPopupRejection(t *testing.T) {
 // window query, the mouse position query, and the hidden-zoom pending
 // state on a real window.
 func TestWindowControlsOnRealHost(t *testing.T) {
+	realinput.Require(t) // activates, minimizes and restores a real window
 	h := desktopNewHost(t)
 	handle, err := h.OpenWindow(WindowOptions{
 		Title:     "desktop controls",
@@ -1031,6 +1034,7 @@ func windowsClassName(raw []uint16) string {
 }
 
 func TestCursorHideUntilMoveOnRealWindow(t *testing.T) {
+	realinput.Require(t) // moves the real cursor with SetCursorPos
 	h := desktopNewHost(t)
 	handle, err := h.OpenWindow(WindowOptions{Title: "desktop cursor", Show: true})
 	if err != nil {

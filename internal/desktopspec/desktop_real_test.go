@@ -26,6 +26,7 @@ import (
 	"unsafe"
 
 	"github.com/hoangvu12/gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/internal/realinput"
 )
 
 // ---------------------------------------------------------------------------
@@ -140,6 +141,7 @@ func wideString(s string) []uint16 {
 // zoom toggles maximize, the restore reports the size again, and titles
 // round-trip through the OS.
 func TestWindowControlsMinimizeZoomRestoreTitle(t *testing.T) {
+	realinput.Require(t) // activates, minimizes and restores real windows
 	app, _ := newApp(t)
 	w := openWindow(t, app, gpui.WindowOptions{
 		Title:     "desktopspec controls",
@@ -217,6 +219,7 @@ func TestWindowControlsMinimizeZoomRestoreTitle(t *testing.T) {
 // an activated window reports itself active, a second window takes over
 // when activated.
 func TestWindowActivationReportsActiveWindow(t *testing.T) {
+	realinput.Require(t) // activates real windows and reads the foreground
 	app, _ := newApp(t)
 	w1 := openWindow(t, app, gpui.WindowOptions{
 		Title: "desktopspec active one", Show: true, Activate: true,
