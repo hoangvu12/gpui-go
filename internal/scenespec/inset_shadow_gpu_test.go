@@ -33,10 +33,10 @@ func (v *insetHighlightView) Render(w *gpui.Window, cx *gpui.Context[insetHighli
 		Bg(gpui.SolidBackground(gpui.Hsla{H: 0, S: 0, L: 0.15, A: 1})).
 		Rounded(gpui.Px(12)).
 		Shadow([]gpui.BoxShadow{{
-			Color:     gpui.SolidBackground(gpui.Hsla{H: 0, S: 0, L: 1, A: 1}),
-			OffsetY:   1,
+			Color:      gpui.SolidBackground(gpui.Hsla{H: 0, S: 0, L: 1, A: 1}),
+			OffsetY:    1,
 			BlurRadius: v.blur,
-			Inset:     true,
+			Inset:      true,
 		}}).
 		DebugSelector("inset-panel")
 	if v.border > 0 {
