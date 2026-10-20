@@ -1811,6 +1811,18 @@ func (h *Host) Stop() error {
 // the host started.
 func (h *Host) ThreadID() uint32 { return h.threadID }
 
+// hostStarted reports whether the host's message loop has been started
+// (Start completed its boot). App.Update's foreground marshal only
+// engages on a started host: before Start, updates run inline (the
+// pre-Run construction pattern), and after the loop exits,
+// runForegroundSync reports the drop and the caller falls back inline.
+func (h *Host) hostStarted() bool {
+	h.mu.Lock()
+	started := h.startedOnce
+	h.mu.Unlock()
+	return started
+}
+
 // IsForegroundThread reports whether the caller runs on the host
 // (foreground) thread, decided through GetCurrentThreadId.
 func (h *Host) IsForegroundThread() bool { return h.onHostThread() }

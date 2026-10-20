@@ -20,7 +20,9 @@ import (
 
 func mustTextService(t *testing.T) *TextService {
 	t.Helper()
-	lib, err := Load(Options{CacheRoot: testDir(t)})
+	// The shared cache root: one materialized artifact for the whole
+	// package (consumer gap 10 — unique roots leaked 18 MB per load).
+	lib, err := Load(Options{CacheRoot: sharedCacheRoot(t)})
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -72,7 +74,7 @@ func TestTextServiceTableValidation(t *testing.T) {
 	}
 
 	// The service is reachable only with the capability bit present.
-	lib, err := Load(Options{CacheRoot: testDir(t)})
+	lib, err := Load(Options{CacheRoot: sharedCacheRoot(t)})
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -816,7 +818,7 @@ func TestTextForcedGCDuringCalls(t *testing.T) {
 	// A fresh library load also survives forced GC (the shared stack is
 	// process-global; the load path must not double-create it).
 	runtime.GC()
-	lib, err := Load(Options{CacheRoot: testDir(t)})
+	lib, err := Load(Options{CacheRoot: sharedCacheRoot(t)})
 	if err != nil {
 		t.Fatalf("second Load failed: %v", err)
 	}

@@ -31,6 +31,7 @@ import (
 
 	"github.com/hoangvu12/gpui-go/gpui"
 	"github.com/hoangvu12/gpui-go/internal/native"
+	"github.com/hoangvu12/gpui-go/internal/realinput"
 )
 
 // waitFor polls cond until it holds or the timeout expires.
@@ -73,9 +74,12 @@ func bootApp(t *testing.T) (*gpui.App, *gpui.Host) {
 	return app, host
 }
 
-// openShown opens one shown app window, failing on creation errors.
+// openShown opens one shown ACTIVATED app window, failing on creation
+// errors (the monitor-capture corpus needs real foreground windows, so
+// the whole corpus is gated behind GPUI_REAL_INPUT_TESTS).
 func openShown(t *testing.T, app *gpui.App, title string, w, h float32) *gpui.Window {
 	t.Helper()
+	realinput.Require(t)
 	window, err := app.OpenWindow(gpui.WindowOptions{
 		Title:     title,
 		Show:      true,
@@ -588,6 +592,7 @@ func TestCaptureStopCloseRaces(t *testing.T) {
 // the arrivals; whether DWM also composes the occluded window's
 // presents is DWM's choice, never the stream's).
 func TestCaptureOcclusionAgnosticMonitorCapture(t *testing.T) {
+	realinput.Require(t) // activates real windows on the captured monitor
 	app, host := bootApp(t)
 	bounds := gpui.Bounds{Origin: gpui.Point{X: 60, Y: 60}, Size: gpui.Size{Width: 260, Height: 180}}
 	occluded, err := app.OpenWindow(gpui.WindowOptions{

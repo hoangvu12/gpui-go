@@ -463,6 +463,16 @@ type FontRegistration struct {
 	// FontIdentity.Generation or a TextLayoutSummary.FontGeneration at
 	// or above this value saw the registered families.
 	Generation uint64
+	// Families are the family names the submitted bytes landed under,
+	// one entry per face in file order (deduplicated), parsed from each
+	// face's name table with the catalog's own precedence: the
+	// typographic family (nameID 16) when present, else the legacy
+	// family (nameID 1). A font whose two names differ (Geist Medium:
+	// nameID 1 "Geist Medium", nameID 16 "Geist") registers under the
+	// TYPOGRAPHIC name only — this report is where that becomes
+	// visible, so a caller knows which name to request (and
+	// FontIdentity.FamilyFound reports a family that resolves nowhere).
+	Families []string
 }
 
 // AddFont registers in-memory font bytes with the text system's font
@@ -488,16 +498,27 @@ type FontRegistration struct {
 // (ErrTextFontData when the bytes contain no supported font face,
 // ErrTextValue for empty or oversize data), and ResolveFont reports
 // the fallback through FontIdentity.FamilyFound (false = the family is
-// absent and a fallback font answered).
+// absent and a fallback font answered). FontRegistration.Families
+// additionally names the families the bytes DID land under, so a
+// legacy-versus-typographic mismatch (the silent-fallback shape this
+// closes, consumer gap 06) is visible without guessing: request a
+// reported family, or check FamilyFound for the name you intended.
 func (ts *TextSystem) AddFont(data []byte) (FontRegistration, error) {
 	if len(data) == 0 {
 		return FontRegistration{}, fmt.Errorf("gpui: AddFont: %w: empty font data", ErrTextValue)
 	}
+	// The family report comes from the submitted bytes (the catalog's
+	// own precedence, parsed before the call): a rejected registration
+	// reports NO families — the report never invents names for bytes
+	// the catalog would refuse. The report is best-effort: an sfnt the
+	// catalog accepts but whose name table the reader cannot decode
+	// registers normally and reports no families (nil).
+	families, _ := fontFamilyNames(data)
 	generation, err := ts.svc.AddFont(data)
 	if err != nil {
 		return FontRegistration{}, wrapTextError("AddFont", err)
 	}
-	return FontRegistration{Generation: generation}, nil
+	return FontRegistration{Generation: generation, Families: families}, nil
 }
 
 // FontMetrics returns the full face metrics (font units) for a font the

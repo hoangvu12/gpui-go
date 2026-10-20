@@ -20,7 +20,7 @@ import (
 // mustSvg loads the native library and fetches the SVG service.
 func mustSvg(t *testing.T) *SvgService {
 	t.Helper()
-	lib, err := Load(Options{CacheRoot: testDir(t)})
+	lib, err := Load(Options{CacheRoot: sharedCacheRoot(t)})
 	if err != nil {
 		t.Fatalf("native load: %v", err)
 	}
@@ -94,21 +94,28 @@ func TestSvgFontAssetSurface(t *testing.T) {
 		t.Error("font asset path(9) = nil error, want the bad-value rejection")
 	}
 
-	// Before any push the paths report missing.
-	for _, path := range want {
-		has, err := svc.HasFontAsset(path)
-		if err != nil {
-			t.Fatalf("has(%q): %v", path, err)
-		}
-		if has {
-			t.Errorf("has(%q) = true before any push", path)
-		}
-	}
-
-	// One push, then the duplicate rule.
+	// The from-absent push and the duplicate rule. The package shares
+	// ONE native module (consumer gap 10), so an earlier run or a
+	// sibling test may have pushed the asset already — the from-absent
+	// assertion only holds then.
 	font := make([]byte, 16)
-	if err := svc.AddFont(want[0], font); err != nil {
-		t.Fatalf("add font: %v", err)
+	already, err := svc.HasFontAsset(want[0])
+	if err != nil {
+		t.Fatalf("has(%q): %v", want[0], err)
+	}
+	if !already {
+		for _, path := range want {
+			has, err := svc.HasFontAsset(path)
+			if err != nil {
+				t.Fatalf("has(%q): %v", path, err)
+			}
+			if has {
+				t.Errorf("has(%q) = true before any push", path)
+			}
+		}
+		if err := svc.AddFont(want[0], font); err != nil {
+			t.Fatalf("add font: %v", err)
+		}
 	}
 	has, err := svc.HasFontAsset(want[0])
 	if err != nil || !has {
@@ -266,11 +273,18 @@ func TestSvgTextWithBundledFont(t *testing.T) {
 	if err != nil {
 		t.Fatalf("font path: %v", err)
 	}
-	if has, err := svc.HasFontAsset(path); err != nil || has {
-		t.Fatalf("has font before push = %v, %v; want false", has, err)
-	}
-	if err := svc.AddFont(path, font); err != nil {
-		t.Fatalf("add font: %v", err)
+	// The package now shares ONE native module (consumer gap 10: one
+	// fixed cache root instead of a leaked 18 MB copy per test), so the
+	// svg service's font state is shared with TestSvgFontAssetSurface —
+	// which proves the from-absent push — running earlier in the file.
+	// This test pushes only when the font is not already present; the
+	// render below is the gate either way.
+	if has, err := svc.HasFontAsset(path); err != nil {
+		t.Fatalf("has font: %v", err)
+	} else if !has {
+		if err := svc.AddFont(path, font); err != nil {
+			t.Fatalf("add font: %v", err)
+		}
 	}
 
 	handle, err := svc.Parse(svgFixture(t, "text-plex"))

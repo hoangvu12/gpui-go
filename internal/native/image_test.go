@@ -25,7 +25,7 @@ import (
 // mustImageService loads the library and fetches the image service.
 func mustImageService(t *testing.T) *ImageService {
 	t.Helper()
-	lib, err := Load(Options{CacheRoot: testDir(t)})
+	lib, err := Load(Options{CacheRoot: sharedCacheRoot(t)})
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}

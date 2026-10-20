@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -77,6 +78,10 @@ type scheduler struct {
 	// shuttingDown marks the app as rejecting new work while terminal
 	// completion messages keep being accepted.
 	shuttingDown bool
+	// driving counts scheduler drives in progress (see drive): a task
+	// body may be executing while the foreground waits for its request.
+	// Read atomically by App.Update's marshal path.
+	driving int32
 	// acks counts worker acknowledgments ever; App.Shutdown diffs it
 	// around its drain.
 	acks int
@@ -287,6 +292,15 @@ func (s *scheduler) rejectIfShuttingDown(op string) {
 // on the task's request channel while the body runs, which keeps
 // observable ordering deterministic.
 func (s *scheduler) drive(t *taskRun) {
+	// A drive in progress means a task body may be executing while the
+	// foreground waits for its next request. App.Update's foreground
+	// marshal (app.go) falls back to inline while this counter is
+	// positive: a task body's RAW App.Update would otherwise block on
+	// a foreground the drive is already waiting on (the sanctioned
+	// task-body path is AsyncApp.Update, whose request the drive runs
+	// inline).
+	atomic.AddInt32(&s.driving, 1)
+	defer atomic.AddInt32(&s.driving, -1)
 	if t.done {
 		return
 	}

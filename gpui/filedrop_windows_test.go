@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 	"unsafe"
+
+	"github.com/hoangvu12/gpui-go/internal/realinput"
 )
 
 // ---------------------------------------------------------------------------
@@ -165,9 +167,13 @@ func (v *dropTestSurface) RenderOnce(w *Window, app *App) AnyElement {
 }
 
 // openDropTestWindow opens a shown real window with the drop test
-// surface drawn, and returns the window, recorder and driver.
+// surface drawn, and returns the window, recorder and driver. The
+// window opens ACTIVATED (the OLE drag loop needs the foreground) and
+// the real drag tests drive it with SendInput/SetCursorPos, so the
+// whole corpus is gated behind GPUI_REAL_INPUT_TESTS.
 func openDropTestWindow(t *testing.T, h *Host, app *App, title string) (*Window, *dropRecorder, *FileDropDriver) {
 	t.Helper()
+	realinput.Require(t)
 	recorder := &dropRecorder{}
 	var surface *dropTestSurface
 	window, err := app.OpenWindowView(WindowOptions{

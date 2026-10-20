@@ -21,6 +21,7 @@ import (
 	"github.com/hoangvu12/gpui-go/internal/native"
 	"reflect"
 	"strings"
+	"sync/atomic"
 )
 
 // appAccess is the unexported carrier that seals AppContext. Only types
@@ -291,11 +292,25 @@ func (a *App) SetReduceMotion(reduce bool) {
 	}
 }
 
-// Update runs f as one application update on the owning dispatcher
-// goroutine. Update increments the update nesting count; when the
-// OUTERMOST update returns, flush_effects runs: release dropped entities,
-// then apply queued effects FIFO until quiet. Nested updates do not
-// flush. Callbacks running during a flush cannot start another flush.
+// Update runs f as one application update. Update increments the
+// update nesting count; when the OUTERMOST update returns,
+// flush_effects runs: release dropped entities, then apply queued
+// effects FIFO until quiet. Nested updates do not flush. Callbacks
+// running during a flush cannot start another flush.
+//
+// Threading: the update runs on the application's foreground
+// (dispatcher) thread. Called from another goroutine of an attached,
+// started host, Update first marshals itself onto the host thread
+// (post-and-block; a panic inside f propagates back to the caller), so
+// an update can never overlap the foreground's scheduler drives or
+// frame draws — the overlap that the scheduler's update guard turned
+// into a terminal panic (consumer gap 07). The marshal is skipped
+// (f runs inline, like today) on the foreground thread itself, in test
+// applications (no host), before the host started, while the
+// scheduler is mid-drive (a task body's RAW App.Update must not block
+// on a foreground the drive is already waiting on — use
+// AsyncApp.Update inside task bodies), and after the loop exited
+// (best-effort; there is no foreground to serialize with).
 //
 // A panic in f restores framework bookkeeping (update depth, entity
 // access guards, borrowed-facade validity) without flushing further
@@ -306,6 +321,15 @@ func (a *App) Update(f func(*App)) {
 	if f == nil {
 		panic("gpui: Update called with a nil callback")
 	}
+	if a.marshalUpdateOnForeground(f) {
+		return
+	}
+	a.updateInline(f)
+}
+
+// updateInline runs f as one application update on the CALLING
+// goroutine (the pre-marshal behavior).
+func (a *App) updateInline(f func(*App)) {
 	a.startUpdate()
 	completed := false
 	defer func() {
@@ -317,6 +341,43 @@ func (a *App) Update(f func(*App)) {
 	f(a)
 	completed = true
 	a.finishUpdate()
+}
+
+// marshalUpdateOnForeground runs f as one application update on the
+// attached host's foreground thread, blocking the calling goroutine
+// until it completed, and reports whether it ran (consumer gap 07).
+// Callers on the foreground thread, test applications without a host,
+// unstarted hosts, a scheduler mid-drive (task-body case, see
+// scheduler.driving) and exited loops keep the inline semantics; a
+// panic inside the marshaled update is re-raised on the calling
+// goroutine.
+func (a *App) marshalUpdateOnForeground(f func(*App)) bool {
+	host := a.host
+	if host == nil || !host.hostStarted() {
+		return false
+	}
+	if host.onHostThread() {
+		return false
+	}
+	if atomic.LoadInt32(&a.sched.driving) > 0 {
+		return false
+	}
+	var panicValue any
+	ran := host.runForegroundSync(func() {
+		defer func() {
+			panicValue = recover()
+		}()
+		a.updateInline(f)
+	})
+	if !ran {
+		// The loop exited while the post was in flight (or was rejected):
+		// best-effort inline, like the pre-loop state.
+		return false
+	}
+	if panicValue != nil {
+		panic(panicValue)
+	}
+	return true
 }
 
 // Defer schedules f to run at the end of the current effect cycle, in
