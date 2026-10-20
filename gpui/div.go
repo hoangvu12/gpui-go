@@ -1818,13 +1818,47 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 				BorderDashedGap:    DefaultBorderDashedGap,
 			}, smoothing, frame.paint), "background")
 		}
+		// paint_inset_shadows (window.rs:4424) — cast from the PADDING
+		// edge, CSS's model ("an inner box-shadow casts a shadow as if
+		// everything outside the padding edge were opaque"): the hole and
+		// the clip region derive from the element bounds inset by the
+		// border widths, with the radii reduced by the border (clamped at
+		// zero). Recorded deviation from the pin (consumer gap 09): the
+		// reference casts inner shadows from the border box, where the
+		// border quad — painted after — covers any band narrower than the
+		// border, so a hard `inset 0 1px 0` line on a 1px-bordered panel
+		// never shows; the padding edge is where CSS (and a 1:1 HTML
+		// port) draws it. A borderless element's padding box IS its border
+		// box, so its records keep the pinned geometry exactly.
+		insetBounds := bounds
+		insetRadii := radii
+		if widths := s.BorderWidths.ToPixels(rem); widths.Top != 0 || widths.Right != 0 || widths.Bottom != 0 || widths.Left != 0 {
+			width := bounds.Size.Width - widths.Left - widths.Right
+			height := bounds.Size.Height - widths.Top - widths.Bottom
+			if width < 0 {
+				width = 0
+			}
+			if height < 0 {
+				height = 0
+			}
+			insetBounds = Bounds{
+				Origin: Point{X: bounds.Origin.X + widths.Left, Y: bounds.Origin.Y + widths.Top},
+				Size:   Size{Width: width, Height: height},
+			}
+			insetRadii = Corners{
+				TopLeft:     max32(radii.TopLeft-max32(widths.Top, widths.Left), 0),
+				TopRight:    max32(radii.TopRight-max32(widths.Top, widths.Right), 0),
+				BottomRight: max32(radii.BottomRight-max32(widths.Bottom, widths.Right), 0),
+				BottomLeft:  max32(radii.BottomLeft-max32(widths.Bottom, widths.Left), 0),
+			}
+		}
 		if ring, ok := s.InsetRing.insetShadow(currentColor); ok {
-			mustPaint(frame.scene.PaintShadow(bounds, ring, radii, smoothing, frame.paint), "inset ring")
+			mustPaint(frame.scene.PaintShadow(insetBounds, ring, insetRadii, smoothing, frame.paint), "inset ring")
 		}
 		// paint_inset_shadows_with_corner_smoothing (window.rs:4424).
 		for _, shadow := range s.BoxShadow {
 			if shadow.Inset {
-				mustPaint(frame.scene.PaintShadow(bounds, shadow, radii, smoothing, frame.paint), "inset shadow")
+				mustPaint(frame.scene.PaintShadow(insetBounds, shadow, insetRadii, smoothing, frame.paint), "inset shadow")
 			}
 		}
 

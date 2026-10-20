@@ -341,10 +341,16 @@ func TestDivPaintsTheBoxInPinnedOrder(t *testing.T) {
 	if bg.Bounds != elem || bg.CornerRadii != r6 || bg.Background != painted(red) || bg.BorderWidths != (gpui.Edges{}) || !bg.BorderColor.IsTransparent() {
 		t.Errorf("background = %+v", bg)
 	}
-	if !insetRing.Inset || insetRing.Bounds != dev(22, 22, 96, 36) || insetRing.CornerRadii != corners(4) || insetRing.Color != painted(green) {
+	// The inset ring and inset shadow cast from the PADDING box
+	// (consumer gap 09, the recorded CSS deviation from the pin): the
+	// element bounds inset by the 2px border — (22,22,96x36) — with the
+	// radii reduced by the border (6-2=4), so the ring's spread-2 hole
+	// is (24,24,92x32) with 2px radii and the shadow's (1,1) offset hole
+	// is (23,23,96x36).
+	if !insetRing.Inset || insetRing.Bounds != dev(24, 24, 92, 32) || insetRing.CornerRadii != corners(2) || insetRing.Color != painted(green) {
 		t.Errorf("inset ring = %+v", insetRing)
 	}
-	if !insetShadow.Inset || insetShadow.Bounds != dev(21, 21, 100, 40) {
+	if !insetShadow.Inset || insetShadow.Bounds != dev(23, 23, 96, 36) || insetShadow.CornerRadii != corners(4) {
 		t.Errorf("inset shadow = %+v", insetShadow)
 	}
 	if child.Bounds != dev(22, 22, 10, 10) {
