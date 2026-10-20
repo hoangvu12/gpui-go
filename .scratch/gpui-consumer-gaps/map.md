@@ -29,6 +29,8 @@ A consumer Windows app built only on gpui-go's public API (mordbard, a Go deskto
 
 ## Decisions so far
 
+- [Ticket 10 resolved: one fixed-name shared native test cache root (plus a shared bundle dir and bounded isolation roots)](issues/10-native-test-temp-leak.md) — a full run leaves zero random-suffix folders in %TEMP% (3 fixed dirs, 56 MB, reused across runs); the isolation tests keep unique roots.
+
 - [Ticket 07 resolved: background App.Update marshals onto the foreground thread](issues/07-update-marshal-foreground.md) — post-and-block on a started host (panics re-raised on the caller), inline on the foreground thread / test apps / pre-Start / mid-drive (task bodies keep AsyncApp.Update) / exited loops; the close-while-updating trampoline panic is gone.
 
 - [Ticket 06 resolved: AddFont reports the families the bytes landed under (the pinned fontique precedence, typographic family when it differs)](issues/06-addfont-family-names.md) — `FontRegistration.Families`, one entry per face in file order, deduplicated, never invented for rejected bytes; dual-family registration deliberately not done (the pin registers one family per face).
