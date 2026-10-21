@@ -1269,8 +1269,19 @@ func TestSetCursorMessagePolicy(t *testing.T) {
 	t.Logf("WM_SETCURSOR(HTLEFT) result = %d (DefWindowProc's sizing-cursor handling)", r)
 
 	// While hidden, the consumed path still applies (SetCursor(None)).
-	h.HideCursorUntilMouseMoves()
-	desktopWaitFor(t, "the cursor flag to clear", func() bool { return !h.IsCursorVisible() })
+	// The hide gate is re-driven (the wave-4 one-shot-gate fix, consumer
+	// gap 11): this test shows a default-position window, and a real
+	// WM_MOUSELEAVE delivered to it while the flag is hidden stores
+	// cursor_visible=true again (handle_mouse_leave_msg) — the live
+	// mouse crossing the shown window under interactive machine use
+	// poisons a one-shot wait, which then times out at its 10 s budget
+	// (the orchestrator's reported failure on base-port; reproduced once
+	// in five local runs even with the seed fix). Re-hiding before every
+	// poll re-establishes the driven state; the message-level assertions
+	// above stay one-shot and deterministic.
+	desktopDriveAndWaitFor(t, "the cursor flag to clear", func() {
+		h.HideCursorUntilMouseMoves()
+	}, func() bool { return !h.IsCursorVisible() })
 	r, _, _ = procSendMessageW.Call(handle.Hwnd(), uintptr(wmSetCursor),
 		handle.Hwnd(), uintptr(1))
 	if r != 0 {
@@ -1298,5 +1309,137 @@ func TestMouseWheelSettingsUpdate(t *testing.T) {
 	t.Logf("mouse wheel settings: %+v", settings)
 	if settings.WheelScrollLines > 1000 || settings.WheelScrollChars > 1000 {
 		t.Fatalf("implausible wheel settings: %+v", settings)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Fresh-window cursor seeding (consumer gap 11)
+// ---------------------------------------------------------------------------
+
+// procGetCursor observes the global cursor handle the WM_SETCURSOR
+// handler installed (user32 GetCursor; test-local binding, the same
+// convention as procGetWindowRng above).
+var procGetCursor = modUser32.NewProc("GetCursor")
+
+// seededCursor reads one window lease's cursor handle on the host
+// thread (deterministic; 0 means the lease is stale or the record was
+// never seeded — the bug this corpus pins).
+func seededCursor(h *Host, handle WindowHandle) uintptr {
+	var cursor uintptr
+	if !h.runForegroundSync(func() {
+		if w := h.windows[handle.Hwnd()]; w != nil && w.id == handle.ID() {
+			cursor = w.cursor
+		}
+	}) {
+		return 0
+	}
+	return cursor
+}
+
+// TestFreshWindowSetCursorAnswersWithArrow pins the consumer-gap-11
+// regression: a freshly created window, with no SetCursorStyle call,
+// answers WM_SETCURSOR over its client area with the Arrow cursor (a
+// non-zero handle) instead of SetCursor(NULL) — the invisible-hover
+// bug the mordbard user reported. The reference seeds every window
+// from the platform's current cursor at creation (generate_creation_info
+// -> WindowCreateContext.current_cursor -> WindowsWindowState::new),
+// which is the Arrow the platform loaded at boot until an app requests
+// another style. Everything stays synthetic: the window is created
+// hidden (nothing appears on the interactive desktop, no focus is
+// taken) and WM_SETCURSOR arrives as a direct SendMessageW, never as
+// real mouse input.
+func TestFreshWindowSetCursorAnswersWithArrow(t *testing.T) {
+	h := desktopNewHost(t)
+	// No SetCursorStyle call on this host: the boot's Arrow must be
+	// the answer.
+	handle, err := h.OpenWindow(WindowOptions{Title: "fresh window cursor"})
+	if err != nil {
+		t.Fatalf("OpenWindow failed (real window expected): %v", err)
+	}
+	if !handle.Alive() {
+		t.Fatal("the fresh window is not alive")
+	}
+
+	arrow := loadCursorHandle(CursorArrow)
+	if arrow == 0 {
+		t.Fatal("LoadImageW(IDC_ARROW) failed: the system arrow must load")
+	}
+	if seeded := seededCursor(h, handle); seeded != arrow {
+		t.Fatalf("fresh window cursor handle = 0x%x, want the platform arrow 0x%x (the record must be seeded at creation)", seeded, arrow)
+	}
+
+	// WM_SETCURSOR over the client area: consumed with 0, and the
+	// cursor it installs is the window's arrow handle. SetCursor and
+	// GetCursor are per-thread cursor state (the displayed image is the
+	// setting of the thread that owns the window under the mouse), so
+	// the whole probe runs on the host thread that owns the window: the
+	// drive first installs a *different* cursor (the I-beam), sends
+	// WM_SETCURSOR (same-thread SendMessage: the handler runs inline and
+	// calls SetCursor with the window's handle), then reads GetCursor —
+	// so a passing check proves the handler really ran. The gate is
+	// re-driven as belt-and-braces (the wave-4 drive-and-poll pattern);
+	// the window is hidden, so the user's real cursor is never affected
+	// and no real input is injected.
+	ibeam := loadCursorHandle(CursorIBeam)
+	if ibeam == 0 || ibeam == arrow {
+		t.Fatal("LoadImageW(IDC_IBEAM) failed or aliased the arrow: the distinct pre-poison cursor must load")
+	}
+	var result, observed uintptr
+	desktopDriveAndWaitFor(t, "WM_SETCURSOR to install the arrow", func() {
+		h.runForegroundSync(func() {
+			procSetCursor.Call(ibeam)
+			result, _, _ = procSendMessageW.Call(handle.Hwnd(), uintptr(wmSetCursor),
+				handle.Hwnd(), uintptr(1))
+			observed, _, _ = procGetCursor.Call()
+		})
+	}, func() bool { return observed == arrow })
+	if result != 0 {
+		t.Fatalf("WM_SETCURSOR(HTCLIENT) result = %d, want 0 (consumed)", result)
+	}
+}
+
+// TestWindowBornUnderCursorStyleSeedsIt pins the rest of the reference
+// creation semantics (platform.rs generate_creation_info): the cursor
+// a window is born with is the platform's *current* cursor, so a
+// window opened while the style is IBeam starts with the IBeam handle,
+// not the boot arrow — and its WM_SETCURSOR answers with that handle.
+// Synthetic messages only; the window is created hidden.
+func TestWindowBornUnderCursorStyleSeedsIt(t *testing.T) {
+	h := desktopNewHost(t)
+	h.SetCursorStyle(CursorIBeam)
+	desktopWaitFor(t, "the IBeam style to be recorded", func() bool {
+		style, err := h.CursorStyle()
+		return err == nil && style == CursorIBeam
+	})
+	handle, err := h.OpenWindow(WindowOptions{Title: "window born under IBeam"})
+	if err != nil {
+		t.Fatalf("OpenWindow failed (real window expected): %v", err)
+	}
+	ibeam := loadCursorHandle(CursorIBeam)
+	if ibeam == 0 {
+		t.Fatal("LoadImageW(IDC_IBEAM) failed: the system I-beam must load")
+	}
+	if seeded := seededCursor(h, handle); seeded != ibeam {
+		t.Fatalf("window born under IBeam cursor handle = 0x%x, want the I-beam 0x%x", seeded, ibeam)
+	}
+
+	// Its WM_SETCURSOR answers with the birth handle (same host-thread
+	// probe: pre-poison with the arrow, send, read GetCursor on the
+	// owning thread).
+	arrow := loadCursorHandle(CursorArrow)
+	if arrow == 0 {
+		t.Fatal("LoadImageW(IDC_ARROW) failed: the system arrow must load")
+	}
+	var result, observed uintptr
+	desktopDriveAndWaitFor(t, "WM_SETCURSOR to install the I-beam", func() {
+		h.runForegroundSync(func() {
+			procSetCursor.Call(arrow)
+			result, _, _ = procSendMessageW.Call(handle.Hwnd(), uintptr(wmSetCursor),
+				handle.Hwnd(), uintptr(1))
+			observed, _, _ = procGetCursor.Call()
+		})
+	}, func() bool { return observed == ibeam })
+	if result != 0 {
+		t.Fatalf("WM_SETCURSOR(HTCLIENT) result = %d, want 0 (consumed)", result)
 	}
 }

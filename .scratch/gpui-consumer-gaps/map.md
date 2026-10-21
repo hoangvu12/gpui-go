@@ -26,9 +26,11 @@ A consumer Windows app built only on gpui-go's public API (mordbard, a Go deskto
 - [Text inside drag preview views paints at twice the drag offset (outside the preview card)](issues/08-drag-preview-text-offset.md)
 - [Zero-blur inset shadows hide under the element border (CSS casts them from the padding edge)](issues/09-inset-shadow-padding-edge.md)
 - [The native test suite leaks an 18 MB gpui-go-native-test-* folder per cache root in %TEMP%](issues/10-native-test-temp-leak.md)
+- [A fresh window's hover shows no cursor: hostWindow.cursor is never seeded, so WM_SETCURSOR answers SetCursor(NULL)](issues/11-initial-window-cursor.md)
 
 ## Decisions so far
 
+- [Ticket 11 resolved: every host window seeds its cursor from the platform's current cursor at creation](issues/11-initial-window-cursor.md) — the reference's `generate_creation_info` semantics (Arrow at boot, the active style when born under one); WM_SETCURSOR over a fresh window answers with a real cursor instead of SetCursor(NULL), and the two reported cursor-gate test timeouts were the documented one-shot-gate environmental class, fixed with the wave-4 bounded re-drive.
 - [Ticket 10 resolved: one fixed-name shared native test cache root (plus a shared bundle dir and bounded isolation roots)](issues/10-native-test-temp-leak.md) — a full run leaves zero random-suffix folders in %TEMP% (3 fixed dirs, 56 MB, reused across runs); the isolation tests keep unique roots.
 
 - [Ticket 07 resolved: background App.Update marshals onto the foreground thread](issues/07-update-marshal-foreground.md) — post-and-block on a started host (panics re-raised on the caller), inline on the foreground thread / test apps / pre-Start / mid-drive (task bodies keep AsyncApp.Update) / exited loops; the close-while-updating trampoline panic is gone.

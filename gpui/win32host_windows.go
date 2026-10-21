@@ -1016,9 +1016,13 @@ type hostWindow struct {
 
 	// --- ticket26 desktop state (host thread only) ---
 
-	// cursor is this window's current cursor handle (0 = none), set by
-	// WM_GPUI_CURSOR_STYLE_CHANGED (reference WindowCreateContext shares
-	// the platform cursor; each window re-receives it on style change).
+	// cursor is this window's current cursor handle (0 = none): seeded
+	// from the platform's current cursor at creation (the reference's
+	// generate_creation_info passes state.current_cursor into the
+	// WindowCreateContext, and WindowsWindowState::new stores it — a
+	// window born while the style is IBeam starts with IBeam, and the
+	// boot default gives every fresh window the Arrow), then replaced by
+	// WM_GPUI_CURSOR_STYLE_CHANGED on style changes.
 	cursor uintptr
 	// hovered reports the cursor being over this window (WM_MOUSEMOVE
 	// sets it, WM_MOUSELEAVE clears it; reference state.hovered).
@@ -1097,6 +1101,18 @@ func (h *Host) newHostWindow(hwnd uintptr) *hostWindow {
 		// and its background appearance starts opaque.
 		appearance:           WindowAppearanceLight,
 		backgroundAppearance: WindowBackgroundOpaque,
+		// Seed the cursor with the platform's current cursor
+		// (generate_creation_info -> WindowCreateContext.current_cursor
+		// -> WindowsWindowState::new current_cursor): the boot's Arrow
+		// by default, or the active style when the window is born under
+		// one. Without this, WM_SETCURSOR would answer SetCursor(NULL)
+		// for every fresh window — an app that never requests another
+		// style (SetCursorStyle early-returns when the platform handle
+		// is unchanged) would show no cursor at all over its windows
+		// (consumer gap 11). Host-thread state read at WM_NCCREATE, on
+		// the host thread, after initDesktopStateOnHostThread ran at
+		// boot.
+		cursor: h.desktop.currentCursor,
 	}
 	if appearance, err := systemAppearanceProvider(); err == nil {
 		w.appearance = appearance
