@@ -365,6 +365,13 @@ func TestChordDispatchAndTimeoutReplay(t *testing.T) {
 
 	// An abandoned chord: prefix pends, then the timeout flush replays
 	// it through the key listeners and the input handler.
+	//
+	// The first key down switched the window to keyboard modality and
+	// refreshed it (window.rs:5746-5760); the redraw installed the
+	// frame's input handler, which is none in this corpus
+	// (window.rs:3171-3213). The reference registers handlers per frame,
+	// so re-register before the replay.
+	k.window.SetInputHandler(input)
 	pendingChanges = 0
 	k.dispatch("g->g")
 	requireTranscript(t, k.recorded(), "increment")

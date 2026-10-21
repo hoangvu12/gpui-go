@@ -1,0 +1,31 @@
+{
+  "ticket": "04-wall-clock-timers",
+  "effort": "gpui-base",
+  "date": "2026-10-19",
+  "result": "resolved",
+  "summary": "Production wall-clock timers: the real host switches the scheduler to monotonic wall time at attach (useWallClock); TaskRun.Sleep, background timers and App.Now advance with wall time while TestApp keeps the deterministic virtual clock unchanged.",
+  "pinned_sources": [
+    "reference/ce-source/crates/gpui/src/platform_scheduler.rs:177-190",
+    "reference/ce-source/crates/gpui/src/platform.rs:1168-1170",
+    "reference/ce-source/crates/gpui/src/executor.rs:185-214",
+    "reference/ce-source/crates/gpui_windows/src/dispatcher.rs:73-149,183-191",
+    "reference/ce-source/crates/gpui/src/threaded_dispatcher.rs:672-696 (ported tests)"
+  ],
+  "implementation": {
+    "files": ["gpui/clock.go (new)", "gpui/executor.go", "gpui/task_ownership.go", "gpui/win32host_windows.go", "gpui/clock_test.go (new)", "gpui/clock_windows_test.go (new)"],
+    "mechanism": "one time.AfterFunc armed for the earliest deadline wakes the existing host dispatcher; drive() runs runRealtime (catch the clock up, fire due timers, run queued work, re-arm); App.Shutdown stops the driver; advanceClock panics on a real-time scheduler (test-only per the pin)"
+  },
+  "tests": {
+    "added": ["TestClockTestAppStaysVirtual", "TestClockTestAppDeterministicReplay", "TestClockWallDeadlineRoundsUp", "TestClockRealHostSleepWakes", "TestClockRealHostNowAdvances", "TestClockRealHostTimersFireInRealTime (port of timers_fire_in_real_time)", "TestClockRealHostCancelWakesSleeper (adapted)"],
+    "upstream_ported": 2,
+    "orchestrator_rerun": [
+      {"command": "CGO_ENABLED=0 go test ./gpui -run TestClock -count=3", "result": "ok"},
+      {"command": "CGO_ENABLED=0 go test ./internal/taskspec ./internal/shutdownspec -count=1", "result": "ok"}
+    ]
+  },
+  "deviations": [
+    "deadlines stay whole milliseconds (the pin uses Duration); wall-mode deadlines round up so a sleep never ends early",
+    "the Windows threadpool timer is replaced by time.AfterFunc + the existing host wake; no native change, no new public API"
+  ],
+  "native_artifact": "unchanged (rev 11, sha256 37ee6877...)"
+}

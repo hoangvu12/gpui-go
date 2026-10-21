@@ -59,15 +59,20 @@ package gpui
 //     focus-bound nodes (div.rs 4153-4161). The reference additionally
 //     advertises Click for plain div click listeners, which the port's
 //     element layer does not surface into the snapshot yet.
-//   - The FROZEN native actions-mask decode (a11y.rs decode_update)
-//     reads the bit at index i as the action whose TAG equals the
-//     bit's value, so only Focus (2), Increment (4) and
-//     SetTextSelection (8) are representable in the mask; Click, Blur,
-//     Decrement, SetValue, ReplaceSelectedText and ShowContextMenu
-//     cannot be advertised to the AT through the frozen ABI (any other
-//     bit fails the whole publish). The serializer encodes the
-//     representable bits and omits the rest; the REQUEST path (the
-//     drained actions) routes all nine actions.
+//   - (Historical, rev-10.) The rev-10 actions-mask decode read the bit
+//     at index i as the action whose TAG equals the bit's value, so
+//     only Focus, Increment and SetTextSelection were representable.
+//     The rev-11 decode reads a tag-presence set (bit i -> tag i+1,
+//     reference/native/src/a11y.rs:845-856) and a11yMaskBit encodes it:
+//     all nine actions are advertised.
+//   - Base ticket 11 / ticket 02 decision (screen-reader fidelity
+//     deviation): the frozen rev-11 decoder carries 8 roles and no
+//     state beyond hidden/bounds/actions. Roles outside the slice
+//     publish as the nearest supported role, else GenericContainer
+//     (a11yPublishedRole, with the full table); the A11yAttributes
+//     states are dropped. The Go snapshot keeps both exactly. A tree
+//     containing an unsupported role therefore publishes instead of
+//     aborting.
 //   - The native service flips its active flag on ANY routed
 //     WM_GETOBJECT (including object ids the adapter declines); the
 //     pin flips it only inside the activation closure. The Go side
@@ -539,11 +544,69 @@ const (
 // service fetch; reasserted here so a mismatch is a Go-side error).
 var a11yNodeRecordSize = uint32(unsafe.Sizeof(native.A11yNodeRecord{}))
 
-// a11yRoleTag maps the port's Role onto the native role tag. The
-// published slice maps one-to-one (Window=1 ... Slider=8); anything
-// else is an error, never a silent coercion.
-func a11yRoleTag(role Role) (uint32, error) {
+// a11yPublishedRole maps a snapshot role onto the role the FROZEN rev-11
+// native decoder can carry (role_from_tag accepts exactly Window,
+// GenericContainer, Button, TextInput, TextRun, Label, CheckBox and
+// Slider — reference/native/src/a11y.rs:598-612; any other tag fails the
+// whole publish with ERR_BAD_VALUE). Ticket 02's decision: the Go
+// snapshot keeps the authored role; publication maps a role the ABI
+// lacks to the NEAREST supported role, else GenericContainer, instead of
+// failing the publish (a recorded screen-reader fidelity deviation).
+//
+// "Nearest" is decided by the UIA control type accesskit_windows gives
+// each role (accesskit_windows-0.33.1/src/node.rs:55-214 control_type):
+//
+//   - same UIA control type as a supported role -> that role:
+//     Switch -> Button (both UIA Button, node.rs:89,99);
+//     Heading, Alert -> Label/StaticText (UIA Text, node.rs:62,102,146);
+//     TimeInput -> TextInput (UIA Edit, node.rs:76-88);
+//     Dialog, AlertDialog -> Window (UIA Window, node.rs:103-108,
+//     128-133,208-213; the IsDialog property and modal flag are lost);
+//     Group, RowGroup, Navigation, Region, RadioGroup -> GenericContainer
+//     (UIA Group, node.rs:73,93,144,164,168,169);
+//   - an interactive control with no same-type supported role -> the
+//     supported control with the same interaction: RadioButton ->
+//     CheckBox (a selectable two-state choice; accesskit pairs
+//     MenuItemRadio/MenuItemCheckBox the same way, node.rs:160-161);
+//     Link, ComboBox, Tab -> Button (invoked to activate / open /
+//     select); SpinButton -> Slider (both adjustable range controls
+//     driven by Increment/Decrement); Tooltip -> Label/StaticText (a
+//     text popup);
+//   - everything else -> GenericContainer: ProgressIndicator (read-only;
+//     the only range role, Slider, would advertise an adjustable
+//     control), Toolbar, TabList, Table, Row, Cell, ColumnHeader, Tree,
+//     TreeItem, Unknown (also the pin's own fallback for a hidden node
+//     without a role, element.rs:429-430), and any role value without a
+//     mapping.
+func a11yPublishedRole(role Role) Role {
 	switch role {
+	case RoleWindow, RoleGenericContainer, RoleButton, RoleTextInput,
+		RoleTextRun, RoleStaticText, RoleCheckBox, RoleSlider:
+		return role
+	case RoleSwitch, RoleLink, RoleComboBox, RoleTab:
+		return RoleButton
+	case RoleHeading, RoleAlert, RoleTooltip:
+		return RoleStaticText
+	case RoleTimeInput:
+		return RoleTextInput
+	case RoleDialog, RoleAlertDialog:
+		return RoleWindow
+	case RoleRadioButton:
+		return RoleCheckBox
+	case RoleSpinButton:
+		return RoleSlider
+	default:
+		return RoleGenericContainer
+	}
+}
+
+// a11yRoleTag maps the port's Role onto the native role tag: the
+// rev-11 slice one-to-one (Window=1 ... Slider=8), every other role
+// through a11yPublishedRole first, so publication never fails on a role
+// (ticket 02). The error return is kept for the closed supported set's
+// internal consistency only.
+func a11yRoleTag(role Role) (uint32, error) {
+	switch a11yPublishedRole(role) {
 	case RoleWindow:
 		return native.A11yRoleWindow, nil
 	case RoleGenericContainer:
@@ -678,6 +741,14 @@ func serializeA11ySnapshot(snapshot *A11ySnapshot, scale float32) (*native.A11yT
 		if node.Hidden {
 			record.Flags |= native.A11yNodeFlagHidden
 		}
+		// node.A11yAttributes (toggled/selected/expanded/disabled,
+		// numeric range, orientation, level, set position, table
+		// indices, modal, live, placeholder, keyboard shortcut) has no
+		// slot in the frozen record (internal/native/a11y.go:106-127;
+		// the decoder reads only role, label, description, value, author
+		// id, hidden, bounds, actions and children,
+		// reference/native/src/a11y.rs:816-868): dropped here, never a
+		// publish failure (ticket 02).
 		// write_a11y_info: label, description, value, author id.
 		record.LabelOffset, record.LabelLen = poolAppend(node.Label)
 		record.DescOffset, record.DescLen = poolAppend(node.Description)
@@ -700,16 +771,11 @@ func serializeA11ySnapshot(snapshot *A11ySnapshot, scale float32) (*native.A11yT
 			record.BoundsX1Bits = math.Float64bits(float64((node.Bounds.Origin.X + node.Bounds.Size.Width) * scale))
 			record.BoundsY1Bits = math.Float64bits(float64((node.Bounds.Origin.Y + node.Bounds.Size.Height) * scale))
 		}
-		// The advertised actions (div.rs 4153-4161). The FROZEN native
-		// decode reads the mask as: the bit at index i adds the action
-		// whose tag equals the bit's VALUE (1<<i is passed to
-		// action_from_tag), so only the power-of-two tags are
-		// representable (Focus=2, Increment=4, SetTextSelection=8); a bit
-		// at index 0 or >= 4 fails the whole publish. The serializer
-		// encodes exactly those bits — mask |= tag for representable
-		// tags — and skips the non-representable ones (recorded in the
-		// file header's deviation list; the REQUEST path routes all nine
-		// actions).
+		// The advertised actions (div.rs 4153-4161; since Base ticket 11
+		// the snapshot's set includes write_a11y_info's Click/Focus). The
+		// rev-11 decode reads the mask as a tag-PRESENCE set (bit i ->
+		// tag i+1, reference/native/src/a11y.rs:845-856), so all nine
+		// tags are representable through a11yMaskBit.
 		var mask uint32
 		for _, action := range node.Actions {
 			tag, err := a11yActionTag(action)

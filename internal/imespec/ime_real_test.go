@@ -25,6 +25,7 @@ import (
 	"unsafe"
 
 	"github.com/hoangvu12/gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/internal/realinput"
 )
 
 var (
@@ -944,6 +945,7 @@ var realProcSetFocus = realModUser32.NewProc("SetFocus")
 // (ImmNotifyIME NI_COMPOSITIONSTR CPS_COMPLETE) runs only for the
 // FOCUSED window; every window still disassociates its own context.
 func TestRealIMEFocusLossDisablesUnderFocusGuard(t *testing.T) {
+	realinput.Require(t) // takes the keyboard focus with SetFocus
 	app, host := newRealAppHost(t)
 	focused := openIMEWindow(t, app, "gpui-go imespec focus-guard focused", gpui.Bounds{
 		Origin: gpui.Point{X: 60, Y: 60},

@@ -15,14 +15,12 @@ package gpui
 // driven through App/Window/Scope, and a subpackage would import-cycle
 // with the App wiring.
 //
-// Deferred pieces (owned by later tickets): the img element itself and
-// its interactivity/object-fit/sprite painting (the scene/sprite
-// tickets), the window image_cache_stack and ImageCacheElement
-// (window.rs/element machinery), the ImageDecoder asset behind
-// ImageSource::Image — the pinned to_image_data path that routes WebP
-// through static decode, deliberately separate from this resource
-// loader's animated path (the distribution contract's mode distinction)
-// — the SVG renderer behind the format fallback (ticket19), and wiring
+// Deferred pieces (owned by later tickets): the img element's
+// interactivity (its object fit and sprite painting landed with Base
+// ticket 08, img.go / paintapi.go), the window image_cache_stack and
+// ImageCacheElement
+// (window.rs/element machinery), the SVG renderer behind the format
+// fallback (ticket19), and wiring
 // is_window_active to real platform activation (the window tickets —
 // the playback policy carries the flag as a parameter).
 
@@ -428,6 +426,17 @@ func newLoadedImage(image *RenderImage) *LoadedImage {
 	return &LoadedImage{id: nextImageID.Add(1), image: image}
 }
 
+// NewLoadedImage wraps decoded frames with a fresh image identity (the
+// pinned RenderImage::new, assets.rs:240-246, which assigns the next
+// ImageId): the in-memory image an img element paints through
+// ImageSourceRender (Base ticket 08, img.go). The frames are BGRA8.
+func NewLoadedImage(image *RenderImage) *LoadedImage {
+	if image == nil {
+		panic("gpui: NewLoadedImage requires decoded frames")
+	}
+	return newLoadedImage(image)
+}
+
 // ---------------------------------------------------------------------------
 // The application image codec and atlas retention
 // ---------------------------------------------------------------------------
@@ -791,9 +800,11 @@ func currentViewOf(w *Window) (EntityID, bool) {
 
 // notifyViewLoaded delivers the redraw nudge (the pinned
 // cx.on_next_frame(move |_, cx| cx.notify(entity))): the requesting
-// view is notified and the window's refresh seam is marked. The port's
-// redraw path is the explicit DrawWindowFrame, so the pinned frame-tick
-// deferral becomes the refresh request.
+// view is notified and the window is refreshed; the frame loop
+// (frameloop.go, on by default since Base ticket 33) redraws it at the
+// next effect flush (test windows) or frame request (real windows).
+// Deviation kept: the notify is immediate instead of deferred to the
+// next frame's callbacks.
 func notifyViewLoaded(w *Window, view EntityID, cx *App) {
 	if view != 0 {
 		cx.notify(view)
@@ -951,12 +962,26 @@ func NeedsAnimationFrame(image *RenderImage, hasElementID bool, policy ImagePlay
 	return hasElementID && image.FrameCount() > 1 && policy.WindowActive && !policy.ReduceMotion
 }
 
-// RequestAnimationFrame marks the window for another frame (the pinned
-// Window::request_animation_frame, window.rs lines 2633-2638, called by
-// animated images): the port's redraw seam is the refresh request the
-// explicit DrawWindowFrame path consumes.
+// RequestAnimationFrame schedules a frame to be drawn on the next
+// animation frame (the pinned Window::request_animation_frame,
+// window.rs lines 2633-2636, called by animated images): the currently
+// rendering view is notified on the window's next frame
+// (on_next_frame(move |_, cx| cx.notify(entity))), which redraws the
+// window through the frame loop (frameloop.go). Called outside a view's
+// render it refreshes the whole window on the next frame (the documented
+// "Otherwise, it will refresh the entire window", window.rs line 2626).
+// A loop that stops requesting stops drawing: the frame source goes
+// idle once no callback is pending and no window is dirty.
 func RequestAnimationFrame(w *Window) {
-	if w != nil {
-		w.requestRefresh()
+	if w == nil {
+		return
 	}
+	view, ok := currentViewOf(w)
+	w.OnNextFrame(func(w *Window, app *App) {
+		if ok {
+			app.notify(view)
+		} else {
+			w.Refresh()
+		}
+	})
 }

@@ -33,6 +33,7 @@ package gpui
 import (
 	"fmt"
 	"reflect"
+	"sort"
 )
 
 // ---------------------------------------------------------------------------
@@ -51,6 +52,17 @@ const (
 	ElementIDView
 	// ElementIDInteger is a numeric identity.
 	ElementIDInteger
+	// ElementIDNamedInteger is a name plus an integer (the reference
+	// ElementId::NamedInteger, window.rs:7667; e.g. ("item", ix)).
+	ElementIDNamedInteger
+	// ElementIDNamedChild is a labeled child of another element id (the
+	// reference ElementId::NamedChild(Arc<ElementId>, SharedString),
+	// window.rs:7673).
+	ElementIDNamedChild
+	// ElementIDCodeLocation is a source-location identity (the reference
+	// ElementId::CodeLocation, window.rs:7671; Window.UseState keys its
+	// state with the caller's location).
+	ElementIDCodeLocation
 )
 
 // ElementID is the identity of one element within its parent's child
@@ -65,8 +77,35 @@ type ElementID struct {
 	Name string
 	// Entity carries the view identity (Kind == ElementIDView).
 	Entity EntityID
-	// Integer carries the numeric identity (Kind == ElementIDInteger).
+	// Integer carries the numeric identity (Kind == ElementIDInteger, and
+	// the integer half of ElementIDNamedInteger).
 	Integer uint64
+	// Parent carries the labeled element of an ElementIDNamedChild (the
+	// child's label is Name).
+	Parent *ElementID
+}
+
+// NamedIntegerElementID builds a name+integer identity (the reference
+// ElementId::NamedInteger and its From<(&str, usize|u64|u32)> /
+// named_usize conversions, window.rs:7667,7680-7682,7770-7798).
+func NamedIntegerElementID(name string, value uint64) ElementID {
+	return ElementID{Kind: ElementIDNamedInteger, Name: name, Integer: value}
+}
+
+// NamedChildElementID builds a labeled child of parent (the reference
+// From<(ElementId, T: Into<SharedString>)> for ElementId, window.rs:7800-7803,
+// which produces ElementId::NamedChild).
+func NamedChildElementID(parent ElementID, name string) ElementID {
+	p := parent
+	return ElementID{Kind: ElementIDNamedChild, Name: name, Parent: &p}
+}
+
+// codeLocationElementID builds the caller-location identity used by
+// Window.UseState (the reference ElementId::CodeLocation built from
+// core::panic::Location::caller(), window.rs:4127-4131). Go has no
+// column information, so the location renders as "file:line".
+func codeLocationElementID(location string) ElementID {
+	return ElementID{Kind: ElementIDCodeLocation, Name: location}
 }
 
 // NameElementID builds a string identity.
@@ -91,6 +130,19 @@ func (id ElementID) String() string {
 		return id.Name
 	case ElementIDView:
 		return fmt.Sprintf("view-%d", uint64(id.Entity))
+	case ElementIDNamedInteger:
+		// window.rs:7692 `{}-{}` (name, integer).
+		return fmt.Sprintf("%s-%d", id.Name, id.Integer)
+	case ElementIDNamedChild:
+		// window.rs:7696 `{}-{}` (parent id, label).
+		parent := ""
+		if id.Parent != nil {
+			parent = id.Parent.String()
+		}
+		return parent + "-" + id.Name
+	case ElementIDCodeLocation:
+		// window.rs:7695 renders the Location (file:line:col; Go has no column).
+		return id.Name
 	default:
 		return fmt.Sprintf("%d", id.Integer)
 	}
@@ -969,14 +1021,34 @@ type windowDrawState struct {
 	draws uint64
 	// closed marks a removed window.
 	closed bool
+	// finishing reports a completed frame being published (render.go
+	// completeFrame): the window still counts as drawing.
+	finishing bool
 	// refreshRequested records that focus or window state requested a
-	// redraw since the last completed draw (the invalidation seam; the
-	// draw itself is the explicit DrawWindowFrame path).
+	// redraw since the last completed draw (the invalidation seam; it is
+	// half of the frame loop's dirty flag, frameloop.go isFrameDirty).
 	refreshRequested bool
 	// inspectorHitboxes is the LAST COMPLETED frame's inspector
 	// hitbox map (the pin's rendered_frame.inspector_hitboxes; ticket27
 	// — picking dispatch reads it between draws).
 	inspectorHitboxes map[uint64]InspectorElementID
+	// lastDeferredPriorities holds the last COMPLETED frame's deferred
+	// draw priorities in push order (the pinned
+	// rendered_frame.deferred_draws observable the deferred.rs tests read;
+	// Base ticket 08).
+	lastDeferredPriorities []int
+	// clientInset is the window's client inset (window.rs client_inset:
+	// Option<Pixels>, set by Window.SetClientInset; paintapi.go).
+	clientInset *float32
+	// selfLeases caches the window-owned strong self-handle leases of
+	// the views this window renders (Context.StrongSelf): one lease per
+	// view entity, retained on the view's first self-handle read during
+	// a render and registered in this window's scope, so it — and every
+	// alias the view hands to its listeners — releases deterministically
+	// when the window closes. The leases themselves are owned by the
+	// window's scope; this map is the per-window install cache, dropped
+	// with the element runtime (dropDrawState).
+	selfLeases map[EntityID]*entityLease
 }
 
 // frameDrawState is one frame's draw state (the reference next_frame
@@ -1023,13 +1095,14 @@ type frameDrawState struct {
 	// Some — including an empty list — means the element's content
 	// lives inside a parent paragraph; nil means standalone).
 	currentInlineFragments []Bounds
-	// inlineShapedLines tracks the real WrappedLines referenced by this
-	// frame's inline paint pieces (frame-scoped native shaping handles;
-	// disposed when the frame completes).
-	inlineShapedLines map[*WrappedLine]struct{}
 	// renderedViews is the rendered-view stack
 	// (window.rendered_entity_stack).
 	renderedViews []EntityID
+	// trackingAccess reports that the frame's element phases are running:
+	// entity accesses are then tracked by the window (Base ticket 33,
+	// frameloop.go recordEntityAccess). It is off during the effect flush
+	// that closes the draw's update.
+	trackingAccess bool
 	// inspectorInstanceIDs is the per-frame inspector path instance
 	// counter (window.rs Frame::next_inspector_instance_ids, cleared
 	// by Frame::clear each frame; ticket27).
@@ -1041,6 +1114,16 @@ type frameDrawState struct {
 	// inspectorTree is the frame's inspector tree build (ticket27's
 	// UI surface; see inspector.go).
 	inspectorTree *inspectorTreeBuild
+	// deferredDraws are the frame's deferred draws (window.rs
+	// Frame::deferred_draws, pushed by Window.DeferDraw during prepaint and
+	// drawn by drawRoots after the root; Base ticket 08, deferred.go).
+	deferredDraws []*deferredDraw
+	// deferredPriorities is the pinned DeferredPriorityStackCache
+	// (elements/deferred.rs:138-155): the priorities of the deferred draws
+	// whose prepaint is running, innermost last. The pin keeps it in an app
+	// global that is only non-empty inside prepaint_deferred_draws; the
+	// port scopes it to the frame under construction.
+	deferredPriorities []int
 }
 
 // windowDrawStates is the per-window element runtime registry.
@@ -1077,7 +1160,40 @@ func dropDrawState(w *Window) {
 		if ds.engine != nil {
 			_ = ds.engine.Dispose()
 		}
+		// A real window's text system owns one native atlas slot (the
+		// service bounds live atlases at 8) and a line-layout cache of
+		// native shaping handles: both retire with the window's element
+		// runtime, like the engine above (Base ticket 33 — with every real
+		// window drawn by the frame loop, leaked slots exhausted the bound
+		// across a test process; the cache's lines dispose the same way,
+		// the reference window's Arc-held lines dying with its
+		// WindowTextSystem).
+		if rts, ok := ds.text.(*realWindowTextSystem); ok {
+			rts.lines.dispose()
+			if rts.atlas != nil {
+				_ = rts.atlas.Dispose()
+			}
+		}
 		delete(windowDrawStates, w)
+		// Dropping the window's element states drops their resources (the
+		// reference drops the frames with the window): keyed-state leases
+		// release here (idempotent when the window scope already closed
+		// them); the queued releases flush at the next update boundary.
+		keys := make([]string, 0, len(ds.elementStates))
+		for key := range ds.elementStates {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			for _, r := range releasersOf(ds.elementStates[key]) {
+				r.releaseElementState()
+			}
+		}
+		ds.elementStates = nil
+		// The window's view self-handle leases released with the window's
+		// scope (removeWindow / CloseTestWindow close it before the element
+		// runtime drops); the install cache retires here with the runtime.
+		ds.selfLeases = nil
 	}
 	// Retire the per-window diagnostic runtimes with the element
 	// runtime (ticket27: the inspector state — generation bumped so
@@ -1448,14 +1564,57 @@ func recordElementStateAccess(w *Window, key string) {
 // Frame::finish's carry-over loop): state of elements that did not
 // draw this frame is dropped, so removal followed by reinsertion
 // starts fresh.
-func retainElementStates(ds *windowDrawState, accessed map[string]struct{}) {
+//
+// Evicted states that hold framework resources (Window.UseKeyedState's
+// entity lease) are released: the reference drops the previous frame's
+// unaccessed ElementStateBox values when the frames swap (window.rs
+// Frame::finish 1225-1231 then next_frame.clear() at 3237), which drops
+// their Entity handles. The Go port has no drop, so eviction calls the
+// state's release hook explicitly (sorted by key for determinism).
+//
+// It returns the evicted releasable states; render.go hands them to the
+// frame-finish hook (helpers_frame.go finishFrame), which releases them
+// when the frames swap.
+func retainElementStates(ds *windowDrawState, accessed map[string]struct{}) []elementStateReleaser {
 	retained := make(map[string]map[reflect.Type]any, len(accessed))
-	for key := range accessed {
-		if byType, ok := ds.elementStates[key]; ok {
+	var evictedKeys []string
+	for key, byType := range ds.elementStates {
+		if _, keep := accessed[key]; keep {
 			retained[key] = byType
+			continue
 		}
+		evictedKeys = append(evictedKeys, key)
+	}
+	sort.Strings(evictedKeys)
+	var evicted []elementStateReleaser
+	for _, key := range evictedKeys {
+		evicted = append(evicted, releasersOf(ds.elementStates[key])...)
 	}
 	ds.elementStates = retained
+	return evicted
+}
+
+// elementStateReleaser is implemented by retained element states that own
+// framework resources released on eviction (keyedstate.go).
+type elementStateReleaser interface {
+	releaseElementState()
+}
+
+// releasersOf returns the releasable states of one key, ordered by type
+// name for determinism.
+func releasersOf(byType map[reflect.Type]any) []elementStateReleaser {
+	types := make([]reflect.Type, 0, len(byType))
+	for t := range byType {
+		types = append(types, t)
+	}
+	sort.Slice(types, func(i, j int) bool { return types[i].String() < types[j].String() })
+	var out []elementStateReleaser
+	for _, t := range types {
+		if r, ok := byType[t].(elementStateReleaser); ok {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // takeElementStateSlot removes and returns the retained *S slot for the

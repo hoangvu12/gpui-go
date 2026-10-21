@@ -401,6 +401,20 @@ type SpriteSceneCommand struct {
 	FilterTarget, TargetIndex uint32
 }
 
+// The command tags and the sprite batch discriminants of the compiled
+// plan (the pinned RenderCommand/PrimitiveKind values the sprite
+// batches carry; see SpriteSceneCommand).
+const (
+	// spriteCommandBatch tags a primitive-batch command.
+	spriteCommandBatch uint32 = 0
+	// spriteBatchKindMonochrome is the monochrome-sprite batch tag.
+	spriteBatchKindMonochrome uint32 = 4
+	// spriteBatchKindSubpixel is the subpixel-sprite batch tag.
+	spriteBatchKindSubpixel uint32 = 5
+	// spriteBatchKindPolychrome is the polychrome-sprite batch tag.
+	spriteBatchKindPolychrome uint32 = 6
+)
+
 // SpriteCommands returns the finished scene's compiled plan commands
 // with the sprite batches' atlas texture indices (the native command
 // record surface; SceneCommands returns the older value view).

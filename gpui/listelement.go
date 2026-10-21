@@ -17,23 +17,29 @@ package gpui
 // element state under items is stable per item while it keeps
 // rendering.
 //
+// Base ticket 07 adds the wheel: the list inserts a hitbox at prepaint
+// and, at paint and before its items, registers the bubble wheel
+// listener that coalesces the frame's deltas, converts lines at 20px and
+// scrolls EAGERLY through StateInner::scroll — clamped, handler-firing,
+// notifying the view (R:elements/list.rs:1551, 1614-1639, 898-960) —
+// plus the scrollbar plumbing (R:list.rs:336-339 measure_all,
+// 743-796, 878-884, 985-1025, 1372-1419) and the remeasure size hints
+// (R:list.rs:457-474, 1667-1698).
+//
 // Bounded deviations from the pin (recorded): the SumTree of ListItem
 // is a Go slice with O(n) cumulative-height walks (identical
 // observables at these sizes); ListAlignment is Top only (the
-// Bottom/chat alignment, follow-tail mode, the scrollbar drag
-// plumbing, measure_all/with_uniform_item_height size hints, the
-// proportional remeasure anchor, the autoscroll request path and the
+// Bottom/chat alignment, follow-tail mode, with_uniform_item_height,
+// the proportional remeasure anchor, the autoscroll request path and the
 // per-item focus-handle retention for off-screen focused items are
-// omitted — no consumers in this slice); the mouse-wheel listener that
-// drives StateInner::scroll at paint time is the input ticket's scope,
-// so the scroll-delta entry is exposed as ListState.ScrollBy (the
-// reference's clamped, handler-firing scroll body — the reference's
-// separate unclamped, handler-less scroll_by walk is not separately
-// exposed; use ScrollTo for programmatic positioning); the reference's
-// scroll() also notifies the current view, which the port's explicit
-// DrawWindowFrame model does not need; the scroll mask is the bounds
-// intersection (the uniform-list precedent; the reference routes it
-// through the style's overflow).
+// omitted — no consumers in this slice); ListState.ScrollBy keeps the
+// port's clamped, handler-firing scroll body for its programmatic
+// callers (the pinned scroll_by, R:list.rs:565-595, is unclamped above
+// and handler-less; the wheel path uses the pinned scroll body); the
+// scroll mask is the bounds intersection (the uniform-list precedent;
+// the reference routes it through the style's overflow).
+//
+// R: = reference/ce-source/crates/gpui/src (pin 254b5dbd).
 
 import (
 	"fmt"
@@ -71,12 +77,27 @@ type ListScrollEvent struct {
 // ---------------------------------------------------------------------------
 
 // listItemState is one item's retained measurement (the reference
-// ListItem; bounded: no size hints and no focus handles).
+// ListItem; bounded: no focus handles).
 type listItemState struct {
-	// measured reports whether size holds a real measurement.
+	// measured reports whether size holds a real measurement (the
+	// pinned ListItem::Measured).
 	measured bool
 	// size is the item's measured size (valid when measured).
 	size Size
+	// hint is an unmeasured item's size hint (ListItem::Unmeasured's
+	// size_hint): the size it had when RemeasureItems invalidated it. It
+	// counts toward the summary height until the item is re-rendered
+	// (R:list.rs:1672-1686).
+	hint *Size
+}
+
+// sizeHint is ListItem::size_hint: the measured size, else the hint.
+func (s listItemState) sizeHint() *Size {
+	if s.measured {
+		size := s.size
+		return &size
+	}
+	return s.hint
 }
 
 // listPadding is the resolved vertical padding the list math uses (the
@@ -118,7 +139,17 @@ type listStateInner struct {
 	scrollHandler func(*ListScrollEvent, *Window, *App)
 	// pendingScroll is the deferred remeasure anchor.
 	pendingScroll *listPendingScroll
+	// scrollbarDragStartHeight freezes the content height a scrollbar
+	// drag maps against (R:list.rs:72).
+	scrollbarDragStartHeight *float32
+	// measureAll and hasMeasured are ListMeasuringBehavior::Measure(bool)
+	// (R:list.rs:196-214); measureAll false is the Visible default.
+	measureAll  bool
+	hasMeasured bool
 }
+
+// resetMeasuring is ListMeasuringBehavior::reset (R:list.rs:207-213).
+func (st *listStateInner) resetMeasuring() { st.hasMeasured = false }
 
 // ListState is the list state a view holds on behalf of the List
 // element (the reference ListState: "this element's state is stored
@@ -166,9 +197,24 @@ func (s *ListState) SetScrollHandler(handler func(*ListScrollEvent, *Window, *Ap
 func (s *ListState) Reset(elementCount int) {
 	st := s.inner
 	st.reset = true
+	st.resetMeasuring()
 	st.logicalScrollTop = nil
 	st.pendingScroll = nil
+	st.scrollbarDragStartHeight = nil
+	if elementCount < 0 {
+		elementCount = 0
+	}
 	st.items = make([]listItemState, elementCount)
+}
+
+// MeasureAll makes the list measure every item in its first layout
+// phase, so scrollbar metrics cover the whole content rather than the
+// rendered items (R:list.rs:333-339 measure_all). It returns the state
+// for chaining.
+func (s *ListState) MeasureAll() *ListState {
+	s.inner.measureAll = true
+	s.inner.hasMeasured = false
+	return s
 }
 
 // Splice informs the list state that the items in [oldStart, oldEnd)
@@ -214,8 +260,10 @@ func (s *ListState) Splice(oldStart, oldEnd, count int) {
 // ment while preserving the current scroll position through the
 // absolute anchor: the same pixel offset into the scroll-top item is
 // restored after the item re-renders at its new height (ListState::
-// remeasure_items; the reference keeps the removed size hints, the
-// bounded slice drops them).
+// remeasure_items, R:list.rs:412-475): the invalidated items keep their
+// last size as a hint, so the content height and the pixel scroll math
+// stay stable until they re-render, and a measure-all list measures
+// again.
 func (s *ListState) RemeasureItems(start, end int) {
 	st := s.inner
 	if start < 0 {
@@ -228,8 +276,9 @@ func (s *ListState) RemeasureItems(start, end int) {
 		st.pendingScroll = &listPendingScroll{itemIx: top.ItemIx, offset: top.OffsetInItem}
 	}
 	for ix := start; ix < end; ix++ {
-		st.items[ix] = listItemState{}
+		st.items[ix] = listItemState{hint: st.items[ix].sizeHint()}
 	}
+	st.resetMeasuring()
 }
 
 // ScrollTo scrolls the list to the given offset in item terms
@@ -342,19 +391,76 @@ func (s *ListState) ViewportBounds() Bounds {
 }
 
 // MaxOffsetForScrollbar returns the maximum scroll offset according to
-// the measured items (ListState::max_offset_for_scrollbar; bounded:
-// the scrollbar drag's frozen height is omitted, so the value always
-// reports the live measured content).
+// the measured items; it stays constant during a scrollbar drag
+// (R:list.rs:770-775 max_offset_for_scrollbar over 878-884
+// max_scroll_offset).
 func (s *ListState) MaxOffsetForScrollbar() Point {
+	return Point{X: 0, Y: s.inner.maxScrollOffset()}
+}
+
+// maxScrollOffset is R:list.rs:878-884: the drag-frozen (else live)
+// content height minus the viewport height, at least zero.
+func (st *listStateInner) maxScrollOffset() float32 {
 	height := float32(0)
-	if bounds := s.inner.lastLayoutBounds; bounds != nil {
+	if bounds := st.lastLayoutBounds; bounds != nil {
 		height = bounds.Size.Height
 	}
-	max := s.inner.totalHeight() - height
-	if max < 0 {
-		max = 0
+	content := st.totalHeight()
+	if st.scrollbarDragStartHeight != nil {
+		content = *st.scrollbarDragStartHeight
 	}
-	return Point{X: 0, Y: max}
+	return max32(content-height, 0)
+}
+
+// ScrollbarDragStarted freezes the content height reported to the
+// scrollbar while the user drags it, so measuring overdraw items does not
+// move the thumb (R:list.rs:739-746 scrollbar_drag_started).
+func (s *ListState) ScrollbarDragStarted() {
+	height := s.inner.totalHeight()
+	s.inner.scrollbarDragStartHeight = &height
+}
+
+// ScrollbarDragEnded ends a scrollbar drag (R:list.rs:748-753).
+func (s *ListState) ScrollbarDragEnded() { s.inner.scrollbarDragStartHeight = nil }
+
+// IsScrollbarDragging reports whether a scrollbar drag is in progress
+// (R:list.rs:755-763).
+func (s *ListState) IsScrollbarDragging() bool { return s.inner.scrollbarDragStartHeight != nil }
+
+// SetOffsetFromScrollbar scrolls to a scrollbar position: point.Y is the
+// negated pixel scroll top, mapped against the drag-frozen content
+// height and clamped into the scroll range (R:list.rs:765-768, 1372-1419;
+// the follow-tail arm is not ported). A list that has not laid out yet
+// ignores it.
+func (s *ListState) SetOffsetFromScrollbar(point Point) {
+	st := s.inner
+	bounds := st.lastLayoutBounds
+	if bounds == nil {
+		return
+	}
+	padding := listPadding{}
+	if last := st.lastPadding; last != nil {
+		padding = *last
+	}
+	content := st.totalHeight()
+	if st.scrollbarDragStartHeight != nil {
+		content = *st.scrollbarDragStartHeight
+	}
+	scrollMax := max32(content+padding.Top+padding.Bottom-bounds.Size.Height, 0)
+	newScrollTop := min32(max32(-point.Y, 0), scrollMax)
+	ix, start := st.seekHeightRight(newScrollTop)
+	top := ListOffset{ItemIx: ix, OffsetInItem: newScrollTop - start}
+	st.rebasePendingScroll(top)
+	st.logicalScrollTop = &top
+}
+
+// ScrollPxOffsetForScrollbar returns the current scroll offset for the
+// scrollbar: y is the negated pixel scroll top (R:list.rs:777-796; Top
+// alignment).
+func (s *ListState) ScrollPxOffsetForScrollbar() Point {
+	st := s.inner
+	top := st.logicalScrollTopValue()
+	return Point{X: 0, Y: -(st.heightBefore(top.ItemIx) + top.OffsetInItem)}
 }
 
 // BoundsForItem returns the bounds of item ix in window coordinates
@@ -400,24 +506,80 @@ func (st *listStateInner) heightBefore(ix int) float32 {
 	}
 	sum := float32(0)
 	for i := 0; i < ix; i++ {
-		if st.items[i].measured {
-			sum += st.items[i].size.Height
-		}
+		sum += st.itemHeight(i)
 	}
 	return sum
 }
 
-// totalHeight returns the sum of the measured item heights (the
-// items summary's height; unmeasured items contribute zero).
+// totalHeight returns the summary height (R:list.rs:1667-1698: measured
+// heights plus the unmeasured items' hints; unhinted unmeasured items
+// contribute zero).
 func (st *listStateInner) totalHeight() float32 { return st.heightBefore(len(st.items)) }
 
 // itemHeight returns one item's height contribution to the summary
-// (measured height, else zero — the bounded slice carries no hints).
+// (the measured height, else the size hint, else zero).
 func (st *listStateInner) itemHeight(ix int) float32 {
 	if st.items[ix].measured {
 		return st.items[ix].size.Height
 	}
+	if hint := st.items[ix].hint; hint != nil {
+		return hint.Height
+	}
 	return 0
+}
+
+// scroll is R:list.rs:898-960 StateInner::scroll, the wheel body: events
+// after a reset are dropped; the new pixel scroll top is the frame's
+// scroll top minus the delta, clamped into [0, content + padding -
+// height]; the logical scroll top is rebased onto the item containing it
+// (re-anchoring a pending remeasure); the scroll handler observes the
+// visible range of the frame's scroll top (the pinned argument); the
+// view is notified.
+func (st *listStateInner) scroll(scrollTop ListOffset, height float32, delta Point, notify func(*Window, *App), w *Window, app *App) {
+	if st.reset {
+		return
+	}
+	padding := listPadding{}
+	if last := st.lastPadding; last != nil {
+		padding = *last
+	}
+	scrollMax := max32(st.totalHeight()+padding.Top+padding.Bottom-height, 0)
+	newScrollTop := min32(max32(st.pixelScrollTop(scrollTop)-delta.Y, 0), scrollMax)
+	ix, start := st.seekHeightRight(newScrollTop)
+	top := ListOffset{ItemIx: ix, OffsetInItem: newScrollTop - start}
+	st.rebasePendingScroll(top)
+	st.logicalScrollTop = &top
+	if handler := st.scrollHandler; handler != nil {
+		rangeStart, rangeEnd := st.visibleRange(height, scrollTop)
+		handler(&ListScrollEvent{
+			VisibleRangeStart: rangeStart,
+			VisibleRangeEnd:   rangeEnd,
+			Count:             len(st.items),
+			IsScrolled:        st.logicalScrollTop != nil,
+		}, w, app)
+	}
+	if notify != nil {
+		notify(w, app)
+	}
+}
+
+// layoutAllItems is R:list.rs:985-1025: under the measure-all behavior,
+// once per measuring cycle, every unmeasured item renders and is laid out
+// at the list width; measured items keep their size.
+func (st *listStateInner) layoutAllItems(availableWidth float32, renderItem func(int, *Window, *App) AnyElement, w *Window, app *App) {
+	if !st.measureAll || st.hasMeasured {
+		return
+	}
+	st.hasMeasured = true
+	avail := AvailableSize{Width: DefiniteAvailableSpace(availableWidth), Height: MinContentAvailableSpace()}
+	for ix := range st.items {
+		if st.items[ix].measured {
+			continue
+		}
+		element := wrapListItem(ix, renderItem(ix, w, app))
+		size := element.LayoutAsRoot(avail, w, app)
+		st.items[ix] = listItemState{measured: true, size: size}
+	}
 }
 
 // seekHeightRight seeks to the item containing the pixel offset
@@ -776,6 +938,11 @@ type listItemPlacement struct {
 type listPrepaintState struct {
 	// items are this frame's visible items in document order.
 	items []listItemPlacement
+	// hitbox is the list's hitbox (R:list.rs:1551).
+	hitbox *Hitbox
+	// scrollTop is the layout walk's effective scroll top, the base the
+	// frame's wheel deltas apply to (R:list.rs:1623).
+	scrollTop ListOffset
 }
 
 // RequestLayout implements Element: the Infer sizing measures its
@@ -830,21 +997,28 @@ func (l *ListElement) Prepaint(global *GlobalElementID, inspector *InspectorElem
 	st := l.state.inner
 	st.reset = false
 
-	// A width change invalidates every cached item height.
+	// The list's hitbox (R:list.rs:1551).
+	box := w.InsertHitbox(bounds, HitboxNormal)
+
+	// A width change invalidates every cached item height and hint
+	// (R:list.rs:1553-1568).
 	if st.lastLayoutBounds == nil || st.lastLayoutBounds.Size.Width != bounds.Size.Width {
 		for i := range st.items {
 			st.items[i] = listItemState{}
 		}
+		st.resetMeasuring()
 	}
 
 	padding := resolveListPadding(l.style, bounds.Size, RemSize(w))
 	mask := intersectMask(currentFrame(w).contentMask, bounds)
+	// The measure-all pass precedes the visible walk (R:list.rs:1262-1267).
+	st.layoutAllItems(bounds.Size.Width, l.renderItem, w, app)
 	response := st.layoutItems(&bounds.Size.Width, bounds.Size.Height, padding, l.renderItem, w, app)
 
 	st.lastLayoutBounds = &bounds
 	st.lastPadding = &padding
 
-	state := listPrepaintState{}
+	state := listPrepaintState{hitbox: &box, scrollTop: response.scrollTop}
 	// Only paint the visible items when there is space for them (taking
 	// the padding into account).
 	if bounds.Size.Height > padding.Top+padding.Bottom {
@@ -863,9 +1037,31 @@ func (l *ListElement) Prepaint(global *GlobalElementID, inspector *InspectorElem
 	return state
 }
 
-// Paint implements Element: paint each visible item at its origin
-// under the content mask.
+// Paint implements Element (R:list.rs:1604-1650): register the wheel
+// listener BEFORE painting the items, so in the bubble phase (reverse
+// registration order) the items' wheel listeners run first and can stop
+// the list from scrolling; then paint each visible item at its origin
+// under the content mask. The listener coalesces the frame's deltas
+// (ScrollDelta::coalesce), converts lines at the pinned 20px and applies
+// the accumulated delta to the frame's scroll top through the eagerly
+// clamping scroll body.
 func (l *ListElement) Paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *struct{}, prepaint *listPrepaintState, w *Window, app *App) {
+	if prepaint.hitbox != nil {
+		notify := currentViewNotifier(w)
+		inner := l.state.inner
+		height := bounds.Size.Height
+		scrollTop := prepaint.scrollTop
+		box := *prepaint.hitbox
+		accumulated := ScrollDelta{}
+		w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
+			e, ok := event.(*ScrollWheelEvent)
+			if !ok || phase != DispatchBubble || !box.ShouldHandleScroll(w) {
+				return
+			}
+			accumulated = coalesceScrollDelta(accumulated, e.Delta)
+			inner.scroll(scrollTop, height, accumulated.PixelDelta(20), notify, w, app)
+		})
+	}
 	mask := intersectMask(currentFrame(w).contentMask, bounds)
 	for _, item := range prepaint.items {
 		element := item.element

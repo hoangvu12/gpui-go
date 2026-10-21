@@ -1,0 +1,90 @@
+{
+  "ticket": "34-real-window-input",
+  "effort": "gpui-base",
+  "date": "2026-10-19",
+  "result": "implemented; one cross-slice test update requested (internal/focusspec)",
+  "summary": "Real Win32 windows route WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_MOUSEHWHEEL and the eight WM_[LRMX]BUTTON(DOWN|UP) messages into element dispatch through hostWindow.onMouseInput / WindowOptions.OnMouseInput; App.OpenWindow dispatches them through window.dispatchInput inside a.Update and answers !Propagate. ClickState is refreshed at WM_SETTINGCHANGE and forgotten at WM_NCDESTROY; the hover-status report on tracking start is ported; the keyboard entry runs dispatch_event's head (modality, propagation, prevent-default reset). The pinned hover-gated on_mouse_move and button-filtered on_mouse_up are spelled; receive-everything callers moved to the ...All names. 07's scroll builders are forwarded by the Interactive mixin. TestFrameLoopRealWindowNotifyRepaints attributes every frame-source wake to its origin.",
+  "pinned_sources": [
+    "reference/ce-source/crates/gpui_windows/src/events.rs:114,138-151,371-398,489-559,562-651,1213-1226,1389-1406",
+    "reference/ce-source/crates/gpui_windows/src/window.rs:1351-1418",
+    "reference/ce-source/crates/gpui_windows/src/util.rs:147-152",
+    "reference/ce-source/crates/gpui_windows/src/system_settings.rs:38-43",
+    "reference/ce-source/crates/gpui/src/window.rs:3171-3213,5739-5760,6081-6086",
+    "reference/ce-source/crates/gpui/src/elements/div.rs:223-236,342-352,1051-1058,1155-1161,1746-1777"
+  ],
+  "changes": [
+    "gpui/win32input_windows.go (new): win32PressedButton (events.rs:378-388), win32MouseMoveEvent, win32WheelEvent (events.rs:574-604, 626-643), handleMouseMoveMsg (start_tracking_mouse, restore_cursor_after_hide, then the input callback; Some(1) without a callback), handleMouseWheelMsg (ScreenToClient, wheel lines / chars from the host's tracked MouseWheelSettings), handleMouseInputMsg (the dispatch-table arms)",
+    "gpui/win32host_windows.go: windowWndProc routes WM_MOUSEMOVE / WM_MOUSEWHEEL / WM_MOUSEHWHEEL / WM_[LRMX]BUTTON(DOWN|UP) through handleMouseInputMsg (no DefWindowProc, like the pin's Some(n)); hostWindow.onMouseInput wired from WindowOptions.OnMouseInput; WM_NCDESTROY forgetWin32ClickState(w)",
+    "gpui/desktop_windows.go: handleSettingChangeMsg calls w.clickState().systemUpdate(wparam) first (events.rs:1220); startMouseLeaveTracking reports hovered_status_change(true) (events.rs:1399-1405)",
+    "gpui/window.go: WindowOptions.OnMouseInput; OpenWindow installs the callback: optional user interceptor first, then window.dispatchInput inside a.Update, handled = !Propagate; nil / unregistered window not handled",
+    "gpui/key_dispatch.go: dispatchKeyEvent calls w.beginPlatformInputDispatch(event, app) first (window.rs:5746-5760)",
+    "gpui/filedrop.go: the post-dispatch default_prevented clear (ticket 06's workaround) removed; the flag now lives until the next event like the pin",
+    "gpui/div.go: OnMouseMove(f(*MouseMoveEvent,*Window,*App)) hover-gated bubble (div.rs:342-352); OnMouseUp(button, f(*MouseUpEvent,*Window,*App)) button-filtered hover-gated bubble (div.rs:223-236)",
+    "gpui/fluent.go: Interactive.OnMouseMove / OnMouseUp take the pinned shapes",
+    "gpui/interact.go: OnMouseUpAll / OnMouseMoveAll docs",
+    "gpui/interact_mixin.go: Interactive.OverflowScroll / OverflowXScroll / OverflowYScroll / RestrictScrollToAxis / TrackScroll forward to 07's DivElement builders",
+    "gpui/frameloop.go: windowFrameState.onWake test seam (nil in production)",
+    "gpui/frameloop_windows_test.go: TestFrameLoopRealWindowNotifyRepaints hardened with frameWakeLedger (stack attribution: frame re-arm / activation / window-procedure message / other)",
+    "gpui/filedrop_windows_test.go, internal/dropspec/drop_test.go: receive-everything OnMouseMove callers -> OnMouseMoveAll"
+  ],
+  "tests_added": [
+    "TestWin32InputTranslation (pure: pressed-button order, logical position, vertical / shift / horizontal wheel distances, handled -> 0/1)",
+    "TestWin32InputRealWindowClickHoverCursor (real window, SendMessageW: hover repaint, resolved + platform + per-window cursor PointingHand, SetCapture/ReleaseCapture, one left click whose StopPropagation makes WM_LBUTTONUP return 0, revert on leave)",
+    "TestWin32InputRealWindowDragWithPreview (real window: threshold, drag start with MK_LBUTTON, preview at mouse - offset (0,0) then (230,130), drag-move on the target, OpenHand cursor, drop without click, preview gone)",
+    "TestWin32InputRealWindowWheelScrolls (real window: WM_MOUSEWHEEL screen point -> ScreenToClient, system lines delta, whole line-height scroll of an OverflowYScroll().TrackScroll div, no scroll outside, clamp at 200)",
+    "TestWin32InputRealWindowClickStateLifecycle (WM_SETTINGCHANGE(SPI_SETDOUBLECLICKTIME) refresh, WM_NCDESTROY forget)"
+  ],
+  "test_isolation": "the real-window input tests consume (via the OnMouseInput interceptor) every mouse event not raised by their own SendMessageW, so real mouse motion and the system's synthesized moves at the real cursor position (capture changes, window show) never reach element dispatch; no SendInput, no SetCursorPos",
+  "runs": [
+    {
+      "command": "CGO_ENABLED=0 go test ./gpui -run 'TestWin32Input|TestFrameLoopRealWindow|TestInteract|TestFluent|TestFileDrop|TestKey|TestScroll' -count=1",
+      "result": "ok"
+    },
+    {
+      "command": "CGO_ENABLED=0 go test ./gpui -run 'TestWin32Input|TestScrollRealWindow' -count=3",
+      "result": "ok"
+    },
+    {
+      "command": "CGO_ENABLED=0 go test ./gpui -count=1 -skip '<the 10 TestImg* tests of ticket 08's in-flight img_test.go>'",
+      "result": "ok (cursor-class tests passed in this run)"
+    },
+    {
+      "command": "CGO_ENABLED=0 go test ./gpui -count=1",
+      "result": "FAIL only from ticket 08's in-flight img_test.go exhausting the 8 native atlas slots (later real windows fail NewAtlas status -2); one earlier full run instead failed only TestCursorHideUntilMoveOnRealWindow / TestSetCursorMessagePolicy (cursor class; both pass isolated -count=2)"
+    },
+    {
+      "command": "CGO_ENABLED=0 go test ./internal/dropspec ./internal/focusspec -count=1",
+      "result": "dropspec ok; focusspec FAIL TestChordDispatchAndTimeoutReplay (see requested_changes_outside_ticket)"
+    },
+    {
+      "command": "CGO_ENABLED=0 go vet ./gpui",
+      "result": "clean"
+    }
+  ],
+  "deviations": [
+    "Non-client button messages (events.rs:119-137) and WM_NCMOUSEMOVE input are not routed: the port keeps the system title bar and has no non-client hit testing",
+    "The drag-preview gate paints the preview through the test's previewHostElement until ticket 08 wires prepaintActiveDragPreview / paintActiveDragPreview into render.go drawRoots",
+    "MouseButtonButton4/Button5 stand for Navigate(Back/Forward), as in ticket 06's button handler",
+    "system_settings update matches the pin's SPI_GET* action codes (a pin quirk), unchanged"
+  ],
+  "requested_changes_outside_ticket": [
+    "internal/focusspec/focus_test.go TestChordDispatchAndTimeoutReplay: the first key down now switches the input modality and refreshes the window (window.rs:5746-5755); the flush redraw replaces the window's input handler with the frame's (none: window.rs:3171-3213), so the handler installed by SetInputHandler before the draw is gone and the abandoned chord no longer takes the text-input timeout. Re-install k.window.SetInputHandler(input) after the first dispatch (or register it from the render through HandleInput)",
+    "ticket 08: gpui/img_test.go leaks native atlas slots (the full ./gpui run exhausts the bound of 8 after it; every later real window fails at NewAtlas status -2)",
+    "ticket 08: render.go drawRoots prepaint/paint of the active drag preview (window.rs:3451-3456, 3474-3475) and resetCursorStyle at frame completion (window.rs:3277)"
+  ],
+  "native_artifact": "unchanged (rev 11)",
+  "orchestrator_rerun": [
+    {
+      "command": "staged 12+34 snapshot (without ticket 08's in-progress files): CGO_ENABLED=0 go test ./gpui -count=1",
+      "result": "ok"
+    },
+    {
+      "command": "every internal/*, authoring, conformance package serially on the snapshot",
+      "result": "ok except headlessspec (snapshot lacks the gitignored reference/ce-source it resolves citations against; ok on the live tree) and one clipspec run (real system clipboard; ok on rerun in snapshot and live tree)"
+    }
+  ],
+  "orchestrator_fixes": [
+    "internal/focusspec TestChordDispatchAndTimeoutReplay re-registers its input handler after the keyboard-modality redraw (the reference registers handlers per frame, window.rs:3171-3213, 5746-5760); its replay property is unchanged",
+    "div.go: a11y-authored divs join the semantic tree (ticket 11 wiring); textElement role = RoleLabel (text.rs:189-191)"
+  ]
+}

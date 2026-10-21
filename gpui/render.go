@@ -47,7 +47,9 @@ func activeFrameWindow() *Window { return activeFrame }
 
 // DrawWindowFrame draws one frame of the window's root view through the
 // full element phase pipeline and returns the finished scene (the
-// reference Window::draw + draw_roots). The frame's paint operations go
+// reference Window::draw + draw_roots). Windows enrolled in the frame
+// loop (frameloop.go) are drawn by their frame requests; an explicit call
+// remains valid and leaves the frame awaiting presentation. The frame's paint operations go
 // into a fresh scene; the scene is finished (sorted, plan compiled) and
 // becomes the window's last drawn scene; per-window retained element
 // state survives across frames keyed by element identity paths.
@@ -99,18 +101,21 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 	// (focus.go/key_dispatch.go): the completed tree and tab stops swap
 	// into the rendered state when the frame completes.
 	beginDispatchFrame(w)
+	// The frame loop's rendered-view collection (Base ticket 03,
+	// frameloop.go): the views rendered by this frame become the
+	// window's tracked entities when it completes.
+	beginFrameTracking(w)
 
 	baseMask := Bounds{Origin: Point{}, Size: viewport}
 	frame := &frameDrawState{
-		scene:             scene,
-		paint:             NewPaintContext(scale, baseMask, 1.0),
-		viewport:          viewport,
-		scale:             scale,
-		rem:               ds.rem,
-		contentMask:       baseMask,
-		elementOffset:     Point{},
-		text:              ds.text,
-		inlineShapedLines: make(map[*WrappedLine]struct{}),
+		scene:         scene,
+		paint:         NewPaintContext(scale, baseMask, 1.0),
+		viewport:      viewport,
+		scale:         scale,
+		rem:           ds.rem,
+		contentMask:   baseMask,
+		elementOffset: Point{},
+		text:          ds.text,
 	}
 	ds.frame = frame
 	previousActive := activeFrame
@@ -132,32 +137,19 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 		// frame; application mutations made during the failed build are
 		// NOT rolled back.
 		if completed {
-			ds.draws++
-			ds.lastDebugBounds = frame.debugBounds
-			ds.lastScene = scene
-			ds.lastInlineFacts = frame.inlineFacts
-			retainElementStates(ds, frame.accessedElementStates)
-			// Swap the completed dispatch frame into the rendered state
-			// (the focus/dispatch runtime reads it for input dispatch).
-			endDispatchFrame(w)
-			// Publish the inspector tree of the completed frame and swap
-			// its hitbox map into the window state (ticket27; window.rs
-			// Frame::finish + mem::swap(next_frame, rendered_frame) carry
-			// the inspector members over). An abandoned build below keeps
-			// the previously published tree.
-			inspectorFinishFrame(w, frame, ds.draws)
-			// Record the draw duration as one overlay sample (window.rs
-			// 3291-3298, cfg(feature = "profiler") → the port's
-			// CapFrameOverlay capability).
-			RecordDebugFrame(w, time.Since(drawStart))
-			ds.refreshRequested = false
+			completeFrame(w, ds, frame, drawStart)
 		} else {
 			discardDispatchFrame(w)
+			abandonFrameTracking(w)
 		}
 	}()
 
 	app := w.app
 	app.Update(func(app *App) {
+		// Entity accesses are tracked while the element phases run, not
+		// during the flush that closes this update (frameloop.go).
+		frame.trackingAccess = true
+		defer func() { frame.trackingAccess = false }()
 		drawErr = drawRoots(w, app, ds, frame)
 	})
 	if drawErr != nil {
@@ -171,6 +163,70 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 	return scene, nil
 }
 
+// finishingFrames counts frame completions in progress (completeFrame):
+// the test flush does not start another draw while one is finishing.
+var finishingFrames int
+
+// completeFrame publishes a completed frame (the tail of Window::draw,
+// window.rs:3233-3290). While it runs the window still counts as drawing
+// (isDrawing), so invalidations raised by the frame-end work are ignored
+// like the reference's draw phase; the frame is then published as clean,
+// and a focus move made by a focus listener refreshes the window
+// afterwards (window.rs:3279-3285) so that frame is not lost.
+func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawStart time.Time) {
+	// The frame's line-layout cache rotation (window.rs:3230
+	// self.text_system().finish_frame(), the tail of Window::draw after
+	// draw_roots): the shaped lines this frame requested survive into
+	// the next frame's previous-frame cache; the lines no frame
+	// requested release their native handles. An abandoned build does
+	// not finish the frame, like the reference: its entries stay for the
+	// next completed frame's rotation (nothing leaks either way).
+	if ds.text != nil {
+		ds.text.finishFrame()
+	}
+	var focusMoved bool
+	func() {
+		ds.finishing = true
+		finishingFrames++
+		defer func() {
+			ds.finishing = false
+			finishingFrames--
+		}()
+		ds.draws++
+		ds.lastDebugBounds = frame.debugBounds
+		ds.lastScene = frame.scene
+		ds.lastInlineFacts = frame.inlineFacts
+		ds.lastDeferredPriorities = deferredPrioritiesOf(frame)
+		evicted := retainElementStates(ds, frame.accessedElementStates)
+		// The frame-finish hook (helpers_frame.go): the completed dispatch
+		// frame swaps into the rendered state through endDispatchFrame (the
+		// focus/dispatch runtime reads it for input dispatch), the evicted
+		// element states release and the focus listeners run.
+		focusMoved = finishFrame(w, evicted)
+		// Publish the inspector tree of the completed frame and swap its
+		// hitbox map into the window state (ticket27; window.rs
+		// Frame::finish + mem::swap(next_frame, rendered_frame) carry the
+		// inspector members over). An abandoned build keeps the previously
+		// published tree.
+		inspectorFinishFrame(w, frame, ds.draws)
+		// Record the draw duration as one overlay sample (window.rs
+		// 3291-3298, cfg(feature = "profiler") → the port's
+		// CapFrameOverlay capability).
+		RecordDebugFrame(w, time.Since(drawStart))
+	}()
+	// The frame loop: tracked entities swap in, the window is clean and the
+	// frame awaits presentation (window.rs 3276/3287).
+	ds.refreshRequested = false
+	completeFrameTracking(w, ds.root)
+	// reset_cursor_style after recording the accessed entities
+	// (window.rs 3276-3277; Base ticket 06's interact.go helper): the
+	// completed frame's cursor requests resolve the window cursor.
+	w.resetCursorStyle(w.app)
+	if focusMoved {
+		w.Refresh()
+	}
+}
+
 // drawRoots is the reference Window::draw_roots: request the root
 // element's layout, stretch auto-sized roots to fill the viewport,
 // compute the layout, prepaint as root at the origin, then paint.
@@ -180,7 +236,11 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 // prepaints after the root and paints after the root, the hovered
 // pick highlight paints after that, and the debug frame overlay
 // paints into the frame's scene (window.rs 3187-3197, the
-// cfg(feature = "profiler") call site).
+// cfg(feature = "profiler") call site). Base ticket 08: the deferred
+// draws prepaint after the inspector (window.rs 3436) and paint after it
+// above a raised order floor (3470, deferred.go); the active drag's
+// preview prepaints after them (3451-3456) and paints after the deferred
+// draws (3474-3475).
 func drawRoots(w *Window, app *App, ds *windowDrawState, frame *frameDrawState) error {
 	root := viewElementOf(ds.root)
 	layoutID := root.RequestLayout(w, app)
@@ -220,11 +280,34 @@ func drawRoots(w *Window, app *App, ds *windowDrawState, frame *frameDrawState) 
 	// element out in the panel region after the root's prepaint.
 	inspectorElement := prepaintInspectorElement(w, app, frame.viewport)
 
+	// prepaint_deferred_draws (window.rs 3436; Base ticket 08,
+	// deferred.go).
+	prepaintDeferredDraws(w, app)
+
+	// The active drag's preview prepaints as a root at
+	// mouse_position - cursor_offset (window.rs 3451-3456; the port has no
+	// in-window prompt and no tooltips, the branches before and after it).
+	// The port's drawables re-resolve their bounds at paint, so the same
+	// absolute offset is re-applied around the preview's paint.
+	var dragOffset Point
+	if drag := app.ActiveDrag(); drag != nil && drag.View != nil {
+		mouse := w.TrackedMousePosition()
+		dragOffset = Point{X: mouse.X - drag.CursorOffset.X, Y: mouse.Y - drag.CursorOffset.Y}
+	}
+	dragElement, hasDragElement := prepaintActiveDragPreview(w, app)
+
 	root.Paint(w, app)
 
-	// paint_inspector (window.rs 3467-3468) then the hovered pick
-	// highlight (paint_inspector_hitbox, 3480-3482).
+	// paint_inspector (window.rs 3467-3468), paint_deferred_draws (3470),
+	// the drag preview (3474-3475), then the hovered pick highlight
+	// (paint_inspector_hitbox, 3480-3482).
 	paintInspectorElement(w, app, inspectorElement)
+	paintDeferredDraws(w, app)
+	if hasDragElement {
+		WithAbsoluteElementOffsetVoid(w, dragOffset, func(w *Window) {
+			paintActiveDragPreview(dragElement, w, app)
+		})
+	}
 	paintInspectorHighlight(w, app)
 
 	// The debug frame overlay (window.rs 3187-3197: painted after
@@ -305,6 +388,48 @@ func LastDrawnScene(w *Window) *Scene {
 		return nil
 	}
 	return ds.lastScene
+}
+
+// GlyphAtlas returns the atlas that holds the window's glyphs: the
+// atlas its text system rasterized every frame's glyph sprites into
+// (the element pipeline's per-window atlas; the reference's window
+// text system owns the atlas behind the platform renderer).
+//
+// A consumer-owned present loop passes it to Surface.DrawScene and
+// Surface.RenderScene whenever it presents LastDrawnScene(w): the
+// scene's sprite batches resolve their textures against exactly this
+// atlas, and a draw that does not receive it fails with the typed
+// ErrSceneSpriteAtlas (a nil atlas presents only sprite-free scenes,
+// which is why sprite-free windows present unchanged). The atlas is
+// created with the window's text system (lazily, on first use), stays
+// the same for the window's lifetime and is rebuilt after device loss
+// by the renderer's recovery (the atlas invalidation + forced redraw).
+//
+// Like every window accessor it must be called on the foreground
+// (host) thread. Deterministic test windows never rasterize glyphs,
+// so they answer ErrNoGlyphAtlas.
+func (w *Window) GlyphAtlas() (*Atlas, error) {
+	if w == nil {
+		return nil, fmt.Errorf("gpui: GlyphAtlas requires a window")
+	}
+	ds, ok := windowDrawStates[w]
+	if !ok {
+		return nil, fmt.Errorf("gpui: GlyphAtlas: the window has no element runtime")
+	}
+	if ds.text == nil {
+		// The same lazy creation the frame draw and Window.ShapeText
+		// use: a present loop may ask before the first frame.
+		text, err := windowTextSystemOf()
+		if err != nil {
+			return nil, fmt.Errorf("gpui: GlyphAtlas: text system: %w", err)
+		}
+		ds.text = text
+	}
+	rts, ok := ds.text.(*realWindowTextSystem)
+	if !ok || rts.atlas == nil {
+		return nil, fmt.Errorf("gpui: GlyphAtlas: %w (deterministic test windows shape no glyph sprites)", ErrNoGlyphAtlas)
+	}
+	return rts.atlas, nil
 }
 
 // WindowPrimitiveCounts returns the current frame's quad and glyph

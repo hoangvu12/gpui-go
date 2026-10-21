@@ -1,0 +1,4996 @@
+{
+  "cm001 Tabs": [
+    "Root 0..14 ",
+    "  Code 0..13 lang=None \"foo\\tbaz\\t\\tbim\""
+  ],
+  "cm002 Tabs": [
+    "Root 0..16 ",
+    "  Code 0..15 lang=None \"foo\\tbaz\\t\\tbim\""
+  ],
+  "cm003 Tabs": [
+    "Root 0..18 ",
+    "  Code 0..17 lang=None \"a\\ta\\nὐ\\ta\""
+  ],
+  "cm004 Tabs": [
+    "Root 0..14 ",
+    "  List 0..13 ordered=false start=None spread=false",
+    "    ListItem 0..13 checked=None spread=true",
+    "      Paragraph 4..7 ",
+    "        Text 4..7 \"foo\"",
+    "      Paragraph 10..13 ",
+    "        Text 10..13 \"bar\""
+  ],
+  "cm005 Tabs": [
+    "Root 0..13 ",
+    "  List 0..12 ordered=false start=None spread=false",
+    "    ListItem 0..12 checked=None spread=true",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"foo\"",
+    "      Code 7..12 lang=None \"bar\""
+  ],
+  "cm006 Tabs": [
+    "Root 0..7 ",
+    "  Blockquote 0..6 ",
+    "    Code 1..6 lang=None \"foo\""
+  ],
+  "cm007 Tabs": [
+    "Root 0..7 ",
+    "  List 0..6 ordered=false start=None spread=false",
+    "    ListItem 0..6 checked=None spread=false",
+    "      Code 1..6 lang=None \"foo\""
+  ],
+  "cm008 Tabs": [
+    "Root 0..13 ",
+    "  Code 0..12 lang=None \"foo\\nbar\""
+  ],
+  "cm009 Tabs": [
+    "Root 0..24 ",
+    "  List 0..23 ordered=false start=None spread=false",
+    "    ListItem 0..23 checked=None spread=false",
+    "      Paragraph 3..6 ",
+    "        Text 3..6 \"foo\"",
+    "      List 10..23 ordered=false start=None spread=false",
+    "        ListItem 10..23 checked=None spread=false",
+    "          Paragraph 12..15 ",
+    "            Text 12..15 \"bar\"",
+    "          List 18..23 ordered=false start=None spread=false",
+    "            ListItem 18..23 checked=None spread=false",
+    "              Paragraph 20..23 ",
+    "                Text 20..23 \"baz\""
+  ],
+  "cm010 Tabs": [
+    "Root 0..6 ",
+    "  Heading 0..5 depth=1",
+    "    Text 2..5 \"Foo\""
+  ],
+  "cm011 Tabs": [
+    "Root 0..7 ",
+    "  ThematicBreak 0..6 "
+  ],
+  "cm012 Backslash escapes": [
+    "Root 0..65 ",
+    "  Paragraph 0..64 ",
+    "    Text 1..64 \"!\\\"#$%&'()*+,-./:;<=>?@[\\\\]^_`{|}~\""
+  ],
+  "cm013 Backslash escapes": [
+    "Root 0..17 ",
+    "  Paragraph 0..16 ",
+    "    Text 0..16 \"\\\\\\t\\\\A\\\\a\\\\ \\\\3\\\\φ\\\\«\""
+  ],
+  "cm014 Backslash escapes": [
+    "Root 0..175 ",
+    "  Paragraph 0..174 ",
+    "    Text 1..174 \"*not emphasized*\\n<br/> not a tag\\n[not a link](/foo)\\n`not code`\\n1. not a list\\n* not a list\\n# not a heading\\n[foo]: /url \\\"not a reference\\\"\\n&ouml; not a character entity\""
+  ],
+  "cm015 Backslash escapes": [
+    "Root 0..13 ",
+    "  Paragraph 0..12 ",
+    "    Text 1..2 \"\\\\\"",
+    "    Emphasis 2..12 ",
+    "      Text 3..11 \"emphasis\""
+  ],
+  "cm016 Backslash escapes": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..3 \"foo\"",
+    "    Break 3..5 ",
+    "    Text 5..8 \"bar\""
+  ],
+  "cm017 Backslash escapes": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    InlineCode 0..10 \"\\\\[\\\\`\""
+  ],
+  "cm018 Backslash escapes": [
+    "Root 0..9 ",
+    "  Code 0..8 lang=None \"\\\\[\\\\]\""
+  ],
+  "cm019 Backslash escapes": [
+    "Root 0..13 ",
+    "  Code 0..12 lang=None \"\\\\[\\\\]\""
+  ],
+  "cm020 Backslash escapes": [
+    "Root 0..30 ",
+    "  Paragraph 0..29 ",
+    "    Link 0..29 url=\"https://example.com?find=\\\\*\" title=None",
+    "      Text 1..28 \"https://example.com?find=\\\\*\""
+  ],
+  "cm021 Backslash escapes": [
+    "Root 0..19 ",
+    "  Html 0..18 \"<a href=\\\"/bar\\\\/)\\\">\""
+  ],
+  "cm022 Backslash escapes": [
+    "Root 0..24 ",
+    "  Paragraph 0..23 ",
+    "    Link 0..23 url=\"/bar*\" title=Some(\"ti*tle\")",
+    "      Text 1..4 \"foo\""
+  ],
+  "cm023 Backslash escapes": [
+    "Root 0..31 ",
+    "  Paragraph 0..5 ",
+    "    LinkReference 0..5 id=\"foo\"",
+    "      Text 1..4 \"foo\"",
+    "  Definition 7..30 id=\"foo\" url=\"/bar*\" title=Some(\"ti*tle\")"
+  ],
+  "cm024 Backslash escapes": [
+    "Root 0..21 ",
+    "  Code 0..20 lang=Some(\"foo+bar\") \"foo\""
+  ],
+  "cm025 Entity and numeric character references": [
+    "Root 0..110 ",
+    "  Paragraph 0..109 ",
+    "    Text 0..109 \"\\u{a0} & © Æ Ď\\n¾ ℋ ⅆ\\n∲ ≧\\u{338}\""
+  ],
+  "cm026 Entity and numeric character references": [
+    "Root 0..26 ",
+    "  Paragraph 0..25 ",
+    "    Text 0..25 \"# Ӓ Ϡ �\""
+  ],
+  "cm027 Entity and numeric character references": [
+    "Root 0..23 ",
+    "  Paragraph 0..22 ",
+    "    Text 0..22 \"\\\" ആ ಫ\""
+  ],
+  "cm028 Entity and numeric character references": [
+    "Root 0..67 ",
+    "  Paragraph 0..66 ",
+    "    Text 0..66 \"&nbsp &x; &#; &#x;\\n&#87654321;\\n&#abcdef0;\\n&ThisIsNotDefined; &hi?;\""
+  ],
+  "cm029 Entity and numeric character references": [
+    "Root 0..6 ",
+    "  Paragraph 0..5 ",
+    "    Text 0..5 \"&copy\""
+  ],
+  "cm030 Entity and numeric character references": [
+    "Root 0..15 ",
+    "  Paragraph 0..14 ",
+    "    Text 0..14 \"&MadeUpEntity;\""
+  ],
+  "cm031 Entity and numeric character references": [
+    "Root 0..29 ",
+    "  Html 0..28 \"<a href=\\\"&ouml;&ouml;.html\\\">\""
+  ],
+  "cm032 Entity and numeric character references": [
+    "Root 0..38 ",
+    "  Paragraph 0..37 ",
+    "    Link 0..37 url=\"/föö\" title=Some(\"föö\")",
+    "      Text 1..4 \"foo\""
+  ],
+  "cm033 Entity and numeric character references": [
+    "Root 0..45 ",
+    "  Paragraph 0..5 ",
+    "    LinkReference 0..5 id=\"foo\"",
+    "      Text 1..4 \"foo\"",
+    "  Definition 7..44 id=\"foo\" url=\"/föö\" title=Some(\"föö\")"
+  ],
+  "cm034 Entity and numeric character references": [
+    "Root 0..26 ",
+    "  Code 0..25 lang=Some(\"föö\") \"foo\""
+  ],
+  "cm035 Entity and numeric character references": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    InlineCode 0..15 \"f&ouml;&ouml;\""
+  ],
+  "cm036 Entity and numeric character references": [
+    "Root 0..19 ",
+    "  Code 0..18 lang=None \"f&ouml;f&ouml;\""
+  ],
+  "cm037 Entity and numeric character references": [
+    "Root 0..20 ",
+    "  Paragraph 0..19 ",
+    "    Text 0..14 \"*foo*\\n\"",
+    "    Emphasis 14..19 ",
+    "      Text 15..18 \"foo\""
+  ],
+  "cm038 Entity and numeric character references": [
+    "Root 0..17 ",
+    "  Paragraph 0..9 ",
+    "    Text 0..9 \"* foo\"",
+    "  List 11..16 ordered=false start=None spread=false",
+    "    ListItem 11..16 checked=None spread=false",
+    "      Paragraph 13..16 ",
+    "        Text 13..16 \"foo\""
+  ],
+  "cm039 Entity and numeric character references": [
+    "Root 0..17 ",
+    "  Paragraph 0..16 ",
+    "    Text 0..16 \"foo\\n\\nbar\""
+  ],
+  "cm040 Entity and numeric character references": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..7 \"\\tfoo\""
+  ],
+  "cm041 Entity and numeric character references": [
+    "Root 0..25 ",
+    "  Paragraph 0..24 ",
+    "    Text 0..24 \"[a](url \\\"tit\\\")\""
+  ],
+  "cm042 Precedence": [
+    "Root 0..14 ",
+    "  List 0..13 ordered=false start=None spread=false",
+    "    ListItem 0..6 checked=None spread=false",
+    "      Paragraph 2..6 ",
+    "        Text 2..6 \"`one\"",
+    "    ListItem 7..13 checked=None spread=false",
+    "      Paragraph 9..13 ",
+    "        Text 9..13 \"two`\""
+  ],
+  "cm043 Thematic breaks": [
+    "Root 0..12 ",
+    "  ThematicBreak 0..3 ",
+    "  ThematicBreak 4..7 ",
+    "  ThematicBreak 8..11 "
+  ],
+  "cm044 Thematic breaks": [
+    "Root 0..4 ",
+    "  Paragraph 0..3 ",
+    "    Text 0..3 \"+++\""
+  ],
+  "cm045 Thematic breaks": [
+    "Root 0..4 ",
+    "  Paragraph 0..3 ",
+    "    Text 0..3 \"===\""
+  ],
+  "cm046 Thematic breaks": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..8 \"--\\n**\\n__\""
+  ],
+  "cm047 Thematic breaks": [
+    "Root 0..18 ",
+    "  ThematicBreak 0..4 ",
+    "  ThematicBreak 5..10 ",
+    "  ThematicBreak 11..17 "
+  ],
+  "cm048 Thematic breaks": [
+    "Root 0..8 ",
+    "  Code 0..7 lang=None \"***\""
+  ],
+  "cm049 Thematic breaks": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Text 0..11 \"Foo\\n***\""
+  ],
+  "cm050 Thematic breaks": [
+    "Root 0..38 ",
+    "  ThematicBreak 0..37 "
+  ],
+  "cm051 Thematic breaks": [
+    "Root 0..7 ",
+    "  ThematicBreak 0..6 "
+  ],
+  "cm052 Thematic breaks": [
+    "Root 0..20 ",
+    "  ThematicBreak 0..19 "
+  ],
+  "cm053 Thematic breaks": [
+    "Root 0..22 ",
+    "  ThematicBreak 0..21 "
+  ],
+  "cm054 Thematic breaks": [
+    "Root 0..12 ",
+    "  ThematicBreak 0..11 "
+  ],
+  "cm055 Thematic breaks": [
+    "Root 0..28 ",
+    "  Paragraph 0..9 ",
+    "    Text 0..9 \"_ _ _ _ a\"",
+    "  Paragraph 11..18 ",
+    "    Text 11..18 \"a------\"",
+    "  Paragraph 20..27 ",
+    "    Text 20..27 \"---a---\""
+  ],
+  "cm056 Thematic breaks": [
+    "Root 0..5 ",
+    "  Paragraph 0..4 ",
+    "    Emphasis 1..4 ",
+    "      Text 2..3 \"-\""
+  ],
+  "cm057 Thematic breaks": [
+    "Root 0..16 ",
+    "  List 0..5 ordered=false start=None spread=false",
+    "    ListItem 0..5 checked=None spread=false",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"foo\"",
+    "  ThematicBreak 6..9 ",
+    "  List 10..15 ordered=false start=None spread=false",
+    "    ListItem 10..15 checked=None spread=false",
+    "      Paragraph 12..15 ",
+    "        Text 12..15 \"bar\""
+  ],
+  "cm058 Thematic breaks": [
+    "Root 0..12 ",
+    "  Paragraph 0..3 ",
+    "    Text 0..3 \"Foo\"",
+    "  ThematicBreak 4..7 ",
+    "  Paragraph 8..11 ",
+    "    Text 8..11 \"bar\""
+  ],
+  "cm059 Thematic breaks": [
+    "Root 0..12 ",
+    "  Heading 0..7 depth=2",
+    "    Text 0..3 \"Foo\"",
+    "  Paragraph 8..11 ",
+    "    Text 8..11 \"bar\""
+  ],
+  "cm060 Thematic breaks": [
+    "Root 0..18 ",
+    "  List 0..5 ordered=false start=None spread=false",
+    "    ListItem 0..5 checked=None spread=false",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"Foo\"",
+    "  ThematicBreak 6..11 ",
+    "  List 12..17 ordered=false start=None spread=false",
+    "    ListItem 12..17 checked=None spread=false",
+    "      Paragraph 14..17 ",
+    "        Text 14..17 \"Bar\""
+  ],
+  "cm061 Thematic breaks": [
+    "Root 0..14 ",
+    "  List 0..13 ordered=false start=None spread=false",
+    "    ListItem 0..5 checked=None spread=false",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"Foo\"",
+    "    ListItem 6..13 checked=None spread=false",
+    "      ThematicBreak 8..13 "
+  ],
+  "cm062 ATX headings": [
+    "Root 0..51 ",
+    "  Heading 0..5 depth=1",
+    "    Text 2..5 \"foo\"",
+    "  Heading 6..12 depth=2",
+    "    Text 9..12 \"foo\"",
+    "  Heading 13..20 depth=3",
+    "    Text 17..20 \"foo\"",
+    "  Heading 21..29 depth=4",
+    "    Text 26..29 \"foo\"",
+    "  Heading 30..39 depth=5",
+    "    Text 36..39 \"foo\"",
+    "  Heading 40..50 depth=6",
+    "    Text 47..50 \"foo\""
+  ],
+  "cm063 ATX headings": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Text 0..11 \"####### foo\""
+  ],
+  "cm064 ATX headings": [
+    "Root 0..18 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..7 \"#5 bolt\"",
+    "  Paragraph 9..17 ",
+    "    Text 9..17 \"#hashtag\""
+  ],
+  "cm065 ATX headings": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Text 1..7 \"## foo\""
+  ],
+  "cm066 ATX headings": [
+    "Root 0..20 ",
+    "  Heading 0..19 depth=1",
+    "    Text 2..6 \"foo \"",
+    "    Emphasis 6..11 ",
+    "      Text 7..10 \"bar\"",
+    "    Text 11..19 \" *baz*\""
+  ],
+  "cm067 ATX headings": [
+    "Root 0..44 ",
+    "  Heading 0..43 depth=1",
+    "    Text 19..22 \"foo\""
+  ],
+  "cm068 ATX headings": [
+    "Root 0..27 ",
+    "  Heading 0..8 depth=3",
+    "    Text 5..8 \"foo\"",
+    "  Heading 9..17 depth=2",
+    "    Text 14..17 \"foo\"",
+    "  Heading 18..26 depth=1",
+    "    Text 23..26 \"foo\""
+  ],
+  "cm069 ATX headings": [
+    "Root 0..10 ",
+    "  Code 0..9 lang=None \"# foo\""
+  ],
+  "cm070 ATX headings": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Text 0..13 \"foo\\n# bar\""
+  ],
+  "cm071 ATX headings": [
+    "Root 0..29 ",
+    "  Heading 0..9 depth=2",
+    "    Text 3..6 \"foo\"",
+    "  Heading 10..28 depth=3",
+    "    Text 18..21 \"bar\""
+  ],
+  "cm072 ATX headings": [
+    "Root 0..54 ",
+    "  Heading 0..40 depth=1",
+    "    Text 2..5 \"foo\"",
+    "  Heading 41..53 depth=5",
+    "    Text 47..50 \"foo\""
+  ],
+  "cm073 ATX headings": [
+    "Root 0..17 ",
+    "  Heading 0..16 depth=3",
+    "    Text 4..7 \"foo\""
+  ],
+  "cm074 ATX headings": [
+    "Root 0..14 ",
+    "  Heading 0..13 depth=3",
+    "    Text 4..13 \"foo ### b\""
+  ],
+  "cm075 ATX headings": [
+    "Root 0..7 ",
+    "  Heading 0..6 depth=1",
+    "    Text 2..6 \"foo#\""
+  ],
+  "cm076 ATX headings": [
+    "Root 0..34 ",
+    "  Heading 0..12 depth=3",
+    "    Text 4..12 \"foo ###\"",
+    "  Heading 13..24 depth=2",
+    "    Text 16..24 \"foo ###\"",
+    "  Heading 25..33 depth=1",
+    "    Text 27..33 \"foo #\""
+  ],
+  "cm077 ATX headings": [
+    "Root 0..17 ",
+    "  ThematicBreak 0..4 ",
+    "  Heading 5..11 depth=2",
+    "    Text 8..11 \"foo\"",
+    "  ThematicBreak 12..16 "
+  ],
+  "cm078 ATX headings": [
+    "Root 0..22 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..7 \"Foo bar\"",
+    "  Heading 8..13 depth=1",
+    "    Text 10..13 \"baz\"",
+    "  Paragraph 14..21 ",
+    "    Text 14..21 \"Bar foo\""
+  ],
+  "cm079 ATX headings": [
+    "Root 0..14 ",
+    "  Heading 0..3 depth=2",
+    "  Heading 4..5 depth=1",
+    "  Heading 6..13 depth=3"
+  ],
+  "cm080 Setext headings": [
+    "Root 0..41 ",
+    "  Heading 0..19 depth=1",
+    "    Text 0..4 \"Foo \"",
+    "    Emphasis 4..9 ",
+    "      Text 5..8 \"bar\"",
+    "  Heading 21..40 depth=2",
+    "    Text 21..25 \"Foo \"",
+    "    Emphasis 25..30 ",
+    "      Text 26..29 \"bar\""
+  ],
+  "cm081 Setext headings": [
+    "Root 0..19 ",
+    "  Heading 0..18 depth=1",
+    "    Text 0..4 \"Foo \"",
+    "    Emphasis 4..13 ",
+    "      Text 5..12 \"bar\\nbaz\""
+  ],
+  "cm082 Setext headings": [
+    "Root 0..22 ",
+    "  Heading 0..21 depth=1",
+    "    Text 2..6 \"Foo \"",
+    "    Emphasis 6..15 ",
+    "      Text 7..14 \"bar\\nbaz\""
+  ],
+  "cm083 Setext headings": [
+    "Root 0..37 ",
+    "  Heading 0..29 depth=2",
+    "    Text 0..3 \"Foo\"",
+    "  Heading 31..36 depth=1",
+    "    Text 31..34 \"Foo\""
+  ],
+  "cm084 Setext headings": [
+    "Root 0..37 ",
+    "  Heading 0..10 depth=2",
+    "    Text 3..6 \"Foo\"",
+    "  Heading 12..23 depth=2",
+    "    Text 14..17 \"Foo\"",
+    "  Heading 25..36 depth=1",
+    "    Text 27..30 \"Foo\""
+  ],
+  "cm085 Setext headings": [
+    "Root 0..29 ",
+    "  Code 0..24 lang=None \"Foo\\n---\\n\\nFoo\"",
+    "  ThematicBreak 25..28 "
+  ],
+  "cm086 Setext headings": [
+    "Root 0..18 ",
+    "  Heading 0..17 depth=2",
+    "    Text 0..3 \"Foo\""
+  ],
+  "cm087 Setext headings": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Text 0..11 \"Foo\\n---\""
+  ],
+  "cm088 Setext headings": [
+    "Root 0..19 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..7 \"Foo\\n= =\"",
+    "  Paragraph 9..12 ",
+    "    Text 9..12 \"Foo\"",
+    "  ThematicBreak 13..18 "
+  ],
+  "cm089 Setext headings": [
+    "Root 0..12 ",
+    "  Heading 0..11 depth=2",
+    "    Text 0..3 \"Foo\""
+  ],
+  "cm090 Setext headings": [
+    "Root 0..10 ",
+    "  Heading 0..9 depth=2",
+    "    Text 0..4 \"Foo\\\\\""
+  ],
+  "cm091 Setext headings": [
+    "Root 0..46 ",
+    "  Heading 0..9 depth=2",
+    "    Text 0..4 \"`Foo\"",
+    "  Paragraph 10..11 ",
+    "    Text 10..11 \"`\"",
+    "  Heading 13..32 depth=2",
+    "    Text 13..28 \"<a title=\\\"a lot\"",
+    "  Paragraph 33..45 ",
+    "    Text 33..45 \"of dashes\\\"/>\""
+  ],
+  "cm092 Setext headings": [
+    "Root 0..10 ",
+    "  Blockquote 0..5 ",
+    "    Paragraph 2..5 ",
+    "      Text 2..5 \"Foo\"",
+    "  ThematicBreak 6..9 "
+  ],
+  "cm093 Setext headings": [
+    "Root 0..14 ",
+    "  Blockquote 0..13 ",
+    "    Paragraph 2..13 ",
+    "      Text 2..13 \"foo\\nbar\\n===\""
+  ],
+  "cm094 Setext headings": [
+    "Root 0..10 ",
+    "  List 0..5 ordered=false start=None spread=false",
+    "    ListItem 0..5 checked=None spread=false",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"Foo\"",
+    "  ThematicBreak 6..9 "
+  ],
+  "cm095 Setext headings": [
+    "Root 0..12 ",
+    "  Heading 0..11 depth=2",
+    "    Text 0..7 \"Foo\\nBar\""
+  ],
+  "cm096 Setext headings": [
+    "Root 0..24 ",
+    "  ThematicBreak 0..3 ",
+    "  Heading 4..11 depth=2",
+    "    Text 4..7 \"Foo\"",
+    "  Heading 12..19 depth=2",
+    "    Text 12..15 \"Bar\"",
+    "  Paragraph 20..23 ",
+    "    Text 20..23 \"Baz\""
+  ],
+  "cm097 Setext headings": [
+    "Root 0..6 ",
+    "  Paragraph 1..5 ",
+    "    Text 1..5 \"====\""
+  ],
+  "cm098 Setext headings": [
+    "Root 0..8 ",
+    "  ThematicBreak 0..3 ",
+    "  ThematicBreak 4..7 "
+  ],
+  "cm099 Setext headings": [
+    "Root 0..12 ",
+    "  List 0..5 ordered=false start=None spread=false",
+    "    ListItem 0..5 checked=None spread=false",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"foo\"",
+    "  ThematicBreak 6..11 "
+  ],
+  "cm100 Setext headings": [
+    "Root 0..12 ",
+    "  Code 0..7 lang=None \"foo\"",
+    "  ThematicBreak 8..11 "
+  ],
+  "cm101 Setext headings": [
+    "Root 0..12 ",
+    "  Blockquote 0..5 ",
+    "    Paragraph 2..5 ",
+    "      Text 2..5 \"foo\"",
+    "  ThematicBreak 6..11 "
+  ],
+  "cm102 Setext headings": [
+    "Root 0..14 ",
+    "  Heading 0..13 depth=2",
+    "    Text 1..6 \"> foo\""
+  ],
+  "cm103 Setext headings": [
+    "Root 0..17 ",
+    "  Paragraph 0..3 ",
+    "    Text 0..3 \"Foo\"",
+    "  Heading 5..12 depth=2",
+    "    Text 5..8 \"bar\"",
+    "  Paragraph 13..16 ",
+    "    Text 13..16 \"baz\""
+  ],
+  "cm104 Setext headings": [
+    "Root 0..18 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..7 \"Foo\\nbar\"",
+    "  ThematicBreak 9..12 ",
+    "  Paragraph 14..17 ",
+    "    Text 14..17 \"baz\""
+  ],
+  "cm105 Setext headings": [
+    "Root 0..18 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..7 \"Foo\\nbar\"",
+    "  ThematicBreak 8..13 ",
+    "  Paragraph 14..17 ",
+    "    Text 14..17 \"baz\""
+  ],
+  "cm106 Setext headings": [
+    "Root 0..17 ",
+    "  Paragraph 0..16 ",
+    "    Text 0..16 \"Foo\\nbar\\n---\\nbaz\""
+  ],
+  "cm107 Indented code blocks": [
+    "Root 0..39 ",
+    "  Code 0..38 lang=None \"a simple\\n  indented code block\""
+  ],
+  "cm108 Indented code blocks": [
+    "Root 0..17 ",
+    "  List 0..16 ordered=false start=None spread=false",
+    "    ListItem 0..16 checked=None spread=true",
+    "      Paragraph 4..7 ",
+    "        Text 4..7 \"foo\"",
+    "      Paragraph 13..16 ",
+    "        Text 13..16 \"bar\""
+  ],
+  "cm109 Indented code blocks": [
+    "Root 0..19 ",
+    "  List 0..18 ordered=true start=Some(1) spread=false",
+    "    ListItem 0..18 checked=None spread=true",
+    "      Paragraph 4..7 ",
+    "        Text 4..7 \"foo\"",
+    "      List 13..18 ordered=false start=None spread=false",
+    "        ListItem 13..18 checked=None spread=false",
+    "          Paragraph 15..18 ",
+    "            Text 15..18 \"bar\""
+  ],
+  "cm110 Indented code blocks": [
+    "Root 0..29 ",
+    "  Code 0..28 lang=None \"<a/>\\n*hi*\\n\\n- one\""
+  ],
+  "cm111 Indented code blocks": [
+    "Root 0..41 ",
+    "  Code 0..40 lang=None \"chunk1\\n\\nchunk2\\n\\n\\n\\nchunk3\""
+  ],
+  "cm112 Indented code blocks": [
+    "Root 0..31 ",
+    "  Code 0..30 lang=None \"chunk1\\n  \\n  chunk2\""
+  ],
+  "cm113 Indented code blocks": [
+    "Root 0..13 ",
+    "  Paragraph 0..11 ",
+    "    Text 0..11 \"Foo\\nbar\""
+  ],
+  "cm114 Indented code blocks": [
+    "Root 0..12 ",
+    "  Code 0..7 lang=None \"foo\"",
+    "  Paragraph 8..11 ",
+    "    Text 8..11 \"bar\""
+  ],
+  "cm115 Indented code blocks": [
+    "Root 0..46 ",
+    "  Heading 0..9 depth=1",
+    "    Text 2..9 \"Heading\"",
+    "  Code 10..17 lang=None \"foo\"",
+    "  Heading 18..32 depth=2",
+    "    Text 18..25 \"Heading\"",
+    "  Code 33..40 lang=None \"foo\"",
+    "  ThematicBreak 41..45 "
+  ],
+  "cm116 Indented code blocks": [
+    "Root 0..20 ",
+    "  Code 0..19 lang=None \"    foo\\nbar\""
+  ],
+  "cm117 Indented code blocks": [
+    "Root 0..20 ",
+    "  Code 6..18 lang=None \"foo\""
+  ],
+  "cm118 Indented code blocks": [
+    "Root 0..10 ",
+    "  Code 0..9 lang=None \"foo  \""
+  ],
+  "cm119 Fenced code blocks": [
+    "Root 0..13 ",
+    "  Code 0..12 lang=None \"<\\n >\""
+  ],
+  "cm120 Fenced code blocks": [
+    "Root 0..13 ",
+    "  Code 0..12 lang=None \"<\\n >\""
+  ],
+  "cm121 Fenced code blocks": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    InlineCode 0..9 \"\\nfoo\\n\""
+  ],
+  "cm122 Fenced code blocks": [
+    "Root 0..16 ",
+    "  Code 0..15 lang=None \"aaa\\n~~~\""
+  ],
+  "cm123 Fenced code blocks": [
+    "Root 0..16 ",
+    "  Code 0..15 lang=None \"aaa\\n```\""
+  ],
+  "cm124 Fenced code blocks": [
+    "Root 0..20 ",
+    "  Code 0..19 lang=None \"aaa\\n```\""
+  ],
+  "cm125 Fenced code blocks": [
+    "Root 0..18 ",
+    "  Code 0..17 lang=None \"aaa\\n~~~\""
+  ],
+  "cm126 Fenced code blocks": [
+    "Root 0..4 ",
+    "  Code 0..4 lang=None \"\""
+  ],
+  "cm127 Fenced code blocks": [
+    "Root 0..15 ",
+    "  Code 0..15 lang=None \"\\n```\\naaa\""
+  ],
+  "cm128 Fenced code blocks": [
+    "Root 0..17 ",
+    "  Blockquote 0..11 ",
+    "    Code 2..11 lang=None \"aaa\"",
+    "  Paragraph 13..16 ",
+    "    Text 13..16 \"bbb\""
+  ],
+  "cm129 Fenced code blocks": [
+    "Root 0..12 ",
+    "  Code 0..11 lang=None \"\\n  \""
+  ],
+  "cm130 Fenced code blocks": [
+    "Root 0..8 ",
+    "  Code 0..7 lang=None \"\""
+  ],
+  "cm131 Fenced code blocks": [
+    "Root 0..18 ",
+    "  Code 1..17 lang=None \"aaa\\naaa\""
+  ],
+  "cm132 Fenced code blocks": [
+    "Root 0..26 ",
+    "  Code 2..25 lang=None \"aaa\\naaa\\naaa\""
+  ],
+  "cm133 Fenced code blocks": [
+    "Root 0..35 ",
+    "  Code 3..34 lang=None \"aaa\\n aaa\\naaa\""
+  ],
+  "cm134 Fenced code blocks": [
+    "Root 0..24 ",
+    "  Code 0..23 lang=None \"```\\naaa\\n```\""
+  ],
+  "cm135 Fenced code blocks": [
+    "Root 0..14 ",
+    "  Code 0..13 lang=None \"aaa\""
+  ],
+  "cm136 Fenced code blocks": [
+    "Root 0..17 ",
+    "  Code 3..16 lang=None \"aaa\""
+  ],
+  "cm137 Fenced code blocks": [
+    "Root 0..16 ",
+    "  Code 0..16 lang=None \"aaa\\n    ```\""
+  ],
+  "cm138 Fenced code blocks": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    InlineCode 0..7 \" \"",
+    "    Text 7..11 \"\\naaa\""
+  ],
+  "cm139 Fenced code blocks": [
+    "Root 0..18 ",
+    "  Code 0..18 lang=None \"aaa\\n~~~ ~~\""
+  ],
+  "cm140 Fenced code blocks": [
+    "Root 0..20 ",
+    "  Paragraph 0..3 ",
+    "    Text 0..3 \"foo\"",
+    "  Code 4..15 lang=None \"bar\"",
+    "  Paragraph 16..19 ",
+    "    Text 16..19 \"baz\""
+  ],
+  "cm141 Fenced code blocks": [
+    "Root 0..26 ",
+    "  Heading 0..7 depth=2",
+    "    Text 0..3 \"foo\"",
+    "  Code 8..19 lang=None \"bar\"",
+    "  Heading 20..25 depth=1",
+    "    Text 22..25 \"baz\""
+  ],
+  "cm142 Fenced code blocks": [
+    "Root 0..38 ",
+    "  Code 0..37 lang=Some(\"ruby\") \"def foo(x)\\n  return 3\\nend\""
+  ],
+  "cm143 Fenced code blocks": [
+    "Root 0..65 ",
+    "  Code 0..64 lang=Some(\"ruby\") \"def foo(x)\\n  return 3\\nend\""
+  ],
+  "cm144 Fenced code blocks": [
+    "Root 0..11 ",
+    "  Code 0..10 lang=Some(\";\") \"\""
+  ],
+  "cm145 Fenced code blocks": [
+    "Root 0..15 ",
+    "  Paragraph 0..14 ",
+    "    InlineCode 0..10 \"aa\"",
+    "    Text 10..14 \"\\nfoo\""
+  ],
+  "cm146 Fenced code blocks": [
+    "Root 0..23 ",
+    "  Code 0..22 lang=Some(\"aa\") \"foo\""
+  ],
+  "cm147 Fenced code blocks": [
+    "Root 0..16 ",
+    "  Code 0..15 lang=None \"``` aaa\""
+  ],
+  "cm148 HTML blocks": [
+    "Root 0..69 ",
+    "  Html 0..32 \"<table><tr><td>\\n<pre>\\n**Hello**,\"",
+    "  Paragraph 34..49 ",
+    "    Emphasis 34..41 ",
+    "      Text 35..40 \"world\"",
+    "    Text 41..43 \".\\n\"",
+    "    Html 43..49 \"</pre>\"",
+    "  Html 50..68 \"</td></tr></table>\""
+  ],
+  "cm149 HTML blocks": [
+    "Root 0..72 ",
+    "  Html 0..64 \"<table>\\n  <tr>\\n    <td>\\n           hi\\n    </td>\\n  </tr>\\n</table>\"",
+    "  Paragraph 66..71 ",
+    "    Text 66..71 \"okay.\""
+  ],
+  "cm150 HTML blocks": [
+    "Root 0..35 ",
+    "  Html 0..34 \" <div>\\n  *hello*\\n         <foo><a>\""
+  ],
+  "cm151 HTML blocks": [
+    "Root 0..13 ",
+    "  Html 0..12 \"</div>\\n*foo*\""
+  ],
+  "cm152 HTML blocks": [
+    "Root 0..38 ",
+    "  Html 0..17 \"<DIV CLASS=\\\"foo\\\">\"",
+    "  Paragraph 19..29 ",
+    "    Emphasis 19..29 ",
+    "      Text 20..28 \"Markdown\"",
+    "  Html 31..37 \"</DIV>\""
+  ],
+  "cm153 HTML blocks": [
+    "Root 0..36 ",
+    "  Html 0..35 \"<div id=\\\"foo\\\"\\n  class=\\\"bar\\\">\\n</div>\""
+  ],
+  "cm154 HTML blocks": [
+    "Root 0..40 ",
+    "  Html 0..39 \"<div id=\\\"foo\\\" class=\\\"bar\\n  baz\\\">\\n</div>\""
+  ],
+  "cm155 HTML blocks": [
+    "Root 0..19 ",
+    "  Html 0..11 \"<div>\\n*foo*\"",
+    "  Paragraph 13..18 ",
+    "    Emphasis 13..18 ",
+    "      Text 14..17 \"bar\""
+  ],
+  "cm156 HTML blocks": [
+    "Root 0..19 ",
+    "  Html 0..18 \"<div id=\\\"foo\\\"\\n*hi*\""
+  ],
+  "cm157 HTML blocks": [
+    "Root 0..15 ",
+    "  Html 0..14 \"<div class\\nfoo\""
+  ],
+  "cm158 HTML blocks": [
+    "Root 0..25 ",
+    "  Html 0..24 \"<div *???-&&&-<---\\n*foo*\""
+  ],
+  "cm159 HTML blocks": [
+    "Root 0..35 ",
+    "  Html 0..34 \"<div><a href=\\\"bar\\\">*foo*</a></div>\""
+  ],
+  "cm160 HTML blocks": [
+    "Root 0..39 ",
+    "  Html 0..38 \"<table><tr><td>\\nfoo\\n</td></tr></table>\""
+  ],
+  "cm161 HTML blocks": [
+    "Root 0..34 ",
+    "  Html 0..33 \"<div></div>\\n``` c\\nint x = 33;\\n```\""
+  ],
+  "cm162 HTML blocks": [
+    "Root 0..26 ",
+    "  Html 0..25 \"<a href=\\\"foo\\\">\\n*bar*\\n</a>\""
+  ],
+  "cm163 HTML blocks": [
+    "Root 0..27 ",
+    "  Html 0..26 \"<Warning>\\n*bar*\\n</Warning>\""
+  ],
+  "cm164 HTML blocks": [
+    "Root 0..27 ",
+    "  Html 0..26 \"<i class=\\\"foo\\\">\\n*bar*\\n</i>\""
+  ],
+  "cm165 HTML blocks": [
+    "Root 0..13 ",
+    "  Html 0..12 \"</ins>\\n*bar*\""
+  ],
+  "cm166 HTML blocks": [
+    "Root 0..19 ",
+    "  Html 0..18 \"<del>\\n*foo*\\n</del>\""
+  ],
+  "cm167 HTML blocks": [
+    "Root 0..21 ",
+    "  Html 0..5 \"<del>\"",
+    "  Paragraph 7..12 ",
+    "    Emphasis 7..12 ",
+    "      Text 8..11 \"foo\"",
+    "  Html 14..20 \"</del>\""
+  ],
+  "cm168 HTML blocks": [
+    "Root 0..17 ",
+    "  Paragraph 0..16 ",
+    "    Html 0..5 \"<del>\"",
+    "    Emphasis 5..10 ",
+    "      Text 6..9 \"foo\"",
+    "    Html 10..16 \"</del>\""
+  ],
+  "cm169 HTML blocks": [
+    "Root 0..120 ",
+    "  Html 0..114 \"<pre language=\\\"haskell\\\"><code>\\nimport Text.HTML.TagSoup\\n\\nmain :: IO ()\\nmain = print $ parseTags tags\\n</code></pre>\"",
+    "  Paragraph 115..119 ",
+    "    Text 115..119 \"okay\""
+  ],
+  "cm170 HTML blocks": [
+    "Root 0..135 ",
+    "  Html 0..129 \"<script type=\\\"text/javascript\\\">\\n// JavaScript example\\n\\ndocument.getElementById(\\\"demo\\\").innerHTML = \\\"Hello JavaScript!\\\";\\n</script>\"",
+    "  Paragraph 130..134 ",
+    "    Text 130..134 \"okay\""
+  ],
+  "cm171 HTML blocks": [
+    "Root 0..38 ",
+    "  Html 0..37 \"<textarea>\\n\\n*foo*\\n\\n_bar_\\n\\n</textarea>\""
+  ],
+  "cm172 HTML blocks": [
+    "Root 0..73 ",
+    "  Html 0..67 \"<style\\n  type=\\\"text/css\\\">\\nh1 {color:red;}\\n\\np {color:blue;}\\n</style>\"",
+    "  Paragraph 68..72 ",
+    "    Text 68..72 \"okay\""
+  ],
+  "cm173 HTML blocks": [
+    "Root 0..31 ",
+    "  Html 0..31 \"<style\\n  type=\\\"text/css\\\">\\n\\nfoo\\n\""
+  ],
+  "cm174 HTML blocks": [
+    "Root 0..19 ",
+    "  Blockquote 0..13 ",
+    "    Html 2..13 \"<div>\\nfoo\"",
+    "  Paragraph 15..18 ",
+    "    Text 15..18 \"bar\""
+  ],
+  "cm175 HTML blocks": [
+    "Root 0..14 ",
+    "  List 0..13 ordered=false start=None spread=false",
+    "    ListItem 0..7 checked=None spread=false",
+    "      Html 2..7 \"<div>\"",
+    "    ListItem 8..13 checked=None spread=false",
+    "      Paragraph 10..13 ",
+    "        Text 10..13 \"foo\""
+  ],
+  "cm176 HTML blocks": [
+    "Root 0..35 ",
+    "  Html 0..28 \"<style>p{color:red;}</style>\"",
+    "  Paragraph 29..34 ",
+    "    Emphasis 29..34 ",
+    "      Text 30..33 \"foo\""
+  ],
+  "cm177 HTML blocks": [
+    "Root 0..24 ",
+    "  Html 0..17 \"<!-- foo -->*bar*\"",
+    "  Paragraph 18..23 ",
+    "    Emphasis 18..23 ",
+    "      Text 19..22 \"baz\""
+  ],
+  "cm178 HTML blocks": [
+    "Root 0..31 ",
+    "  Html 0..30 \"<script>\\nfoo\\n</script>1. *bar*\""
+  ],
+  "cm179 HTML blocks": [
+    "Root 0..30 ",
+    "  Html 0..24 \"<!-- Foo\\n\\nbar\\n   baz -->\"",
+    "  Paragraph 25..29 ",
+    "    Text 25..29 \"okay\""
+  ],
+  "cm180 HTML blocks": [
+    "Root 0..28 ",
+    "  Html 0..22 \"<?php\\n\\n  echo '>';\\n\\n?>\"",
+    "  Paragraph 23..27 ",
+    "    Text 23..27 \"okay\""
+  ],
+  "cm181 HTML blocks": [
+    "Root 0..16 ",
+    "  Html 0..15 \"<!DOCTYPE html>\""
+  ],
+  "cm182 HTML blocks": [
+    "Root 0..119 ",
+    "  Html 0..113 \"<![CDATA[\\nfunction matchwo(a,b)\\n{\\n  if (a < b && a < 0) then {\\n    return 1;\\n\\n  } else {\\n\\n    return 0;\\n  }\\n}\\n]]>\"",
+    "  Paragraph 114..118 ",
+    "    Text 114..118 \"okay\""
+  ],
+  "cm183 HTML blocks": [
+    "Root 0..33 ",
+    "  Html 0..14 \"  <!-- foo -->\"",
+    "  Code 16..32 lang=None \"<!-- foo -->\""
+  ],
+  "cm184 HTML blocks": [
+    "Root 0..19 ",
+    "  Html 0..7 \"  <div>\"",
+    "  Code 9..18 lang=None \"<div>\""
+  ],
+  "cm185 HTML blocks": [
+    "Root 0..21 ",
+    "  Paragraph 0..3 ",
+    "    Text 0..3 \"Foo\"",
+    "  Html 4..20 \"<div>\\nbar\\n</div>\""
+  ],
+  "cm186 HTML blocks": [
+    "Root 0..23 ",
+    "  Html 0..22 \"<div>\\nbar\\n</div>\\n*foo*\""
+  ],
+  "cm187 HTML blocks": [
+    "Root 0..23 ",
+    "  Paragraph 0..22 ",
+    "    Text 0..4 \"Foo\\n\"",
+    "    Html 4..18 \"<a href=\\\"bar\\\">\"",
+    "    Text 18..22 \"\\nbaz\""
+  ],
+  "cm188 HTML blocks": [
+    "Root 0..34 ",
+    "  Html 0..5 \"<div>\"",
+    "  Paragraph 7..25 ",
+    "    Emphasis 7..19 ",
+    "      Text 8..18 \"Emphasized\"",
+    "    Text 19..25 \" text.\"",
+    "  Html 27..33 \"</div>\""
+  ],
+  "cm189 HTML blocks": [
+    "Root 0..32 ",
+    "  Html 0..31 \"<div>\\n*Emphasized* text.\\n</div>\""
+  ],
+  "cm190 HTML blocks": [
+    "Root 0..46 ",
+    "  Html 0..7 \"<table>\"",
+    "  Html 9..13 \"<tr>\"",
+    "  Html 15..28 \"<td>\\nHi\\n</td>\"",
+    "  Html 30..35 \"</tr>\"",
+    "  Html 37..45 \"</table>\""
+  ],
+  "cm191 HTML blocks": [
+    "Root 0..64 ",
+    "  Html 0..7 \"<table>\"",
+    "  Html 9..15 \"  <tr>\"",
+    "  Code 17..44 lang=None \"<td>\\n  Hi\\n</td>\"",
+    "  Html 46..53 \"  </tr>\"",
+    "  Html 55..63 \"</table>\""
+  ],
+  "cm192 Link reference definitions": [
+    "Root 0..27 ",
+    "  Definition 0..19 id=\"foo\" url=\"/url\" title=Some(\"title\")",
+    "  Paragraph 21..26 ",
+    "    LinkReference 21..26 id=\"foo\"",
+    "      Text 22..25 \"foo\""
+  ],
+  "cm193 Link reference definitions": [
+    "Root 0..56 ",
+    "  Definition 0..48 id=\"foo\" url=\"/url\" title=Some(\"the title\")",
+    "  Paragraph 50..55 ",
+    "    LinkReference 50..55 id=\"foo\"",
+    "      Text 51..54 \"foo\""
+  ],
+  "cm194 Link reference definitions": [
+    "Root 0..56 ",
+    "  Definition 0..42 id=\"foo*bar\\\\]\" url=\"my_(url)\" title=Some(\"title (with parens)\")",
+    "  Paragraph 44..55 ",
+    "    LinkReference 44..55 id=\"foo*bar\\\\]\"",
+    "      Text 45..54 \"Foo*bar]\""
+  ],
+  "cm195 Link reference definitions": [
+    "Root 0..39 ",
+    "  Definition 0..27 id=\"foobar\" url=\"my url\" title=Some(\"title\")",
+    "  Paragraph 29..38 ",
+    "    LinkReference 29..38 id=\"foobar\"",
+    "      Text 30..37 \"Foo bar\""
+  ],
+  "cm196 Link reference definitions": [
+    "Root 0..41 ",
+    "  Definition 0..33 id=\"foo\" url=\"/url\" title=Some(\"\\ntitle\\nline1\\nline2\\n\")",
+    "  Paragraph 35..40 ",
+    "    LinkReference 35..40 id=\"foo\"",
+    "      Text 36..39 \"foo\""
+  ],
+  "cm197 Link reference definitions": [
+    "Root 0..44 ",
+    "  Paragraph 0..18 ",
+    "    Text 0..18 \"[foo]: /url 'title\"",
+    "  Paragraph 20..36 ",
+    "    Text 20..36 \"with blank line'\"",
+    "  Paragraph 38..43 ",
+    "    Text 38..43 \"[foo]\""
+  ],
+  "cm198 Link reference definitions": [
+    "Root 0..19 ",
+    "  Definition 0..11 id=\"foo\" url=\"/url\" title=None",
+    "  Paragraph 13..18 ",
+    "    LinkReference 13..18 id=\"foo\"",
+    "      Text 14..17 \"foo\""
+  ],
+  "cm199 Link reference definitions": [
+    "Root 0..14 ",
+    "  Paragraph 0..6 ",
+    "    Text 0..6 \"[foo]:\"",
+    "  Paragraph 8..13 ",
+    "    Text 8..13 \"[foo]\""
+  ],
+  "cm200 Link reference definitions": [
+    "Root 0..17 ",
+    "  Definition 0..9 id=\"foo\" url=\"\" title=None",
+    "  Paragraph 11..16 ",
+    "    LinkReference 11..16 id=\"foo\"",
+    "      Text 12..15 \"foo\""
+  ],
+  "cm201 Link reference definitions": [
+    "Root 0..25 ",
+    "  Paragraph 0..17 ",
+    "    Text 0..7 \"[foo]: \"",
+    "    Html 7..12 \"<bar>\"",
+    "    Text 12..17 \"(baz)\"",
+    "  Paragraph 19..24 ",
+    "    Text 19..24 \"[foo]\""
+  ],
+  "cm202 Link reference definitions": [
+    "Root 0..43 ",
+    "  Definition 0..35 id=\"foo\" url=\"/url\\\\bar*baz\" title=Some(\"foo\\\"bar\\\\baz\")",
+    "  Paragraph 37..42 ",
+    "    LinkReference 37..42 id=\"foo\"",
+    "      Text 38..41 \"foo\""
+  ],
+  "cm203 Link reference definitions": [
+    "Root 0..18 ",
+    "  Paragraph 0..5 ",
+    "    LinkReference 0..5 id=\"foo\"",
+    "      Text 1..4 \"foo\"",
+    "  Definition 7..17 id=\"foo\" url=\"url\" title=None"
+  ],
+  "cm204 Link reference definitions": [
+    "Root 0..34 ",
+    "  Paragraph 0..5 ",
+    "    LinkReference 0..5 id=\"foo\"",
+    "      Text 1..4 \"foo\"",
+    "  Definition 7..19 id=\"foo\" url=\"first\" title=None",
+    "  Definition 20..33 id=\"foo\" url=\"second\" title=None"
+  ],
+  "cm205 Link reference definitions": [
+    "Root 0..19 ",
+    "  Definition 0..11 id=\"foo\" url=\"/url\" title=None",
+    "  Paragraph 13..18 ",
+    "    LinkReference 13..18 id=\"foo\"",
+    "      Text 14..17 \"Foo\""
+  ],
+  "cm206 Link reference definitions": [
+    "Root 0..28 ",
+    "  Definition 0..17 id=\"αγω\" url=\"/φου\" title=None",
+    "  Paragraph 19..27 ",
+    "    LinkReference 19..27 id=\"αγω\"",
+    "      Text 20..26 \"αγω\""
+  ],
+  "cm207 Link reference definitions": [
+    "Root 0..12 ",
+    "  Definition 0..11 id=\"foo\" url=\"/url\" title=None"
+  ],
+  "cm208 Link reference definitions": [
+    "Root 0..18 ",
+    "  Definition 0..13 id=\"foo\" url=\"/url\" title=None",
+    "  Paragraph 14..17 ",
+    "    Text 14..17 \"bar\""
+  ],
+  "cm209 Link reference definitions": [
+    "Root 0..23 ",
+    "  Paragraph 0..22 ",
+    "    Text 0..22 \"[foo]: /url \\\"title\\\" ok\""
+  ],
+  "cm210 Link reference definitions": [
+    "Root 0..23 ",
+    "  Definition 0..11 id=\"foo\" url=\"/url\" title=None",
+    "  Paragraph 12..22 ",
+    "    Text 12..22 \"\\\"title\\\" ok\""
+  ],
+  "cm211 Link reference definitions": [
+    "Root 0..31 ",
+    "  Code 0..23 lang=None \"[foo]: /url \\\"title\\\"\"",
+    "  Paragraph 25..30 ",
+    "    Text 25..30 \"[foo]\""
+  ],
+  "cm212 Link reference definitions": [
+    "Root 0..27 ",
+    "  Code 0..19 lang=None \"[foo]: /url\"",
+    "  Paragraph 21..26 ",
+    "    Text 21..26 \"[foo]\""
+  ],
+  "cm213 Link reference definitions": [
+    "Root 0..23 ",
+    "  Paragraph 0..15 ",
+    "    Text 0..15 \"Foo\\n[bar]: /baz\"",
+    "  Paragraph 17..22 ",
+    "    Text 17..22 \"[bar]\""
+  ],
+  "cm214 Link reference definitions": [
+    "Root 0..26 ",
+    "  Heading 0..7 depth=1",
+    "    LinkReference 2..7 id=\"foo\"",
+    "      Text 3..6 \"Foo\"",
+    "  Definition 8..19 id=\"foo\" url=\"/url\" title=None",
+    "  Blockquote 20..25 ",
+    "    Paragraph 22..25 ",
+    "      Text 22..25 \"bar\""
+  ],
+  "cm215 Link reference definitions": [
+    "Root 0..26 ",
+    "  Definition 0..11 id=\"foo\" url=\"/url\" title=None",
+    "  Heading 12..19 depth=1",
+    "    Text 12..15 \"bar\"",
+    "  Paragraph 20..25 ",
+    "    LinkReference 20..25 id=\"foo\"",
+    "      Text 21..24 \"foo\""
+  ],
+  "cm216 Link reference definitions": [
+    "Root 0..22 ",
+    "  Definition 0..11 id=\"foo\" url=\"/url\" title=None",
+    "  Paragraph 12..21 ",
+    "    Text 12..16 \"===\\n\"",
+    "    LinkReference 16..21 id=\"foo\"",
+    "      Text 17..20 \"foo\""
+  ],
+  "cm217 Link reference definitions": [
+    "Root 0..83 ",
+    "  Definition 0..21 id=\"foo\" url=\"/foo-url\" title=Some(\"foo\")",
+    "  Definition 22..45 id=\"bar\" url=\"/bar-url\" title=Some(\"bar\")",
+    "  Definition 46..61 id=\"baz\" url=\"/baz-url\" title=None",
+    "  Paragraph 63..82 ",
+    "    LinkReference 63..68 id=\"foo\"",
+    "      Text 64..67 \"foo\"",
+    "    Text 68..70 \",\\n\"",
+    "    LinkReference 70..75 id=\"bar\"",
+    "      Text 71..74 \"bar\"",
+    "    Text 75..77 \",\\n\"",
+    "    LinkReference 77..82 id=\"baz\"",
+    "      Text 78..81 \"baz\""
+  ],
+  "cm218 Link reference definitions": [
+    "Root 0..21 ",
+    "  Paragraph 0..5 ",
+    "    LinkReference 0..5 id=\"foo\"",
+    "      Text 1..4 \"foo\"",
+    "  Blockquote 7..20 ",
+    "    Definition 9..20 id=\"foo\" url=\"/url\" title=None"
+  ],
+  "cm219 Paragraphs": [
+    "Root 0..9 ",
+    "  Paragraph 0..3 ",
+    "    Text 0..3 \"aaa\"",
+    "  Paragraph 5..8 ",
+    "    Text 5..8 \"bbb\""
+  ],
+  "cm220 Paragraphs": [
+    "Root 0..17 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..7 \"aaa\\nbbb\"",
+    "  Paragraph 9..16 ",
+    "    Text 9..16 \"ccc\\nddd\""
+  ],
+  "cm221 Paragraphs": [
+    "Root 0..10 ",
+    "  Paragraph 0..3 ",
+    "    Text 0..3 \"aaa\"",
+    "  Paragraph 6..9 ",
+    "    Text 6..9 \"bbb\""
+  ],
+  "cm222 Paragraphs": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Text 2..10 \"aaa\\nbbb\""
+  ],
+  "cm223 Paragraphs": [
+    "Root 0..64 ",
+    "  Paragraph 0..63 ",
+    "    Text 0..63 \"aaa\\nbbb\\nccc\""
+  ],
+  "cm224 Paragraphs": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Text 3..10 \"aaa\\nbbb\""
+  ],
+  "cm225 Paragraphs": [
+    "Root 0..12 ",
+    "  Code 0..7 lang=None \"aaa\"",
+    "  Paragraph 8..11 ",
+    "    Text 8..11 \"bbb\""
+  ],
+  "cm226 Paragraphs": [
+    "Root 0..18 ",
+    "  Paragraph 0..17 ",
+    "    Text 0..3 \"aaa\"",
+    "    Break 3..9 ",
+    "    Text 9..12 \"bbb\""
+  ],
+  "cm227 Blank lines": [
+    "Root 0..22 ",
+    "  Paragraph 4..7 ",
+    "    Text 4..7 \"aaa\"",
+    "  Heading 12..17 depth=1",
+    "    Text 14..17 \"aaa\""
+  ],
+  "cm228 Block quotes": [
+    "Root 0..20 ",
+    "  Blockquote 0..19 ",
+    "    Heading 2..7 depth=1",
+    "      Text 4..7 \"Foo\"",
+    "    Paragraph 10..19 ",
+    "      Text 10..19 \"bar\\nbaz\""
+  ],
+  "cm229 Block quotes": [
+    "Root 0..18 ",
+    "  Blockquote 0..17 ",
+    "    Heading 1..6 depth=1",
+    "      Text 3..6 \"Foo\"",
+    "    Paragraph 8..17 ",
+    "      Text 8..17 \"bar\\nbaz\""
+  ],
+  "cm230 Block quotes": [
+    "Root 0..27 ",
+    "  Blockquote 0..26 ",
+    "    Heading 5..10 depth=1",
+    "      Text 7..10 \"Foo\"",
+    "    Paragraph 16..26 ",
+    "      Text 16..26 \"bar\\nbaz\""
+  ],
+  "cm231 Block quotes": [
+    "Root 0..32 ",
+    "  Code 0..31 lang=None \"> # Foo\\n> bar\\n> baz\""
+  ],
+  "cm232 Block quotes": [
+    "Root 0..18 ",
+    "  Blockquote 0..17 ",
+    "    Heading 2..7 depth=1",
+    "      Text 4..7 \"Foo\"",
+    "    Paragraph 10..17 ",
+    "      Text 10..17 \"bar\\nbaz\""
+  ],
+  "cm233 Block quotes": [
+    "Root 0..16 ",
+    "  Blockquote 0..15 ",
+    "    Paragraph 2..15 ",
+    "      Text 2..15 \"bar\\nbaz\\nfoo\""
+  ],
+  "cm234 Block quotes": [
+    "Root 0..10 ",
+    "  Blockquote 0..5 ",
+    "    Paragraph 2..5 ",
+    "      Text 2..5 \"foo\"",
+    "  ThematicBreak 6..9 "
+  ],
+  "cm235 Block quotes": [
+    "Root 0..14 ",
+    "  Blockquote 0..7 ",
+    "    List 2..7 ordered=false start=None spread=false",
+    "      ListItem 2..7 checked=None spread=false",
+    "        Paragraph 4..7 ",
+    "          Text 4..7 \"foo\"",
+    "  List 8..13 ordered=false start=None spread=false",
+    "    ListItem 8..13 checked=None spread=false",
+    "      Paragraph 10..13 ",
+    "        Text 10..13 \"bar\""
+  ],
+  "cm236 Block quotes": [
+    "Root 0..18 ",
+    "  Blockquote 0..9 ",
+    "    Code 2..9 lang=None \"foo\"",
+    "  Code 10..17 lang=None \"bar\""
+  ],
+  "cm237 Block quotes": [
+    "Root 0..14 ",
+    "  Blockquote 0..5 ",
+    "    Code 2..5 lang=None \"\"",
+    "  Paragraph 6..9 ",
+    "    Text 6..9 \"foo\"",
+    "  Code 10..14 lang=None \"\""
+  ],
+  "cm238 Block quotes": [
+    "Root 0..16 ",
+    "  Blockquote 0..15 ",
+    "    Paragraph 2..15 ",
+    "      Text 2..15 \"foo\\n- bar\""
+  ],
+  "cm239 Block quotes": [
+    "Root 0..2 ",
+    "  Blockquote 0..1 "
+  ],
+  "cm240 Block quotes": [
+    "Root 0..9 ",
+    "  Blockquote 0..8 "
+  ],
+  "cm241 Block quotes": [
+    "Root 0..12 ",
+    "  Blockquote 0..11 ",
+    "    Paragraph 4..7 ",
+    "      Text 4..7 \"foo\""
+  ],
+  "cm242 Block quotes": [
+    "Root 0..13 ",
+    "  Blockquote 0..5 ",
+    "    Paragraph 2..5 ",
+    "      Text 2..5 \"foo\"",
+    "  Blockquote 7..12 ",
+    "    Paragraph 9..12 ",
+    "      Text 9..12 \"bar\""
+  ],
+  "cm243 Block quotes": [
+    "Root 0..12 ",
+    "  Blockquote 0..11 ",
+    "    Paragraph 2..11 ",
+    "      Text 2..11 \"foo\\nbar\""
+  ],
+  "cm244 Block quotes": [
+    "Root 0..14 ",
+    "  Blockquote 0..13 ",
+    "    Paragraph 2..5 ",
+    "      Text 2..5 \"foo\"",
+    "    Paragraph 10..13 ",
+    "      Text 10..13 \"bar\""
+  ],
+  "cm245 Block quotes": [
+    "Root 0..10 ",
+    "  Paragraph 0..3 ",
+    "    Text 0..3 \"foo\"",
+    "  Blockquote 4..9 ",
+    "    Paragraph 6..9 ",
+    "      Text 6..9 \"bar\""
+  ],
+  "cm246 Block quotes": [
+    "Root 0..16 ",
+    "  Blockquote 0..5 ",
+    "    Paragraph 2..5 ",
+    "      Text 2..5 \"aaa\"",
+    "  ThematicBreak 6..9 ",
+    "  Blockquote 10..15 ",
+    "    Paragraph 12..15 ",
+    "      Text 12..15 \"bbb\""
+  ],
+  "cm247 Block quotes": [
+    "Root 0..10 ",
+    "  Blockquote 0..9 ",
+    "    Paragraph 2..9 ",
+    "      Text 2..9 \"bar\\nbaz\""
+  ],
+  "cm248 Block quotes": [
+    "Root 0..11 ",
+    "  Blockquote 0..5 ",
+    "    Paragraph 2..5 ",
+    "      Text 2..5 \"bar\"",
+    "  Paragraph 7..10 ",
+    "    Text 7..10 \"baz\""
+  ],
+  "cm249 Block quotes": [
+    "Root 0..12 ",
+    "  Blockquote 0..7 ",
+    "    Paragraph 2..5 ",
+    "      Text 2..5 \"bar\"",
+    "  Paragraph 8..11 ",
+    "    Text 8..11 \"baz\""
+  ],
+  "cm250 Block quotes": [
+    "Root 0..14 ",
+    "  Blockquote 0..13 ",
+    "    Blockquote 2..13 ",
+    "      Blockquote 4..13 ",
+    "        Paragraph 6..13 ",
+    "          Text 6..13 \"foo\\nbar\""
+  ],
+  "cm251 Block quotes": [
+    "Root 0..20 ",
+    "  Blockquote 0..19 ",
+    "    Blockquote 1..19 ",
+    "      Blockquote 2..19 ",
+    "        Paragraph 4..19 ",
+    "          Text 4..19 \"foo\\nbar\\nbaz\""
+  ],
+  "cm252 Block quotes": [
+    "Root 0..26 ",
+    "  Blockquote 0..10 ",
+    "    Code 2..10 lang=None \"code\"",
+    "  Blockquote 12..25 ",
+    "    Paragraph 14..25 ",
+    "      Text 17..25 \"not code\""
+  ],
+  "cm253 List items": [
+    "Root 0..65 ",
+    "  Paragraph 0..27 ",
+    "    Text 0..27 \"A paragraph\\nwith two lines.\"",
+    "  Code 29..46 lang=None \"indented code\"",
+    "  Blockquote 48..64 ",
+    "    Paragraph 50..64 ",
+    "      Text 50..64 \"A block quote.\""
+  ],
+  "cm254 List items": [
+    "Root 0..81 ",
+    "  List 0..80 ordered=true start=Some(1) spread=false",
+    "    ListItem 0..80 checked=None spread=true",
+    "      Paragraph 4..35 ",
+    "        Text 4..35 \"A paragraph\\nwith two lines.\"",
+    "      Code 41..58 lang=None \"indented code\"",
+    "      Blockquote 64..80 ",
+    "        Paragraph 66..80 ",
+    "          Text 66..80 \"A block quote.\""
+  ],
+  "cm255 List items": [
+    "Root 0..12 ",
+    "  List 0..6 ordered=false start=None spread=false",
+    "    ListItem 0..6 checked=None spread=false",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"one\"",
+    "  Paragraph 7..11 ",
+    "    Text 8..11 \"two\""
+  ],
+  "cm256 List items": [
+    "Root 0..13 ",
+    "  List 0..12 ordered=false start=None spread=false",
+    "    ListItem 0..12 checked=None spread=true",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"one\"",
+    "      Paragraph 9..12 ",
+    "        Text 9..12 \"two\""
+  ],
+  "cm257 List items": [
+    "Root 0..20 ",
+    "  List 0..10 ordered=false start=None spread=false",
+    "    ListItem 0..10 checked=None spread=false",
+    "      Paragraph 6..9 ",
+    "        Text 6..9 \"one\"",
+    "  Code 11..19 lang=None \" two\""
+  ],
+  "cm258 List items": [
+    "Root 0..21 ",
+    "  List 0..20 ordered=false start=None spread=false",
+    "    ListItem 0..20 checked=None spread=true",
+    "      Paragraph 6..9 ",
+    "        Text 6..9 \"one\"",
+    "      Paragraph 17..20 ",
+    "        Text 17..20 \"two\""
+  ],
+  "cm259 List items": [
+    "Root 0..29 ",
+    "  Blockquote 0..28 ",
+    "    Blockquote 5..28 ",
+    "      List 7..28 ordered=true start=Some(1) spread=false",
+    "        ListItem 7..28 checked=None spread=true",
+    "          Paragraph 11..14 ",
+    "            Text 11..14 \"one\"",
+    "          Paragraph 25..28 ",
+    "            Text 25..28 \"two\""
+  ],
+  "cm260 List items": [
+    "Root 0..22 ",
+    "  Blockquote 0..21 ",
+    "    Blockquote 1..21 ",
+    "      List 2..10 ordered=false start=None spread=false",
+    "        ListItem 2..10 checked=None spread=false",
+    "          Paragraph 4..7 ",
+    "            Text 4..7 \"one\"",
+    "      Paragraph 18..21 ",
+    "        Text 18..21 \"two\""
+  ],
+  "cm261 List items": [
+    "Root 0..12 ",
+    "  Paragraph 0..4 ",
+    "    Text 0..4 \"-one\"",
+    "  Paragraph 6..11 ",
+    "    Text 6..11 \"2.two\""
+  ],
+  "cm262 List items": [
+    "Root 0..14 ",
+    "  List 0..13 ordered=false start=None spread=false",
+    "    ListItem 0..13 checked=None spread=true",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"foo\"",
+    "      Paragraph 10..13 ",
+    "        Text 10..13 \"bar\""
+  ],
+  "cm263 List items": [
+    "Root 0..53 ",
+    "  List 0..52 ordered=true start=Some(1) spread=false",
+    "    ListItem 0..52 checked=None spread=true",
+    "      Paragraph 4..7 ",
+    "        Text 4..7 \"foo\"",
+    "      Code 13..32 lang=None \"bar\"",
+    "      Paragraph 38..41 ",
+    "        Text 38..41 \"baz\"",
+    "      Blockquote 47..52 ",
+    "        Paragraph 49..52 ",
+    "          Text 49..52 \"bam\""
+  ],
+  "cm264 List items": [
+    "Root 0..29 ",
+    "  List 0..28 ordered=false start=None spread=false",
+    "    ListItem 0..28 checked=None spread=true",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"Foo\"",
+    "      Code 9..28 lang=None \"bar\\n\\n\\nbaz\""
+  ],
+  "cm265 List items": [
+    "Root 0..14 ",
+    "  List 0..13 ordered=true start=Some(123456789) spread=false",
+    "    ListItem 0..13 checked=None spread=false",
+    "      Paragraph 11..13 ",
+    "        Text 11..13 \"ok\""
+  ],
+  "cm266 List items": [
+    "Root 0..19 ",
+    "  Paragraph 0..18 ",
+    "    Text 0..18 \"1234567890. not ok\""
+  ],
+  "cm267 List items": [
+    "Root 0..6 ",
+    "  List 0..5 ordered=true start=Some(0) spread=false",
+    "    ListItem 0..5 checked=None spread=false",
+    "      Paragraph 3..5 ",
+    "        Text 3..5 \"ok\""
+  ],
+  "cm268 List items": [
+    "Root 0..8 ",
+    "  List 0..7 ordered=true start=Some(3) spread=false",
+    "    ListItem 0..7 checked=None spread=false",
+    "      Paragraph 5..7 ",
+    "        Text 5..7 \"ok\""
+  ],
+  "cm269 List items": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Text 0..10 \"-1. not ok\""
+  ],
+  "cm270 List items": [
+    "Root 0..17 ",
+    "  List 0..16 ordered=false start=None spread=false",
+    "    ListItem 0..16 checked=None spread=true",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"foo\"",
+    "      Code 9..16 lang=None \"bar\""
+  ],
+  "cm271 List items": [
+    "Root 0..27 ",
+    "  List 0..26 ordered=true start=Some(10) spread=false",
+    "    ListItem 0..26 checked=None spread=true",
+    "      Paragraph 7..10 ",
+    "        Text 7..10 \"foo\"",
+    "      Code 19..26 lang=None \"bar\""
+  ],
+  "cm272 List items": [
+    "Root 0..44 ",
+    "  Code 0..17 lang=None \"indented code\"",
+    "  Paragraph 19..28 ",
+    "    Text 19..28 \"paragraph\"",
+    "  Code 30..43 lang=None \"more code\""
+  ],
+  "cm273 List items": [
+    "Root 0..53 ",
+    "  List 0..52 ordered=true start=Some(1) spread=false",
+    "    ListItem 0..52 checked=None spread=true",
+    "      Code 3..20 lang=None \"indented code\"",
+    "      Paragraph 25..34 ",
+    "        Text 25..34 \"paragraph\"",
+    "      Code 39..52 lang=None \"more code\""
+  ],
+  "cm274 List items": [
+    "Root 0..54 ",
+    "  List 0..53 ordered=true start=Some(1) spread=false",
+    "    ListItem 0..53 checked=None spread=true",
+    "      Code 3..21 lang=None \" indented code\"",
+    "      Paragraph 26..35 ",
+    "        Text 26..35 \"paragraph\"",
+    "      Code 40..53 lang=None \"more code\""
+  ],
+  "cm275 List items": [
+    "Root 0..12 ",
+    "  Paragraph 0..6 ",
+    "    Text 3..6 \"foo\"",
+    "  Paragraph 8..11 ",
+    "    Text 8..11 \"bar\""
+  ],
+  "cm276 List items": [
+    "Root 0..16 ",
+    "  List 0..9 ordered=false start=None spread=false",
+    "    ListItem 0..9 checked=None spread=false",
+    "      Paragraph 5..8 ",
+    "        Text 5..8 \"foo\"",
+    "  Paragraph 10..15 ",
+    "    Text 12..15 \"bar\""
+  ],
+  "cm277 List items": [
+    "Root 0..15 ",
+    "  List 0..14 ordered=false start=None spread=false",
+    "    ListItem 0..14 checked=None spread=true",
+    "      Paragraph 3..6 ",
+    "        Text 3..6 \"foo\"",
+    "      Paragraph 11..14 ",
+    "        Text 11..14 \"bar\""
+  ],
+  "cm278 List items": [
+    "Root 0..40 ",
+    "  List 0..39 ordered=false start=None spread=false",
+    "    ListItem 0..7 checked=None spread=false",
+    "      Paragraph 4..7 ",
+    "        Text 4..7 \"foo\"",
+    "    ListItem 8..27 checked=None spread=false",
+    "      Code 12..27 lang=None \"bar\"",
+    "    ListItem 28..39 checked=None spread=false",
+    "      Code 32..39 lang=None \"baz\""
+  ],
+  "cm279 List items": [
+    "Root 0..11 ",
+    "  List 0..10 ordered=false start=None spread=false",
+    "    ListItem 0..10 checked=None spread=false",
+    "      Paragraph 7..10 ",
+    "        Text 7..10 \"foo\""
+  ],
+  "cm280 List items": [
+    "Root 0..9 ",
+    "  List 0..1 ordered=false start=None spread=false",
+    "    ListItem 0..1 checked=None spread=false",
+    "  Paragraph 3..8 ",
+    "    Text 5..8 \"foo\""
+  ],
+  "cm281 List items": [
+    "Root 0..14 ",
+    "  List 0..13 ordered=false start=None spread=false",
+    "    ListItem 0..5 checked=None spread=false",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"foo\"",
+    "    ListItem 6..7 checked=None spread=false",
+    "    ListItem 8..13 checked=None spread=false",
+    "      Paragraph 10..13 ",
+    "        Text 10..13 \"bar\""
+  ],
+  "cm282 List items": [
+    "Root 0..17 ",
+    "  List 0..16 ordered=false start=None spread=false",
+    "    ListItem 0..5 checked=None spread=false",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"foo\"",
+    "    ListItem 6..10 checked=None spread=false",
+    "    ListItem 11..16 checked=None spread=false",
+    "      Paragraph 13..16 ",
+    "        Text 13..16 \"bar\""
+  ],
+  "cm283 List items": [
+    "Root 0..17 ",
+    "  List 0..16 ordered=true start=Some(1) spread=false",
+    "    ListItem 0..6 checked=None spread=false",
+    "      Paragraph 3..6 ",
+    "        Text 3..6 \"foo\"",
+    "    ListItem 7..9 checked=None spread=false",
+    "    ListItem 10..16 checked=None spread=false",
+    "      Paragraph 13..16 ",
+    "        Text 13..16 \"bar\""
+  ],
+  "cm284 List items": [
+    "Root 0..2 ",
+    "  List 0..1 ordered=false start=None spread=false",
+    "    ListItem 0..1 checked=None spread=false"
+  ],
+  "cm285 List items": [
+    "Root 0..14 ",
+    "  Paragraph 0..5 ",
+    "    Text 0..5 \"foo\\n*\"",
+    "  Paragraph 7..13 ",
+    "    Text 7..13 \"foo\\n1.\""
+  ],
+  "cm286 List items": [
+    "Root 0..85 ",
+    "  List 0..84 ordered=true start=Some(1) spread=false",
+    "    ListItem 0..84 checked=None spread=true",
+    "      Paragraph 5..37 ",
+    "        Text 5..37 \"A paragraph\\nwith two lines.\"",
+    "      Code 44..61 lang=None \"indented code\"",
+    "      Blockquote 68..84 ",
+    "        Paragraph 70..84 ",
+    "          Text 70..84 \"A block quote.\""
+  ],
+  "cm287 List items": [
+    "Root 0..89 ",
+    "  List 0..88 ordered=true start=Some(1) spread=false",
+    "    ListItem 0..88 checked=None spread=true",
+    "      Paragraph 6..39 ",
+    "        Text 6..39 \"A paragraph\\nwith two lines.\"",
+    "      Code 47..64 lang=None \"indented code\"",
+    "      Blockquote 72..88 ",
+    "        Paragraph 74..88 ",
+    "          Text 74..88 \"A block quote.\""
+  ],
+  "cm288 List items": [
+    "Root 0..93 ",
+    "  List 0..92 ordered=true start=Some(1) spread=false",
+    "    ListItem 0..92 checked=None spread=true",
+    "      Paragraph 7..41 ",
+    "        Text 7..41 \"A paragraph\\nwith two lines.\"",
+    "      Code 50..67 lang=None \"indented code\"",
+    "      Blockquote 76..92 ",
+    "        Paragraph 78..92 ",
+    "          Text 78..92 \"A block quote.\""
+  ],
+  "cm289 List items": [
+    "Root 0..97 ",
+    "  Code 0..96 lang=None \"1.  A paragraph\\n    with two lines.\\n\\n        indented code\\n\\n    > A block quote.\""
+  ],
+  "cm290 List items": [
+    "Root 0..83 ",
+    "  List 0..82 ordered=true start=Some(1) spread=false",
+    "    ListItem 0..82 checked=None spread=true",
+    "      Paragraph 6..33 ",
+    "        Text 6..33 \"A paragraph\\nwith two lines.\"",
+    "      Code 41..58 lang=None \"indented code\"",
+    "      Blockquote 66..82 ",
+    "        Paragraph 68..82 ",
+    "          Text 68..82 \"A block quote.\""
+  ],
+  "cm291 List items": [
+    "Root 0..38 ",
+    "  List 0..37 ordered=true start=Some(1) spread=false",
+    "    ListItem 0..37 checked=None spread=false",
+    "      Paragraph 6..37 ",
+    "        Text 6..37 \"A paragraph\\nwith two lines.\""
+  ],
+  "cm292 List items": [
+    "Root 0..34 ",
+    "  Blockquote 0..33 ",
+    "    List 2..33 ordered=true start=Some(1) spread=false",
+    "      ListItem 2..33 checked=None spread=false",
+    "        Blockquote 5..33 ",
+    "          Paragraph 7..33 ",
+    "            Text 7..33 \"Blockquote\\ncontinued here.\""
+  ],
+  "cm293 List items": [
+    "Root 0..36 ",
+    "  Blockquote 0..35 ",
+    "    List 2..35 ordered=true start=Some(1) spread=false",
+    "      ListItem 2..35 checked=None spread=false",
+    "        Blockquote 5..35 ",
+    "          Paragraph 7..35 ",
+    "            Text 7..35 \"Blockquote\\ncontinued here.\""
+  ],
+  "cm294 List items": [
+    "Root 0..36 ",
+    "  List 0..35 ordered=false start=None spread=false",
+    "    ListItem 0..35 checked=None spread=false",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"foo\"",
+    "      List 8..35 ordered=false start=None spread=false",
+    "        ListItem 8..35 checked=None spread=false",
+    "          Paragraph 10..13 ",
+    "            Text 10..13 \"bar\"",
+    "          List 18..35 ordered=false start=None spread=false",
+    "            ListItem 18..35 checked=None spread=false",
+    "              Paragraph 20..23 ",
+    "                Text 20..23 \"baz\"",
+    "              List 30..35 ordered=false start=None spread=false",
+    "                ListItem 30..35 checked=None spread=false",
+    "                  Paragraph 32..35 ",
+    "                    Text 32..35 \"boo\""
+  ],
+  "cm295 List items": [
+    "Root 0..30 ",
+    "  List 0..29 ordered=false start=None spread=false",
+    "    ListItem 0..5 checked=None spread=false",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"foo\"",
+    "    ListItem 6..12 checked=None spread=false",
+    "      Paragraph 9..12 ",
+    "        Text 9..12 \"bar\"",
+    "    ListItem 13..20 checked=None spread=false",
+    "      Paragraph 17..20 ",
+    "        Text 17..20 \"baz\"",
+    "    ListItem 21..29 checked=None spread=false",
+    "      Paragraph 26..29 ",
+    "        Text 26..29 \"boo\""
+  ],
+  "cm296 List items": [
+    "Root 0..18 ",
+    "  List 0..17 ordered=true start=Some(10) spread=false",
+    "    ListItem 0..17 checked=None spread=false",
+    "      Paragraph 4..7 ",
+    "        Text 4..7 \"foo\"",
+    "      List 12..17 ordered=false start=None spread=false",
+    "        ListItem 12..17 checked=None spread=false",
+    "          Paragraph 14..17 ",
+    "            Text 14..17 \"bar\""
+  ],
+  "cm297 List items": [
+    "Root 0..17 ",
+    "  List 0..7 ordered=true start=Some(10) spread=false",
+    "    ListItem 0..7 checked=None spread=false",
+    "      Paragraph 4..7 ",
+    "        Text 4..7 \"foo\"",
+    "  List 8..16 ordered=false start=None spread=false",
+    "    ListItem 8..16 checked=None spread=false",
+    "      Paragraph 13..16 ",
+    "        Text 13..16 \"bar\""
+  ],
+  "cm298 List items": [
+    "Root 0..8 ",
+    "  List 0..7 ordered=false start=None spread=false",
+    "    ListItem 0..7 checked=None spread=false",
+    "      List 2..7 ordered=false start=None spread=false",
+    "        ListItem 2..7 checked=None spread=false",
+    "          Paragraph 4..7 ",
+    "            Text 4..7 \"foo\""
+  ],
+  "cm299 List items": [
+    "Root 0..12 ",
+    "  List 0..11 ordered=true start=Some(1) spread=false",
+    "    ListItem 0..11 checked=None spread=false",
+    "      List 3..11 ordered=false start=None spread=false",
+    "        ListItem 3..11 checked=None spread=false",
+    "          List 5..11 ordered=true start=Some(2) spread=false",
+    "            ListItem 5..11 checked=None spread=false",
+    "              Paragraph 8..11 ",
+    "                Text 8..11 \"foo\""
+  ],
+  "cm300 List items": [
+    "Root 0..26 ",
+    "  List 0..25 ordered=false start=None spread=false",
+    "    ListItem 0..7 checked=None spread=false",
+    "      Heading 2..7 depth=1",
+    "        Text 4..7 \"Foo\"",
+    "    ListItem 8..25 checked=None spread=false",
+    "      Heading 10..19 depth=2",
+    "        Text 10..13 \"Bar\"",
+    "      Paragraph 22..25 ",
+    "        Text 22..25 \"baz\""
+  ],
+  "cm301 Lists": [
+    "Root 0..18 ",
+    "  List 0..11 ordered=false start=None spread=false",
+    "    ListItem 0..5 checked=None spread=false",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"foo\"",
+    "    ListItem 6..11 checked=None spread=false",
+    "      Paragraph 8..11 ",
+    "        Text 8..11 \"bar\"",
+    "  List 12..17 ordered=false start=None spread=false",
+    "    ListItem 12..17 checked=None spread=false",
+    "      Paragraph 14..17 ",
+    "        Text 14..17 \"baz\""
+  ],
+  "cm302 Lists": [
+    "Root 0..21 ",
+    "  List 0..13 ordered=true start=Some(1) spread=false",
+    "    ListItem 0..6 checked=None spread=false",
+    "      Paragraph 3..6 ",
+    "        Text 3..6 \"foo\"",
+    "    ListItem 7..13 checked=None spread=false",
+    "      Paragraph 10..13 ",
+    "        Text 10..13 \"bar\"",
+    "  List 14..20 ordered=true start=Some(3) spread=false",
+    "    ListItem 14..20 checked=None spread=false",
+    "      Paragraph 17..20 ",
+    "        Text 17..20 \"baz\""
+  ],
+  "cm303 Lists": [
+    "Root 0..16 ",
+    "  Paragraph 0..3 ",
+    "    Text 0..3 \"Foo\"",
+    "  List 4..15 ordered=false start=None spread=false",
+    "    ListItem 4..9 checked=None spread=false",
+    "      Paragraph 6..9 ",
+    "        Text 6..9 \"bar\"",
+    "    ListItem 10..15 checked=None spread=false",
+    "      Paragraph 12..15 ",
+    "        Text 12..15 \"baz\""
+  ],
+  "cm304 Lists": [
+    "Root 0..68 ",
+    "  Paragraph 0..67 ",
+    "    Text 0..67 \"The number of windows in my house is\\n14.  The number of doors is 6.\""
+  ],
+  "cm305 Lists": [
+    "Root 0..67 ",
+    "  Paragraph 0..36 ",
+    "    Text 0..36 \"The number of windows in my house is\"",
+    "  List 37..66 ordered=true start=Some(1) spread=false",
+    "    ListItem 37..66 checked=None spread=false",
+    "      Paragraph 41..66 ",
+    "        Text 41..66 \"The number of doors is 6.\""
+  ],
+  "cm306 Lists": [
+    "Root 0..21 ",
+    "  List 0..20 ordered=false start=None spread=true",
+    "    ListItem 0..6 checked=None spread=false",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"foo\"",
+    "    ListItem 7..14 checked=None spread=true",
+    "      Paragraph 9..12 ",
+    "        Text 9..12 \"bar\"",
+    "    ListItem 15..20 checked=None spread=false",
+    "      Paragraph 17..20 ",
+    "        Text 17..20 \"baz\""
+  ],
+  "cm307 Lists": [
+    "Root 0..36 ",
+    "  List 0..35 ordered=false start=None spread=false",
+    "    ListItem 0..35 checked=None spread=false",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"foo\"",
+    "      List 8..35 ordered=false start=None spread=false",
+    "        ListItem 8..35 checked=None spread=false",
+    "          Paragraph 10..13 ",
+    "            Text 10..13 \"bar\"",
+    "          List 18..35 ordered=false start=None spread=false",
+    "            ListItem 18..35 checked=None spread=true",
+    "              Paragraph 20..23 ",
+    "                Text 20..23 \"baz\"",
+    "              Paragraph 32..35 ",
+    "                Text 32..35 \"bim\""
+  ],
+  "cm308 Lists": [
+    "Root 0..35 ",
+    "  List 0..12 ordered=false start=None spread=false",
+    "    ListItem 0..5 checked=None spread=false",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"foo\"",
+    "    ListItem 6..12 checked=None spread=false",
+    "      Paragraph 8..11 ",
+    "        Text 8..11 \"bar\"",
+    "  Html 13..21 \"<!-- -->\"",
+    "  List 23..34 ordered=false start=None spread=false",
+    "    ListItem 23..28 checked=None spread=false",
+    "      Paragraph 25..28 ",
+    "        Text 25..28 \"baz\"",
+    "    ListItem 29..34 checked=None spread=false",
+    "      Paragraph 31..34 ",
+    "        Text 31..34 \"bim\""
+  ],
+  "cm309 Lists": [
+    "Root 0..50 ",
+    "  List 0..30 ordered=false start=None spread=true",
+    "    ListItem 0..21 checked=None spread=true",
+    "      Paragraph 4..7 ",
+    "        Text 4..7 \"foo\"",
+    "      Paragraph 13..20 ",
+    "        Text 13..20 \"notcode\"",
+    "    ListItem 22..30 checked=None spread=false",
+    "      Paragraph 26..29 ",
+    "        Text 26..29 \"foo\"",
+    "  Html 31..39 \"<!-- -->\"",
+    "  Code 41..49 lang=None \"code\""
+  ],
+  "cm310 Lists": [
+    "Root 0..37 ",
+    "  List 0..36 ordered=false start=None spread=false",
+    "    ListItem 0..3 checked=None spread=false",
+    "      Paragraph 2..3 ",
+    "        Text 2..3 \"a\"",
+    "    ListItem 4..8 checked=None spread=false",
+    "      Paragraph 7..8 ",
+    "        Text 7..8 \"b\"",
+    "    ListItem 9..14 checked=None spread=false",
+    "      Paragraph 13..14 ",
+    "        Text 13..14 \"c\"",
+    "    ListItem 15..21 checked=None spread=false",
+    "      Paragraph 20..21 ",
+    "        Text 20..21 \"d\"",
+    "    ListItem 22..27 checked=None spread=false",
+    "      Paragraph 26..27 ",
+    "        Text 26..27 \"e\"",
+    "    ListItem 28..32 checked=None spread=false",
+    "      Paragraph 31..32 ",
+    "        Text 31..32 \"f\"",
+    "    ListItem 33..36 checked=None spread=false",
+    "      Paragraph 35..36 ",
+    "        Text 35..36 \"g\""
+  ],
+  "cm311 Lists": [
+    "Root 0..22 ",
+    "  List 0..21 ordered=true start=Some(1) spread=true",
+    "    ListItem 0..5 checked=None spread=false",
+    "      Paragraph 3..4 ",
+    "        Text 3..4 \"a\"",
+    "    ListItem 6..13 checked=None spread=false",
+    "      Paragraph 11..12 ",
+    "        Text 11..12 \"b\"",
+    "    ListItem 14..21 checked=None spread=false",
+    "      Paragraph 20..21 ",
+    "        Text 20..21 \"c\""
+  ],
+  "cm312 Lists": [
+    "Root 0..30 ",
+    "  List 0..29 ordered=false start=None spread=false",
+    "    ListItem 0..3 checked=None spread=false",
+    "      Paragraph 2..3 ",
+    "        Text 2..3 \"a\"",
+    "    ListItem 4..8 checked=None spread=false",
+    "      Paragraph 7..8 ",
+    "        Text 7..8 \"b\"",
+    "    ListItem 9..14 checked=None spread=false",
+    "      Paragraph 13..14 ",
+    "        Text 13..14 \"c\"",
+    "    ListItem 15..29 checked=None spread=false",
+    "      Paragraph 20..29 ",
+    "        Text 20..29 \"d\\n- e\""
+  ],
+  "cm313 Lists": [
+    "Root 0..23 ",
+    "  List 0..13 ordered=true start=Some(1) spread=true",
+    "    ListItem 0..5 checked=None spread=false",
+    "      Paragraph 3..4 ",
+    "        Text 3..4 \"a\"",
+    "    ListItem 6..13 checked=None spread=false",
+    "      Paragraph 11..12 ",
+    "        Text 11..12 \"b\"",
+    "  Code 14..22 lang=None \"3. c\""
+  ],
+  "cm314 Lists": [
+    "Root 0..13 ",
+    "  List 0..12 ordered=false start=None spread=true",
+    "    ListItem 0..3 checked=None spread=false",
+    "      Paragraph 2..3 ",
+    "        Text 2..3 \"a\"",
+    "    ListItem 4..8 checked=None spread=false",
+    "      Paragraph 6..7 ",
+    "        Text 6..7 \"b\"",
+    "    ListItem 9..12 checked=None spread=false",
+    "      Paragraph 11..12 ",
+    "        Text 11..12 \"c\""
+  ],
+  "cm315 Lists": [
+    "Root 0..11 ",
+    "  List 0..10 ordered=false start=None spread=true",
+    "    ListItem 0..3 checked=None spread=false",
+    "      Paragraph 2..3 ",
+    "        Text 2..3 \"a\"",
+    "    ListItem 4..5 checked=None spread=false",
+    "    ListItem 7..10 checked=None spread=false",
+    "      Paragraph 9..10 ",
+    "        Text 9..10 \"c\""
+  ],
+  "cm316 Lists": [
+    "Root 0..17 ",
+    "  List 0..16 ordered=false start=None spread=false",
+    "    ListItem 0..3 checked=None spread=false",
+    "      Paragraph 2..3 ",
+    "        Text 2..3 \"a\"",
+    "    ListItem 4..12 checked=None spread=true",
+    "      Paragraph 6..7 ",
+    "        Text 6..7 \"b\"",
+    "      Paragraph 11..12 ",
+    "        Text 11..12 \"c\"",
+    "    ListItem 13..16 checked=None spread=false",
+    "      Paragraph 15..16 ",
+    "        Text 15..16 \"d\""
+  ],
+  "cm317 Lists": [
+    "Root 0..27 ",
+    "  List 0..26 ordered=false start=None spread=false",
+    "    ListItem 0..3 checked=None spread=false",
+    "      Paragraph 2..3 ",
+    "        Text 2..3 \"a\"",
+    "    ListItem 4..22 checked=None spread=true",
+    "      Paragraph 6..7 ",
+    "        Text 6..7 \"b\"",
+    "      Definition 11..22 id=\"ref\" url=\"/url\" title=None",
+    "    ListItem 23..26 checked=None spread=false",
+    "      Paragraph 25..26 ",
+    "        Text 25..26 \"d\""
+  ],
+  "cm318 Lists": [
+    "Root 0..26 ",
+    "  List 0..25 ordered=false start=None spread=false",
+    "    ListItem 0..3 checked=None spread=false",
+    "      Paragraph 2..3 ",
+    "        Text 2..3 \"a\"",
+    "    ListItem 4..21 checked=None spread=false",
+    "      Code 6..21 lang=None \"b\\n\\n\"",
+    "    ListItem 22..25 checked=None spread=false",
+    "      Paragraph 24..25 ",
+    "        Text 24..25 \"c\""
+  ],
+  "cm319 Lists": [
+    "Root 0..21 ",
+    "  List 0..20 ordered=false start=None spread=false",
+    "    ListItem 0..16 checked=None spread=false",
+    "      Paragraph 2..3 ",
+    "        Text 2..3 \"a\"",
+    "      List 6..16 ordered=false start=None spread=false",
+    "        ListItem 6..16 checked=None spread=true",
+    "          Paragraph 8..9 ",
+    "            Text 8..9 \"b\"",
+    "          Paragraph 15..16 ",
+    "            Text 15..16 \"c\"",
+    "    ListItem 17..20 checked=None spread=false",
+    "      Paragraph 19..20 ",
+    "        Text 19..20 \"d\""
+  ],
+  "cm320 Lists": [
+    "Root 0..18 ",
+    "  List 0..17 ordered=false start=None spread=false",
+    "    ListItem 0..13 checked=None spread=false",
+    "      Paragraph 2..3 ",
+    "        Text 2..3 \"a\"",
+    "      Blockquote 6..13 ",
+    "        Paragraph 8..9 ",
+    "          Text 8..9 \"b\"",
+    "    ListItem 14..17 checked=None spread=false",
+    "      Paragraph 16..17 ",
+    "        Text 16..17 \"c\""
+  ],
+  "cm321 Lists": [
+    "Root 0..30 ",
+    "  List 0..29 ordered=false start=None spread=false",
+    "    ListItem 0..25 checked=None spread=false",
+    "      Paragraph 2..3 ",
+    "        Text 2..3 \"a\"",
+    "      Blockquote 6..9 ",
+    "        Paragraph 8..9 ",
+    "          Text 8..9 \"b\"",
+    "      Code 12..25 lang=None \"c\"",
+    "    ListItem 26..29 checked=None spread=false",
+    "      Paragraph 28..29 ",
+    "        Text 28..29 \"d\""
+  ],
+  "cm322 Lists": [
+    "Root 0..4 ",
+    "  List 0..3 ordered=false start=None spread=false",
+    "    ListItem 0..3 checked=None spread=false",
+    "      Paragraph 2..3 ",
+    "        Text 2..3 \"a\""
+  ],
+  "cm323 Lists": [
+    "Root 0..10 ",
+    "  List 0..9 ordered=false start=None spread=false",
+    "    ListItem 0..9 checked=None spread=false",
+    "      Paragraph 2..3 ",
+    "        Text 2..3 \"a\"",
+    "      List 6..9 ordered=false start=None spread=false",
+    "        ListItem 6..9 checked=None spread=false",
+    "          Paragraph 8..9 ",
+    "            Text 8..9 \"b\""
+  ],
+  "cm324 Lists": [
+    "Root 0..29 ",
+    "  List 0..28 ordered=true start=Some(1) spread=false",
+    "    ListItem 0..28 checked=None spread=true",
+    "      Code 3..20 lang=None \"foo\"",
+    "      Paragraph 25..28 ",
+    "        Text 25..28 \"bar\""
+  ],
+  "cm325 Lists": [
+    "Root 0..21 ",
+    "  List 0..20 ordered=false start=None spread=false",
+    "    ListItem 0..20 checked=None spread=true",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"foo\"",
+    "      List 8..14 ordered=false start=None spread=false",
+    "        ListItem 8..14 checked=None spread=false",
+    "          Paragraph 10..13 ",
+    "            Text 10..13 \"bar\"",
+    "      Paragraph 17..20 ",
+    "        Text 17..20 \"baz\""
+  ],
+  "cm326 Lists": [
+    "Root 0..33 ",
+    "  List 0..32 ordered=false start=None spread=true",
+    "    ListItem 0..16 checked=None spread=false",
+    "      Paragraph 2..3 ",
+    "        Text 2..3 \"a\"",
+    "      List 6..16 ordered=false start=None spread=false",
+    "        ListItem 6..9 checked=None spread=false",
+    "          Paragraph 8..9 ",
+    "            Text 8..9 \"b\"",
+    "        ListItem 12..16 checked=None spread=false",
+    "          Paragraph 14..15 ",
+    "            Text 14..15 \"c\"",
+    "    ListItem 17..32 checked=None spread=false",
+    "      Paragraph 19..20 ",
+    "        Text 19..20 \"d\"",
+    "      List 23..32 ordered=false start=None spread=false",
+    "        ListItem 23..26 checked=None spread=false",
+    "          Paragraph 25..26 ",
+    "            Text 25..26 \"e\"",
+    "        ListItem 29..32 checked=None spread=false",
+    "          Paragraph 31..32 ",
+    "            Text 31..32 \"f\""
+  ],
+  "cm327 Inlines": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    InlineCode 0..4 \"hi\"",
+    "    Text 4..7 \"lo`\""
+  ],
+  "cm328 Code spans": [
+    "Root 0..6 ",
+    "  Paragraph 0..5 ",
+    "    InlineCode 0..5 \"foo\""
+  ],
+  "cm329 Code spans": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    InlineCode 0..15 \"foo ` bar\""
+  ],
+  "cm330 Code spans": [
+    "Root 0..7 ",
+    "  Paragraph 0..6 ",
+    "    InlineCode 0..6 \"``\""
+  ],
+  "cm331 Code spans": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    InlineCode 0..8 \" `` \""
+  ],
+  "cm332 Code spans": [
+    "Root 0..5 ",
+    "  Paragraph 0..4 ",
+    "    InlineCode 0..4 \" a\""
+  ],
+  "cm333 Code spans": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    InlineCode 0..7 \"\\u{a0}b\\u{a0}\""
+  ],
+  "cm334 Code spans": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    InlineCode 0..4 \"\\u{a0}\"",
+    "    Text 4..5 \"\\n\"",
+    "    InlineCode 5..9 \"  \""
+  ],
+  "cm335 Code spans": [
+    "Root 0..20 ",
+    "  Paragraph 0..19 ",
+    "    InlineCode 0..19 \"\\nfoo\\nbar  \\nbaz\\n\""
+  ],
+  "cm336 Code spans": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    InlineCode 0..10 \"\\nfoo \\n\""
+  ],
+  "cm337 Code spans": [
+    "Root 0..17 ",
+    "  Paragraph 0..16 ",
+    "    InlineCode 0..16 \"foo   bar \\nbaz\""
+  ],
+  "cm338 Code spans": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    InlineCode 0..6 \"foo\\\\\"",
+    "    Text 6..10 \"bar`\""
+  ],
+  "cm339 Code spans": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    InlineCode 0..11 \"foo`bar\""
+  ],
+  "cm340 Code spans": [
+    "Root 0..15 ",
+    "  Paragraph 0..14 ",
+    "    InlineCode 0..14 \"foo `` bar\""
+  ],
+  "cm341 Code spans": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..4 \"*foo\"",
+    "    InlineCode 4..7 \"*\""
+  ],
+  "cm342 Code spans": [
+    "Root 0..21 ",
+    "  Paragraph 0..20 ",
+    "    Text 0..7 \"[not a \"",
+    "    InlineCode 7..19 \"link](/foo\"",
+    "    Text 19..20 \")\""
+  ],
+  "cm343 Code spans": [
+    "Root 0..15 ",
+    "  Paragraph 0..14 ",
+    "    InlineCode 0..11 \"<a href=\\\"\"",
+    "    Text 11..14 \"\\\">`\""
+  ],
+  "cm344 Code spans": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Html 0..12 \"<a href=\\\"`\\\">\"",
+    "    Text 12..13 \"`\""
+  ],
+  "cm345 Code spans": [
+    "Root 0..25 ",
+    "  Paragraph 0..24 ",
+    "    InlineCode 0..19 \"<https://foo.bar.\"",
+    "    Text 19..24 \"baz>`\""
+  ],
+  "cm346 Code spans": [
+    "Root 0..24 ",
+    "  Paragraph 0..23 ",
+    "    Link 0..22 url=\"https://foo.bar.`baz\" title=None",
+    "      Text 1..21 \"https://foo.bar.`baz\"",
+    "    Text 22..23 \"`\""
+  ],
+  "cm347 Code spans": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..8 \"```foo``\""
+  ],
+  "cm348 Code spans": [
+    "Root 0..5 ",
+    "  Paragraph 0..4 ",
+    "    Text 0..4 \"`foo\""
+  ],
+  "cm349 Code spans": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Text 0..4 \"`foo\"",
+    "    InlineCode 4..11 \"bar\""
+  ],
+  "cm350 Emphasis and strong emphasis": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Emphasis 0..9 ",
+    "      Text 1..8 \"foo bar\""
+  ],
+  "cm351 Emphasis and strong emphasis": [
+    "Root 0..13 ",
+    "  Paragraph 0..12 ",
+    "    Text 0..12 \"a * foo bar*\""
+  ],
+  "cm352 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..8 \"a*\\\"foo\\\"*\""
+  ],
+  "cm353 Emphasis and strong emphasis": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..7 \"*\\u{a0}a\\u{a0}*\""
+  ],
+  "cm354 Emphasis and strong emphasis": [
+    "Root 0..37 ",
+    "  Paragraph 0..9 ",
+    "    Text 0..9 \"*$*alpha.\"",
+    "  Paragraph 11..21 ",
+    "    Text 11..21 \"*£*bravo.\"",
+    "  Paragraph 23..36 ",
+    "    Text 23..36 \"*€*charlie.\""
+  ],
+  "cm355 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..3 \"foo\"",
+    "    Emphasis 3..8 ",
+    "      Text 4..7 \"bar\""
+  ],
+  "cm356 Emphasis and strong emphasis": [
+    "Root 0..7 ",
+    "  Paragraph 0..6 ",
+    "    Text 0..1 \"5\"",
+    "    Emphasis 1..4 ",
+    "      Text 2..3 \"6\"",
+    "    Text 4..6 \"78\""
+  ],
+  "cm357 Emphasis and strong emphasis": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Emphasis 0..9 ",
+    "      Text 1..8 \"foo bar\""
+  ],
+  "cm358 Emphasis and strong emphasis": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Text 0..10 \"_ foo bar_\""
+  ],
+  "cm359 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..8 \"a_\\\"foo\\\"_\""
+  ],
+  "cm360 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..8 \"foo_bar_\""
+  ],
+  "cm361 Emphasis and strong emphasis": [
+    "Root 0..7 ",
+    "  Paragraph 0..6 ",
+    "    Text 0..6 \"5_6_78\""
+  ],
+  "cm362 Emphasis and strong emphasis": [
+    "Root 0..39 ",
+    "  Paragraph 0..38 ",
+    "    Text 0..38 \"пристаням_стремятся_\""
+  ],
+  "cm363 Emphasis and strong emphasis": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Text 0..10 \"aa_\\\"bb\\\"_cc\""
+  ],
+  "cm364 Emphasis and strong emphasis": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Text 0..4 \"foo-\"",
+    "    Emphasis 4..11 ",
+    "      Text 5..10 \"(bar)\""
+  ],
+  "cm365 Emphasis and strong emphasis": [
+    "Root 0..6 ",
+    "  Paragraph 0..5 ",
+    "    Text 0..5 \"_foo*\""
+  ],
+  "cm366 Emphasis and strong emphasis": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Text 0..10 \"*foo bar *\""
+  ],
+  "cm367 Emphasis and strong emphasis": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Text 0..10 \"*foo bar\\n*\""
+  ],
+  "cm368 Emphasis and strong emphasis": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..7 \"*(*foo)\""
+  ],
+  "cm369 Emphasis and strong emphasis": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Emphasis 0..9 ",
+    "      Text 1..2 \"(\"",
+    "      Emphasis 2..7 ",
+    "        Text 3..6 \"foo\"",
+    "      Text 7..8 \")\""
+  ],
+  "cm370 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Emphasis 0..5 ",
+    "      Text 1..4 \"foo\"",
+    "    Text 5..8 \"bar\""
+  ],
+  "cm371 Emphasis and strong emphasis": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Text 0..10 \"_foo bar _\""
+  ],
+  "cm372 Emphasis and strong emphasis": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..7 \"_(_foo)\""
+  ],
+  "cm373 Emphasis and strong emphasis": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Emphasis 0..9 ",
+    "      Text 1..2 \"(\"",
+    "      Emphasis 2..7 ",
+    "        Text 3..6 \"foo\"",
+    "      Text 7..8 \")\""
+  ],
+  "cm374 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..8 \"_foo_bar\""
+  ],
+  "cm375 Emphasis and strong emphasis": [
+    "Root 0..39 ",
+    "  Paragraph 0..38 ",
+    "    Text 0..38 \"_пристаням_стремятся\""
+  ],
+  "cm376 Emphasis and strong emphasis": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Emphasis 0..13 ",
+    "      Text 1..12 \"foo_bar_baz\""
+  ],
+  "cm377 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Emphasis 0..7 ",
+    "      Text 1..6 \"(bar)\"",
+    "    Text 7..8 \".\""
+  ],
+  "cm378 Emphasis and strong emphasis": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Strong 0..11 ",
+    "      Text 2..9 \"foo bar\""
+  ],
+  "cm379 Emphasis and strong emphasis": [
+    "Root 0..13 ",
+    "  Paragraph 0..12 ",
+    "    Text 0..12 \"** foo bar**\""
+  ],
+  "cm380 Emphasis and strong emphasis": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Text 0..10 \"a**\\\"foo\\\"**\""
+  ],
+  "cm381 Emphasis and strong emphasis": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Text 0..3 \"foo\"",
+    "    Strong 3..10 ",
+    "      Text 5..8 \"bar\""
+  ],
+  "cm382 Emphasis and strong emphasis": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Strong 0..11 ",
+    "      Text 2..9 \"foo bar\""
+  ],
+  "cm383 Emphasis and strong emphasis": [
+    "Root 0..13 ",
+    "  Paragraph 0..12 ",
+    "    Text 0..12 \"__ foo bar__\""
+  ],
+  "cm384 Emphasis and strong emphasis": [
+    "Root 0..13 ",
+    "  Paragraph 0..12 ",
+    "    Text 0..12 \"__\\nfoo bar__\""
+  ],
+  "cm385 Emphasis and strong emphasis": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Text 0..10 \"a__\\\"foo\\\"__\""
+  ],
+  "cm386 Emphasis and strong emphasis": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Text 0..10 \"foo__bar__\""
+  ],
+  "cm387 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..8 \"5__6__78\""
+  ],
+  "cm388 Emphasis and strong emphasis": [
+    "Root 0..41 ",
+    "  Paragraph 0..40 ",
+    "    Text 0..40 \"пристаням__стремятся__\""
+  ],
+  "cm389 Emphasis and strong emphasis": [
+    "Root 0..22 ",
+    "  Paragraph 0..21 ",
+    "    Strong 0..21 ",
+    "      Text 2..7 \"foo, \"",
+    "      Strong 7..14 ",
+    "        Text 9..12 \"bar\"",
+    "      Text 14..19 \", baz\""
+  ],
+  "cm390 Emphasis and strong emphasis": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Text 0..4 \"foo-\"",
+    "    Strong 4..13 ",
+    "      Text 6..11 \"(bar)\""
+  ],
+  "cm391 Emphasis and strong emphasis": [
+    "Root 0..13 ",
+    "  Paragraph 0..12 ",
+    "    Text 0..12 \"**foo bar **\""
+  ],
+  "cm392 Emphasis and strong emphasis": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Text 0..9 \"**(**foo)\""
+  ],
+  "cm393 Emphasis and strong emphasis": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Emphasis 0..11 ",
+    "      Text 1..2 \"(\"",
+    "      Strong 2..9 ",
+    "        Text 4..7 \"foo\"",
+    "      Text 9..10 \")\""
+  ],
+  "cm394 Emphasis and strong emphasis": [
+    "Root 0..75 ",
+    "  Paragraph 0..74 ",
+    "    Strong 0..74 ",
+    "      Text 2..16 \"Gomphocarpus (\"",
+    "      Emphasis 16..42 ",
+    "        Text 17..41 \"Gomphocarpus physocarpus\"",
+    "      Text 42..49 \", syn.\\n\"",
+    "      Emphasis 49..71 ",
+    "        Text 50..70 \"Asclepias physocarpa\"",
+    "      Text 71..72 \")\""
+  ],
+  "cm395 Emphasis and strong emphasis": [
+    "Root 0..20 ",
+    "  Paragraph 0..19 ",
+    "    Strong 0..19 ",
+    "      Text 2..7 \"foo \\\"\"",
+    "      Emphasis 7..12 ",
+    "        Text 8..11 \"bar\"",
+    "      Text 12..17 \"\\\" foo\""
+  ],
+  "cm396 Emphasis and strong emphasis": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Strong 0..7 ",
+    "      Text 2..5 \"foo\"",
+    "    Text 7..10 \"bar\""
+  ],
+  "cm397 Emphasis and strong emphasis": [
+    "Root 0..13 ",
+    "  Paragraph 0..12 ",
+    "    Text 0..12 \"__foo bar __\""
+  ],
+  "cm398 Emphasis and strong emphasis": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Text 0..9 \"__(__foo)\""
+  ],
+  "cm399 Emphasis and strong emphasis": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Emphasis 0..11 ",
+    "      Text 1..2 \"(\"",
+    "      Strong 2..9 ",
+    "        Text 4..7 \"foo\"",
+    "      Text 9..10 \")\""
+  ],
+  "cm400 Emphasis and strong emphasis": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Text 0..10 \"__foo__bar\""
+  ],
+  "cm401 Emphasis and strong emphasis": [
+    "Root 0..41 ",
+    "  Paragraph 0..40 ",
+    "    Text 0..40 \"__пристаням__стремятся\""
+  ],
+  "cm402 Emphasis and strong emphasis": [
+    "Root 0..18 ",
+    "  Paragraph 0..17 ",
+    "    Strong 0..17 ",
+    "      Text 2..15 \"foo__bar__baz\""
+  ],
+  "cm403 Emphasis and strong emphasis": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Strong 0..9 ",
+    "      Text 2..7 \"(bar)\"",
+    "    Text 9..10 \".\""
+  ],
+  "cm404 Emphasis and strong emphasis": [
+    "Root 0..18 ",
+    "  Paragraph 0..17 ",
+    "    Emphasis 0..17 ",
+    "      Text 1..5 \"foo \"",
+    "      Link 5..16 url=\"/url\" title=None",
+    "        Text 6..9 \"bar\""
+  ],
+  "cm405 Emphasis and strong emphasis": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Emphasis 0..9 ",
+    "      Text 1..8 \"foo\\nbar\""
+  ],
+  "cm406 Emphasis and strong emphasis": [
+    "Root 0..18 ",
+    "  Paragraph 0..17 ",
+    "    Emphasis 0..17 ",
+    "      Text 1..5 \"foo \"",
+    "      Strong 5..12 ",
+    "        Text 7..10 \"bar\"",
+    "      Text 12..16 \" baz\""
+  ],
+  "cm407 Emphasis and strong emphasis": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Emphasis 0..15 ",
+    "      Text 1..5 \"foo \"",
+    "      Emphasis 5..10 ",
+    "        Text 6..9 \"bar\"",
+    "      Text 10..14 \" baz\""
+  ],
+  "cm408 Emphasis and strong emphasis": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Emphasis 0..11 ",
+    "      Emphasis 1..6 ",
+    "        Text 2..5 \"foo\"",
+    "      Text 6..10 \" bar\""
+  ],
+  "cm409 Emphasis and strong emphasis": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Emphasis 0..11 ",
+    "      Text 1..5 \"foo \"",
+    "      Emphasis 5..10 ",
+    "        Text 6..9 \"bar\""
+  ],
+  "cm410 Emphasis and strong emphasis": [
+    "Root 0..18 ",
+    "  Paragraph 0..17 ",
+    "    Emphasis 0..17 ",
+    "      Text 1..5 \"foo \"",
+    "      Strong 5..12 ",
+    "        Text 7..10 \"bar\"",
+    "      Text 12..16 \" baz\""
+  ],
+  "cm411 Emphasis and strong emphasis": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Emphasis 0..15 ",
+    "      Text 1..4 \"foo\"",
+    "      Strong 4..11 ",
+    "        Text 6..9 \"bar\"",
+    "      Text 11..14 \"baz\""
+  ],
+  "cm412 Emphasis and strong emphasis": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Emphasis 0..10 ",
+    "      Text 1..9 \"foo**bar\""
+  ],
+  "cm413 Emphasis and strong emphasis": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Emphasis 0..13 ",
+    "      Strong 1..8 ",
+    "        Text 3..6 \"foo\"",
+    "      Text 8..12 \" bar\""
+  ],
+  "cm414 Emphasis and strong emphasis": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Emphasis 0..13 ",
+    "      Text 1..5 \"foo \"",
+    "      Strong 5..12 ",
+    "        Text 7..10 \"bar\""
+  ],
+  "cm415 Emphasis and strong emphasis": [
+    "Root 0..13 ",
+    "  Paragraph 0..12 ",
+    "    Emphasis 0..12 ",
+    "      Text 1..4 \"foo\"",
+    "      Strong 4..11 ",
+    "        Text 6..9 \"bar\""
+  ],
+  "cm416 Emphasis and strong emphasis": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Text 0..3 \"foo\"",
+    "    Emphasis 3..12 ",
+    "      Strong 4..11 ",
+    "        Text 6..9 \"bar\"",
+    "    Text 12..15 \"baz\""
+  ],
+  "cm417 Emphasis and strong emphasis": [
+    "Root 0..25 ",
+    "  Paragraph 0..24 ",
+    "    Text 0..3 \"foo\"",
+    "    Strong 3..18 ",
+    "      Strong 5..16 ",
+    "        Strong 7..14 ",
+    "          Text 9..12 \"bar\"",
+    "    Text 18..24 \"***baz\""
+  ],
+  "cm418 Emphasis and strong emphasis": [
+    "Root 0..28 ",
+    "  Paragraph 0..27 ",
+    "    Emphasis 0..27 ",
+    "      Text 1..5 \"foo \"",
+    "      Strong 5..22 ",
+    "        Text 7..11 \"bar \"",
+    "        Emphasis 11..16 ",
+    "          Text 12..15 \"baz\"",
+    "        Text 16..20 \" bim\"",
+    "      Text 22..26 \" bop\""
+  ],
+  "cm419 Emphasis and strong emphasis": [
+    "Root 0..20 ",
+    "  Paragraph 0..19 ",
+    "    Emphasis 0..19 ",
+    "      Text 1..5 \"foo \"",
+    "      Link 5..18 url=\"/url\" title=None",
+    "        Emphasis 6..11 ",
+    "          Text 7..10 \"bar\""
+  ],
+  "cm420 Emphasis and strong emphasis": [
+    "Root 0..28 ",
+    "  Paragraph 0..27 ",
+    "    Text 0..27 \"** is not an empty emphasis\""
+  ],
+  "cm421 Emphasis and strong emphasis": [
+    "Root 0..37 ",
+    "  Paragraph 0..36 ",
+    "    Text 0..36 \"**** is not an empty strong emphasis\""
+  ],
+  "cm422 Emphasis and strong emphasis": [
+    "Root 0..20 ",
+    "  Paragraph 0..19 ",
+    "    Strong 0..19 ",
+    "      Text 2..6 \"foo \"",
+    "      Link 6..17 url=\"/url\" title=None",
+    "        Text 7..10 \"bar\""
+  ],
+  "cm423 Emphasis and strong emphasis": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Strong 0..11 ",
+    "      Text 2..9 \"foo\\nbar\""
+  ],
+  "cm424 Emphasis and strong emphasis": [
+    "Root 0..18 ",
+    "  Paragraph 0..17 ",
+    "    Strong 0..17 ",
+    "      Text 2..6 \"foo \"",
+    "      Emphasis 6..11 ",
+    "        Text 7..10 \"bar\"",
+    "      Text 11..15 \" baz\""
+  ],
+  "cm425 Emphasis and strong emphasis": [
+    "Root 0..20 ",
+    "  Paragraph 0..19 ",
+    "    Strong 0..19 ",
+    "      Text 2..6 \"foo \"",
+    "      Strong 6..13 ",
+    "        Text 8..11 \"bar\"",
+    "      Text 13..17 \" baz\""
+  ],
+  "cm426 Emphasis and strong emphasis": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Strong 0..15 ",
+    "      Strong 2..9 ",
+    "        Text 4..7 \"foo\"",
+    "      Text 9..13 \" bar\""
+  ],
+  "cm427 Emphasis and strong emphasis": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Strong 0..15 ",
+    "      Text 2..6 \"foo \"",
+    "      Strong 6..13 ",
+    "        Text 8..11 \"bar\""
+  ],
+  "cm428 Emphasis and strong emphasis": [
+    "Root 0..18 ",
+    "  Paragraph 0..17 ",
+    "    Strong 0..17 ",
+    "      Text 2..6 \"foo \"",
+    "      Emphasis 6..11 ",
+    "        Text 7..10 \"bar\"",
+    "      Text 11..15 \" baz\""
+  ],
+  "cm429 Emphasis and strong emphasis": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Strong 0..15 ",
+    "      Text 2..5 \"foo\"",
+    "      Emphasis 5..10 ",
+    "        Text 6..9 \"bar\"",
+    "      Text 10..13 \"baz\""
+  ],
+  "cm430 Emphasis and strong emphasis": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Strong 0..13 ",
+    "      Emphasis 2..7 ",
+    "        Text 3..6 \"foo\"",
+    "      Text 7..11 \" bar\""
+  ],
+  "cm431 Emphasis and strong emphasis": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Strong 0..13 ",
+    "      Text 2..6 \"foo \"",
+    "      Emphasis 6..11 ",
+    "        Text 7..10 \"bar\""
+  ],
+  "cm432 Emphasis and strong emphasis": [
+    "Root 0..30 ",
+    "  Paragraph 0..29 ",
+    "    Strong 0..29 ",
+    "      Text 2..6 \"foo \"",
+    "      Emphasis 6..23 ",
+    "        Text 7..11 \"bar \"",
+    "        Strong 11..18 ",
+    "          Text 13..16 \"baz\"",
+    "        Text 18..22 \"\\nbim\"",
+    "      Text 23..27 \" bop\""
+  ],
+  "cm433 Emphasis and strong emphasis": [
+    "Root 0..22 ",
+    "  Paragraph 0..21 ",
+    "    Strong 0..21 ",
+    "      Text 2..6 \"foo \"",
+    "      Link 6..19 url=\"/url\" title=None",
+    "        Emphasis 7..12 ",
+    "          Text 8..11 \"bar\""
+  ],
+  "cm434 Emphasis and strong emphasis": [
+    "Root 0..28 ",
+    "  Paragraph 0..27 ",
+    "    Text 0..27 \"__ is not an empty emphasis\""
+  ],
+  "cm435 Emphasis and strong emphasis": [
+    "Root 0..37 ",
+    "  Paragraph 0..36 ",
+    "    Text 0..36 \"____ is not an empty strong emphasis\""
+  ],
+  "cm436 Emphasis and strong emphasis": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..7 \"foo ***\""
+  ],
+  "cm437 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..4 \"foo \"",
+    "    Emphasis 4..8 ",
+    "      Text 6..7 \"*\""
+  ],
+  "cm438 Emphasis and strong emphasis": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..4 \"foo \"",
+    "    Emphasis 4..7 ",
+    "      Text 5..6 \"_\""
+  ],
+  "cm439 Emphasis and strong emphasis": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Text 0..9 \"foo *****\""
+  ],
+  "cm440 Emphasis and strong emphasis": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Text 0..4 \"foo \"",
+    "    Strong 4..10 ",
+    "      Text 7..8 \"*\""
+  ],
+  "cm441 Emphasis and strong emphasis": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Text 0..4 \"foo \"",
+    "    Strong 4..9 ",
+    "      Text 6..7 \"_\""
+  ],
+  "cm442 Emphasis and strong emphasis": [
+    "Root 0..7 ",
+    "  Paragraph 0..6 ",
+    "    Text 0..1 \"*\"",
+    "    Emphasis 1..6 ",
+    "      Text 2..5 \"foo\""
+  ],
+  "cm443 Emphasis and strong emphasis": [
+    "Root 0..7 ",
+    "  Paragraph 0..6 ",
+    "    Emphasis 0..5 ",
+    "      Text 1..4 \"foo\"",
+    "    Text 5..6 \"*\""
+  ],
+  "cm444 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..1 \"*\"",
+    "    Strong 1..8 ",
+    "      Text 3..6 \"foo\""
+  ],
+  "cm445 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..3 \"***\"",
+    "    Emphasis 3..8 ",
+    "      Text 4..7 \"foo\""
+  ],
+  "cm446 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Strong 0..7 ",
+    "      Text 2..5 \"foo\"",
+    "    Text 7..8 \"*\""
+  ],
+  "cm447 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Emphasis 0..5 ",
+    "      Text 1..4 \"foo\"",
+    "    Text 5..8 \"***\""
+  ],
+  "cm448 Emphasis and strong emphasis": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..7 \"foo ___\""
+  ],
+  "cm449 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..4 \"foo \"",
+    "    Emphasis 4..8 ",
+    "      Text 6..7 \"_\""
+  ],
+  "cm450 Emphasis and strong emphasis": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..4 \"foo \"",
+    "    Emphasis 4..7 ",
+    "      Text 5..6 \"*\""
+  ],
+  "cm451 Emphasis and strong emphasis": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Text 0..9 \"foo _____\""
+  ],
+  "cm452 Emphasis and strong emphasis": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Text 0..4 \"foo \"",
+    "    Strong 4..10 ",
+    "      Text 7..8 \"_\""
+  ],
+  "cm453 Emphasis and strong emphasis": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Text 0..4 \"foo \"",
+    "    Strong 4..9 ",
+    "      Text 6..7 \"*\""
+  ],
+  "cm454 Emphasis and strong emphasis": [
+    "Root 0..7 ",
+    "  Paragraph 0..6 ",
+    "    Text 0..1 \"_\"",
+    "    Emphasis 1..6 ",
+    "      Text 2..5 \"foo\""
+  ],
+  "cm455 Emphasis and strong emphasis": [
+    "Root 0..7 ",
+    "  Paragraph 0..6 ",
+    "    Emphasis 0..5 ",
+    "      Text 1..4 \"foo\"",
+    "    Text 5..6 \"_\""
+  ],
+  "cm456 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..1 \"_\"",
+    "    Strong 1..8 ",
+    "      Text 3..6 \"foo\""
+  ],
+  "cm457 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..3 \"___\"",
+    "    Emphasis 3..8 ",
+    "      Text 4..7 \"foo\""
+  ],
+  "cm458 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Strong 0..7 ",
+    "      Text 2..5 \"foo\"",
+    "    Text 7..8 \"_\""
+  ],
+  "cm459 Emphasis and strong emphasis": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Emphasis 0..5 ",
+    "      Text 1..4 \"foo\"",
+    "    Text 5..8 \"___\""
+  ],
+  "cm460 Emphasis and strong emphasis": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Strong 0..7 ",
+    "      Text 2..5 \"foo\""
+  ],
+  "cm461 Emphasis and strong emphasis": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Emphasis 0..7 ",
+    "      Emphasis 1..6 ",
+    "        Text 2..5 \"foo\""
+  ],
+  "cm462 Emphasis and strong emphasis": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Strong 0..7 ",
+    "      Text 2..5 \"foo\""
+  ],
+  "cm463 Emphasis and strong emphasis": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Emphasis 0..7 ",
+    "      Emphasis 1..6 ",
+    "        Text 2..5 \"foo\""
+  ],
+  "cm464 Emphasis and strong emphasis": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Strong 0..11 ",
+    "      Strong 2..9 ",
+    "        Text 4..7 \"foo\""
+  ],
+  "cm465 Emphasis and strong emphasis": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Strong 0..11 ",
+    "      Strong 2..9 ",
+    "        Text 4..7 \"foo\""
+  ],
+  "cm466 Emphasis and strong emphasis": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Strong 0..15 ",
+    "      Strong 2..13 ",
+    "        Strong 4..11 ",
+    "          Text 6..9 \"foo\""
+  ],
+  "cm467 Emphasis and strong emphasis": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Emphasis 0..9 ",
+    "      Strong 1..8 ",
+    "        Text 3..6 \"foo\""
+  ],
+  "cm468 Emphasis and strong emphasis": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Emphasis 0..13 ",
+    "      Strong 1..12 ",
+    "        Strong 3..10 ",
+    "          Text 5..8 \"foo\""
+  ],
+  "cm469 Emphasis and strong emphasis": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Emphasis 0..10 ",
+    "      Text 1..9 \"foo _bar\"",
+    "    Text 10..15 \" baz_\""
+  ],
+  "cm470 Emphasis and strong emphasis": [
+    "Root 0..27 ",
+    "  Paragraph 0..26 ",
+    "    Emphasis 0..26 ",
+    "      Text 1..5 \"foo \"",
+    "      Strong 5..21 ",
+    "        Text 7..19 \"bar *baz bim\"",
+    "      Text 21..25 \" bam\""
+  ],
+  "cm471 Emphasis and strong emphasis": [
+    "Root 0..18 ",
+    "  Paragraph 0..17 ",
+    "    Text 0..6 \"**foo \"",
+    "    Strong 6..17 ",
+    "      Text 8..15 \"bar baz\""
+  ],
+  "cm472 Emphasis and strong emphasis": [
+    "Root 0..15 ",
+    "  Paragraph 0..14 ",
+    "    Text 0..5 \"*foo \"",
+    "    Emphasis 5..14 ",
+    "      Text 6..13 \"bar baz\""
+  ],
+  "cm473 Emphasis and strong emphasis": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Text 0..1 \"*\"",
+    "    Link 1..13 url=\"/url\" title=None",
+    "      Text 2..6 \"bar*\""
+  ],
+  "cm474 Emphasis and strong emphasis": [
+    "Root 0..18 ",
+    "  Paragraph 0..17 ",
+    "    Text 0..5 \"_foo \"",
+    "    Link 5..17 url=\"/url\" title=None",
+    "      Text 6..10 \"bar_\""
+  ],
+  "cm475 Emphasis and strong emphasis": [
+    "Root 0..28 ",
+    "  Paragraph 0..27 ",
+    "    Text 0..1 \"*\"",
+    "    Html 1..27 \"<img src=\\\"foo\\\" title=\\\"*\\\"/>\""
+  ],
+  "cm476 Emphasis and strong emphasis": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Text 0..2 \"**\"",
+    "    Html 2..15 \"<a href=\\\"**\\\">\""
+  ],
+  "cm477 Emphasis and strong emphasis": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Text 0..2 \"__\"",
+    "    Html 2..15 \"<a href=\\\"__\\\">\""
+  ],
+  "cm478 Emphasis and strong emphasis": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Emphasis 0..7 ",
+    "      Text 1..3 \"a \"",
+    "      InlineCode 3..6 \"*\""
+  ],
+  "cm479 Emphasis and strong emphasis": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Emphasis 0..7 ",
+    "      Text 1..3 \"a \"",
+    "      InlineCode 3..6 \"_\""
+  ],
+  "cm480 Emphasis and strong emphasis": [
+    "Root 0..27 ",
+    "  Paragraph 0..26 ",
+    "    Text 0..3 \"**a\"",
+    "    Link 3..26 url=\"https://foo.bar/?q=**\" title=None",
+    "      Text 4..25 \"https://foo.bar/?q=**\""
+  ],
+  "cm481 Emphasis and strong emphasis": [
+    "Root 0..27 ",
+    "  Paragraph 0..26 ",
+    "    Text 0..3 \"__a\"",
+    "    Link 3..26 url=\"https://foo.bar/?q=__\" title=None",
+    "      Text 4..25 \"https://foo.bar/?q=__\""
+  ],
+  "cm482 Links": [
+    "Root 0..21 ",
+    "  Paragraph 0..20 ",
+    "    Link 0..20 url=\"/uri\" title=Some(\"title\")",
+    "      Text 1..5 \"link\""
+  ],
+  "cm483 Links": [
+    "Root 0..13 ",
+    "  Paragraph 0..12 ",
+    "    Link 0..12 url=\"/uri\" title=None",
+    "      Text 1..5 \"link\""
+  ],
+  "cm484 Links": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Link 0..15 url=\"./target.md\" title=None"
+  ],
+  "cm485 Links": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Link 0..8 url=\"\" title=None",
+    "      Text 1..5 \"link\""
+  ],
+  "cm486 Links": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Link 0..10 url=\"\" title=None",
+    "      Text 1..5 \"link\""
+  ],
+  "cm487 Links": [
+    "Root 0..5 ",
+    "  Paragraph 0..4 ",
+    "    Link 0..4 url=\"\" title=None"
+  ],
+  "cm488 Links": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Text 0..15 \"[link](/my uri)\""
+  ],
+  "cm489 Links": [
+    "Root 0..18 ",
+    "  Paragraph 0..17 ",
+    "    Link 0..17 url=\"/my uri\" title=None",
+    "      Text 1..5 \"link\""
+  ],
+  "cm490 Links": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Text 0..15 \"[link](foo\\nbar)\""
+  ],
+  "cm491 Links": [
+    "Root 0..18 ",
+    "  Paragraph 0..17 ",
+    "    Text 0..7 \"[link](\"",
+    "    Html 7..16 \"<foo\\nbar>\"",
+    "    Text 16..17 \")\""
+  ],
+  "cm492 Links": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Link 0..10 url=\"b)c\" title=None",
+    "      Text 1..2 \"a\""
+  ],
+  "cm493 Links": [
+    "Root 0..15 ",
+    "  Paragraph 0..14 ",
+    "    Text 0..14 \"[link](<foo>)\""
+  ],
+  "cm494 Links": [
+    "Root 0..29 ",
+    "  Paragraph 0..28 ",
+    "    Text 0..23 \"[a](<b)c\\n[a](<b)c>\\n[a](\"",
+    "    Html 23..26 \"<b>\"",
+    "    Text 26..28 \"c)\""
+  ],
+  "cm495 Links": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Link 0..15 url=\"(foo)\" title=None",
+    "      Text 1..5 \"link\""
+  ],
+  "cm496 Links": [
+    "Root 0..22 ",
+    "  Paragraph 0..21 ",
+    "    Link 0..21 url=\"foo(and(bar))\" title=None",
+    "      Text 1..5 \"link\""
+  ],
+  "cm497 Links": [
+    "Root 0..21 ",
+    "  Paragraph 0..20 ",
+    "    Text 0..20 \"[link](foo(and(bar))\""
+  ],
+  "cm498 Links": [
+    "Root 0..24 ",
+    "  Paragraph 0..23 ",
+    "    Link 0..23 url=\"foo(and(bar)\" title=None",
+    "      Text 1..5 \"link\""
+  ],
+  "cm499 Links": [
+    "Root 0..23 ",
+    "  Paragraph 0..22 ",
+    "    Link 0..22 url=\"foo(and(bar)\" title=None",
+    "      Text 1..5 \"link\""
+  ],
+  "cm500 Links": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Link 0..15 url=\"foo):\" title=None",
+    "      Text 1..5 \"link\""
+  ],
+  "cm501 Links": [
+    "Root 0..96 ",
+    "  Paragraph 0..17 ",
+    "    Link 0..17 url=\"#fragment\" title=None",
+    "      Text 1..5 \"link\"",
+    "  Paragraph 19..55 ",
+    "    Link 19..55 url=\"https://example.com#fragment\" title=None",
+    "      Text 20..24 \"link\"",
+    "  Paragraph 57..95 ",
+    "    Link 57..95 url=\"https://example.com?foo=3#frag\" title=None",
+    "      Text 58..62 \"link\""
+  ],
+  "cm502 Links": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Link 0..15 url=\"foo\\\\bar\" title=None",
+    "      Text 1..5 \"link\""
+  ],
+  "cm503 Links": [
+    "Root 0..22 ",
+    "  Paragraph 0..21 ",
+    "    Link 0..21 url=\"foo%20bä\" title=None",
+    "      Text 1..5 \"link\""
+  ],
+  "cm504 Links": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Link 0..15 url=\"\\\"title\\\"\" title=None",
+    "      Text 1..5 \"link\""
+  ],
+  "cm505 Links": [
+    "Root 0..63 ",
+    "  Paragraph 0..62 ",
+    "    Link 0..20 url=\"/url\" title=Some(\"title\")",
+    "      Text 1..5 \"link\"",
+    "    Text 20..21 \"\\n\"",
+    "    Link 21..41 url=\"/url\" title=Some(\"title\")",
+    "      Text 22..26 \"link\"",
+    "    Text 41..42 \"\\n\"",
+    "    Link 42..62 url=\"/url\" title=Some(\"title\")",
+    "      Text 43..47 \"link\""
+  ],
+  "cm506 Links": [
+    "Root 0..30 ",
+    "  Paragraph 0..29 ",
+    "    Link 0..29 url=\"/url\" title=Some(\"title \\\"\\\"\")",
+    "      Text 1..5 \"link\""
+  ],
+  "cm507 Links": [
+    "Root 0..22 ",
+    "  Paragraph 0..21 ",
+    "    Link 0..21 url=\"/url\\u{a0}\\\"title\\\"\" title=None",
+    "      Text 1..5 \"link\""
+  ],
+  "cm508 Links": [
+    "Root 0..33 ",
+    "  Paragraph 0..32 ",
+    "    Text 0..32 \"[link](/url \\\"title \\\"and\\\" title\\\")\""
+  ],
+  "cm509 Links": [
+    "Root 0..33 ",
+    "  Paragraph 0..32 ",
+    "    Link 0..32 url=\"/url\" title=Some(\"title \\\"and\\\" title\")",
+    "      Text 1..5 \"link\""
+  ],
+  "cm510 Links": [
+    "Root 0..28 ",
+    "  Paragraph 0..27 ",
+    "    Link 0..27 url=\"/uri\" title=Some(\"title\")",
+    "      Text 1..5 \"link\""
+  ],
+  "cm511 Links": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Text 0..13 \"[link] (/uri)\""
+  ],
+  "cm512 Links": [
+    "Root 0..25 ",
+    "  Paragraph 0..24 ",
+    "    Link 0..24 url=\"/uri\" title=None",
+    "      Text 1..17 \"link [foo [bar]]\""
+  ],
+  "cm513 Links": [
+    "Root 0..18 ",
+    "  Paragraph 0..17 ",
+    "    Text 0..17 \"[link] bar](/uri)\""
+  ],
+  "cm514 Links": [
+    "Root 0..18 ",
+    "  Paragraph 0..17 ",
+    "    Text 0..6 \"[link \"",
+    "    Link 6..17 url=\"/uri\" title=None",
+    "      Text 7..10 \"bar\""
+  ],
+  "cm515 Links": [
+    "Root 0..19 ",
+    "  Paragraph 0..18 ",
+    "    Link 0..18 url=\"/uri\" title=None",
+    "      Text 1..11 \"link [bar\""
+  ],
+  "cm516 Links": [
+    "Root 0..31 ",
+    "  Paragraph 0..30 ",
+    "    Link 0..30 url=\"/uri\" title=None",
+    "      Text 1..6 \"link \"",
+    "      Emphasis 6..23 ",
+    "        Text 7..11 \"foo \"",
+    "        Strong 11..18 ",
+    "          Text 13..16 \"bar\"",
+    "        Text 18..19 \" \"",
+    "        InlineCode 19..22 \"#\""
+  ],
+  "cm517 Links": [
+    "Root 0..26 ",
+    "  Paragraph 0..25 ",
+    "    Link 0..25 url=\"/uri\" title=None",
+    "      Image 1..18 url=\"moon.jpg\" alt=\"moon\" title=None"
+  ],
+  "cm518 Links": [
+    "Root 0..24 ",
+    "  Paragraph 0..23 ",
+    "    Text 0..5 \"[foo \"",
+    "    Link 5..16 url=\"/uri\" title=None",
+    "      Text 6..9 \"bar\"",
+    "    Text 16..23 \"](/uri)\""
+  ],
+  "cm519 Links": [
+    "Root 0..38 ",
+    "  Paragraph 0..37 ",
+    "    Text 0..5 \"[foo \"",
+    "    Emphasis 5..30 ",
+    "      Text 6..11 \"[bar \"",
+    "      Link 11..22 url=\"/uri\" title=None",
+    "        Text 12..15 \"baz\"",
+    "      Text 22..29 \"](/uri)\"",
+    "    Text 30..37 \"](/uri)\""
+  ],
+  "cm520 Links": [
+    "Root 0..29 ",
+    "  Paragraph 0..28 ",
+    "    Image 0..28 url=\"uri3\" alt=\"[foo](uri2)\" title=None"
+  ],
+  "cm521 Links": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Text 0..1 \"*\"",
+    "    Link 1..13 url=\"/uri\" title=None",
+    "      Text 2..6 \"foo*\""
+  ],
+  "cm522 Links": [
+    "Root 0..17 ",
+    "  Paragraph 0..16 ",
+    "    Link 0..16 url=\"baz*\" title=None",
+    "      Text 1..9 \"foo *bar\""
+  ],
+  "cm523 Links": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Emphasis 0..10 ",
+    "      Text 1..9 \"foo [bar\"",
+    "    Text 10..15 \" baz]\""
+  ],
+  "cm524 Links": [
+    "Root 0..25 ",
+    "  Paragraph 0..24 ",
+    "    Text 0..5 \"[foo \"",
+    "    Html 5..24 \"<bar attr=\\\"](baz)\\\">\""
+  ],
+  "cm525 Links": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Text 0..4 \"[foo\"",
+    "    InlineCode 4..13 \"](/uri)\""
+  ],
+  "cm526 Links": [
+    "Root 0..41 ",
+    "  Paragraph 0..40 ",
+    "    Text 0..4 \"[foo\"",
+    "    Link 4..40 url=\"https://example.com/?search=](uri)\" title=None",
+    "      Text 5..39 \"https://example.com/?search=](uri)\""
+  ],
+  "cm527 Links": [
+    "Root 0..32 ",
+    "  Paragraph 0..10 ",
+    "    LinkReference 0..10 id=\"bar\"",
+    "      Text 1..4 \"foo\"",
+    "  Definition 12..31 id=\"bar\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm528 Links": [
+    "Root 0..37 ",
+    "  Paragraph 0..23 ",
+    "    LinkReference 0..23 id=\"ref\"",
+    "      Text 1..17 \"link [foo [bar]]\"",
+    "  Definition 25..36 id=\"ref\" url=\"/uri\" title=None"
+  ],
+  "cm529 Links": [
+    "Root 0..31 ",
+    "  Paragraph 0..17 ",
+    "    LinkReference 0..17 id=\"ref\"",
+    "      Text 1..11 \"link [bar\"",
+    "  Definition 19..30 id=\"ref\" url=\"/uri\" title=None"
+  ],
+  "cm530 Links": [
+    "Root 0..43 ",
+    "  Paragraph 0..29 ",
+    "    LinkReference 0..29 id=\"ref\"",
+    "      Text 1..6 \"link \"",
+    "      Emphasis 6..23 ",
+    "        Text 7..11 \"foo \"",
+    "        Strong 11..18 ",
+    "          Text 13..16 \"bar\"",
+    "        Text 18..19 \" \"",
+    "        InlineCode 19..22 \"#\"",
+    "  Definition 31..42 id=\"ref\" url=\"/uri\" title=None"
+  ],
+  "cm531 Links": [
+    "Root 0..38 ",
+    "  Paragraph 0..24 ",
+    "    LinkReference 0..24 id=\"ref\"",
+    "      Image 1..18 url=\"moon.jpg\" alt=\"moon\" title=None",
+    "  Definition 26..37 id=\"ref\" url=\"/uri\" title=None"
+  ],
+  "cm532 Links": [
+    "Root 0..36 ",
+    "  Paragraph 0..22 ",
+    "    Text 0..5 \"[foo \"",
+    "    Link 5..16 url=\"/uri\" title=None",
+    "      Text 6..9 \"bar\"",
+    "    Text 16..17 \"]\"",
+    "    LinkReference 17..22 id=\"ref\"",
+    "      Text 18..21 \"ref\"",
+    "  Definition 24..35 id=\"ref\" url=\"/uri\" title=None"
+  ],
+  "cm533 Links": [
+    "Root 0..41 ",
+    "  Paragraph 0..27 ",
+    "    Text 0..5 \"[foo \"",
+    "    Emphasis 5..21 ",
+    "      Text 6..10 \"bar \"",
+    "      LinkReference 10..20 id=\"ref\"",
+    "        Text 11..14 \"baz\"",
+    "    Text 21..22 \"]\"",
+    "    LinkReference 22..27 id=\"ref\"",
+    "      Text 23..26 \"ref\"",
+    "  Definition 29..40 id=\"ref\" url=\"/uri\" title=None"
+  ],
+  "cm534 Links": [
+    "Root 0..26 ",
+    "  Paragraph 0..12 ",
+    "    Text 0..1 \"*\"",
+    "    LinkReference 1..12 id=\"ref\"",
+    "      Text 2..6 \"foo*\"",
+    "  Definition 14..25 id=\"ref\" url=\"/uri\" title=None"
+  ],
+  "cm535 Links": [
+    "Root 0..30 ",
+    "  Paragraph 0..16 ",
+    "    LinkReference 0..15 id=\"ref\"",
+    "      Text 1..9 \"foo *bar\"",
+    "    Text 15..16 \"*\"",
+    "  Definition 18..29 id=\"ref\" url=\"/uri\" title=None"
+  ],
+  "cm536 Links": [
+    "Root 0..38 ",
+    "  Paragraph 0..24 ",
+    "    Text 0..5 \"[foo \"",
+    "    Html 5..24 \"<bar attr=\\\"][ref]\\\">\"",
+    "  Definition 26..37 id=\"ref\" url=\"/uri\" title=None"
+  ],
+  "cm537 Links": [
+    "Root 0..26 ",
+    "  Paragraph 0..12 ",
+    "    Text 0..4 \"[foo\"",
+    "    InlineCode 4..12 \"][ref]\"",
+    "  Definition 14..25 id=\"ref\" url=\"/uri\" title=None"
+  ],
+  "cm538 Links": [
+    "Root 0..54 ",
+    "  Paragraph 0..40 ",
+    "    Text 0..4 \"[foo\"",
+    "    Link 4..40 url=\"https://example.com/?search=][ref]\" title=None",
+    "      Text 5..39 \"https://example.com/?search=][ref]\"",
+    "  Definition 42..53 id=\"ref\" url=\"/uri\" title=None"
+  ],
+  "cm539 Links": [
+    "Root 0..32 ",
+    "  Paragraph 0..10 ",
+    "    LinkReference 0..10 id=\"bar\"",
+    "      Text 1..4 \"foo\"",
+    "  Definition 12..31 id=\"bar\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm540 Links": [
+    "Root 0..18 ",
+    "  Paragraph 0..5 ",
+    "    LinkReference 0..5 id=\"ss\"",
+    "      Text 1..4 \"ẞ\"",
+    "  Definition 7..17 id=\"ss\" url=\"/url\" title=None"
+  ],
+  "cm541 Links": [
+    "Root 0..34 ",
+    "  Definition 0..17 id=\"foobar\" url=\"/url\" title=None",
+    "  Paragraph 19..33 ",
+    "    LinkReference 19..33 id=\"foobar\"",
+    "      Text 20..23 \"Baz\""
+  ],
+  "cm542 Links": [
+    "Root 0..33 ",
+    "  Paragraph 0..11 ",
+    "    Text 0..6 \"[foo] \"",
+    "    LinkReference 6..11 id=\"bar\"",
+    "      Text 7..10 \"bar\"",
+    "  Definition 13..32 id=\"bar\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm543 Links": [
+    "Root 0..33 ",
+    "  Paragraph 0..11 ",
+    "    Text 0..6 \"[foo]\\n\"",
+    "    LinkReference 6..11 id=\"bar\"",
+    "      Text 7..10 \"bar\"",
+    "  Definition 13..32 id=\"bar\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm544 Links": [
+    "Root 0..39 ",
+    "  Definition 0..12 id=\"foo\" url=\"/url1\" title=None",
+    "  Definition 14..26 id=\"foo\" url=\"/url2\" title=None",
+    "  Paragraph 28..38 ",
+    "    LinkReference 28..38 id=\"foo\"",
+    "      Text 29..32 \"bar\""
+  ],
+  "cm545 Links": [
+    "Root 0..27 ",
+    "  Paragraph 0..12 ",
+    "    Text 0..12 \"[bar][foo!]\"",
+    "  Definition 14..26 id=\"foo!\" url=\"/url\" title=None"
+  ],
+  "cm546 Links": [
+    "Root 0..26 ",
+    "  Paragraph 0..11 ",
+    "    Text 0..11 \"[foo][ref[]\"",
+    "  Paragraph 13..25 ",
+    "    Text 13..25 \"[ref[]: /uri\""
+  ],
+  "cm547 Links": [
+    "Root 0..34 ",
+    "  Paragraph 0..15 ",
+    "    Text 0..15 \"[foo][ref[bar]]\"",
+    "  Paragraph 17..33 ",
+    "    Text 17..33 \"[ref[bar]]: /uri\""
+  ],
+  "cm548 Links": [
+    "Root 0..27 ",
+    "  Paragraph 0..9 ",
+    "    Text 0..9 \"[[[foo]]]\"",
+    "  Paragraph 11..26 ",
+    "    Text 11..26 \"[[[foo]]]: /url\""
+  ],
+  "cm549 Links": [
+    "Root 0..28 ",
+    "  Paragraph 0..12 ",
+    "    LinkReference 0..12 id=\"ref\\\\[\"",
+    "      Text 1..4 \"foo\"",
+    "  Definition 14..27 id=\"ref\\\\[\" url=\"/uri\" title=None"
+  ],
+  "cm550 Links": [
+    "Root 0..23 ",
+    "  Definition 0..13 id=\"bar\\\\\\\\\" url=\"/uri\" title=None",
+    "  Paragraph 15..22 ",
+    "    LinkReference 15..22 id=\"bar\\\\\\\\\"",
+    "      Text 16..21 \"bar\\\\\""
+  ],
+  "cm551 Links": [
+    "Root 0..13 ",
+    "  Paragraph 0..2 ",
+    "    Text 0..2 \"[]\"",
+    "  Paragraph 4..12 ",
+    "    Text 4..12 \"[]: /uri\""
+  ],
+  "cm552 Links": [
+    "Root 0..17 ",
+    "  Paragraph 0..4 ",
+    "    Text 0..4 \"[\\n]\"",
+    "  Paragraph 6..16 ",
+    "    Text 6..16 \"[\\n]: /uri\""
+  ],
+  "cm553 Links": [
+    "Root 0..29 ",
+    "  Paragraph 0..7 ",
+    "    LinkReference 0..7 id=\"foo\"",
+    "      Text 1..4 \"foo\"",
+    "  Definition 9..28 id=\"foo\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm554 Links": [
+    "Root 0..41 ",
+    "  Paragraph 0..13 ",
+    "    LinkReference 0..13 id=\"*foo*bar\"",
+    "      Emphasis 1..6 ",
+    "        Text 2..5 \"foo\"",
+    "      Text 6..10 \" bar\"",
+    "  Definition 15..40 id=\"*foo*bar\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm555 Links": [
+    "Root 0..29 ",
+    "  Paragraph 0..7 ",
+    "    LinkReference 0..7 id=\"foo\"",
+    "      Text 1..4 \"Foo\"",
+    "  Definition 9..28 id=\"foo\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm556 Links": [
+    "Root 0..31 ",
+    "  Paragraph 0..9 ",
+    "    LinkReference 0..5 id=\"foo\"",
+    "      Text 1..4 \"foo\"",
+    "    Text 6..9 \"\\n[]\"",
+    "  Definition 11..30 id=\"foo\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm557 Links": [
+    "Root 0..27 ",
+    "  Paragraph 0..5 ",
+    "    LinkReference 0..5 id=\"foo\"",
+    "      Text 1..4 \"foo\"",
+    "  Definition 7..26 id=\"foo\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm558 Links": [
+    "Root 0..39 ",
+    "  Paragraph 0..11 ",
+    "    LinkReference 0..11 id=\"*foo*bar\"",
+    "      Emphasis 1..6 ",
+    "        Text 2..5 \"foo\"",
+    "      Text 6..10 \" bar\"",
+    "  Definition 13..38 id=\"*foo*bar\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm559 Links": [
+    "Root 0..41 ",
+    "  Paragraph 0..13 ",
+    "    Text 0..1 \"[\"",
+    "    LinkReference 1..12 id=\"*foo*bar\"",
+    "      Emphasis 2..7 ",
+    "        Text 3..6 \"foo\"",
+    "      Text 7..11 \" bar\"",
+    "    Text 12..13 \"]\"",
+    "  Definition 15..40 id=\"*foo*bar\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm560 Links": [
+    "Root 0..25 ",
+    "  Paragraph 0..11 ",
+    "    Text 0..6 \"[[bar \"",
+    "    LinkReference 6..11 id=\"foo\"",
+    "      Text 7..10 \"foo\"",
+    "  Definition 13..24 id=\"foo\" url=\"/url\" title=None"
+  ],
+  "cm561 Links": [
+    "Root 0..27 ",
+    "  Paragraph 0..5 ",
+    "    LinkReference 0..5 id=\"foo\"",
+    "      Text 1..4 \"Foo\"",
+    "  Definition 7..26 id=\"foo\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm562 Links": [
+    "Root 0..23 ",
+    "  Paragraph 0..9 ",
+    "    LinkReference 0..5 id=\"foo\"",
+    "      Text 1..4 \"foo\"",
+    "    Text 5..9 \" bar\"",
+    "  Definition 11..22 id=\"foo\" url=\"/url\" title=None"
+  ],
+  "cm563 Links": [
+    "Root 0..28 ",
+    "  Paragraph 0..6 ",
+    "    Text 1..6 \"[foo]\"",
+    "  Definition 8..27 id=\"foo\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm564 Links": [
+    "Root 0..22 ",
+    "  Definition 0..12 id=\"foo*\" url=\"/url\" title=None",
+    "  Paragraph 14..21 ",
+    "    Text 14..15 \"*\"",
+    "    LinkReference 15..21 id=\"foo*\"",
+    "      Text 16..20 \"foo*\""
+  ],
+  "cm565 Links": [
+    "Root 0..38 ",
+    "  Paragraph 0..10 ",
+    "    LinkReference 0..10 id=\"bar\"",
+    "      Text 1..4 \"foo\"",
+    "  Definition 12..24 id=\"foo\" url=\"/url1\" title=None",
+    "  Definition 25..37 id=\"bar\" url=\"/url2\" title=None"
+  ],
+  "cm566 Links": [
+    "Root 0..22 ",
+    "  Paragraph 0..7 ",
+    "    LinkReference 0..7 id=\"foo\"",
+    "      Text 1..4 \"foo\"",
+    "  Definition 9..21 id=\"foo\" url=\"/url1\" title=None"
+  ],
+  "cm567 Links": [
+    "Root 0..22 ",
+    "  Paragraph 0..7 ",
+    "    Link 0..7 url=\"\" title=None",
+    "      Text 1..4 \"foo\"",
+    "  Definition 9..21 id=\"foo\" url=\"/url1\" title=None"
+  ],
+  "cm568 Links": [
+    "Root 0..32 ",
+    "  Paragraph 0..17 ",
+    "    LinkReference 0..5 id=\"foo\"",
+    "      Text 1..4 \"foo\"",
+    "    Text 5..17 \"(not a link)\"",
+    "  Definition 19..31 id=\"foo\" url=\"/url1\" title=None"
+  ],
+  "cm569 Links": [
+    "Root 0..29 ",
+    "  Paragraph 0..15 ",
+    "    Text 0..5 \"[foo]\"",
+    "    LinkReference 5..15 id=\"baz\"",
+    "      Text 6..9 \"bar\"",
+    "  Definition 17..28 id=\"baz\" url=\"/url\" title=None"
+  ],
+  "cm570 Links": [
+    "Root 0..43 ",
+    "  Paragraph 0..15 ",
+    "    LinkReference 0..10 id=\"bar\"",
+    "      Text 1..4 \"foo\"",
+    "    LinkReference 10..15 id=\"baz\"",
+    "      Text 11..14 \"baz\"",
+    "  Definition 17..29 id=\"baz\" url=\"/url1\" title=None",
+    "  Definition 30..42 id=\"bar\" url=\"/url2\" title=None"
+  ],
+  "cm571 Links": [
+    "Root 0..43 ",
+    "  Paragraph 0..15 ",
+    "    Text 0..5 \"[foo]\"",
+    "    LinkReference 5..15 id=\"baz\"",
+    "      Text 6..9 \"bar\"",
+    "  Definition 17..29 id=\"baz\" url=\"/url1\" title=None",
+    "  Definition 30..42 id=\"foo\" url=\"/url2\" title=None"
+  ],
+  "cm572 Images": [
+    "Root 0..21 ",
+    "  Paragraph 0..20 ",
+    "    Image 0..20 url=\"/url\" alt=\"foo\" title=Some(\"title\")"
+  ],
+  "cm573 Images": [
+    "Root 0..54 ",
+    "  Paragraph 0..12 ",
+    "    ImageReference 0..12 id=\"foo*bar*\"",
+    "  Definition 14..53 id=\"foo*bar*\" url=\"train.jpg\" title=Some(\"train & tracks\")"
+  ],
+  "cm574 Images": [
+    "Root 0..27 ",
+    "  Paragraph 0..26 ",
+    "    Image 0..26 url=\"/url2\" alt=\"foo \" title=None"
+  ],
+  "cm575 Images": [
+    "Root 0..26 ",
+    "  Paragraph 0..25 ",
+    "    Image 0..25 url=\"/url2\" alt=\"foo bar\" title=None"
+  ],
+  "cm576 Images": [
+    "Root 0..56 ",
+    "  Paragraph 0..14 ",
+    "    ImageReference 0..14 id=\"foo*bar*\"",
+    "  Definition 16..55 id=\"foo*bar*\" url=\"train.jpg\" title=Some(\"train & tracks\")"
+  ],
+  "cm577 Images": [
+    "Root 0..59 ",
+    "  Paragraph 0..20 ",
+    "    ImageReference 0..20 id=\"foobar\"",
+    "  Definition 22..58 id=\"foobar\" url=\"train.jpg\" title=Some(\"train & tracks\")"
+  ],
+  "cm578 Images": [
+    "Root 0..18 ",
+    "  Paragraph 0..17 ",
+    "    Image 0..17 url=\"train.jpg\" alt=\"foo\" title=None"
+  ],
+  "cm579 Images": [
+    "Root 0..46 ",
+    "  Paragraph 0..45 ",
+    "    Text 0..3 \"My \"",
+    "    Image 3..45 url=\"/path/to/train.jpg\" alt=\"foo bar\" title=Some(\"title\")"
+  ],
+  "cm580 Images": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Image 0..13 url=\"url\" alt=\"foo\" title=None"
+  ],
+  "cm581 Images": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Image 0..9 url=\"/url\" alt=\"\" title=None"
+  ],
+  "cm582 Images": [
+    "Root 0..25 ",
+    "  Paragraph 0..11 ",
+    "    ImageReference 0..11 id=\"bar\"",
+    "  Definition 13..24 id=\"bar\" url=\"/url\" title=None"
+  ],
+  "cm583 Images": [
+    "Root 0..25 ",
+    "  Paragraph 0..11 ",
+    "    ImageReference 0..11 id=\"bar\"",
+    "  Definition 13..24 id=\"bar\" url=\"/url\" title=None"
+  ],
+  "cm584 Images": [
+    "Root 0..30 ",
+    "  Paragraph 0..8 ",
+    "    ImageReference 0..8 id=\"foo\"",
+    "  Definition 10..29 id=\"foo\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm585 Images": [
+    "Root 0..42 ",
+    "  Paragraph 0..14 ",
+    "    ImageReference 0..14 id=\"*foo*bar\"",
+    "  Definition 16..41 id=\"*foo*bar\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm586 Images": [
+    "Root 0..30 ",
+    "  Paragraph 0..8 ",
+    "    ImageReference 0..8 id=\"foo\"",
+    "  Definition 10..29 id=\"foo\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm587 Images": [
+    "Root 0..32 ",
+    "  Paragraph 0..10 ",
+    "    ImageReference 0..6 id=\"foo\"",
+    "    Text 7..10 \"\\n[]\"",
+    "  Definition 12..31 id=\"foo\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm588 Images": [
+    "Root 0..28 ",
+    "  Paragraph 0..6 ",
+    "    ImageReference 0..6 id=\"foo\"",
+    "  Definition 8..27 id=\"foo\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm589 Images": [
+    "Root 0..40 ",
+    "  Paragraph 0..12 ",
+    "    ImageReference 0..12 id=\"*foo*bar\"",
+    "  Definition 14..39 id=\"*foo*bar\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm590 Images": [
+    "Root 0..32 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..8 \"![[foo]]\"",
+    "  Paragraph 10..31 ",
+    "    Text 10..31 \"[[foo]]: /url \\\"title\\\"\""
+  ],
+  "cm591 Images": [
+    "Root 0..28 ",
+    "  Paragraph 0..6 ",
+    "    ImageReference 0..6 id=\"foo\"",
+    "  Definition 8..27 id=\"foo\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm592 Images": [
+    "Root 0..29 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..7 \"![foo]\"",
+    "  Definition 9..28 id=\"foo\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm593 Images": [
+    "Root 0..29 ",
+    "  Paragraph 0..7 ",
+    "    Text 1..2 \"!\"",
+    "    LinkReference 2..7 id=\"foo\"",
+    "      Text 3..6 \"foo\"",
+    "  Definition 9..28 id=\"foo\" url=\"/url\" title=Some(\"title\")"
+  ],
+  "cm594 Autolinks": [
+    "Root 0..21 ",
+    "  Paragraph 0..20 ",
+    "    Link 0..20 url=\"http://foo.bar.baz\" title=None",
+    "      Text 1..19 \"http://foo.bar.baz\""
+  ],
+  "cm595 Autolinks": [
+    "Root 0..49 ",
+    "  Paragraph 0..48 ",
+    "    Link 0..48 url=\"https://foo.bar.baz/test?q=hello&id=22&boolean\" title=None",
+    "      Text 1..47 \"https://foo.bar.baz/test?q=hello&id=22&boolean\""
+  ],
+  "cm596 Autolinks": [
+    "Root 0..25 ",
+    "  Paragraph 0..24 ",
+    "    Link 0..24 url=\"irc://foo.bar:2233/baz\" title=None",
+    "      Text 1..23 \"irc://foo.bar:2233/baz\""
+  ],
+  "cm597 Autolinks": [
+    "Root 0..21 ",
+    "  Paragraph 0..20 ",
+    "    Link 0..20 url=\"MAILTO:FOO@BAR.BAZ\" title=None",
+    "      Text 1..19 \"MAILTO:FOO@BAR.BAZ\""
+  ],
+  "cm598 Autolinks": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Link 0..9 url=\"a+b+c:d\" title=None",
+    "      Text 1..8 \"a+b+c:d\""
+  ],
+  "cm599 Autolinks": [
+    "Root 0..27 ",
+    "  Paragraph 0..26 ",
+    "    Link 0..26 url=\"made-up-scheme://foo,bar\" title=None",
+    "      Text 1..25 \"made-up-scheme://foo,bar\""
+  ],
+  "cm600 Autolinks": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Link 0..13 url=\"https://../\" title=None",
+    "      Text 1..12 \"https://../\""
+  ],
+  "cm601 Autolinks": [
+    "Root 0..21 ",
+    "  Paragraph 0..20 ",
+    "    Link 0..20 url=\"localhost:5001/foo\" title=None",
+    "      Text 1..19 \"localhost:5001/foo\""
+  ],
+  "cm602 Autolinks": [
+    "Root 0..26 ",
+    "  Paragraph 0..25 ",
+    "    Text 0..1 \"<\"",
+    "    Link 1..20 url=\"https://foo.bar/baz\" title=None",
+    "      Text 1..20 \"https://foo.bar/baz\"",
+    "    Text 20..25 \" bim>\""
+  ],
+  "cm603 Autolinks": [
+    "Root 0..26 ",
+    "  Paragraph 0..25 ",
+    "    Link 0..25 url=\"https://example.com/\\\\[\\\\\" title=None",
+    "      Text 1..24 \"https://example.com/\\\\[\\\\\""
+  ],
+  "cm604 Autolinks": [
+    "Root 0..22 ",
+    "  Paragraph 0..21 ",
+    "    Link 0..21 url=\"mailto:foo@bar.example.com\" title=None",
+    "      Text 1..20 \"foo@bar.example.com\""
+  ],
+  "cm605 Autolinks": [
+    "Root 0..31 ",
+    "  Paragraph 0..30 ",
+    "    Link 0..30 url=\"mailto:foo+special@Bar.baz-bar0.com\" title=None",
+    "      Text 1..29 \"foo+special@Bar.baz-bar0.com\""
+  ],
+  "cm606 Autolinks": [
+    "Root 0..24 ",
+    "  Paragraph 0..23 ",
+    "    Text 0..23 \"<foo+@bar.example.com>\""
+  ],
+  "cm607 Autolinks": [
+    "Root 0..3 ",
+    "  Paragraph 0..2 ",
+    "    Text 0..2 \"<>\""
+  ],
+  "cm608 Autolinks": [
+    "Root 0..20 ",
+    "  Paragraph 0..19 ",
+    "    Text 0..2 \"< \"",
+    "    Link 2..17 url=\"https://foo.bar\" title=None",
+    "      Text 2..17 \"https://foo.bar\"",
+    "    Text 17..19 \" >\""
+  ],
+  "cm609 Autolinks": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..7 \"<m:abc>\""
+  ],
+  "cm610 Autolinks": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Text 0..13 \"<foo.bar.baz>\""
+  ],
+  "cm611 Autolinks": [
+    "Root 0..20 ",
+    "  Paragraph 0..19 ",
+    "    Link 0..19 url=\"https://example.com\" title=None",
+    "      Text 0..19 \"https://example.com\""
+  ],
+  "cm612 Autolinks": [
+    "Root 0..20 ",
+    "  Paragraph 0..19 ",
+    "    Link 0..19 url=\"mailto:foo@bar.example.com\" title=None",
+    "      Text 0..19 \"foo@bar.example.com\""
+  ],
+  "cm613 Raw HTML": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Html 0..3 \"<a>\"",
+    "    Html 3..8 \"<bab>\"",
+    "    Html 8..13 \"<c2c>\""
+  ],
+  "cm614 Raw HTML": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Html 0..4 \"<a/>\"",
+    "    Html 4..9 \"<b2/>\""
+  ],
+  "cm615 Raw HTML": [
+    "Root 0..23 ",
+    "  Paragraph 0..22 ",
+    "    Html 0..6 \"<a  />\"",
+    "    Html 6..22 \"<b2\\ndata=\\\"foo\\\" >\""
+  ],
+  "cm616 Raw HTML": [
+    "Root 0..64 ",
+    "  Paragraph 0..63 ",
+    "    Html 0..63 \"<a foo=\\\"bar\\\" bam = 'baz <em>\\\"</em>'\\n_boolean zoop:33=zoop:33 />\""
+  ],
+  "cm617 Raw HTML": [
+    "Root 0..39 ",
+    "  Paragraph 0..38 ",
+    "    Text 0..4 \"Foo \"",
+    "    Html 4..38 \"<responsive-image src=\\\"foo.jpg\\\" />\""
+  ],
+  "cm618 Raw HTML": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Text 0..9 \"<33> <__>\""
+  ],
+  "cm619 Raw HTML": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Text 0..15 \"<a h*#ref=\\\"hi\\\">\""
+  ],
+  "cm620 Raw HTML": [
+    "Root 0..27 ",
+    "  Paragraph 0..26 ",
+    "    Text 0..26 \"<a href=\\\"hi'> <a href=hi'>\""
+  ],
+  "cm621 Raw HTML": [
+    "Root 0..42 ",
+    "  Paragraph 0..41 ",
+    "    Text 0..41 \"< a><\\nfoo><bar/ >\\n<foo bar=baz\\nbim!bop />\""
+  ],
+  "cm622 Raw HTML": [
+    "Root 0..26 ",
+    "  Paragraph 0..25 ",
+    "    Text 0..25 \"<a href='bar'title=title>\""
+  ],
+  "cm623 Raw HTML": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Html 0..4 \"</a>\"",
+    "    Html 4..11 \"</foo >\""
+  ],
+  "cm624 Raw HTML": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Text 0..15 \"</a href=\\\"foo\\\">\""
+  ],
+  "cm625 Raw HTML": [
+    "Root 0..49 ",
+    "  Paragraph 0..48 ",
+    "    Text 0..4 \"foo \"",
+    "    Html 4..48 \"<!-- this is a --\\ncomment - with hyphens -->\""
+  ],
+  "cm626 Raw HTML": [
+    "Root 0..38 ",
+    "  Paragraph 0..17 ",
+    "    Text 0..4 \"foo \"",
+    "    Html 4..9 \"<!-->\"",
+    "    Text 9..17 \" foo -->\"",
+    "  Paragraph 19..37 ",
+    "    Text 19..23 \"foo \"",
+    "    Html 23..29 \"<!--->\"",
+    "    Text 29..37 \" foo -->\""
+  ],
+  "cm627 Raw HTML": [
+    "Root 0..22 ",
+    "  Paragraph 0..21 ",
+    "    Text 0..4 \"foo \"",
+    "    Html 4..21 \"<?php echo $a; ?>\""
+  ],
+  "cm628 Raw HTML": [
+    "Root 0..24 ",
+    "  Paragraph 0..23 ",
+    "    Text 0..4 \"foo \"",
+    "    Html 4..23 \"<!ELEMENT br EMPTY>\""
+  ],
+  "cm629 Raw HTML": [
+    "Root 0..20 ",
+    "  Paragraph 0..19 ",
+    "    Text 0..4 \"foo \"",
+    "    Html 4..19 \"<![CDATA[>&<]]>\""
+  ],
+  "cm630 Raw HTML": [
+    "Root 0..22 ",
+    "  Paragraph 0..21 ",
+    "    Text 0..4 \"foo \"",
+    "    Html 4..21 \"<a href=\\\"&ouml;\\\">\""
+  ],
+  "cm631 Raw HTML": [
+    "Root 0..18 ",
+    "  Paragraph 0..17 ",
+    "    Text 0..4 \"foo \"",
+    "    Html 4..17 \"<a href=\\\"\\\\*\\\">\""
+  ],
+  "cm632 Raw HTML": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Text 0..13 \"<a href=\\\"\\\"\\\">\""
+  ],
+  "cm633 Hard line breaks": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Text 0..3 \"foo\"",
+    "    Break 3..6 ",
+    "    Text 6..9 \"baz\""
+  ],
+  "cm634 Hard line breaks": [
+    "Root 0..9 ",
+    "  Paragraph 0..8 ",
+    "    Text 0..3 \"foo\"",
+    "    Break 3..5 ",
+    "    Text 5..8 \"baz\""
+  ],
+  "cm635 Hard line breaks": [
+    "Root 0..15 ",
+    "  Paragraph 0..14 ",
+    "    Text 0..3 \"foo\"",
+    "    Break 3..11 ",
+    "    Text 11..14 \"baz\""
+  ],
+  "cm636 Hard line breaks": [
+    "Root 0..15 ",
+    "  Paragraph 0..14 ",
+    "    Text 0..3 \"foo\"",
+    "    Break 3..6 ",
+    "    Text 11..14 \"bar\""
+  ],
+  "cm637 Hard line breaks": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Text 0..3 \"foo\"",
+    "    Break 3..5 ",
+    "    Text 10..13 \"bar\""
+  ],
+  "cm638 Hard line breaks": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Emphasis 0..11 ",
+    "      Text 1..4 \"foo\"",
+    "      Break 4..7 ",
+    "      Text 7..10 \"bar\""
+  ],
+  "cm639 Hard line breaks": [
+    "Root 0..11 ",
+    "  Paragraph 0..10 ",
+    "    Emphasis 0..10 ",
+    "      Text 1..4 \"foo\"",
+    "      Break 4..6 ",
+    "      Text 6..9 \"bar\""
+  ],
+  "cm640 Hard line breaks": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    InlineCode 0..13 \"code  \\nspan\""
+  ],
+  "cm641 Hard line breaks": [
+    "Root 0..13 ",
+    "  Paragraph 0..12 ",
+    "    InlineCode 0..12 \"code\\\\\\nspan\""
+  ],
+  "cm642 Hard line breaks": [
+    "Root 0..21 ",
+    "  Paragraph 0..20 ",
+    "    Html 0..20 \"<a href=\\\"foo  \\nbar\\\">\""
+  ],
+  "cm643 Hard line breaks": [
+    "Root 0..20 ",
+    "  Paragraph 0..19 ",
+    "    Html 0..19 \"<a href=\\\"foo\\\\\\nbar\\\">\""
+  ],
+  "cm644 Hard line breaks": [
+    "Root 0..5 ",
+    "  Paragraph 0..4 ",
+    "    Text 0..4 \"foo\\\\\""
+  ],
+  "cm645 Hard line breaks": [
+    "Root 0..6 ",
+    "  Paragraph 0..5 ",
+    "    Text 0..3 \"foo\""
+  ],
+  "cm646 Hard line breaks": [
+    "Root 0..9 ",
+    "  Heading 0..8 depth=3",
+    "    Text 4..8 \"foo\\\\\""
+  ],
+  "cm647 Hard line breaks": [
+    "Root 0..10 ",
+    "  Heading 0..9 depth=3",
+    "    Text 4..7 \"foo\""
+  ],
+  "cm648 Soft line breaks": [
+    "Root 0..8 ",
+    "  Paragraph 0..7 ",
+    "    Text 0..7 \"foo\\nbaz\""
+  ],
+  "cm649 Soft line breaks": [
+    "Root 0..10 ",
+    "  Paragraph 0..9 ",
+    "    Text 0..9 \"foo\\nbaz\""
+  ],
+  "cm650 Textual content": [
+    "Root 0..16 ",
+    "  Paragraph 0..15 ",
+    "    Text 0..15 \"hello $.;'there\""
+  ],
+  "cm651 Textual content": [
+    "Root 0..14 ",
+    "  Paragraph 0..13 ",
+    "    Text 0..13 \"Foo χρῆν\""
+  ],
+  "cm652 Textual content": [
+    "Root 0..20 ",
+    "  Paragraph 0..19 ",
+    "    Text 0..19 \"Multiple     spaces\""
+  ],
+  "gfm-footnote-01": [
+    "Root 0..104 ",
+    "  Paragraph 0..37 ",
+    "    Text 0..33 \"That's some text with a footnote.\"",
+    "    FootnoteReference 33..37 id=\"1\"",
+    "  FootnoteDefinition 39..103 id=\"1\"",
+    "    Paragraph 45..69 ",
+    "      Text 45..69 \"And that's the footnote.\"",
+    "    Paragraph 75..103 ",
+    "      Text 75..103 \"That's the second paragraph.\""
+  ],
+  "gfm-footnote-02": [
+    "Root 0..14 ",
+    "  FootnoteDefinition 0..13 id=\"000\"",
+    "    Paragraph 7..13 ",
+    "      Text 7..13 \"0\\t[^]:\""
+  ],
+  "gfm-footnote-03": [
+    "Root 0..101 ",
+    "  Paragraph 0..40 ",
+    "    Text 0..4 \"This\"",
+    "    FootnoteReference 4..8 id=\"3\"",
+    "    Text 8..11 \" is\"",
+    "    FootnoteReference 11..15 id=\"1\"",
+    "    Text 15..35 \" text with footnotes\"",
+    "    FootnoteReference 35..39 id=\"2\"",
+    "    Text 39..40 \".\"",
+    "  FootnoteDefinition 42..60 id=\"1\"",
+    "    Paragraph 48..60 ",
+    "      Text 48..60 \"Footnote one\"",
+    "  FootnoteDefinition 61..79 id=\"2\"",
+    "    Paragraph 67..79 ",
+    "      Text 67..79 \"Footnote two\"",
+    "  FootnoteDefinition 80..100 id=\"3\"",
+    "    Paragraph 86..100 ",
+    "      Text 86..100 \"Footnote three\""
+  ],
+  "gfm-footnote-04": [
+    "Root 0..26 ",
+    "  Paragraph 0..9 ",
+    "    Text 0..5 \"test!\"",
+    "    FootnoteReference 5..9 id=\"1\"",
+    "  FootnoteDefinition 11..25 id=\"1\"",
+    "    Paragraph 17..25 ",
+    "      Text 17..25 \"footnote\""
+  ],
+  "gfm-footnote-05": [
+    "Root 0..77 ",
+    "  Paragraph 0..16 ",
+    "    Text 0..9 \"something\"",
+    "    FootnoteReference 9..16 id=\"fn:1\"",
+    "  Paragraph 18..34 ",
+    "    Text 18..27 \"something\"",
+    "    FootnoteReference 27..34 id=\"fn:1\"",
+    "  Paragraph 36..52 ",
+    "    Text 36..45 \"something\"",
+    "    FootnoteReference 45..52 id=\"fn:1\"",
+    "  FootnoteDefinition 54..76 id=\"fn:1\"",
+    "    Paragraph 63..76 ",
+    "      Text 63..76 \"footnote text\""
+  ],
+  "gfm-linkify-01": [
+    "Root 0..19 ",
+    "  Paragraph 0..18 ",
+    "    Link 0..18 url=\"http://www.commonmark.org\" title=None",
+    "      Text 0..18 \"www.commonmark.org\""
+  ],
+  "gfm-linkify-02": [
+    "Root 0..52 ",
+    "  Paragraph 0..51 ",
+    "    Text 0..6 \"Visit \"",
+    "    Link 6..29 url=\"http://www.commonmark.org/help\" title=None",
+    "      Text 6..29 \"www.commonmark.org/help\"",
+    "    Text 29..51 \" for more information.\""
+  ],
+  "gfm-linkify-03": [
+    "Root 0..176 ",
+    "  Paragraph 0..41 ",
+    "    Link 0..41 url=\"http://www.google.com/search?q=Markup+(business)\" title=None",
+    "      Text 0..41 \"www.google.com/search?q=Markup+(business)\"",
+    "  Paragraph 43..86 ",
+    "    Link 43..84 url=\"http://www.google.com/search?q=Markup+(business)\" title=None",
+    "      Text 43..84 \"www.google.com/search?q=Markup+(business)\"",
+    "    Text 84..86 \"))\"",
+    "  Paragraph 88..131 ",
+    "    Text 88..89 \"(\"",
+    "    Link 89..130 url=\"http://www.google.com/search?q=Markup+(business)\" title=None",
+    "      Text 89..130 \"www.google.com/search?q=Markup+(business)\"",
+    "    Text 130..131 \")\"",
+    "  Paragraph 133..175 ",
+    "    Text 133..134 \"(\"",
+    "    Link 134..175 url=\"http://www.google.com/search?q=Markup+(business)\" title=None",
+    "      Text 134..175 \"www.google.com/search?q=Markup+(business)\""
+  ],
+  "gfm-linkify-04": [
+    "Root 0..39 ",
+    "  Paragraph 0..38 ",
+    "    Link 0..38 url=\"http://www.google.com/search?q=(business))+ok\" title=None",
+    "      Text 0..38 \"www.google.com/search?q=(business))+ok\""
+  ],
+  "gfm-linkify-05": [
+    "Root 0..81 ",
+    "  Paragraph 0..40 ",
+    "    Link 0..40 url=\"http://www.google.com/search?q=commonmark&hl=en\" title=None",
+    "      Text 0..40 \"www.google.com/search?q=commonmark&hl=en\"",
+    "  Paragraph 42..80 ",
+    "    Link 42..76 url=\"http://www.google.com/search?q=commonmark\" title=None",
+    "      Text 42..76 \"www.google.com/search?q=commonmark\"",
+    "    Text 76..80 \"&hl;\""
+  ],
+  "gfm-linkify-06": [
+    "Root 0..25 ",
+    "  Paragraph 0..24 ",
+    "    Link 0..21 url=\"http://www.commonmark.org/he\" title=None",
+    "      Text 0..21 \"www.commonmark.org/he\"",
+    "    Text 21..24 \"<lp\""
+  ],
+  "gfm-linkify-07": [
+    "Root 0..137 ",
+    "  Paragraph 0..21 ",
+    "    Link 0..21 url=\"http://commonmark.org\" title=None",
+    "      Text 0..21 \"http://commonmark.org\"",
+    "  Paragraph 23..86 ",
+    "    Text 23..30 \"(Visit \"",
+    "    Link 30..85 url=\"https://encrypted.google.com/search?q=Markup+(business)\" title=None",
+    "      Text 30..85 \"https://encrypted.google.com/search?q=Markup+(business)\"",
+    "    Text 85..86 \")\"",
+    "  Paragraph 88..136 ",
+    "    Text 88..136 \"Anonymous FTP is available at ftp://foo.bar.baz.\""
+  ],
+  "gfm-linkify-08": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Link 0..11 url=\"mailto:foo@bar.baz\" title=None",
+    "      Text 0..11 \"foo@bar.baz\""
+  ],
+  "gfm-linkify-09": [
+    "Root 0..67 ",
+    "  Paragraph 0..66 ",
+    "    Text 0..40 \"hello@mail+xyz.example isn't valid, but \"",
+    "    Link 40..62 url=\"mailto:hello+xyz@mail.example\" title=None",
+    "      Text 40..62 \"hello+xyz@mail.example\"",
+    "    Text 62..66 \" is.\""
+  ],
+  "gfm-linkify-10": [
+    "Root 0..54 ",
+    "  Paragraph 0..11 ",
+    "    Link 0..11 url=\"mailto:a.b-c_d@a.b\" title=None",
+    "      Text 0..11 \"a.b-c_d@a.b\"",
+    "  Paragraph 13..25 ",
+    "    Link 13..24 url=\"mailto:a.b-c_d@a.b\" title=None",
+    "      Text 13..24 \"a.b-c_d@a.b\"",
+    "    Text 24..25 \".\"",
+    "  Paragraph 27..39 ",
+    "    Text 27..39 \"a.b-c_d@a.b-\"",
+    "  Paragraph 41..53 ",
+    "    Text 41..53 \"a.b-c_d@a.b_\""
+  ],
+  "gfm-linkify-11": [
+    "Root 0..27 ",
+    "  Paragraph 0..26 ",
+    "    Link 0..26 url=\"https://github.com#sun,mon\" title=None",
+    "      Text 0..26 \"https://github.com#sun,mon\""
+  ],
+  "gfm-linkify-12": [
+    "Root 0..28 ",
+    "  Paragraph 0..27 ",
+    "    Link 0..27 url=\"https://github.com/sunday's\" title=None",
+    "      Text 0..27 \"https://github.com/sunday's\""
+  ],
+  "gfm-linkify-13": [
+    "Root 0..30 ",
+    "  Paragraph 0..29 ",
+    "    Link 0..29 url=\"https://github.com?q=stars:>1\" title=None",
+    "      Text 0..29 \"https://github.com?q=stars:>1\""
+  ],
+  "gfm-linkify-14": [
+    "Root 0..41 ",
+    "  Paragraph 0..40 ",
+    "    Link 0..40 url=\"https://google.com\" title=None",
+    "      Link 1..19 url=\"https://google.com\" title=None",
+    "        Text 1..19 \"https://google.com\""
+  ],
+  "gfm-linkify-15": [
+    "Root 0..35 ",
+    "  Paragraph 0..34 ",
+    "    Text 0..10 \"This is a \"",
+    "    InlineCode 10..34 \"git@github.com:vim/vim\""
+  ],
+  "gfm-linkify-16": [
+    "Root 0..20 ",
+    "  Paragraph 0..19 ",
+    "    Link 0..19 url=\"https://nic.college\" title=None",
+    "      Text 0..19 \"https://nic.college\""
+  ],
+  "gfm-linkify-17": [
+    "Root 0..37 ",
+    "  Paragraph 0..36 ",
+    "    Link 0..36 url=\"http://server.intranet.acme.com:1313\" title=None",
+    "      Text 0..36 \"http://server.intranet.acme.com:1313\""
+  ],
+  "gfm-linkify-18": [
+    "Root 0..19 ",
+    "  Paragraph 0..18 ",
+    "    Link 0..18 url=\"https://g.page/foo\" title=None",
+    "      Text 0..18 \"https://g.page/foo\""
+  ],
+  "gfm-linkify-19": [
+    "Root 0..93 ",
+    "  Paragraph 0..92 ",
+    "    Strong 0..23 ",
+    "      Link 2..21 url=\"http://test.com/~/a\" title=None",
+    "        Text 2..21 \"http://test.com/~/a\"",
+    "    Text 23..24 \"\\n\"",
+    "    Strong 24..46 ",
+    "      Link 26..44 url=\"http://test.com/~/\" title=None",
+    "        Text 26..44 \"http://test.com/~/\"",
+    "    Text 46..47 \"\\n\"",
+    "    Strong 47..68 ",
+    "      Link 49..65 url=\"http://test.com/\" title=None",
+    "        Text 49..65 \"http://test.com/\"",
+    "      Text 65..66 \"~\"",
+    "    Text 68..69 \"\\n\"",
+    "    Strong 69..92 ",
+    "      Link 71..89 url=\"http://test.com/a/\" title=None",
+    "        Text 71..89 \"http://test.com/a/\"",
+    "      Text 89..90 \"~\""
+  ],
+  "gfm-linkify-20": [
+    "Root 0..106 ",
+    "  Paragraph 0..23 ",
+    "    Text 0..1 \"(\"",
+    "    Link 1..21 url=\"https://example.org/\" title=None",
+    "      Text 1..21 \"https://example.org/\"",
+    "    Text 21..23 \").\"",
+    "  Paragraph 25..48 ",
+    "    Text 25..26 \"(\"",
+    "    Link 26..46 url=\"https://example.org/\" title=None",
+    "      Text 26..46 \"https://example.org/\"",
+    "    Text 46..48 \"):\"",
+    "  Paragraph 50..72 ",
+    "    Link 50..70 url=\"https://example.org/\" title=None",
+    "      Text 50..70 \"https://example.org/\"",
+    "    Text 70..72 \").\"",
+    "  Paragraph 74..105 ",
+    "    Text 74..75 \"(\"",
+    "    Link 75..103 url=\"https://example.org/path_(x)\" title=None",
+    "      Text 75..103 \"https://example.org/path_(x)\"",
+    "    Text 103..105 \").\""
+  ],
+  "gfm-strikethrough-01": [
+    "Root 0..21 ",
+    "  Paragraph 0..20 ",
+    "    Delete 0..6 ",
+    "      Text 2..4 \"Hi\"",
+    "    Text 6..20 \" Hello, world!\""
+  ],
+  "gfm-strikethrough-02": [
+    "Root 0..31 ",
+    "  Paragraph 0..12 ",
+    "    Text 0..12 \"This ~~has a\"",
+    "  Paragraph 14..30 ",
+    "    Text 14..30 \"new paragraph~~.\""
+  ],
+  "gfm-strikethrough-03": [
+    "Root 0..19 ",
+    "  Paragraph 0..18 ",
+    "    Delete 0..4 ",
+    "      Text 1..3 \"Hi\"",
+    "    Text 4..18 \" Hello, world!\""
+  ],
+  "gfm-strikethrough-04": [
+    "Root 0..28 ",
+    "  Paragraph 0..27 ",
+    "    Text 0..27 \"This will ~~~not~~~ strike.\""
+  ],
+  "gfm-strikethrough-05": [
+    "Root 0..23 ",
+    "  Code 0..23 lang=Some(\"Hi~~~\") \"\""
+  ],
+  "gfm-table-01": [
+    "Root 0..42 ",
+    "  Table 0..41 align=[None, None]",
+    "    TableRow 0..13 ",
+    "      TableCell 0..6 ",
+    "        Text 2..5 \"foo\"",
+    "      TableCell 6..13 ",
+    "        Text 8..11 \"bar\"",
+    "    TableRow 28..41 ",
+    "      TableCell 28..34 ",
+    "        Text 30..33 \"baz\"",
+    "      TableCell 34..41 ",
+    "        Text 36..39 \"bim\""
+  ],
+  "gfm-table-02": [
+    "Root 0..46 ",
+    "  Table 0..45 align=[Center, Right]",
+    "    TableRow 0..16 ",
+    "      TableCell 0..6 ",
+    "        Text 2..5 \"abc\"",
+    "      TableCell 6..16 ",
+    "        Text 8..14 \"defghi\"",
+    "    TableRow 36..45 ",
+    "      TableCell 36..40 ",
+    "        Text 36..39 \"bar\"",
+    "      TableCell 40..45 ",
+    "        Text 42..45 \"baz\""
+  ],
+  "gfm-table-03": [
+    "Root 0..52 ",
+    "  Table 0..51 align=[None]",
+    "    TableRow 0..10 ",
+    "      TableCell 0..10 ",
+    "        Text 2..7 \"f|oo\"",
+    "    TableRow 22..35 ",
+    "      TableCell 22..35 ",
+    "        Text 24..26 \"b \"",
+    "        InlineCode 26..30 \"|\"",
+    "        Text 30..33 \" az\"",
+    "    TableRow 36..51 ",
+    "      TableCell 36..51 ",
+    "        Text 38..40 \"b \"",
+    "        Strong 40..46 ",
+    "          Text 43..44 \"|\"",
+    "        Text 46..49 \" im\""
+  ],
+  "gfm-table-04": [
+    "Root 0..48 ",
+    "  Table 0..41 align=[None, None]",
+    "    TableRow 0..13 ",
+    "      TableCell 0..6 ",
+    "        Text 2..5 \"abc\"",
+    "      TableCell 6..13 ",
+    "        Text 8..11 \"def\"",
+    "    TableRow 28..41 ",
+    "      TableCell 28..34 ",
+    "        Text 30..33 \"bar\"",
+    "      TableCell 34..41 ",
+    "        Text 36..39 \"baz\"",
+    "  Blockquote 42..47 ",
+    "    Paragraph 44..47 ",
+    "      Text 44..47 \"bar\""
+  ],
+  "gfm-table-05": [
+    "Root 0..51 ",
+    "  Table 0..45 align=[None, None]",
+    "    TableRow 0..13 ",
+    "      TableCell 0..6 ",
+    "        Text 2..5 \"abc\"",
+    "      TableCell 6..13 ",
+    "        Text 8..11 \"def\"",
+    "    TableRow 28..41 ",
+    "      TableCell 28..34 ",
+    "        Text 30..33 \"bar\"",
+    "      TableCell 34..41 ",
+    "        Text 36..39 \"baz\"",
+    "    TableRow 42..45 ",
+    "      TableCell 42..45 ",
+    "        Text 42..45 \"bar\"",
+    "  Paragraph 47..50 ",
+    "    Text 47..50 \"bar\""
+  ],
+  "gfm-table-06": [
+    "Root 0..30 ",
+    "  Paragraph 0..29 ",
+    "    Text 0..29 \"| abc | def |\\n| --- |\\n| bar |\""
+  ],
+  "gfm-table-07": [
+    "Root 0..56 ",
+    "  Table 0..55 align=[None, None]",
+    "    TableRow 0..13 ",
+    "      TableCell 0..6 ",
+    "        Text 2..5 \"abc\"",
+    "      TableCell 6..13 ",
+    "        Text 8..11 \"def\"",
+    "    TableRow 28..35 ",
+    "      TableCell 28..35 ",
+    "        Text 30..33 \"bar\"",
+    "    TableRow 36..55 ",
+    "      TableCell 36..42 ",
+    "        Text 38..41 \"bar\"",
+    "      TableCell 42..48 ",
+    "        Text 44..47 \"baz\"",
+    "      TableCell 48..55 ",
+    "        Text 50..53 \"boo\""
+  ],
+  "gfm-table-08": [
+    "Root 0..28 ",
+    "  Table 0..27 align=[None, None]",
+    "    TableRow 0..13 ",
+    "      TableCell 0..6 ",
+    "        Text 2..5 \"abc\"",
+    "      TableCell 6..13 ",
+    "        Text 8..11 \"def\""
+  ],
+  "gfm-table-09": [
+    "Root 0..28 ",
+    "  Table 0..15 align=[None, None]",
+    "    TableRow 0..7 ",
+    "      TableCell 0..3 ",
+    "        Text 0..3 \"Foo\"",
+    "      TableCell 3..7 ",
+    "        Text 4..7 \"Bar\"",
+    "  Paragraph 16..27 ",
+    "    InlineCode 16..22 \"Yoyo\"",
+    "    Text 22..27 \"|Dyne\""
+  ],
+  "gfm-table-10": [
+    "Root 0..36 ",
+    "  Table 0..15 align=[None, None]",
+    "    TableRow 0..7 ",
+    "      TableCell 0..3 ",
+    "        Text 0..3 \"foo\"",
+    "      TableCell 3..7 ",
+    "        Text 4..7 \"bar\"",
+    "  Paragraph 16..35 ",
+    "    InlineCode 16..19 \"\\\\\"",
+    "    Text 19..35 \" | second column\""
+  ],
+  "gfm-table-11": [
+    "Root 0..45 ",
+    "  Paragraph 0..7 ",
+    "    Strong 0..7 ",
+    "      Text 2..5 \"xxx\"",
+    "  Table 8..44 align=[Center, Center]",
+    "    TableRow 8..25 ",
+    "      TableCell 8..16 ",
+    "        Text 10..15 \"hello\"",
+    "      TableCell 16..25 ",
+    "        Text 20..22 \"hi\""
+  ],
+  "gfm-table-12": [
+    "Root 0..12 ",
+    "  Paragraph 0..11 ",
+    "    Text 0..11 \"Foo\\n---\""
+  ],
+  "gfm-table-13": [
+    "Root 0..21 ",
+    "  List 0..20 ordered=false start=None spread=false",
+    "    ListItem 0..20 checked=None spread=true",
+    "      Paragraph 2..5 ",
+    "        Text 2..5 \"aaa\"",
+    "      Paragraph 9..20 ",
+    "        Text 9..20 \"Foo\\n\\\\t\\\\t---\""
+  ],
+  "gfm-table-14": [
+    "Root 0..38 ",
+    "  List 0..37 ordered=false start=None spread=false",
+    "    ListItem 0..37 checked=None spread=false",
+    "      Paragraph 2..37 ",
+    "        Link 2..34 url=\"marketing/_index.md\" title=None",
+    "          Text 3..12 \"Marketing\"",
+    "        Text 34..37 \"\\n--\""
+  ],
+  "gfm-tasklist-01": [
+    "Root 0..20 ",
+    "  List 0..19 ordered=false start=None spread=false",
+    "    ListItem 0..9 checked=Some(false) spread=false",
+    "      Paragraph 6..9 ",
+    "        Text 6..9 \"foo\"",
+    "    ListItem 10..19 checked=Some(true) spread=false",
+    "      Paragraph 16..19 ",
+    "        Text 16..19 \"bar\""
+  ],
+  "gfm-tasklist-02": [
+    "Root 0..44 ",
+    "  List 0..43 ordered=false start=None spread=false",
+    "    ListItem 0..33 checked=Some(true) spread=false",
+    "      Paragraph 6..9 ",
+    "        Text 6..9 \"foo\"",
+    "      List 12..33 ordered=false start=None spread=false",
+    "        ListItem 12..21 checked=Some(false) spread=false",
+    "          Paragraph 18..21 ",
+    "            Text 18..21 \"bar\"",
+    "        ListItem 24..33 checked=Some(true) spread=false",
+    "          Paragraph 30..33 ",
+    "            Text 30..33 \"baz\"",
+    "    ListItem 34..43 checked=Some(false) spread=false",
+    "      Paragraph 40..43 ",
+    "        Text 40..43 \"bim\""
+  ],
+  "gfm-tasklist-03": [
+    "Root 0..14 ",
+    "  List 0..13 ordered=false start=None spread=false",
+    "    ListItem 0..13 checked=None spread=false",
+    "      Paragraph 2..13 ",
+    "        Text 2..13 \"test[x]=[x]\""
+  ],
+  "gfm-tasklist-04": [
+    "Root 0..10 ",
+    "  List 0..9 ordered=false start=None spread=false",
+    "    ListItem 0..9 checked=Some(true) spread=false",
+    "      Paragraph 6..9 ",
+    "        Text 6..9 \"[x]\""
+  ]
+}

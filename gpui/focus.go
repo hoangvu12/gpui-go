@@ -94,6 +94,19 @@ type windowFocusState struct {
 	// pendingInputObservers observe pending-input state changes
 	// (window.rs pending_input_observers).
 	pendingInputObservers []*pendingInputSubscription
+
+	// focusListeners are the window focus-change listeners registered by
+	// Context.OnFocus/OnFocusIn/OnBlur/OnFocusOut (window.rs:1290
+	// focus_listeners, filled by new_focus_listener at 2090-2095),
+	// delivered at frame finish (helpers_frame.go).
+	focusListeners *subscriberSet
+	// activationObservers are the Context.ObserveWindowActivation
+	// registrations (window.rs:1317 activation_observers).
+	activationObservers *subscriberSet
+	// inactive records the last reported window activation (window.rs
+	// Window.active, inverted so the zero value is an active window: test
+	// windows have no platform activation source).
+	inactive bool
 }
 
 // renderedFrame is one completed frame's interaction state: the
@@ -106,6 +119,21 @@ type renderedFrame struct {
 	tabStops       *TabStopMap
 	mouseListeners []mouseListener
 	hitboxes       []*hitboxRecord
+	// focus is the focus identity the frame was finished with, or 0
+	// (window.rs:1101 Frame.focus; the focus path compares through it).
+	focus uint64
+	// windowActive is the window activation the frame was finished with
+	// (window.rs Frame.window_active, recorded at 3198).
+	windowActive bool
+}
+
+// focusPathOf returns the frame's focus path (window.rs:1219-1223
+// Frame::focus_path): empty without a focus or a frame.
+func (f *renderedFrame) focusPathOf() []uint64 {
+	if f == nil || f.focus == 0 || f.dispatchTree == nil {
+		return nil
+	}
+	return f.dispatchTree.focusPath(f.focus)
 }
 
 // focusState returns (creating when absent) the window's focus
@@ -126,6 +154,11 @@ func focusState(w *Window) *windowFocusState {
 // focusRefOf returns the window's focus record for a handle identity,
 // or nil when absent or released.
 func (w *Window) focusRefOf(id uint64) *focusRef {
+	if isAppFocusID(id) {
+		// App-level handles (App.FocusHandle) live in the app registry and
+		// are valid in every window of their application.
+		return appFocusRefOf(w.app, id)
+	}
 	fs := focusState(w)
 	ref, ok := fs.handles[id]
 	if !ok || ref.released {
@@ -144,8 +177,11 @@ func (w *Window) focusRefOf(id uint64) *focusRef {
 // owning window pointer, which stays valid as a logical identity after
 // close); Release performs the logical release.
 type FocusHandle struct {
-	id       uint64
-	window   *Window
+	id     uint64
+	window *Window
+	// app is the owning application of an app-level handle
+	// (App.FocusHandle, app.rs:2796); nil for window-allocated handles.
+	app      *App
 	tabIndex int64
 	tabStop  bool
 }
@@ -190,10 +226,28 @@ func (h FocusHandle) TabStop(tabStop bool) FocusHandle {
 // windowRef returns the window's live focus record for this handle, or
 // nil when absent or released.
 func (h FocusHandle) windowRef() *focusRef {
+	if isAppFocusID(h.id) {
+		if app := h.ownerApp(); app != nil {
+			return appFocusRefOf(app, h.id)
+		}
+		return nil
+	}
 	if h.window == nil {
 		return nil
 	}
 	return h.window.focusRefOf(h.id)
+}
+
+// ownerApp resolves the application of a handle (app-level handles carry
+// it; window handles reach it through their window).
+func (h FocusHandle) ownerApp() *App {
+	if h.app != nil {
+		return h.app
+	}
+	if h.window != nil {
+		return h.window.app
+	}
+	return nil
 }
 
 // Release performs the logical release of this handle (the ownership
@@ -202,6 +256,25 @@ func (h FocusHandle) windowRef() *focusRef {
 // release clears the window focus and dispatches focus-lost listeners
 // (window.rs notify_focus_lost).
 func (h FocusHandle) Release() {
+	if isAppFocusID(h.id) {
+		// App-level handle: release the shared record, then clear the
+		// focus of every window of the application that holds it.
+		app := h.ownerApp()
+		if app == nil {
+			return
+		}
+		ref := appFocusRefOf(app, h.id)
+		if ref == nil {
+			return // idempotent
+		}
+		ref.released = true
+		for _, id := range app.Windows() {
+			if w, ok := app.Window(id); ok {
+				w.releaseFocused(h.id)
+			}
+		}
+		return
+	}
 	w := h.window
 	if w == nil {
 		return
@@ -212,7 +285,15 @@ func (h FocusHandle) Release() {
 		return // idempotent
 	}
 	ref.released = true
+	w.releaseFocused(h.id)
+}
 
+// releaseFocused clears this window's focus when it holds the released
+// identity and dispatches the focus-lost listeners (the release half of
+// FocusHandle.Release).
+func (w *Window) releaseFocused(id uint64) {
+	fs := focusState(w)
+	h := FocusHandle{id: id, window: w}
 	if fs.focused == h.id {
 		fs.focused = 0
 		fs.focusGeneration++
@@ -362,9 +443,8 @@ func (w *Window) Focus(handle FocusHandle) {
 	fs.focusGeneration++
 	w.clearPendingKeystrokes()
 
-	// The reference refreshes the invalidation and redraws; the port
-	// records the dirty state through the draw state's frame count on
-	// the next draw (DrawWindowFrame is the explicit draw path).
+	// The reference refreshes the window (window.rs Window::focus →
+	// refresh): the frame loop redraws it.
 	w.requestRefresh()
 }
 
@@ -378,7 +458,7 @@ func (w *Window) Focused() FocusedResult {
 	if fs.focused == 0 || w.focusRefOf(fs.focused) == nil {
 		return FocusedResult{}
 	}
-	return FocusedResult{Handle: FocusHandle{id: fs.focused, window: w}, Ok: true}
+	return FocusedResult{Handle: w.handleFor(fs.focused), Ok: true}
 }
 
 // Blur removes focus from all elements in this window (Window::blur).
@@ -475,7 +555,7 @@ func (w *Window) FocusPath(handle FocusHandle) []FocusHandle {
 	ids := fs.rendered.dispatchTree.focusPath(handle.id)
 	out := make([]FocusHandle, 0, len(ids))
 	for _, id := range ids {
-		out = append(out, FocusHandle{id: id, window: w})
+		out = append(out, w.handleFor(id))
 	}
 	return out
 }
@@ -515,19 +595,22 @@ func (s *focusLostSubscription) Cancel() {
 }
 
 // requestRefresh records that this window's content changed and a new
-// frame should be drawn (the invalidation seam; the draw itself is the
-// explicit DrawWindowFrame path in this port).
+// frame should be drawn: it is Window::refresh (window.rs:2287-2292) —
+// the window is marked dirty and its frame source wakes on the
+// clean→dirty edge (frameloop.go markFrameDirty, Base ticket 33). Like
+// the reference it has no effect while the window's frame is being drawn
+// (the completed frame clears the request anyway).
 func (w *Window) requestRefresh() {
-	if w == nil {
+	if w == nil || w.isDrawing() {
 		return
 	}
-	if ds, ok := windowDrawStates[w]; ok {
-		ds.refreshRequested = true
-	}
+	w.markFrameDirty()
 }
 
 // RefreshRequested reports whether a refresh was requested since the
-// last completed draw (test support).
+// last completed draw (test support). With the frame loop on by default,
+// a test window's request is normally served by the next effect flush,
+// which draws it; the flag is then clear again.
 func (w *Window) RefreshRequested() bool {
 	if w == nil {
 		return false
@@ -595,6 +678,7 @@ type tabStopNode struct {
 	id      uint64
 	tabStop bool
 	window  *Window
+	app     *App
 }
 
 // TabStopMap is the frame's collection of tab stops (tab_stop.rs
@@ -622,6 +706,7 @@ func (t *TabStopMap) Insert(handle FocusHandle, tabIndex int64, tabStop bool) {
 		id:      handle.id,
 		tabStop: tabStop,
 		window:  handle.window,
+		app:     handle.app,
 	}
 	t.byID[handle.id] = node
 	t.insertOrdered(node)
@@ -681,10 +766,8 @@ func (t *TabStopMap) Replay(operations []TabStopOperation, tabIndexOf func(Focus
 // lookupRef resolves a handle's tab properties from its window
 // registry.
 func (t *TabStopMap) lookupRef(handle FocusHandle) (*focusRef, bool) {
-	if handle.window != nil {
-		if ref := handle.window.focusRefOf(handle.id); ref != nil {
-			return ref, true
-		}
+	if ref := handle.windowRef(); ref != nil {
+		return ref, true
 	}
 	return nil, false
 }
@@ -777,7 +860,7 @@ func (t *TabStopMap) slicePosition(node tabStopNode) int {
 }
 
 func (t *TabStopMap) handleFor(node tabStopNode) FocusHandle {
-	return FocusHandle{id: node.id, window: node.window}
+	return FocusHandle{id: node.id, window: node.window, app: node.app}
 }
 
 // TabStopCount returns the number of tab stops (tab_stop.rs

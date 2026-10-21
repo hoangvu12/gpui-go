@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -39,6 +40,9 @@ import (
 //     production executors.
 //   - The scheduler never advances the virtual clock implicitly and
 //     refuses to run while an application update is active.
+//   - Real applications (Host.attach) replace the virtual clock with
+//     the production wall clock and timer driver (clock.go); test
+//     applications never do, so everything above stays bit-exact.
 type scheduler struct {
 	app     *App
 	clockMs int64
@@ -74,9 +78,17 @@ type scheduler struct {
 	// shuttingDown marks the app as rejecting new work while terminal
 	// completion messages keep being accepted.
 	shuttingDown bool
+	// driving counts scheduler drives in progress (see drive): a task
+	// body may be executing while the foreground waits for its request.
+	// Read atomically by App.Update's marshal path.
+	driving int32
 	// acks counts worker acknowledgments ever; App.Shutdown diffs it
 	// around its drain.
 	acks int
+	// wall is the production wall clock and timer driver (clock.go),
+	// installed by Host.attach; nil for test applications, which keep
+	// the deterministic virtual clock.
+	wall *wallClock
 }
 
 func newScheduler() *scheduler { return &scheduler{} }
@@ -280,6 +292,15 @@ func (s *scheduler) rejectIfShuttingDown(op string) {
 // on the task's request channel while the body runs, which keeps
 // observable ordering deterministic.
 func (s *scheduler) drive(t *taskRun) {
+	// A drive in progress means a task body may be executing while the
+	// foreground waits for its next request. App.Update's foreground
+	// marshal (app.go) falls back to inline while this counter is
+	// positive: a task body's RAW App.Update would otherwise block on
+	// a foreground the drive is already waiting on (the sanctioned
+	// task-body path is AsyncApp.Update, whose request the drive runs
+	// inline).
+	atomic.AddInt32(&s.driving, 1)
+	defer atomic.AddInt32(&s.driving, -1)
 	if t.done {
 		return
 	}
@@ -422,9 +443,15 @@ func (t *taskRun) removeWaiter(w *taskRun) {
 }
 
 // addTimer registers a virtual-clock timer for t at now + d. Timers with
-// equal deadlines fire in registration order.
+// equal deadlines fire in registration order. On the production wall
+// clock the deadline is taken from wall time (rounded up so the timer
+// never completes early) and the timer driver is re-armed (clock.go).
 func (s *scheduler) addTimer(t *taskRun, d time.Duration) {
-	e := &timerEntry{deadline: s.clockMs + d.Milliseconds(), task: t}
+	deadline := s.clockMs + d.Milliseconds()
+	if s.wall != nil {
+		deadline = s.wall.deadlineAfter(d)
+	}
+	e := &timerEntry{deadline: deadline, task: t}
 	t.timer = e
 	i := sort.Search(len(s.timers), func(i int) bool {
 		return s.timers[i].deadline > e.deadline
@@ -432,6 +459,7 @@ func (s *scheduler) addTimer(t *taskRun, d time.Duration) {
 	s.timers = append(s.timers, nil)
 	copy(s.timers[i+1:], s.timers[i:])
 	s.timers[i] = e
+	s.armWallTimer()
 }
 
 // removeTimer unregisters the task's timer.
@@ -474,6 +502,11 @@ func (s *scheduler) fireReady() {
 // matching the reference TestDispatcher::advance_clock.
 func (s *scheduler) advanceClock(ms int64) {
 	s.guardNotUpdating()
+	if s.wall != nil {
+		// The reference advance_clock is test-only (executor.rs:210-214);
+		// a real application's clock follows wall time.
+		panic("gpui: advanceClock on a real-time scheduler")
+	}
 	target := s.clockMs + ms
 	for {
 		s.run()
@@ -487,8 +520,18 @@ func (s *scheduler) advanceClock(ms int64) {
 	s.clockMs = target
 }
 
-// nowMs reports the virtual clock in milliseconds.
-func (s *scheduler) nowMs() int64 { return s.clockMs }
+// nowMs reports the scheduler clock in milliseconds: the virtual clock
+// for test applications, monotonic wall time for real applications (the
+// reference BackgroundExecutor::now reads the scheduler clock,
+// executor.rs:185-191; the platform clock is Instant::now,
+// platform_scheduler.rs:177-190). The wall reading is safe from any
+// goroutine.
+func (s *scheduler) nowMs() int64 {
+	if s.wall != nil {
+		return s.wall.nowMs()
+	}
+	return s.clockMs
+}
 
 // Task is the handle of one running task. Handle copies alias the same
 // task.
@@ -616,8 +659,12 @@ type TaskRun struct {
 	t *taskRun
 }
 
-// Sleep blocks the task until the virtual clock passes d. It returns
-// immediately for non-positive durations. A cancelled task may still
+// Sleep blocks the task until the scheduler clock passes d: the virtual
+// clock under TestApp, wall time in a real application, where the
+// elapsed time is at least d and may be longer (reference
+// BackgroundExecutor::timer, executor.rs:193-202). It returns
+// immediately for non-positive durations (Task::ready for a zero
+// duration, executor.rs:198-200). A cancelled task may still
 // sleep: cancellation is cooperative, so a worker that keeps sleeping
 // after observing it is ignoring cancellation — it stays parked,
 // unresolved and tracked (never force-killed) — while a well-behaved

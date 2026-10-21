@@ -107,7 +107,7 @@ func (t *taskRun) parkedDescription() string {
 	case t.awaiting != nil:
 		return fmt.Sprintf("awaiting task %d", t.awaiting.id)
 	case t.timer != nil:
-		return fmt.Sprintf("parked on timer until +%dms", t.timer.deadline-t.sched.clockMs)
+		return fmt.Sprintf("parked on timer until +%dms", t.timer.deadline-t.sched.nowMs())
 	case t.queued:
 		return "queued to run"
 	default:
@@ -485,6 +485,9 @@ type ShutdownReport struct {
 func (a *App) Shutdown() ShutdownReport {
 	s := a.sched
 	s.shuttingDown = true
+	// Real applications: stop the wall-clock timer driver so pending
+	// timers no longer fire (clock.go); no-op for test applications.
+	s.armWallTimer()
 	before := s.acks
 	cancelled := a.cancelAllTasksForShutdown()
 	s.run()

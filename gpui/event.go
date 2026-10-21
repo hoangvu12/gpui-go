@@ -140,6 +140,27 @@ func (e Event[S, P]) Subscribe[O any](cx *Context[O], source Entity[S], f func(*
 	return Subscription{app: cx.app, reg: reg}
 }
 
+// SubscribeIn is Subscribe with the window threaded through to the
+// callback (app/context.rs:355-388 Context::subscribe_in). Delivery
+// requires both endpoints to be live (the reference upgrades the weak
+// subscriber and emitter and drops the registration otherwise) and is
+// skipped while the window is closed (the reference's with_window finds
+// no window).
+func (e Event[S, P]) SubscribeIn[O any](cx *Context[O], source Entity[S], w *Window, f func(*O, Entity[S], *P, *Window, *Context[O])) Subscription {
+	if w == nil {
+		panic("gpui: SubscribeIn requires a live window")
+	}
+	if f == nil {
+		panic("gpui: SubscribeIn called with a nil callback")
+	}
+	return e.Subscribe(cx, source, func(state *O, emitter Entity[S], payload *P, scx *Context[O]) {
+		if !windowIsOpen(w) {
+			return
+		}
+		f(state, emitter, payload, w, scx)
+	})
+}
+
 // SubscribeSelf registers f for occurrences of this event emitted by the
 // context's own entity.
 func (e Event[S, P]) SubscribeSelf(cx *Context[S], f func(*S, *P, *Context[S])) Subscription {

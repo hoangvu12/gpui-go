@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 	"unsafe"
+
+	"github.com/hoangvu12/gpui-go/internal/realinput"
 )
 
 // ---------------------------------------------------------------------------
@@ -150,7 +152,7 @@ func (v *dropTestSurface) RenderOnce(w *Window, app *App) AnyElement {
 			recorder.mu.Unlock()
 		}
 	})
-	d = d.OnMouseMove(func(event *MouseMoveEvent, phase DispatchPhase, hitbox *Hitbox, w *Window, app *App) {
+	d = d.OnMouseMoveAll(func(event *MouseMoveEvent, phase DispatchPhase, hitbox *Hitbox, w *Window, app *App) {
 		if phase == DispatchBubble && hitbox.IsHovered(w) {
 			recorder.mu.Lock()
 			recorder.focuses = append(recorder.focuses, fmt.Sprintf("move(%.1f,%.1f)", event.Position.X, event.Position.Y))
@@ -165,9 +167,13 @@ func (v *dropTestSurface) RenderOnce(w *Window, app *App) AnyElement {
 }
 
 // openDropTestWindow opens a shown real window with the drop test
-// surface drawn, and returns the window, recorder and driver.
+// surface drawn, and returns the window, recorder and driver. The
+// window opens ACTIVATED (the OLE drag loop needs the foreground) and
+// the real drag tests drive it with SendInput/SetCursorPos, so the
+// whole corpus is gated behind GPUI_REAL_INPUT_TESTS.
 func openDropTestWindow(t *testing.T, h *Host, app *App, title string) (*Window, *dropRecorder, *FileDropDriver) {
 	t.Helper()
+	realinput.Require(t)
 	recorder := &dropRecorder{}
 	var surface *dropTestSurface
 	window, err := app.OpenWindowView(WindowOptions{

@@ -26,6 +26,7 @@ import (
 	"unsafe"
 
 	"github.com/hoangvu12/gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/internal/realinput"
 )
 
 // ---------------------------------------------------------------------------
@@ -58,6 +59,30 @@ func waitFor(t *testing.T, timeout time.Duration, what string, cond func() bool)
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("timed out after %v waiting for %s", timeout, what)
+}
+
+// driveAndWaitFor is the bounded re-drive wait (the gpui corpus's
+// wave-4 one-shot-gate fix, mirrored for this package): the drive runs
+// before every poll on the same budget, so a one-shot gate poisoned by
+// a real system message between drives is re-established instead of
+// timing out — a real WM_MOUSELEAVE delivered to a shown window
+// re-stores cursor_visible=true (the handle_mouse_leave_msg policy)
+// and would starve a one-shot hidden-cursor wait under interactive
+// machine use. Honest failure remains: a gate that never holds across
+// a full drive-and-poll pair still fails the test.
+func driveAndWaitFor(t *testing.T, timeout time.Duration, what string, drive func(), cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		drive()
+		if cond() {
+			return
+		}
+		if !time.Now().Before(deadline) {
+			t.Fatalf("timed out after %v waiting for %s (re-driven on retry)", timeout, what)
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
 }
 
 func recvWithin[T any](t *testing.T, timeout time.Duration, what string, ch chan T) T {
@@ -140,6 +165,7 @@ func wideString(s string) []uint16 {
 // zoom toggles maximize, the restore reports the size again, and titles
 // round-trip through the OS.
 func TestWindowControlsMinimizeZoomRestoreTitle(t *testing.T) {
+	realinput.Require(t) // activates, minimizes and restores real windows
 	app, _ := newApp(t)
 	w := openWindow(t, app, gpui.WindowOptions{
 		Title:     "desktopspec controls",
@@ -217,6 +243,7 @@ func TestWindowControlsMinimizeZoomRestoreTitle(t *testing.T) {
 // an activated window reports itself active, a second window takes over
 // when activated.
 func TestWindowActivationReportsActiveWindow(t *testing.T) {
+	realinput.Require(t) // activates real windows and reads the foreground
 	app, _ := newApp(t)
 	w1 := openWindow(t, app, gpui.WindowOptions{
 		Title: "desktopspec active one", Show: true, Activate: true,
@@ -586,13 +613,27 @@ func TestCursorStyleAndVisibilityAppLevel(t *testing.T) {
 	if err := app.HideCursorUntilMouseMoves(); err != nil {
 		t.Fatalf("HideCursorUntilMouseMoves: %v", err)
 	}
-	waitFor(t, 10*time.Second, "the cursor to hide", func() bool {
+	// The hide and restore gates are re-driven (the gpui corpus's
+	// wave-4 one-shot-gate fix, consumer gap 11): this test shows a
+	// default-position window, and a real WM_MOUSELEAVE delivered to it
+	// re-stores cursor_visible=true (handle_mouse_leave_msg), which a
+	// one-shot hide wait reports as a 10 s timeout under interactive
+	// machine use. Re-hiding and re-delivering the synthetic move before
+	// every poll re-establishes the driven state; no real input is
+	// injected.
+	driveAndWaitFor(t, 10*time.Second, "the cursor to hide", func() {
+		if err := app.HideCursorUntilMouseMoves(); err != nil {
+			t.Errorf("HideCursorUntilMouseMoves (re-drive): %v", err)
+		}
+	}, func() bool {
 		visible, _ := app.IsCursorVisible()
 		return !visible
 	})
 	// A mouse move over the window restores it.
-	deliver(t, w.Handle().Hwnd(), 0x0200 /*WM_MOUSEMOVE*/, 0, 0)
-	waitFor(t, 10*time.Second, "the cursor to restore on the move", func() bool {
+	hwnd := w.Handle().Hwnd()
+	driveAndWaitFor(t, 10*time.Second, "the cursor to restore on the move", func() {
+		deliver(t, hwnd, 0x0200 /*WM_MOUSEMOVE*/, 0, 0)
+	}, func() bool {
 		visible, _ := app.IsCursorVisible()
 		return visible
 	})

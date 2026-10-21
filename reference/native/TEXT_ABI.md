@@ -4,6 +4,11 @@ Status: implemented by `reference/native/src/text.rs`, installed in
 reserved slot 4 of the bootstrap `GpuiGoAbiTable` (see
 `reference/native/src/lib.rs`) and advertised with capability bit 4
 (`text-parley-0-11-1`). The Go mirror lives in `internal/native/text.go`.
+**Service version 2** (the consumer-gaps font-registration ticket): the
+`text_font_add` entry (table slot 15) registers font bytes through the
+pinned `add_fonts` path, the font record's v1 `reserved` word became the
+`family_found` diagnostic, and the table gained the `max_font_bytes`
+scalar (200 → 216 bytes).
 
 The semantics are the pinned GPUI-CE text stack at commit
 `254b5dbd47cbb5acbcc5bbdcbb322a339276c88a`: shaping, run/fragment/glyph
@@ -95,7 +100,8 @@ concern and never crosses this ABI.
   `text_shape` with -6 before any shaping work),
 - 1 MiB text length, 1024 runs, 4096 feature records, 64 KiB packed
   strings per shape request,
-- 1 MiB packed font-name dump.
+- 1 MiB packed font-name dump,
+- 64 MiB font data per `text_font_add` call (`MAX_FONT_BYTES`).
 
 ## Handles
 
@@ -118,7 +124,7 @@ record ends in a `record_size` self-check the Go side verifies.
 |---|---|---|
 | `GpuiGoTextFeature` | 8 / 4 | tag @0 (4 ASCII chars, big-endian), value @4 (0/1, ≤ u16::MAX) |
 | `GpuiGoTextFontRequest` | 28 / 4 | weight_bits @0 (f32), style @4 (0 normal/1 italic/2 oblique), feature_count @8, fallback_count @12, reserved[3] @16 (must be 0) |
-| `GpuiGoTextFontRecord` | 40 / 8 | font_id @0 (u64 canonical), generation @8 (u64 catalog generation), weight_bits @12, style @16, feature_count @20, fallback_count @24, reserved @28, record_size @36 |
+| `GpuiGoTextFontRecord` | 40 / 8 | font_id @0 (u64 canonical), generation @8 (u64 catalog generation), weight_bits @16, style @20, feature_count @24, fallback_count @28, family_found @32 (1 = the primary family is in the catalog; 0 = the fallback chain answered — service v2, replacing the v1 reserved word), record_size @36 |
 | `GpuiGoTextFontMetricsRecord` | 52 / 4 | units_per_em @0, ascent/descent/line_gap/underline_position/underline_thickness/cap_height/x_height @4..32, bbox x/y/w/h @32..48, record_size @48 (font units, exactly `gpui::FontMetrics`) |
 | `GpuiGoTextRunRecord` | 48 / 4 | len @0, family_offset @4, family_len @8, fallbacks_offset @12, fallbacks_len @16, weight_bits @20, style @24, feature_offset @28, feature_count @32, letter_spacing_present @36 (0/1), letter_spacing_bits @40, reserved @44 (must be 0) |
 | `GpuiGoTextLayoutRecord` | 56 / 4 | text_len @0, font_size_bits @4, wrap_present @8, wrap_bits @12, clamp_present @16, line_clamp @20, line_count @24, fragment_count @28, glyph_count @32, width_bits @36, ascent_bits @40, descent_bits @44, font_generation @48, record_size @52 |
@@ -132,8 +138,8 @@ record ends in a `record_size` self-check the Go side verifies.
 
 ## Table
 
-`GpuiGoTextTable`: 15 function pointers then 20 self-check/capacity
-scalars; size 200, alignment 8. All entries return an i32 status.
+`GpuiGoTextTable`: 16 function pointers then 21 self-check/capacity
+scalars; size 216, alignment 8. All entries return an i32 status.
 
 | Slot | Entry | Signature |
 |---|---|---|
@@ -152,8 +158,9 @@ scalars; size 200, alignment 8. All entries return an i32 status.
 | 12 | `cluster` | `(handle: u64, index: u32, affinity: u32, side: u32, out: *mut ClusterRecord) -> i32` |
 | 13 | `fragments` | `(handle: u64, records: *mut FragmentRecord, capacity: u32, out_needed: *mut u32) -> i32` |
 | 14 | `glyphs` | `(handle: u64, records: *mut GlyphRecord, capacity: u32, out_needed: *mut u32) -> i32` |
+| 15 | `font_add` | `(data: *const u8, data_len: u32, out_generation: *mut u64) -> i32` |
 
-Self-check scalars: `service_version` (1), `size_of_table` (200),
+Self-check scalars: `service_version` (2), `size_of_table` (216),
 `align_of_table` (8), `size_of_font_request` (28), `size_of_font_record`
 (40), `align_of_font_record` (8), `size_of_metrics_record` (52),
 `size_of_run_record` (48), `size_of_feature_record` (8),
@@ -162,19 +169,21 @@ Self-check scalars: `service_version` (1), `size_of_table` (200),
 `size_of_selection_record` (20), `size_of_cluster_record` (16),
 `size_of_fragment_record` (32), `align_of_fragment_record` (8),
 `size_of_glyph_record` (20), `max_shaping_handles` (256),
-`max_text_bytes` (1 MiB).
+`max_text_bytes` (1 MiB), `max_font_bytes` (64 MiB).
 
 ## Status codes
 
 0 ok; -1 stale handle; -2 bad handle (malformed shaping handle, or a
 font id outside the canonical-bit/registry rules); -3 null argument; -4
 bad value (run coverage, byte boundary, feature tag/value, enumerant,
-non-finite float, bound, reserved field); -5 font unresolved (the whole
-pinned fallback chain failed — with the pinned service fallbacks ending
-in Arial this is effectively unreachable on a normal Windows install;
-see the tests for the fallback-resolution behavior); -6 shaping-handle
-limit; -7 capacity (dump too small; `out_needed` carries the required
-count/byte count); 101 panic contained.
+non-finite float, bound, reserved field, empty or oversize font data);
+-5 font unresolved (the whole pinned fallback chain failed — with the
+pinned service fallbacks ending in Arial this is effectively unreachable
+on a normal Windows install; see the tests for the fallback-resolution
+behavior); -6 shaping-handle limit; -7 capacity (dump too small;
+`out_needed` carries the required count/byte count); -8 font data
+rejected (the bytes submitted to `text_font_add` contain no supported
+font face — the pinned `add_fonts` failure); 101 panic contained.
 
 ## Entry semantics
 
@@ -192,6 +201,34 @@ count/byte count); 101 panic contained.
   the canonical `FontId`; face index, data identity and variation axes
   are `pub(crate)` in `gpui_ce_parley` and not observable. The
   descriptor bytes are the caller's own request and are not echoed.
+  **`CLARIFIED`** (service v2, `family_found`): the pinned resolve chain
+  silently falls back when the requested family is absent (the fallback
+  font's id answers with no diagnostic — the reference exposes no
+  matched-family report). The service computes family presence against
+  `all_font_names` (cached per catalog generation; `text_font_add`
+  invalidates) and reports it in the record's `family_found` word:
+  1 = the primary family is in the catalog (system-installed or
+  registered), 0 = a fallback answered. The resolve behavior itself is
+  unchanged — the word only makes the fallback observable.
+- `font_add` (service v2): registers the caller's font bytes through the
+  pinned `PlatformTextSystem::add_fonts` path (`fontique::Blob` →
+  `CatalogState::register_blobs`, exactly the code the pinned
+  `gpui::TextSystem::add_fonts` runs — the entry calls the same
+  `ParleyTextSystem` through its public trait method). Family names come
+  from each font's embedded name table; the registered families appear
+  in `font_names` and resolve by name through `font_resolve` from the
+  next call, and shaping/rasterization (the glyph service's shared
+  stack) see them. The bytes are copied into service-owned state before
+  registration; no caller pointer is retained. One blob per call (the
+  pin's `add_fonts` takes a `Vec` of sources; each call here is one
+  registration batch, so N calls bump the catalog generation N times —
+  FontIds, families and resolution are unaffected). `out_generation`
+  receives the catalog generation after the registration. Failures: -8
+  when the bytes contain no supported font face (the pinned
+  `register_blobs` bail), -4 for empty or oversize data, -3 for null
+  pointers. Re-registering the same bytes succeeds (Fontique has no
+  duplicate-family rule on this path, unlike the SVG service's
+  path-keyed registry) and bumps the generation again.
 - `font_metrics`: the full `gpui::FontMetrics` (font units) for any id
   the service registered — resolved ids AND every font id Parley
   selected during shaping (fragment font ids are registered at shape
@@ -263,5 +300,10 @@ count/byte count); 101 panic contained.
 The pinned construction appends the service fallback families (Lilex,
 IBM Plex Sans, Arial) to every resolve chain, so an unknown family name
 resolves through them (Arial on a default Windows install). The Rust
-tests cover the fallback-resolution path; `-5` fires only when the whole
-chain fails.
+and Go tests cover the fallback-resolution path; `-5` fires only when
+the whole chain fails. Since service v2 the fallback is observable:
+an unknown family resolves to the fallback font's id AND reports
+`family_found = 0` in the font record, so a family that resolves
+nowhere (an embedded font that failed to register, or a name that
+differs from the embedded name table's family) is diagnosable without
+changing the pinned silent-fallback behavior.

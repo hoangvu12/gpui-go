@@ -279,6 +279,56 @@ type BoxShadow struct {
 	Inset bool
 }
 
+// NewBoxShadow creates a shadow with the given offset and color in the
+// order of the CSS box-shadow property, zero blur and spread, not inset
+// (style.rs:450 BoxShadow::new).
+func NewBoxShadow(offsetX, offsetY float32, color Background) BoxShadow {
+	return BoxShadow{Color: color, OffsetX: offsetX, OffsetY: offsetY}
+}
+
+// WithBlurRadius returns the shadow with the blur radius set
+// (style.rs:461 BoxShadow::blur_radius; renamed because Go forbids a
+// method sharing the BlurRadius field's name).
+func (b BoxShadow) WithBlurRadius(radius float32) BoxShadow {
+	b.BlurRadius = radius
+	return b
+}
+
+// WithSpreadRadius returns the shadow with the spread radius set
+// (style.rs:467 BoxShadow::spread_radius).
+func (b BoxShadow) WithSpreadRadius(radius float32) BoxShadow {
+	b.SpreadRadius = radius
+	return b
+}
+
+// WithInset returns the shadow marked inset (style.rs:473
+// BoxShadow::inset).
+func (b BoxShadow) WithInset() BoxShadow {
+	b.Inset = true
+	return b
+}
+
+// Black is the pinned opaque black (color.rs:68 black()).
+func Black() Hsla { return Hsla{H: 0, S: 0, L: 0, A: 1} }
+
+// Red is the pinned red (color.rs:93 red(): hue 0, saturation 1,
+// lightness 0.5).
+func Red() Hsla { return Hsla{H: 0, S: 1, L: 0.5, A: 1} }
+
+// Outline builds a 1px border-only quad with a transparent background
+// (window.rs:7926 outline()).
+func Outline(bounds Bounds, borderColor Background, borderStyle BorderStyle) PaintQuad {
+	return PaintQuad{
+		Bounds:             bounds,
+		Background:         SolidBackground(TransparentBlack()),
+		BorderWidths:       Edges{Top: 1, Right: 1, Bottom: 1, Left: 1},
+		BorderColor:        borderColor,
+		BorderStyle:        borderStyle,
+		BorderDashedLength: DefaultBorderDashedLength,
+		BorderDashedGap:    DefaultBorderDashedGap,
+	}
+}
+
 // UnderlineStyle is the style of an underline (the pinned
 // UnderlineStyle): logical pixels.
 type UnderlineStyle struct {

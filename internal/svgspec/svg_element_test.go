@@ -209,6 +209,7 @@ func TestSvgElementExternalPath(t *testing.T) {
 	if sprites := monochromeSprites(t, f.draw(t, window)); len(sprites) != 0 {
 		t.Fatalf("the external-path frame painted %d sprites before the file read, want 0", len(sprites))
 	}
+	draws := gpui.WindowDrawCount(window)
 	f.ta.RunUntilParked()
 	// The completion notification count is order-dependent: with the
 	// pinned fonts already pushed only the file read notifies (1);
@@ -217,8 +218,11 @@ func TestSvgElementExternalPath(t *testing.T) {
 	if *notifications < 1 {
 		t.Fatal("the external-path completion did not notify the view (the use_asset redraw)")
 	}
-	if !window.RefreshRequested() {
-		t.Fatal("the external-path completion did not mark the window for redraw")
+	// Migrated by Base ticket 33: the notification redraws the window
+	// through the default frame loop (it used to only mark the refresh
+	// seam for an explicit draw).
+	if gpui.WindowDrawCount(window) <= draws {
+		t.Fatal("the external-path completion did not redraw the window")
 	}
 	// The redraw resolves the bytes and paints the mask (a further
 	// pending font load — the isolated ordering — resolves through the

@@ -29,14 +29,17 @@ import "errors"
 // Cursor
 // ---------------------------------------------------------------------------
 
-// CursorStyle selects the pointer cursor. The set is the one the pinned
-// Windows loader (gpui_windows/src/util.rs load_cursor) maps to distinct
-// system cursors; unmapped reference styles load the arrow exactly like
-// the reference's catch-all arm.
+// CursorStyle selects the pointer cursor (platform.rs:3189-3273). Every
+// pinned variant is declared; the Windows loader (gpui_windows/src/
+// util.rs:89-127 load_cursor) maps them to system cursors, and the
+// variants without a Windows arm (ClosedHand, OpenHand, DragCopy,
+// ContextualMenu) load the arrow exactly like the reference's catch-all
+// arm (util.rs:114).
 type CursorStyle uint8
 
-// Cursor styles (reference platform.rs CursorStyle, bounded to the
-// Windows loader's distinct cases).
+// Cursor styles (reference platform.rs CursorStyle; the Go order keeps
+// the port's original numbering and appends the four variants base-05
+// declared provisionally in styled_cursor.go).
 const (
 	// CursorArrow is the default pointer (IDC_ARROW).
 	CursorArrow CursorStyle = iota
@@ -73,6 +76,23 @@ const (
 	CursorResizeUpRightDownLeft
 	// CursorOperationNotAllowed is the "no" cursor (IDC_NO).
 	CursorOperationNotAllowed
+	// CursorClosedHand is the closed (grabbing) hand (platform.rs:3204,
+	// CSS `grabbing`; gpui_macros styles.rs:658 cursor_grabbing). The
+	// pinned Windows loader has no arm for it: util.rs:114's catch-all
+	// loads IDC_ARROW.
+	CursorClosedHand
+	// CursorOpenHand is the open (grab) hand (platform.rs:3208, CSS
+	// `grab`; styles.rs:651 cursor_grab); IDC_ARROW on Windows
+	// (util.rs:114).
+	CursorOpenHand
+	// CursorDragCopy is the drag-copy cursor (platform.rs:3268, CSS
+	// `copy`; styles.rs:637 cursor_copy); IDC_ARROW on Windows
+	// (util.rs:114).
+	CursorDragCopy
+	// CursorContextualMenu is the contextual-menu cursor (platform.rs:3272,
+	// CSS `context-menu`; styles.rs:609 cursor_context_menu); IDC_ARROW
+	// on Windows (util.rs:114).
+	CursorContextualMenu
 )
 
 // ---------------------------------------------------------------------------

@@ -54,6 +54,12 @@ func NewTestWindow(app *App, size Size) *Window {
 			id:     WindowID(app.windowSeq),
 			handle: WindowHandle{},
 			scope:  app.rootScope.Child(),
+			// The test window's frame loop (Base ticket 03): it starts
+			// dirty (window.rs:178) and its frame waker counts wakes
+			// (platform/test/window.rs:377-385); frames are delivered by
+			// SimulateFrameRequest and the test-support flush, which
+			// draws dirty test windows (app.rs:1800-1812).
+			frames: newWindowFrameState(nil),
 		}
 		app.windows[window.id] = window
 	})
@@ -265,6 +271,13 @@ func (t *testTextSystem) inlineMetrics(font FontDescriptor, fontSize float32) In
 		XHeight: fontSize * (testTextXHeight / testTextUnitsPerEm),
 	}
 }
+
+// finishFrame implements windowTextSystem: the deterministic test
+// system shapes no native handles, so the frame's line-usage rotation
+// is a no-op (the cache exists to keep native shaping handles alive
+// exactly as long as frames re-request them; the stub's results are
+// free to rebuild).
+func (t *testTextSystem) finishFrame() {}
 
 // testTextXHeight is the stub's x_height (516 font units).
 const testTextXHeight = 516.0

@@ -10,9 +10,15 @@ import (
 // source (254b5dbd47cbb5acbcc5bbdcbb322a339276c88a): the Length/
 // DefiniteLength/AbsoluteLength units, the enums Style forwards to Taffy,
 // and the Style struct itself (crates/gpui/src/geometry.rs and
-// crates/gpui/src/style.rs). Only the fields the pinned adapter forwards
-// (crates/gpui/src/taffy.rs::into_taffy_style) are carried; visual style
-// (background, borders as paint, text, shadows) stays out of this slice.
+// crates/gpui/src/style.rs). The layout fields are the ones the pinned
+// adapter forwards (crates/gpui/src/taffy.rs::into_taffy_style); ticket
+// base-05 adds the paint and interaction fields of the pinned Style
+// (style.rs:233-406: visibility, overflow fade, scroll axis flags,
+// background, border color/style/dash pattern, corner radii and
+// smoothing, box shadows, rings, filters, the text refinement, the
+// mouse cursor, opacity and the debug flags). The adapter still forwards
+// only the layout subset; the paint fields are consumed by the div's
+// Style.paint port (div.go).
 //
 // Units are LOGICAL pixels at the style layer, exactly like the reference:
 // authored values convert to device pixels once, inside the layout
@@ -850,6 +856,64 @@ type Style struct {
 	// the adapter records it per node and the inline layout consumes
 	// it. Baseline by default; NOT forwarded to Taffy).
 	VerticalAlign VerticalAlign
+
+	// ---- Paint and interaction fields (style.rs:239-405) ----
+
+	// Visibility controls whether the element paints (style.rs:240;
+	// Hidden keeps the layout space but skips paint, div.rs:3021).
+	Visibility Visibility
+	// OverflowFade is the per-edge fade distance of overflow masking
+	// (style.rs:248). Stored and refined; the port's content mask has no
+	// fade component yet, so it is not applied at paint.
+	OverflowFade AbsoluteLengthEdges
+	// AllowConcurrentScroll lets both axes scroll at once (style.rs:252).
+	AllowConcurrentScroll bool
+	// RestrictScrollToAxis locks scrolling to the gesture's axis
+	// (style.rs:278).
+	RestrictScrollToAxis bool
+	// Background is the fill (style.rs:339 Option<Fill>; Fill has the one
+	// variant Color(Background), so the port stores the Background).
+	Background *Background
+	// BorderColor is the background painted into the border
+	// (style.rs:342).
+	BorderColor *Background
+	// BorderStyle is the border style (style.rs:345).
+	BorderStyle BorderStyle
+	// BorderDashedLength is the dash length as a multiple of the border
+	// width (style.rs:348).
+	BorderDashedLength float32
+	// BorderDashedGap is the dash gap as a multiple of the border width
+	// (style.rs:351).
+	BorderDashedGap float32
+	// CornerRadii are the corner radii (style.rs:355 Corners<AbsoluteLength>).
+	CornerRadii AbsoluteLengthCorners
+	// CornerSmoothing is the corner smoothing in [0, 1] (style.rs:359).
+	CornerSmoothing *float32
+	// BoxShadow are the element's shadows (style.rs:362).
+	BoxShadow []BoxShadow
+	// Ring is the solid ring painted outside the element (style.rs:366).
+	Ring RingStyle
+	// InsetRing is the solid ring painted inside the element
+	// (style.rs:370).
+	InsetRing RingStyle
+	// Filter applies to the element's own content (style.rs:373).
+	Filter []Filter
+	// BackdropFilter applies to the content behind the element
+	// (style.rs:376).
+	BackdropFilter []Filter
+	// Text is the text style refinement the element cascades
+	// (style.rs:380).
+	Text TextStyleRefinement
+	// MouseCursor is the cursor shown over the element (style.rs:383).
+	MouseCursor *CursorStyle
+	// Opacity is the element opacity (style.rs:386).
+	Opacity *float32
+	// Debug draws a red outline around the element (style.rs:401; the
+	// pinned field is cfg(debug_assertions), the port always carries it).
+	Debug bool
+	// DebugBelow draws the outline on this element and every conforming
+	// descendant (style.rs:405).
+	DebugBelow bool
 }
 
 // DefaultStyle returns the reference Style::default() for the forwarded
@@ -881,5 +945,270 @@ func DefaultStyle() Style {
 		FlexGrow:       0.0,
 		FlexShrink:     1.0,
 		VerticalAlign:  VerticalAlignBaseline,
+		// The paint defaults (style.rs:1028-1081): visible, zero overflow
+		// fade, no background or border color, solid border with the
+		// scene's default dash pattern, zero radii, no shadows, rings or
+		// filters, an empty text refinement, no cursor and no opacity.
+		Visibility:         VisibilityVisible,
+		OverflowFade:       AbsoluteLengthEdges{Top: zeroAbs, Right: zeroAbs, Bottom: zeroAbs, Left: zeroAbs},
+		BorderStyle:        BorderStyleSolid,
+		BorderDashedLength: DefaultBorderDashedLength,
+		BorderDashedGap:    DefaultBorderDashedGap,
+		CornerRadii:        AbsoluteLengthCorners{TopLeft: zeroAbs, TopRight: zeroAbs, BottomRight: zeroAbs, BottomLeft: zeroAbs},
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Paint-side style types (style.rs)
+// ---------------------------------------------------------------------------
+
+// Visibility is the value of the visibility property (style.rs:421-429;
+// Visible is the default).
+type Visibility uint8
+
+const (
+	// VisibilityVisible draws the element as normal.
+	VisibilityVisible Visibility = iota
+	// VisibilityHidden skips drawing but keeps the layout space.
+	VisibilityHidden
+)
+
+// String returns the reference variant name.
+func (v Visibility) String() string {
+	switch v {
+	case VisibilityVisible:
+		return "Visible"
+	case VisibilityHidden:
+		return "Hidden"
+	default:
+		return fmt.Sprintf("Visibility(%d)", uint8(v))
+	}
+}
+
+// AbsoluteLengthCorners is Corners<AbsoluteLength> (the Style corner
+// radii, style.rs:355).
+type AbsoluteLengthCorners struct {
+	TopLeft     AbsoluteLength
+	TopRight    AbsoluteLength
+	BottomRight AbsoluteLength
+	BottomLeft  AbsoluteLength
+}
+
+// ToPixels resolves the radii against the rem size
+// (Corners<AbsoluteLength>::to_pixels).
+func (c AbsoluteLengthCorners) ToPixels(remSize float32) Corners {
+	return Corners{
+		TopLeft:     c.TopLeft.ToPixels(remSize),
+		TopRight:    c.TopRight.ToPixels(remSize),
+		BottomRight: c.BottomRight.ToPixels(remSize),
+		BottomLeft:  c.BottomLeft.ToPixels(remSize),
+	}
+}
+
+// ToPixels resolves the edges against the rem size
+// (Edges<AbsoluteLength>::to_pixels).
+func (e AbsoluteLengthEdges) ToPixels(remSize float32) Edges {
+	return Edges{
+		Top:    e.Top.ToPixels(remSize),
+		Right:  e.Right.ToPixels(remSize),
+		Bottom: e.Bottom.ToPixels(remSize),
+		Left:   e.Left.ToPixels(remSize),
+	}
+}
+
+// ClampRadiiForQuadSize clamps every radius to half the shortest side
+// (geometry.rs:2511 Corners::clamp_radii_for_quad_size).
+func (c Corners) ClampRadiiForQuadSize(size Size) Corners {
+	limit := min32(size.Width, size.Height) / 2
+	return Corners{
+		TopLeft:     min32(c.TopLeft, limit),
+		TopRight:    min32(c.TopRight, limit),
+		BottomRight: min32(c.BottomRight, limit),
+		BottomLeft:  min32(c.BottomLeft, limit),
+	}
+}
+
+// Filter is a graphical filter applied to an element's own content
+// (Styled.Filter, CSS filter) or to the content behind it
+// (Styled.BackdropFilter, CSS backdrop-filter): the pinned enum's one
+// variant Blur(Pixels) (style.rs:479-486).
+type Filter struct {
+	// BlurRadius is the gaussian blur radius in logical pixels.
+	BlurRadius float32
+}
+
+// Blur returns the gaussian blur filter (Filter::Blur).
+func Blur(radius float32) Filter { return Filter{BlurRadius: radius} }
+
+// IsIdentity reports whether the filter has no visible effect
+// (style.rs:495 Filter::is_identity: radius <= 0).
+func (f Filter) IsIdentity() bool { return blurRadiusIsIdentity(f.BlurRadius) }
+
+// RingColor is a ring's color (style.rs:173-190): CurrentColor (the
+// default, the element's effective text color like CSS currentColor) or
+// an explicit background.
+type RingColor struct {
+	// Explicit selects Color; false is CurrentColor.
+	Explicit bool
+	// Color is the explicit color when Explicit is set.
+	Color Background
+}
+
+// RingColorOf returns an explicit ring color (RingColor::Color).
+func RingColorOf(color Background) RingColor { return RingColor{Explicit: true, Color: color} }
+
+// resolve is RingColor::resolve (style.rs:184).
+func (c RingColor) resolve(current Hsla) Background {
+	if c.Explicit {
+		return c.Color
+	}
+	return SolidBackground(current)
+}
+
+// RingStyle is a ring around or inside an element (style.rs:192-200): a
+// zero width disables it.
+type RingStyle struct {
+	// Width in logical pixels.
+	Width float32
+	// Color is the ring color.
+	Color RingColor
+}
+
+// outerQuad is RingStyle::outer_quad (style.rs:203-221): quad borders
+// paint inward, so the quad is dilated by the width and its radii grow
+// by the width, leaving its transparent interior on the element bounds.
+func (r RingStyle) outerQuad(bounds Bounds, radii Corners, current Hsla) (PaintQuad, bool) {
+	if !(r.Width > 0) {
+		return PaintQuad{}, false
+	}
+	return PaintQuad{
+		Bounds: dilate(bounds, r.Width),
+		CornerRadii: Corners{
+			TopLeft:     radii.TopLeft + r.Width,
+			TopRight:    radii.TopRight + r.Width,
+			BottomRight: radii.BottomRight + r.Width,
+			BottomLeft:  radii.BottomLeft + r.Width,
+		},
+		Background:         SolidBackground(TransparentBlack()),
+		BorderWidths:       Edges{Top: r.Width, Right: r.Width, Bottom: r.Width, Left: r.Width},
+		BorderColor:        r.Color.resolve(current),
+		BorderStyle:        BorderStyleSolid,
+		BorderDashedLength: DefaultBorderDashedLength,
+		BorderDashedGap:    DefaultBorderDashedGap,
+	}, true
+}
+
+// insetShadow is RingStyle::inset_shadow (style.rs:223-229): a zero
+// offset, zero blur inset shadow spread by the width.
+func (r RingStyle) insetShadow(current Hsla) (BoxShadow, bool) {
+	if !(r.Width > 0) {
+		return BoxShadow{}, false
+	}
+	return NewBoxShadow(0, 0, r.Color.resolve(current)).WithSpreadRadius(r.Width).WithInset(), true
+}
+
+// TextOverflowKind selects the truncation position (style.rs:534-547).
+type TextOverflowKind uint8
+
+const (
+	// TextOverflowTruncate truncates at the end ("very long te…").
+	TextOverflowTruncate TextOverflowKind = iota
+	// TextOverflowTruncateStart truncates at the start ("…ong text here").
+	TextOverflowTruncateStart
+	// TextOverflowTruncateMiddle truncates in the middle ("long fi…name.rs").
+	TextOverflowTruncateMiddle
+)
+
+// TextOverflow is how overflowing text truncates (style.rs:534-547): the
+// position plus the string that represents the truncation.
+type TextOverflow struct {
+	// Kind is the truncation position.
+	Kind TextOverflowKind
+	// Ellipsis is the truncation marker.
+	Ellipsis string
+}
+
+// Ellipsis is the pinned truncation marker (styled.rs:16 ELLIPSIS).
+const Ellipsis = "…"
+
+// TextTransform is the layout-time case mapping (style.rs:576-588; None
+// is the default).
+type TextTransform uint8
+
+const (
+	// TextTransformNone does not transform text.
+	TextTransformNone TextTransform = iota
+	// TextTransformUppercase uppercases text.
+	TextTransformUppercase
+	// TextTransformLowercase lowercases text.
+	TextTransformLowercase
+	// TextTransformCapitalize uppercases the first letter of each word.
+	TextTransformCapitalize
+)
+
+// StrikethroughStyle is the style of a strikethrough (style.rs:1099-1107):
+// logical pixels; a nil color is the reference None.
+type StrikethroughStyle struct {
+	// Thickness of the strikethrough.
+	Thickness float32
+	// Color of the strikethrough.
+	Color *Hsla
+}
+
+// HasOpaqueBackground reports whether the background is a
+// non-transparent color (style.rs:776 Style::has_opaque_background).
+func (s *Style) HasOpaqueBackground() bool {
+	return s.Background != nil && !s.Background.IsTransparent()
+}
+
+// TextStyle returns the element's text refinement, or nil when it
+// refines nothing (style.rs:783 Style::text_style).
+func (s *Style) TextStyle() *TextStyleRefinement {
+	if s.Text.IsSome() {
+		return &s.Text
+	}
+	return nil
+}
+
+// OverflowMask returns the content mask of this style for the given
+// bounds, or nil when the element does not clip its overflow
+// (style.rs:793-850 Style::overflow_mask). A visible border insets the
+// clipped region by the border widths. The pinned axis selection is
+// ported verbatim: with x visible and y clipped the mask spans the
+// border-inset x range and the full bounds height, and vice versa. The
+// pinned fade distances are not carried (the port's content mask has no
+// fade component).
+func (s *Style) OverflowMask(bounds Bounds, remSize float32) *Bounds {
+	xVisible := s.OverflowX == OverflowVisible
+	yVisible := s.OverflowY == OverflowVisible
+	if xVisible && yVisible {
+		return nil
+	}
+	minX, minY := bounds.Origin.X, bounds.Origin.Y
+	maxX, maxY := bounds.Right(), bounds.Bottom()
+	if s.BorderColor != nil && !s.BorderColor.IsTransparent() {
+		minX += s.BorderWidths.Left.ToPixels(remSize)
+		maxX -= s.BorderWidths.Right.ToPixels(remSize)
+		minY += s.BorderWidths.Top.ToPixels(remSize)
+		maxY -= s.BorderWidths.Bottom.ToPixels(remSize)
+	}
+	var mask Bounds
+	switch {
+	case xVisible && !yVisible:
+		mask = fromCorners(Point{X: minX, Y: bounds.Origin.Y}, Point{X: maxX, Y: bounds.Bottom()})
+	case !xVisible && yVisible:
+		mask = fromCorners(Point{X: bounds.Origin.X, Y: minY}, Point{X: bounds.Right(), Y: maxY})
+	default:
+		mask = fromCorners(Point{X: minX, Y: minY}, Point{X: maxX, Y: maxY})
+	}
+	return &mask
+}
+
+// isBorderVisible is style.rs:1017 Style::is_border_visible.
+func (s *Style) isBorderVisible() bool {
+	if s.BorderColor == nil || s.BorderColor.IsTransparent() {
+		return false
+	}
+	w := s.BorderWidths
+	return !w.Top.IsZero() || !w.Right.IsZero() || !w.Bottom.IsZero() || !w.Left.IsZero()
 }

@@ -2,6 +2,7 @@ package gpui
 
 import (
 	"fmt"
+	"reflect"
 )
 
 // This file is the port's view runtime (ticket11): the Render/RenderOnce
@@ -171,6 +172,84 @@ func retainForFrame[S any](entity Entity[S]) Entity[S] {
 	return entity.RetainInto(owner)
 }
 
+// installViewSelfHandle installs the window-owned strong self-handle
+// lease of a view being rendered by w (Context.StrongSelf): one lease
+// per (window, view entity), retained on the first read and shared by
+// every later read, registered in the window's scope so it releases
+// when the window closes. The reference's listener closures own strong
+// Entity clones that drop with the element tree (R:app/context.rs:50-56
+// with Rust's Arc ref-counting); the window-owned lease is the port's
+// deterministic equivalent — the element tree and its closures live as
+// long as the window's placement, and the lease follows that lifetime
+// instead of GC timing.
+func installViewSelfHandle(w *Window, id EntityID) *entityLease {
+	ds := drawState(w)
+	if lease := ds.selfLeases[id]; lease != nil && !lease.dead {
+		return lease
+	}
+	owner := w.Scope()
+	owner.requireOpen()
+	lease := &entityLease{id: id, app: w.app, kind: leaseOwned, owner: owner}
+	owner.addLease(lease)
+	w.app.entities.addLease(id)
+	if ds.selfLeases == nil {
+		ds.selfLeases = make(map[EntityID]*entityLease)
+	}
+	ds.selfLeases[id] = lease
+	return lease
+}
+
+// entityBackedView is implemented by the entity view adapters: it
+// reports the backing entity's identity, application and state type (the
+// reference AnyView's entity + entity_type, view.rs:53-71).
+type entityBackedView interface {
+	backingEntity() (EntityID, *App, reflect.Type)
+}
+
+func (v *viewAdapter[S, PS]) backingEntity() (EntityID, *App, reflect.Type) {
+	return v.entity.id, v.entity.app, reflect.TypeFor[S]()
+}
+
+func (v *managedViewAdapter[S, PS]) backingEntity() (EntityID, *App, reflect.Type) {
+	return v.entity.id, v.entity.app, reflect.TypeFor[S]()
+}
+
+// DowncastView converts a view to the entity of state T backing it
+// (view.rs:53-61 AnyView::downcast). It reports false for recipes
+// (stateless views) and views backed by another state type.
+//
+// The returned handle is a non-releasable facade over the view's lease
+// (Read/Update/Downgrade work while the entity is live; Release panics):
+// retain it with RetainInto to own it independently — the reference
+// returns a strong clone.
+func DowncastView[T any](view View) (Entity[T], bool) {
+	backed, ok := view.(entityBackedView)
+	if !ok {
+		return Entity[T]{}, false
+	}
+	id, app, stateType := backed.backingEntity()
+	if stateType != reflect.TypeFor[T]() {
+		return Entity[T]{}, false
+	}
+	return Entity[T]{
+		id:    id,
+		app:   app,
+		lease: &entityLease{kind: leaseBorrow, id: id, app: app, valid: &borrowValidity{}},
+	}, true
+}
+
+// Root returns the window's root view as the entity of state T
+// (window.rs:2272-2279 Window::root). It reports false when the window
+// has no root view or the root is not backed by T; RootView
+// distinguishes the two (the reference's outer Option).
+func (w *Window) Root[T any]() (Entity[T], bool) {
+	root, ok := w.RootView()
+	if !ok {
+		return Entity[T]{}, false
+	}
+	return DowncastView[T](root)
+}
+
 // statelessView wraps a RenderOnce recipe as a View without identity
 // (the reference blanket impl View for RenderOnce).
 type statelessView struct {
@@ -302,10 +381,13 @@ func (v *viewElement) LayoutNodeStyle() (Style, bool) {
 }
 
 // withRenderedView pushes the entity onto the window's rendered-view
-// stack around f (the reference window.with_rendered_view).
+// stack around f (the reference window.with_rendered_view). The pushed
+// view is tracked by the window's frame loop (frameloop.go
+// recordRenderedView; R:window.rs:3302-3314).
 func withRenderedView[R any](w *Window, id EntityID, f func(*Window) R) R {
 	frame := currentFrame(w)
 	frame.renderedViews = append(frame.renderedViews, id)
+	recordRenderedView(w)
 	defer func() { frame.renderedViews = frame.renderedViews[:len(frame.renderedViews)-1] }()
 	return f(w)
 }
@@ -361,6 +443,15 @@ func (w *Window) RootView() (View, bool) {
 // the window's first frame before returning (the reference
 // App::open_window: the root view is built before the first draw, and
 // the window draws at least once so the frame is complete).
+//
+// The build runs with the window as the active frame-construction
+// boundary (the reference pushes the window onto window_update_stack
+// around build_root_view, app.rs:1346-1350): ViewOf placements made
+// while opening the window — the root view above all — retain their
+// independent leases in the window's scope, mirroring the reference
+// window owning its root AnyView (app.rs:1360 window.root.replace), so
+// closing the window releases the root placement instead of leaking it
+// to the application root scope until shutdown.
 func (a *App) OpenWindowView(opts WindowOptions, build func(w *Window, app *App) View) (*Window, error) {
 	if build == nil {
 		return nil, fmt.Errorf("gpui: OpenWindowView requires a root view builder")
@@ -377,6 +468,9 @@ func (a *App) OpenWindowView(opts WindowOptions, build func(w *Window, app *App)
 	}
 	if !h.runForegroundSync(func() {
 		a.Update(func(app *App) {
+			previousActive := activeFrame
+			activeFrame = window
+			defer func() { activeFrame = previousActive }()
 			window.SetRootView(build(window, app))
 			if _, err := DrawWindowFrame(window); err != nil {
 				panic(fmt.Sprintf("gpui: OpenWindowView initial draw: %v", err))

@@ -39,13 +39,74 @@ func (h *hello) Render(w *gpui.Window, cx *gpui.Context[hello]) gpui.AnyElement 
 		AlignItems(gpui.AlignItemsCenter).
 		Bg(gpui.RgbaToHsla(0x1e293bff)).
 		Child(gpui.Div().
+			Flex().
+			Justify(gpui.AlignContentCenter).
+			AlignItems(gpui.AlignItemsCenter).
 			Size(gpui.PxLength(160), gpui.PxLength(96)).
-			Bg(gpui.RgbaToHsla(0x2563ebff))).
+			Bg(gpui.RgbaToHsla(0x2563ebff)).
+			TextColor(gpui.RgbaToHsla(0xffffffff)).
+			TextLg().
+			Child("Hello!")).
 		IntoElement()
 }
 ```
 
-The rest of the example creates the app and its Win32 host, opens the window with `App.OpenWindowView`, and presents frames. The present loop is still explicit. `gpui.DrawWindowFrame` builds the scene, and the window's `Surface.DrawScene` puts it on screen. The example repeats both steps from the window's `OnRedraw` hook. The public API does not yet expose the atlas that holds a window's glyphs, so a hand-written loop like this one can only present scenes without text. For larger programs, the real-window tests under `internal/*spec` exercise each subsystem against live windows. The [two-window counter](internal/authorspec/counter_window_test.go) is a good place to start.
+The rest of the example creates the app and its Win32 host, opens the window with `App.OpenWindowView`, and presents frames. The present loop is still explicit. The window's `OnRedraw` hook hands the last drawn scene to the window's surface: `gpui.LastDrawnScene` returns the scene the frame loop built, and the window's `Surface.DrawScene` puts it on screen. Text drawn by the element tree presents too: the scene's glyph sprites live in the atlas the window's text system rasterized them into, so the loop passes `Window.GlyphAtlas()` alongside the scene (a scene without sprites ignores it, and drawing a sprite scene with a nil or foreign atlas fails with the typed `ErrSceneSpriteAtlas`). For larger programs, the real-window tests under `internal/*spec` exercise each subsystem against live windows. The [two-window counter](internal/authorspec/counter_window_test.go) is a good place to start, and [the consumer present loop](internal/presentspec/present_spec_test.go) shows element-tree text presented and read back pixel by pixel.
+
+## Updating the view from a listener
+
+Listeners run after `Render` returns, so a listener must not capture the entity handle that `cx.Entity()` hands out: in Go a borrow cannot keep a lease alive the way Rust's `Entity<T>` clone does, so that handle is callback-borrowed and expires when the render callback returns. The view's strong self-handle replaces the reference's `cx.entity()` capture pattern:
+
+```go
+type counter struct {
+	count int
+}
+
+func (v *counter) Render(w *gpui.Window, cx *gpui.Context[counter]) gpui.AnyElement {
+	self := cx.StrongSelf()
+	return gpui.Div().
+		ID("increment").
+		Flex().
+		SizeFull().
+		Justify(gpui.AlignContentCenter).
+		AlignItems(gpui.AlignItemsCenter).
+		OnClick(func(_ *gpui.ClickEvent, _ *gpui.Window, app *gpui.App) {
+			self.Update(app, func(v *counter, cx *gpui.Context[counter]) {
+				v.count++
+				cx.Notify() // queues the redraw that re-renders this view
+			})
+		}).
+		Child(fmt.Sprintf("Count: %d", v.count)).
+		IntoElement()
+}
+```
+
+`cx.StrongSelf()` is only valid inside the view's `Render` — it panics elsewhere with a misuse diagnostic. The window drawing the view owns one lease for the handle (shared by every render, so repeated renders do not accumulate leases), and that lease releases when the window closes. Never `Release` or `TransferInto` the self-handle; call `RetainInto` if you need an independently owned copy with its own lifetime, or `Downgrade` for a weak identity.
+
+When a listener only needs to update the view's own state, `cx.Listener` is the lighter and preferred shape — it captures a weak identity, hands your callback the fresh state and context, and becomes a no-op after the view releases:
+
+```go
+OnClick(cx.Listener(func(v *counter, _ *gpui.ClickEvent, _ *gpui.Window, cx *gpui.Context[counter]) {
+	v.count++
+	cx.Notify()
+}))
+```
+
+Use `cx.StrongSelf()` when porting GPUI code that captured `cx.entity()` into a closure and calls `Update` on it, or when a callback needs the handle as a value (for example to spawn work that updates the view from its result). Both shapes update the entity through an update — never mutate the state pointer captured in a closure directly. The real-window proof of both shapes is the [self-handle corpus](internal/authorspec/self_handle_window_test.go); the deterministic lease and release rules live in [internal/portfixture](internal/portfixture/self_handle_test.go).
+
+**Embedded fonts.** Apps that ship their own typefaces (embedded with `go:embed`, for instance) register the bytes before the first text layout:
+
+```go
+ts, err := gpui.DefaultTextSystem()
+if err != nil { /* ... */ }
+if _, err := ts.AddFont(geistBytes); err != nil { /* the bytes hold no font face */ }
+```
+
+`TextSystem.AddFont` mirrors GPUI's `add_fonts`: family names come from each font's embedded name table, they appear in `FontNames`, and `FontDescriptor{Family: "Geist"}` resolves to the registered face for shaping and rasterization. Fonts are process-stable; there is no unregister. If a family resolves nowhere — an embedded font that failed to register, or a name that differs from the font's internal family name — `ResolveFont` still returns the fallback font (GPUI's behavior), but `FontIdentity.FamilyFound` is `false`, so the missing font is diagnosable.
+
+## Build speed
+
+A one-line edit in a UI package rebuilds in about 1–2 seconds. The fluent methods of `Styled`, `Parent` and `Interactive` (and so of `Div`, `Img`, `Canvas` and every `Component[Self]` component) are generic methods marked with an internal type parameter, `func (s *Styled[Self]) Flex[_ lazy]() Self`. You call them as usual (`d.Flex()`), and Go compiles only the methods a package actually calls. With ordinary methods, every package that mentioned a styled element recompiled the whole 3,100-method vocabulary. The one difference from ordinary methods is that a fluent method cannot be taken as a method value (`f := d.Flex`); wrap it in a closure instead. [internal/buildcostspec](internal/buildcostspec/buildcost_test.go) fails if a consumer package's compiled size grows back.
 
 ## Status
 

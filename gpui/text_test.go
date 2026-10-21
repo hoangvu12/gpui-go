@@ -228,3 +228,33 @@ func TestTextSystemSmoke(t *testing.T) {
 		t.Errorf("DefaultLineHeight(16) = %v, want %v", got, want)
 	}
 }
+
+// TestAddFontSeamValidation pins the public AddFont seam's validation
+// mapping (the service-backed registration and readback gates live in
+// internal/fontspec, the repo convention): empty data is the typed
+// value error before native entry, and bytes with no font face surface
+// as the gpui-mapped font-data error.
+func TestAddFontSeamValidation(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skipf("the native text artifact is Windows AMD64; the text system cannot run on %s", runtime.GOOS)
+	}
+	system, err := DefaultTextSystem()
+	if err != nil {
+		t.Fatalf("DefaultTextSystem: %v", err)
+	}
+	if _, err := system.AddFont(nil); !errors.Is(err, ErrTextValue) {
+		t.Errorf("AddFont(nil) error = %v, want ErrTextValue", err)
+	}
+	if _, err := system.AddFont([]byte("not a font")); !errors.Is(err, ErrTextFontData) {
+		t.Errorf("AddFont(no-face bytes) error = %v, want ErrTextFontData", err)
+	}
+	// The default descriptor reports its family found (the v2
+	// diagnostic answered by the real catalog).
+	identity, err := system.ResolveFont(DefaultFontDescriptor())
+	if err != nil {
+		t.Fatalf("ResolveFont(default): %v", err)
+	}
+	if !identity.FamilyFound {
+		t.Errorf("the default descriptor reports FamilyFound = false, want true")
+	}
+}

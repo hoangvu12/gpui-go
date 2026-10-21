@@ -52,6 +52,20 @@ package gpui
 // the dispatch below (including the built-in Click fallback's
 // synthetic mouse events), and destroys the adapter at window close.
 //
+// Base ticket 11 (div a11y authoring; div_a11y.go holds the builders)
+// extends the node model to the full accesskit state Base writes
+// (A11yAttributes: toggled/selected/expanded/disabled, numeric ranges,
+// orientation, level, set position, table indices, modal, live
+// regions — R:elements/div.rs:2537-2564, 4065-4162), the Base role
+// set (accesskit-0.24.1/src/lib.rs:62), the advertised action set
+// (div.rs:4153-4161), and the aria_active_descendant focus override
+// (div.rs:1551-1569, 2821-2827; window/a11y.rs:268-282, 525-551,
+// 587-599). The focus binding moved from paint to prepaint to match the
+// pin (Interactivity::prepaint, div.rs:2800-2819, runs while the
+// element's node is on top of the stack, which the active-descendant
+// ancestor gate requires). A hidden element without a role now gets a
+// GenericContainer node (element.rs:429-430).
+//
 // FILE OWNERSHIP: this file owns the accessibility runtime. It does not
 // modify the element/div/window files; it calls their existing seams
 // (RequestElementLayout, the phase machinery, the focus and window
@@ -94,7 +108,75 @@ const (
 	RoleCheckBox
 	// RoleSlider is an adjustable slider.
 	RoleSlider
+
+	// Base ticket 11: the accesskit Role variants Base authors on divs
+	// (grep `Role::` over upstream-base/ce/crates/base/src, c0820693;
+	// variant names from accesskit-0.24.1/src/lib.rs:62 `pub enum Role`).
+	// They are appended so the ticket-21 discriminants above stay stable.
+	// The frozen rev-11 native decoder accepts only the eight roles above
+	// (reference/native/src/a11y.rs:598-612); the Go snapshot carries
+	// these roles exactly and publication maps them to the nearest
+	// supported role (a11yPublishedRole, a11yprovider.go).
+
+	// RoleRadioButton is one choice of a radio group.
+	RoleRadioButton
+	// RoleSwitch is an on/off switch.
+	RoleSwitch
+	// RoleProgressIndicator is a read-only progress bar.
+	RoleProgressIndicator
+	// RoleLink is a hyperlink.
+	RoleLink
+	// RoleGroup groups related controls.
+	RoleGroup
+	// RoleToolbar is a toolbar.
+	RoleToolbar
+	// RoleTabList is the container of tabs.
+	RoleTabList
+	// RoleTab is one tab of a tab list.
+	RoleTab
+	// RoleRegion is a landmark region.
+	RoleRegion
+	// RoleNavigation is a navigation landmark.
+	RoleNavigation
+	// RoleHeading is a heading (aria_level carries its level).
+	RoleHeading
+	// RoleComboBox is a combo box / select.
+	RoleComboBox
+	// RoleAlert is an alert message.
+	RoleAlert
+	// RoleTable is a table.
+	RoleTable
+	// RoleRowGroup is a group of table rows.
+	RoleRowGroup
+	// RoleRow is one table row.
+	RoleRow
+	// RoleDialog is a dialog.
+	RoleDialog
+	// RoleCell is one table cell.
+	RoleCell
+	// RoleTreeItem is one tree item.
+	RoleTreeItem
+	// RoleTree is a tree.
+	RoleTree
+	// RoleTooltip is a tooltip.
+	RoleTooltip
+	// RoleTimeInput is a time entry field.
+	RoleTimeInput
+	// RoleSpinButton is a spin button.
+	RoleSpinButton
+	// RoleRadioGroup is a radio group.
+	RoleRadioGroup
+	// RoleColumnHeader is a table column header.
+	RoleColumnHeader
+	// RoleAlertDialog is an alert dialog.
+	RoleAlertDialog
 )
+
+// RoleLabel is accesskit's name for the port's static text role (the
+// pin's Text element reports Role::Label, elements/text.rs:189-191; the
+// native decoder maps the static text tag onto Role::Label,
+// reference/native/src/a11y.rs:605-608).
+const RoleLabel = RoleStaticText
 
 // String renders the role like the reference Debug impl.
 func (r Role) String() string {
@@ -117,8 +199,274 @@ func (r Role) String() string {
 		return "CheckBox"
 	case RoleSlider:
 		return "Slider"
+	case RoleRadioButton:
+		return "RadioButton"
+	case RoleSwitch:
+		return "Switch"
+	case RoleProgressIndicator:
+		return "ProgressIndicator"
+	case RoleLink:
+		return "Link"
+	case RoleGroup:
+		return "Group"
+	case RoleToolbar:
+		return "Toolbar"
+	case RoleTabList:
+		return "TabList"
+	case RoleTab:
+		return "Tab"
+	case RoleRegion:
+		return "Region"
+	case RoleNavigation:
+		return "Navigation"
+	case RoleHeading:
+		return "Heading"
+	case RoleComboBox:
+		return "ComboBox"
+	case RoleAlert:
+		return "Alert"
+	case RoleTable:
+		return "Table"
+	case RoleRowGroup:
+		return "RowGroup"
+	case RoleRow:
+		return "Row"
+	case RoleDialog:
+		return "Dialog"
+	case RoleCell:
+		return "Cell"
+	case RoleTreeItem:
+		return "TreeItem"
+	case RoleTree:
+		return "Tree"
+	case RoleTooltip:
+		return "Tooltip"
+	case RoleTimeInput:
+		return "TimeInput"
+	case RoleSpinButton:
+		return "SpinButton"
+	case RoleRadioGroup:
+		return "RadioGroup"
+	case RoleColumnHeader:
+		return "ColumnHeader"
+	case RoleAlertDialog:
+		return "AlertDialog"
 	default:
 		return fmt.Sprintf("Role(%d)", uint16(r))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The accesskit value enums Base authors (accesskit::Toggled /
+// Orientation / Live, re-exported by the pin at gpui.rs:94-96)
+// ---------------------------------------------------------------------------
+
+// Toggled is the tri-state toggle state (accesskit::Toggled,
+// accesskit-0.24.1/src/lib.rs:486; re-exported as gpui::Toggled,
+// gpui.rs:96).
+type Toggled uint8
+
+// The toggle states.
+const (
+	// ToggledFalse is off / unchecked.
+	ToggledFalse Toggled = iota
+	// ToggledTrue is on / checked.
+	ToggledTrue
+	// ToggledMixed is indeterminate.
+	ToggledMixed
+)
+
+// String renders the state like the reference Debug impl.
+func (t Toggled) String() string {
+	switch t {
+	case ToggledFalse:
+		return "False"
+	case ToggledTrue:
+		return "True"
+	case ToggledMixed:
+		return "Mixed"
+	default:
+		return fmt.Sprintf("Toggled(%d)", uint8(t))
+	}
+}
+
+// A11yOrientation is a node's orientation (accesskit::Orientation,
+// accesskit-0.24.1/src/lib.rs:417; re-exported as gpui::Orientation,
+// gpui.rs:96). Named A11yOrientation because the package's Orientation
+// is the path sweep orientation (path.go:97).
+type A11yOrientation uint8
+
+// The orientations.
+const (
+	// A11yOrientationHorizontal is a horizontal layout.
+	A11yOrientationHorizontal A11yOrientation = iota
+	// A11yOrientationVertical is a vertical layout.
+	A11yOrientationVertical
+)
+
+// String renders the orientation like the reference Debug impl.
+func (o A11yOrientation) String() string {
+	switch o {
+	case A11yOrientationHorizontal:
+		return "Horizontal"
+	case A11yOrientationVertical:
+		return "Vertical"
+	default:
+		return fmt.Sprintf("Orientation(%d)", uint8(o))
+	}
+}
+
+// A11yLive is a live-region politeness (accesskit::Live,
+// accesskit-0.24.1/src/lib.rs:584; div.rs:1710 aria_live).
+type A11yLive uint8
+
+// The live-region politeness levels.
+const (
+	// A11yLiveOff announces nothing.
+	A11yLiveOff A11yLive = iota
+	// A11yLivePolite announces when idle.
+	A11yLivePolite
+	// A11yLiveAssertive announces immediately.
+	A11yLiveAssertive
+)
+
+// String renders the politeness like the reference Debug impl.
+func (l A11yLive) String() string {
+	switch l {
+	case A11yLiveOff:
+		return "Off"
+	case A11yLivePolite:
+		return "Polite"
+	case A11yLiveAssertive:
+		return "Assertive"
+	default:
+		return fmt.Sprintf("Live(%d)", uint8(l))
+	}
+}
+
+// A11yAttributes is the accesskit::Node property set Base ticket 11
+// adds to the port's node record: everything Interactivity's
+// write_a11y_info writes besides role/label/description/value/author id
+// (R:elements/div.rs:4065-4162 over AriaProperties, div.rs:2537-2564).
+// It is embedded in both A11ySpec (what an element writes) and
+// A11ySnapshotNode (what the snapshot publishes), so the Go snapshot
+// carries the full semantics. Option-valued accesskit properties are
+// Optional (absent vs an explicit false/zero); accesskit flag
+// properties (set_disabled/clear_disabled, set_modal, set_live_atomic)
+// are plain bools.
+//
+// The frozen rev-11 node record has no slot for any of these
+// (internal/native/a11y.go:106-127): publication drops them (ticket 02
+// decision; the screen-reader fidelity deviation recorded in
+// a11yprovider.go).
+type A11yAttributes struct {
+	// KeyboardShortcut is the announced shortcut (aria_keyshortcuts ->
+	// set_keyboard_shortcut, div.rs:1537, 4075-4077).
+	KeyboardShortcut string
+	// Placeholder is the empty-input hint (aria_placeholder ->
+	// set_placeholder, div.rs:1635, 4109-4111).
+	Placeholder string
+	// Selected is the selected state (div.rs:1589, 4078-4080).
+	Selected Optional[bool]
+	// Expanded is the expanded state (div.rs:1595, 4081-4083).
+	Expanded Optional[bool]
+	// Toggled is the toggle state (div.rs:1601, 4084-4086).
+	Toggled Optional[Toggled]
+	// Disabled is the Disabled flag (div.rs:1608, 4087-4093).
+	Disabled bool
+	// NumericValue, MinNumericValue, MaxNumericValue and
+	// NumericValueStep are the numeric range (div.rs:1614-1650,
+	// 4094-4105).
+	NumericValue     Optional[float64]
+	MinNumericValue  Optional[float64]
+	MaxNumericValue  Optional[float64]
+	NumericValueStep Optional[float64]
+	// Orientation is the orientation (div.rs:1653, 4112-4114).
+	Orientation Optional[A11yOrientation]
+	// Level is the heading/tree level (div.rs:1659, 4115-4117).
+	Level Optional[int]
+	// PositionInSet and SizeOfSet are the set position (div.rs:1665-1674,
+	// 4118-4123).
+	PositionInSet Optional[int]
+	SizeOfSet     Optional[int]
+	// RowIndex, ColumnIndex, RowCount and ColumnCount are the table
+	// indices (div.rs:1677-1698, 4124-4135).
+	RowIndex    Optional[int]
+	ColumnIndex Optional[int]
+	RowCount    Optional[int]
+	ColumnCount Optional[int]
+	// Modal is the Modal flag (div.rs:1703, 4136-4142).
+	Modal bool
+	// Live is the live-region politeness (div.rs:1710, 4143-4145).
+	Live Optional[A11yLive]
+	// LiveAtomic is the LiveAtomic flag (div.rs:1719, 4146-4152).
+	LiveAtomic bool
+}
+
+// traceAttributes appends the present attributes in a fixed order (the
+// snapshot trace; absent attributes render nothing, so pre-ticket-11
+// traces are byte-identical).
+func (a A11yAttributes) traceAttributes(b *strings.Builder) {
+	if a.Placeholder != "" {
+		fmt.Fprintf(b, " placeholder=%q", a.Placeholder)
+	}
+	if a.KeyboardShortcut != "" {
+		fmt.Fprintf(b, " shortcut=%q", a.KeyboardShortcut)
+	}
+	if v, ok := a.Toggled.Get(); ok {
+		fmt.Fprintf(b, " toggled=%s", v)
+	}
+	if v, ok := a.Selected.Get(); ok {
+		fmt.Fprintf(b, " selected=%t", v)
+	}
+	if v, ok := a.Expanded.Get(); ok {
+		fmt.Fprintf(b, " expanded=%t", v)
+	}
+	if a.Disabled {
+		b.WriteString(" disabled")
+	}
+	floats := []struct {
+		name string
+		v    Optional[float64]
+	}{
+		{"numeric", a.NumericValue},
+		{"min", a.MinNumericValue},
+		{"max", a.MaxNumericValue},
+		{"step", a.NumericValueStep},
+	}
+	for _, f := range floats {
+		if v, ok := f.v.Get(); ok {
+			fmt.Fprintf(b, " %s=%s", f.name, strconv.FormatFloat(v, 'g', -1, 64))
+		}
+	}
+	if v, ok := a.Orientation.Get(); ok {
+		fmt.Fprintf(b, " orientation=%s", v)
+	}
+	ints := []struct {
+		name string
+		v    Optional[int]
+	}{
+		{"level", a.Level},
+		{"posinset", a.PositionInSet},
+		{"setsize", a.SizeOfSet},
+		{"row", a.RowIndex},
+		{"col", a.ColumnIndex},
+		{"rows", a.RowCount},
+		{"cols", a.ColumnCount},
+	}
+	for _, f := range ints {
+		if v, ok := f.v.Get(); ok {
+			fmt.Fprintf(b, " %s=%d", f.name, v)
+		}
+	}
+	if a.Modal {
+		b.WriteString(" modal")
+	}
+	if v, ok := a.Live.Get(); ok {
+		fmt.Fprintf(b, " live=%s", v)
+	}
+	if a.LiveAtomic {
+		b.WriteString(" live-atomic")
 	}
 }
 
@@ -243,13 +591,30 @@ const RootA11yNodeID A11yNodeID = 0
 // String renders the id for traces.
 func (id A11yNodeID) String() string { return fmt.Sprintf("#%016x", uint64(id)) }
 
-// canonicalElementID encodes one path component unambiguously.
+// canonicalElementID encodes one path component unambiguously: one tag
+// byte per ElementId variant (window.rs:7655-7675), names
+// length-prefixed where more data follows them. The Name/View/Integer
+// encodings are unchanged, so their node ids stay stable.
 func canonicalElementID(id ElementID) string {
 	switch id.Kind {
 	case ElementIDName:
 		return "\x01" + id.Name
 	case ElementIDView:
 		return "\x02" + strconv.FormatUint(uint64(id.Entity), 10)
+	case ElementIDNamedInteger:
+		// ElementId::NamedInteger(name, integer).
+		return "\x04" + strconv.Itoa(len(id.Name)) + ":" + id.Name + strconv.FormatUint(id.Integer, 10)
+	case ElementIDNamedChild:
+		// ElementId::NamedChild(parent, label): the label, then the
+		// parent's own encoding as the remainder.
+		parent := ""
+		if id.Parent != nil {
+			parent = canonicalElementID(*id.Parent)
+		}
+		return "\x05" + strconv.Itoa(len(id.Name)) + ":" + id.Name + parent
+	case ElementIDCodeLocation:
+		// ElementId::CodeLocation(location).
+		return "\x06" + id.Name
 	default:
 		return "\x03" + strconv.FormatUint(id.Integer, 10)
 	}
@@ -323,10 +688,25 @@ type A11ySpec struct {
 	// Focus binds the node to a focus handle: the node becomes
 	// focusable, and when the handle holds window focus the node is
 	// reported as the tree's focus (a11y.rs set_focusable / set_focus,
-	// driven from Interactivity::paint, div.rs:2803-2825).
+	// driven from Interactivity::prepaint, div.rs:2800-2819).
 	Focus FocusHandle
 	// hasFocus marks a non-nil Focus binding.
 	hasFocus bool
+	// A11yAttributes carries the full accesskit state set (Base ticket
+	// 11: toggled/selected/expanded, numeric ranges, set positions,
+	// table indices, flags, live regions).
+	A11yAttributes
+	// Actions are the actions the node ADVERTISES (accesskit
+	// Node::add_action from write_a11y_info: Click for click listeners,
+	// Focus for a tracked focus handle, every on_a11y_action action —
+	// div.rs:4153-4161). The published node's action set is these plus
+	// the actions with registered listeners.
+	Actions []A11yAction
+	// ActiveDescendant claims the tree's reported focus while a focused
+	// ancestor is present (aria_active_descendant, div.rs:1551-1569; the
+	// claim is made at prepaint, div.rs:2821-2827, gated by
+	// window/a11y.rs:268-282).
+	ActiveDescendant bool
 }
 
 // WithFocus binds a focus handle to the spec.
@@ -456,11 +836,28 @@ func (e *a11yElement[L, P]) RequestLayout(global *GlobalElementID, inspector *In
 	return e.child.RequestLayout(global, inspector, w, app)
 }
 
+// LayoutNodeStyle forwards the child's root-stretch report (the
+// drawable asserts it on the element it wraps, element.go
+// rootStretchStyle), so wrapping an element for accessibility never
+// changes its root layout.
+func (e *a11yElement[L, P]) LayoutNodeStyle() (Style, bool) {
+	if s, ok := any(e.child).(interface{ LayoutNodeStyle() (Style, bool) }); ok {
+		return s.LayoutNodeStyle()
+	}
+	return Style{}, false
+}
+
 // Prepaint implements Element: push the node (when the element
-// publishes one), run the child's prepaint, contribute synthetic
-// children with the prepaint state, then pop.
+// publishes one), register its focus binding and active-descendant
+// claim while it is the top of the node stack (the pin does both at the
+// start of Interactivity::prepaint, div.rs:2800-2827, after Drawable
+// pushed the node, element.rs:424-446), run the child's prepaint,
+// contribute synthetic children with the prepaint state, then pop.
 func (e *a11yElement[L, P]) Prepaint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *L, w *Window, app *App) P {
 	state, node := beginElementA11yNode(w, global, e)
+	if node != nil {
+		registerElementA11yFocus(w, state, node)
+	}
 	prepaint := e.child.Prepaint(global, inspector, bounds, layout, w, app)
 	if node != nil {
 		node.bounds = bounds
@@ -473,8 +870,8 @@ func (e *a11yElement[L, P]) Prepaint(global *GlobalElementID, inspector *Inspect
 }
 
 // Paint implements Element: run the child's paint, then register this
-// frame's focus binding and action listeners on the node (div.rs
-// Interactivity::paint, lines 2803-2825 and 3086-3093).
+// frame's action listeners on the node (div.rs Interactivity::paint,
+// lines 3086-3098).
 func (e *a11yElement[L, P]) Paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *L, prepaint *P, w *Window, app *App) {
 	e.child.Paint(global, inspector, bounds, layout, prepaint, w, app)
 	registerElementA11yActions(w, global, e, prepaint)
@@ -535,6 +932,12 @@ func beginElementA11yNode[L, P any](w *Window, global *GlobalElementID, e *a11yE
 	if !specPublishes(spec, hasCompanion) {
 		return state, nil
 	}
+	if spec.Role == RoleUnknown && spec.Hidden {
+		// A hidden element without a role gets an internal container node
+		// (element.rs:429-430 role.unwrap_or(GenericContainer); the
+		// element.rs:117-124 is_a11y_hidden contract).
+		spec.Role = RoleGenericContainer
+	}
 	if !state.beginNode(id, spec, Bounds{}, false) {
 		// Duplicate id this frame: discarded and recorded; the element
 		// still renders (a11y.rs can_push returns false).
@@ -543,8 +946,25 @@ func beginElementA11yNode[L, P any](w *Window, global *GlobalElementID, e *a11yE
 	return state, state.stack[len(state.stack)-1]
 }
 
-// registerElementA11yActions records the focus binding and action
-// listeners of one publishing element at paint time.
+// registerElementA11yFocus records the focus binding and the
+// active-descendant claim of one just-pushed element node, while it is
+// the top of the build stack (Interactivity::prepaint, div.rs:2800-2827:
+// set_focusable + set_focus for a tracked focus handle, then
+// set_active_descendant when report_active_descendant_focus is set).
+func registerElementA11yFocus(w *Window, state *windowA11yState, node *a11yPendingNode) {
+	if handle, ok := node.spec.focusBinding(); ok {
+		state.setFocusable(node.id, handle)
+		if handle.IsFocused(w) {
+			state.setFocus(node.id)
+		}
+	}
+	if node.spec.ActiveDescendant {
+		state.setActiveDescendant(node.id)
+	}
+}
+
+// registerElementA11yActions records the action listeners of one
+// publishing element at paint time (div.rs:3086-3098).
 func registerElementA11yActions[L, P any](w *Window, global *GlobalElementID, e *a11yElement[L, P], prepaint *P) {
 	state := activeA11yBuild(w)
 	if state == nil || global == nil {
@@ -557,12 +977,6 @@ func registerElementA11yActions[L, P any](w *Window, global *GlobalElementID, e 
 	spec, hasCompanion := elementA11ySpec(e.child)
 	if !specPublishes(spec, hasCompanion) {
 		return
-	}
-	if handle, ok := spec.focusBinding(); ok {
-		state.setFocusable(id, handle)
-		if handle.IsFocused(w) {
-			state.setFocus(id)
-		}
 	}
 	if actions, ok := any(e.child).(A11yActions[P]); ok {
 		for _, reg := range actions.A11yActionRegistrations(prepaint) {
@@ -626,7 +1040,12 @@ type windowA11yState struct {
 	focusable map[A11yNodeID]uint64
 	focus     A11yNodeID
 	focusSet  bool
-	listeners map[A11yNodeID]map[A11yAction][]A11yActionListener
+	// activeDescendant is this frame's aria_active_descendant claim
+	// (a11y.rs:404-408 A11yNodeBuilder::active_descendant): when set and
+	// present at finalize it is reported as the tree's focus.
+	activeDescendant    A11yNodeID
+	activeDescendantSet bool
+	listeners           map[A11yNodeID]map[A11yAction][]A11yActionListener
 	// nodeGenerations is the live identity model: each published node id
 	// carries a generation assigned at insertion and retired at removal;
 	// a reinserted id gets a FRESH generation so a stale token can never
@@ -772,6 +1191,8 @@ func (st *windowA11yState) beginBuild(frame *frameDrawState) {
 	st.focusable = make(map[A11yNodeID]uint64)
 	st.focus = RootA11yNodeID
 	st.focusSet = false
+	st.activeDescendant = RootA11yNodeID
+	st.activeDescendantSet = false
 	st.listeners = make(map[A11yNodeID]map[A11yAction][]A11yActionListener)
 	st.pendingCollisions = nil
 	st.pendingDiagnostics = nil
@@ -790,6 +1211,7 @@ func (st *windowA11yState) resetBuild() {
 	st.stack = nil
 	st.nodes = nil
 	st.seen = nil
+	st.activeDescendantSet = false
 	st.pendingCollisions = nil
 	st.pendingDiagnostics = nil
 }
@@ -860,6 +1282,76 @@ func (st *windowA11yState) setFocus(id A11yNodeID) {
 	st.focusSet = true
 }
 
+// nodeIsFocused reports whether id is the node currently reported as
+// focused (a11y.rs:520-523 node_is_focused).
+func (st *windowA11yState) nodeIsFocused(id A11yNodeID) bool {
+	return st.focusSet && st.focus == id
+}
+
+// focusIsAncestorOfCurrent reports whether the focused node is a STRICT
+// ancestor of the node on top of the build stack (a11y.rs:525-534: the
+// top is the current node; everything below it is an ancestor).
+func (st *windowA11yState) focusIsAncestorOfCurrent() bool {
+	if !st.focusSet {
+		return false
+	}
+	ancestors := len(st.stack) - 1
+	for i := 0; i < ancestors; i++ {
+		if st.stack[i].id == st.focus {
+			return true
+		}
+	}
+	return false
+}
+
+// claimActiveDescendant records the frame's active-descendant claim
+// (a11y.rs:536-551 A11yNodeBuilder::set_active_descendant: a second,
+// different claim in one frame panics in debug builds and is last-wins
+// in release; the port records a diagnostic and keeps last-wins).
+func (st *windowA11yState) claimActiveDescendant(id A11yNodeID) {
+	if st.activeDescendantSet && st.activeDescendant != id {
+		st.pendingDiagnostics = append(st.pendingDiagnostics, a11yDiagnostic{Node: id, Kind: "active-descendant-claimed-twice"})
+	}
+	st.activeDescendant = id
+	st.activeDescendantSet = true
+}
+
+// setActiveDescendant is the gated claim (a11y.rs:268-282
+// A11y::set_active_descendant): the focused node itself may not claim
+// (debug panic / release warn-and-return; the port records and
+// returns), and the claim is honored only when the node is in the tree
+// and the focused node is its ancestor — so it is safe to set
+// unconditionally on a selected child (div.rs:1560-1565).
+func (st *windowA11yState) setActiveDescendant(id A11yNodeID) {
+	if st.nodeIsFocused(id) {
+		st.pendingDiagnostics = append(st.pendingDiagnostics, a11yDiagnostic{Node: id, Kind: "active-descendant-on-focused-node"})
+		return
+	}
+	if st.hasNode(id) && st.focusIsAncestorOfCurrent() {
+		st.claimActiveDescendant(id)
+	}
+}
+
+// finalizeFocus resolves the reported focus at finalize (a11y.rs:587-599
+// then repair_tree_update :617-626): an active descendant present in the
+// tree wins; a claimed but absent one falls back (debug panic / release
+// warn; the port records) to the real focus; a focus absent from the
+// tree falls back to the root.
+func (st *windowA11yState) finalizeFocus(present func(A11yNodeID) bool) A11yNodeID {
+	focus := st.focus
+	if st.activeDescendantSet {
+		if present(st.activeDescendant) {
+			focus = st.activeDescendant
+		} else {
+			st.pendingDiagnostics = append(st.pendingDiagnostics, a11yDiagnostic{Node: st.activeDescendant, Kind: "active-descendant-not-in-tree"})
+		}
+	}
+	if !present(focus) {
+		focus = RootA11yNodeID
+	}
+	return focus
+}
+
 // addListener registers one action listener for a node (a11y.rs
 // action_listeners, populated during paint).
 func (st *windowA11yState) addListener(id A11yNodeID, action A11yAction, listener A11yActionListener) {
@@ -899,8 +1391,14 @@ type A11ySnapshotNode struct {
 	FocusHandleID uint64
 	// Synthetic marks nodes that do not correspond to any element.
 	Synthetic bool
-	// Actions are the semantic actions listeners answered this frame.
+	// Actions are the node's advertised semantic actions: the element's
+	// write_a11y_info actions (A11ySpec.Actions, div.rs:4153-4161) plus
+	// the actions listeners answered this frame, sorted ascending.
 	Actions []A11yAction
+	// A11yAttributes is the full accesskit state set of the node (Base
+	// ticket 11). Publication through the frozen rev-11 ABI drops it
+	// (a11yprovider.go); the snapshot keeps it exactly.
+	A11yAttributes
 }
 
 // String renders the node for traces.
@@ -919,6 +1417,7 @@ func (n A11ySnapshotNode) String() string {
 	if n.Value != "" {
 		fmt.Fprintf(&b, " value=%q", n.Value)
 	}
+	n.A11yAttributes.traceAttributes(&b)
 	if n.Hidden {
 		b.WriteString(" hidden")
 	}
@@ -1164,21 +1663,32 @@ func PublishWindowA11y(w *Window) (*A11ySnapshot, error) {
 	for _, n := range st.nodes {
 		spec := n.spec
 		snapshotNode := A11ySnapshotNode{
-			ID:            n.id,
-			Role:          spec.Role,
-			Label:         spec.Label,
-			Description:   spec.Description,
-			Value:         spec.Value,
-			AuthorID:      spec.AuthorID,
-			Hidden:        spec.Hidden,
-			Children:      append([]A11yNodeID{}, n.children...),
-			Bounds:        n.bounds,
-			Synthetic:     n.synthetic,
-			FocusHandleID: st.focusable[n.id],
+			ID:             n.id,
+			Role:           spec.Role,
+			Label:          spec.Label,
+			Description:    spec.Description,
+			Value:          spec.Value,
+			AuthorID:       spec.AuthorID,
+			Hidden:         spec.Hidden,
+			Children:       append([]A11yNodeID{}, n.children...),
+			Bounds:         n.bounds,
+			Synthetic:      n.synthetic,
+			FocusHandleID:  st.focusable[n.id],
+			A11yAttributes: spec.A11yAttributes,
 		}
-		if byAction := st.listeners[n.id]; len(byAction) > 0 {
-			actions := make([]A11yAction, 0, len(byAction))
-			for action := range byAction {
+		// The advertised actions: write_a11y_info's add_action set
+		// (div.rs:4153-4161) united with this frame's listener actions,
+		// deduplicated and sorted (accesskit keeps actions as a set).
+		advertised := make(map[A11yAction]bool, len(spec.Actions))
+		for _, action := range spec.Actions {
+			advertised[action] = true
+		}
+		for action := range st.listeners[n.id] {
+			advertised[action] = true
+		}
+		if len(advertised) > 0 {
+			actions := make([]A11yAction, 0, len(advertised))
+			for action := range advertised {
 				actions = append(actions, action)
 			}
 			sortA11yActions(actions)
@@ -1186,10 +1696,10 @@ func PublishWindowA11y(w *Window) (*A11ySnapshot, error) {
 		}
 		publishedIDs[n.id] = snapshotNode
 	}
-	focus := st.focus
-	if _, ok := publishedIDs[focus]; !ok {
-		focus = RootA11yNodeID
-	}
+	focus := st.finalizeFocus(func(id A11yNodeID) bool {
+		_, ok := publishedIDs[id]
+		return ok
+	})
 	for id, node := range publishedIDs {
 		valid := node.Children[:0:0]
 		for _, child := range node.Children {

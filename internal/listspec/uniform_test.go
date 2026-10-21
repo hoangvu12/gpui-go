@@ -71,14 +71,22 @@ func itoa(ix int) string {
 
 // drawUniform draws one frame of the uniform corpus and reports the
 // item indices rendered during it.
+//
+// Migrated by Base ticket 33 (the default frame loop): the sink update's
+// flush draws a dirty window by itself (app.rs:1800-1812); the explicit
+// draw runs only when that flush drew nothing, so each call still draws
+// exactly one frame into the fresh sink.
 func drawUniform(t *testing.T, window *gpui.Window, app *gpui.App, view gpui.Entity[uniformView]) []int {
 	t.Helper()
 	rendered := []int{}
+	before := gpui.WindowDrawCount(window)
 	view.Update(app, func(v *uniformView, cx *gpui.Context[uniformView]) {
 		v.rendered = &rendered
 	})
-	if _, err := gpui.DrawWindowFrame(window); err != nil {
-		t.Fatalf("DrawWindowFrame: %v", err)
+	if gpui.WindowDrawCount(window) == before {
+		if _, err := gpui.DrawWindowFrame(window); err != nil {
+			t.Fatalf("DrawWindowFrame: %v", err)
+		}
 	}
 	return rendered
 }

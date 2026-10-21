@@ -16,6 +16,7 @@ package gpui
 //   - crates/gpui_windows/src/events.rs — the message policies:
 //     WM_CLOSE veto, WM_DESTROY close + registry removal post,
 //     WM_DPICHANGED suggested rectangle, WM_SIZE minimized handling,
+//     WM_GETMINMAXINFO minimum tracking size (WindowOptions.MinSize),
 //     WM_PAINT validation.
 //
 // Pure Go: every Win32 call goes through the stdlib syscall package
@@ -151,6 +152,11 @@ const (
 	wmDPICHanged = 0x02E0
 	wmUser       = 0x0400
 
+	// wmGetMinMaxInfo is WM_GETMINMAXINFO (winuser.h): the system
+	// queries the window's minimum/maximum tracking sizes during
+	// creation, interactive resizing and sizing operations.
+	wmGetMinMaxInfo = 0x0024
+
 	wmGPUICloseOneWindow = wmUser + 2 // reference WM_GPUI_CLOSE_ONE_WINDOW
 	wmGPUIWake           = wmUser + 3 // reference WM_GPUI_TASK_DISPATCHED_ON_MAIN_THREAD
 
@@ -267,6 +273,18 @@ type monitorInfo struct {
 	rcMonitor rect
 	rcWork    rect
 	dwFlags   uint32
+}
+
+// minMaxInfo is Win32 MINMAXINFO (40 bytes: five POINTs). Only
+// ptMinTrackSize is written, by the WM_GETMINMAXINFO minimum-size
+// handler; the system pre-fills the struct with defaults before
+// sending the message.
+type minMaxInfo struct {
+	ptReserved     point
+	ptMaxSize      point
+	ptMaxPosition  point
+	ptMinTrackSize point
+	ptMaxTrackSize point
 }
 
 // Message-word helpers.
@@ -522,6 +540,9 @@ func platformWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe
 //   - WM_DPICHANGED records the new scale and applies the suggested
 //     rectangle (SetWindowPos; WM_SIZE/WM_MOVE update the rest).
 //   - WM_SIZE skips the resize report while minimized.
+//   - WM_GETMINMAXINFO raises the minimum tracking size when the
+//     window was opened with a minimum size (WindowOptions.MinSize);
+//     otherwise the message falls to default processing.
 //   - WM_ACTIVATE defers the activation callback to the foreground
 //     queue (reference spawns it on the foreground executor); ticket26
 //     adds the synchronous cursor-visibility/modifier-reset part.
@@ -539,6 +560,10 @@ func platformWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe
 //   - WM_MOUSEMOVE / WM_NCMOUSEMOVE restore a hidden cursor and track
 //     the leave; WM_MOUSELEAVE / WM_NCMOUSELEAVE clear hover and the
 //     shared cursor flag.
+//   - WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_MOUSEHWHEEL and the eight client
+//     button messages deliver mouse events through the mouse input
+//     callback (Base ticket 34).
+//   - WM_NCDESTROY also forgets the window's ClickState.
 //   - WM_GPUI_CURSOR_STYLE_CHANGED adopts the platform's new cursor.
 //   - WM_SHOWWINDOW draws a shown window.
 //   - WM_ENDSESSION forwards a real session end to the platform window.
@@ -546,9 +571,9 @@ func platformWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe
 // Input, IME, accessibility and dialog messages arrive with their
 // tickets; they fall through to DefWindowProcW here. lparam is
 // unsafe.Pointer-typed because it is a pointer for the messages this
-// procedure dereferences (WM_NCCREATE's CREATESTRUCTW and
-// WM_DPICHANGED's suggested RECT); integer reinterpretations use
-// uintptr(lparam).
+// procedure dereferences (WM_NCCREATE's CREATESTRUCTW,
+// WM_GETMINMAXINFO's MINMAXINFO and WM_DPICHANGED's suggested RECT);
+// integer reinterpretations use uintptr(lparam).
 func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.Pointer) (result uintptr) {
 	lp := uintptr(lparam)
 	tracef("window msg hwnd=%x id=0x%x w=%x", hwnd, message, wparam)
@@ -627,6 +652,18 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		}
 		w.applySizeChange(width, height)
 		return 0
+
+	case wmGetMinMaxInfo:
+		// WM_GETMINMAXINFO: raise the minimum tracking size to the
+		// window's minimum (reference events.rs handle_get_min_max_info
+		// returning Some(0), which Windows consults to clamp interactive
+		// resizing). A window without a minimum falls to DefWindowProcW —
+		// exactly the pre-MinSize behavior.
+		if result, handled := w.handleGetMinMaxInfoMsg(lparam); handled {
+			return result
+		}
+		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
+		return r
 
 	case wmDPICHanged:
 		newDPI := float32(loword(wparam))
@@ -796,14 +833,17 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
 		return r
 
-	case wmMouseMove:
-		// WM_MOUSEMOVE: restore a hidden cursor and track the leave so
-		// hide-until-move stays exact (ticket26). Mouse input routing
-		// itself arrives with the input tickets.
-		w.restoreCursorAfterHide()
-		w.startMouseLeaveTracking(tmeLeave)
-		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
-		return r
+	case wmMouseMove, wmMouseWheel, wmMouseHWheel,
+		wmLButtonDown, wmRButtonDown, wmMButtonDown, wmXButtonDown,
+		wmLButtonUp, wmRButtonUp, wmMButtonUp, wmXButtonUp:
+		// Base ticket 34: the client-area mouse messages reach element
+		// dispatch through the mouse input callback (events.rs:114,
+		// 138-151; win32input_windows.go). WM_MOUSEMOVE also starts the
+		// leave tracking and restores a hidden cursor (ticket26,
+		// events.rs:372-373). Every arm returns the pin's Some(0|1); none
+		// reaches DefWindowProcW.
+		result, _ := w.handleMouseInputMsg(message, wparam, lp)
+		return result
 
 	case wmNcMouseMove:
 		// WM_NCMOUSEMOVE: the same cursor restore plus non-client leave
@@ -901,6 +941,9 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		// its Weak box at WM_NCDESTROY).
 		unbindWindow(hwnd)
 		delete(w.host.windows, hwnd)
+		// The window's ClickState retires with it (the pin's
+		// WindowsWindowState::click_state drops with the state).
+		forgetWin32ClickState(w)
 		return r
 	}
 	r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
@@ -928,9 +971,14 @@ type hostWindow struct {
 	// borderW/H is the window-minus-client frame extent (reference
 	// WindowBorderOffset), updated after creation and DPI changes.
 	borderW, borderH int32
-	minimized        bool
-	dirty            bool
-	title            string
+	// minSize is the window's minimum client size in logical pixels
+	// (WindowOptions.MinSize; a zero dimension is unconstrained). The
+	// WM_GETMINMAXINFO floor and the programmatic sizing clamps derive
+	// from it at the current scale factor.
+	minSize   Size
+	minimized bool
+	dirty     bool
+	title     string
 
 	// Callbacks from WindowOptions (nil keeps the default policy).
 	shouldClose func() bool
@@ -968,9 +1016,13 @@ type hostWindow struct {
 
 	// --- ticket26 desktop state (host thread only) ---
 
-	// cursor is this window's current cursor handle (0 = none), set by
-	// WM_GPUI_CURSOR_STYLE_CHANGED (reference WindowCreateContext shares
-	// the platform cursor; each window re-receives it on style change).
+	// cursor is this window's current cursor handle (0 = none): seeded
+	// from the platform's current cursor at creation (the reference's
+	// generate_creation_info passes state.current_cursor into the
+	// WindowCreateContext, and WindowsWindowState::new stores it — a
+	// window born while the style is IBeam starts with IBeam, and the
+	// boot default gives every fresh window the Arrow), then replaced by
+	// WM_GPUI_CURSOR_STYLE_CHANGED on style changes.
 	cursor uintptr
 	// hovered reports the cursor being over this window (WM_MOUSEMOVE
 	// sets it, WM_MOUSELEAVE clears it; reference state.hovered).
@@ -1023,6 +1075,11 @@ type hostWindow struct {
 	// onGesture receives the Direct Manipulation events (drain_events
 	// through the input callback: *ScrollWheelEvent / *PinchEvent).
 	onGesture func(event any)
+	// onMouseInput receives the client-area mouse events (Base ticket
+	// 34: *MouseMoveEvent, *MouseDownEvent, *MouseUpEvent and
+	// *ScrollWheelEvent — the pin's callbacks.input for the mouse arms);
+	// returning true reports the event handled (!propagate).
+	onMouseInput func(event any) bool
 	// dmRecord records the Direct Manipulation setup outcome for
 	// diagnostics (the honest COM-call record).
 	dmRecord string
@@ -1044,6 +1101,18 @@ func (h *Host) newHostWindow(hwnd uintptr) *hostWindow {
 		// and its background appearance starts opaque.
 		appearance:           WindowAppearanceLight,
 		backgroundAppearance: WindowBackgroundOpaque,
+		// Seed the cursor with the platform's current cursor
+		// (generate_creation_info -> WindowCreateContext.current_cursor
+		// -> WindowsWindowState::new current_cursor): the boot's Arrow
+		// by default, or the active style when the window is born under
+		// one. Without this, WM_SETCURSOR would answer SetCursor(NULL)
+		// for every fresh window — an app that never requests another
+		// style (SetCursorStyle early-returns when the platform handle
+		// is unchanged) would show no cursor at all over its windows
+		// (consumer gap 11). Host-thread state read at WM_NCCREATE, on
+		// the host thread, after initDesktopStateOnHostThread ran at
+		// boot.
+		cursor: h.desktop.currentCursor,
 	}
 	if appearance, err := systemAppearanceProvider(); err == nil {
 		w.appearance = appearance
@@ -1205,6 +1274,56 @@ func (w *hostWindow) clientSize() Size {
 		Width:  float32(w.clientW) / w.scale,
 		Height: float32(w.clientH) / w.scale,
 	}
+}
+
+// handleGetMinMaxInfoMsg is WM_GETMINMAXINFO (reference events.rs
+// handle_get_min_max_info_msg): a set minimum raises the minimum
+// tracking size to the logical minimum scaled to device pixels at the
+// current scale factor plus the frame offset (ptMinTrackSize bounds
+// the OUTER window, so a client-area minimum needs the border added;
+// the reference's handle_get_min_max_info_msg computes the same
+// `min_size.scale(scale_factor) + border_offset`). The floor is
+// re-derived on every message, so a scale-factor change
+// (WM_DPICHANGED updates w.scale and the border offset) re-clamps
+// automatically. A dimension with a zero minimum keeps the system's
+// pre-filled value; a window without any minimum reports the message
+// unhandled (handled=false mirrors the reference's None), falling to
+// DefWindowProcW — today's behavior.
+func (w *hostWindow) handleGetMinMaxInfoMsg(lparam unsafe.Pointer) (uintptr, bool) {
+	if w.minSize.Width <= 0 && w.minSize.Height <= 0 {
+		return 0, false
+	}
+	info := (*minMaxInfo)(lparam)
+	if w.minSize.Width > 0 {
+		info.ptMinTrackSize.x = int32(w.minSize.Width*w.scale) + w.borderW
+	}
+	if w.minSize.Height > 0 {
+		info.ptMinTrackSize.y = int32(w.minSize.Height*w.scale) + w.borderH
+	}
+	// The reference returns Some(0): the rest of the struct stays as
+	// the system pre-filled it.
+	return 0, true
+}
+
+// clampClientDeviceSize raises a requested client size in device
+// pixels to the window's minimum (the logical minimum scaled at the
+// current scale factor); a zero dimension is unconstrained. The
+// WM_GETMINMAXINFO floor enforces the same minimum on interactive
+// resizing; this clamp covers the programmatic SetWindowPos sizing
+// paths (SetBounds and the initial placement), which must clamp to
+// the floor as well.
+func (w *hostWindow) clampClientDeviceSize(cx, cy int32) (int32, int32) {
+	if w.minSize.Width > 0 {
+		if min := int32(w.minSize.Width * w.scale); cx < min {
+			cx = min
+		}
+	}
+	if w.minSize.Height > 0 {
+		if min := int32(w.minSize.Height * w.scale); cy < min {
+			cy = min
+		}
+	}
+	return cx, cy
 }
 
 // windowRectFromClient computes the outer window rect for a desired
@@ -1708,6 +1827,18 @@ func (h *Host) Stop() error {
 // the host started.
 func (h *Host) ThreadID() uint32 { return h.threadID }
 
+// hostStarted reports whether the host's message loop has been started
+// (Start completed its boot). App.Update's foreground marshal only
+// engages on a started host: before Start, updates run inline (the
+// pre-Run construction pattern), and after the loop exits,
+// runForegroundSync reports the drop and the caller falls back inline.
+func (h *Host) hostStarted() bool {
+	h.mu.Lock()
+	started := h.startedOnce
+	h.mu.Unlock()
+	return started
+}
+
 // IsForegroundThread reports whether the caller runs on the host
 // (foreground) thread, decided through GetCurrentThreadId.
 func (h *Host) IsForegroundThread() bool { return h.onHostThread() }
@@ -2049,6 +2180,8 @@ func (h *Host) openWindowOnHostThread(opts WindowOptions) (WindowHandle, error) 
 	w.onHoverStatusChange = opts.OnHoverStatusChange
 	w.onFileDrop = opts.OnFileDrop
 	w.onGesture = opts.OnGesture
+	w.onMouseInput = opts.OnMouseInput
+	w.minSize = opts.MinSize
 	w.updateBorderOffset()
 
 	// Ticket24: the per-window Direct Manipulation handler
@@ -2093,6 +2226,10 @@ func (h *Host) openWindowOnHostThread(opts WindowOptions) (WindowHandle, error) 
 		if cy < 1 {
 			cy = 120
 		}
+		// The initial placement clamps to the minimum like SetBounds
+		// (a window opened smaller than its own floor opens at the
+		// floor).
+		cx, cy = w.clampClientDeviceSize(cx, cy)
 		r := w.windowRectFromClient(x, y, cx, cy)
 		procSetWindowPos.Call(hwnd, 0,
 			uintptr(int64(r.left)), uintptr(int64(r.top)),
@@ -2302,7 +2439,8 @@ func (wh WindowHandle) Bounds() (Bounds, error) {
 // SetBounds moves and resizes the window to the requested logical
 // bounds. The client area becomes the requested size (the frame offset
 // is added like the reference's calculate_window_rect); the position is
-// the requested origin.
+// the requested origin. A size below WindowOptions.MinSize clamps up
+// to the minimum, like the interactive-resize floor.
 func (wh WindowHandle) SetBounds(bounds Bounds) {
 	wh.host.runForegroundAsync(func() {
 		w := wh.record()
@@ -2319,6 +2457,7 @@ func (wh WindowHandle) SetBounds(bounds Bounds) {
 		if cy < 1 {
 			cy = w.clientH
 		}
+		cx, cy = w.clampClientDeviceSize(cx, cy)
 		r := w.windowRectFromClient(x, y, cx, cy)
 		procSetWindowPos.Call(wh.hwnd, 0,
 			uintptr(int64(r.left)), uintptr(int64(r.top)),
@@ -2373,14 +2512,18 @@ func (d *platformDispatcher) wake() {
 // drive drains the scheduler on the host thread. Blocking here mirrors
 // the reference: its main thread runs foreground runnables to
 // completion; task bodies park on their own goroutines and their update
-// requests execute inline here.
+// requests execute inline here. The drain first fires every wall-clock
+// timer that came due (the reference timer completion arriving through
+// dispatch_after, gpui_windows/src/dispatcher.rs:147-149, then waking
+// its awaiter onto the main thread, dispatcher.rs:118-132) and re-arms
+// the timer driver afterwards (clock.go).
 func (d *platformDispatcher) drive() {
 	defer func() {
 		if r := recover(); r != nil {
 			d.host.recordPanic(r)
 		}
 	}()
-	d.app.sched.run()
+	d.app.sched.runRealtime()
 }
 
 // attach wires the host into the application as its foreground
@@ -2397,5 +2540,9 @@ func (h *Host) attach(a *App) error {
 	h.app = a
 	h.dispatcher = &platformDispatcher{app: a, host: h}
 	a.platformWake = h.dispatcher.wake
+	// Real applications run on wall-clock time: TaskRun.Sleep, background
+	// timers and App.Now follow the platform clock (the reference
+	// PlatformScheduler's PlatformClock, platform_scheduler.rs:177-190).
+	a.sched.useWallClock(h.dispatcher.wake)
 	return nil
 }

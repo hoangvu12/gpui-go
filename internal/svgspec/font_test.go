@@ -278,7 +278,15 @@ func TestSvgFontOrchestration(t *testing.T) {
 	w1, w1Notifications := elemF.newSvgWindow(t, func() gpui.AnyElement { return newSvg().IntoElement() })
 	w2, _ := elemF.newSvgWindow(t, func() gpui.AnyElement { return newSvg().IntoElement() })
 
-	if sprites := monochromeSprites(t, elemF.draw(t, w1)); len(sprites) != 0 {
+	// Migrated by Base ticket 33 (the default frame loop): w2's creation
+	// flushes, and the flush draws w1's opening frame (app.rs:1800-1812);
+	// that frame is the pending-font frame observed here (an extra explicit
+	// draw would register a second completion awaiter). w2 is drawn
+	// explicitly as before.
+	if got := gpui.WindowDrawCount(w1); got != 1 {
+		t.Fatalf("w1 frames after the windows opened = %d, want 1 (the flush-drawn opening frame)", got)
+	}
+	if sprites := monochromeSprites(t, gpui.LastDrawnScene(w1)); len(sprites) != 0 {
 		t.Fatalf("the pending-font frame painted %d monochrome sprites, want 0", len(sprites))
 	}
 	if sprites := monochromeSprites(t, elemF.draw(t, w2)); len(sprites) != 0 {
@@ -418,6 +426,7 @@ func TestSvgFontOrchestration(t *testing.T) {
 	// the parse app — the duplicate push is tolerated), the open
 	// window's notification fires once, and the redraw paints the
 	// tinted mask through the real pipeline.
+	w1Draws := gpui.WindowDrawCount(w1)
 	elemF.ta.RunUntilParked()
 	if got := elemF.fontLoadTotal(); got != 2 {
 		t.Fatalf("the element app's font registry reads = %d, want 2 (the two windows shared the loads)", got)
@@ -425,14 +434,17 @@ func TestSvgFontOrchestration(t *testing.T) {
 	if *w1Notifications != 1 {
 		t.Fatalf("the open window's view notifications = %d, want exactly 1", *w1Notifications)
 	}
-	if !w1.RefreshRequested() {
-		t.Fatal("the font completion did not mark the window for redraw")
+	// Migrated by Base ticket 33: the completion's notification redraws
+	// the window through the default frame loop (it used to only mark the
+	// refresh seam for an explicit draw); the frame it drew is inspected.
+	if got := gpui.WindowDrawCount(w1); got != w1Draws+1 {
+		t.Fatalf("the font completion redrew the window %d times, want 1", got-w1Draws)
 	}
 
 	// The redraw renders the mask: one monochrome sprite at the
 	// centering math's bounds, a monochrome-pool tile at the smooth-
 	// factor size.
-	scene := elemF.draw(t, w1)
+	scene := gpui.LastDrawnScene(w1)
 	sprites := monochromeSprites(t, scene)
 	if len(sprites) != 1 {
 		t.Fatalf("the redraw painted %d monochrome sprites, want 1", len(sprites))

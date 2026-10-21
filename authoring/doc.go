@@ -12,7 +12,7 @@
 // that copy check. Custom methods remain the component author's responsibility.
 // Components are not safe for concurrent mutation.
 //
-// This package is the initial authoring mechanism, not a renderer, an element
-// lifecycle, or the complete GPUI style vocabulary. Its style snapshots can be
-// consumed by a later rendering layer without depending on a GPU backend.
+// The helper itself now lives in package gpui (gpui.Styled, with the complete
+// pinned Styled vocabulary); this package keeps the original authoring names
+// as aliases of the gpui types.
 package authoring

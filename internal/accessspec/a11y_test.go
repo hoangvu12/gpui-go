@@ -183,16 +183,30 @@ func TestStableNodeIdentityAndPropertyUpdates(t *testing.T) {
 		t.Errorf("label bounds changed across a value-only update: %s -> %s", labelBefore.Bounds, labelAfter.Bounds)
 	}
 
-	// Immutability: mutate the app WITHOUT redrawing; the published
-	// snapshot keeps its values (it copies everything at finalize).
+	// Immutability: mutate the app; the published snapshot keeps its
+	// values (it copies everything at finalize).
+	//
+	// Migrated by Base ticket 33: the notifying update's flush now redraws
+	// the window (the default frame loop, app.rs:1800-1812), so the next
+	// publish carries the new frame. The original properties are kept: the
+	// previously published snapshot is unchanged by the mutation and the
+	// redraw, and a republish without a draw returns the same snapshot.
 	f.update(t, func(c *Counter, cx *gpui.Context[Counter]) {
 		c.count = 99
 		cx.Notify()
 	})
-	stillSecond, err := gpui.PublishWindowA11y(f.window)
-	if err != nil || stillSecond != second {
+	third, err := gpui.PublishWindowA11y(f.window)
+	if err != nil {
+		t.Fatalf("PublishWindowA11y after the redraw: %v", err)
+	}
+	if third == second || nodeByAuthor(t, third, "count-label").Value != "Count: 99" {
+		t.Fatal("the notifying update did not redraw and republish the label")
+	}
+	again, err := gpui.PublishWindowA11y(f.window)
+	if err != nil || again != third {
 		t.Fatalf("republish without a draw must return the same snapshot: %v", err)
 	}
+	stillSecond := second
 	labelImmutable := nodeByAuthor(t, stillSecond, "count-label")
 	if labelImmutable.Value != "Count: 7" {
 		t.Errorf("published snapshot mutated with app state: value = %q, want Count: 7", labelImmutable.Value)

@@ -1,0 +1,20 @@
+{
+  "ticket": "08-element-paint-api",
+  "effort": "gpui-base",
+  "date": "2026-10-19",
+  "result": "resolved",
+  "summary": "External elements can paint: Window.PaintLayer/PaintDropShadows/PaintInsetShadows/PaintQuad/PaintPath/PaintUnderline/PaintStrikethrough/PaintImage/DropImage + ViewportSize/ClientInset/LayoutBounds; Canvas[T]; Deferred + Window.DeferDraw (nested rounds, order floor, captured context); Anchored (switch-anchor/snap/snap-with-margin, local/window modes); Img with ImageSource (resource/render/encoded/custom), object fit, fallback, loading replacement, intrinsic auto-sizing, MIME helpers; Animation/WithAnimation/AnimationElement + easings; render.go wiring for deferred draws, the drag preview and the frame-end cursor reset; a test-fixture atlas leak fixed.",
+  "pinned_sources": ["reference/ce-source/crates/gpui/src/window.rs:2779,2822-2830,3277,3436,3451-3456,3470,3474-3475,3580-3710,4302-4466,4634-4795,5057-5203,5303", "reference/ce-source/crates/gpui/src/elements/canvas.rs:10-95", "reference/ce-source/crates/gpui/src/elements/deferred.rs:7-155", "reference/ce-source/crates/gpui/src/elements/anchored.rs:9-289", "reference/ce-source/crates/gpui/src/elements/img.rs:40-614", "reference/ce-source/crates/gpui/src/elements/animation.rs:13-534", "reference/ce-source/crates/gpui/src/motion.rs:21-742", "reference/ce-source/crates/gpui/src/platform.rs:3476-3565", "reference/ce-source/crates/gpui/src/assets.rs:240"],
+  "implementation": {"files": ["gpui/render.go", "gpui/element.go", "gpui/image.go", "gpui/imagecache.go", "gpui/paintapi.go (new)", "gpui/canvas.go (new)", "gpui/deferred.go (new)", "gpui/anchored.go (new)", "gpui/img.go (new)", "gpui/animation.go (new)", "+ 5 new _test.go files"]},
+  "tests": {
+    "added": 33,
+    "upstream": "deferred 0/1/0, anchored 3/0/0, img 5/0/0, animation 3/3/4 (ported/deviated/n.a.; springs not ported)",
+    "orchestrator_rerun": [
+      {"command": "CGO_ENABLED=0 go build ./... && go vet ./... && gofmt -l", "result": "clean"},
+      {"command": "CGO_ENABLED=0 go test ./gpui -count=1", "result": "ok (cursor-class tests passed this run)"},
+      {"command": "every package in ./internal/... ./authoring ./conformance/... ./cmd/... ./examples/... serially, -count=1", "result": "all ok"}
+    ]
+  },
+  "deviations": ["drawables re-resolve bounds at paint, so Deferred/Anchored/the drag preview re-apply offsets around paint", "Img has no interactivity and no image_cache_stack; SVG bytes in ImageSourceImage return the loader's SVG error; zero-size images set no aspect ratio (the pin's NaN would reach native layout)", "loading replacement appears one render after the 200ms deadline (strict > on the deterministic clock)", "animation synced epoch = app-clock origin; Motion* renames; with-animation as free functions; springs not ported", "Paint* panic on native insert failure (div convention); PaintImage returns an error", "no in-window prompts/tooltips in drawRoots"],
+  "native_artifact": "unchanged (rev 11)"
+}

@@ -21,6 +21,7 @@ import (
 	"github.com/hoangvu12/gpui-go/internal/native"
 	"reflect"
 	"strings"
+	"sync/atomic"
 )
 
 // appAccess is the unexported carrier that seals AppContext. Only types
@@ -291,11 +292,25 @@ func (a *App) SetReduceMotion(reduce bool) {
 	}
 }
 
-// Update runs f as one application update on the owning dispatcher
-// goroutine. Update increments the update nesting count; when the
-// OUTERMOST update returns, flush_effects runs: release dropped entities,
-// then apply queued effects FIFO until quiet. Nested updates do not
-// flush. Callbacks running during a flush cannot start another flush.
+// Update runs f as one application update. Update increments the
+// update nesting count; when the OUTERMOST update returns,
+// flush_effects runs: release dropped entities, then apply queued
+// effects FIFO until quiet. Nested updates do not flush. Callbacks
+// running during a flush cannot start another flush.
+//
+// Threading: the update runs on the application's foreground
+// (dispatcher) thread. Called from another goroutine of an attached,
+// started host, Update first marshals itself onto the host thread
+// (post-and-block; a panic inside f propagates back to the caller), so
+// an update can never overlap the foreground's scheduler drives or
+// frame draws — the overlap that the scheduler's update guard turned
+// into a terminal panic (consumer gap 07). The marshal is skipped
+// (f runs inline, like today) on the foreground thread itself, in test
+// applications (no host), before the host started, while the
+// scheduler is mid-drive (a task body's RAW App.Update must not block
+// on a foreground the drive is already waiting on — use
+// AsyncApp.Update inside task bodies), and after the loop exited
+// (best-effort; there is no foreground to serialize with).
 //
 // A panic in f restores framework bookkeeping (update depth, entity
 // access guards, borrowed-facade validity) without flushing further
@@ -306,6 +321,15 @@ func (a *App) Update(f func(*App)) {
 	if f == nil {
 		panic("gpui: Update called with a nil callback")
 	}
+	if a.marshalUpdateOnForeground(f) {
+		return
+	}
+	a.updateInline(f)
+}
+
+// updateInline runs f as one application update on the CALLING
+// goroutine (the pre-marshal behavior).
+func (a *App) updateInline(f func(*App)) {
 	a.startUpdate()
 	completed := false
 	defer func() {
@@ -319,6 +343,43 @@ func (a *App) Update(f func(*App)) {
 	a.finishUpdate()
 }
 
+// marshalUpdateOnForeground runs f as one application update on the
+// attached host's foreground thread, blocking the calling goroutine
+// until it completed, and reports whether it ran (consumer gap 07).
+// Callers on the foreground thread, test applications without a host,
+// unstarted hosts, a scheduler mid-drive (task-body case, see
+// scheduler.driving) and exited loops keep the inline semantics; a
+// panic inside the marshaled update is re-raised on the calling
+// goroutine.
+func (a *App) marshalUpdateOnForeground(f func(*App)) bool {
+	host := a.host
+	if host == nil || !host.hostStarted() {
+		return false
+	}
+	if host.onHostThread() {
+		return false
+	}
+	if atomic.LoadInt32(&a.sched.driving) > 0 {
+		return false
+	}
+	var panicValue any
+	ran := host.runForegroundSync(func() {
+		defer func() {
+			panicValue = recover()
+		}()
+		a.updateInline(f)
+	})
+	if !ran {
+		// The loop exited while the post was in flight (or was rejected):
+		// best-effort inline, like the pre-loop state.
+		return false
+	}
+	if panicValue != nil {
+		panic(panicValue)
+	}
+	return true
+}
+
 // Defer schedules f to run at the end of the current effect cycle, in
 // call order, including callbacks scheduled from inside a running defer.
 // It matches App::defer in the reference: a defer registered during the
@@ -330,9 +391,11 @@ func (a *App) Defer(f func(*App)) {
 	a.pushEffect(effect{kind: effDefer, callback: f})
 }
 
-// RefreshWindows schedules all windows for redraw. It can be called
-// repeatedly in one update cycle and still results in a single redraw
-// pass; the effect is not coalesced in the queue, matching the reference.
+// RefreshWindows schedules all windows for redraw (App::refresh_windows,
+// app.rs 1132-1136). It can be called repeatedly in one update cycle and
+// still results in a single redraw pass; the effect is not coalesced in
+// the queue, matching the reference. Applying it marks every window
+// dirty (frameloop.go).
 func (a *App) RefreshWindows() {
 	a.effects = append(a.effects, effect{kind: effRefresh})
 }
@@ -387,6 +450,9 @@ func (a *App) pushEffect(e effect) {
 // pending releases requests a subsequent flush instead of draining those
 // releases in this cycle.
 func (a *App) flushEffects() {
+	// flushDraws counts the test-window frames this flush drew
+	// (frameloop.go drawDirtyTestWindowsInFlush).
+	flushDraws := 0
 	for {
 		a.releaseDroppedEntities()
 
@@ -405,6 +471,17 @@ func (a *App) flushEffects() {
 		if len(a.effects) > 0 {
 			continue
 		}
+
+		// The test-support branch draws every dirty test window
+		// (app.rs 1800-1812; Base ticket 33, frameloop.go); the effects the
+		// draws queued are applied by this loop.
+		if a.drawDirtyTestWindowsInFlush(&flushDraws) && len(a.effects) > 0 {
+			continue
+		}
+
+		// The quiet queue schedules a frame for every window with frame
+		// demand (app.rs 1814-1822; Base ticket 03, frameloop.go).
+		a.scheduleWindowFrames()
 
 		if a.retireEventArena() {
 			// Retirement produced pending releases. They are not drained
@@ -499,8 +576,9 @@ func (a *App) applyEffect(e effect) {
 	case effDefer:
 		e.callback(a)
 	case effRefresh:
-		// Window refresh: the draw hook observes dirtiness; real window
-		// invalidation belongs to the window tickets.
+		// Window refresh marks every window dirty (apply_refresh_effect,
+		// app.rs 1896-1903; Base ticket 03); the draw hook still observes.
+		a.refreshAllWindows()
 		if a.drawHook != nil {
 			_ = a.drawHook.DirtyWindows()
 		}
@@ -511,8 +589,11 @@ func (a *App) applyEffect(e effect) {
 	}
 }
 
-// notify queues a Notify effect for id, coalesced while pending.
+// notify queues a Notify effect for id, coalesced while pending, and
+// invalidates every window whose last frame rendered the entity
+// (App::notify, app.rs 2920-2953; Base ticket 03, frameloop.go).
 func (a *App) notify(id EntityID) {
+	a.invalidateViewWindows(id)
 	a.pushEffect(effect{kind: effNotify, emitter: id})
 }
 
@@ -754,10 +835,15 @@ func (a *App) removeDetachedTask(t *taskRun) {
 
 // entityLeaseOf returns the lease of an owned handle, or panics with the
 // programmer-misuse diagnostic when the handle is zero, stale, or an
-// expired borrow.
+// expired borrow. A view self-handle facade never expires: its lease is
+// owned by the rendering window, so access is valid while the entity is
+// live (Context.StrongSelf).
 func entityLeaseOf[S any](h Entity[S], op string) *entityLease {
 	if h.lease == nil {
 		panic(fmt.Sprintf("gpui: zero entity handle is invalid (used by %s)", op))
+	}
+	if h.lease.kind == leaseSelfHandle {
+		return h.lease
 	}
 	if h.lease.kind == leaseBorrow {
 		if h.lease.valid.expired {
@@ -793,6 +879,7 @@ func withEntityUpdate[S any](a *App, id EntityID, f func(state *S, cx *Context[S
 		if !ok {
 			panic(fmt.Sprintf("gpui: entity %d holds state of type %T, not %T", uint64(id), slot.state, new(S)))
 		}
+		recordEntityAccess(a, id)
 		cx := &Context[S]{app: a, entity: id, valid: &borrowValidity{}}
 		slot.writer = true
 		defer func() {

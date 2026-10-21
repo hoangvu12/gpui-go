@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/hoangvu12/gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/internal/realinput"
 )
 
 // Win32 bindings the corpus brings itself (the desktopspec pattern:
@@ -66,6 +67,15 @@ type a11yFixture struct {
 // Narrator evidence test shows a window.
 func bootA11yFixture(t *testing.T, title string) *a11yFixture {
 	t.Helper()
+	return bootA11yFixtureView(t, title, func(model gpui.Entity[a11yModel]) gpui.View {
+		return &a11yRootView{model: model}
+	})
+}
+
+// bootA11yFixtureView is bootA11yFixture with a caller-chosen root view
+// over the same model (Base ticket 11's role corpus reuses the boot).
+func bootA11yFixtureView(t *testing.T, title string, root func(model gpui.Entity[a11yModel]) gpui.View) *a11yFixture {
+	t.Helper()
 	host := gpui.NewHost()
 	if err := host.Start(); err != nil {
 		t.Fatalf("host start: %v — this session is expected to create real windows", err)
@@ -91,7 +101,7 @@ func bootA11yFixture(t *testing.T, title string) *a11yFixture {
 			Show:   false,
 		}, func(w *gpui.Window, app *gpui.App) gpui.View {
 			model = newA11yModel(app, w)
-			return &a11yRootView{model: model}
+			return root(model)
 		})
 		if err != nil {
 			done <- err
@@ -774,6 +784,7 @@ func TestA11yConcurrentQueriesUpdatesAndActions(t *testing.T) {
 // it (the deterministic corpus keeps its windows hidden).
 func bootShownA11yFixture(t *testing.T, title string) *a11yFixture {
 	t.Helper()
+	realinput.Require(t) // the shown fixture activates its window
 	host := gpui.NewHost()
 	if err := host.Start(); err != nil {
 		t.Fatalf("host start: %v — this session is expected to create real windows", err)
@@ -825,6 +836,7 @@ func TestA11yNarratorActivationEvidence(t *testing.T) {
 	if os.Getenv("GPUI_A11Y_NARRATOR") != "1" {
 		t.Skip("opt-in evidence test: set GPUI_A11Y_NARRATOR=1 to run the real Narrator session")
 	}
+	realinput.Require(t) // activates the window into the foreground
 	f := bootShownA11yFixture(t, "Narrator Evidence")
 	gpui.ActivateWindowA11y(f.window)
 	f.drawAndPublish(t)

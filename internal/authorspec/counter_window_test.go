@@ -90,6 +90,9 @@ type realCounterApp struct {
 	// sync runs f on the foreground (host) thread (all application
 	// access is marshaled there).
 	sync func(f func())
+	// presentedDraws is each window's draw count at its last present
+	// (redrawAndPresent awaits the frame loop's next frame past it).
+	presentedDraws map[*gpui.Window]uint64
 }
 
 // bootRealCounterApp boots the real application: a started host, a
@@ -127,7 +130,7 @@ func bootRealCounterApp(t *testing.T) *realCounterApp {
 		}
 	})
 
-	state := &realCounterApp{app: app, host: host, renderer: renderer}
+	state := &realCounterApp{app: app, host: host, renderer: renderer, presentedDraws: map[*gpui.Window]uint64{}}
 	// All application access is marshaled to the foreground (host)
 	// thread.
 	state.sync = func(f func()) {
@@ -198,6 +201,10 @@ func bootRealCounterApp(t *testing.T) *realCounterApp {
 		if openErr != nil {
 			t.Fatalf("OpenWindowView B: %v — this session is expected to create real windows", openErr)
 		}
+		// The opening frames (recorded in the same foreground unit as the
+		// opens, before any frame request can run).
+		state.presentedDraws[state.windowA] = gpui.WindowDrawCount(state.windowA)
+		state.presentedDraws[state.windowB] = gpui.WindowDrawCount(state.windowB)
 	})
 	t.Cleanup(func() {
 		for _, window := range []*gpui.Window{state.windowA, state.windowB} {
@@ -226,19 +233,29 @@ func (state *realCounterApp) incrementFrom(t *testing.T, window *gpui.Window, cl
 	})
 }
 
-// redrawAndPresent redraws the window (one full frame through the
+// redrawAndPresent awaits the window's redraw (one full frame through the
 // element phases) and presents it through the renderer, retiring the
 // submission. It reports the drawn scene's sprite and quad counts.
+//
+// Migrated by Base ticket 33 (the default frame loop): the increment's
+// notification redraws the window through its WM_PAINT frame request
+// (window.rs:1715-1843) — an explicit DrawWindowFrame here would race the
+// frame loop and draw a second frame. The helper waits for that frame,
+// then presents the drawn scene exactly as before.
 func (state *realCounterApp) redrawAndPresent(t *testing.T, window *gpui.Window) (quads, mono, sub, poly int) {
 	t.Helper()
+	want := state.presentedDraws[window] + 1
+	waitForCond(t, 10*time.Second, "the frame loop to redraw the window", func() bool {
+		var draws uint64
+		state.sync(func() { draws = gpui.WindowDrawCount(window) })
+		return draws >= want
+	})
 	state.sync(func() {
-		scene, err := gpui.DrawWindowFrame(window)
-		if err != nil {
-			t.Fatalf("DrawWindowFrame: %v", err)
+		state.presentedDraws[window] = gpui.WindowDrawCount(window)
+		if gpui.LastDrawnScene(window) == nil {
+			t.Fatalf("the redraw produced no scene")
 		}
-		if scene == nil {
-			t.Fatalf("DrawWindowFrame produced no scene")
-		}
+		var err error
 		quads, mono, sub, poly, err = gpui.WindowPrimitiveCounts(window)
 		if err != nil {
 			t.Fatalf("WindowPrimitiveCounts: %v", err)

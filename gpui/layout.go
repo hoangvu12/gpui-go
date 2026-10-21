@@ -884,7 +884,15 @@ func (e *LayoutEngine) ParentRelativeLayoutBounds(ctx *LayoutContext, id LayoutI
 		return e.LayoutBounds(ctx, id)
 	}
 	parentID := LayoutID{engine: e, node: parent, generation: id.generation}
-	parentBounds, err := e.LayoutBounds(ctx, parentID)
+	// The parent's RAW bounds, without the element offset: the pinned
+	// taffy.rs parent_relative_layout_bounds reads layout_bounds(parent)
+	// (the engine's ordinary, offset-free computation) and window.rs adds
+	// pixel_snap_point(element_offset()) exactly once, AFTER the engine
+	// call. Computing the parent through the offset-aware LayoutBounds
+	// here and adding the offset again below doubled it for every
+	// prepaint-under-offset root (the drag preview's separately prepainted
+	// root; consumer gap 08).
+	parentBounds, err := e.layoutBounds(parentID, ctx.ScaleFactor())
 	if err != nil {
 		return Bounds{}, err
 	}

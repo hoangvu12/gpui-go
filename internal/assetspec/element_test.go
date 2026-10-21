@@ -193,6 +193,15 @@ func (f *elementFixture) draw(t *testing.T) {
 // loading state, the completion notification redraws the view, and the
 // second frame renders the decoded image — through the real codec and
 // the deterministic scheduler.
+//
+// Migrated by Base ticket 33 (the default frame loop): the completion's
+// notification now redraws the window itself — the flush draws dirty
+// test windows (app.rs:1800-1812) — instead of only marking the refresh
+// seam for an explicit draw. The test still proves the completion
+// notifies exactly once, that the redraw it causes renders the decoded
+// image (exactly one frame after the loading frame), and that the atlas
+// tile appears only with that resolving frame (none after the loading
+// frame).
 func TestImageElementAsyncLoadStates(t *testing.T) {
 	f := newElementFixture(t, "img.png", "img.png", pngBytes(t, 4, 2), false)
 	atlas := mustAtlas(t, f.app)
@@ -201,9 +210,13 @@ func TestImageElementAsyncLoadStates(t *testing.T) {
 	if got := f.states(); len(got) != 1 || got[0] != "loading" {
 		t.Fatalf("first frame states = %v, want [loading]", got)
 	}
+	if got := tileCount(t, atlas); got != 0 {
+		t.Fatalf("atlas tiles before the resolving frame = %d, want 0", got)
+	}
+	draws := gpui.WindowDrawCount(f.window)
 
 	// The load runs and the completion notifies the view (the pinned
-	// on_next_frame + notify) and marks the window's redraw seam.
+	// on_next_frame + notify); the notification redraws the window.
 	f.ta.RunUntilParked()
 	if *f.loads != 1 {
 		t.Fatalf("asset loads = %d, want 1", *f.loads)
@@ -211,15 +224,14 @@ func TestImageElementAsyncLoadStates(t *testing.T) {
 	if f.notifications != 1 {
 		t.Fatalf("view notifications = %d, want 1", f.notifications)
 	}
-	if !f.window.RefreshRequested() {
-		t.Fatal("the completion did not mark the window for redraw")
+	if got := gpui.WindowDrawCount(f.window); got != draws+1 {
+		t.Fatalf("the completion redrew the window %d times, want 1", got-draws)
 	}
-	if got := tileCount(t, atlas); got != 0 {
-		t.Fatalf("atlas tiles before the resolving frame = %d, want 0", got)
+	if f.window.RefreshRequested() {
+		t.Fatal("the window is still marked for redraw after the frame loop drew it")
 	}
 
-	// The redraw resolves and retains the decoded frames.
-	f.draw(t)
+	// The redraw resolved and retained the decoded frames.
 	if got := f.states(); len(got) != 2 || got[1] != "loaded:0" {
 		t.Fatalf("second frame states = %v, want [loading loaded:0]", got)
 	}
@@ -247,8 +259,10 @@ func TestImageElementErrorState(t *testing.T) {
 	if got := f.states(); len(got) != 1 || got[0] != "loading" {
 		t.Fatalf("first frame states = %v, want [loading]", got)
 	}
+	// Migrated by Base ticket 33: the completion's notification redraws
+	// the window (the default frame loop), so the error frame is drawn by
+	// RunUntilParked instead of an explicit draw.
 	f.ta.RunUntilParked()
-	f.draw(t)
 	states := f.states()
 	if len(states) != 2 || states[1] != "error:asset error: Embedded resource not found: missing.png" {
 		t.Fatalf("error frame states = %v", states)
@@ -268,6 +282,12 @@ func TestImageElementErrorState(t *testing.T) {
 // lines 4013-4033): one load serves both windows; the first requester
 // receives the completion notification, the second resolves on its
 // next render.
+//
+// Migrated by Base ticket 33 (the default frame loop): the second
+// window's creation flushes and draws the first window's opening frame,
+// and the completion's notification redraws the first window; the second
+// window, which no completion notifies, still resolves only on its own
+// next (explicit) render.
 func TestImageElementTwoWindowsShareAppAsset(t *testing.T) {
 	f := newElementFixture(t, "img.png", "img.png", pngBytes(t, 2, 2), true)
 
@@ -281,8 +301,8 @@ func TestImageElementTwoWindowsShareAppAsset(t *testing.T) {
 	secondWindow := gpui.NewTestWindow(f.app, gpui.Size{Width: 100, Height: 100})
 	secondWindow.SetRootView(gpui.ViewOf(secondView))
 
-	// Both windows render the loading state.
-	f.draw(t)
+	// Both windows render the loading state (the first window's opening
+	// frame was drawn by the flush of the second window's creation).
 	if got := f.states(); len(got) != 1 || got[0] != "loading" {
 		t.Fatalf("window 1 states = %v, want [loading]", got)
 	}
@@ -300,6 +320,12 @@ func TestImageElementTwoWindowsShareAppAsset(t *testing.T) {
 	}
 	if f.notifications != 1 {
 		t.Fatalf("view notifications = %d, want 1 (only the first requester registers)", f.notifications)
+	}
+	if got := f.states(); len(got) != 2 || got[1] != "loaded:0" {
+		t.Fatalf("window 1 states after the completion = %v, want [loading loaded:0] (the notification redraws it)", got)
+	}
+	if got := *secondStates; len(got) != 1 {
+		t.Fatalf("window 2 states after the completion = %v, want [loading] (no notification reaches it)", got)
 	}
 
 	// The second consumer resolves on its next render without a new
@@ -350,8 +376,10 @@ func TestImageElementAnimatedPlayback(t *testing.T) {
 	if got := f.states(); len(got) != 1 || got[0] != "loading" {
 		t.Fatalf("first frame states = %v, want [loading]", got)
 	}
+	// Migrated by Base ticket 33: the completion's notification redraws
+	// the window (the default frame loop); the animation frames below stay
+	// explicit draws (next-frame callbacks wait for a frame request).
 	f.ta.RunUntilParked()
-	f.draw(t)
 	if got := f.states(); len(got) != 2 || got[1] != "loaded:0" {
 		t.Fatalf("resolved states = %v, want [loading loaded:0]", got)
 	}
@@ -389,8 +417,9 @@ func TestImageElementReduceMotionFreezesAnimation(t *testing.T) {
 	f.app.SetReduceMotion(true)
 
 	f.draw(t)
+	// Migrated by Base ticket 33: the completion's notification redraws
+	// the window (the default frame loop).
 	f.ta.RunUntilParked()
-	f.draw(t)
 	if got := f.states(); len(got) != 2 || got[1] != "loaded:0" {
 		t.Fatalf("resolved states = %v, want [loading loaded:0]", got)
 	}
@@ -403,14 +432,22 @@ func TestImageElementReduceMotionFreezesAnimation(t *testing.T) {
 
 // TestImageElementLoadingDelayTimer pins the loading state machinery in
 // a real element: a first frame of a still-loading image starts the
-// 200ms timer, and advancing the virtual clock to the deadline fires
-// the notification. The load also completes during the same clock
-// advance (the scheduler runs the queued worker first), so BOTH pinned
-// notification sources fire — the awaiter's completion notify and the
-// loading-delay timer — and the resolved image wins the next frame,
-// exactly the pinned outcome when an asset resolves within the delay.
-// The > LOADING_DELAY replacement decision itself is pinned by the
-// state-machine tests (TestLoadingDelayStateMachine).
+// 200ms timer. The load completes during the clock advance (the
+// scheduler runs the queued worker first); its notification redraws the
+// window, and the resolving frame drops the started-loading tracker,
+// cancelling the timer (img.rs lines 372/390: started_loading = None
+// drops the task) — so the resolved image wins and the loading
+// replacement never appears, the pinned outcome when an asset resolves
+// within the delay.
+//
+// Migrated by Base ticket 33 (the default frame loop). With explicit
+// draws the resolving frame came after the deadline, so the timer fired
+// too (two notifications); with the upstream draw-on-flush the resolving
+// frame precedes the deadline and cancels the timer (one notification,
+// none after further clock advances). That the timer itself notifies at
+// the deadline stays pinned by TestLoadingDelayStateMachine
+// (animation_test.go); the > LOADING_DELAY replacement decision by the
+// state-machine tests.
 func TestImageElementLoadingDelayTimer(t *testing.T) {
 	f := newElementFixture(t, "img.png", "img.png", pngBytes(t, 2, 2), false)
 
@@ -422,21 +459,22 @@ func TestImageElementLoadingDelayTimer(t *testing.T) {
 		t.Fatalf("view notifications before any completion = %d, want 0", f.notifications)
 	}
 
-	// Advancing to the 200ms deadline runs the queued load (the
-	// completion notify) and then fires the loading-delay timer (the
-	// second notify).
+	// Advancing to the 200ms deadline runs the queued load: the
+	// completion notifies and its frame resolves the image.
 	f.ta.AdvanceClock(200)
-	if f.notifications != 2 {
-		t.Fatalf("view notifications = %d, want 2 (the load completion and the loading-delay timer)", f.notifications)
+	if f.notifications != 1 {
+		t.Fatalf("view notifications = %d, want 1 (the load completion; the resolving frame cancelled the delay timer)", f.notifications)
 	}
 	if *f.loads != 1 {
 		t.Fatalf("asset loads = %d, want 1", *f.loads)
 	}
-
-	// The resolved image wins the next frame; the loading replacement
-	// never appears because the load beat the delay.
-	f.draw(t)
 	if got := f.states(); len(got) != 2 || got[1] != "loaded:0" {
 		t.Fatalf("states after the delay = %v, want [loading loaded:0]", got)
+	}
+	// The cancelled timer never notifies later.
+	f.ta.AdvanceClock(1000)
+	f.ta.RunUntilParked()
+	if f.notifications != 1 {
+		t.Fatalf("view notifications after the deadline passed = %d, want 1 (the delay timer was cancelled)", f.notifications)
 	}
 }

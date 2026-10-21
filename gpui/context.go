@@ -1,5 +1,9 @@
 package gpui
 
+import (
+	"fmt"
+)
+
 // Context is the typed application context issued for one entity access:
 // each update, delivery and construction receives a fresh Context. The
 // context implements the sealed AppContext interface.
@@ -31,6 +35,11 @@ func (cx *Context[S]) App() *App { return cx.app }
 // context. The handle (and every copy of it) is valid only during the
 // callback that received this context; retain it with RetainInto to keep
 // it. Releasing or transferring the borrowed facade is misuse.
+//
+// Listeners run after the render callback returns, so a view's Render
+// must not capture this handle for its listener closures: use
+// StrongSelf (the window-owned self-handle) or Listener (the weak
+// adapter) instead.
 func (cx *Context[S]) Entity() Entity[S] {
 	if cx.valid == nil {
 		panic("gpui: context has no borrow validity")
@@ -47,6 +56,67 @@ func (cx *Context[S]) Entity() Entity[S] {
 
 // EntityID returns the identity of the entity backing this context.
 func (cx *Context[S]) EntityID() EntityID { return cx.entity }
+
+// StrongSelf returns this view's strong self-handle: an Entity[S] that
+// stays usable after the render callback returns, for the listener
+// closures a view installs during Render (R:app/context.rs:50-56
+// Context::entity — "Returns a handle to the entity belonging to this
+// context"; in Rust the returned handle is strong because clones own
+// ref-counts, and the element tree owns the listener closures).
+//
+// Go cannot release a lease when a closure becomes unreachable, so the
+// recorded ownership contract keeps Context.Entity a callback-borrowed
+// facade. StrongSelf is the conforming view pattern: the window drawing
+// the view owns ONE independent lease of the view entity (retained on
+// the first read, shared by every later read), so the handle and every
+// alias copied into listeners keep working while the window shows the
+// view, and the lease releases deterministically when the window's
+// scope closes. Releasing or transferring the self-handle is misuse
+// (the window owns the lease); RetainInto creates an independently
+// owned copy when a caller needs a different lifetime.
+//
+// StrongSelf must be called inside the view's Render (or another
+// callback for the same view while that view is being rendered in a
+// window frame); it panics with a misuse diagnostic otherwise. The
+// natural listener shapes are:
+//
+//	self := cx.StrongSelf()
+//	gpui.Div().OnClick(func(_ *gpui.ClickEvent, _ *gpui.Window, app *gpui.App) {
+//		self.Update(app, func(v *V, cx *gpui.Context[V]) { ... })
+//	})
+//
+// and the weak adapter for the same job:
+//
+//	gpui.Div().OnClick(cx.Listener(func(v *V, e *gpui.ClickEvent, w *gpui.Window, cx *gpui.Context[V]) { ... }))
+//
+// Listener (like the reference cx.listener, R:app/context.rs:252-267)
+// captures a weak identity and is a no-op after the view releases;
+// StrongSelf keeps the view alive for as long as the window renders it.
+// Prefer Listener for state updates, StrongSelf when porting code that
+// captured cx.entity() and calls Update on it from a closure.
+func (cx *Context[S]) StrongSelf() Entity[S] {
+	w := activeFrameWindow()
+	if w == nil {
+		panic("gpui: StrongSelf is a view self-handle and requires a window frame: call it inside the view's Render")
+	}
+	if w.app != cx.app {
+		panic("gpui: StrongSelf context belongs to a different application than the window being drawn")
+	}
+	if !cx.app.entities.isLive(cx.entity) {
+		panic("gpui: the entity must be alive to issue a self-handle")
+	}
+	frame := currentFrame(w)
+	if len(frame.renderedViews) == 0 || frame.renderedViews[len(frame.renderedViews)-1] != cx.entity {
+		panic(fmt.Sprintf("gpui: StrongSelf called for entity %d while view %d is rendering: the self-handle belongs to the view being rendered",
+			uint64(cx.entity), uint64(frame.renderedViews[len(frame.renderedViews)-1])))
+	}
+	installViewSelfHandle(w, cx.entity)
+	return Entity[S]{
+		id:    cx.entity,
+		app:   cx.app,
+		lease: &entityLease{kind: leaseSelfHandle, id: cx.entity, app: cx.app},
+	}
+}
 
 // Scope returns the entity's dependent-resource scope. It survives as
 // long as the entity has independent owners, even if its original

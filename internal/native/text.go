@@ -51,11 +51,15 @@ const (
 	textErrFontUnresolved int32 = -5
 	textErrShapingLimit   int32 = -6
 	textErrTextCapacity   int32 = -7
+	textErrFontData       int32 = -8
 	textErrTextPanic      int32 = 101
 )
 
-// textServiceVersion mirrors GPUI_GO_TEXT_SERVICE_VERSION.
-const textServiceVersion uint32 = 1
+// textServiceVersion mirrors GPUI_GO_TEXT_SERVICE_VERSION. Version 2
+// (the consumer-gaps font-registration ticket): the font record's v1
+// reserved word became family_found, and the table gained the font_add
+// entry plus the max_font_bytes scalar.
+const textServiceVersion uint32 = 2
 
 func textStatusName(code int32) string {
 	switch code {
@@ -75,6 +79,8 @@ func textStatusName(code int32) string {
 		return "live shaping-handle limit exceeded"
 	case textErrTextCapacity:
 		return "dump capacity too small"
+	case textErrFontData:
+		return "font data rejected (no supported font face)"
 	case textErrTextPanic:
 		return "native panic contained"
 	default:
@@ -104,6 +110,9 @@ var (
 	// ErrTextTextCapacity: a dump capacity was too small; retry with the
 	// reported need.
 	ErrTextTextCapacity = errors.New("native: text dump capacity too small")
+	// ErrTextFontData: font bytes submitted to AddFont contain no
+	// supported font face (the pinned add_fonts registration failure).
+	ErrTextFontData = errors.New("native: font data rejected")
 	// ErrTextPanic: a native panic was contained by catch_unwind.
 	ErrTextPanic = errors.New("native: text panic contained")
 )
@@ -139,6 +148,8 @@ func (e *TextStatusError) Unwrap() error {
 		return ErrTextShapingLimit
 	case textErrTextCapacity:
 		return ErrTextTextCapacity
+	case textErrFontData:
+		return ErrTextFontData
 	case textErrTextPanic:
 		return ErrTextPanic
 	default:
@@ -200,8 +211,9 @@ type textFontRequest struct {
 }
 
 // FontRecord mirrors GpuiGoTextFontRecord (40 bytes, alignment 8):
-// font_id @0 (u64), generation @8 (u64), weight_bits @12, style @16,
-// feature_count @20, fallback_count @24, reserved @28, record_size @36.
+// font_id @0 (u64), generation @8 (u64), weight_bits @16, style @20,
+// feature_count @24, fallback_count @28, family_found @32, record_size @36.
+// Service v2: the v1 reserved word reports family_found.
 type FontRecord struct {
 	FontID        uint64
 	Generation    uint64
@@ -209,8 +221,11 @@ type FontRecord struct {
 	Style         uint32
 	FeatureCount  uint32
 	FallbackCount uint32
-	Reserved      uint32
-	RecordSize    uint32
+	// FamilyFound is 1 when the descriptor's primary family is present in
+	// the font catalog (system-installed or registered through AddFont);
+	// 0 when the id resolved through the fallback chain.
+	FamilyFound uint32
+	RecordSize  uint32
 }
 
 // FontMetricsRecord mirrors GpuiGoTextFontMetricsRecord (52 bytes,
@@ -373,6 +388,11 @@ type FontIdentity struct {
 	Style         TextFontStyle
 	FeatureCount  int
 	FallbackCount int
+	// FamilyFound reports whether the descriptor's primary family is
+	// present in the font catalog (system-installed or registered through
+	// AddFont); false means the id resolved through the fallback chain
+	// (the diagnosable silent fallback — service v2).
+	FamilyFound bool
 }
 
 // FontMetrics is the pinned FontMetrics in font units.
@@ -535,8 +555,9 @@ type TextGlyph struct {
 // Service table mirror and validation
 // ---------------------------------------------------------------------------
 
-// textTable mirrors the native GpuiGoTextTable: 15 function pointers
-// then 20 self-check/capacity scalars; 200 bytes, alignment 8.
+// textTable mirrors the native GpuiGoTextTable: 16 function pointers
+// then 21 self-check/capacity scalars; 216 bytes, alignment 8. Service
+// v2 added the fontAdd slot and the maxFontBytes scalar.
 type textTable struct {
 	fontNames       uintptr
 	fontResolve     uintptr
@@ -553,6 +574,7 @@ type textTable struct {
 	cluster         uintptr
 	fragments       uintptr
 	glyphs          uintptr
+	fontAdd         uintptr
 	serviceVersion  uint32
 	sizeOfTable     uint32
 	alignOfTable    uint32
@@ -573,6 +595,7 @@ type textTable struct {
 	sizeOfGlyphRec  uint32
 	maxShaping      uint32
 	maxTextBytes    uint32
+	maxFontBytes    uint32
 }
 
 // textTableFromSlot reinterprets a reserved-slot word as a table pointer
@@ -641,20 +664,20 @@ func validateTextTable(t *textTable, path string) error {
 	if t.sizeOfGlyphRec != uint32(unsafe.Sizeof(TextGlyphRecord{})) {
 		return abi("text size_of_glyph_record", fmt.Sprint(unsafe.Sizeof(TextGlyphRecord{})), fmt.Sprint(t.sizeOfGlyphRec))
 	}
-	if t.maxShaping == 0 || t.maxTextBytes == 0 {
+	if t.maxShaping == 0 || t.maxTextBytes == 0 || t.maxFontBytes == 0 {
 		return &CapabilityError{Path: path, Detail: "text capacity bounds are zero"}
 	}
 	slots := [...]uintptr{
 		t.fontNames, t.fontResolve, t.fontMetrics, t.shape, t.layout,
 		t.dispose, t.layoutInfo, t.lineCount, t.line, t.caret, t.hitTest,
-		t.selectionRects, t.cluster, t.fragments, t.glyphs,
+		t.selectionRects, t.cluster, t.fragments, t.glyphs, t.fontAdd,
 	}
 	names := [...]string{
 		"text_font_names", "text_font_resolve", "text_font_metrics",
 		"text_shape", "text_layout", "text_dispose", "text_layout_info",
 		"text_line_count", "text_line", "text_caret", "text_hit_test",
 		"text_selection_rects", "text_cluster", "text_fragments",
-		"text_glyphs",
+		"text_glyphs", "text_font_add",
 	}
 	for i, slot := range slots {
 		if slot == 0 {
@@ -710,6 +733,45 @@ func (s *TextService) MaxShapingHandles() int { return int(s.table.maxShaping) }
 
 // MaxTextBytes is the native text length bound.
 func (s *TextService) MaxTextBytes() int { return int(s.table.maxTextBytes) }
+
+// MaxFontBytes is the native font-data length bound for one AddFont call.
+func (s *TextService) MaxFontBytes() int { return int(s.table.maxFontBytes) }
+
+// AddFont registers in-memory font bytes with the font catalog through
+// the pinned PlatformTextSystem::add_fonts path (the code behind
+// gpui::TextSystem::add_fonts: fontique Blob registration; family names
+// come from each font's embedded name table). The families the bytes
+// register become resolvable by name and appear in FontNames; shaping and
+// rasterization (the glyph service's shared stack) see them from the next
+// call. Registration is process-stable: fonts have no dispose.
+//
+// One blob per call (the pinned add_fonts takes a batch; each call here is
+// one registration batch, so N calls bump the catalog generation N times —
+// FontIds, families and resolution are unaffected). The returned
+// generation is the catalog generation after this registration.
+//
+// Errors: ErrTextFontData when the bytes contain no supported font face;
+// ErrTextBadValue when data is empty or exceeds MaxFontBytes.
+func (s *TextService) AddFont(data []byte) (uint64, error) {
+	if s.lib.released.Load() {
+		return 0, ErrClosed
+	}
+	if len(data) == 0 {
+		return 0, fmt.Errorf("%w: empty font data", ErrTextBadValue)
+	}
+	if len(data) > int(s.table.maxFontBytes) {
+		return 0, fmt.Errorf("%w: font data length %d exceeds %d", ErrTextBadValue, len(data), s.table.maxFontBytes)
+	}
+	var generation uint64
+	code, err := callTextFontAdd(s.table.fontAdd, data, &generation)
+	if err != nil {
+		return 0, err
+	}
+	if code != textStatusOK {
+		return 0, textStatusError(code, "text_font_add")
+	}
+	return generation, nil
+}
 
 // featureTagBits packs a four-character ASCII feature tag into the ABI's
 // big-endian u32.
@@ -859,6 +921,7 @@ func (s *TextService) ResolveFont(descriptor FontDescriptor) (FontIdentity, erro
 		Style:         TextFontStyle(record.Style),
 		FeatureCount:  int(record.FeatureCount),
 		FallbackCount: int(record.FallbackCount),
+		FamilyFound:   record.FamilyFound != 0,
 	}, nil
 }
 

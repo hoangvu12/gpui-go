@@ -33,6 +33,10 @@ func callTextFontMetrics(fn uintptr, fontID uint64, out *FontMetricsRecord) (int
 	return 0, hostSupported()
 }
 
+func callTextFontAdd(fn uintptr, data []byte, outGeneration *uint64) (int32, error) {
+	return 0, hostSupported()
+}
+
 func callTextShape(
 	fn uintptr,
 	text []byte,

@@ -1,0 +1,32 @@
+{
+  "ticket": "03-frame-loop",
+  "effort": "gpui-base",
+  "date": "2026-10-19",
+  "result": "resolved (with follow-up ticket 33)",
+  "summary": "Automatic redraw: windows track the views their last frame rendered; Notify on a rendered view marks the window dirty and wakes it; Window.Refresh, Window.OnNextFrame, Context.OnNextFrame, RequestAnimationFrame (notify rendering view next frame), RefreshWindows; WM_PAINT runs the pinned frame request (next-frame callbacks, draw if dirty, present hook); wakes pace on DwmFlush then InvalidateRect; resize refreshes.",
+  "pinned_sources": [
+    "reference/ce-source/crates/gpui/src/app.rs:1814-1822,1896,2920-2953",
+    "reference/ce-source/crates/gpui/src/window.rs:189-240,1715-1843,2287,2613,2626-2643,2700",
+    "reference/ce-source/crates/gpui/src/app/context.rs:292",
+    "reference/ce-source/crates/gpui_windows/src/vsync.rs:22-55",
+    "reference/ce-source/crates/gpui/src/platform/test/window.rs:192-206,377-385"
+  ],
+  "implementation": {
+    "files": ["gpui/frameloop.go (new)", "gpui/frameloop_windows.go (new)", "gpui/frameloop_other.go (new)", "gpui/app.go", "gpui/render.go", "gpui/window.go", "gpui/testwindow.go", "gpui/testapp.go", "gpui/imagecache.go", "examples/hello/main.go"]
+  },
+  "tests": {
+    "added": ["TestFrameWakerFiresOnFrameDemand", "TestPendingNextFrameCallbacksAreNotStranded", "TestFrameLoopNotifyRedrawsRenderedView", "TestFrameLoopTracksNestedRenderedViews", "TestRequestAnimationFrameLoopStopsWhenIdle", "TestWindowRefreshAndRefreshWindows", "TestContextOnNextFrameAndSimulateNextFrame", "TestTestAppFrameLoopDrawsDirtyWindows", "TestFrameLoopRealWindowNotifyRepaints (real window)", "TestFrameLoopRealWindowWithoutPresentHookKeepsExplicitDraws (real window)"],
+    "upstream_ported": 2,
+    "orchestrator_rerun": [
+      {"command": "CGO_ENABLED=0 go test ./gpui -run 'TestFrame|TestPendingNextFrame|TestRequestAnimationFrameLoop|TestWindowRefreshAndRefreshWindows|TestContextOnNextFrame|TestTestAppFrameLoop' -count=2", "result": "ok"},
+      {"command": "CGO_ENABLED=0 go test ./internal/assetspec ./internal/svgspec ./internal/authorspec ./internal/accessspec ./internal/inspectorspec -count=1", "result": "ok"},
+      {"command": "CGO_ENABLED=0 go build ./examples/...", "result": "ok"}
+    ]
+  },
+  "deviations": [
+    "auto-redraw is opt-in: real windows redraw automatically only when OnRedraw (now the present step) is set; test apps only after TestApp.SetFrameLoop(true) — upstream always redraws; kept so existing manual-redraw corpora (authorspec counter, assetspec/svgspec RefreshRequested asserts) stay valid. Follow-up ticket 33 makes it the default",
+    "dirty tracking covers rendered views (not every entity read during a frame); a notify during a draw still reaches observers (upstream drops it)",
+    "pacing waits for vblank only while a wake is pending; no inactive/thermal throttling"
+  ],
+  "native_artifact": "unchanged (rev 11)"
+}

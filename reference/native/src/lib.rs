@@ -90,8 +90,13 @@ pub const GPUI_GO_ABI_VERSION: u32 = 1;
 /// the renderer's ERR_RECOVERING moved to -13 (the -12 collided with the
 /// scene service's status space), the device rebuild takes the old
 /// resources before recreating (the pin's order), and the a11y action mask
-/// decodes as a tag-presence set (all nine actions representable).
-pub const GPUI_GO_NATIVE_REVISION: u32 = 11;
+/// decodes as a tag-presence set (all nine actions representable). The
+/// consumer-gaps font-registration rebuild bumped it to 12: the text
+/// service v2 (its `text_font_add` entry in table slot 15 registers font
+/// bytes through the pinned `PlatformTextSystem::add_fonts`, the font
+/// record's v1 reserved word became the `family_found` diagnostic, the
+/// table gained the `max_font_bytes` scalar).
+pub const GPUI_GO_NATIVE_REVISION: u32 = 12;
 
 /// gpui-CE source pin this artifact family is built against (ASCII hex,
 /// zero-padded to 40 bytes in the table).

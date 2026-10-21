@@ -1,137 +1,190 @@
 package gpui
 
-// This file is the scroll-state slice of ticket14: the ScrollHandle
-// (elements/div.rs 4725-4840, bounded) — the shared scroll state a view
-// holds on behalf of a scrollable element, exposing the offset, the
-// max offset, the top/bottom visible children and child bounds, with
-// the pinned binary-search item lookup. The mouse-wheel/scrollbar
-// input plumbing arrives with the hitbox/input tickets; the list
-// elements (list.go) drive this handle from their prepaint.
+// This file is the scroll-state slice: the ScrollHandle (R:elements/
+// div.rs:4724-4943) — the shared scroll state a view holds on behalf of
+// a scrollable div, exposing the offset, the max offset, the painted
+// bounds, the top/bottom visible children and the child bounds, with the
+// pinned binary-search item lookup and the deferred scroll-to-item
+// (FirstVisible / Top strategies). The scrollable div (div.go,
+// scroll_element.go; Base ticket 07) writes the state back at prepaint
+// (R:div.rs:2392-2400, 2931-2970) and applies wheel deltas to the shared
+// offset cell at paint-registered listeners (R:div.rs:3816-3879). The
+// uniform list keeps its own ScrollStrategy (R:elements/uniform_list.rs:
+// 82-99), declared here with the shared scroll vocabulary.
+//
+// R: = reference/ce-source/crates/gpui/src (pin 254b5dbd).
 
-import "sort"
-
-// ScrollStrategy places a scrolled-to child in the viewport (the
-// reference ScrollStrategy).
+// ScrollStrategy places a scrolled-to uniform-list item in the viewport
+// (R:uniform_list.rs:82-99 ScrollStrategy).
 type ScrollStrategy uint8
 
 const (
-	// ScrollTop places the child at the top of the viewport.
+	// ScrollTop places the item at the top of the viewport.
 	ScrollTop ScrollStrategy = iota
-	// ScrollCenter places the child in the middle of the viewport when
-	// the content allows (else the closest position).
+	// ScrollCenter places the item in the middle of the viewport when the
+	// content allows (else the closest position).
 	ScrollCenter
-	// ScrollBottom places the child at the bottom of the viewport when
-	// the content allows (else the closest position).
+	// ScrollBottom places the item at the bottom of the viewport when the
+	// content allows (else the closest position).
 	ScrollBottom
-	// ScrollNearest scrolls the minimum distance that reveals the
-	// child (top when it is above the viewport, bottom when below).
+	// ScrollNearest scrolls the minimum distance that reveals the item
+	// (top when it is above the viewport, bottom when below).
 	ScrollNearest
 )
 
-// scrollHandleState is the handle's shared state (the reference
-// ScrollHandleState, bounded to the offset/bounds/children surface).
-type scrollHandleState struct {
-	// offset is the current scroll offset (negative y scrolls down).
-	offset Point
-	// maxOffset is the maximum scroll offset (content - viewport,
-	// clamped at zero).
-	maxOffset Point
-	// bounds is the scrollable element's painted bounds.
-	bounds Bounds
-	// childBounds are the children's layout bounds in window-local
-	// pixels (the reference stores them scrolled-in-view).
-	childBounds []Bounds
-	// pendingScrollToItem is the deferred scroll-to target consumed by
-	// the next prepaint (the reference ScrollActiveItem).
-	pendingScrollToItem *scrollActiveItem
-}
+// divScrollStrategy is the div scroll handle's private strategy
+// (R:div.rs:4742-4747 ScrollStrategy: FirstVisible is the default).
+type divScrollStrategy uint8
 
-// scrollActiveItem is one deferred scroll-to request.
+const (
+	// divScrollFirstVisible scrolls the minimal amount that fully reveals
+	// the child (R:div.rs:4745).
+	divScrollFirstVisible divScrollStrategy = iota
+	// divScrollTop places the child's top at the viewport top
+	// (R:div.rs:4746).
+	divScrollTop
+)
+
+// scrollActiveItem is one deferred scroll-to request (R:div.rs:4736-4740
+// ScrollActiveItem).
 type scrollActiveItem struct {
 	index    int
-	strategy ScrollStrategy
+	strategy divScrollStrategy
+}
+
+// scrollHandleState is the handle's shared state (R:div.rs:4724-4734
+// ScrollHandleState). offset and ongoingScroll are cells shared with the
+// tracking element (the pinned Rc<RefCell<..>> fields): the element's
+// wheel listener writes the offset cell directly.
+type scrollHandleState struct {
+	// offset is the current scroll offset cell (negative y scrolls down).
+	offset *Point
+	// ongoingScroll is the dominant-axis tracker the element's
+	// restrict_scroll_to_axis filter uses (R:div.rs:4727).
+	ongoingScroll *OngoingScroll
+	// bounds is the scrollable element's prepainted bounds.
+	bounds Bounds
+	// maxOffset is the maximum scroll distance per axis (content plus
+	// padding minus the bounds, rounded to two decimals and clamped at
+	// zero; R:div.rs:2953-2955). Positive: the offset ranges over
+	// [-maxOffset, 0].
+	maxOffset Point
+	// childBounds are the children's layout bounds at the element's
+	// prepaint, before the scroll offset is applied (R:div.rs:2394-2399).
+	childBounds []Bounds
+	// scrollToBottom is the pending scroll-to-bottom request
+	// (R:div.rs:4731).
+	scrollToBottom bool
+	// overflowX and overflowY are the element's last computed overflow
+	// (R:div.rs:4732, written at R:div.rs:2932).
+	overflowX, overflowY Overflow
+	// activeItem is the deferred scroll-to target (R:div.rs:4733).
+	activeItem *scrollActiveItem
 }
 
 // ScrollHandle is a handle to the scrollable aspects of an element
-// (div.rs ScrollHandle): views hold it and pass it to the scrollable
-// element; it exposes the scroll state and mutates the offset.
+// (R:div.rs:4749-4753 ScrollHandle): views hold it and pass it to the
+// scrollable element with DivElement.TrackScroll; it exposes the scroll
+// state and mutates the offset. Copies share the state (the pinned
+// Rc clone). The zero value is unusable; construct with NewScrollHandle.
 type ScrollHandle struct {
 	state *scrollHandleState
 }
 
-// NewScrollHandle constructs a new scroll handle (ScrollHandle::new).
+// NewScrollHandle constructs a new scroll handle (R:div.rs:4762-4765
+// ScrollHandle::new).
 func NewScrollHandle() ScrollHandle {
-	return ScrollHandle{state: &scrollHandleState{}}
+	return ScrollHandle{state: &scrollHandleState{offset: &Point{}, ongoingScroll: &OngoingScroll{}}}
 }
 
-// Offset returns the current scroll offset (ScrollHandle::offset).
+// Offset returns the current scroll offset (R:div.rs:4767-4770).
 func (h ScrollHandle) Offset() Point {
-	return h.state.offset
+	return *h.state.offset
 }
 
-// MaxOffset returns the maximum scroll offset (content minus viewport,
-// zero when the content fits; ScrollHandle::max_offset).
+// MaxOffset returns the maximum scroll offset (R:div.rs:4772-4775).
 func (h ScrollHandle) MaxOffset() Point {
 	return h.state.maxOffset
 }
 
-// SetOffset sets the scroll offset (ScrollHandle::set_offset; the
-// scrollable element clamps it against the content size at the next
-// prepaint).
-func (h ScrollHandle) SetOffset(offset Point) {
-	h.state.offset = offset
+// pinnedBinarySearch is Rust's slice::binary_search_by over n elements
+// with the comparator cmp(i) (<0 Less, 0 Equal, >0 Greater): it returns
+// (index, true) for a match and (insertion point, false) otherwise. The
+// probe sequence is the standard library's (base advances while the
+// probe is not Greater), so ties between adjacent Equal children resolve
+// identically.
+func pinnedBinarySearch(n int, cmp func(i int) int) (int, bool) {
+	size := n
+	if size == 0 {
+		return 0, false
+	}
+	base := 0
+	for size > 1 {
+		half := size / 2
+		mid := base + half
+		if cmp(mid) <= 0 {
+			base = mid
+		}
+		size -= half
+	}
+	c := cmp(base)
+	if c == 0 {
+		return base, true
+	}
+	if c < 0 {
+		return base + 1, false
+	}
+	return base, false
 }
 
-// Bounds returns the scrollable element's painted bounds
-// (ScrollHandle::bounds).
+// itemAt is the shared body of top_item / bottom_item: the child whose
+// vertical range contains y, else the insertion point clamped to the last
+// child (R:div.rs:4782-4793).
+func (h ScrollHandle) itemAt(y float32) int {
+	children := h.state.childBounds
+	ix, found := pinnedBinarySearch(len(children), func(i int) int {
+		bounds := children[i]
+		if y < bounds.Top() {
+			return 1
+		}
+		if y > bounds.Bottom() {
+			return -1
+		}
+		return 0
+	})
+	if found {
+		return ix
+	}
+	last := len(children) - 1
+	if last < 0 {
+		last = 0
+	}
+	if ix > last {
+		return last
+	}
+	return ix
+}
+
+// TopItem returns the topmost child scrolled into view
+// (R:div.rs:4777-4794 top_item).
+func (h ScrollHandle) TopItem() int {
+	return h.itemAt(h.state.bounds.Top() - h.state.offset.Y)
+}
+
+// BottomItem returns the bottom-most child scrolled into view
+// (R:div.rs:4796-4813 bottom_item).
+func (h ScrollHandle) BottomItem() int {
+	return h.itemAt(h.state.bounds.Bottom() - h.state.offset.Y)
+}
+
+// Bounds returns the bounds into which the scrollable element is painted
+// (R:div.rs:4815-4818).
 func (h ScrollHandle) Bounds() Bounds {
 	return h.state.bounds
 }
 
-// TopItem returns the topmost child scrolled into view (the pinned
-// top_item binary search: the child whose y range contains the
-// viewport's top edge, else the nearest index).
-func (h ScrollHandle) TopItem() int {
-	state := h.state
-	top := state.bounds.Top() - state.offset.Y
-	ix := sort.Search(len(state.childBounds), func(i int) bool {
-		bounds := state.childBounds[i]
-		return top <= bounds.Bottom()
-	})
-	if ix < len(state.childBounds) && top < state.childBounds[ix].Top() {
-		// The viewport top is before this child's top: the search's
-		// insertion point IS the answer (the reference's Err arm).
-		return ix
-	}
-	if ix >= len(state.childBounds) {
-		if len(state.childBounds) == 0 {
-			return 0
-		}
-		return len(state.childBounds) - 1
-	}
-	return ix
-}
-
-// BottomItem returns the bottom-most child scrolled into view (the
-// pinned bottom_item binary search).
-func (h ScrollHandle) BottomItem() int {
-	state := h.state
-	bottom := state.bounds.Bottom() - state.offset.Y
-	ix := sort.Search(len(state.childBounds), func(i int) bool {
-		bounds := state.childBounds[i]
-		return bottom <= bounds.Bottom()
-	})
-	if ix >= len(state.childBounds) {
-		if len(state.childBounds) == 0 {
-			return 0
-		}
-		return len(state.childBounds) - 1
-	}
-	return ix
-}
-
-// BoundsForItem returns the painted bounds of child ix
-// (ScrollHandle::bounds_for_item).
+// BoundsForItem returns the layout bounds of child ix
+// (R:div.rs:4820-4823 bounds_for_item).
 func (h ScrollHandle) BoundsForItem(ix int) (Bounds, bool) {
 	if ix < 0 || ix >= len(h.state.childBounds) {
 		return Bounds{}, false
@@ -139,64 +192,101 @@ func (h ScrollHandle) BoundsForItem(ix int) (Bounds, bool) {
 	return h.state.childBounds[ix], true
 }
 
-// ScrollToItem defers a scroll that brings item ix into view under
-// the strategy (ScrollHandle::scroll_to_item), applied by the
-// scrollable element's next prepaint.
-func (h ScrollHandle) ScrollToItem(ix int, strategy ScrollStrategy) {
-	h.state.pendingScrollToItem = &scrollActiveItem{index: ix, strategy: strategy}
+// ScrollToItem defers a scroll that fully reveals child ix with the
+// minimal movement, applied at the element's next prepaint
+// (R:div.rs:4825-4832 scroll_to_item, FirstVisible).
+func (h ScrollHandle) ScrollToItem(ix int) {
+	h.state.activeItem = &scrollActiveItem{index: ix, strategy: divScrollFirstVisible}
 }
 
-// scrollTo computes the offset that places childBounds under the
-// strategy within the scroll bounds (the pinned scroll_to placement
-// math: top/center/bottom/nearest offsets clamped to [max, 0]).
-func (h ScrollHandle) scrollTo(bounds, child Bounds, strategy ScrollStrategy) Point {
+// ScrollToTopOfItem defers a scroll that places child ix at the top of
+// the viewport (R:div.rs:4834-4842 scroll_to_top_of_item).
+func (h ScrollHandle) ScrollToTopOfItem(ix int) {
+	h.state.activeItem = &scrollActiveItem{index: ix, strategy: divScrollTop}
+}
+
+// scrollToActiveItem applies the deferred scroll-to request against the
+// last prepaint's bounds, children and overflow (R:div.rs:4844-4893). A
+// request for a child that does not exist yet stays pending.
+func (h ScrollHandle) scrollToActiveItem() {
 	state := h.state
-	maxY := minZero32(state.maxOffset.Y)
-	var target float32
-	switch strategy {
-	case ScrollTop:
-		target = minZero32(maxY + (child.Top() - bounds.Top()))
-	case ScrollCenter:
-		viewport := bounds.Size.Height
-		target = minZero32(maxY + (child.Top() - bounds.Top()) - (viewport-child.Size.Height)/2)
-	case ScrollBottom:
-		viewport := bounds.Size.Height
-		target = minZero32(maxY + (child.Bottom() - bounds.Bottom()) + (viewport - child.Size.Height))
-	case ScrollNearest:
-		if child.Top() < bounds.Top() {
-			target = minZero32(maxY + (child.Top() - bounds.Top()))
-		} else if child.Bottom() > bounds.Bottom() {
-			viewport := bounds.Size.Height
-			target = minZero32(maxY + (child.Bottom() - bounds.Bottom()) + (viewport - child.Size.Height))
-		} else {
-			target = minZero32(state.offset.Y)
+	active := state.activeItem
+	if active == nil {
+		return
+	}
+	if active.index < 0 || active.index >= len(state.childBounds) {
+		return
+	}
+	bounds := state.childBounds[active.index]
+	offset := state.offset
+	switch active.strategy {
+	case divScrollFirstVisible:
+		if state.overflowY == OverflowScroll {
+			childHeight := bounds.Size.Height
+			viewportHeight := state.bounds.Size.Height
+			if childHeight > viewportHeight {
+				offset.Y = state.bounds.Top() - bounds.Top()
+			} else if bounds.Top()+offset.Y < state.bounds.Top() {
+				offset.Y = state.bounds.Top() - bounds.Top()
+			} else if bounds.Bottom()+offset.Y > state.bounds.Bottom() {
+				offset.Y = state.bounds.Bottom() - bounds.Bottom()
+			}
+		}
+	case divScrollTop:
+		offset.Y = state.bounds.Top() - bounds.Top()
+	}
+	if state.overflowX == OverflowScroll {
+		childWidth := bounds.Size.Width
+		viewportWidth := state.bounds.Size.Width
+		if childWidth > viewportWidth {
+			offset.X = state.bounds.Left() - bounds.Left()
+		} else if bounds.Left()+offset.X < state.bounds.Left() {
+			offset.X = state.bounds.Left() - bounds.Left()
+		} else if bounds.Right()+offset.X > state.bounds.Right() {
+			offset.X = state.bounds.Right() - bounds.Right()
 		}
 	}
-	target = max32(target, minZero32(maxY))
-	return Point{X: state.offset.X, Y: target}
+	state.activeItem = nil
 }
 
-// consumePendingScrollTo applies and clears the deferred scroll-to
-// request against the current state (used by the scrollable elements'
-// prepaint).
-func (h ScrollHandle) consumePendingScrollTo(bounds Bounds, childBoundsAt func(ix int) (Bounds, bool)) (Point, bool) {
-	pending := h.state.pendingScrollToItem
-	if pending == nil {
-		return Point{}, false
-	}
-	h.state.pendingScrollToItem = nil
-	child, ok := childBoundsAt(pending.index)
-	if !ok {
-		return Point{}, false
-	}
-	h.state.offset = h.scrollTo(bounds, child, pending.strategy)
-	return h.state.offset, true
+// ScrollToBottom scrolls to the bottom at the element's next prepaint
+// (R:div.rs:4895-4899 scroll_to_bottom).
+func (h ScrollHandle) ScrollToBottom() {
+	h.state.scrollToBottom = true
 }
 
-// minZero32 clamps a negative value to zero.
-func minZero32(v float32) float32 {
-	if v < 0 {
-		return 0
+// SetOffset sets the offset explicitly: the distance from the top left of
+// the parent container to the top left of the first child, more negative
+// as the content scrolls further down (R:div.rs:4901-4907). The
+// scrollable element clamps it at its next prepaint.
+func (h ScrollHandle) SetOffset(offset Point) {
+	*h.state.offset = offset
+}
+
+// LogicalScrollTop returns the top child index and the pixel offset of
+// its top from the viewport top (R:div.rs:4909-4922).
+func (h ScrollHandle) LogicalScrollTop() (int, float32) {
+	ix := h.TopItem()
+	state := h.state
+	if ix >= 0 && ix < len(state.childBounds) {
+		return ix, state.childBounds[ix].Top() + state.offset.Y - state.bounds.Top()
 	}
-	return v
+	return ix, 0
+}
+
+// LogicalScrollBottom returns the bottom child index and the pixel offset
+// of its bottom from the viewport bottom (R:div.rs:4924-4937).
+func (h ScrollHandle) LogicalScrollBottom() (int, float32) {
+	ix := h.BottomItem()
+	state := h.state
+	if ix >= 0 && ix < len(state.childBounds) {
+		return ix, state.childBounds[ix].Bottom() + state.offset.Y - state.bounds.Bottom()
+	}
+	return ix, 0
+}
+
+// ChildrenCount returns the number of tracked children
+// (R:div.rs:4939-4942 children_count).
+func (h ScrollHandle) ChildrenCount() int {
+	return len(h.state.childBounds)
 }

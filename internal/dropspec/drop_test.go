@@ -105,7 +105,7 @@ func (v *dropSurface) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement 
 		rec.dropped = append(rec.dropped, *paths)
 		rec.mu.Unlock()
 	})
-	d = d.OnMouseMove(func(event *gpui.MouseMoveEvent, phase gpui.DispatchPhase, hitbox *gpui.Hitbox, w *gpui.Window, app *gpui.App) {
+	d = d.OnMouseMoveAll(func(event *gpui.MouseMoveEvent, phase gpui.DispatchPhase, hitbox *gpui.Hitbox, w *gpui.Window, app *gpui.App) {
 		if phase == gpui.DispatchBubble && hitbox.IsHovered(w) {
 			rec.mu.Lock()
 			rec.moves = append(rec.moves, fmt.Sprintf("move(%.1f,%.1f)", event.Position.X, event.Position.Y))

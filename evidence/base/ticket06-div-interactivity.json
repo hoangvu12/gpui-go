@@ -1,0 +1,93 @@
+{
+  "ticket": "06-div-interactivity",
+  "effort": "gpui-base",
+  "date": "2026-10-19",
+  "result": "implemented; host/draw/key wiring requested from the owning slices",
+  "summary": "Div click synthesis (mouse pairing + Enter/Space keyboard activation), ClickEvent enum with the pinned accessors, on_mouse_down / capture_any_mouse_down / on_any_mouse_down / on_mouse_down_out / on_mouse_down_all / on_mouse_up_out / capture_any_mouse_up / on_any_mouse_up / on_mouse_up_all / on_mouse_move_all, on_aux_click, on_hover, on_drag / on_drag_alt / on_drag_move + DragMoveEvent with the 2px threshold, hover / group_hover / active / group_active / focus / in_focus / focus_visible styles, group hitboxes, should_insert_hitbox, per-hitbox and window cursor requests with reset_cursor_style on hit-test change, capture_pointer / release_pointer, the active-drag preview helpers, hidden divs registering nothing, the div dispatch node popped and its tab group closed after its children, and the Win32 SetCapture / ReleaseCapture button handlers with the ClickState double-click counter.",
+  "pinned_sources": [
+    "reference/ce-source/crates/gpui/src/interactive.rs:218-449",
+    "reference/ce-source/crates/gpui/src/elements/div.rs:65,70-103,135-412,674-743,788,854,900-1001,1027-1207,1459-1490,1786-1808,2569-2911,2986-3125,3253-3814,3904-4063,4165-4223,4548-4573,5084-5301,5609-5688,5767-6035",
+    "reference/ce-source/crates/gpui/src/window.rs:748-753,880-915,1200-1213,2791-2801,3098-3110,3439-3475,3844-3862,5684-5693,5739-5760,6081-6136",
+    "reference/ce-source/crates/gpui/src/element.rs:468,505,572",
+    "reference/ce-source/crates/gpui/src/platform.rs:3189-3273",
+    "reference/ce-source/crates/gpui_windows/src/events.rs:138-149,489-559,1220",
+    "reference/ce-source/crates/gpui_windows/src/window.rs:1351-1418",
+    "reference/ce-source/crates/gpui_windows/src/util.rs:89-127,147-152"
+  ],
+  "implementation": {
+    "files": [
+      "gpui/interact.go (new)",
+      "gpui/interact_mixin.go (new)",
+      "gpui/interact_test.go (new)",
+      "gpui/interact_windows_test.go (new)",
+      "gpui/div.go",
+      "gpui/mouseevent.go",
+      "gpui/filedrop.go",
+      "gpui/desktop.go",
+      "gpui/desktop_windows.go",
+      "gpui/desktop_input_windows.go",
+      "gpui/styled_cursor.go (deleted; its four CursorStyle variants moved into desktop.go)"
+    ]
+  },
+  "tests": {
+    "added_top_level": 21,
+    "upstream_ported": 10,
+    "upstream_deviated": 2,
+    "upstream_not_applicable": 4,
+    "notes": "ported: hover_listeners_update_when_layout_changes_under_stationary_mouse, hover_listeners_remain_hovered_during_stationary_mouse_press, the 7 keyboard_activation_* tests, focus_next_from_tab_group_container_enters_that_group. deviated: group_hover_styles_update_only_on_transitions (render count observed as the root view's notification count, the canvas paint count as the member's painted quad: no canvas element yet), mouse_down_out_is_suppressed_while_window_prompt_is_active (the prompt half is n/a: no in-window prompt in the port; the down-out half is ported). n/a: the 4 tooltip tests (tooltips are not in this ticket). window.rs drag tests stay ticket24's (platform drag).",
+    "commands": [
+      {
+        "command": "CGO_ENABLED=0 go test ./gpui -run 'TestInteract' -count=1",
+        "result": "ok (21 tests, 29 PASS lines with subtests)"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./gpui -run 'TestInteract|TestStyled|TestStyleRefinementPinned|TestStyleSnapshot|TestDivPaint|TestInvisibleDiv|TestOverflowMask|TestDebugOutline|TestComponent|TestFluent|TestDivID|TestCursor|TestFileDrop|TestRealDoDragDrop|TestDropTarget|TestInspector|TestA11y|TestAccessib|TestFocus|TestKey|TestTab|TestHelper|TestFrameLoop' -count=1",
+        "result": "ok"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./internal/dropspec ./internal/focusspec -count=1",
+        "result": "ok"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./internal/listspec -count=1",
+        "result": "FAIL: double renders from the flush auto-draw (drawDirtyTestWindowsInFlush, ticket 33's in-flight migration; the stacks contain no ticket-06 code)"
+      },
+      {
+        "command": "CGO_ENABLED=0 go vet ./gpui",
+        "result": "clean"
+      },
+      {
+        "command": "gofmt -l gpui/",
+        "result": "clean"
+      }
+    ]
+  },
+  "deviations": [
+    "ClickEvent is a Kind-tagged struct (FileDropEvent's convention); the zero value is Keyboard like ClickEvent::default()",
+    "the StatefulInteractiveElement type restriction (on_click, on_aux_click, on_drag, on_hover, active, group_active need .id()) is a prepaint panic for an id-less div",
+    "the port's OnMouseMove / OnMouseUp keep their pre-existing all-events shape (= on_mouse_move_all / on_mouse_up_all); the pinned hover-gated on_mouse_move and button-filtered on_mouse_up are not spelled yet (callers in fluent.go, internal/dropspec, filedrop_windows_test.go)",
+    "dispatch-tree registrations (key listeners, actions, tab stops, keyboard click) stay at prepaint (key_dispatch.go design); a hidden div and its subtree suppress them there; mouse listeners and cursor requests moved to paint like the pin",
+    "cursor requests live in a per-window side table keyed by the frame under construction; the paint-time hit test (window.rs:3459) is computed by the first div paint of the frame",
+    "the pinned dispatch_event resets default_prevented per event; the keyboard entry does not yet, so the mouse path clears it after capturing its result",
+    "not ported: tooltips, mouse-exit / pressure listeners, drop predicates and drag-over styles, style transitions, window control areas, external_drag_payload, prompts (has_active_prompt is false)",
+    "ClosedHand / OpenHand / DragCopy / ContextualMenu load IDC_ARROW on Windows, exactly the pinned util.rs:114 catch-all"
+  ],
+  "requested_changes_outside_ticket": [
+    "render.go drawRoots: prepaintActiveDragPreview after the root (and inspector) prepaint and paintActiveDragPreview after the root paint (window.rs:3451-3456, 3474-3475); completeFrame: w.resetCursorStyle(app) after the frame-finish hook (window.rs:3277)",
+    "key_dispatch.go dispatchKeyEvent: call w.beginPlatformInputDispatch(event, app) first (window.rs:5746-5760: keyboard modality for focus-visible and hover suppression, default_prevented reset)",
+    "win32host_windows.go windowWndProc: route WM_[LRMX]BUTTON(DOWN|UP) to w.handleMouseButtonMsg(message, wparam, lp, w.onMouseInput); add hostWindow.onMouseInput + WindowOptions.OnMouseInput; WM_NCDESTROY forgetWin32ClickState(w); WM_SETTINGCHANGE w.clickState().systemUpdate(wparam) (events.rs:1220); WM_MOUSEMOVE translation (events.rs:371-398) is still unported",
+    "window.go OpenWindow: hostOpts.OnMouseInput = dispatch through window.dispatchInput inside a.Update, returning !result.Propagate"
+  ],
+  "native_artifact": "unchanged (rev 11)",
+  "orchestrator_rerun": [
+    {
+      "command": "CGO_ENABLED=0 go test ./gpui -run TestInteract -count=2",
+      "result": "ok"
+    },
+    {
+      "command": "CGO_ENABLED=0 go test ./internal/dropspec ./internal/focusspec ./internal/scenespec ./internal/layoutspec -count=1",
+      "result": "ok"
+    }
+  ],
+  "orchestrator_finding": "Real Win32 windows never route WM_*BUTTONDOWN/UP to element dispatch (grep: no WM_LBUTTONDOWN handling in gpui/win32host_windows.go); the core's input evidence used synthetic dispatch. Owned by ticket 34 together with the render.go/key_dispatch.go/window.go wiring listed by the worker."
+}

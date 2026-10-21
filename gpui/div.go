@@ -27,23 +27,20 @@ package gpui
 //     bounds layer, the row placement (baseline = (line_height - ascent -
 //     descent)/2 + ascent) and the per-glyph paint calls.
 //
-// Bounds of this slice (deliberate, separate tickets): hitboxes, mouse
-// listeners, focus routing and key contexts are ticket13; scroll handles
-// are ticket14; inline layout is ticket15. The div stores what those
-// tickets need (the focus handle, the key context, the listeners) without
-// dispatching anything.
+// Focus routing and key contexts landed with ticket13, hitboxes and the
+// mouse listener dispatch with ticket24, inline layout with ticket15.
+// Base ticket 06 (interact.go) adds the interactive element state, click
+// synthesis, the mouse-down / up-out / hover / drag builders, the state
+// styles and the cursor requests; Base ticket 07 (scroll_element.go)
+// adds overflow scrolling: the scroll offset resolved at request layout,
+// the content size and clamp at prepaint (children prepaint and paint
+// under the scroll offset), and the default wheel listener at paint.
 
 import (
 	"fmt"
 	"reflect"
-
-	"github.com/hoangvu12/gpui-go/authoring"
+	"slices"
 )
-
-// StyleRefinement is the authoring style refinement the div composes
-// with (the shared authoring type identity, avoiding a root/authoring
-// dependency cycle).
-type StyleRefinement = authoring.StyleRefinement
 
 // ---------------------------------------------------------------------------
 // The text style stack (style.rs TextStyle / TextStyleRefinement)
@@ -73,31 +70,56 @@ const (
 	WhiteSpaceNowrap
 )
 
-// TextStyle is the resolved text style of an element (the reference
-// TextStyle): the fields this slice's text element consumes.
+// TextStyle is the resolved text style of an element (style.rs:590-646
+// TextStyle). The text element consumes the color, font, size, line
+// height, alignment and white space; the remaining pinned fields
+// (background color, underline, strikethrough, truncation, line clamp,
+// letter spacing, case transform) are resolved and cascaded here for
+// the text tickets that consume them.
 type TextStyle struct {
 	// Color is the text color.
 	Color Hsla
 	// FontFamily is the font family (".SystemUIFont" by default).
 	FontFamily string
-	// FontWeight is the font weight (400 by default).
-	FontWeight float32
-	// FontStyle is the font style (Normal by default).
-	FontStyle FontStyle
+	// FontFeatures are the OpenType feature settings.
+	FontFeatures []FontFeature
+	// FontFallbacks are the fallback families (nil is the pinned None).
+	FontFallbacks []string
 	// FontSize is the font size in pixels or rems (1rem by default).
 	FontSize AbsoluteLength
 	// LineHeight is the line height in pixels, rems or a relative
 	// fraction (the golden ratio by default).
 	LineHeight DefiniteLength
-	// TextAlign is the alignment within the element.
-	TextAlign TextAlign
+	// FontWeight is the font weight (400 by default).
+	FontWeight float32
+	// FontStyle is the font style (Normal by default).
+	FontStyle FontStyle
+	// BackgroundColor is the text background color (nil = None).
+	BackgroundColor *Hsla
+	// Underline is the underline style (nil = None).
+	Underline *UnderlineStyle
+	// Strikethrough is the strikethrough style (nil = None).
+	Strikethrough *StrikethroughStyle
 	// WhiteSpace is the wrapping mode.
 	WhiteSpace WhiteSpace
+	// TextOverflow is the truncation behavior (nil = None).
+	TextOverflow *TextOverflow
+	// TextAlign is the alignment within the element.
+	TextAlign TextAlign
+	// LineClamp is the number of lines shown before truncating (nil =
+	// None).
+	LineClamp *int
+	// LetterSpacing is the extra spacing between characters in pixels
+	// (nil = None).
+	LetterSpacing *float32
+	// TextTransform is the layout-time case mapping (nil = None).
+	TextTransform *TextTransform
 }
 
-// DefaultTextStyle returns the reference TextStyle::default(): black
-// text, the system UI font at 1rem, the golden-ratio line height,
-// left-aligned normal white space.
+// DefaultTextStyle returns the reference TextStyle::default()
+// (style.rs:648-671): black text, the system UI font at 1rem, the
+// golden-ratio line height, normal weight and style, left-aligned
+// normal white space, and every optional field None.
 func DefaultTextStyle() TextStyle {
 	return TextStyle{
 		Color:      Hsla{H: 0, S: 0, L: 0, A: 1},
@@ -112,53 +134,106 @@ func DefaultTextStyle() TextStyle {
 }
 
 // TextStyleRefinement is the text style refinement an element cascades
-// to its children (the reference TextStyleRefinement; the fields this
-// slice consumes). Absent fields leave the previous values unchanged.
+// to its children (the derived TextStyleRefinement of style.rs:591).
+// Absent fields leave the previous values unchanged; the pinned Option
+// fields of TextStyle refine as Optional of their inner type.
 type TextStyleRefinement struct {
-	// Color refines the text color.
-	Color *Hsla
-	// FontFamily refines the font family.
-	FontFamily *string
-	// FontWeight refines the font weight.
-	FontWeight *float32
-	// FontStyle refines the font style.
-	FontStyle *FontStyle
-	// FontSize refines the font size.
-	FontSize *AbsoluteLength
-	// LineHeight refines the line height.
-	LineHeight *DefiniteLength
-	// TextAlign refines the alignment.
-	TextAlign *TextAlign
-	// WhiteSpace refines the wrapping mode.
-	WhiteSpace *WhiteSpace
+	Color           Optional[Hsla]
+	FontFamily      Optional[string]
+	FontFeatures    Optional[[]FontFeature]
+	FontFallbacks   Optional[[]string]
+	FontSize        Optional[AbsoluteLength]
+	LineHeight      Optional[DefiniteLength]
+	FontWeight      Optional[float32]
+	FontStyle       Optional[FontStyle]
+	BackgroundColor Optional[Hsla]
+	Underline       Optional[UnderlineStyle]
+	Strikethrough   Optional[StrikethroughStyle]
+	WhiteSpace      Optional[WhiteSpace]
+	TextOverflow    Optional[TextOverflow]
+	TextAlign       Optional[TextAlign]
+	LineClamp       Optional[int]
+	LetterSpacing   Optional[float32]
+	TextTransform   Optional[TextTransform]
 }
 
-// Refine applies the explicitly supplied fields onto style.
+// Refine applies the explicitly supplied fields onto style (the derived
+// Refineable::refine for TextStyle).
 func (r *TextStyleRefinement) Refine(style *TextStyle) {
-	if r.Color != nil {
-		style.Color = *r.Color
+	refineValue(&style.Color, r.Color)
+	refineValue(&style.FontFamily, r.FontFamily)
+	if v, ok := r.FontFeatures.Get(); ok {
+		style.FontFeatures = slices.Clone(v)
 	}
-	if r.FontFamily != nil {
-		style.FontFamily = *r.FontFamily
+	if v, ok := r.FontFallbacks.Get(); ok {
+		style.FontFallbacks = slices.Clone(v)
 	}
-	if r.FontWeight != nil {
-		style.FontWeight = *r.FontWeight
+	refineValue(&style.FontSize, r.FontSize)
+	refineValue(&style.LineHeight, r.LineHeight)
+	refineValue(&style.FontWeight, r.FontWeight)
+	refineValue(&style.FontStyle, r.FontStyle)
+	refinePointer(&style.BackgroundColor, r.BackgroundColor)
+	refinePointer(&style.Underline, r.Underline)
+	refinePointer(&style.Strikethrough, r.Strikethrough)
+	refineValue(&style.WhiteSpace, r.WhiteSpace)
+	refinePointer(&style.TextOverflow, r.TextOverflow)
+	refineValue(&style.TextAlign, r.TextAlign)
+	refinePointer(&style.LineClamp, r.LineClamp)
+	refinePointer(&style.LetterSpacing, r.LetterSpacing)
+	refinePointer(&style.TextTransform, r.TextTransform)
+}
+
+// Merge applies the present fields of other onto r (the derived
+// Refineable::refine for TextStyleRefinement; named Merge because Refine
+// applies a refinement onto a TextStyle).
+func (r *TextStyleRefinement) Merge(other *TextStyleRefinement) {
+	if other == nil {
+		return
 	}
-	if r.FontStyle != nil {
-		style.FontStyle = *r.FontStyle
+	mergeOptional(&r.Color, other.Color)
+	mergeOptional(&r.FontFamily, other.FontFamily)
+	if v, ok := other.FontFeatures.Get(); ok {
+		r.FontFeatures = Some(slices.Clone(v))
 	}
-	if r.FontSize != nil {
-		style.FontSize = *r.FontSize
+	if v, ok := other.FontFallbacks.Get(); ok {
+		r.FontFallbacks = Some(slices.Clone(v))
 	}
-	if r.LineHeight != nil {
-		style.LineHeight = *r.LineHeight
+	mergeOptional(&r.FontSize, other.FontSize)
+	mergeOptional(&r.LineHeight, other.LineHeight)
+	mergeOptional(&r.FontWeight, other.FontWeight)
+	mergeOptional(&r.FontStyle, other.FontStyle)
+	mergeOptional(&r.BackgroundColor, other.BackgroundColor)
+	mergeOptional(&r.Underline, other.Underline)
+	mergeOptional(&r.Strikethrough, other.Strikethrough)
+	mergeOptional(&r.WhiteSpace, other.WhiteSpace)
+	mergeOptional(&r.TextOverflow, other.TextOverflow)
+	mergeOptional(&r.TextAlign, other.TextAlign)
+	mergeOptional(&r.LineClamp, other.LineClamp)
+	mergeOptional(&r.LetterSpacing, other.LetterSpacing)
+	mergeOptional(&r.TextTransform, other.TextTransform)
+}
+
+// IsSome reports whether any field is present (the derived
+// Refineable is_some, used by Style::text_style).
+func (r *TextStyleRefinement) IsSome() bool {
+	return r.Color.present || r.FontFamily.present || r.FontFeatures.present ||
+		r.FontFallbacks.present || r.FontSize.present || r.LineHeight.present ||
+		r.FontWeight.present || r.FontStyle.present || r.BackgroundColor.present ||
+		r.Underline.present || r.Strikethrough.present || r.WhiteSpace.present ||
+		r.TextOverflow.present || r.TextAlign.present || r.LineClamp.present ||
+		r.LetterSpacing.present || r.TextTransform.present
+}
+
+// Clone returns an independent copy (the slice-valued fields copied).
+func (r TextStyleRefinement) Clone() TextStyleRefinement {
+	out := r
+	if v, ok := r.FontFeatures.Get(); ok {
+		out.FontFeatures = Some(slices.Clone(v))
 	}
-	if r.TextAlign != nil {
-		style.TextAlign = *r.TextAlign
+	if v, ok := r.FontFallbacks.Get(); ok {
+		out.FontFallbacks = Some(slices.Clone(v))
 	}
-	if r.WhiteSpace != nil {
-		style.WhiteSpace = *r.WhiteSpace
-	}
+	return out
 }
 
 // FontSizePixels resolves the font size against the window rem size
@@ -182,12 +257,15 @@ func (t TextStyle) LineHeightPixels(fontSize, rem float32) float32 {
 }
 
 // FontDescriptorOf builds the shaping font descriptor of this text
-// style (TextStyle::font / to_run).
+// style (style.rs:708 TextStyle::font / to_run: family, features,
+// fallbacks, weight, style).
 func (t TextStyle) FontDescriptorOf() FontDescriptor {
 	return FontDescriptor{
-		Family: t.FontFamily,
-		Weight: t.FontWeight,
-		Style:  t.FontStyle,
+		Family:    t.FontFamily,
+		Weight:    t.FontWeight,
+		Style:     t.FontStyle,
+		Features:  slices.Clone(t.FontFeatures),
+		Fallbacks: slices.Clone(t.FontFallbacks),
 	}
 }
 
@@ -203,6 +281,12 @@ type windowTextSystem interface {
 	// shape shapes the text at the resolved font size with one style run
 	// of the given font, under the optional wrap width and line clamp.
 	shape(text string, fontSize float32, font FontDescriptor, wrapWidth *float32, lineClamp *uint32) (shapedText, error)
+	// finishFrame ends one frame's shaped-line usage (the reference
+	// WindowTextSystem::finish_frame, called by the window draw's tail):
+	// the window's line-layout cache rotates — the lines the frame
+	// requested survive into the next frame's previous-frame cache, the
+	// rest release. A stateless test system has nothing to rotate.
+	finishFrame()
 	// layoutInline lays out one inline document (text plus atomic
 	// element boxes) in one inline formatting context (the reference
 	// PlatformTextSystem::layout_inline). Go owns the algorithm on both
@@ -253,14 +337,23 @@ type shapedText interface {
 
 // realWindowTextSystem is the real text stack seam: shaping through the
 // port's TextSystem and painting through the scene's shaped-text paint
-// path (PaintShapedText) with the window's atlas.
+// path (PaintShapedText) with the window's atlas. It is the reference
+// WindowTextSystem: one per window, carrying the window's line-layout
+// cache (text_cache.go, the reference LineLayoutCache) so shaped lines
+// are reused across frames instead of re-shaped every frame.
 type realWindowTextSystem struct {
 	system *TextSystem
 	atlas  *Atlas
+	// lines is the window's line-layout cache (the reference
+	// WindowTextSystem's line_layout_cache): shaped lines cached across
+	// frames, disposed when superseded (ticket 02).
+	lines shapedLineCache
 }
 
-// windowTextSystemOf returns the real text system seam, constructing the
-// shared text system and atlas once per process.
+// windowTextSystemOf returns the real text system seam for one
+// window: the process-global TextSystem plus a fresh per-window atlas
+// and line-layout cache (the reference WindowTextSystem::new per
+// window).
 func windowTextSystemOf() (windowTextSystem, error) {
 	system, err := DefaultTextSystem()
 	if err != nil {
@@ -275,20 +368,30 @@ func windowTextSystemOf() (windowTextSystem, error) {
 
 // shape implements windowTextSystem.
 func (r *realWindowTextSystem) shape(text string, fontSize float32, font FontDescriptor, wrapWidth *float32, lineClamp *uint32) (shapedText, error) {
-	run := TextRun{Len: len(text), Font: font}
 	request := TextLayoutRequest{
 		Text:      text,
 		FontSize:  fontSize,
-		Runs:      []TextRun{run},
+		Runs:      []TextRun{{Len: len(text), Font: font}},
 		WrapWidth: wrapWidth,
 		LineClamp: lineClamp,
 	}
-	line, err := r.system.ShapeText(request)
+	// The reference shape_text resolves through the window's
+	// line-layout cache (WindowTextSystem::shape_text →
+	// LineLayoutCache::layout_wrapped_line): the same text, font size,
+	// runs, wrap width and line clamp reuse the shaped line across
+	// frames, and the superseded lines release at the frame rotation.
+	line, err := r.lines.layoutWrappedLine(r.system, request)
 	if err != nil {
 		return nil, err
 	}
 	return &realShapedText{line: line, system: r.system, atlas: r.atlas}, nil
 }
+
+// finishFrame implements windowTextSystem: rotate the window's
+// line-layout cache (WindowTextSystem::finish_frame →
+// LineLayoutCache::finish_frame), invoked by the window draw's
+// completion (render.go completeFrame, window.rs:3230).
+func (r *realWindowTextSystem) finishFrame() { r.lines.finishFrame() }
 
 // realShapedText adapts the port's WrappedLine into the shapedText seam.
 type realShapedText struct {
@@ -424,7 +527,8 @@ func (t *textElement) A11yRole() (Role, bool) {
 	if t.id == nil {
 		return 0, false
 	}
-	return Role(1), true
+	// A text element with an id is a Label (elements/text.rs:189-191).
+	return RoleLabel, true
 }
 
 // WriteA11yInfo implements the property capability (Text::write_a11y_info:
@@ -537,13 +641,6 @@ func (t *textElement) LayoutNodeStyle() (Style, bool) { return DefaultStyle(), t
 // Div (elements/div.rs Div / Interactivity, bounded to this slice)
 // ---------------------------------------------------------------------------
 
-// ClickEvent is the click event payload of OnClick listeners (the
-// reference ClickEvent; the payload fields arrive with the input ticket).
-type ClickEvent struct {
-	// Button is the mouse button (0 primary).
-	Button uint8
-}
-
 // typedKeyListener is one registered key listener: the raw callback
 // and its phase (capture or bubble).
 type typedKeyListener struct {
@@ -599,27 +696,48 @@ func (s *divFrameState) standaloneInline() *inlineDivFrameState {
 // spelling: the Div() constructor returns *DivElement because a type and
 // a function cannot share the package-level identifier Div).
 type DivElement struct {
+	// Styled is the div's base style refinement and the whole pinned
+	// Styled vocabulary (div.rs Interactivity::base_style, refined by
+	// every Styled method; ticket base-05).
+	Styled[*DivElement]
 	// elementID is the optional element identity (div.rs
 	// Interactivity::element_id).
-	elementID *string
+	elementID *ElementID
 	// focusHandle is the tracked focus handle (ticket13 routes it).
 	focusHandle *FocusHandle
 	// keyContext is the key context name (ticket13's keymap layer).
 	keyContext *string
-	// style is the layout style (the interactivity base style refined by
-	// the fluent methods).
-	style Style
-	// textStyle is the text style refinement cascaded to children.
-	textStyle TextStyleRefinement
-	// background is the box background (painted when non-transparent).
-	background *Background
-	// opacity is the element opacity applied at paint.
-	opacity *float32
 	// children are the converted child elements.
 	children []AnyElement
-	// clickListeners are the registered click listeners (ticket13
-	// dispatch).
+	// clickListeners are the registered click listeners (div.rs:2615
+	// click_listeners; delivered by the mouse-up pairing and the
+	// keyboard activation, interact.go).
 	clickListeners []func(*ClickEvent, *Window, *App)
+	// auxClickListeners are the non-primary click listeners (div.rs:2616
+	// aux_click_listeners).
+	auxClickListeners []func(*ClickEvent, *Window, *App)
+	// mouseDownListeners are the registered mouse-down listeners
+	// (div.rs:2602 mouse_down_listeners).
+	mouseDownListeners []typedMouseListener[MouseDownEvent]
+	// dragListener starts a drag once the mouse moves past the drag
+	// threshold (div.rs:2617 drag_listener).
+	dragListener func(cursorOffset Point, cursorStyle *CursorStyle, w *Window, app *App) AnyDrag
+	// hoverListeners observe hover transitions (div.rs:2618
+	// hover_listeners).
+	hoverListeners []func(*bool, *Window, *App)
+	// group names this element's hitbox for group styles (div.rs:2586).
+	group *string
+	// hoverStyle, activeStyle, focusStyle, inFocusStyle and
+	// focusVisibleStyle are the state style refinements (div.rs:2591-2596).
+	hoverStyle        *StyleRefinement
+	activeStyle       *StyleRefinement
+	focusStyle        *StyleRefinement
+	inFocusStyle      *StyleRefinement
+	focusVisibleStyle *StyleRefinement
+	// groupHoverStyle and groupActiveStyle refine this element while its
+	// named group is hovered / pressed (div.rs:2595, 2597).
+	groupHoverStyle  *GroupStyle
+	groupActiveStyle *GroupStyle
 	// actionListeners are the registered action listeners (dispatch
 	// routed by the dispatch tree since ticket13).
 	actionListeners []typedActionListener
@@ -657,6 +775,17 @@ type DivElement struct {
 	// tabStop records an interactivity tab-stop request (div.rs
 	// tab_stop; explicit track_focus handles carry their own).
 	tabStop bool
+	// trackedScrollHandle is the tracked scroll handle (div.rs:2582
+	// tracked_scroll_handle; Base ticket 07, scroll_element.go).
+	trackedScrollHandle *ScrollHandle
+	// scroll is this frame's resolved scroll slice (div.rs:2584-2585
+	// scroll_offset / ongoing_scroll, assigned at request layout,
+	// div.rs:2735-2755); nil when the element does not scroll.
+	scroll *elementScroll
+	// scrollStateful records a StatefulInteractiveElement scroll builder
+	// (OverflowScroll / OverflowXScroll / OverflowYScroll /
+	// RestrictScrollToAxis / TrackScroll), which requires an element ID.
+	scrollStateful bool
 	// debugSelector is the test-support bounds key.
 	debugSelector string
 	// converting guards reentrant child mutation/conversion (the
@@ -669,14 +798,35 @@ type DivElement struct {
 
 // Div creates a new div element (the fixture constructor spelling).
 func Div() *DivElement {
-	return &DivElement{style: DefaultStyle()}
+	return BindStyled(&DivElement{})
 }
 
-// ID assigns this element a string identity (DivElement::id): identity
-// participates in the global element id path and keys retained element
-// state.
-func (d *DivElement) ID(value string) *DivElement {
-	d.elementID = &value
+// IntoElementID is the set of values convertible to an element identity
+// (the pinned `impl Into<ElementId>`): a name string (ElementId::Name) or
+// any ElementID (named integers, named children, code locations, ...).
+type IntoElementID interface {
+	string | ElementID
+}
+
+// ElementIDOf converts a string or ElementID into an ElementID (a string
+// is NameElementID).
+func ElementIDOf[I IntoElementID](value I) ElementID {
+	switch v := any(value).(type) {
+	case string:
+		return NameElementID(v)
+	case ElementID:
+		return v
+	}
+	panic("gpui: unreachable IntoElementID")
+}
+
+// ID assigns this element an identity (div.rs InteractiveElement::id,
+// `impl Into<ElementId>`): a string names it; any ElementID is used as
+// is. Identity participates in the global element id path and keys
+// retained element state.
+func (d *DivElement) ID[I IntoElementID](value I) *DivElement {
+	id := ElementIDOf(value)
+	d.elementID = &id
 	return d
 }
 
@@ -694,237 +844,92 @@ func (d *DivElement) KeyContext(value string) *DivElement {
 	return d
 }
 
-// Flex sets the display type to flex (Styled::flex).
-func (d *DivElement) Flex() *DivElement {
-	d.style.Display = DisplayFlex
+// The Styled vocabulary is promoted from the embedded Styled[*DivElement]
+// (styled.go, styled_generated.go). The methods below are the port's own
+// div builders that predate it: Size and Gap keep their legacy
+// two-argument form next to the pinned one-argument form, and Justify,
+// AlignItems, GridTemplateCols, GridTemplateRows and GridAt are the
+// port's direct setters of the corresponding style fields.
+
+// Size sets the width and height (styles.rs:1348 `size`): one argument
+// sets both, as pinned; two arguments set width then height (the port's
+// original Size(width, height) form). Any other count panics.
+func (d *DivElement) Size[L IntoLength](lengths ...L) *DivElement {
+	style := d.StyleMut()
+	switch len(lengths) {
+	case 1:
+		v := LengthOf(lengths[0])
+		style.SizeWidth, style.SizeHeight = Some(v), Some(v)
+	case 2:
+		style.SizeWidth, style.SizeHeight = Some(LengthOf(lengths[0])), Some(LengthOf(lengths[1]))
+	default:
+		panic(fmt.Sprintf("gpui: DivElement.Size takes one or two lengths, got %d", len(lengths)))
+	}
 	return d
 }
 
-// Block sets the display type to block (Styled::block): the div's
-// text and inline children are collected into paragraphs.
-func (d *DivElement) Block() *DivElement {
-	d.style.Display = DisplayBlock
-	return d
-}
-
-// Inline sets the display type to inline (Styled::inline): the div's
-// contents join the surrounding paragraph; standalone it lays out its
-// contents in block flow.
-func (d *DivElement) Inline() *DivElement {
-	d.style.Display = DisplayInline
-	return d
-}
-
-// InlineFlex sets the display type to inline-flex (Styled::inline_flex):
-// an atomic inline box whose children use flex layout.
-func (d *DivElement) InlineFlex() *DivElement {
-	d.style.Display = DisplayInlineFlex
-	return d
-}
-
-// Grid sets the display type to grid (Styled::grid): children place
-// into the tracks defined by GridTemplateCols/GridTemplateRows.
-func (d *DivElement) Grid() *DivElement {
-	d.style.Display = DisplayGrid
+// Gap sets the gap between children (styles.rs:1396 `gap`): one argument
+// sets both axes, as pinned; two arguments set the column (width) then
+// row (height) gap (the port's original Gap(width, height) form). Any
+// other count panics.
+func (d *DivElement) Gap[L IntoDefiniteLength](lengths ...L) *DivElement {
+	style := d.StyleMut()
+	switch len(lengths) {
+	case 1:
+		v := DefiniteLengthFrom(lengths[0])
+		style.GapWidth, style.GapHeight = Some(v), Some(v)
+	case 2:
+		style.GapWidth, style.GapHeight = Some(DefiniteLengthFrom(lengths[0])), Some(DefiniteLengthFrom(lengths[1]))
+	default:
+		panic(fmt.Sprintf("gpui: DivElement.Gap takes one or two lengths, got %d", len(lengths)))
+	}
 	return d
 }
 
 // GridTemplateCols sets the column track template
 // (grid-template-columns: repeat(n, minmax(min, 1fr)) in the pinned
-// simplified form).
+// simplified form; the pinned builders are GridCols and its variants).
 func (d *DivElement) GridTemplateCols(template GridTemplate) *DivElement {
-	d.style.GridCols = &template
+	d.StyleMut().GridCols = Some(template)
 	return d
 }
 
 // GridTemplateRows sets the row track template (grid-template-rows).
 func (d *DivElement) GridTemplateRows(template GridTemplate) *DivElement {
-	d.style.GridRows = &template
+	d.StyleMut().GridRows = Some(template)
 	return d
 }
 
 // GridAt places this item in its parent grid (the reference
-// col_row/row_col placement).
+// col_row/row_col placement; the pinned builders are ColStart, RowSpan
+// and their variants).
 func (d *DivElement) GridAt(location GridLocation) *DivElement {
-	d.style.GridLocation = &location
+	d.StyleMut().GridLocation = Some(location)
 	return d
 }
 
-// Absolute sets the position to absolute (Styled::absolute): the
-// item offsets from its closest positioned ancestor and leaves the
-// inline/block flow.
-func (d *DivElement) Absolute() *DivElement {
-	d.style.Position = PositionAbsolute
-	return d
-}
-
-// Left sets the left inset (Styled::left).
-func (d *DivElement) Left(offset Length) *DivElement {
-	d.style.Inset.Left = offset
-	return d
-}
-
-// Top sets the top inset (Styled::top).
-func (d *DivElement) Top(offset Length) *DivElement {
-	d.style.Inset.Top = offset
-	return d
-}
-
-// Right sets the right inset (Styled::right).
-func (d *DivElement) Right(offset Length) *DivElement {
-	d.style.Inset.Right = offset
-	return d
-}
-
-// Bottom sets the bottom inset (Styled::bottom).
-func (d *DivElement) Bottom(offset Length) *DivElement {
-	d.style.Inset.Bottom = offset
-	return d
-}
-
-// W sets the width (Styled::w).
-func (d *DivElement) W(width Length) *DivElement {
-	d.style.Size.Width = width
-	return d
-}
-
-// H sets the height (Styled::h).
-func (d *DivElement) H(height Length) *DivElement {
-	d.style.Size.Height = height
-	return d
-}
-
-// Size sets the width and height (Styled::size).
-func (d *DivElement) Size(width, height Length) *DivElement {
-	d.style.Size = LengthSize{Width: width, Height: height}
-	return d
-}
-
-// AlignBaseline aligns this inline box's bottom with the text baseline
-// (Styled::align_baseline).
-func (d *DivElement) AlignBaseline() *DivElement {
-	d.style.VerticalAlign = VerticalAlignBaseline
-	return d
-}
-
-// AlignTop aligns this inline box's top with the line's top
-// (Styled::align_top).
-func (d *DivElement) AlignTop() *DivElement {
-	d.style.VerticalAlign = VerticalAlignTop
-	return d
-}
-
-// AlignBottom aligns this inline box's bottom with the line's bottom
-// (Styled::align_bottom).
-func (d *DivElement) AlignBottom() *DivElement {
-	d.style.VerticalAlign = VerticalAlignBottom
-	return d
-}
-
-// AlignMiddle centers this inline box on the text's x-height midpoint
-// (Styled::align_middle).
-func (d *DivElement) AlignMiddle() *DivElement {
-	d.style.VerticalAlign = VerticalAlignMiddle
-	return d
-}
-
-// Gap2 sets the gap to 0.5rem (Styled::gap_2).
-func (d *DivElement) Gap2() *DivElement {
-	d.style.Gap = DefiniteLengthSize{Width: DefiniteRem(0.5), Height: DefiniteRem(0.5)}
-	return d
-}
-
-// Gap sets the gap between children.
-func (d *DivElement) Gap(width, height DefiniteLength) *DivElement {
-	d.style.Gap = DefiniteLengthSize{Width: width, Height: height}
-	return d
-}
-
-// P sets the padding on all four edges (Styled::p).
-func (d *DivElement) P(padding DefiniteLength) *DivElement {
-	d.style.Padding = DefiniteLengthEdges{Top: padding, Right: padding, Bottom: padding, Left: padding}
-	return d
-}
-
-// SizeFull sets the size to 100% of the parent (Styled::size_full).
-func (d *DivElement) SizeFull() *DivElement {
-	d.style.Size = LengthSize{Width: DefiniteLengthOf(Fraction(1.0)), Height: DefiniteLengthOf(Fraction(1.0))}
-	return d
-}
-
-// Justify sets the main-axis content distribution (Styled::justify).
+// Justify sets the main-axis content distribution (the justify_content
+// field; the pinned builders are the Justify* methods).
 func (d *DivElement) Justify(justify AlignContent) *DivElement {
-	d.style.JustifyContent = &justify
+	d.StyleMut().JustifyContent = Some(justify)
 	return d
 }
 
-// AlignItems sets the cross-axis item alignment.
+// AlignItems sets the cross-axis item alignment (the align_items field;
+// the pinned builders are the Items* methods).
 func (d *DivElement) AlignItems(align AlignItems) *DivElement {
-	d.style.AlignItems = &align
+	d.StyleMut().AlignItems = Some(align)
 	return d
 }
 
-// Bg sets the background color of the box (Styled::bg).
-func (d *DivElement) Bg(color Hsla) *DivElement {
-	d.background = &[]Background{SolidBackground(color)}[0]
+// Extend appends already-converted children (element.rs:230
+// ParentElement::extend), e.g. a component's collected Parent children.
+func (d *DivElement) Extend(elements []AnyElement) *DivElement {
+	if len(elements) == 0 {
+		return d
+	}
+	d.commitChildren("DivElement.Extend", len(elements), elements)
 	return d
-}
-
-// Opacity sets the element opacity applied at paint (Styled::opacity).
-func (d *DivElement) Opacity(opacity float32) *DivElement {
-	d.opacity = &opacity
-	return d
-}
-
-// TextSize sets the text font size cascading to children
-// (Styled::text_size).
-func (d *DivElement) TextSize(size AbsoluteLength) *DivElement {
-	d.textStyle.FontSize = &size
-	return d
-}
-
-// TextColor sets the text color cascading to children
-// (Styled::text_color).
-func (d *DivElement) TextColor(color Hsla) *DivElement {
-	d.textStyle.Color = &color
-	return d
-}
-
-// Refine applies the authoring style refinement onto this element (the
-// fixture Refine method; the authoring Styled helper's snapshot composes
-// through it).
-func (d *DivElement) Refine(value StyleRefinement) *DivElement {
-	if display, ok := value.Display.Get(); ok {
-		if display == authoring.DisplayFlex {
-			d.style.Display = DisplayFlex
-		} else {
-			d.style.Display = DisplayBlock
-		}
-	}
-	if padding, ok := value.PaddingLeft.Get(); ok {
-		d.style.Padding.Left = authoringLengthToDefinite(padding)
-	}
-	if padding, ok := value.PaddingRight.Get(); ok {
-		d.style.Padding.Right = authoringLengthToDefinite(padding)
-	}
-	if gap, ok := value.Gap.Get(); ok {
-		converted := authoringLengthToDefinite(gap)
-		d.style.Gap = DefiniteLengthSize{Width: converted, Height: converted}
-	}
-	if opacity, ok := value.Opacity.Get(); ok {
-		opacity := opacity
-		d.opacity = &opacity
-	}
-	return d
-}
-
-// authoringLengthToDefinite converts an authoring length into a port
-// definite length.
-func authoringLengthToDefinite(length authoring.Length) DefiniteLength {
-	if length.Unit == authoring.Rems {
-		return DefiniteRem(length.Value)
-	}
-	return DefinitePx(length.Value)
 }
 
 // DebugSelector sets the test-support bounds key of this element (the
@@ -935,8 +940,14 @@ func (d *DivElement) DebugSelector(selector string) *DivElement {
 	return d
 }
 
-// OnClick binds a click listener to this element (the fluent spelling
-// of Interactivity::on_click; delivery arrives with the input ticket).
+// OnClick binds a click listener to this element (div.rs:1814
+// StatefulInteractiveElement::on_click, Interactivity::on_click at
+// div.rs:674). A left mouse press and release over the element fires a
+// ClickEvent of kind Mouse (div.rs:3467-3626); Enter/Space pressed and
+// released while the element's tracked focus handle is focused fires a
+// Keyboard click (div.rs:3512-3577). The pin restricts on_click to
+// stateful elements: the element needs an ID (an ID-less div keeps no
+// interactive state, so its click listeners never fire).
 func (d *DivElement) OnClick(f func(*ClickEvent, *Window, *App)) *DivElement {
 	if f == nil {
 		panic("gpui: OnClick requires a non-nil listener")
@@ -1057,25 +1068,31 @@ type typedDropListener struct {
 	onDrop func(value any, event *MouseUpEvent, w *Window, app *App)
 }
 
-// OnMouseMove binds a mouse-move listener
-// (InteractiveElement::on_mouse_move): the listener receives the
-// event, the dispatch phase and this element's hitbox; the typical
-// listener checks hitbox.IsHovered(w).
-func (d *DivElement) OnMouseMove(f func(*MouseMoveEvent, DispatchPhase, *Hitbox, *Window, *App)) *DivElement {
-	if f == nil {
-		panic("gpui: OnMouseMove requires a non-nil listener")
-	}
-	d.mouseMoveListeners = append(d.mouseMoveListeners, typedMouseListener[MouseMoveEvent]{f: f})
+// OnMouseMove binds a listener to the mouse moves over this element, in
+// the bubble phase (div.rs:342-352 Interactivity::on_mouse_move, fluent
+// div.rs:1155-1161). OnMouseMoveAll receives every move with the phase and
+// hitbox.
+func (d *DivElement) OnMouseMove(f func(*MouseMoveEvent, *Window, *App)) *DivElement {
+	requireListener("OnMouseMove", f == nil)
+	d.mouseMoveListeners = append(d.mouseMoveListeners, typedMouseListener[MouseMoveEvent]{f: func(e *MouseMoveEvent, phase DispatchPhase, hitbox *Hitbox, w *Window, app *App) {
+		if phase == DispatchBubble && hitbox.IsHovered(w) {
+			f(e, w, app)
+		}
+	}})
 	return d
 }
 
-// OnMouseUp binds a mouse-up listener (InteractiveElement::on_mouse_up).
-func (d *DivElement) OnMouseUp(f func(*MouseUpEvent, DispatchPhase, *Hitbox, *Window, *App)) *DivElement {
-	if f == nil {
-		panic("gpui: OnMouseUp requires a non-nil listener")
-	}
-	d.mouseUpListeners = append(d.mouseUpListeners, typedMouseListener[MouseUpEvent]{f: f})
-	return d
+// OnMouseUp binds a listener to the mouse up of the given button over
+// this element, in the bubble phase (div.rs:223-236
+// Interactivity::on_mouse_up, fluent div.rs:1051-1058). OnMouseUpAll
+// receives every mouse up with the phase and hitbox.
+func (d *DivElement) OnMouseUp(button MouseButton, f func(*MouseUpEvent, *Window, *App)) *DivElement {
+	requireListener("OnMouseUp", f == nil)
+	return d.appendMouseUp(func(e *MouseUpEvent, phase DispatchPhase, hitbox *Hitbox, w *Window, app *App) {
+		if phase == DispatchBubble && e.Button == button && hitbox.IsHovered(w) {
+			f(e, w, app)
+		}
+	})
 }
 
 // OnScrollWheel binds a scroll listener
@@ -1278,7 +1295,7 @@ func (e *divElement) ID() (ElementID, bool) {
 	if e.builder.elementID == nil {
 		return ElementID{}, false
 	}
-	return NameElementID(*e.builder.elementID), true
+	return *e.builder.elementID, true
 }
 
 // SourceLocation implements Element.
@@ -1286,7 +1303,7 @@ func (e *divElement) SourceLocation() *SourceLocation { return nil }
 
 // A11yRole implements the accessibility role capability: the div carries
 // no role (the reference filters GenericContainer).
-func (e *divElement) A11yRole() (Role, bool) { return 0, false }
+func (e *divElement) A11yRole() (Role, bool) { return e.builder.A11yRole() }
 
 // RequestLayout implements Element (div.rs Div::request_layout +
 // Interactivity::request_layout, bounded).
@@ -1318,62 +1335,81 @@ func (d *DivElement) ChildCount() int { return len(d.children) }
 // IntoElement implements IntoElement: the div builder converts into its
 // element (the reference IntoElement for Div wraps the builder).
 func (d *DivElement) IntoElement() AnyElement {
+	// An a11y-authored div joins the semantic tree through its companion
+	// (div.rs:2261-2269, 4065-4162; Base ticket 11).
+	if d.hasA11yAuthoring() {
+		return divIntoA11yElement(d)
+	}
 	return CustomElement[divFrameState, divPrepaintState](&divElement{builder: d})
 }
 
-// divPrepaintState is the div's prepaint state (the reference
-// Option<Hitbox>; hitboxes arrive with the input ticket, so this slice
-// records whether the frame recorded the element bounds).
+// divPrepaintState is the div's prepaint state (div.rs:2362 the
+// reference Option<Hitbox>): the hitbox inserted for this frame, when
+// the element needs one (div.rs:2887-2911 should_insert_hitbox), plus
+// whether the frame recorded the debug-selector bounds.
 type divPrepaintState struct {
+	// hitbox is this frame's hitbox, or nil.
+	hitbox *Hitbox
 	// debugBounds records whether the debug selector was recorded.
 	debugBounds bool
+	// scrollOffset is the clamped scroll offset the children prepainted
+	// under (div.rs:2876-2878, 2460); paint re-applies it because the
+	// port's drawables re-resolve their bounds at paint.
+	scrollOffset Point
 }
 
-// computeStyle returns the div's complete layout style (the reference
-// compute_style: Style::default().refine(base_style)).
+// computeStyle returns the div's base style (Style::default() refined by
+// the base style, the first step of div.rs:3904 compute_style_internal).
 func (d *DivElement) computeStyle() Style {
-	return d.style
+	style := DefaultStyle()
+	style.Refine(d.Styled.storage())
+	return style
 }
 
-// textStyleSheet builds the div's text style refinement scope (the
-// reference style.text_style()).
-func (d *DivElement) textStyleSheet() *TextStyleRefinement {
-	return &d.textStyle
-}
-
-// overflowMask computes the div's content-mask refinement for its
-// overflow style (the reference Style::overflow_mask): visible overflow
-// returns nil.
-func (d *DivElement) overflowMask(bounds Bounds, rem float32) *Bounds {
-	if d.style.OverflowX == OverflowVisible && d.style.OverflowY == OverflowVisible {
+// interactiveStateOf resolves the element's retained interactive state
+// inside WithOptionalElementState (the pinned
+// `element_state.map(|s| s.unwrap_or_default())`): an element with an id
+// gets its retained state or a fresh default; an id-less element has
+// none.
+func interactiveStateOf(global *GlobalElementID, state *InteractiveElementState) *InteractiveElementState {
+	if global == nil {
 		return nil
 	}
-	// Clip/hidden/scroll overflow intersects the mask with the bounds.
-	mask := bounds
-	if d.style.OverflowX == OverflowVisible {
-		mask.Origin.X = bounds.Origin.X - 1e9
-		mask.Size.Width = 2e9
+	if state == nil {
+		return &InteractiveElementState{}
 	}
-	if d.style.OverflowY == OverflowVisible {
-		mask.Origin.Y = bounds.Origin.Y - 1e9
-		mask.Size.Height = 2e9
-	}
-	return &mask
+	return state
 }
 
-// RequestLayout implements Element (the div.rs Div::request_layout +
-// Interactivity::request_layout path, bounded): compute the style, scope
-// the text style, request the children, then request this element's
-// layout node with the children — a Block/Inline div routes through the
-// inline frame state (paragraph collection) — and publish the node's
-// container inline content (the reference publishes Container for every
-// div).
+// RequestLayout implements Element (div.rs:2288-2351 Div::request_layout
+// + div.rs:2672-2763 Interactivity::request_layout, bounded): inside the
+// element's interactive state, a drag in progress clears the pending
+// mouse down and the pressed state (div.rs:2703-2712), the style is
+// computed with the state styles (compute_style_internal without a
+// hitbox, div.rs:2757-2758), then the text style is scoped, the children
+// are requested and this element's layout node is requested with them —
+// a Block/Inline div routes through the inline frame state (paragraph
+// collection) — and the node's container inline content is published
+// (the reference publishes Container for every div).
 func (d *DivElement) requestLayout(global *GlobalElementID, inspector *InspectorElementID, w *Window, app *App) (LayoutID, divFrameState) {
-	style := d.computeStyle()
+	// The scroll offset and gesture cells (div.rs:2735-2755).
+	d.scroll = resolveElementScroll(d.trackedScrollHandle, d.Styled.storage(), global, w)
+	style := WithOptionalElementState(w, global, func(slot *InteractiveElementState, w *Window) (Style, *InteractiveElementState) {
+		es := interactiveStateOf(global, slot)
+		if es != nil && app.HasActiveDrag() {
+			if es.pendingMouseDown != nil {
+				es.pendingMouseDown.event = nil
+			}
+			if es.clickedState != nil {
+				*es.clickedState = ElementClickedState{}
+			}
+		}
+		return d.computeStyleInternal(nil, es, w, app), es
+	})
 	d.lastStyle = style
 	state := divFrameState{}
 	var layoutID LayoutID
-	WithTextStyleVoid(w, d.textStyleSheet(), func(w *Window) {
+	WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
 		childLayoutIDs := make([]LayoutID, 0, len(d.children))
 		for i := range d.children {
 			childLayoutIDs = append(childLayoutIDs, d.children[i].RequestLayout(w, app))
@@ -1395,14 +1431,28 @@ func (d *DivElement) requestLayout(global *GlobalElementID, inspector *Inspector
 	return layoutID, state
 }
 
-// Prepaint implements Element (the Interactivity::prepaint path,
-// bounded): a standalone inline div first places its paragraphs' boxes
-// and span fragments (prepare_layout, outside the style/mask scopes —
-// the reference computes the content size before the interactivity
-// prepaint), then scopes the text style and the overflow content mask,
-// records the debug-selector bounds, registers the dispatch state, and
-// prepaints the children (through the inline frame state when it owns
-// them).
+// Prepaint implements Element (div.rs:2354-2482 Div::prepaint +
+// div.rs:2766-2885 Interactivity::prepaint, bounded): a standalone
+// inline div first places its paragraphs' boxes and span fragments
+// (prepare_layout, outside the style/mask scopes — the reference
+// computes the content size before the interactivity prepaint); then,
+// inside the element's interactive state, the style is computed, the
+// hover state is initialized for hover styles (div.rs:2846-2850), and
+// inside the text style and overflow content mask the hitbox is
+// inserted when needed (div.rs:2865-2874), the dispatch state is
+// registered and the children are prepainted (through the inline frame
+// state when it owns them). The div's dispatch node is popped and its
+// tab group closed after the children (the pinned Drawable::prepaint
+// pop_node, element.rs:505, and the with_tab_group scope, div.rs:3036).
+//
+// The port registers the dispatch-tree state (key listeners, actions,
+// tab stops, the keyboard click) during prepaint so the completed frame
+// carries the tree (key_dispatch.go's header); the pin registers them in
+// paint after its Visibility::Hidden early return (div.rs:3021-3023), so
+// a hidden div — and everything inside it, whose paint never runs —
+// registers none of them here either (interact.go hiddenPrepaintDepth).
+// The mouse listeners and cursor requests register in paint, like the
+// pin (div.rs:3048-3082).
 func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *divFrameState, w *Window, app *App) divPrepaintState {
 	state := divPrepaintState{}
 	// Contents participating in a parent paragraph are detected here:
@@ -1410,45 +1460,130 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 	// call (the reference commits contents_in_parent_paragraph at
 	// prepaint from window.current_inline_fragments).
 	layout.contentsInParentParagraph = currentFrame(w).currentInlineFragments != nil
+	// The content size the scroll clamp measures against, with the
+	// tracked handle's child bounds (div.rs:2383-2413), then the handle's
+	// deferred scroll-to-item (div.rs:2415-2417).
+	var contentSize Size
 	if standalone := layout.standaloneInline(); standalone != nil {
-		standalone.prepareLayout(bounds, layout.childLayoutIDs, w)
+		contentSize = standalone.prepareLayout(bounds, layout.childLayoutIDs, w)
+		d.trackInlineChildBounds(layout.childLayoutIDs, w)
+	} else if d.scroll != nil || d.trackedScrollHandle != nil {
+		contentSize = d.scrollContentSize(bounds, layout.childLayoutIDs, w)
+	}
+	if d.trackedScrollHandle != nil {
+		d.trackedScrollHandle.scrollToActiveItem()
 	}
 	if d.debugSelector != "" {
 		recordDebugBounds(w, d.debugSelector, bounds)
 		state.debugBounds = true
 	}
-	WithTextStyleVoid(w, d.textStyleSheet(), func(w *Window) {
-		WithContentMaskVoid(w, d.overflowMask(bounds, RemSize(w)), func(w *Window) {
-			registerDivElementDispatch(w, d)
-			registerDivElementMouseState(w, d, bounds, inspector)
-			if standalone := layout.standaloneInline(); standalone != nil {
-				standalone.prepaintChildren(d.children, w, app)
-				return
-			}
-			for i := range d.children {
-				d.children[i].Prepaint(w, app)
-			}
+	if global == nil && d.requiresElementState() {
+		panic("gpui: OnClick, OnAuxClick, OnDrag, OnHover, Active and GroupActive require an element ID (the pinned StatefulInteractiveElement methods, div.rs:1495-1899)")
+	}
+	if global == nil && d.scrollStateful {
+		panic("gpui: OverflowScroll, OverflowXScroll, OverflowYScroll, RestrictScrollToAxis and TrackScroll require an element ID (the pinned StatefulInteractiveElement methods, div.rs:1746-1777)")
+	}
+	WithOptionalElementState(w, global, func(slot *InteractiveElementState, w *Window) (struct{}, *InteractiveElementState) {
+		es := interactiveStateOf(global, slot)
+		style := d.computeStyleInternal(nil, es, w, app)
+		if es != nil && (d.hoverStyle != nil || d.groupHoverStyle != nil) && es.hoverState == nil {
+			es.hoverState = &ElementHoverState{}
+		}
+		hidden := style.Visibility == VisibilityHidden
+		suppressed := hidden || hiddenPrepaintDepth(w) > 0
+		WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
+			WithContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
+				// should_insert_hitbox's scroll_offset.is_some() arm
+				// (div.rs:2892) joins interact.go's predicate here.
+				if d.shouldInsertHitbox(&style, w) || d.scroll != nil {
+					box := w.InsertHitbox(bounds, d.hitboxBehavior)
+					state.hitbox = &box
+					// insert_inspector_hitbox (div.rs:3100-3111, the
+					// ticket27 integration): while the window's inspector
+					// is picking, register this hitbox as selectable for
+					// its element's inspector id.
+					w.InsertInspectorHitbox(box, inspector)
+				}
+				// clamp_scroll_position (div.rs:2876-2877).
+				scrollOffset := d.scroll.clamp(bounds, &style, contentSize, w)
+				state.scrollOffset = scrollOffset
+				tree := currentDispatchTree(w)
+				endGroup := registerDivElementDispatch(w, d, suppressed, state.hitbox, es)
+				defer func() {
+					if endGroup {
+						currentTabStops(w).EndGroup()
+					}
+					tree.PopNode()
+				}()
+				if style.Display == DisplayNone {
+					// skip children (div.rs:2428-2430)
+					return
+				}
+				withHiddenPrepaint(w, hidden, func() {
+					// The children prepaint under the scroll offset
+					// (div.rs:2460; inline.rs:454 for the inline path).
+					withElementOffsetVoid(w, scrollOffset, func(w *Window) {
+						if standalone := layout.standaloneInline(); standalone != nil {
+							standalone.prepaintChildren(d.children, w, app)
+							return
+						}
+						for i := range d.children {
+							d.children[i].Prepaint(w, app)
+						}
+					})
+				})
+			})
 		})
+		return struct{}{}, es
 	})
 	return state
 }
 
 // registerDivElementDispatch pushes the div's dispatch node and
-// registers its interactive state on the frame under construction
-// (div.rs Interactivity paint: with_tab_group + tab_stops.insert + the
-// dispatch-tree registrations; the port registers during prepaint so
-// the completed frame carries the tree — see key_dispatch.go's
-// header).
-func registerDivElementDispatch(w *Window, d *DivElement) {
+// registers its dispatch-tree state on the frame under construction
+// (the pinned Drawable::prepaint push_node, element.rs:468; the focus
+// identity of Interactivity::prepaint's set_focus_handle, div.rs:2800;
+// then Interactivity::paint's with_tab_group + tab_stops.insert,
+// div.rs:3025-3047, the keyboard click of paint_mouse_listeners,
+// div.rs:3512-3577, and paint_keyboard_listeners, div.rs:3766-3796, in
+// that order). The port registers during prepaint so the completed
+// frame carries the tree (key_dispatch.go's header). suppressed is the
+// pin's Visibility::Hidden early return (div.rs:3021-3023) for this div
+// or a hidden ancestor: only the node and its focus identity register.
+// It reports whether a tab group was opened; the caller closes it and
+// pops the node after the children.
+func registerDivElementDispatch(w *Window, d *DivElement, suppressed bool, hitbox *Hitbox, es *InteractiveElementState) (endGroup bool) {
 	tree := currentDispatchTree(w)
 	tree.PushNode()
+	if d.focusHandle != nil {
+		tree.SetFocusID(d.focusHandle.id)
+	}
+	if suppressed {
+		return false
+	}
+
+	// with_tab_group (div.rs:3025-3036): the group opens before the
+	// children (their paths carry the group index); the container's own
+	// handle is inserted inside the group (div.rs:3037-3047).
+	if d.tabGroup && d.tabIndex != nil {
+		currentTabStops(w).BeginGroup(*d.tabIndex)
+		endGroup = true
+	}
+	if d.focusHandle != nil {
+		registerFocusStop(w, *d.focusHandle)
+	}
+
+	// The keyboard click (div.rs:3512-3577) registers before the
+	// element's own key listeners, as paint_mouse_listeners runs before
+	// paint_keyboard_listeners (div.rs:3075, 3084).
+	if hitbox != nil {
+		registerDivKeyboardClick(w, d, *hitbox, es)
+	}
+
 	if d.keyContext != nil {
 		if context, err := ParseKeyContext(*d.keyContext); err == nil {
 			tree.SetKeyContext(context)
 		}
-	}
-	if d.focusHandle != nil {
-		tree.SetFocusID(d.focusHandle.id)
 	}
 
 	// Key listeners (phase-routed by the tree).
@@ -1475,104 +1610,7 @@ func registerDivElementDispatch(w *Window, d *DivElement) {
 			invokeTypedActionListener(listener, action, phase, w, app)
 		})
 	}
-
-	// The tab group opens before the children (their paths carry the
-	// group index); the container's own handle is inserted inside the
-	// group (div.rs: the container sorts with its children). The group
-	// is closed and the node popped by prepaint after the children.
-	if d.focusHandle != nil {
-		if d.tabGroup && d.tabIndex != nil {
-			currentTabStops(w).BeginGroup(*d.tabIndex)
-		}
-		registerFocusStop(w, *d.focusHandle)
-	}
-}
-
-// registerDivElementMouseState inserts the div's hitbox and registers
-// its mouse-family listeners on the frame under construction
-// (ticket24; div.rs Interactivity prepaint's insert_hitbox +
-// paint_mouse_listeners). The port registers both during prepaint —
-// parent before children — which preserves the pin's ordering: the
-// hitbox walk and the listener capture phase both run parents first,
-// so children (inserted later) hit-test and dispatch in front of
-// their parents.
-func registerDivElementMouseState(w *Window, d *DivElement, bounds Bounds, inspector *InspectorElementID) {
-	// insert_hitbox (div.rs Interactivity::prepaint): the bounds plus
-	// the content mask active at insertion.
-	box := w.InsertHitbox(bounds, d.hitboxBehavior)
-	// insert_inspector_hitbox (div.rs:3100-3111, the ticket27
-	// integration): while the window's inspector is picking, register
-	// this hitbox as selectable for its element's inspector id.
-	w.InsertInspectorHitbox(box, inspector)
-
-	// A focusable element transfers focus on a hovered mouse down
-	// unless the default action was prevented (div.rs
-	// paint_mouse_listeners's tracked_focus_handle arm).
-	if d.focusHandle != nil {
-		handle := *d.focusHandle
-		hitbox := box
-		w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
-			if _, isDown := event.(*MouseDownEvent); !isDown {
-				return
-			}
-			if phase == DispatchBubble && hitbox.IsHovered(w) && !w.DefaultPrevented() {
-				w.Focus(handle)
-				// If there is a parent that is also focusable, prevent it
-				// from transferring focus because we already did so.
-				w.PreventDefault()
-			}
-		})
-	}
-
-	// The typed mouse-family listeners (div.rs's per-kind arms: the
-	// registration closure captures this element's hitbox and forwards
-	// the phase; the listener decides what the hitbox gates).
-	for _, listener := range d.mouseMoveListeners {
-		registerMouseListener(w, listener, box)
-	}
-	for _, listener := range d.mouseUpListeners {
-		registerMouseListener(w, listener, box)
-	}
-	for _, listener := range d.scrollWheelListeners {
-		registerMouseListener(w, listener, box)
-	}
-	for _, listener := range d.pinchListeners {
-		registerMouseListener(w, listener, box)
-	}
-
-	// The drop listeners (div.rs paint_mouse_listeners's drop arm): on
-	// a bubbled mouse up with an active drag whose value matches a
-	// listener's payload type and this element hovered, stop the drag,
-	// deliver the value, refresh and stop propagation.
-	if len(d.dropListeners) > 0 {
-		listeners := append([]typedDropListener(nil), d.dropListeners...)
-		hitbox := box
-		w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
-			up, isUp := event.(*MouseUpEvent)
-			if !isUp || phase != DispatchBubble {
-				return
-			}
-			drag := app.ActiveDrag()
-			if drag == nil {
-				return
-			}
-			for _, listener := range listeners {
-				if !dropListenerPayloadMatches(drag.Value, listener.payloadType) {
-					continue
-				}
-				// Without a listener-level can-drop predicate the hitbox
-				// must be hovered (div.rs: the default drop eligibility).
-				if !hitbox.IsHovered(w) {
-					continue
-				}
-				value, _ := app.StopDrag(w)
-				listener.onDrop(value, up, w, app)
-				w.requestRefresh()
-				app.StopPropagation()
-				break
-			}
-		})
-	}
+	return endGroup
 }
 
 // registerMouseListener wraps one typed mouse-family listener as a
@@ -1626,50 +1664,246 @@ func invokeTypedActionListener(listener typedActionListener, action any, phase D
 	handler.Call([]reflect.Value{payload, reflect.ValueOf(w), reflect.ValueOf(app)})
 }
 
-// Paint implements Element (the Interactivity::paint + Style::paint
-// path, bounded): scope the element opacity, paint the background quad
-// when non-transparent, paint the children (through the inline frame
-// state — the children first, then the paragraphs — when it owns them),
-// then paint the border when visible.
+// Paint implements Element (div.rs:2485-2525 Div::paint + div.rs:2986-3125
+// Interactivity::paint + style.rs:874-1015 Style::paint, bounded): inside
+// the element's interactive state, compute the style with this frame's
+// hitbox (hover, active, focus and group styles; div.rs:3003-3009) and
+// register the group-hover refresh handler (div.rs:3019); a hidden
+// element paints nothing more (div.rs:3021); otherwise scope the
+// element opacity and paint the style's box around the text-style and
+// overflow-mask scoped content: with a hitbox, the cursor request
+// (div.rs:3054-3062), the group hitbox push (div.rs:3064-3066) and the
+// mouse listeners (div.rs:3075-3080, interact.go); then the children
+// (through the inline frame state — the children first, then the
+// paragraphs — when it owns them; none when Display is None,
+// div.rs:2510-2512) and the group pop (div.rs:3111-3113).
 func (d *DivElement) paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *divFrameState, prepaint *divPrepaintState, w *Window, app *App) {
-	WithElementOpacityVoid(w, d.opacity, func(w *Window) {
-		paintDivElementBox(d, bounds, w, func(w *Window) {
-			WithTextStyleVoid(w, d.textStyleSheet(), func(w *Window) {
-				WithContentMaskVoid(w, d.overflowMask(bounds, RemSize(w)), func(w *Window) {
-					if standalone := layout.standaloneInline(); standalone != nil {
-						standalone.paintChildren(d.children, w, app)
-						return
-					}
-					for i := range d.children {
-						d.children[i].Paint(w, app)
-					}
+	ensurePaintHitTest(w)
+	hitbox := prepaint.hitbox
+	WithOptionalElementState(w, global, func(slot *InteractiveElementState, w *Window) (struct{}, *InteractiveElementState) {
+		es := interactiveStateOf(global, slot)
+		style := d.computeStyleInternal(hitbox, es, w, app)
+		d.paintHoverGroupHandler(w, app)
+		if style.Visibility == VisibilityHidden {
+			return struct{}{}, es
+		}
+		WithElementOpacityVoid(w, style.Opacity, func(w *Window) {
+			style.paint(bounds, w, app, func(w *Window) {
+				WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
+					WithContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
+						if hitbox != nil {
+							if drag := app.ActiveDrag(); drag != nil {
+								if drag.CursorStyle != nil {
+									w.SetWindowCursorStyle(*drag.CursorStyle)
+								}
+							} else if style.MouseCursor != nil {
+								w.SetCursorStyle(*style.MouseCursor, hitbox)
+							}
+							if d.group != nil {
+								groupHitboxPush(*d.group, hitbox.ID(), app)
+								defer groupHitboxPop(*d.group, app)
+							}
+							d.paintMouseListeners(*hitbox, es, w, app)
+							// paint_scroll_listener (div.rs:3081).
+							d.scroll.paintListener(*hitbox, &style, w)
+						}
+						if style.Display == DisplayNone {
+							return
+						}
+						// The children paint under the offset they
+						// prepainted under (the port's drawables re-resolve
+						// their bounds at paint; the pin reuses the
+						// prepainted bounds).
+						withElementOffsetVoid(w, prepaint.scrollOffset, func(w *Window) {
+							if standalone := layout.standaloneInline(); standalone != nil {
+								standalone.paintChildren(d.children, w, app)
+								return
+							}
+							for i := range d.children {
+								d.children[i].Paint(w, app)
+							}
+						})
+					})
 				})
 			})
 		})
+		return struct{}{}, es
 	})
 }
 
-// paintDivElementBox paints the div's own box: the background quad
-// before the continuation and the border quad after it (the reference
-// Style::paint_box, bounded to background and border).
-func paintDivElementBox(d *DivElement, bounds Bounds, w *Window, continuation func(*Window)) {
-	frame := currentFrame(w)
-	if d.background != nil && !d.background.IsTransparent() {
-		background := *d.background
-		borderColor := background.Opacity(0)
-		pq := PaintQuad{
-			Bounds:             bounds,
-			Background:         background,
-			BorderColor:        borderColor,
-			CornerRadii:        Corners{},
-			BorderWidths:       Edges{},
-			BorderStyle:        BorderStyleSolid,
-			BorderDashedLength: DefaultBorderDashedLength,
-			BorderDashedGap:    DefaultBorderDashedGap,
+// paint is style.rs:874 Style::paint: inside a parent paragraph every
+// placed fragment gets the box (with an empty continuation) before the
+// continuation runs once; otherwise the element bounds get the box.
+func (s *Style) paint(bounds Bounds, w *Window, app *App, continuation func(*Window)) {
+	if fragments := currentFrame(w).currentInlineFragments; fragments != nil {
+		for _, fragment := range fragments {
+			s.paintBox(fragment, w, app, func(*Window) {})
 		}
-		if err := frame.scene.PaintQuad(pq, 0, frame.paint); err != nil {
-			panic(fmt.Sprintf("gpui: DivElement background paint: %v", err))
+		continuation(w)
+		return
+	}
+	s.paintBox(bounds, w, app, continuation)
+}
+
+// debugBelowDepth counts the DebugBelow scopes open per application
+// (the pinned DebugBelow global set and removed around paint_box,
+// style.rs:901-909 and 1011-1014).
+var debugBelowDepth = map[*App]int{}
+
+// paintBox is style.rs:894-1015 Style::paint_box: the debug outline,
+// the drop shadows and the outer ring, the backdrop filter, then — inside
+// the content filter group when the style has filters — the background
+// quad, the inset ring and inset shadows, the continuation, and the
+// border quad.
+func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*Window)) {
+	frame := currentFrame(w)
+	mustPaint := func(err error, what string) {
+		if err != nil {
+			panic(fmt.Sprintf("gpui: DivElement %s paint: %v", what, err))
 		}
 	}
-	continuation(w)
+	if s.DebugBelow {
+		debugBelowDepth[app]++
+		defer func() {
+			if debugBelowDepth[app]--; debugBelowDepth[app] <= 0 {
+				delete(debugBelowDepth, app)
+			}
+		}()
+	}
+	if s.Debug || debugBelowDepth[app] > 0 {
+		mustPaint(frame.scene.PaintQuad(Outline(bounds, SolidBackground(Red()), BorderStyleSolid), 0, frame.paint), "debug outline")
+	}
+
+	rem := RemSize(w)
+	radii := s.CornerRadii.ToPixels(rem).ClampRadiiForQuadSize(bounds.Size)
+	var smoothing float32
+	if s.CornerSmoothing != nil {
+		smoothing = *s.CornerSmoothing
+	}
+	currentColor := WindowTextStyle(w).Color
+	if color, ok := s.Text.Color.Get(); ok {
+		currentColor = color
+	}
+
+	// paint_drop_shadows_with_corner_smoothing (window.rs:4375): the
+	// non-inset shadows, before the background.
+	for _, shadow := range s.BoxShadow {
+		if !shadow.Inset {
+			mustPaint(frame.scene.PaintShadow(bounds, shadow, radii, smoothing, frame.paint), "drop shadow")
+		}
+	}
+	if ring, ok := s.Ring.outerQuad(bounds, radii, currentColor); ok {
+		mustPaint(frame.scene.PaintQuad(ring, smoothing, frame.paint), "ring")
+	}
+	// paint_backdrop_filter_with_corner_smoothing (window.rs:4487): the
+	// identity filters are dropped; the port's backdrop record carries
+	// one blur, so a chain paints one record per filter in order.
+	for _, filter := range s.BackdropFilter {
+		if !filter.IsIdentity() {
+			mustPaint(frame.scene.PaintBackdropFilterCornerSmoothing(bounds, filter.BlurRadius, radii, smoothing, frame.paint), "backdrop filter")
+		}
+	}
+
+	paintUnit := func(w *Window) {
+		frame := currentFrame(w)
+		if s.Background != nil && !s.Background.IsTransparent() {
+			background := *s.Background
+			mustPaint(frame.scene.PaintQuad(PaintQuad{
+				Bounds:             bounds,
+				CornerRadii:        radii,
+				Background:         background,
+				BorderColor:        background.Opacity(0),
+				BorderStyle:        s.BorderStyle,
+				BorderDashedLength: DefaultBorderDashedLength,
+				BorderDashedGap:    DefaultBorderDashedGap,
+			}, smoothing, frame.paint), "background")
+		}
+		// paint_inset_shadows (window.rs:4424) — cast from the PADDING
+		// edge, CSS's model ("an inner box-shadow casts a shadow as if
+		// everything outside the padding edge were opaque"): the hole and
+		// the clip region derive from the element bounds inset by the
+		// border widths, with the radii reduced by the border (clamped at
+		// zero). Recorded deviation from the pin (consumer gap 09): the
+		// reference casts inner shadows from the border box, where the
+		// border quad — painted after — covers any band narrower than the
+		// border, so a hard `inset 0 1px 0` line on a 1px-bordered panel
+		// never shows; the padding edge is where CSS (and a 1:1 HTML
+		// port) draws it. A borderless element's padding box IS its border
+		// box, so its records keep the pinned geometry exactly.
+		insetBounds := bounds
+		insetRadii := radii
+		if widths := s.BorderWidths.ToPixels(rem); widths.Top != 0 || widths.Right != 0 || widths.Bottom != 0 || widths.Left != 0 {
+			width := bounds.Size.Width - widths.Left - widths.Right
+			height := bounds.Size.Height - widths.Top - widths.Bottom
+			if width < 0 {
+				width = 0
+			}
+			if height < 0 {
+				height = 0
+			}
+			insetBounds = Bounds{
+				Origin: Point{X: bounds.Origin.X + widths.Left, Y: bounds.Origin.Y + widths.Top},
+				Size:   Size{Width: width, Height: height},
+			}
+			insetRadii = Corners{
+				TopLeft:     max32(radii.TopLeft-max32(widths.Top, widths.Left), 0),
+				TopRight:    max32(radii.TopRight-max32(widths.Top, widths.Right), 0),
+				BottomRight: max32(radii.BottomRight-max32(widths.Bottom, widths.Right), 0),
+				BottomLeft:  max32(radii.BottomLeft-max32(widths.Bottom, widths.Left), 0),
+			}
+		}
+		if ring, ok := s.InsetRing.insetShadow(currentColor); ok {
+			mustPaint(frame.scene.PaintShadow(insetBounds, ring, insetRadii, smoothing, frame.paint), "inset ring")
+		}
+		// paint_inset_shadows_with_corner_smoothing (window.rs:4424).
+		for _, shadow := range s.BoxShadow {
+			if shadow.Inset {
+				mustPaint(frame.scene.PaintShadow(insetBounds, shadow, insetRadii, smoothing, frame.paint), "inset shadow")
+			}
+		}
+
+		continuation(w)
+
+		if s.isBorderVisible() {
+			borderColor := *s.BorderColor
+			mustPaint(currentFrame(w).scene.PaintQuad(PaintQuad{
+				Bounds:             bounds,
+				CornerRadii:        radii,
+				Background:         borderColor.Opacity(0),
+				BorderWidths:       s.BorderWidths.ToPixels(rem),
+				BorderColor:        borderColor,
+				BorderStyle:        s.BorderStyle,
+				BorderDashedLength: s.BorderDashedLength,
+				BorderDashedGap:    s.BorderDashedGap,
+			}, smoothing, currentFrame(w).paint), "border")
+		}
+	}
+
+	if len(s.Filter) == 0 {
+		paintUnit(w)
+		return
+	}
+	// with_filter_layer_with_corner_smoothing (window.rs:4537): the port's
+	// filter group carries one blur, so a chain nests one group per
+	// filter (outermost last, applying the filters in order); identity
+	// filters run inline inside WithFilterLayerCornerSmoothing.
+	s.withFilterChain(s.Filter, bounds, radii, smoothing, w, paintUnit)
+}
+
+// withFilterChain runs f inside one content-filter group per filter,
+// the first filter innermost.
+func (s *Style) withFilterChain(filters []Filter, bounds Bounds, radii Corners, smoothing float32, w *Window, f func(*Window)) {
+	if len(filters) == 0 {
+		f(w)
+		return
+	}
+	last := filters[len(filters)-1]
+	frame := currentFrame(w)
+	err := frame.scene.WithFilterLayerCornerSmoothing(bounds, last.BlurRadius, radii, smoothing, frame.paint, func() error {
+		s.withFilterChain(filters[:len(filters)-1], bounds, radii, smoothing, w, f)
+		return nil
+	})
+	if err != nil {
+		panic(fmt.Sprintf("gpui: DivElement filter paint: %v", err))
+	}
 }

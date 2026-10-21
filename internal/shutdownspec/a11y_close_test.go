@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/hoangvu12/gpui-go/gpui"
+	"github.com/hoangvu12/gpui-go/internal/realinput"
 )
 
 // wmGetObject is WM_GETOBJECT (winuser.h 0x003D).
@@ -107,6 +108,8 @@ func (v *a11yView) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
 // the label node (the pre-close reference for late dispatch).
 func openA11yWindow(t *testing.T, f *realFixture, title string, onClose func()) (*gpui.Window, gpui.A11yToken) {
 	t.Helper()
+	realinput.Require(t) // the a11y close corpus opens an activated window
+
 	window, err := f.app.OpenWindowView(gpui.WindowOptions{
 		Title:     title,
 		Show:      true,
