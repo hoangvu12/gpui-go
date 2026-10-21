@@ -1,5 +1,9 @@
 # Resume after compaction or explicit chat transfer
 
+## Build speed (2026-10-21, merged to main)
+
+Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_ lazy]` type-parameter marker (gpui/styled.go `lazy`; cmd/stylegen emits it). Go compiles every ordinary method of an instantiated generic type in each package that references it, so plain methods made every UI package recompile the ~3,100-method vocabulary (mordbard UI edit: 37 s → ~2 s; five Component[Self] components: 171 MB → 4.8 MB). Any new Self-returning method on a mixin needs the marker; internal/buildcostspec fails otherwise. Open runtime items (measured, not yet fixed): the >128-distinct-text real-window failure (native shaping handle cap), per-frame glyph re-rasterization (draw_text.go paintGlyphFromAtlas skips the pinned raster_metadata cache), per-node/per-primitive FFI calls, ~60k allocations/frame at 1,000 elements.
+
 ## ACTIVE EFFORT (2026-10-19): the GPUI Base port
 
 Read [.scratch/gpui-base/map.md](../.scratch/gpui-base/map.md) first — the gap map, the waves and the decisions. Branch `base-port` (commit per verified batch; merge to main + push at wave ends; v0.2.0 tag at the end). Authorization: the user approved the plan, the dependency policy (goldmark, uax29, x/net/html as modules; rope/sum tree/lsp types/strftime/search/data-url recreated) and the frozen-artifact fallbacks (ticket 02) with "sounds good then" (2026-10-19). The native artifact stays FROZEN at rev 11 — a genuine native gap is a decision for the user, never a rebuild.

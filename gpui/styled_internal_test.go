@@ -1,14 +1,54 @@
 package gpui
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
 )
 
+// ownMethods parses the package's non-test sources and returns the
+// method names each named type declares itself.
+func ownMethods(t *testing.T, types ...string) map[string]map[string]bool {
+	t.Helper()
+	want := map[string]map[string]bool{}
+	for _, name := range types {
+		want[name] = map[string]bool{}
+	}
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, ".", func(fi os.FileInfo) bool {
+		return !strings.HasSuffix(fi.Name(), "_test.go")
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range pkgs["gpui"].Files {
+		for _, d := range f.Decls {
+			fd, ok := d.(*ast.FuncDecl)
+			if !ok || fd.Recv == nil || len(fd.Recv.List) != 1 {
+				continue
+			}
+			recv := fd.Recv.List[0].Type
+			if star, ok := recv.(*ast.StarExpr); ok {
+				recv = star.X
+			}
+			if ix, ok := recv.(*ast.IndexExpr); ok {
+				recv = ix.X
+			}
+			if id, ok := recv.(*ast.Ident); ok && want[id.Name] != nil {
+				want[id.Name][fd.Name.Name] = true
+			}
+		}
+	}
+	return want
+}
+
 // TestStyledGeneratedVocabularyIsComplete checks the generated method
-// index against the pinned macro tables (styles.rs) and that every
-// non-generic generated method is promoted onto *DivElement.
+// index against the pinned macro tables (styles.rs) and that no built-in
+// element shadows a generated method except the known overrides.
 func TestStyledGeneratedVocabularyIsComplete(t *testing.T) {
 	// styles.rs:1000-1056 generate_box_style_methods: per prefix one
 	// custom setter, the 46 non-auto suffixes twice (plain and _neg_),
@@ -35,17 +75,20 @@ func TestStyledGeneratedVocabularyIsComplete(t *testing.T) {
 		t.Fatalf("generated methods = %d, want %d (the styles.rs tables)", got, want)
 	}
 
-	divType := reflect.TypeOf((*DivElement)(nil))
-	for name, rust := range generatedStyledMethods {
-		if _, ok := divType.MethodByName(name); ok {
-			continue
-		}
-		// Generic methods (the custom value setters taking IntoLength /
-		// IntoDefiniteLength / IntoBackground) are not in the reflected
-		// method set; Size and Gap are DivElement's own overrides.
-		m, ok := reflect.TypeOf((*Styled[*DivElement])(nil)).MethodByName(name)
-		if ok {
-			t.Errorf("%s (%s) is on Styled but not promoted to *DivElement (%v)", name, rust, m.Type)
+	// Every vocabulary method is generic (the lazy marker), so reflection
+	// cannot see it; promotion onto the built-in elements is the
+	// language's. What can go wrong is an element method shadowing a
+	// vocabulary method: only the known overrides may.
+	overrides := map[string]map[string]bool{
+		// The port's legacy two-argument Size and Gap (div.go).
+		"DivElement": {"Size": true, "Gap": true},
+	}
+	declared := ownMethods(t, "DivElement", "ImgElement", "CanvasElement")
+	for owner, names := range declared {
+		for name := range names {
+			if _, vocab := generatedStyledMethods[name]; vocab && !overrides[owner][name] {
+				t.Errorf("%s.%s shadows the generated Styled method %s", owner, name, generatedStyledMethods[name])
+			}
 		}
 	}
 	// A spot check of the naming rule.

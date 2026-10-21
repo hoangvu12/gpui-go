@@ -33,7 +33,7 @@ func (s *Styled[Self]) Map[U any](f func(Self) U) U {
 }
 
 // When applies then when condition holds (util.rs:21).
-func (s *Styled[Self]) When(condition bool, then func(Self) Self) Self {
+func (s *Styled[Self]) When[_ lazy](condition bool, then func(Self) Self) Self {
 	s.check()
 	if condition {
 		return then(s.self)
@@ -42,7 +42,7 @@ func (s *Styled[Self]) When(condition bool, then func(Self) Self) Self {
 }
 
 // WhenElse applies then or elseFn by condition (util.rs:29).
-func (s *Styled[Self]) WhenElse(condition bool, then, elseFn func(Self) Self) Self {
+func (s *Styled[Self]) WhenElse[_ lazy](condition bool, then, elseFn func(Self) Self) Self {
 	s.check()
 	if condition {
 		return then(s.self)
@@ -131,13 +131,13 @@ func (p *Parent[Self]) Extend(elements []AnyElement) {
 
 // Child adds one child, converting it with the selected precedence and
 // panicking on invalid input (element.rs:233 ParentElement::child).
-func (p *Parent[Self]) Child(value any) Self {
+func (p *Parent[Self]) Child[_ lazy](value any) Self {
 	return p.Children(value)
 }
 
 // Children adds multiple children (element.rs:242
 // ParentElement::children).
-func (p *Parent[Self]) Children(values ...any) Self {
+func (p *Parent[Self]) Children[_ lazy](values ...any) Self {
 	p.check()
 	if len(values) == 0 {
 		return p.self
@@ -241,19 +241,19 @@ func (i *Interactive[Self]) ID[I IntoElementID](value I) Self {
 }
 
 // TrackFocus tracks a focus handle on the inner div (DivElement.TrackFocus).
-func (i *Interactive[Self]) TrackFocus(value FocusHandle) Self {
+func (i *Interactive[Self]) TrackFocus[_ lazy](value FocusHandle) Self {
 	i.Interactivity().TrackFocus(value)
 	return i.self
 }
 
 // KeyContext sets the inner div's key context (DivElement.KeyContext).
-func (i *Interactive[Self]) KeyContext(value string) Self {
+func (i *Interactive[Self]) KeyContext[_ lazy](value string) Self {
 	i.Interactivity().KeyContext(value)
 	return i.self
 }
 
 // OnClick binds a click listener on the inner div (DivElement.OnClick).
-func (i *Interactive[Self]) OnClick(f func(*ClickEvent, *Window, *App)) Self {
+func (i *Interactive[Self]) OnClick[_ lazy](f func(*ClickEvent, *Window, *App)) Self {
 	i.Interactivity().OnClick(f)
 	return i.self
 }
@@ -274,39 +274,39 @@ func (i *Interactive[Self]) CaptureAction[A any](a Action[A], f func(*A, *Window
 
 // OnBoxedAction binds a boxed-action listener on the inner div
 // (DivElement.OnBoxedAction).
-func (i *Interactive[Self]) OnBoxedAction(a BoxedAction, f func(BoxedAction, *Window, *App)) Self {
+func (i *Interactive[Self]) OnBoxedAction[_ lazy](a BoxedAction, f func(BoxedAction, *Window, *App)) Self {
 	i.Interactivity().OnBoxedAction(a, f)
 	return i.self
 }
 
 // OnKeyDown binds a bubble key-down listener (DivElement.OnKeyDown).
-func (i *Interactive[Self]) OnKeyDown(f func(*KeyDownEvent, *Window, *App)) Self {
+func (i *Interactive[Self]) OnKeyDown[_ lazy](f func(*KeyDownEvent, *Window, *App)) Self {
 	i.Interactivity().OnKeyDown(f)
 	return i.self
 }
 
 // CaptureKeyDown binds a capture key-down listener
 // (DivElement.CaptureKeyDown).
-func (i *Interactive[Self]) CaptureKeyDown(f func(*KeyDownEvent, *Window, *App)) Self {
+func (i *Interactive[Self]) CaptureKeyDown[_ lazy](f func(*KeyDownEvent, *Window, *App)) Self {
 	i.Interactivity().CaptureKeyDown(f)
 	return i.self
 }
 
 // OnKeyUp binds a bubble key-up listener (DivElement.OnKeyUp).
-func (i *Interactive[Self]) OnKeyUp(f func(*KeyUpEvent, *Window, *App)) Self {
+func (i *Interactive[Self]) OnKeyUp[_ lazy](f func(*KeyUpEvent, *Window, *App)) Self {
 	i.Interactivity().OnKeyUp(f)
 	return i.self
 }
 
 // CaptureKeyUp binds a capture key-up listener (DivElement.CaptureKeyUp).
-func (i *Interactive[Self]) CaptureKeyUp(f func(*KeyUpEvent, *Window, *App)) Self {
+func (i *Interactive[Self]) CaptureKeyUp[_ lazy](f func(*KeyUpEvent, *Window, *App)) Self {
 	i.Interactivity().CaptureKeyUp(f)
 	return i.self
 }
 
 // OnModifiersChanged binds a modifiers-changed listener
 // (DivElement.OnModifiersChanged).
-func (i *Interactive[Self]) OnModifiersChanged(f func(*ModifiersChangedEvent, *Window, *App)) Self {
+func (i *Interactive[Self]) OnModifiersChanged[_ lazy](f func(*ModifiersChangedEvent, *Window, *App)) Self {
 	i.Interactivity().OnModifiersChanged(f)
 	return i.self
 }
@@ -314,7 +314,7 @@ func (i *Interactive[Self]) OnModifiersChanged(f func(*ModifiersChangedEvent, *W
 // OnMouseMove binds a hover-gated bubble mouse-move listener
 // (DivElement.OnMouseMove, div.rs:1155). OnMouseMoveAll receives every
 // move.
-func (i *Interactive[Self]) OnMouseMove(f func(*MouseMoveEvent, *Window, *App)) Self {
+func (i *Interactive[Self]) OnMouseMove[_ lazy](f func(*MouseMoveEvent, *Window, *App)) Self {
 	i.Interactivity().OnMouseMove(f)
 	return i.self
 }
@@ -322,45 +322,45 @@ func (i *Interactive[Self]) OnMouseMove(f func(*MouseMoveEvent, *Window, *App)) 
 // OnMouseUp binds a hover-gated bubble mouse-up listener for one button
 // (DivElement.OnMouseUp, div.rs:1051). OnMouseUpAll receives every mouse
 // up.
-func (i *Interactive[Self]) OnMouseUp(button MouseButton, f func(*MouseUpEvent, *Window, *App)) Self {
+func (i *Interactive[Self]) OnMouseUp[_ lazy](button MouseButton, f func(*MouseUpEvent, *Window, *App)) Self {
 	i.Interactivity().OnMouseUp(button, f)
 	return i.self
 }
 
 // OnScrollWheel binds a scroll listener (DivElement.OnScrollWheel).
-func (i *Interactive[Self]) OnScrollWheel(f func(*ScrollWheelEvent, DispatchPhase, *Hitbox, *Window, *App)) Self {
+func (i *Interactive[Self]) OnScrollWheel[_ lazy](f func(*ScrollWheelEvent, DispatchPhase, *Hitbox, *Window, *App)) Self {
 	i.Interactivity().OnScrollWheel(f)
 	return i.self
 }
 
 // OnPinch binds a pinch listener (DivElement.OnPinch).
-func (i *Interactive[Self]) OnPinch(f func(*PinchEvent, DispatchPhase, *Hitbox, *Window, *App)) Self {
+func (i *Interactive[Self]) OnPinch[_ lazy](f func(*PinchEvent, DispatchPhase, *Hitbox, *Window, *App)) Self {
 	i.Interactivity().OnPinch(f)
 	return i.self
 }
 
 // Occlude makes the inner div's hitbox block the mouse
 // (DivElement.Occlude).
-func (i *Interactive[Self]) Occlude() Self {
+func (i *Interactive[Self]) Occlude[_ lazy]() Self {
 	i.Interactivity().Occlude()
 	return i.self
 }
 
 // TabIndex sets the inner div's tab index (DivElement.TabIndex).
-func (i *Interactive[Self]) TabIndex(index int64) Self {
+func (i *Interactive[Self]) TabIndex[_ lazy](index int64) Self {
 	i.Interactivity().TabIndex(index)
 	return i.self
 }
 
 // TabGroup makes the inner div a tab group (DivElement.TabGroup).
-func (i *Interactive[Self]) TabGroup() Self {
+func (i *Interactive[Self]) TabGroup[_ lazy]() Self {
 	i.Interactivity().TabGroup()
 	return i.self
 }
 
 // DebugSelector sets the inner div's test bounds key
 // (DivElement.DebugSelector).
-func (i *Interactive[Self]) DebugSelector(selector string) Self {
+func (i *Interactive[Self]) DebugSelector[_ lazy](selector string) Self {
 	i.Interactivity().DebugSelector(selector)
 	return i.self
 }

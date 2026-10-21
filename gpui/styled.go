@@ -47,6 +47,30 @@ type Styled[Self any] struct {
 	target *StyleRefinement
 }
 
+// lazy is the type-parameter marker on every fluent method of the
+// mixins (Styled, Parent, Interactive): `func (s *Styled[Self])
+// Flex[_ lazy]() Self`. Its only type is lazyT, so callers never write
+// the argument (d.Flex() infers it).
+//
+// It exists for build speed. Go compiles every ordinary method of an
+// instantiated generic type in each package that references the
+// instantiation, so with plain methods a package that merely mentioned
+// *DivElement (which embeds Styled[*DivElement]) recompiled the whole
+// ~3,100-method vocabulary: a 109-line view compiled to a 30 MB object
+// and rebuilt in ~14 s, and each Component[Self] component added ~30 MB
+// to every package using it. A generic method is not part of the method
+// set; it is compiled only where it is called, and only the methods a
+// package actually calls (Rust's Styled trait has the same
+// pay-for-what-you-use property). internal/buildcostspec guards it.
+//
+// The one cost: a fluent method cannot be used as a method value
+// (f := d.Flex) without instantiation, which callers cannot spell; wrap
+// it in a closure instead.
+type lazy interface{ lazyT }
+
+// lazyT is lazy's only type.
+type lazyT struct{}
+
 // StyleBase is the binding hook promoted through value embedding.
 // Components using that embedding must not override this method.
 func (s *Styled[Self]) StyleBase() *Styled[Self] { return s }
@@ -139,7 +163,7 @@ func (s *Styled[Self]) storage() *StyleRefinement {
 
 // Refine applies the given refinement to this element's style
 // (styled.rs:30 Styled::refine_style): only present fields change.
-func (s *Styled[Self]) Refine(refinement StyleRefinement) Self {
+func (s *Styled[Self]) Refine[_ lazy](refinement StyleRefinement) Self {
 	s.StyleMut().Refine(&refinement)
 	return s.self
 }
@@ -154,7 +178,7 @@ func (s *Styled[Self]) TextStyleMut() *TextStyleRefinement {
 
 // Blur blurs this element's own content and children (CSS filter:
 // blur), appending to the filter chain (styled.rs:55).
-func (s *Styled[Self]) Blur(radius float32) Self {
+func (s *Styled[Self]) Blur[_ lazy](radius float32) Self {
 	st := s.StyleMut()
 	chain, _ := st.Filter.Get()
 	st.Filter = Some(append(slices.Clip(slices.Clone(chain)), Blur(radius)))
@@ -163,7 +187,7 @@ func (s *Styled[Self]) Blur(radius float32) Self {
 
 // Filter replaces the full filter chain of this element's own content
 // (styled.rs:66).
-func (s *Styled[Self]) Filter(filters []Filter) Self {
+func (s *Styled[Self]) Filter[_ lazy](filters []Filter) Self {
 	s.StyleMut().Filter = Some(slices.Clone(filters))
 	return s.self
 }
@@ -171,7 +195,7 @@ func (s *Styled[Self]) Filter(filters []Filter) Self {
 // BackdropBlur blurs the content rendered behind this element (CSS
 // backdrop-filter: blur), appending to the backdrop chain
 // (styled.rs:77).
-func (s *Styled[Self]) BackdropBlur(radius float32) Self {
+func (s *Styled[Self]) BackdropBlur[_ lazy](radius float32) Self {
 	st := s.StyleMut()
 	chain, _ := st.BackdropFilter.Get()
 	st.BackdropFilter = Some(append(slices.Clip(slices.Clone(chain)), Blur(radius)))
@@ -179,7 +203,7 @@ func (s *Styled[Self]) BackdropBlur(radius float32) Self {
 }
 
 // BackdropFilter replaces the full backdrop filter chain (styled.rs:88).
-func (s *Styled[Self]) BackdropFilter(filters []Filter) Self {
+func (s *Styled[Self]) BackdropFilter[_ lazy](filters []Filter) Self {
 	s.StyleMut().BackdropFilter = Some(slices.Clone(filters))
 	return s.self
 }
@@ -187,66 +211,66 @@ func (s *Styled[Self]) BackdropFilter(filters []Filter) Self {
 // ---- Display and inline alignment (styled.rs:94-160) ----
 
 // Display sets the display type (styled.rs:94).
-func (s *Styled[Self]) Display(display Display) Self {
+func (s *Styled[Self]) Display[_ lazy](display Display) Self {
 	s.StyleMut().Display = Some(display)
 	return s.self
 }
 
 // Block sets the display type to block (styled.rs:101).
-func (s *Styled[Self]) Block() Self { return s.Display(DisplayBlock) }
+func (s *Styled[Self]) Block[_ lazy]() Self { return s.Display(DisplayBlock) }
 
 // Flex sets the display type to flex (styled.rs:107).
-func (s *Styled[Self]) Flex() Self { return s.Display(DisplayFlex) }
+func (s *Styled[Self]) Flex[_ lazy]() Self { return s.Display(DisplayFlex) }
 
 // Grid sets the display type to grid (styled.rs:113).
-func (s *Styled[Self]) Grid() Self { return s.Display(DisplayGrid) }
+func (s *Styled[Self]) Grid[_ lazy]() Self { return s.Display(DisplayGrid) }
 
 // Inline contributes this element's contents to a block parent's
 // paragraph (styled.rs:119).
-func (s *Styled[Self]) Inline() Self { return s.Display(DisplayInline) }
+func (s *Styled[Self]) Inline[_ lazy]() Self { return s.Display(DisplayInline) }
 
 // InlineFlex places this element in a paragraph as one atomic box with
 // flex layout inside (styled.rs:124).
-func (s *Styled[Self]) InlineFlex() Self { return s.Display(DisplayInlineFlex) }
+func (s *Styled[Self]) InlineFlex[_ lazy]() Self { return s.Display(DisplayInlineFlex) }
 
 // VerticalAlign sets the vertical alignment in an inline layout
 // (styled.rs:129).
-func (s *Styled[Self]) VerticalAlign(align VerticalAlign) Self {
+func (s *Styled[Self]) VerticalAlign[_ lazy](align VerticalAlign) Self {
 	s.StyleMut().VerticalAlign = Some(align)
 	return s.self
 }
 
 // AlignBaseline aligns this inline box with the text baseline
 // (styled.rs:135).
-func (s *Styled[Self]) AlignBaseline() Self { return s.VerticalAlign(VerticalAlignBaseline) }
+func (s *Styled[Self]) AlignBaseline[_ lazy]() Self { return s.VerticalAlign(VerticalAlignBaseline) }
 
 // AlignMiddle aligns this inline box's midpoint with the parent baseline
 // plus half the x-height (styled.rs:142).
-func (s *Styled[Self]) AlignMiddle() Self { return s.VerticalAlign(VerticalAlignMiddle) }
+func (s *Styled[Self]) AlignMiddle[_ lazy]() Self { return s.VerticalAlign(VerticalAlignMiddle) }
 
 // AlignTop aligns this inline box with the top of its line
 // (styled.rs:147).
-func (s *Styled[Self]) AlignTop() Self { return s.VerticalAlign(VerticalAlignTop) }
+func (s *Styled[Self]) AlignTop[_ lazy]() Self { return s.VerticalAlign(VerticalAlignTop) }
 
 // AlignBottom aligns this inline box with the bottom of its line
 // (styled.rs:152).
-func (s *Styled[Self]) AlignBottom() Self { return s.VerticalAlign(VerticalAlignBottom) }
+func (s *Styled[Self]) AlignBottom[_ lazy]() Self { return s.VerticalAlign(VerticalAlignBottom) }
 
 // Hidden sets the display type to none (styled.rs:158).
-func (s *Styled[Self]) Hidden() Self { return s.Display(DisplayNone) }
+func (s *Styled[Self]) Hidden[_ lazy]() Self { return s.Display(DisplayNone) }
 
 // ---- Scrollbar and overflow fade (styled.rs:166-196) ----
 
 // ScrollbarWidth sets the space reserved for the scrollbar
 // (styled.rs:166).
-func (s *Styled[Self]) ScrollbarWidth(width AbsoluteLength) Self {
+func (s *Styled[Self]) ScrollbarWidth[_ lazy](width AbsoluteLength) Self {
 	s.StyleMut().ScrollbarWidth = Some(width)
 	return s.self
 }
 
 // OverflowFade sets per-edge fade distances for clipped overflow
 // (styled.rs:176).
-func (s *Styled[Self]) OverflowFade(fade AbsoluteLengthEdges) Self {
+func (s *Styled[Self]) OverflowFade[_ lazy](fade AbsoluteLengthEdges) Self {
 	st := s.StyleMut()
 	st.OverflowFadeTop = Some(fade.Top)
 	st.OverflowFadeRight = Some(fade.Right)
@@ -257,85 +281,85 @@ func (s *Styled[Self]) OverflowFade(fade AbsoluteLengthEdges) Self {
 
 // OverflowFadeX sets equal left/right fades and clears top/bottom
 // (styled.rs:188, Edges::horizontal).
-func (s *Styled[Self]) OverflowFadeX(fade AbsoluteLength) Self {
+func (s *Styled[Self]) OverflowFadeX[_ lazy](fade AbsoluteLength) Self {
 	return s.OverflowFade(AbsoluteLengthEdges{Left: fade, Right: fade})
 }
 
 // OverflowFadeY sets equal top/bottom fades and clears left/right
 // (styled.rs:194, Edges::vertical).
-func (s *Styled[Self]) OverflowFadeY(fade AbsoluteLength) Self {
+func (s *Styled[Self]) OverflowFadeY[_ lazy](fade AbsoluteLength) Self {
 	return s.OverflowFade(AbsoluteLengthEdges{Top: fade, Bottom: fade})
 }
 
 // ---- Whitespace, truncation and text alignment (styled.rs:200-293) ----
 
 // Whitespace sets the white space handling (styled.rs:200).
-func (s *Styled[Self]) Whitespace(whiteSpace WhiteSpace) Self {
+func (s *Styled[Self]) Whitespace[_ lazy](whiteSpace WhiteSpace) Self {
 	s.TextStyleMut().WhiteSpace = Some(whiteSpace)
 	return s.self
 }
 
 // WhitespaceNormal sets white space to normal (styled.rs:207).
-func (s *Styled[Self]) WhitespaceNormal() Self { return s.Whitespace(WhiteSpaceNormal) }
+func (s *Styled[Self]) WhitespaceNormal[_ lazy]() Self { return s.Whitespace(WhiteSpaceNormal) }
 
 // WhitespaceNowrap sets white space to nowrap (styled.rs:214).
-func (s *Styled[Self]) WhitespaceNowrap() Self { return s.Whitespace(WhiteSpaceNowrap) }
+func (s *Styled[Self]) WhitespaceNowrap[_ lazy]() Self { return s.Whitespace(WhiteSpaceNowrap) }
 
 // TextEllipsis truncates overflowing text with an ellipsis at the end
 // (styled.rs:221).
-func (s *Styled[Self]) TextEllipsis() Self {
+func (s *Styled[Self]) TextEllipsis[_ lazy]() Self {
 	return s.TextOverflow(TextOverflow{Kind: TextOverflowTruncate, Ellipsis: Ellipsis})
 }
 
 // TextEllipsisStart truncates with an ellipsis at the start
 // (styled.rs:229).
-func (s *Styled[Self]) TextEllipsisStart() Self {
+func (s *Styled[Self]) TextEllipsisStart[_ lazy]() Self {
 	return s.TextOverflow(TextOverflow{Kind: TextOverflowTruncateStart, Ellipsis: Ellipsis})
 }
 
 // TextEllipsisMiddle truncates with an ellipsis in the middle
 // (styled.rs:237).
-func (s *Styled[Self]) TextEllipsisMiddle() Self {
+func (s *Styled[Self]) TextEllipsisMiddle[_ lazy]() Self {
 	return s.TextOverflow(TextOverflow{Kind: TextOverflowTruncateMiddle, Ellipsis: Ellipsis})
 }
 
 // TextOverflow sets the text overflow behavior (styled.rs:243).
-func (s *Styled[Self]) TextOverflow(overflow TextOverflow) Self {
+func (s *Styled[Self]) TextOverflow[_ lazy](overflow TextOverflow) Self {
 	s.TextStyleMut().TextOverflow = Some(overflow)
 	return s.self
 }
 
 // TextAlign sets the text alignment (styled.rs:249).
-func (s *Styled[Self]) TextAlign(align TextAlign) Self {
+func (s *Styled[Self]) TextAlign[_ lazy](align TextAlign) Self {
 	s.TextStyleMut().TextAlign = Some(align)
 	return s.self
 }
 
 // TextLeft aligns text left (styled.rs:255).
-func (s *Styled[Self]) TextLeft() Self { return s.TextAlign(TextAlignLeft) }
+func (s *Styled[Self]) TextLeft[_ lazy]() Self { return s.TextAlign(TextAlignLeft) }
 
 // TextCenter centers text (styled.rs:260).
-func (s *Styled[Self]) TextCenter() Self { return s.TextAlign(TextAlignCenter) }
+func (s *Styled[Self]) TextCenter[_ lazy]() Self { return s.TextAlign(TextAlignCenter) }
 
 // TextRight aligns text right (styled.rs:265).
-func (s *Styled[Self]) TextRight() Self { return s.TextAlign(TextAlignRight) }
+func (s *Styled[Self]) TextRight[_ lazy]() Self { return s.TextAlign(TextAlignRight) }
 
 // LetterSpacing sets the letter spacing in logical pixels
 // (styled.rs:270).
-func (s *Styled[Self]) LetterSpacing(spacing float32) Self {
+func (s *Styled[Self]) LetterSpacing[_ lazy](spacing float32) Self {
 	s.TextStyleMut().LetterSpacing = Some(spacing)
 	return s.self
 }
 
 // TextTransform sets the case transformation (styled.rs:276).
-func (s *Styled[Self]) TextTransform(transform TextTransform) Self {
+func (s *Styled[Self]) TextTransform[_ lazy](transform TextTransform) Self {
 	s.TextStyleMut().TextTransform = Some(transform)
 	return s.self
 }
 
 // Truncate hides overflow, prevents wrapping and truncates with an
 // ellipsis (styled.rs:283).
-func (s *Styled[Self]) Truncate() Self {
+func (s *Styled[Self]) Truncate[_ lazy]() Self {
 	s.OverflowHidden()
 	s.WhitespaceNowrap()
 	return s.TextEllipsis()
@@ -343,7 +367,7 @@ func (s *Styled[Self]) Truncate() Self {
 
 // LineClamp sets the number of lines shown before truncating, and hides
 // overflow (styled.rs:289).
-func (s *Styled[Self]) LineClamp(lines int) Self {
+func (s *Styled[Self]) LineClamp[_ lazy](lines int) Self {
 	s.TextStyleMut().LineClamp = Some(lines)
 	return s.OverflowHidden()
 }
@@ -351,26 +375,28 @@ func (s *Styled[Self]) LineClamp(lines int) Self {
 // ---- Flex (styled.rs:297-434) ----
 
 // FlexDirection sets the flex direction (styled.rs:297).
-func (s *Styled[Self]) FlexDirection(direction FlexDirection) Self {
+func (s *Styled[Self]) FlexDirection[_ lazy](direction FlexDirection) Self {
 	s.StyleMut().FlexDirection = Some(direction)
 	return s.self
 }
 
 // FlexCol sets the flex direction to column (styled.rs:304).
-func (s *Styled[Self]) FlexCol() Self { return s.FlexDirection(FlexDirectionColumn) }
+func (s *Styled[Self]) FlexCol[_ lazy]() Self { return s.FlexDirection(FlexDirectionColumn) }
 
 // FlexColReverse sets the flex direction to column-reverse
 // (styled.rs:311).
-func (s *Styled[Self]) FlexColReverse() Self { return s.FlexDirection(FlexDirectionColumnReverse) }
+func (s *Styled[Self]) FlexColReverse[_ lazy]() Self {
+	return s.FlexDirection(FlexDirectionColumnReverse)
+}
 
 // FlexRow sets the flex direction to row (styled.rs:318).
-func (s *Styled[Self]) FlexRow() Self { return s.FlexDirection(FlexDirectionRow) }
+func (s *Styled[Self]) FlexRow[_ lazy]() Self { return s.FlexDirection(FlexDirectionRow) }
 
 // FlexRowReverse sets the flex direction to row-reverse (styled.rs:325).
-func (s *Styled[Self]) FlexRowReverse() Self { return s.FlexDirection(FlexDirectionRowReverse) }
+func (s *Styled[Self]) FlexRowReverse[_ lazy]() Self { return s.FlexDirection(FlexDirectionRowReverse) }
 
 // setFlex writes grow, shrink and basis together.
-func (s *Styled[Self]) setFlex(grow, shrink float32, basis Length) Self {
+func (s *Styled[Self]) setFlex[_ lazy](grow, shrink float32, basis Length) Self {
 	st := s.StyleMut()
 	st.FlexGrow = Some(grow)
 	st.FlexShrink = Some(shrink)
@@ -380,17 +406,17 @@ func (s *Styled[Self]) setFlex(grow, shrink float32, basis Length) Self {
 
 // Flex1 lets the item grow and shrink, ignoring its initial size
 // (styled.rs:332: grow 1, shrink 1, basis relative(0)).
-func (s *Styled[Self]) Flex1() Self { return s.setFlex(1, 1, DefiniteLengthOf(Fraction(0))) }
+func (s *Styled[Self]) Flex1[_ lazy]() Self { return s.setFlex(1, 1, DefiniteLengthOf(Fraction(0))) }
 
 // FlexAuto lets the item grow and shrink from its initial size
 // (styled.rs:341).
-func (s *Styled[Self]) FlexAuto() Self { return s.setFlex(1, 1, AutoLength()) }
+func (s *Styled[Self]) FlexAuto[_ lazy]() Self { return s.setFlex(1, 1, AutoLength()) }
 
 // FlexInitial lets the item shrink but not grow (styled.rs:350).
-func (s *Styled[Self]) FlexInitial() Self { return s.setFlex(0, 1, AutoLength()) }
+func (s *Styled[Self]) FlexInitial[_ lazy]() Self { return s.setFlex(0, 1, AutoLength()) }
 
 // FlexNone prevents the item from growing or shrinking (styled.rs:359).
-func (s *Styled[Self]) FlexNone() Self { return s.setFlex(0, 0, AutoLength()) }
+func (s *Styled[Self]) FlexNone[_ lazy]() Self { return s.setFlex(0, 0, AutoLength()) }
 
 // FlexBasis sets the initial main-axis size (styled.rs:368).
 func (s *Styled[Self]) FlexBasis[L IntoLength](basis L) Self {
@@ -399,43 +425,43 @@ func (s *Styled[Self]) FlexBasis[L IntoLength](basis L) Self {
 }
 
 // FlexGrow sets the grow factor (styled.rs:375).
-func (s *Styled[Self]) FlexGrow(grow float32) Self {
+func (s *Styled[Self]) FlexGrow[_ lazy](grow float32) Self {
 	s.StyleMut().FlexGrow = Some(grow)
 	return s.self
 }
 
 // FlexGrow0 disables growth (styled.rs:382).
-func (s *Styled[Self]) FlexGrow0() Self { return s.FlexGrow(0) }
+func (s *Styled[Self]) FlexGrow0[_ lazy]() Self { return s.FlexGrow(0) }
 
 // FlexGrow1 enables growth (styled.rs:389).
-func (s *Styled[Self]) FlexGrow1() Self { return s.FlexGrow(1) }
+func (s *Styled[Self]) FlexGrow1[_ lazy]() Self { return s.FlexGrow(1) }
 
 // FlexShrink sets the shrink factor (styled.rs:396).
-func (s *Styled[Self]) FlexShrink(shrink float32) Self {
+func (s *Styled[Self]) FlexShrink[_ lazy](shrink float32) Self {
 	s.StyleMut().FlexShrink = Some(shrink)
 	return s.self
 }
 
 // FlexShrink0 disables shrinking (styled.rs:403).
-func (s *Styled[Self]) FlexShrink0() Self { return s.FlexShrink(0) }
+func (s *Styled[Self]) FlexShrink0[_ lazy]() Self { return s.FlexShrink(0) }
 
 // FlexShrink1 enables shrinking (styled.rs:410).
-func (s *Styled[Self]) FlexShrink1() Self { return s.FlexShrink(1) }
+func (s *Styled[Self]) FlexShrink1[_ lazy]() Self { return s.FlexShrink(1) }
 
 // FlexWrap lets flex items wrap (styled.rs:417).
-func (s *Styled[Self]) FlexWrap() Self {
+func (s *Styled[Self]) FlexWrap[_ lazy]() Self {
 	s.StyleMut().FlexWrap = Some(FlexWrapWrap)
 	return s.self
 }
 
 // FlexWrapReverse wraps flex items in reverse (styled.rs:424).
-func (s *Styled[Self]) FlexWrapReverse() Self {
+func (s *Styled[Self]) FlexWrapReverse[_ lazy]() Self {
 	s.StyleMut().FlexWrap = Some(FlexWrapWrapReverse)
 	return s.self
 }
 
 // FlexNowrap prevents flex items from wrapping (styled.rs:431).
-func (s *Styled[Self]) FlexNowrap() Self {
+func (s *Styled[Self]) FlexNowrap[_ lazy]() Self {
 	s.StyleMut().FlexWrap = Some(FlexWrapNoWrap)
 	return s.self
 }
@@ -443,126 +469,126 @@ func (s *Styled[Self]) FlexNowrap() Self {
 // ---- Alignment (styled.rs:438-624) ----
 
 // alignItems writes align_items.
-func (s *Styled[Self]) alignItems(value AlignItems) Self {
+func (s *Styled[Self]) alignItems[_ lazy](value AlignItems) Self {
 	s.StyleMut().AlignItems = Some(value)
 	return s.self
 }
 
 // ItemsStart aligns items to the cross-axis start (styled.rs:438:
 // FlexStart).
-func (s *Styled[Self]) ItemsStart() Self { return s.alignItems(AlignItemsFlexStart) }
+func (s *Styled[Self]) ItemsStart[_ lazy]() Self { return s.alignItems(AlignItemsFlexStart) }
 
 // ItemsEnd aligns items to the cross-axis end (styled.rs:445: FlexEnd).
-func (s *Styled[Self]) ItemsEnd() Self { return s.alignItems(AlignItemsFlexEnd) }
+func (s *Styled[Self]) ItemsEnd[_ lazy]() Self { return s.alignItems(AlignItemsFlexEnd) }
 
 // ItemsCenter centers items on the cross axis (styled.rs:452).
-func (s *Styled[Self]) ItemsCenter() Self { return s.alignItems(AlignItemsCenter) }
+func (s *Styled[Self]) ItemsCenter[_ lazy]() Self { return s.alignItems(AlignItemsCenter) }
 
 // ItemsBaseline aligns items on their baselines (styled.rs:459).
-func (s *Styled[Self]) ItemsBaseline() Self { return s.alignItems(AlignItemsBaseline) }
+func (s *Styled[Self]) ItemsBaseline[_ lazy]() Self { return s.alignItems(AlignItemsBaseline) }
 
 // ItemsStretch stretches items on the cross axis (styled.rs:466).
-func (s *Styled[Self]) ItemsStretch() Self { return s.alignItems(AlignItemsStretch) }
+func (s *Styled[Self]) ItemsStretch[_ lazy]() Self { return s.alignItems(AlignItemsStretch) }
 
 // alignSelf writes align_self.
-func (s *Styled[Self]) alignSelf(value AlignItems) Self {
+func (s *Styled[Self]) alignSelf[_ lazy](value AlignItems) Self {
 	s.StyleMut().AlignSelf = Some(value)
 	return s.self
 }
 
 // SelfStart aligns this item to the cross-axis start (styled.rs:473:
 // Start).
-func (s *Styled[Self]) SelfStart() Self { return s.alignSelf(AlignItemsStart) }
+func (s *Styled[Self]) SelfStart[_ lazy]() Self { return s.alignSelf(AlignItemsStart) }
 
 // SelfEnd aligns this item to the cross-axis end (styled.rs:480: End).
-func (s *Styled[Self]) SelfEnd() Self { return s.alignSelf(AlignItemsEnd) }
+func (s *Styled[Self]) SelfEnd[_ lazy]() Self { return s.alignSelf(AlignItemsEnd) }
 
 // SelfFlexStart aligns this item to the flex start (styled.rs:487).
-func (s *Styled[Self]) SelfFlexStart() Self { return s.alignSelf(AlignItemsFlexStart) }
+func (s *Styled[Self]) SelfFlexStart[_ lazy]() Self { return s.alignSelf(AlignItemsFlexStart) }
 
 // SelfFlexEnd aligns this item to the flex end (styled.rs:494).
-func (s *Styled[Self]) SelfFlexEnd() Self { return s.alignSelf(AlignItemsFlexEnd) }
+func (s *Styled[Self]) SelfFlexEnd[_ lazy]() Self { return s.alignSelf(AlignItemsFlexEnd) }
 
 // SelfCenter centers this item on the cross axis (styled.rs:501).
-func (s *Styled[Self]) SelfCenter() Self { return s.alignSelf(AlignItemsCenter) }
+func (s *Styled[Self]) SelfCenter[_ lazy]() Self { return s.alignSelf(AlignItemsCenter) }
 
 // SelfBaseline aligns this item on the baseline (styled.rs:508).
-func (s *Styled[Self]) SelfBaseline() Self { return s.alignSelf(AlignItemsBaseline) }
+func (s *Styled[Self]) SelfBaseline[_ lazy]() Self { return s.alignSelf(AlignItemsBaseline) }
 
 // SelfStretch stretches this item on the cross axis (styled.rs:515).
-func (s *Styled[Self]) SelfStretch() Self { return s.alignSelf(AlignItemsStretch) }
+func (s *Styled[Self]) SelfStretch[_ lazy]() Self { return s.alignSelf(AlignItemsStretch) }
 
 // justify writes justify_content.
-func (s *Styled[Self]) justify(value AlignContent) Self {
+func (s *Styled[Self]) justify[_ lazy](value AlignContent) Self {
 	s.StyleMut().JustifyContent = Some(value)
 	return s.self
 }
 
 // JustifyStart packs items at the main-axis start (styled.rs:522).
-func (s *Styled[Self]) JustifyStart() Self { return s.justify(AlignContentStart) }
+func (s *Styled[Self]) JustifyStart[_ lazy]() Self { return s.justify(AlignContentStart) }
 
 // JustifyEnd packs items at the main-axis end (styled.rs:529).
-func (s *Styled[Self]) JustifyEnd() Self { return s.justify(AlignContentEnd) }
+func (s *Styled[Self]) JustifyEnd[_ lazy]() Self { return s.justify(AlignContentEnd) }
 
 // JustifyCenter centers items on the main axis (styled.rs:536).
-func (s *Styled[Self]) JustifyCenter() Self { return s.justify(AlignContentCenter) }
+func (s *Styled[Self]) JustifyCenter[_ lazy]() Self { return s.justify(AlignContentCenter) }
 
 // JustifyBetween distributes space between items (styled.rs:544).
-func (s *Styled[Self]) JustifyBetween() Self { return s.justify(AlignContentSpaceBetween) }
+func (s *Styled[Self]) JustifyBetween[_ lazy]() Self { return s.justify(AlignContentSpaceBetween) }
 
 // JustifyAround distributes space around items (styled.rs:552).
-func (s *Styled[Self]) JustifyAround() Self { return s.justify(AlignContentSpaceAround) }
+func (s *Styled[Self]) JustifyAround[_ lazy]() Self { return s.justify(AlignContentSpaceAround) }
 
 // JustifyEvenly distributes space evenly (styled.rs:562).
-func (s *Styled[Self]) JustifyEvenly() Self { return s.justify(AlignContentSpaceEvenly) }
+func (s *Styled[Self]) JustifyEvenly[_ lazy]() Self { return s.justify(AlignContentSpaceEvenly) }
 
 // alignContent writes align_content.
-func (s *Styled[Self]) alignContent(value AlignContent) Self {
+func (s *Styled[Self]) alignContent[_ lazy](value AlignContent) Self {
 	s.StyleMut().AlignContent = Some(value)
 	return s.self
 }
 
 // ContentNormal clears align-content (styled.rs:569: align_content =
 // None, the refinement absent).
-func (s *Styled[Self]) ContentNormal() Self {
+func (s *Styled[Self]) ContentNormal[_ lazy]() Self {
 	s.StyleMut().AlignContent = Optional[AlignContent]{}
 	return s.self
 }
 
 // ContentCenter packs content in the cross-axis center (styled.rs:576).
-func (s *Styled[Self]) ContentCenter() Self { return s.alignContent(AlignContentCenter) }
+func (s *Styled[Self]) ContentCenter[_ lazy]() Self { return s.alignContent(AlignContentCenter) }
 
 // ContentStart packs content at the cross-axis start (styled.rs:583:
 // FlexStart).
-func (s *Styled[Self]) ContentStart() Self { return s.alignContent(AlignContentFlexStart) }
+func (s *Styled[Self]) ContentStart[_ lazy]() Self { return s.alignContent(AlignContentFlexStart) }
 
 // ContentEnd packs content at the cross-axis end (styled.rs:590:
 // FlexEnd).
-func (s *Styled[Self]) ContentEnd() Self { return s.alignContent(AlignContentFlexEnd) }
+func (s *Styled[Self]) ContentEnd[_ lazy]() Self { return s.alignContent(AlignContentFlexEnd) }
 
 // ContentBetween distributes content with space between
 // (styled.rs:598).
-func (s *Styled[Self]) ContentBetween() Self { return s.alignContent(AlignContentSpaceBetween) }
+func (s *Styled[Self]) ContentBetween[_ lazy]() Self { return s.alignContent(AlignContentSpaceBetween) }
 
 // ContentAround distributes content with space around (styled.rs:606).
-func (s *Styled[Self]) ContentAround() Self { return s.alignContent(AlignContentSpaceAround) }
+func (s *Styled[Self]) ContentAround[_ lazy]() Self { return s.alignContent(AlignContentSpaceAround) }
 
 // ContentEvenly distributes content evenly (styled.rs:614).
-func (s *Styled[Self]) ContentEvenly() Self { return s.alignContent(AlignContentSpaceEvenly) }
+func (s *Styled[Self]) ContentEvenly[_ lazy]() Self { return s.alignContent(AlignContentSpaceEvenly) }
 
 // ContentStretch stretches content on the cross axis (styled.rs:621).
-func (s *Styled[Self]) ContentStretch() Self { return s.alignContent(AlignContentStretch) }
+func (s *Styled[Self]) ContentStretch[_ lazy]() Self { return s.alignContent(AlignContentStretch) }
 
 // ---- Aspect ratio, background and border pattern (styled.rs:628-668) ----
 
 // AspectRatio sets the width/height ratio (styled.rs:628).
-func (s *Styled[Self]) AspectRatio(ratio float32) Self {
+func (s *Styled[Self]) AspectRatio[_ lazy](ratio float32) Self {
 	s.StyleMut().AspectRatio = Some(ratio)
 	return s.self
 }
 
 // AspectSquare sets the aspect ratio to 1 (styled.rs:635).
-func (s *Styled[Self]) AspectSquare() Self { return s.AspectRatio(1) }
+func (s *Styled[Self]) AspectSquare[_ lazy]() Self { return s.AspectRatio(1) }
 
 // Bg sets the background (styled.rs:641; the pinned Fill's one variant
 // is a Background).
@@ -572,21 +598,21 @@ func (s *Styled[Self]) Bg[F IntoBackground](fill F) Self {
 }
 
 // BorderDashed sets the border style to dashed (styled.rs:651).
-func (s *Styled[Self]) BorderDashed() Self {
+func (s *Styled[Self]) BorderDashed[_ lazy]() Self {
 	s.StyleMut().BorderStyle = Some(BorderStyleDashed)
 	return s.self
 }
 
 // BorderDashedLength sets the dash length as a multiple of the border
 // width, clamped at zero (styled.rs:657).
-func (s *Styled[Self]) BorderDashedLength(lengthPerBorderWidth float32) Self {
+func (s *Styled[Self]) BorderDashedLength[_ lazy](lengthPerBorderWidth float32) Self {
 	s.StyleMut().BorderDashedLength = Some(max32(lengthPerBorderWidth, 0))
 	return s.self
 }
 
 // BorderDashedGap sets the dash gap as a multiple of the border width,
 // clamped at zero (styled.rs:664).
-func (s *Styled[Self]) BorderDashedGap(gapPerBorderWidth float32) Self {
+func (s *Styled[Self]) BorderDashedGap[_ lazy](gapPerBorderWidth float32) Self {
 	s.StyleMut().BorderDashedGap = Some(max32(gapPerBorderWidth, 0))
 	return s.self
 }
@@ -594,79 +620,79 @@ func (s *Styled[Self]) BorderDashedGap(gapPerBorderWidth float32) Self {
 // ---- Text (styled.rs:679-908) ----
 
 // TextColor sets the text color, cascading to children (styled.rs:679).
-func (s *Styled[Self]) TextColor(color Hsla) Self {
+func (s *Styled[Self]) TextColor[_ lazy](color Hsla) Self {
 	s.TextStyleMut().Color = Some(color)
 	return s.self
 }
 
 // FontWeight sets the font weight, cascading to children
 // (styled.rs:687; FontWeight is the port's float32 weight).
-func (s *Styled[Self]) FontWeight(weight float32) Self {
+func (s *Styled[Self]) FontWeight[_ lazy](weight float32) Self {
 	s.TextStyleMut().FontWeight = Some(weight)
 	return s.self
 }
 
 // TextBg sets the text background color, cascading to children
 // (styled.rs:695).
-func (s *Styled[Self]) TextBg(bg Hsla) Self {
+func (s *Styled[Self]) TextBg[_ lazy](bg Hsla) Self {
 	s.TextStyleMut().BackgroundColor = Some(bg)
 	return s.self
 }
 
 // TextSize sets the font size, cascading to children (styled.rs:703).
-func (s *Styled[Self]) TextSize(size AbsoluteLength) Self {
+func (s *Styled[Self]) TextSize[_ lazy](size AbsoluteLength) Self {
 	s.TextStyleMut().FontSize = Some(size)
 	return s.self
 }
 
 // TextXs sets the font size to 0.75rem (styled.rs:710).
-func (s *Styled[Self]) TextXs() Self { return s.TextSize(RemsOf(0.75)) }
+func (s *Styled[Self]) TextXs[_ lazy]() Self { return s.TextSize(RemsOf(0.75)) }
 
 // TextSm sets the font size to 0.875rem (styled.rs:717).
-func (s *Styled[Self]) TextSm() Self { return s.TextSize(RemsOf(0.875)) }
+func (s *Styled[Self]) TextSm[_ lazy]() Self { return s.TextSize(RemsOf(0.875)) }
 
 // TextBase sets the font size to 1rem (styled.rs:724).
-func (s *Styled[Self]) TextBase() Self { return s.TextSize(RemsOf(1.0)) }
+func (s *Styled[Self]) TextBase[_ lazy]() Self { return s.TextSize(RemsOf(1.0)) }
 
 // TextLg sets the font size to 1.125rem (styled.rs:731).
-func (s *Styled[Self]) TextLg() Self { return s.TextSize(RemsOf(1.125)) }
+func (s *Styled[Self]) TextLg[_ lazy]() Self { return s.TextSize(RemsOf(1.125)) }
 
 // TextXl sets the font size to 1.25rem (styled.rs:738).
-func (s *Styled[Self]) TextXl() Self { return s.TextSize(RemsOf(1.25)) }
+func (s *Styled[Self]) TextXl[_ lazy]() Self { return s.TextSize(RemsOf(1.25)) }
 
 // Text2xl sets the font size to 1.5rem (styled.rs:745).
-func (s *Styled[Self]) Text2xl() Self { return s.TextSize(RemsOf(1.5)) }
+func (s *Styled[Self]) Text2xl[_ lazy]() Self { return s.TextSize(RemsOf(1.5)) }
 
 // Text3xl sets the font size to 1.875rem (styled.rs:752).
-func (s *Styled[Self]) Text3xl() Self { return s.TextSize(RemsOf(1.875)) }
+func (s *Styled[Self]) Text3xl[_ lazy]() Self { return s.TextSize(RemsOf(1.875)) }
 
 // Italic sets the font style to italic (styled.rs:759).
-func (s *Styled[Self]) Italic() Self {
+func (s *Styled[Self]) Italic[_ lazy]() Self {
 	s.TextStyleMut().FontStyle = Some(FontStyleItalic)
 	return s.self
 }
 
 // NotItalic sets the font style to normal (styled.rs:766).
-func (s *Styled[Self]) NotItalic() Self {
+func (s *Styled[Self]) NotItalic[_ lazy]() Self {
 	s.TextStyleMut().FontStyle = Some(FontStyleNormal)
 	return s.self
 }
 
 // Underline sets a 1px underline (styled.rs:773).
-func (s *Styled[Self]) Underline() Self {
+func (s *Styled[Self]) Underline[_ lazy]() Self {
 	s.TextStyleMut().Underline = Some(UnderlineStyle{Thickness: 1})
 	return s.self
 }
 
 // LineThrough sets a 1px strikethrough (styled.rs:784).
-func (s *Styled[Self]) LineThrough() Self {
+func (s *Styled[Self]) LineThrough[_ lazy]() Self {
 	s.TextStyleMut().Strikethrough = Some(StrikethroughStyle{Thickness: 1})
 	return s.self
 }
 
 // TextDecorationNone removes the underline refinement (styled.rs:796:
 // underline = None).
-func (s *Styled[Self]) TextDecorationNone() Self {
+func (s *Styled[Self]) TextDecorationNone[_ lazy]() Self {
 	s.TextStyleMut().Underline = Optional[UnderlineStyle]{}
 	return s.self
 }
@@ -674,7 +700,7 @@ func (s *Styled[Self]) TextDecorationNone() Self {
 // underlineWith edits the underline, inserting the default first
 // (`underline.get_or_insert_with(Default::default)`). The color pointer
 // is replaced, never written through, so snapshots stay independent.
-func (s *Styled[Self]) underlineWith(edit func(*UnderlineStyle)) Self {
+func (s *Styled[Self]) underlineWith[_ lazy](edit func(*UnderlineStyle)) Self {
 	text := s.TextStyleMut()
 	underline, _ := text.Underline.Get()
 	edit(&underline)
@@ -683,53 +709,53 @@ func (s *Styled[Self]) underlineWith(edit func(*UnderlineStyle)) Self {
 }
 
 // TextDecorationColor sets the underline color (styled.rs:802).
-func (s *Styled[Self]) TextDecorationColor(color Hsla) Self {
+func (s *Styled[Self]) TextDecorationColor[_ lazy](color Hsla) Self {
 	return s.underlineWith(func(u *UnderlineStyle) { c := color; u.Color = &c })
 }
 
 // TextDecorationSolid sets a solid underline (styled.rs:811).
-func (s *Styled[Self]) TextDecorationSolid() Self {
+func (s *Styled[Self]) TextDecorationSolid[_ lazy]() Self {
 	return s.underlineWith(func(u *UnderlineStyle) { u.Wavy = false })
 }
 
 // TextDecorationWavy sets a wavy underline (styled.rs:820).
-func (s *Styled[Self]) TextDecorationWavy() Self {
+func (s *Styled[Self]) TextDecorationWavy[_ lazy]() Self {
 	return s.underlineWith(func(u *UnderlineStyle) { u.Wavy = true })
 }
 
 // TextDecoration0 sets a 0px underline thickness (styled.rs:829).
-func (s *Styled[Self]) TextDecoration0() Self {
+func (s *Styled[Self]) TextDecoration0[_ lazy]() Self {
 	return s.underlineWith(func(u *UnderlineStyle) { u.Thickness = 0 })
 }
 
 // TextDecoration1 sets a 1px underline thickness (styled.rs:838).
-func (s *Styled[Self]) TextDecoration1() Self {
+func (s *Styled[Self]) TextDecoration1[_ lazy]() Self {
 	return s.underlineWith(func(u *UnderlineStyle) { u.Thickness = 1 })
 }
 
 // TextDecoration2 sets a 2px underline thickness (styled.rs:847).
-func (s *Styled[Self]) TextDecoration2() Self {
+func (s *Styled[Self]) TextDecoration2[_ lazy]() Self {
 	return s.underlineWith(func(u *UnderlineStyle) { u.Thickness = 2 })
 }
 
 // TextDecoration4 sets a 4px underline thickness (styled.rs:856).
-func (s *Styled[Self]) TextDecoration4() Self {
+func (s *Styled[Self]) TextDecoration4[_ lazy]() Self {
 	return s.underlineWith(func(u *UnderlineStyle) { u.Thickness = 4 })
 }
 
 // TextDecoration8 sets an 8px underline thickness (styled.rs:865).
-func (s *Styled[Self]) TextDecoration8() Self {
+func (s *Styled[Self]) TextDecoration8[_ lazy]() Self {
 	return s.underlineWith(func(u *UnderlineStyle) { u.Thickness = 8 })
 }
 
 // FontFamily sets the font family (styled.rs:873).
-func (s *Styled[Self]) FontFamily(familyName string) Self {
+func (s *Styled[Self]) FontFamily[_ lazy](familyName string) Self {
 	s.TextStyleMut().FontFamily = Some(familyName)
 	return s.self
 }
 
 // FontFeatures sets the font features (styled.rs:879).
-func (s *Styled[Self]) FontFeatures(features []FontFeature) Self {
+func (s *Styled[Self]) FontFeatures[_ lazy](features []FontFeature) Self {
 	s.TextStyleMut().FontFeatures = Some(slices.Clone(features))
 	return s.self
 }
@@ -737,7 +763,7 @@ func (s *Styled[Self]) FontFeatures(features []FontFeature) Self {
 // Font sets family, features, weight and style, and the fallbacks
 // (styled.rs:885: fallbacks are assigned as-is, so an empty list makes
 // the refinement absent).
-func (s *Styled[Self]) Font(font FontDescriptor) Self {
+func (s *Styled[Self]) Font[_ lazy](font FontDescriptor) Self {
 	text := s.TextStyleMut()
 	text.FontFamily = Some(font.Family)
 	text.FontFeatures = Some(slices.Clone(font.Features))
@@ -759,7 +785,7 @@ func (s *Styled[Self]) LineHeight[L IntoDefiniteLength](lineHeight L) Self {
 
 // Opacity sets the opacity of this element and its children
 // (styled.rs:911).
-func (s *Styled[Self]) Opacity(opacity float32) Self {
+func (s *Styled[Self]) Opacity[_ lazy](opacity float32) Self {
 	s.StyleMut().Opacity = Some(opacity)
 	return s.self
 }
@@ -767,44 +793,44 @@ func (s *Styled[Self]) Opacity(opacity float32) Self {
 // ---- Grid (styled.rs:917-1054) ----
 
 // GridCols sets the column template (styled.rs:917: min size Zero).
-func (s *Styled[Self]) GridCols(cols uint16) Self {
+func (s *Styled[Self]) GridCols[_ lazy](cols uint16) Self {
 	s.StyleMut().GridCols = Some(GridTemplate{Repeat: cols, MinSize: GridTemplateMinZero})
 	return s.self
 }
 
 // GridColsMinContent sets min-content column minimums (styled.rs:927).
-func (s *Styled[Self]) GridColsMinContent(cols uint16) Self {
+func (s *Styled[Self]) GridColsMinContent[_ lazy](cols uint16) Self {
 	s.StyleMut().GridCols = Some(GridTemplate{Repeat: cols, MinSize: GridTemplateMinMinContent})
 	return s.self
 }
 
 // GridColsMaxContent sets max-content column sizing (styled.rs:936).
-func (s *Styled[Self]) GridColsMaxContent(cols uint16) Self {
+func (s *Styled[Self]) GridColsMaxContent[_ lazy](cols uint16) Self {
 	s.StyleMut().GridCols = Some(GridTemplate{Repeat: cols, MinSize: GridTemplateMinMaxContent})
 	return s.self
 }
 
 // GridRows sets the row template (styled.rs:945).
-func (s *Styled[Self]) GridRows(rows uint16) Self {
+func (s *Styled[Self]) GridRows[_ lazy](rows uint16) Self {
 	s.StyleMut().GridRows = Some(GridTemplate{Repeat: rows, MinSize: GridTemplateMinZero})
 	return s.self
 }
 
 // GridRowsMinContent sets min-content row minimums (styled.rs:955).
-func (s *Styled[Self]) GridRowsMinContent(rows uint16) Self {
+func (s *Styled[Self]) GridRowsMinContent[_ lazy](rows uint16) Self {
 	s.StyleMut().GridRows = Some(GridTemplate{Repeat: rows, MinSize: GridTemplateMinMinContent})
 	return s.self
 }
 
 // GridRowsMaxContent sets max-content row sizing (styled.rs:964).
-func (s *Styled[Self]) GridRowsMaxContent(rows uint16) Self {
+func (s *Styled[Self]) GridRowsMaxContent[_ lazy](rows uint16) Self {
 	s.StyleMut().GridRows = Some(GridTemplate{Repeat: rows, MinSize: GridTemplateMinMaxContent})
 	return s.self
 }
 
 // gridLocation edits the grid location, inserting the default first
 // (style.rs:416 grid_location_mut: get_or_insert_default).
-func (s *Styled[Self]) gridLocation(edit func(*GridLocation)) Self {
+func (s *Styled[Self]) gridLocation[_ lazy](edit func(*GridLocation)) Self {
 	st := s.StyleMut()
 	location, _ := st.GridLocation.Get()
 	edit(&location)
@@ -813,68 +839,68 @@ func (s *Styled[Self]) gridLocation(edit func(*GridLocation)) Self {
 }
 
 // ColStart sets the column start line (styled.rs:973).
-func (s *Styled[Self]) ColStart(start int16) Self {
+func (s *Styled[Self]) ColStart[_ lazy](start int16) Self {
 	return s.gridLocation(func(l *GridLocation) { l.Column.Start = LineGridPlacement(start) })
 }
 
 // ColStartAuto sets the column start to auto (styled.rs:980).
-func (s *Styled[Self]) ColStartAuto() Self {
+func (s *Styled[Self]) ColStartAuto[_ lazy]() Self {
 	return s.gridLocation(func(l *GridLocation) { l.Column.Start = AutoGridPlacement() })
 }
 
 // ColEnd sets the column end line (styled.rs:987).
-func (s *Styled[Self]) ColEnd(end int16) Self {
+func (s *Styled[Self]) ColEnd[_ lazy](end int16) Self {
 	return s.gridLocation(func(l *GridLocation) { l.Column.End = LineGridPlacement(end) })
 }
 
 // ColEndAuto sets the column end to auto (styled.rs:994).
-func (s *Styled[Self]) ColEndAuto() Self {
+func (s *Styled[Self]) ColEndAuto[_ lazy]() Self {
 	return s.gridLocation(func(l *GridLocation) { l.Column.End = AutoGridPlacement() })
 }
 
 // ColSpan spans the given number of columns (styled.rs:1001).
-func (s *Styled[Self]) ColSpan(span uint16) Self {
+func (s *Styled[Self]) ColSpan[_ lazy](span uint16) Self {
 	return s.gridLocation(func(l *GridLocation) {
 		l.Column = GridPlacementRange{Start: SpanGridPlacement(span), End: SpanGridPlacement(span)}
 	})
 }
 
 // ColSpanFull spans every column (styled.rs:1008: Line(1)..Line(-1)).
-func (s *Styled[Self]) ColSpanFull() Self {
+func (s *Styled[Self]) ColSpanFull[_ lazy]() Self {
 	return s.gridLocation(func(l *GridLocation) {
 		l.Column = GridPlacementRange{Start: LineGridPlacement(1), End: LineGridPlacement(-1)}
 	})
 }
 
 // RowStart sets the row start line (styled.rs:1015).
-func (s *Styled[Self]) RowStart(start int16) Self {
+func (s *Styled[Self]) RowStart[_ lazy](start int16) Self {
 	return s.gridLocation(func(l *GridLocation) { l.Row.Start = LineGridPlacement(start) })
 }
 
 // RowStartAuto sets the row start to auto (styled.rs:1022).
-func (s *Styled[Self]) RowStartAuto() Self {
+func (s *Styled[Self]) RowStartAuto[_ lazy]() Self {
 	return s.gridLocation(func(l *GridLocation) { l.Row.Start = AutoGridPlacement() })
 }
 
 // RowEnd sets the row end line (styled.rs:1029).
-func (s *Styled[Self]) RowEnd(end int16) Self {
+func (s *Styled[Self]) RowEnd[_ lazy](end int16) Self {
 	return s.gridLocation(func(l *GridLocation) { l.Row.End = LineGridPlacement(end) })
 }
 
 // RowEndAuto sets the row end to auto (styled.rs:1036).
-func (s *Styled[Self]) RowEndAuto() Self {
+func (s *Styled[Self]) RowEndAuto[_ lazy]() Self {
 	return s.gridLocation(func(l *GridLocation) { l.Row.End = AutoGridPlacement() })
 }
 
 // RowSpan spans the given number of rows (styled.rs:1043).
-func (s *Styled[Self]) RowSpan(span uint16) Self {
+func (s *Styled[Self]) RowSpan[_ lazy](span uint16) Self {
 	return s.gridLocation(func(l *GridLocation) {
 		l.Row = GridPlacementRange{Start: SpanGridPlacement(span), End: SpanGridPlacement(span)}
 	})
 }
 
 // RowSpanFull spans every row (styled.rs:1050).
-func (s *Styled[Self]) RowSpanFull() Self {
+func (s *Styled[Self]) RowSpanFull[_ lazy]() Self {
 	return s.gridLocation(func(l *GridLocation) {
 		l.Row = GridPlacementRange{Start: LineGridPlacement(1), End: LineGridPlacement(-1)}
 	})
@@ -884,14 +910,14 @@ func (s *Styled[Self]) RowSpanFull() Self {
 
 // Debug draws a red debug outline around this element (styled.rs:1058;
 // cfg(debug_assertions) in the pin, always available in the port).
-func (s *Styled[Self]) Debug() Self {
+func (s *Styled[Self]) Debug[_ lazy]() Self {
 	s.StyleMut().Debug = Some(true)
 	return s.self
 }
 
 // DebugBelow draws the debug outline on this element and every
 // conforming descendant (styled.rs:1065).
-func (s *Styled[Self]) DebugBelow() Self {
+func (s *Styled[Self]) DebugBelow[_ lazy]() Self {
 	s.StyleMut().DebugBelow = Some(true)
 	return s.self
 }
@@ -899,10 +925,10 @@ func (s *Styled[Self]) DebugBelow() Self {
 // RoundedSmoothing sets the corner smoothing, 0 (circular) to 1 (maximum)
 // (styled.rs:1072; the pinned debug_assert on the range is not ported —
 // paint clamps to [0, 1]).
-func (s *Styled[Self]) RoundedSmoothing(amount float32) Self {
+func (s *Styled[Self]) RoundedSmoothing[_ lazy](amount float32) Self {
 	s.StyleMut().CornerSmoothing = Some(amount)
 	return s.self
 }
 
 // RoundedSmoothingIos sets corner smoothing to 0.6 (styled.rs:1082).
-func (s *Styled[Self]) RoundedSmoothingIos() Self { return s.RoundedSmoothing(0.6) }
+func (s *Styled[Self]) RoundedSmoothingIos[_ lazy]() Self { return s.RoundedSmoothing(0.6) }

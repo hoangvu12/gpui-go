@@ -3,7 +3,9 @@
 // crates/gpui_macros/src/styles.rs at
 // 254b5dbd47cbb5acbcc5bbdcbb322a339276c88a). The tables below mirror the
 // macro's prefix and suffix tables line for line; the emitted methods are
-// methods of gpui.Styled[Self].
+// methods of gpui.Styled[Self]. Each is a generic method (at least the
+// `[_ lazy]` marker), so a consumer package compiles only the methods it
+// calls (see lazy in gpui/styled.go).
 //
 // It is a maintainer tool: the generated file is committed, and
 // consumers never run it. Regenerate from the gpui directory with
@@ -291,6 +293,11 @@ func (e *emitter) method(rust, goSig, doc string, body ...string) {
 	e.names[name] = rust
 	for _, line := range strings.Split(doc, "\n") {
 		fmt.Fprintf(&e.buf, "// %s\n", line)
+	}
+	// A method without type parameters of its own gets the lazy marker
+	// (styled.go): generic methods compile only where they are called.
+	if strings.HasPrefix(goSig, "(") {
+		goSig = "[_ lazy]" + goSig
 	}
 	fmt.Fprintf(&e.buf, "func (s *Styled[Self]) %s%s Self {\n", name, goSig)
 	for _, line := range body {
