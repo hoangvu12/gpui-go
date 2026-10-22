@@ -4,7 +4,7 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: base-port-2 orchestrator (2026-10-22)
 Blocked by: 08, 12, 13, 14
 
@@ -33,3 +33,7 @@ Button, Toggle, Checkbox, Radio, RadioGroup, Switch, ToggleGroup, Link, Tabs, To
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
 - 2026-10-22 — Claimed by the base-port-2 orchestrator and delegated.
+
+## Answer
+
+Resolved 2026-10-22. All 17 modules ported into the root `base` package (Button sets the pattern: `gpui.Component[*X]` over an inner div, a RenderOnce recipe, the control's own OnClick/TrackFocus/TabIndex). Tests: 75 upstream ported, 3 adapted (link opened-URL check, two avatar selector checks), 5 Go-only; 82 pass on the orchestrator's snapshot rerun. Gap 2b convention: where upstream's base is a plain `div()`, the constructor calls `.Block()` before the caller's style (sites listed per file and in the evidence). [Evidence](../../../evidence/base/ticket17-simple-controls.json).
