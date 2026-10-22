@@ -1,0 +1,334 @@
+package base
+
+// Window roots and presentation-layer plugins (U:root.rs).
+//
+// Deviations, each joining with the ticket that ports its dependency:
+//
+//   - The Copy action handling — the ctrl-c binding (U:root.rs:17-21) and
+//     on_action_copy (U:root.rs:264-273) — needs input::Copy (ticket 20)
+//     and TextSelection::selected_text (ticket 29).
+//   - The TextSelectionLayer child (U:root.rs:293) arrives with ticket 29.
+//   - The focus-trap lookup (crate::active_focus_trap, U:focus_trap.rs:
+//     224-228) arrives with ticket 16; until then activeFocusTrap reports
+//     no trap and Tab is plain focus navigation.
+//   - install_window_hit_test_forwarder (U:root.rs:148-149) is macOS-only.
+
+import (
+	"reflect"
+
+	"github.com/hoangvu12/gpui-go/gpui"
+)
+
+// The root actions (U:root.rs:11 actions!(root, [Tab, TabPrev])). The
+// module is private upstream; the payloads stay unexported here so they
+// do not collide with tabs.rs's Tab component.
+type (
+	rootTab     struct{}
+	rootTabPrev struct{}
+)
+
+var (
+	rootTabAction     = gpui.DefineUnitAction[rootTab]("root::Tab")
+	rootTabPrevAction = gpui.DefineUnitAction[rootTabPrev]("root::TabPrev")
+)
+
+// rootContext is the root key context (U:root.rs:12).
+const rootContext = "Root"
+
+// rootInit binds the root keys (U:root.rs:14-23).
+func rootInit(app *gpui.App) {
+	ctx := rootContext
+	app.BindKeys(
+		gpui.NewKeyBinding("tab", rootTabAction.Box(rootTab{}), &ctx),
+		gpui.NewKeyBinding("shift-tab", rootTabPrevAction.Box(rootTabPrev{}), &ctx),
+	)
+}
+
+// activeFocusTrap returns the focus handle of the active focus trap, if
+// any (the crate::active_focus_trap seam, U:focus_trap.rs:224-228). The
+// focus-trap ticket (16) replaces this declaration with the manager
+// lookup.
+var activeFocusTrap = func(w *gpui.Window, app *gpui.App) (gpui.FocusHandle, bool) {
+	return gpui.FocusHandle{}, false
+}
+
+// RootPlugin is a presentation layer's retained, per-window facilities
+// (U:root.rs:25-75). Register it with RootRegisterPlugin during explicit
+// application initialization, before creating windows. Its Render output
+// is mounted as an overlay above application content; plugins are
+// processed in registration order, so later plugins appear above earlier
+// ones. Notify the plugin entity after its state changes to render the
+// root again.
+//
+// On every root render each plugin participates in three stages, each an
+// optional interface (the Rust trait's default methods):
+//
+//  1. RootPluginPrepare synchronizes window state before elements are
+//     built.
+//  2. RootPluginStyle supplies defaults for the root surface.
+//  3. RootPluginDecorate wraps the completed surface.
+type RootPlugin[V any] interface {
+	gpui.Render[V]
+}
+
+// RootPluginPrepare is RootPlugin::prepare (U:root.rs:47-52): synchronize
+// settings derived from the plugin with the window (rem size, the active
+// text selection scope). It must not notify: it runs during the root's
+// render.
+type RootPluginPrepare[V any] interface {
+	Prepare(w *gpui.Window, cx *gpui.Context[V])
+}
+
+// RootPluginStyle is RootPlugin::style (U:root.rs:54-58): apply default
+// styles directly to the root surface. Styles set on the Root instance are
+// refined onto the surface afterwards and take precedence. It must not
+// notify.
+type RootPluginStyle interface {
+	Style(surface *gpui.DivElement, w *gpui.Window, app *gpui.App)
+}
+
+// RootPluginDecorate is RootPlugin::decorate (U:root.rs:60-74): add
+// presentation around the completed root surface (client-side window
+// borders, a structural wrapper). Return surface unchanged when nothing is
+// needed; root gives read-only access to the root and its view.
+type RootPluginDecorate interface {
+	Decorate(surface gpui.AnyElement, root *Root, w *gpui.Window, app *gpui.App) gpui.AnyElement
+}
+
+// pluginFactory builds one window's plugin (U:root.rs:77).
+type pluginFactory func(w *gpui.Window, cx *gpui.Context[Root]) rootPlugin
+
+// pluginRegistryEntry is one registered plugin type (U:root.rs:81-83).
+type pluginRegistryEntry struct {
+	typ     reflect.Type
+	factory pluginFactory
+}
+
+// pluginRegistry is the plugin registry global, stored as
+// *pluginRegistry (U:root.rs:81-83).
+type pluginRegistry struct {
+	entries []pluginRegistryEntry
+}
+
+// rootPlugin is one window's plugin (U:root.rs:84-89).
+type rootPlugin struct {
+	view     gpui.View
+	prepare  func(w *gpui.Window, app *gpui.App)
+	style    func(surface *gpui.DivElement, w *gpui.Window, app *gpui.App)
+	decorate func(surface gpui.AnyElement, root *Root, w *gpui.Window, app *gpui.App) gpui.AnyElement
+}
+
+// Root is the window's content and overlay host, independent of any
+// styled component library (U:root.rs:91-96). It is Styled: styles set on
+// it are refined onto the root surface (U:root.rs:275-279). Build it in
+// place with NewRoot.
+type Root struct {
+	gpui.Styled[*Root]
+	view    gpui.View
+	plugins []rootPlugin
+}
+
+// RootRegisterPlugin registers a presentation plugin once per application
+// (U:root.rs:99-145 Root::register_plugin). Re-registering its type
+// replaces the factory for future windows rather than mounting it twice.
+// Factories are captured when a root is created, so registration affects
+// only future windows. build initializes the plugin state in place (the
+// Rust `fn(&mut Window, &mut Context<V>) -> V`).
+func RootRegisterPlugin[V any, PV interface {
+	*V
+	RootPlugin[V]
+}](app *gpui.App, build func(state *V, w *gpui.Window, cx *gpui.Context[V])) {
+	if !gpui.HasGlobal[*pluginRegistry](app) {
+		app.SetGlobal(&pluginRegistry{})
+	}
+	factory := func(w *gpui.Window, cx *gpui.Context[Root]) rootPlugin {
+		// The plugin entity is owned by the window, like the Root that
+		// owns it upstream (Root is the window's root view).
+		entity := gpui.NewEntity(cx, w.Scope(), func(state *V, vcx *gpui.Context[V]) {
+			build(state, w, vcx)
+		})
+		// Plugin construction can enqueue notifications. Observe only
+		// after that effect cycle so mounting a Root does not immediately
+		// render application content a second time (U:root.rs:111-120).
+		cx.Defer(func(_ *Root, rcx *gpui.Context[Root]) {
+			rcx.Observe(entity, func(_ *Root, _ gpui.Entity[V], rcx *gpui.Context[Root]) {
+				rcx.Notify()
+			})
+		})
+		return rootPlugin{
+			view: gpui.ViewOfIn[V, PV](w.Scope(), entity),
+			prepare: func(w *gpui.Window, app *gpui.App) {
+				entity.Update(app, func(state *V, vcx *gpui.Context[V]) {
+					if p, ok := any(PV(state)).(RootPluginPrepare[V]); ok {
+						p.Prepare(w, vcx)
+					}
+				})
+			},
+			style: func(surface *gpui.DivElement, w *gpui.Window, app *gpui.App) {
+				entity.Update(app, func(state *V, vcx *gpui.Context[V]) {
+					if p, ok := any(PV(state)).(RootPluginStyle); ok {
+						p.Style(surface, w, vcx.App())
+					}
+				})
+			},
+			decorate: func(surface gpui.AnyElement, root *Root, w *gpui.Window, app *gpui.App) gpui.AnyElement {
+				return entity.UpdateWith(app, func(state *V, vcx *gpui.Context[V]) gpui.AnyElement {
+					if p, ok := any(PV(state)).(RootPluginDecorate); ok {
+						return p.Decorate(surface, root, w, vcx.App())
+					}
+					return surface
+				})
+			},
+		}
+	}
+	registry := gpui.Global[*pluginRegistry](app)
+	app.NotifyGlobal[*pluginRegistry]()
+	typ := reflect.TypeFor[V]()
+	for i := range registry.entries {
+		if registry.entries[i].typ == typ {
+			registry.entries[i].factory = factory
+			return
+		}
+	}
+	registry.entries = append(registry.entries, pluginRegistryEntry{typ: typ, factory: factory})
+}
+
+// NewRoot initializes root in place around the application view
+// (U:root.rs:147-162 Root::new): every registered plugin is built for
+// this window. Call it from the root entity's build:
+//
+//	ta.AddWindowView(func(r *base.Root, w *gpui.Window, cx *gpui.Context[base.Root]) {
+//		base.NewRoot(r, view, w, cx)
+//	})
+func NewRoot(root *Root, view gpui.View, w *gpui.Window, cx *gpui.Context[Root]) {
+	gpui.BindStyled(root)
+	root.view = view
+	var factories []pluginRegistryEntry
+	if registry, ok := gpui.TryGlobal[*pluginRegistry](cx.App()); ok {
+		factories = append(factories, registry.entries...)
+	}
+	root.plugins = make([]rootPlugin, 0, len(factories))
+	for _, entry := range factories {
+		root.plugins = append(root.plugins, entry.factory(w, cx))
+	}
+}
+
+// View returns the original application content view (U:root.rs:164-167).
+func (r *Root) View() gpui.View { return r.view }
+
+// Plugin finds a presentation plugin owned by this window
+// (U:root.rs:169-174).
+func (r *Root) Plugin[V any]() (gpui.Entity[V], bool) {
+	for _, plugin := range r.plugins {
+		if entity, ok := gpui.DowncastView[V](plugin.view); ok {
+			return entity, true
+		}
+	}
+	return gpui.Entity[V]{}, false
+}
+
+// rootOf returns the window's Base Root (the shared body of Root::read and
+// Root::update, U:root.rs:176-193).
+func rootOf(w *gpui.Window) gpui.Entity[Root] {
+	root, ok := w.Root[Root]()
+	if !ok {
+		panic("base: window must have a Base Root")
+	}
+	return root
+}
+
+// RootRead returns the window's Base Root; it panics when the window's
+// root view is not a Root (U:root.rs:176-182 Root::read).
+func RootRead(w *gpui.Window, app *gpui.App) *Root {
+	return rootOf(w).Read(app, func(r *Root, _ *gpui.App) *Root { return r })
+}
+
+// RootUpdate updates the window's Base Root (U:root.rs:183-193
+// Root::update); it panics when the window's root view is not a Root.
+func RootUpdate[R any](w *gpui.Window, app *gpui.App, f func(root *Root, w *gpui.Window, cx *gpui.Context[Root]) R) R {
+	return rootOf(w).UpdateWith(app, func(r *Root, cx *gpui.Context[Root]) R {
+		return f(r, w, cx)
+	})
+}
+
+// focusedEqual compares two Window.Focused results (Option<FocusHandle>
+// equality).
+func focusedEqual(a, b gpui.FocusedResult) bool {
+	if a.Ok != b.Ok {
+		return false
+	}
+	return !a.Ok || a.Handle.ID() == b.Handle.ID()
+}
+
+// rootFocusCycleMaxAttempts prevents an infinite loop (U:root.rs:208).
+const rootFocusCycleMaxAttempts = 100
+
+// onActionTab moves focus forward, cycling inside an active focus trap
+// (U:root.rs:194-227).
+func (r *Root) onActionTab(_ *rootTab, w *gpui.Window, cx *gpui.Context[Root]) {
+	r.cycleFocus(w, cx.App(), w.FocusNext)
+}
+
+// onActionTabPrev moves focus backward, cycling inside an active focus
+// trap (U:root.rs:229-262).
+func (r *Root) onActionTabPrev(_ *rootTabPrev, w *gpui.Window, cx *gpui.Context[Root]) {
+	r.cycleFocus(w, cx.App(), w.FocusPrev)
+}
+
+// cycleFocus is the shared body of the Tab handlers: when focus is inside
+// a focus trap and the move leaves it, keep moving until focus is back
+// inside, or until it cycles back to where it started.
+func (r *Root) cycleFocus(w *gpui.Window, app *gpui.App, move func()) {
+	container, ok := activeFocusTrap(w, app)
+	if !ok {
+		move()
+		return
+	}
+	before := w.Focused()
+	move()
+	if container.ContainsFocused(w) {
+		return
+	}
+	for attempts := 0; !container.ContainsFocused(w) && attempts < rootFocusCycleMaxAttempts; attempts++ {
+		move()
+		if focusedEqual(w.Focused(), before) {
+			break
+		}
+	}
+}
+
+// Render renders the root surface: the application view with every
+// plugin's overlay above it, then plugin styles, the instance style and
+// plugin decorations (U:root.rs:280-310).
+func (r *Root) Render(w *gpui.Window, cx *gpui.Context[Root]) gpui.AnyElement {
+	app := cx.App()
+	for _, plugin := range r.plugins {
+		plugin.prepare(w, app)
+	}
+	overlays := make([]any, 0, len(r.plugins))
+	for _, plugin := range r.plugins {
+		overlays = append(overlays, plugin.view)
+	}
+	content := gpui.Div().
+		ID("root").
+		KeyContext(rootContext).
+		OnAction(rootTabAction, cx.Listener(func(r *Root, a *rootTab, w *gpui.Window, cx *gpui.Context[Root]) {
+			r.onActionTab(a, w, cx)
+		})).
+		OnAction(rootTabPrevAction, cx.Listener(func(r *Root, a *rootTabPrev, w *gpui.Window, cx *gpui.Context[Root]) {
+			r.onActionTabPrev(a, w, cx)
+		})).
+		Relative().
+		SizeFull().
+		Child(r.view).
+		Child(gpui.Div().Absolute().Inset0().Children(overlays...))
+	for _, plugin := range r.plugins {
+		plugin.style(content, w, app)
+	}
+	content.StyleMut().Refine(r.StyleMut())
+	element := content.IntoElement()
+	for _, plugin := range r.plugins {
+		element = plugin.decorate(element, r, w, app)
+	}
+	return element
+}

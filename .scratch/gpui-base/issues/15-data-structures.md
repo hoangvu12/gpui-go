@@ -5,7 +5,7 @@ Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
 Status: claimed
-Assignee: base-port orchestrator (wave 1d/2a)
+Assignee: base-port-2 orchestrator (2026-10-22)
 Blocked by: 01
 
 ## Question
@@ -32,3 +32,4 @@ Pure-Go building blocks behave like ropey 2 (byte-indexed, LF lines, UTF-16 metr
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-22 — Reopened: the 2026-10-19 worker died with its session and left nothing on disk (status set back to open). Re-claimed the same day by the base-port-2 orchestrator (worktree gpui-go-wt-base, branch base-port-2) and delegated.

@@ -38,6 +38,8 @@ Consequence for the core record: the ticket-33 audit's "6911/6911 reconciled" as
 
 Base resolves `gpui-ce 0.2.2` **from crates.io** (`upstream-base/ce/Cargo.lock:3057-3060`), which keeps Zed's legacy text system (`LineWrapper`/`LineFragment`/`Boundary`, `ShapedLine::x_for_index`, 4-arg `shape_line`, `layout_width`). Our pin 254b5dbd carries the same version string but replaced that API with the Parley backend. The baseline's "same API line" holds for everything except text. Resolution: a Go-side legacy facade over `ShapeText` ([10](issues/10-rich-text.md)); geometry in input/text is re-expressed, not transliterated.
 
+**2b. Default display.** The same crates.io 0.2.2 line defaults `Style::default().display` to `Block` (`~/.cargo/git/checkouts/gpui-ce-6758b1db058c6497/beb5a6d/crates/gpui/src/style.rs:971`); our pin defaults to `Flex` (`reference/ce-source/crates/gpui/src/style.rs:1024-1027`). Upstream layouts and tests that rely on a plain div stacking as a block differ under the core; found by ticket 13 (styled cross-axis test adapted). Component tickets record each affected site.
+
 ### 3. Native-artifact gaps (frozen rev 11) → decision [02](issues/02-native-gap-policy.md)
 
 | Gap | Evidence | Proposed Go-side fallback |
@@ -89,6 +91,7 @@ Blocking edges live in each ticket's `Blocked by:`; the frontier is computed fro
 - [Test harness — Base-shaped simulate helpers (keystrokes, mouse, drag, a11y node, ComputeStyle)](issues/12-test-harness.md)
 - [Real-window input — button/move/wheel messages routed into element dispatch](issues/34-real-window-input.md)
 - [Element paint API](issues/08-element-paint-api.md) — external painting, Canvas, Deferred, Anchored, Img, animation element, drag preview.
+- [Base infra](issues/13-base-infra.md) — `base` package: Init, Theme + shadcn tokens, StyledExt, StateStyle, Root + plugins, GlobalState, reduce motion, History/UndoHistory; 59 tests.
 - Package layout (orchestrator, routine): one `base` package mirroring the single crate; dependency-free data structures (rope, sum tree, segmentation) in subpackages under `base/`.
 
 ## Not yet specified
