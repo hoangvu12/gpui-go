@@ -710,12 +710,19 @@ func (e AnyElement) LayoutAsRoot(available AvailableSize, w *Window, app *App) S
 	return e.obj.layoutAsRoot(available, w, app)
 }
 
-// PrepainAt prepaints the element at the given absolute origin
+// PrepaintAt prepaints the element at the given absolute origin
 // (AnyElement::prepaint_at: with_absolute_element_offset).
-func (e AnyElement) PrepainAt(origin Point, w *Window, app *App) {
+func (e AnyElement) PrepaintAt(origin Point, w *Window, app *App) {
 	WithAbsoluteElementOffsetVoid(w, origin, func(w *Window) {
 		e.Prepaint(w, app)
 	})
+}
+
+// PrepainAt is the misspelled name v0.1.0 shipped for PrepaintAt.
+//
+// Deprecated: use PrepaintAt.
+func (e AnyElement) PrepainAt(origin Point, w *Window, app *App) {
+	e.PrepaintAt(origin, w, app)
 }
 
 // PrepaintAsRoot lays the element out under the available space and

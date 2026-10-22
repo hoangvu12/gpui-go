@@ -1,0 +1,65 @@
+{
+  "ticket": "14-motion",
+  "effort": "gpui-base",
+  "date": "2026-10-22",
+  "branch": "base-port-2",
+  "result": "resolved",
+  "summary": "The motion system in the root base package: animation.rs (CubicBezier presets, Lerp, EffectTransition over the core animation element), easing (CSS easings, steps, linear stops), timing (signed durations, iteration counts, directions, phases), keyframes/discrete, stagger, Transition/MotionTransition/TransitionWithStatus/AnimateKeyframes, Spring/MotionSpring, MotionValue, Presence, Sequence, MotionReveal; honors App.ReduceMotion (ticket 13).",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/animation.rs, motion.rs, motion/{easing,keyframes,presence,reveal,sequence,stagger,timing}.rs @ c0820693"
+  ],
+  "implementation": {
+    "files": [
+      "base/animation.go",
+      "base/motion.go",
+      "base/motion_easing.go",
+      "base/motion_keyframes.go",
+      "base/motion_presence.go",
+      "base/motion_reveal.go",
+      "base/motion_sequence.go",
+      "base/motion_stagger.go",
+      "base/motion_timing.go",
+      "+ a _test.go per file",
+      "gpui/element.go: AnyElement.PrepaintAt (the v0.1.0 misspelling PrepainAt kept as a Deprecated alias; orchestrator), gpui/list.go caller"
+    ]
+  },
+  "tests": {
+    "upstream_ported": 48,
+    "detail": "animation.rs 4/4, motion/easing.rs 1/1, motion.rs 43/43 incl. requested_animation_frames_resample_without_manual_refresh (motion.rs:1586); windowed tests on the TestApp virtual clock (AdvanceClock + SimulateNextFrame); none needs a real window",
+    "upstream_deviated": 3,
+    "deviated_list": [
+      "status_transition_reports_delay_running_and_finished",
+      "a_completed_transition_stops_requesting_frames",
+      "presence_enters_exits_and_only_unmounts_after_exit (all three pass only with deviation 1)"
+    ],
+    "not_applicable": 0,
+    "go_only": 3,
+    "orchestrator_rerun": [
+      {
+        "where": "live tree after b152b11 (no workers running)",
+        "command": "CGO_ENABLED=0 go vet ./base ./base/rope && gofmt -l base",
+        "result": "clean"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base ./base/rope -count=1 -v",
+        "result": "ok x2; base 153 PASS (13: 59, 14: 51, 19: 43), 0 FAIL, 0 SKIP"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=3 -run 'Motion|Transition|Presence|Spring|Sequence|Keyframe|Reveal|Resample|UndoManager'",
+        "result": "ok"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test -p 1 ./gpui ./internal/scenespec ./internal/inlinespec ./internal/listspec ./internal/authorspec -count=1 (after the PrepaintAt rename)",
+        "result": "ok x5"
+      }
+    ]
+  },
+  "deviations": [
+    "Duration scaling: Rust Duration::mul_f32 goes through f32 seconds (100ms x 1.0 -> 100.000001ms), which on the port's clock keeps a transition Running at exactly delay+duration where three upstream tests expect Finished; the port scales in f64 rounded to the nanosecond (motion.go mulF32). Not cross-checked against Rust (no cargo).",
+    "Hsla lerp: channels lerped and clamped like the pinned hsla(); upstream's palette into_degrees round trip not reproduced (core hue is 0..1).",
+    "The deprecated alias animation::Transition and FluentBuilder on EffectTransition not ported.",
+    "Rust free functions transition/spring are MotionTransition/MotionSpring (collide with the Transition/Spring types).",
+    "Interpolate/Lerp dispatch at runtime over the core's float32/Point/Size/Bounds/Hsla; T: Interpolate + PartialEq -> comparable; TransitionID needs Equal (ElementID parent pointers)."
+  ],
+  "native_artifact": "unchanged (rev 11)"
+}

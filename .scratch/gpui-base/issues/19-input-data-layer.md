@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: resolved
+Assignee: base-port-2 orchestrator (2026-10-22)
 Blocked by: 15
 
 ## Question
@@ -30,3 +30,8 @@ RopeExt, cursor/selection/change, the undo manager and mask patterns work headle
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-22 — Claimed by the base-port-2 orchestrator and delegated.
+
+## Answer
+
+Resolved 2026-10-22. Root `base` package input_*.go: `RopeExtOf(*rope.Rope)` (all 20 RopeExt methods), InputEdit, RopeLines, `InputPoint`, `InputPosition`, `InputSelection`, cursor/selections and text selectors, change, the undo manager, MaskToken/MaskPattern. All 42 upstream tests ported (4 adapted) + 1 Go-only; ticket 15's test-only RopeExt copy retired. Typed placeholders (`any`) remain for the token delta and auto-closed pairs until those modules are ported. [Evidence](../../../evidence/base/ticket19-input-data-layer.json).

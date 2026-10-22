@@ -95,6 +95,8 @@ Blocking edges live in each ticket's `Blocked by:`; the frontier is computed fro
 - [Inline styled runs](issues/35-inline-styled-runs.md) — StyledText and Text keep per-run colors/decorations inside inline paragraphs.
 - [Base infra](issues/13-base-infra.md) — `base` package: Init, Theme + shadcn tokens, StyledExt, StateStyle, Root + plugins, GlobalState, reduce motion, History/UndoHistory; 59 tests.
 - [Data structures](issues/15-data-structures.md) — base/rope, base/sumtree, base/segment (uax29 v2.7.0 enters go.mod), base/dataurl, base/strftime; 57 tests.
+- [Motion](issues/14-motion.md) — easings, timing, keyframes, transitions, springs, presence, sequence, reveal in the root base package; 48 upstream tests on the virtual clock; f64 duration scaling deviation.
+- [Input data layer](issues/19-input-data-layer.md) — RopeExt, InputPoint/InputPosition/InputSelection, cursor, change, undo manager, mask patterns; 42 upstream tests.
 - Package layout (orchestrator, routine): one `base` package mirroring the single crate; dependency-free data structures (rope, sum tree, segmentation) in subpackages under `base/`.
 
 ## Not yet specified

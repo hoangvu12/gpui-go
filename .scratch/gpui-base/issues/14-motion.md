@@ -4,7 +4,7 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: base-port-2 orchestrator (2026-10-22)
 Blocked by: 03, 04, 08, 13
 
@@ -32,3 +32,7 @@ Transitions, keyframes, springs, presence, reveal, sequence and stagger animate 
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
 - 2026-10-22 — Claimed by the base-port-2 orchestrator and delegated (files: base/animation.go, base/motion*.go in the root base package; a base/motion subpackage would cycle through GlobalState/reduce motion).
+
+## Answer
+
+Resolved 2026-10-22. The motion system lives in the root `base` package (animation.go, motion*.go): easings, timing, keyframes, stagger, Transition/`MotionTransition`, Spring/`MotionSpring`, MotionValue, Presence, Sequence, MotionReveal, honoring reduced motion. All 48 upstream tests ported (3 rely on the duration-scaling deviation), windowed ones on the virtual clock including `requested_animation_frames_resample_without_manual_refresh`. Deviations: f64 duration scaling instead of Rust's f32 `mul_f32` (not cross-checked against Rust), Hsla lerp without the palette degrees round trip, collision renames. The core gained `AnyElement.PrepaintAt` (the shipped `PrepainAt` kept as a deprecated alias). [Evidence](../../../evidence/base/ticket14-motion.json).
