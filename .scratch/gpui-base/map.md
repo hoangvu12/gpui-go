@@ -101,6 +101,7 @@ Blocking edges live in each ticket's `Blocked by:`; the frontier is computed fro
 - [Overlays](issues/16-overlays.md) — focus trap, positioner, popup, popover, tooltip, hover card, dialog, alert dialog, sheet, toast; 53 upstream tests; Init wires the overlay initializers.
 - [Scroll family](issues/18-scroll-family.md) — scrollbar, scroll bounce, scrollable mask, auto scroll, virtual list; 83 upstream tests; VirtualList content-slot deviation.
 - [Markdown parse](issues/27-markdown-parse.md) — goldmark → mdast adapter → node tree with byte spans; MarkdownPlugin registries; node.rs data model + equality; 82 upstream tests ported/deviated, 10 deferred (3 → 30, 7 rendering → 28); MDX deferred.
+- [Plot](issues/31-plot.md) — scales, shapes (incl. sankey), axis/grid/label/hover, path cache, appear animation; 67/67 upstream tests; solid fills only.
 - Package layout (orchestrator, routine): one `base` package mirroring the single crate; dependency-free data structures (rope, sum tree, segmentation) in subpackages under `base/`.
 
 ## Not yet specified

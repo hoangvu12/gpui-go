@@ -1,11 +1,6 @@
 package base
 
 // Application-wide defaults for Base behavior modules (U:theme.rs).
-//
-// Deviation: Theme's `plot: PlotTheme` field (U:theme.rs:22, 96-118) is
-// not ported yet. PlotTheme carries PlotMotion (U:plot/mod.rs:44-105),
-// which is built from motion's Spring and Transition (ticket 14); the plot
-// ticket (31) adds the field and type.
 
 import (
 	"fmt"
@@ -62,6 +57,7 @@ type Theme struct {
 	Tokens     SemanticThemeTokens
 	Scrollbar  ScrollbarTheme
 	Resizable  ResizableTheme
+	Plot       PlotTheme
 }
 
 // DefaultTheme returns the default theme (U:theme.rs:16 derive(Default)).
@@ -70,6 +66,7 @@ func DefaultTheme() Theme {
 		Appearance: ThemeAppearanceLight,
 		Tokens:     DefaultSemanticThemeTokens(),
 		Scrollbar:  NewScrollbarTheme(),
+		Plot:       NewPlotTheme(),
 	}
 }
 
@@ -152,3 +149,24 @@ type ResizableTheme struct {
 	Handle       gpui.Optional[gpui.Hsla]
 	ActiveHandle gpui.Optional[gpui.Hsla]
 }
+
+// PlotTheme holds the global defaults used by the plot (U:theme.rs:96-119).
+// Its motion defaults to motionless: styled layers project their own
+// timing; Base never installs a fade or glide.
+type PlotTheme struct {
+	motion PlotMotion
+}
+
+// NewPlotTheme returns the default plot theme (U:theme.rs:106-108).
+func NewPlotTheme() PlotTheme {
+	return PlotTheme{motion: DefaultPlotMotion()}
+}
+
+// WithMotion sets the motion (U:theme.rs:110-113).
+func (t PlotTheme) WithMotion(motion PlotMotion) PlotTheme {
+	t.motion = motion
+	return t
+}
+
+// Motion returns the motion (U:theme.rs:115-117).
+func (t PlotTheme) Motion() PlotMotion { return t.motion }

@@ -1,0 +1,52 @@
+{
+  "ticket": "31-plot",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved",
+  "summary": "Plot library in the root base package: scales (band, linear, ordinal, point), shapes (arc, area, bar, line, pie, radial line, stack, sankey), axis, grid, label, hover readers, path cache, plot element and the appear animation with PlotAppearScope; the Plot theme field and defaults.",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/plot/** @ c0820693",
+    "upstream-base/ce/crates/base/src/theme.rs (Plot field)"
+  ],
+  "implementation": {
+    "files": [
+      "base/plot{,_appear,_axis,_element,_grid,_hover,_label,_path_cache}.go",
+      "base/plot_scale{,_band,_linear,_ordinal,_point}.go",
+      "base/plot_shape_{arc,area,bar,line,pie,radial_line,sankey,stack}.go",
+      "base/plot{,_appear,_scale,_shape,_shape_sankey}_test.go",
+      "base/theme.go: Plot field + defaults"
+    ],
+    "history": "First worker died at the 2026-10-22 usage-limit stop with 56/67 tests; a fresh worker (2026-10-23) added the 11 appear.rs tests, fixed NaN-min semantics in band scale (rustMinF32), corrected upstream line citations, and audited every plot file against upstream."
+  },
+  "tests": {
+    "upstream": 67,
+    "ported": 67,
+    "deviated": 0,
+    "not_applicable": 0,
+    "per_module": "scales 25, sankey 12, stack/pie/arc 7, line/radial 3, grid/axis/path_cache 8, hover 1, appear 11 (8 window on the virtual clock, 3 pure)",
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD 66a7b55 + ticket-31 files only (20 and 28 in-progress files excluded)",
+        "command": "CGO_ENABLED=0 go vet ./base && gofmt -l base && go build ./...",
+        "result": "clean"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=1 -v",
+        "result": "ok, 533 PASS (466 + 67), 0 FAIL, 3 SKIP (ticket-30 deferrals)"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=3 -run Appear",
+        "result": "ok"
+      }
+    ]
+  },
+  "deviations": [
+    "solid fills/strokes only (decision 02: native scene rejects gradients)",
+    "optional rust_decimal value type not ported",
+    "ShapeKey hashes with maphash instead of DefaultHasher",
+    "appear-scope stack per window instead of thread-local",
+    "appear memory keyed by GlobalElementID.String() (Go ID type is not comparable)"
+  ],
+  "follow_ups": []
+}
