@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: 23
 
 ## Question
@@ -30,3 +30,4 @@ Diagnostics, completions, hover, code actions, definitions, document colors, sem
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-23 — Claimed and delegated. Owns new base/editor_{diagnostics,lsp*}*.go and their tests. It may edit the input/editor engine files (base/input*.go, base/editor*.go) to hook diagnostics and LSP in. It also owns the 2 state.rs tests 23 deferred: the diagnostics scroll test and the hover half of test_blur_keeps_decorations.
