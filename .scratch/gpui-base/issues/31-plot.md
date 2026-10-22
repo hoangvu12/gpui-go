@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: base-port-2 orchestrator (2026-10-22)
 Blocked by: 08, 10, 14
 
 ## Question
@@ -31,3 +31,4 @@ Scales, shapes (line/area/bar/arc/pie/radial/stack/sankey), axes, grid, labels, 
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-22 — Claimed by the base-port-2 orchestrator and delegated.
