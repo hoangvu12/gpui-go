@@ -15,11 +15,11 @@ func IsMobile() bool {
 
 // Init initializes the global infrastructure owned by the base layer
 // (U:lib.rs:227-245): the Theme global, GlobalState, the system
-// reduced-motion preference, the dialog, focus_trap, popover and sheet
-// initializers, and the Root key bindings.
+// reduced-motion preference, the dialog, focus_trap, popover, sheet and
+// input initializers, and the Root key bindings.
 //
 // The upstream init also runs the combobox, color_picker, select,
-// number_input, time_field, input, tree and text initializers
+// number_input, time_field, tree and text initializers
 // (U:lib.rs:236-243); each joins this function with the ticket that ports
 // its module.
 func Init(app *gpui.App) {
@@ -30,5 +30,6 @@ func Init(app *gpui.App) {
 	focusTrapInit(app)
 	popoverInit(app)
 	sheetInit(app)
+	inputInit(app)
 	rootInit(app)
 }

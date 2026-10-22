@@ -4,7 +4,7 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: base-port-2 orchestrator (2026-10-22)
 Blocked by: 10, 12, 18, 19
 
@@ -31,3 +31,29 @@ A focused `Input` edits, selects, scrolls, validates (pattern/mask/number), copi
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
 - 2026-10-22 — Claimed by the base-port-2 orchestrator and delegated.
+- 2026-10-23 — The first worker died at the usage-limit stop. The successor orchestrator gated its 5 non-compiling files behind `//go:build basewip20`. A fresh worker finished the ticket and removed the tags, and the orchestrator wired `inputInit` into `Init`.
+
+## Answer
+
+The single-line Input is ported. Its parts:
+- the shared `InputBaseState` engine:
+  - kind hooks
+  - masked, pattern and number modes
+  - the blink cursor and movement
+  - editing, history, the clipboard and IME (through `Window.HandleInput`)
+  - mouse selection, layout and render
+  - `InputEditorStyle`
+- the input element and the `Input` component
+- `Init` now calls `inputInit` (U:lib.rs:241), which installs the key bindings.
+
+Tests: 98 upstream tests are in scope.
+- 84 are ported, 7 of them with deviations. 5 clipboard tests feed their text through the paste path because TestApp has no clipboard.
+- 14 are not applicable: the editor gutter, decorations and editor scrollbar, inline tokens, the number-step test (ticket 22), and the cached-parent test (no view caching in the Go core).
+
+Deviations:
+- the display map is a one-row-per-line placeholder, which ticket 21 replaces
+- the editor-only paths are stand-ins that do nothing
+- no native context menu
+- mode-specific methods panic on the wrong mode
+
+Orchestrator re-run on a snapshot of HEAD plus 20's files and lib.go: vet, gofmt and `go build ./...` are clean, `go test ./base` has 618 pass and 3 skip. Evidence: [ticket20-single-line-input.json](../../../evidence/base/ticket20-single-line-input.json).
