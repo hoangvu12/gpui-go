@@ -1,0 +1,57 @@
+{
+  "ticket": "25-composite-controls",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved (two optional gpui seams recorded)",
+  "summary": "Tree (uniform-list tree with keyboard navigation), NavStack, Resizable panels (group, panel, resize handle with the exact feedback-frame split) and Questionnaire (types, state, keyboard, control); treeInit joins Init (U:lib.rs:242).",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/{tree,nav_stack}.rs, resizable/*, questionnaire/* @ c0820693"
+  ],
+  "implementation": {
+    "files": [
+      "base/tree.go, base/nav_stack.go",
+      "base/resizable{,_panel,_handle}.go",
+      "base/questionnaire_{types,state,keyboard,control}.go",
+      "tests: base/{tree,nav_stack,resizable,resizable_handle,questionnaire_state,questionnaire_control}_test.go",
+      "base/lib.go: Init calls treeInit (worker); the Init doc comment updated (orchestrator)"
+    ],
+    "history": "The worker hit the 2026-10-23 usage limit mid-ticket and was resumed with its context after the reset."
+  },
+  "tests": {
+    "upstream": 35,
+    "ported": 35,
+    "deviated": 0,
+    "not_applicable": 0,
+    "per_file": "tree 6, nav_stack 7, resizable/mod 8, resizable/resize_handle 8, questionnaire/state 6",
+    "go_only": 3,
+    "notes": "resizable drag gives exactly [220, 180] with on_resize called once; the handle goes Idle -> Hovered -> Pressed -> Dragging -> Idle, and a covered handle stays Idle",
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD 8d4d33d + ticket-25 files + base/lib.go (23 and 29 in-progress files excluded)",
+        "command": "CGO_ENABLED=0 go vet ./base && gofmt -l base && go build ./...",
+        "result": "clean; no basewip tags"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=1 -v",
+        "result": "ok, 862 PASS (824 + 38), 0 FAIL, 3 SKIP (ticket-30 deferrals)"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=2",
+        "result": "ok"
+      }
+    ]
+  },
+  "deviations": [
+    "ResizableState.drawNotify drops notifies raised while drawing once a frame has drawn the state (the pinned window drops them; the Go core still delivers them per gpui/frameloop.go, and the panels' prepaint notify otherwise redrew forever)",
+    "Tree ListStyle applies width and height only (the core uniform list takes no style refinement)",
+    "the tree item renderer runs outside the state read, on a snapshot",
+    "ResizablePanelGroup creates its keyed state only when the caller supplies none (upstream creates it eagerly but never observes it)",
+    "Go shapes per ticket 22: data enums as Kind structs, (value, bool) optionals, -1 indices, a comparable QuestionnaireSchemaError, validators as funcs, ResizeHandle[T] returns a gpui.View",
+    "NewResizableState() defaults to horizontal (the Go zero Axis is vertical)"
+  ],
+  "follow_ups": [
+    "optional gpui: UniformListElement.Refine(StyleRefinement) (R:elements/uniform_list.rs:22,687) to drop the ListStyle deviation",
+    "core decision (optional): drop Notify effects for entities the drawing window tracks while it draws (R:window.rs:189-214, R:app.rs:2920-2953), which would retire drawNotify; existing core observers rely on today's delivery"
+  ]
+}
