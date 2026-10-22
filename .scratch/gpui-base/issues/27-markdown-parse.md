@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: base-port-2 orchestrator (2026-10-22)
 Blocked by: 01, 13
 
 ## Question
@@ -32,3 +32,4 @@ Markdown (GFM + math + frontmatter; MDX per ticket 01) parses into Base's node t
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-22 — Claimed by the base-port-2 orchestrator and delegated. Ownership split with 28: the parser needs text/node.rs data types (BlockNode, InlineNode, TextMark, LinkMark, Span, ImageNode, Paragraph/Table/CodeBlock data, MarkdownSource), so 27 ports the node DATA model and its pure methods into base/text_node.go; 28 adds the rendering half of node.rs in separate files. goldmark enters go.mod here (ticket 01).

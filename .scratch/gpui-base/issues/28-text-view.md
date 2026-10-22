@@ -30,3 +30,4 @@ TextView renders markdown documents (inline flow with embedded objects, code blo
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-22 — Note from the base-port-2 orchestrator: ticket 27 ports the node.rs data model into base/text_node.go; this ticket adds the rendering half (NodeContext, Paragraph/BlockNode render impls, caches) in separate files.
