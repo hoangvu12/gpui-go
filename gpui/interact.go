@@ -740,56 +740,57 @@ func (d *DivElement) Group(group string) *DivElement {
 
 // Hover applies the style while the mouse hovers over this element
 // (div.rs:970-977 InteractiveElement::hover). Setting it twice panics
-// like the pin's debug assertion.
-func (d *DivElement) Hover(f func(StyleRefinement) StyleRefinement) *DivElement {
+// like the pin's debug assertion. Besides the pinned closure it takes a
+// StyleBuilder: .Hover(gpui.Styles().Bg(tw.Slate700)).
+func (d *DivElement) Hover[F StyleArg](f F) *DivElement {
 	if d.hoverStyle != nil {
 		panic("gpui: hover style already set")
 	}
-	d.hoverStyle = refinementOf(f, "Hover")
+	d.hoverStyle = stateRefinement(f, "Hover")
 	return d
 }
 
 // GroupHover applies the style while the mouse hovers over a member of
 // the named group (div.rs:980-990 InteractiveElement::group_hover).
-func (d *DivElement) GroupHover(group string, f func(StyleRefinement) StyleRefinement) *DivElement {
-	d.groupHoverStyle = &GroupStyle{Group: group, Style: *refinementOf(f, "GroupHover")}
+func (d *DivElement) GroupHover[F StyleArg](group string, f F) *DivElement {
+	d.groupHoverStyle = &GroupStyle{Group: group, Style: *stateRefinement(f, "GroupHover")}
 	return d
 }
 
 // Active applies the style while this element is pressed (div.rs:1786
 // StatefulInteractiveElement::active; requires an ID).
-func (d *DivElement) Active(f func(StyleRefinement) StyleRefinement) *DivElement {
-	d.activeStyle = refinementOf(f, "Active")
+func (d *DivElement) Active[F StyleArg](f F) *DivElement {
+	d.activeStyle = stateRefinement(f, "Active")
 	return d
 }
 
 // GroupActive applies the style while the named group is pressed
 // (div.rs:1795 StatefulInteractiveElement::group_active; requires an
 // ID).
-func (d *DivElement) GroupActive(group string, f func(StyleRefinement) StyleRefinement) *DivElement {
-	d.groupActiveStyle = &GroupStyle{Group: group, Style: *refinementOf(f, "GroupActive")}
+func (d *DivElement) GroupActive[F StyleArg](group string, f F) *DivElement {
+	d.groupActiveStyle = &GroupStyle{Group: group, Style: *stateRefinement(f, "GroupActive")}
 	return d
 }
 
 // Focus applies the style while this element's tracked focus handle is
 // focused (div.rs:1459 InteractiveElement::focus).
-func (d *DivElement) Focus(f func(StyleRefinement) StyleRefinement) *DivElement {
-	d.focusStyle = refinementOf(f, "Focus")
+func (d *DivElement) Focus[F StyleArg](f F) *DivElement {
+	d.focusStyle = stateRefinement(f, "Focus")
 	return d
 }
 
 // InFocus applies the style while focus is within this element's
 // tracked focus handle (div.rs:1469 InteractiveElement::in_focus).
-func (d *DivElement) InFocus(f func(StyleRefinement) StyleRefinement) *DivElement {
-	d.inFocusStyle = refinementOf(f, "InFocus")
+func (d *DivElement) InFocus[F StyleArg](f F) *DivElement {
+	d.inFocusStyle = stateRefinement(f, "InFocus")
 	return d
 }
 
 // FocusVisible applies the style while this element is focused and the
 // last input came from the keyboard, like CSS :focus-visible
 // (div.rs:1481 InteractiveElement::focus_visible).
-func (d *DivElement) FocusVisible(f func(StyleRefinement) StyleRefinement) *DivElement {
-	d.focusVisibleStyle = refinementOf(f, "FocusVisible")
+func (d *DivElement) FocusVisible[F StyleArg](f F) *DivElement {
+	d.focusVisibleStyle = stateRefinement(f, "FocusVisible")
 	return d
 }
 

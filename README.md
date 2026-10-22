@@ -104,6 +104,28 @@ if _, err := ts.AddFont(geistBytes); err != nil { /* the bytes hold no font face
 
 `TextSystem.AddFont` mirrors GPUI's `add_fonts`: family names come from each font's embedded name table, they appear in `FontNames`, and `FontDescriptor{Family: "Geist"}` resolves to the registered face for shaping and rasterization. Fonts are process-stable; there is no unregister. If a family resolves nowhere — an embedded font that failed to register, or a name that differs from the font's internal family name — `ResolveFont` still returns the fallback font (GPUI's behavior), but `FontIdentity.FamilyFound` is `false`, so the missing font is diagnosable.
 
+## Tailwind-style authoring
+
+GPUI's style methods already follow Tailwind's names. gpui-go completes the mapping so that a Tailwind class always has a method of the same name (`items-center` is `ItemsCenter()`, `px-4` is `Px4()`, `w-1/2` is `W1_2()`, `bg-slate-800` is `Bg(tw.Slate800)`). Package [`tw`](tw) holds the Tailwind v3.4 color palette, state styles take a prebuilt style from `gpui.Styles()`, and `Class` applies a class string the way an HTML `class` attribute does:
+
+```go
+gpui.Div().
+	ID("save").
+	Class("flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 active:bg-slate-900").
+	OnClick(cx.Listener(func(v *editor, _ *gpui.ClickEvent, _ *gpui.Window, cx *gpui.Context[editor]) {
+		v.save()
+		cx.Notify()
+	})).
+	Child("Save")
+
+// The same style with typed methods:
+gpui.Div().ID("save").Flex().ItemsCenter().Gap2().Px4().Py2().RoundedLg().Bg(tw.Slate800).TextColor(tw.White).
+	Hover(gpui.Styles().Bg(tw.Slate700)).
+	Active(gpui.Styles().Bg(tw.Slate900))
+```
+
+`Class` parses each distinct string once and caches it. A class it cannot apply, such as a typo or a utility GPUI has no equivalent for (`z-10`, `sm:p-4`), is skipped and reported on stderr. `go run github.com/hoangvu12/gpui-go/cmd/twcheck ./...` finds those classes before the program runs. [docs/tailwind.md](docs/tailwind.md) is the full guide for people and coding agents who come from React and Tailwind. It covers the naming rule, what is and is not supported, and the GPUI rules that web code does not teach. These names are gpui-go additions beyond the GPUI-CE pin; [ADR 0001](docs/adr/0001-tailwind-authoring.md) records why.
+
 ## Build speed
 
 A one-line edit in a UI package rebuilds in about 1–2 seconds. The fluent methods of `Styled`, `Parent` and `Interactive` (and so of `Div`, `Img`, `Canvas` and every `Component[Self]` component) are generic methods marked with an internal type parameter, `func (s *Styled[Self]) Flex[_ lazy]() Self`. You call them as usual (`d.Flex()`), and Go compiles only the methods a package actually calls. With ordinary methods, every package that mentioned a styled element recompiled the whole 3,100-method vocabulary. The one difference from ordinary methods is that a fluent method cannot be taken as a method value (`f := d.Flex`); wrap it in a closure instead. [internal/buildcostspec](internal/buildcostspec/buildcost_test.go) fails if a consumer package's compiled size grows back.
@@ -114,4 +136,4 @@ Version 0.1.0 is the first tagged release. All 34 tickets in the core backlog ar
 
 ## License
 
-gpui-go is licensed under the [Apache License 2.0](LICENSE), the same license as GPUI-CE. The embedded native library includes third-party crates, whose licenses are collected in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+gpui-go is licensed under the [Apache License 2.0](LICENSE), the same license as GPUI-CE. The embedded native library includes third-party crates, and the Tailwind color palette comes from Tailwind CSS (MIT); their licenses are collected in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

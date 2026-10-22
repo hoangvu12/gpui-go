@@ -353,6 +353,40 @@ The embedded native library `internal/native/artifacts/gpui_go_native.dll` is co
 
 These crates ship no license file in their published source; their declared license is in the table above: accesskit 0.24.1, accesskit_consumer 0.37.0, accesskit_windows 0.33.1, hexf-parse 0.2.1, lyon 1.0.19, lyon_algorithms 1.0.21, lyon_geom 1.0.19, lyon_path 1.0.19, lyon_tessellation 1.0.22, profiling 1.0.18, profiling-procmacros 1.0.18, pulp-wasm-simd-flag 0.1.1, seahash 4.1.0, simd_helpers 0.1.0, svg_fmt 0.4.5, taffy 0.13.0, zune-inflate 0.2.54.
 
+## Go sources
+
+The Go packages of this module also include material from the project below, which is not part of the native library. Its license text follows it.
+
+### Tailwind CSS 3.4.17
+
+Source: https://github.com/tailwindlabs/tailwindcss (v3.4.17), MIT License.
+
+Covers the default color palette values in `cmd/tailwindgen/palette.go`, `gpui/tailwind_palette_generated.go` and `tw/palette_generated.go`, and the utility class names and scales that `Styled.Class` and the Tailwind-named `Styled` methods follow.
+
+```text
+MIT License
+
+Copyright (c) Tailwind Labs, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## License texts
 
 ### adler2 2.0.1
