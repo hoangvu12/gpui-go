@@ -761,6 +761,10 @@ func (e *inlineText) Paint(global *gpui.GlobalElementID, _ *gpui.InspectorElemen
 			color = view.Read(app, func(s *TextViewState, _ *gpui.App) gpui.Hsla { return s.textViewStyle.Selection() })
 		}
 		paintInlineSelection(*selection, layout, bounds, w, color)
+		if hasView {
+			// The touch handles' ends (U:text/inline.rs:996-1001, ticket 29).
+			textViewRegisterSelectionEdges(view, *selection, layout, app)
+		}
 	}
 
 	if isSelectable {

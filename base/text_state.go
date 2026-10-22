@@ -187,8 +187,9 @@ type textViewSelectionAdapter interface {
 
 var (
 	// newTextViewSelectionAdapter is TextViewSelectionAdapter::new
-	// (ticket 29); nil leaves views without window selection.
-	newTextViewSelectionAdapter func(state gpui.WeakEntity[TextViewState], app *gpui.App) textViewSelectionAdapter
+	// (ticket 29); nil leaves views without window selection. owner (the
+	// state's dependent scope) owns the adapter's selection participant.
+	newTextViewSelectionAdapter func(state gpui.WeakEntity[TextViewState], owner *gpui.Scope, app *gpui.App) textViewSelectionAdapter
 	// textSelectionRegisterInline is the adapter's register_inline +
 	// register_text_run for a painted inline (U:text/inline.rs:1005-1022).
 	textSelectionRegisterInline func(view gpui.Entity[TextViewState], lineBounds []gpui.Bounds, text string, layout *gpui.TextLayout, bounds gpui.Bounds, app *gpui.App)
@@ -310,7 +311,7 @@ func newTextViewState(format textViewFormat, text string, cx *gpui.Context[TextV
 		parser:             &textViewParser{format: format, content: emptyParsedContent()},
 	}
 	if newTextViewSelectionAdapter != nil {
-		s.selectionAdapter = newTextViewSelectionAdapter(cx.Entity().Downgrade(), cx.App())
+		s.selectionAdapter = newTextViewSelectionAdapter(cx.Entity().Downgrade(), cx.Scope(), cx.App())
 	}
 	s.incrementUpdate(text, false, cx)
 	return s
@@ -746,11 +747,10 @@ func (s *TextViewState) Render(w *gpui.Window, cx *gpui.Context[TextViewState]) 
 	} else {
 		content = content.Child(VFlex().Gap1().Child("Failed to parse content").Child(*s.parsedError))
 	}
+	// The bounds, and the window selection clear when the layout changed
+	// under it (U:text/state.rs:1066-1101; ticket 29, text_selection_adapter.go).
 	return ElementExtOf(content).OnPrepaint(func(bounds gpui.Bounds, w *gpui.Window, app *gpui.App) {
-		_ = state.TryUpdate(app, func(s *TextViewState, _ *gpui.Context[TextViewState]) {
-			s.updateBounds(bounds)
-			s.compatibleLayoutUpdate = false
-		})
+		textViewSelectionPrepaint(state, bounds, w, app)
 	}).IntoElement()
 }
 

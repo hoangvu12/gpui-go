@@ -12,7 +12,7 @@ import (
 // deferred:
 //   - inline_virtual_resource_growth_remeasures_all_blocks_and_preserves
 //     _copy drags a selection through crate::TextSelectionLayer and copies
-//     it (ticket 29).
+//     it: ported by ticket 29 in text_view_selection_test.go.
 //   - inline_virtual_font_and_rem_zoom_remeasure_offscreen_blocks is
 //     deviated: the text-size zoom is ported; the rem zoom step needs
 //     Window::set_rem_size, which the gpui port does not expose.

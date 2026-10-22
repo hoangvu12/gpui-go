@@ -10,8 +10,9 @@ import (
 
 // Ports of the U:text/text_view.rs tests (860-2575). Of 37: 16 ported, 2
 // deviated, 19 deferred:
-//   - deferred to ticket 29 (they drag, double/triple click or copy through
-//     the window TextSelection layer and the selection adapter):
+//   - ported by ticket 29 in text_view_selection_test.go (they drag,
+//     double/triple click or copy through the window TextSelection layer
+//     and the selection adapter):
 //     inline_plugin_reuses_render_and_preserves_native_child_events,
 //     inline_hover_card_is_lazy_and_retains_atomic_copy,
 //     inline_plugins_drag_and_copy_across_formulas_in_both_directions,

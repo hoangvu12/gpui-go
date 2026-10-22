@@ -1,0 +1,55 @@
+{
+  "ticket": "29-text-selection",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved (Root/ElementExt wiring and a core paint-bounds bug handed to a follow-up)",
+  "summary": "Cross-element text selection (TextSelection, TextSelectionLayer, participants, scopes, handles), SelectableText, touch selection handles, text boundaries (wrappers over base/segment), the text/selection word lookup and the TextView selection adapter wired into ticket 28's hooks.",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/{text_selection,selectable_text,touch_selection,text_boundary}.rs, text/{selection,selection_adapter}.rs @ c0820693"
+  ],
+  "implementation": {
+    "files": [
+      "new: base/{text_selection,text_selection_adapter,text_selection_word,touch_selection,selectable_text,text_boundary}.go",
+      "tests: base/{text_selection,text_selection_word,touch_selection,selectable_text,text_view_selection}_test.go",
+      "edits to 28's files: text_state.go (adapter owner scope, selection prepaint clear-on-layout-change), text_view.go (touch handles in prepaint/paint), text_inline.go (painted selection edges), text_inline_object.go (registration uses hitbox bounds), header comments in text_view_upstream_test.go and text_inline_virtual_test.go"
+    ],
+    "history": "The worker hit the 2026-10-23 usage limit mid-ticket and was resumed with its context after the reset."
+  },
+  "tests": {
+    "per_file": {
+      "text_selection.rs": "45/45",
+      "selectable_text.rs": "3/3",
+      "touch_selection.rs": "3/3",
+      "text/selection.rs": "2/2",
+      "28's deferred (15 text_view.rs + 1 inline_virtual)": "16: 13 ported, 3 deviated (the remeasure test uses paragraph+list blocks because the test text system never wraps, even on \\n; ScrollTo(ListOffset{ItemIx: count}) for scroll_to_end; the hover-card content is a plain div)"
+    },
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD ca08122 + ticket-29 files and its edits to 28's files (26 in-progress files excluded)",
+        "command": "CGO_ENABLED=0 go vet ./base && gofmt -l base && go build ./...",
+        "result": "clean; no basewip tags"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=1 -v",
+        "result": "ok, 1012 PASS (943 + 69), 0 FAIL, 3 SKIP (ticket-30 deferrals)"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=3",
+        "result": "ok"
+      }
+    ]
+  },
+  "deviations": [
+    "entities need an owner scope: NewTextSelectionHandle takes one; TextSelectionLayer keeps the window state alive through a keyed holder entity",
+    "the participant content mask is recorded via gpui.ContentMask(w) at registration (Hitbox's mask is unexported); a recover guard makes it a no-op outside a draw",
+    "text_rows_extent uses the caret after the last character (TextLayout exposes no line layouts); still a covering extent",
+    "Subscribe is a self-subscription on the participant; touch observation goes through an observer entity (no App-level subscribe/observe)"
+  ],
+  "follow_ups": [
+    "base/root.go: mount TextSelectionLayer{} as the root's first child (U:root.rs:293) and the ctrl-c Copy action via TextSelectionSelectedText (U:root.rs:17-21, 264-273)",
+    "base/element_ext.go: TextSelectionScope(scope) (U:element_ext.rs:7-13) over textSelectionScope",
+    "core bug gpui/element.go:612: drawable.paint recomputes layoutBoundsOf at paint time; the pin stores the prepaint bounds and paints with them (R:element.rs:537-545, 557-600). PrepaintAsRoot/PrepaintAt elements paint at the wrong origin (inline objects report (0,0)); likely the cause of 28's paintOrigin workaround",
+    "optional gpui: public Hitbox.ContentMask(), ListState.ScrollToEnd, App-level Subscribe/Observe; the test text system never makes more than one line"
+  ]
+}

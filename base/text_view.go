@@ -12,8 +12,9 @@ package base
 //   - Copy reads the window TextSelection (ticket 29) through
 //     textSelectionSelectedText; without it the state's own selection
 //     (select-all, multi-click) is copied.
-//   - Touch handles, the selection adapter's per-frame registration and
-//     the reveal handler (tickets 29 and 30) are not carried.
+//   - The selection adapter's per-frame registration and touch handles
+//     are ticket 29's (text_selection_adapter.go); the reveal handler
+//     (ticket 30) is not carried.
 //   - TextViewPlugin: a MarkdownPlugin is applied with Plugin; other
 //     plugins implement TextViewPlugin.
 
@@ -303,6 +304,9 @@ type textViewLayoutState struct {
 type textViewPrepaintState struct {
 	hitbox     gpui.Hitbox
 	clipBottom *float32
+	// touchHandles is the touch handles this view owns, with their
+	// hitboxes (ticket 29).
+	touchHandles TouchHandleLayout
 }
 
 // IntoElement implements gpui.IntoElement.
@@ -462,12 +466,21 @@ func (v *TextView) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElementID,
 			}
 		}
 	}
-	return textViewPrepaintState{hitbox: w.InsertHitbox(bounds, gpui.HitboxNormal), clipBottom: clipBottom}
+	hitbox := w.InsertHitbox(bounds, gpui.HitboxNormal)
+	// Over the text, so after its hitbox (ticket 29).
+	var touchHandles TouchHandleLayout
+	if v.selectable {
+		touchHandles = textViewPrepaintTouchHandles(state, w, app)
+	}
+	return textViewPrepaintState{hitbox: hitbox, clipBottom: clipBottom, touchHandles: touchHandles}
 }
 
 // Paint paints the document with the view's state on the stack, clipped to
 // the last whole line under max_lines (U:text/text_view.rs:781-857).
 func (v *TextView) Paint(_ *gpui.GlobalElementID, _ *gpui.InspectorElementID, bounds gpui.Bounds, layout *textViewLayoutState, prepaint *textViewPrepaintState, w *gpui.Window, app *gpui.App) {
+	if v.selectable {
+		textViewSelectionBeginFrame(layout.state, app)
+	}
 	textViewStatePush(app, layout.state)
 	if prepaint.clipBottom != nil {
 		mask := textBoundsFromCorners(bounds.Origin, gpui.Point{X: bounds.Right(), Y: *prepaint.clipBottom})
@@ -476,6 +489,11 @@ func (v *TextView) Paint(_ *gpui.GlobalElementID, _ *gpui.InspectorElementID, bo
 		layout.element.Paint(w, app)
 	}
 	textViewStatePop(app)
+	if v.selectable {
+		// Registration and touch handles (ticket 29,
+		// text_selection_adapter.go).
+		textViewSelectionPaint(layout.state, prepaint.hitbox, &prepaint.touchHandles, w, app)
+	}
 }
 
 // Text is a plain string or a TextView (U:text/mod.rs:48-103).

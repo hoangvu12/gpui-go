@@ -108,6 +108,7 @@ Blocking edges live in each ticket's `Blocked by:`; the frontier is computed fro
 - [Textarea](issues/21-textarea.md) — display map (wrap/fold), inline tokens, Textarea, multi-line builders; 75 upstream tests ported, 61 editor-only state.rs tests left for 23/24.
 - [Composite controls](issues/25-composite-controls.md) — Tree, NavStack, Resizable (exact split), Questionnaire; 35/35 upstream tests; drawNotify works around the core's notify-while-drawing delivery.
 - [Editor basics](issues/23-editor-basics.md) — Editor mode: language config, auto-close, indent, folding, gutter, editor scrollbar, ghost text, highlighting hooks, decorations, search; 80 of 83 upstream tests ported (3 n/a).
+- [Text selection](issues/29-text-selection.md) — cross-element selection, SelectableText, touch handles, boundaries, TextView adapter; 53/53 upstream + 16 deferred from 28; Root/ElementExt wiring and a core paint-bounds bug follow.
 - Package layout (orchestrator, routine): one `base` package mirroring the single crate; dependency-free data structures (rope, sum tree, segmentation) in subpackages under `base/`.
 
 ## Not yet specified
