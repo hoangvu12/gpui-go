@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: 01, 28, 36
 
 ## Question
@@ -31,3 +31,4 @@ Range highlights, streaming fade-in and HTML documents (with the minifier) rende
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
 - 2026-10-23 — Note from the base-port-2 orchestrator: ticket 28 leaves hooks for this ticket: nodeRenderContext.streamFades/rangeBackgrounds and textLeafKey. This ticket also owns 28's 65 deferred tests: 59 from state.rs, 5 from inline.rs and 1 inline HTML test from text_view.rs. It also owns the 3 skipped markdown HTML tests from ticket 27.
+- 2026-10-23 — Claimed and delegated. Owns new base/text_{range_highlight,stream_fade,html*}*.go and the html5minify port. May wire 28's hooks in base/text_*.go and un-skip the 3 markdown HTML tests. x/net/html enters go.mod (ticket 01), with notices.
