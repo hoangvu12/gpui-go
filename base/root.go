@@ -8,9 +8,6 @@ package base
 //     on_action_copy (U:root.rs:264-273) — needs input::Copy (ticket 20)
 //     and TextSelection::selected_text (ticket 29).
 //   - The TextSelectionLayer child (U:root.rs:293) arrives with ticket 29.
-//   - The focus-trap lookup (crate::active_focus_trap, U:focus_trap.rs:
-//     224-228) arrives with ticket 16; until then activeFocusTrap reports
-//     no trap and Tab is plain focus navigation.
 //   - install_window_hit_test_forwarder (U:root.rs:148-149) is macOS-only.
 
 import (
@@ -45,12 +42,10 @@ func rootInit(app *gpui.App) {
 }
 
 // activeFocusTrap returns the focus handle of the active focus trap, if
-// any (the crate::active_focus_trap seam, U:focus_trap.rs:224-228). The
-// focus-trap ticket (16) replaces this declaration with the manager
-// lookup.
-var activeFocusTrap = func(w *gpui.Window, app *gpui.App) (gpui.FocusHandle, bool) {
-	return gpui.FocusHandle{}, false
-}
+// any (crate::active_focus_trap, U:focus_trap.rs:224-228): the focus trap
+// manager's lookup (focus_trap.go). It stays a variable so the root's
+// Go-own Tab test can substitute a trap.
+var activeFocusTrap = ActiveFocusTrap
 
 // RootPlugin is a presentation layer's retained, per-window facilities
 // (U:root.rs:25-75). Register it with RootRegisterPlugin during explicit

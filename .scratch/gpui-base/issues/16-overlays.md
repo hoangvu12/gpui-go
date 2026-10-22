@@ -4,7 +4,7 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: base-port-2 orchestrator (2026-10-22)
 Blocked by: 08, 12, 14
 
@@ -31,3 +31,7 @@ FocusTrap, Positioner, Popup, Popover, Tooltip, HoverCard, Dialog, AlertDialog, 
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
 - 2026-10-22 — Claimed by the base-port-2 orchestrator and delegated.
+
+## Answer
+
+Resolved 2026-10-22. Focus trap, positioner, popup, popover, tooltip, hover card, dialog, alert dialog, sheet and toast in the root `base` package; Root's focus-trap placeholder replaced by the real lookup; `base.Init` runs the dialog/focus_trap/popover/sheet initializers. All 53 upstream tests ported (0 deviated) + 4 Go-only; 292 base tests pass on the orchestrator's snapshot rerun. Gap 2b: the Block() convention applied to every plain upstream div. Deviations (window decorations assumed server-side, keyed-state focus handles instead of per-render handles, registration-order trap lookup): [evidence](../../../evidence/base/ticket16-overlays.json).

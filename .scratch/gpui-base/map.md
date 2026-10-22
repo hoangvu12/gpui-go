@@ -98,6 +98,7 @@ Blocking edges live in each ticket's `Blocked by:`; the frontier is computed fro
 - [Motion](issues/14-motion.md) — easings, timing, keyframes, transitions, springs, presence, sequence, reveal in the root base package; 48 upstream tests on the virtual clock; f64 duration scaling deviation.
 - [Input data layer](issues/19-input-data-layer.md) — RopeExt, InputPoint/InputPosition/InputSelection, cursor, change, undo manager, mask patterns; 42 upstream tests.
 - [Simple controls](issues/17-simple-controls.md) — Button pattern + 16 controls (toggle, checkbox, radio, switch, link, tabs, toolbar, accordion, collapsible, avatar, progress, slider, pagination, table); 78 upstream tests; `.Block()` convention for gap 2b.
+- [Overlays](issues/16-overlays.md) — focus trap, positioner, popup, popover, tooltip, hover card, dialog, alert dialog, sheet, toast; 53 upstream tests; Init wires the overlay initializers.
 - Package layout (orchestrator, routine): one `base` package mirroring the single crate; dependency-free data structures (rope, sum tree, segmentation) in subpackages under `base/`.
 
 ## Not yet specified
