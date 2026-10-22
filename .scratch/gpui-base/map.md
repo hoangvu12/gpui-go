@@ -67,7 +67,7 @@ Everything else (quads with radii/borders, shadows, layers, paths, cursor, point
 | Wave | Tickets | Parallelism |
 |---|---|---|
 | 0 — decisions (user) | [01 dependencies](issues/01-dependency-policy.md), [02 native gaps](issues/02-native-gap-policy.md) | — |
-| 1 — core completion (`gpui/`) | [03](issues/03-frame-loop.md) [04](issues/04-wall-clock-timers.md) [05](issues/05-styled-vocabulary.md) [09](issues/09-state-context-helpers.md) → [06](issues/06-div-interactivity.md) [07](issues/07-scrolling.md) [08](issues/08-element-paint-api.md) → [10](issues/10-rich-text.md) [11](issues/11-a11y-authoring.md) [12](issues/12-test-harness.md) | 4 → 3 → 3 workers |
+| 1 — core completion (`gpui/`) | [35 inline runs](issues/35-inline-styled-runs.md) (follow-up of 10); [03](issues/03-frame-loop.md) [04](issues/04-wall-clock-timers.md) [05](issues/05-styled-vocabulary.md) [09](issues/09-state-context-helpers.md) → [06](issues/06-div-interactivity.md) [07](issues/07-scrolling.md) [08](issues/08-element-paint-api.md) → [10](issues/10-rich-text.md) [11](issues/11-a11y-authoring.md) [12](issues/12-test-harness.md) | 4 → 3 → 3 workers |
 | 2 — Base foundations (`base/`) | [13 infra](issues/13-base-infra.md), [14 motion](issues/14-motion.md), [15 data structures](issues/15-data-structures.md) | 13 ∥ 15, then 14 |
 | 3 — overlays, controls, scroll | [16](issues/16-overlays.md) [17](issues/17-simple-controls.md) [18](issues/18-scroll-family.md), [19 input data](issues/19-input-data-layer.md), [31 plot](issues/31-plot.md) | 5 workers |
 | 4 — input + text | [20](issues/20-single-line-input.md) → [21](issues/21-textarea.md) [22](issues/22-input-controls.md); [27 markdown](issues/27-markdown-parse.md) → [28 TextView](issues/28-text-view.md) | 2 chains |
@@ -91,6 +91,7 @@ Blocking edges live in each ticket's `Blocked by:`; the frontier is computed fro
 - [Test harness — Base-shaped simulate helpers (keystrokes, mouse, drag, a11y node, ComputeStyle)](issues/12-test-harness.md)
 - [Real-window input — button/move/wheel messages routed into element dispatch](issues/34-real-window-input.md)
 - [Element paint API](issues/08-element-paint-api.md) — external painting, Canvas, Deferred, Anchored, Img, animation element, drag preview.
+- [Rich text](issues/10-rich-text.md) — per-run paint fields, HighlightStyle, StyledText/TextLayout, the legacy ShapeLine/LineWrapper facade over ShapeText; ligatures split colors inside the glyph; inline paragraphs → [35](issues/35-inline-styled-runs.md).
 - [Base infra](issues/13-base-infra.md) — `base` package: Init, Theme + shadcn tokens, StyledExt, StateStyle, Root + plugins, GlobalState, reduce motion, History/UndoHistory; 59 tests.
 - [Data structures](issues/15-data-structures.md) — base/rope, base/sumtree, base/segment (uax29 v2.7.0 enters go.mod), base/dataurl, base/strftime; 57 tests.
 - Package layout (orchestrator, routine): one `base` package mirroring the single crate; dependency-free data structures (rope, sum tree, segmentation) in subpackages under `base/`.

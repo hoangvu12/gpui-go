@@ -4,7 +4,7 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: base-port-2 orchestrator (2026-10-22)
 Blocked by: 02, 08
 
@@ -35,3 +35,11 @@ Text with per-run color, background, underline and strikethrough paints correctl
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
 - 2026-10-22 — Reopened: the 2026-10-19 worker died with its session and left nothing on disk (status set back to open). Re-claimed the same day by the base-port-2 orchestrator (worktree gpui-go-wt-base, branch base-port-2) and delegated.
+
+## Answer
+
+Resolved 2026-10-22 on `base-port-2`. `TextRun` gains `Color`/`BackgroundColor`/`Underline`/`Strikethrough` (kept out of the layout cache key; geometry unchanged); `HighlightStyle` + `CombineHighlights`; per-run paint clipped to each run's selection rects (decision 02); `StyledText` + `TextLayout`; the legacy facade `Window.TextSystem()` → `ShapeLine` / `LayoutWidth` / `LineWrapper`, `ShapedLine` x↔index + paint/paint_background, `LineFragment`/`Boundary`.
+
+Tests: 18 added (4 upstream ported, 4 adapted, 24 not applicable with reasons); the real-window transcript checks per-run sprite colors and clips, decorations, a Calibri ligature across a color boundary, and `ShapedLine` vs `WrappedLine.Caret/HitTest` for every character. Orchestrator snapshot rerun: richtextspec, gpui, textspec, glyphspec, inlinespec, scenespec, authorspec, layoutspec all green.
+
+Deviations ([evidence](../../../evidence/base/ticket10-rich-text.json)): a ligature across a color boundary shows both colors split inside the glyph, not one color as decision 02 expected; strikethrough/underline use the core's fallback offsets (`line.rs:437,448`); `ShapeLine` rejects a force width (tickets 21/23 re-express the line-number measurement); truncation and text transform not ported. Follow-up: [35](35-inline-styled-runs.md) for per-run colors inside inline paragraphs.

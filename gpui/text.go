@@ -550,14 +550,33 @@ func (ts *TextSystem) FontMetrics(fontID FontID) (FontMetrics, error) {
 // ---------------------------------------------------------------------------
 
 // TextRun is one style run of a shaped document, mirroring the pinned
-// gpui::TextRun: a byte length, the run's font descriptor and an
-// optional letter spacing. Runs must exactly cover the shaped text on
-// UTF-8 character boundaries.
+// gpui::TextRun (crates/gpui/src/text_system.rs:489-504): a byte length,
+// the run's font descriptor, the paint fields (color, background,
+// underline, strikethrough) and an optional letter spacing. Runs must
+// exactly cover the shaped text on UTF-8 character boundaries.
+//
+// Only Len, Font and LetterSpacing cross the native shaping ABI (the
+// rev-11 run record carries no paint style; ticket 02's decision): the
+// paint fields are applied Go-side at paint time (rich_paint.go — shape
+// once, paint each run clipped to its selection rectangles), so they
+// never change a shaped geometry and are not part of the line-layout
+// cache key (text_cache.go encodeShapeRuns).
 type TextRun struct {
 	// Len is this run's length in UTF-8 bytes.
 	Len int
 	// Font is the run's font descriptor.
 	Font FontDescriptor
+	// Color is the run's glyph color (the pinned TextRun::color).
+	Color Hsla
+	// BackgroundColor is the run's background color, nil for none (the
+	// pinned TextRun::background_color).
+	BackgroundColor *Hsla
+	// Underline is the run's underline, nil for none (the pinned
+	// TextRun::underline).
+	Underline *UnderlineStyle
+	// Strikethrough is the run's strikethrough, nil for none (the pinned
+	// TextRun::strikethrough).
+	Strikethrough *StrikethroughStyle
 	// LetterSpacing, when non-nil, is applied between the run's glyphs
 	// (pixels).
 	LetterSpacing *float32
