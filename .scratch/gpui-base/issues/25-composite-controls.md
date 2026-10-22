@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: 17, 18, 22
 
 ## Question
@@ -31,3 +31,4 @@ Tree, NavStack, Resizable panels and Questionnaire behave as upstream (including
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-23 — Claimed and delegated. Owns new base/{tree,nav_stack,resizable*,questionnaire*}.go and the tree Init line in base/lib.go.

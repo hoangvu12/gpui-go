@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: 28
 
 ## Question
@@ -31,3 +31,4 @@ Cross-element selection, SelectableText and touch selection handles work as upst
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
 - 2026-10-23 — Note from the base-port-2 orchestrator: ticket 28 leaves hooks for this ticket: newTextViewSelectionAdapter, textSelectionRegisterInline, textSelectionEnd, textSelectionSelectedText and textWordRangeAt (which defaults to segment.WordRangeAt). This ticket also owns 28's 16 deferred selection tests: 15 from text_view.rs and 1 from inline_virtual_tests.rs. See evidence/base/ticket28-text-view.json.
+- 2026-10-23 — Claimed and delegated. Owns new base/{text_selection*,selectable_text*,touch_selection*,text_boundary*}.go. May wire 28's hooks in base/text_{view,state,inline,inline_flow,node_render}.go and move 28's 16 deferred tests into place. Ticket 30 waits for this ticket so the two don't both edit those files.
