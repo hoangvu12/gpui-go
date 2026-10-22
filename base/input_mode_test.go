@@ -7,8 +7,7 @@ import (
 	"github.com/hoangvu12/gpui-go/base/rope"
 )
 
-// Ported tests of U:input/base/mode.rs (4/4; test_code_editor reads the
-// indent-guides flag directly, has_indent_guides lives in the indent port).
+// Ported tests of U:input/base/mode.rs (4/4).
 
 // U:input/base/mode.rs:422-435
 func TestInputModeReplacementInputEditBackspaceAtEndUsesOldRange(t *testing.T) {
@@ -26,13 +25,13 @@ func TestInputModeReplacementInputEditBackspaceAtEndUsesOldRange(t *testing.T) {
 
 // U:input/base/mode.rs:437-466
 func TestInputModeCodeEditor(t *testing.T) {
-	mode := layoutModeCodeEditor()
-	if !mode.showLineNumber() || !mode.indentGuides || mode.maxRowsCount() != math.MaxInt || mode.minRowsCount() != 1 || !mode.isFolding() {
+	mode := layoutModeCodeEditor(nil)
+	if !mode.showLineNumber() || !mode.hasIndentGuides() || mode.maxRowsCount() != math.MaxInt || mode.minRowsCount() != 1 || !mode.isFolding() {
 		t.Fatalf("code editor defaults = %+v", mode)
 	}
 
-	mode = layoutMode{kind: layoutCodeEditor}
-	if mode.showLineNumber() || mode.indentGuides || mode.minRowsCount() != 1 || mode.isFolding() || mode.isAutoClose() || mode.isSmartIndent() {
+	mode = layoutMode{kind: layoutCodeEditor, language: &editorLanguage{}, highlighter: &highlighterCell{}}
+	if mode.showLineNumber() || mode.hasIndentGuides() || mode.minRowsCount() != 1 || mode.isFolding() || mode.isAutoClose() || mode.isSmartIndent() {
 		t.Fatalf("code editor with everything off = %+v", mode)
 	}
 }

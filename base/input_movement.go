@@ -1,8 +1,7 @@
 package base
 
 // Port of U:input/base/movement.rs: caret movement over the last layout.
-// Vertical moves go through the display map (input_layout.go's
-// inputDisplayMap stand-in until the textarea ticket).
+// Vertical moves go through the display map (input_display_map.go).
 
 import (
 	"github.com/hoangvu12/gpui-go/base/sumtree"

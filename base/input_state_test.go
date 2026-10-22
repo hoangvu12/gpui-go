@@ -29,6 +29,7 @@ type inputView[M InputModeKind] struct {
 func buildInput(t *testing.T, f func(InputState) InputState) *inputView[InputMode] {
 	t.Helper()
 	ta := gpui.NewTestApp()
+	shutdownAtCleanup(t, ta)
 	ta.Update(func(app *gpui.App) {
 		t := DefaultTheme()
 		app.SetGlobal(&t)

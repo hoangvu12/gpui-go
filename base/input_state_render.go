@@ -1,14 +1,8 @@
 package base
 
 // Render of the input engine (U:input/base/state.rs:4354-4512): action
-// and pointer listener registration around the TextElement.
-//
-// Joining with later tickets: the multi-line indent actions
-// (indent_inline / outdent_inline / indent_block / outdent_block,
-// U:input/editor/indent.rs:199-237) and the editor scrollbar
-// (EditorScrollbar, U:input/base/element.rs:196-292), which only a
-// multi-line input registers; the highlighter refresh of a pending update
-// (U:input/base/state.rs:4362-4378) runs through the mode hooks.
+// and pointer listener registration around the TextElement and the
+// editor scrollbar.
 
 import "github.com/hoangvu12/gpui-go/gpui"
 
@@ -22,6 +16,8 @@ func (s *InputBaseState[M]) Render(w *gpui.Window, cx *inputCx[M]) gpui.AnyEleme
 	// self-handle (Context.StrongSelf) is the pinned cx.entity().
 	entity := cx.StrongSelf()
 	if s.pendingUpdate {
+		s.updateHighlighter(highlighterUpdate{oldText: s.text, newText: s.text}, w, cx)
+		s.updateFoldCandidates()
 		s.hooks.refreshLanguageFeatures(s, w, cx)
 		s.pendingUpdate = false
 	}
@@ -44,6 +40,12 @@ func (s *InputBaseState[M]) Render(w *gpui.Window, cx *inputCx[M]) gpui.AnyEleme
 			OnAction(CutAction, w.ListenerFor(entity, (*self).cut)).
 			OnAction(UndoAction, w.ListenerFor(entity, (*self).undo)).
 			OnAction(RedoAction, w.ListenerFor(entity, (*self).redo))
+		if s.IsMultiLine() {
+			d.OnAction(IndentInlineAction, w.ListenerFor(entity, (*self).indentInline)).
+				OnAction(OutdentInlineAction, w.ListenerFor(entity, (*self).outdentInline)).
+				OnAction(IndentAction, w.ListenerFor(entity, (*self).indentBlock)).
+				OnAction(OutdentAction, w.ListenerFor(entity, (*self).outdentBlock))
+		}
 	}
 	d.OnAction(MoveLeftAction, w.ListenerFor(entity, (*self).left)).
 		OnAction(MoveRightAction, w.ListenerFor(entity, (*self).right)).
@@ -132,6 +134,9 @@ func (s *InputBaseState[M]) Render(w *gpui.Window, cx *inputCx[M]) gpui.AnyEleme
 			Pl(gpui.Px(s.editorPaddings.Left))
 	}
 	d.Child(newTextElement(entity).withPlaceholder(s.placeholder))
+	if s.showsScrollbar() {
+		d.Child(newEditorScrollbar(entity))
+	}
 
 	// Actions only one mode handles are registered by that mode.
 	return s.hooks.registerActions(d, entity, w).IntoElement()

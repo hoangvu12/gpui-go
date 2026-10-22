@@ -14,6 +14,7 @@ import (
 func buildTextarea(t *testing.T, f func(TextareaState) TextareaState) *inputView[TextareaMode] {
 	t.Helper()
 	ta := gpui.NewTestApp()
+	shutdownAtCleanup(t, ta)
 	ta.Update(func(app *gpui.App) {
 		theme := DefaultTheme()
 		app.SetGlobal(&theme)

@@ -20,21 +20,20 @@ package base
 //     hooks do through `&mut InputBaseState<Self>`. Go has no RefCell
 //     borrow split, so drive_highlighter / drive_highlighter_batch take
 //     the state instead of the highlighter cell
-//     (U:input/base/kind.rs:163-182); the editor ticket reads the cell
-//     from the state's layout mode.
+//     (U:input/base/kind.rs:163-182); the editor reads the cell from the
+//     state's layout mode.
 //   - A method that only exists on one mode upstream (InputState::masked,
 //     TextareaState::rows, ...) cannot be restricted to one instantiation
 //     of a Go generic type. Those methods exist on every instantiation and
 //     panic on the wrong mode (requireInputMode); upstream it is a compile
 //     error (U:input/base/kind.rs:12-21). Recorded deviation.
 //
-// Hooks and extras whose parameter types are ported by later tickets join
-// with those tickets: InputExtras::decoration_layers / range_decorations
-// (TextDecoration, RangeDecoration — editor decorations),
-// semantic_token_styles (HighlightStyleResolver), inline_completion_item
-// (lsp_types::InlineCompletionItem), and EditorMode's own hook set and
-// EditorExtras (U:input/base/kind.rs:349-377, the LSP and decoration
-// state).
+// EditorMode's hook set and EditorExtras are editor.go's (the editor's
+// impl lives with the editor code upstream, U:input/editor/mod.rs:13-192,
+// 234-277). Hooks and extras whose types are ported by the diagnostics /
+// LSP ticket (24) keep their default answers there: semantic_token_styles
+// (LSP semantic tokens), document colors, the hover and inline-completion
+// state and the context-menu providers.
 
 import (
 	"github.com/hoangvu12/gpui-go/base/rope"
@@ -99,9 +98,9 @@ func (EditorMode) codeEditor() bool { return true }
 func (InputMode) hookSet() any    { return inputModeDefaults[InputMode]{} }
 func (TextareaMode) hookSet() any { return inputModeDefaults[TextareaMode]{} }
 
-// hookSet for EditorMode returns the default hooks until the editor
-// ticket ports its implementation (U:input/base/kind.rs:349-350).
-func (EditorMode) hookSet() any { return inputModeDefaults[EditorMode]{} }
+// hookSet for EditorMode is the editor's implementation (editor.go,
+// U:input/editor/mod.rs:13-192).
+func (EditorMode) hookSet() any { return editorModeHooks{} }
 
 // InputExtras is what the renderer may read out of a mode's extra state
 // (U:input/base/kind.rs:69-124). Every answer is empty for a plain input
@@ -117,6 +116,17 @@ type InputExtras interface {
 	// contextMenuCapabilities is what this mode can offer its context
 	// menu: go-to-definition, code actions (U:input/base/kind.rs:120-123).
 	contextMenuCapabilities() (goToDefinition, codeActions bool)
+	// decorationLayers are the decoration ranges to paint, innermost
+	// collection first (U:input/base/kind.rs:81-84).
+	decorationLayers() [][]TextDecoration
+	// rangeDecorations are the geometric decorations intersecting the
+	// visible, non-folded buffer spans (U:input/base/kind.rs:86-89).
+	rangeDecorations(ranges []InputSelection) []RangeDecoration
+	// inlineCompletionText is the insert_text of inline_completion_item,
+	// the inline completion to paint as ghost text
+	// (U:input/base/kind.rs:115-118); the item itself is an LSP type
+	// (ticket 24).
+	inlineCompletionText() (string, bool)
 }
 
 // inputColoredRange is one (Range<usize>, Hsla) pair of
@@ -135,6 +145,11 @@ func (noInputExtras) documentColorSwatches(rope.Rope, InputSelection) []inputCol
 }
 func (noInputExtras) hoverSymbolRange() (InputSelection, bool) { return InputSelection{}, false }
 func (noInputExtras) contextMenuCapabilities() (bool, bool)    { return false, false }
+func (noInputExtras) decorationLayers() [][]TextDecoration     { return nil }
+func (noInputExtras) rangeDecorations([]InputSelection) []RangeDecoration {
+	return nil
+}
+func (noInputExtras) inlineCompletionText() (string, bool) { return "", false }
 
 // SyntaxContext is the syntax context at an offset, for editing decisions
 // (U:input/editor/highlighting.rs:84-89). It is declared here because the
@@ -160,7 +175,7 @@ type inputModeHooks[M InputModeKind] interface {
 	driveHighlighter(s *InputBaseState[M], edit InputEdit, text rope.Rope, folding bool, w *gpui.Window, cx *gpui.Context[InputBaseState[M]])
 	// driveHighlighterBatch drives it once for several edits applied as
 	// one change (U:input/base/kind.rs:173-182).
-	driveHighlighterBatch(s *InputBaseState[M], edits []inputEditWithText, folding bool, w *gpui.Window, cx *gpui.Context[InputBaseState[M]])
+	driveHighlighterBatch(s *InputBaseState[M], edits []InputEditWithText, folding bool, w *gpui.Window, cx *gpui.Context[InputBaseState[M]])
 	// hoverDefinitionStyle is the range highlighted while Cmd-hovering a
 	// symbol (U:input/base/kind.rs:184-190).
 	hoverDefinitionStyle(s *InputBaseState[M], app *gpui.App) (gpui.HighlightRange, bool)
@@ -218,13 +233,6 @@ type inputModeHooks[M InputModeKind] interface {
 	registerActions(element *gpui.DivElement, entity gpui.Entity[InputBaseState[M]], w *gpui.Window) *gpui.DivElement
 }
 
-// inputEditWithText is one (InputEdit, Rope) entry of a batch: an edit
-// with the text right after it (U:input/base/kind.rs:177).
-type inputEditWithText struct {
-	edit InputEdit
-	text rope.Rope
-}
-
 // inputModeDefaults carries the trait's default method bodies; every
 // mode's hook set embeds it (U:input/base/kind.rs:158-331).
 type inputModeDefaults[M InputModeKind] struct{}
@@ -232,7 +240,7 @@ type inputModeDefaults[M InputModeKind] struct{}
 func (inputModeDefaults[M]) newExtras() InputExtras { return noInputExtras{} }
 func (inputModeDefaults[M]) driveHighlighter(*InputBaseState[M], InputEdit, rope.Rope, bool, *gpui.Window, *gpui.Context[InputBaseState[M]]) {
 }
-func (inputModeDefaults[M]) driveHighlighterBatch(*InputBaseState[M], []inputEditWithText, bool, *gpui.Window, *gpui.Context[InputBaseState[M]]) {
+func (inputModeDefaults[M]) driveHighlighterBatch(*InputBaseState[M], []InputEditWithText, bool, *gpui.Window, *gpui.Context[InputBaseState[M]]) {
 }
 func (inputModeDefaults[M]) hoverDefinitionStyle(*InputBaseState[M], *gpui.App) (gpui.HighlightRange, bool) {
 	return gpui.HighlightRange{}, false

@@ -73,6 +73,7 @@ func (f *inputFrame) Render(w *gpui.Window, cx *gpui.Context[inputFrame]) gpui.A
 // U:input/base/state.rs:4870-4896
 func TestInputSingleLineIsCenteredInATallerFrame(t *testing.T) {
 	ta := gpui.NewTestApp()
+	shutdownAtCleanup(t, ta)
 	ta.Update(func(app *gpui.App) { inputInit(app) })
 	var input gpui.Entity[InputState]
 	opts := gpui.WindowOptions{Bounds: gpui.Bounds{Size: gpui.Size{Width: 400, Height: 100}}}
@@ -103,6 +104,7 @@ func (*inputEmptyRoot) Render(*gpui.Window, *gpui.Context[inputEmptyRoot]) gpui.
 func buildUnrenderedInput(t *testing.T) *inputView[InputMode] {
 	t.Helper()
 	ta := gpui.NewTestApp()
+	shutdownAtCleanup(t, ta)
 	ta.Update(func(app *gpui.App) { inputInit(app) })
 	var input gpui.Entity[InputState]
 	_, cx := ta.AddWindowView(func(r *inputEmptyRoot, w *gpui.Window, cx *gpui.Context[inputEmptyRoot]) {

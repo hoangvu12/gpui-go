@@ -6,11 +6,10 @@ package base
 // stood immediately before the replacement was applied
 // (U:input/base/change.rs:5-14).
 //
-// tokenDelta is Option<Box<inline_tokens::TokenDelta>>: nil is None. Its
-// type belongs to the inline-tokens port (U:input/base/inline_tokens.rs:
-// 210-215), which should narrow this field to *tokenDelta.
+// tokenDelta is Option<Box<inline_tokens::TokenDelta>>: nil is None
+// (U:input/base/inline_tokens.rs:210-215).
 type change struct {
-	tokenDelta any
+	tokenDelta *tokenDelta
 	oldRange   InputSelection
 	oldText    string
 	newRange   InputSelection

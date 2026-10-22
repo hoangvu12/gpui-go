@@ -2,18 +2,10 @@ package base
 
 // Editing, history, clipboard and the IME handler of the input engine
 // (U:input/base/state.rs:1549-2271, 2612-2871, 3586-4346), plus the
-// stand-ins for modules later tickets port (see input_state.go).
-//
-// Code-editor-only branches whose data joins with the editor tickets are
-// not ported here: the language-config smart indent of
-// indent_of_next_line_at (U:input/base/state.rs:1588-1625), automatic
-// closing (auto_close_target / skip_over_target / the pair deletion of
-// backspace, U:input/base/state.rs:1685-1795, 1808-1839, 3937-3956,
-// 3986-4003), the bracket split of enter (U:input/base/state.rs:
-// 1966-2021) and fold-candidate maintenance (U:input/base/state.rs:
-// 3810-3853). LayoutMode::is_auto_close / is_smart_indent are false
-// outside a code editor, so a plain input and a textarea never reach
-// them.
+// touch-selection stand-in (see input_state.go). The automatic-closing
+// decisions are editor_auto_close.go's; LayoutMode::is_auto_close /
+// is_smart_indent are false outside a code editor, so a plain input and a
+// textarea never reach them.
 
 import (
 	"slices"
@@ -27,33 +19,12 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Stand-ins for later tickets (touch selection, search)
+// Stand-in for a later ticket (touch selection)
 // ---------------------------------------------------------------------------
 
 // dismissTouchSelection drops the touch handles and edit menu; with no
 // touch selection it is a no-op (U:input/base/touch.rs:86-92).
 func (s *InputBaseState[M]) dismissTouchSelection(*inputCx[M]) {}
-
-// updateSearch keeps the search matches in step with an edit; an input
-// with no active search session skips it (U:input/editor/search.rs:
-// 272-277).
-func (s *InputBaseState[M]) updateSearch(*gpui.App) {}
-
-// onActionSearch leaves the shortcut to the ancestors of an input that is
-// not searchable (U:input/editor/search.rs:286-292). Opening the search
-// panel joins with the search port.
-func (s *InputBaseState[M]) onActionSearch(_ *Search, _ *gpui.Window, cx *inputCx[M]) {
-	if !s.searchable {
-		cx.Propagate()
-	}
-}
-
-// onActionReplace is U:input/editor/search.rs:294-305 (see onActionSearch).
-func (s *InputBaseState[M]) onActionReplace(_ *Replace, _ *gpui.Window, cx *inputCx[M]) {
-	if !s.searchable {
-		cx.Propagate()
-	}
-}
 
 // ---------------------------------------------------------------------------
 // selection.rs: select_word / select_line
@@ -98,9 +69,8 @@ func (s *InputBaseState[M]) selectLine(offset int, _ *gpui.Window, cx *inputCx[M
 func (s *InputBaseState[M]) indentOfNextLine() string { return s.indentOfNextLineAt(s.Cursor()) }
 
 // indentOfNextLineAt is the indent of the line after offset: the deeper
-// of the current and next lines' leading whitespace
-// (U:input/base/state.rs:1553-1628; the language-config smart indent
-// joins with the editor ticket).
+// of the current and next lines' leading whitespace, adjusted by the
+// language's smart indent (U:input/base/state.rs:1553-1628).
 func (s *InputBaseState[M]) indentOfNextLineAt(offset int) string {
 	if s.IsSingleLine() {
 		return ""
@@ -117,10 +87,34 @@ func (s *InputBaseState[M]) indentOfNextLineAt(offset int) string {
 		}
 		return b.String()
 	}
-	currentIndent := leading(s.startOfLineAt(offset, affinity))
-	nextIndent := leading(s.endOfLineAt(offset, affinity))
+	currentLineStart := s.startOfLineAt(offset, affinity)
+	nextLineStart := s.endOfLineAt(offset, affinity)
+	currentIndent := leading(currentLineStart)
+	nextIndent := leading(nextLineStart)
 	if len(nextIndent) > len(currentIndent) {
 		return nextIndent
+	}
+
+	// Smart indent: one extra level after lines ending with a trigger;
+	// skipped inside strings and comments, where the trigger is literal.
+	if rules, ok := s.mode.languageConfig(); ok && s.mode.isSmartIndent() &&
+		s.hooks.editingSyntaxContext(s, offset) == SyntaxContextCode {
+		lineBefore := s.text.Slice(currentLineStart, max(offset, currentLineStart)).String()
+		tab := s.mode.tabSize()
+		if rules.opensIndent(strings.TrimRightFunc(lineBefore, unicode.IsSpace)) {
+			currentIndent += tab.String()
+		} else if rules.closesIndent(s.text.Slice(offset, max(nextLineStart, offset)).String()) {
+			if strings.HasSuffix(currentIndent, "\t") {
+				currentIndent = currentIndent[:len(currentIndent)-1]
+			} else {
+				for range tab.TabSize {
+					if !strings.HasSuffix(currentIndent, " ") {
+						break
+					}
+					currentIndent = currentIndent[:len(currentIndent)-1]
+				}
+			}
+		}
 	}
 	return currentIndent
 }
@@ -170,6 +164,13 @@ func (s *InputBaseState[M]) deleteSelections(silent bool, collapsedIntent editIn
 func (s *InputBaseState[M]) backspace(_ *Backspace, w *gpui.Window, cx *inputCx[M]) {
 	if s.selections.isSingle() && s.activeSelection().isEmpty() && s.Cursor() == 0 {
 		cx.Propagate()
+		return
+	}
+	// Pair deletion follows automatic closing rules, independently of the
+	// structural brackets used by Enter (U:input/base/state.rs:1808-1839).
+	if rng, ok := s.autoClosePairDeletion(); ok {
+		utf16 := s.rangeToUTF16(rng)
+		s.replaceTextInRangeSilent(&utf16, "", w, cx)
 		return
 	}
 	s.deleteSelections(false, editIntentBackspace, func(offset int) InputSelection {
@@ -249,7 +250,7 @@ func (s *InputBaseState[M]) enter(action *Enter, w *gpui.Window, cx *inputCx[M])
 			sort.SliceStable(edits, func(i, j int) bool { return edits[i].rng.Start < edits[j].rng.Start })
 			s.replaceTextInRanges(edits, w, cx)
 			s.pauseBlinkCursor(cx)
-		} else {
+		} else if !s.splitBracketsOnEnter(w, cx) {
 			indent := ""
 			if s.IsCodeEditor() {
 				indent = s.indentOfNextLine()
@@ -264,6 +265,55 @@ func (s *InputBaseState[M]) enter(action *Enter, w *gpui.Window, cx *inputCx[M])
 	}
 
 	InputBaseStateEvents[M]().Emit(cx, InputEvent{Kind: InputEventPressEnter, Secondary: action.Secondary, Shift: action.Shift})
+}
+
+// splitBracketsOnEnter is the bracket split: Enter between `{|}` produces
+// a `{`, an indented middle line holding the cursor, and the `}` line.
+// Smart indent controls it, independently of automatic closing; it is
+// skipped inside strings and comments (U:input/base/state.rs:1966-2021).
+func (s *InputBaseState[M]) splitBracketsOnEnter(w *gpui.Window, cx *inputCx[M]) bool {
+	if !s.IsCodeEditor() || !s.activeSelection().isEmpty() {
+		return false
+	}
+	rules, ok := s.mode.languageConfig()
+	if !ok || !s.mode.isSmartIndent() || s.hooks.editingSyntaxContext(s, s.Cursor()) != SyntaxContextCode {
+		return false
+	}
+	off := s.Cursor()
+	isPair := false
+	for _, p := range rules.Brackets {
+		if p.Open != "" && p.Close != "" && p.Open != p.Close &&
+			s.textBeforeMatches(off, p.Open) && s.textAfterMatches(off, p.Close) {
+			isPair = true
+			break
+		}
+	}
+	if !isPair {
+		return false
+	}
+	// Base indent: leading whitespace only.
+	lineStart := s.startOfLineAt(off, s.lineEndAffinityAt(off))
+	var b strings.Builder
+	it := s.text.CharsAt(lineStart)
+	for c, ok := it.Next(); ok; c, ok = it.Next() {
+		if !unicode.IsSpace(c) || c == '\n' || c == '\r' {
+			break
+		}
+		b.WriteRune(c)
+	}
+	indent := b.String()
+	// Extra level only with smart indent enabled.
+	inner := indent
+	if s.mode.isSmartIndent() {
+		inner += s.mode.tabSize().String()
+	}
+	s.replaceTextInRangeSilent(nil, "\n"+inner+"\n"+indent, w, cx)
+	s.setCursorTo(off + 1 + len(inner))
+	s.updatePreferredColumn()
+	cursors := slices.Collect(s.selections.iter())
+	s.undoManager.recordSelections(cursors, cloneSelections(cursors))
+	s.pauseBlinkCursor(cx)
+	return true
 }
 
 // Clean clears the text (U:input/base/state.rs:2049-2053).
@@ -586,11 +636,7 @@ func (s *InputBaseState[M]) pushHistory(text rope.Rope, rng InputSelection, newT
 
 	openTransaction := s.undoManager.hasOpenTransaction()
 	c := newChange(rng, oldText, newRange, newText)
-	// change.tokenDelta is `any` (input_change.go): store only a non-nil
-	// delta so the undo manager's nil checks see None.
-	if delta != nil {
-		c.tokenDelta = delta
-	}
+	c.tokenDelta = delta
 	recorded := s.undoManager.recordTransaction(c, intent)
 	// A batch records its own cursor sets; this covers a change that is a
 	// transaction on its own.
@@ -611,8 +657,7 @@ func (s *InputBaseState[M]) redo(_ *Redo, w *gpui.Window, cx *inputCx[M]) {
 }
 
 // replayHistory replays one transaction backwards or forwards
-// (U:input/base/state.rs:2802-2850). The auto-closed pairs restore joins
-// with the editor auto-close port.
+// (U:input/base/state.rs:2802-2850).
 func (s *InputBaseState[M]) replayHistory(undo bool, w *gpui.Window, cx *inputCx[M]) {
 	if !s.IsEditable() {
 		return
@@ -629,7 +674,7 @@ func (s *InputBaseState[M]) replayHistory(undo bool, w *gpui.Window, cx *inputCx
 	}
 	tokenAware := s.inlineTokens != nil
 	for _, c := range r.changes {
-		if d, _ := c.tokenDelta.(*tokenDelta); d != nil {
+		if c.tokenDelta != nil {
 			tokenAware = true
 		}
 	}
@@ -646,10 +691,10 @@ func (s *InputBaseState[M]) replayHistory(undo bool, w *gpui.Window, cx *inputCx
 		}
 		rngUTF16 := s.rangeToUTF16(rng)
 		s.replaceTextInRangeSilent(&rngUTF16, text, w, cx)
-		d, _ := c.tokenDelta.(*tokenDelta)
-		s.replayTokens(rng, len(text), d, undo)
+		s.replayTokens(rng, len(text), c.tokenDelta, undo)
 	}
 	s.restoreSelections(r.selections)
+	s.mode.restoreAutoClosedPairs(autoClosedPairsFromReplay(r.autoClosedPairs))
 	if tokenAware {
 		s.imeMarkedRange = nil
 	}
@@ -692,8 +737,8 @@ func (s *InputBaseState[M]) replaceTextInRangeSilent(rngUTF16 *gpui.UTF16Range, 
 
 // replaceTextInRanges applies a batch of edits (byte ranges in the
 // pre-edit document) as one history transaction
-// (U:input/base/state.rs:3598-3808). The token-span merge, highlighter,
-// fold and diagnostic steps join with their tickets.
+// (U:input/base/state.rs:3598-3808). The diagnostics reset joins with
+// ticket 24.
 func (s *InputBaseState[M]) replaceTextInRanges(edits []inputTextEdit, w *gpui.Window, cx *inputCx[M]) {
 	if !s.IsEditable() || len(edits) == 0 {
 		return
@@ -742,10 +787,13 @@ func (s *InputBaseState[M]) replaceTextInRanges(edits []inputTextEdit, w *gpui.W
 		s.undoManager.beginTransaction()
 	}
 
+	autoClosedBefore := s.mode.autoClosedPairsSnapshot()
 	recorded := false
-	var highlighterEdits []inputEditWithText
+	// Several edits reach the highlighter as one batch.
+	var highlighterEdits []InputEditWithText
 	for _, e := range sorted {
 		oldText := s.text
+		s.mode.adjustAutoClosedPair(e.rng, len(e.text))
 		s.ext().Replace(e.rng.Start, e.rng.End, e.text)
 
 		s.hooks.adjustAnnotations(s, e.rng, len(e.text))
@@ -760,15 +808,22 @@ func (s *InputBaseState[M]) replaceTextInRanges(edits []inputTextEdit, w *gpui.W
 		if group {
 			if s.IsCodeEditor() {
 				edit := replacementInputEdit(oldText, s.text, e.rng, e.text)
-				highlighterEdits = append(highlighterEdits, inputEditWithText{edit: edit, text: s.text})
+				highlighterEdits = append(highlighterEdits, InputEditWithText{Edit: edit, Text: s.text})
 			}
-		} else if s.IsCodeEditor() {
-			s.hooks.driveHighlighter(s, replacementInputEdit(oldText, s.text, e.rng, e.text), s.text, s.mode.isFolding(), w, cx)
+		} else {
+			s.updateHighlighter(highlighterUpdate{selectedRange: e.rng, oldText: oldText, newText: s.text, changeText: e.text, force: true}, w, cx)
+			s.updateFoldCandidatesIncremental(e.rng, e.text)
 		}
 	}
 	if group {
-		if len(highlighterEdits) > 0 {
-			s.hooks.driveHighlighterBatch(s, highlighterEdits, s.mode.isFolding(), w, cx)
+		s.updateHighlighterBatch(highlighterEdits, w, cx)
+		// Fold candidates are read from the reparsed document, so each edit
+		// is located where it ended up; sorted runs from the highest offset.
+		shift := 0
+		for i := len(sorted) - 1; i >= 0; i-- {
+			start := sorted[i].rng.Start + shift
+			s.updateFoldCandidatesIncremental(NewInputSelection(start, start), sorted[i].text)
+			shift += len(sorted[i].text) - sorted[i].rng.Len()
 		}
 		s.undoManager.commitTransaction()
 	}
@@ -820,6 +875,7 @@ func (s *InputBaseState[M]) replaceTextInRanges(edits []inputTextEdit, w *gpui.W
 
 	selectionsAfter := slices.Collect(s.selections.iter())
 	if recorded {
+		s.undoManager.recordAutoClosedPairs(autoClosedBefore, s.mode.autoClosedPairsSnapshot())
 		s.undoManager.recordSelections(selectionsBefore, selectionsAfter)
 	}
 
@@ -908,6 +964,19 @@ func (s *InputBaseState[M]) ReplaceTextInRange(rngUTF16 *gpui.UTF16Range, newTex
 	rng := s.resolveReplacementRange(rngUTF16)
 	rng = s.normalizeTokenRange(rng)
 
+	// Skip-over as a pure cursor move: a typed closer that already follows
+	// the cursor moves past it without touching text or history
+	// (U:input/base/state.rs:3937-3956).
+	if rng.IsEmpty() && rng.Start == s.Cursor() && s.imeMarkedRange == nil && !s.silentReplaceText &&
+		s.IsCodeEditor() && s.selections.isSingle() && s.activeSelection().isEmpty() {
+		if target, ok := s.skipOverTarget(newText); ok {
+			s.setCursorTo(target)
+			s.updatePreferredColumn()
+			cx.Notify()
+			return
+		}
+	}
+
 	if s.IsMultiLine() {
 		multiCursor := rngUTF16 == nil && s.imeMarkedRange == nil && !s.selections.isSingle()
 		if multiCursor {
@@ -934,7 +1003,19 @@ func (s *InputBaseState[M]) ReplaceTextInRange(rngUTF16 *gpui.UTF16Range, newTex
 			if requestedIntent != nil {
 				s.undoManager.setPendingIntent(*requestedIntent)
 			}
-			s.replaceTextInRanges([]inputTextEdit{{rng: rng, text: newText}}, w, cx)
+			if openLen, closer, ok := s.autoCloseTarget(rng, newText); ok {
+				// One edit keeps the pair atomic even at undo coalescing
+				// limits (U:input/base/state.rs:3986-4003).
+				s.replaceTextInRanges([]inputTextEdit{{rng: rng, text: newText + closer}}, w, cx)
+				cursor := rng.Start + len(newText)
+				s.mode.trackAutoClosedPair(NewInputSelection(cursor-openLen, cursor), NewInputSelection(cursor, cursor+len(closer)))
+				s.undoManager.recordAutoClosedPairsAfter(s.mode.autoClosedPairsSnapshot())
+				s.setCursorTo(cursor)
+				s.updatePreferredColumn()
+				s.undoManager.recordSelections([]cursorSelection{selectionBefore}, slices.Collect(s.selections.iter()))
+			} else {
+				s.replaceTextInRanges([]inputTextEdit{{rng: rng, text: newText}}, w, cx)
+			}
 		}
 		if endsComposition {
 			s.undoManager.commitTransaction()
@@ -947,6 +1028,7 @@ func (s *InputBaseState[M]) ReplaceTextInRange(rngUTF16 *gpui.UTF16Range, newTex
 
 	// Single-line path.
 	oldText := s.text
+	s.mode.adjustAutoClosedPair(rng, len(newText))
 	s.ext().Replace(rng.Start, rng.End, newText)
 
 	newOffset := min(rng.Start+len(newText), s.text.Len())
@@ -994,9 +1076,8 @@ func (s *InputBaseState[M]) ReplaceTextInRange(rngUTF16 *gpui.UTF16Range, newTex
 	s.displayMap.adjustFoldsForEdit(oldText, rng, newText)
 	s.displayMap.onTextChanged(s.text, rng, newText, w)
 
-	if s.IsCodeEditor() {
-		s.hooks.driveHighlighter(s, replacementInputEdit(oldText, s.text, rng, newText), s.text, s.mode.isFolding(), w, cx)
-	}
+	s.updateHighlighter(highlighterUpdate{selectedRange: rng, oldText: oldText, newText: s.text, changeText: newText, force: true}, w, cx)
+	s.updateFoldCandidatesIncremental(rng, newText)
 	s.hooks.refreshLanguageFeatures(s, w, cx)
 	s.setCursorTo(newOffset)
 	s.imeMarkedRange = nil
@@ -1065,7 +1146,9 @@ func (s *InputBaseState[M]) ReplaceAndMarkTextInRange(rngUTF16 *gpui.UTF16Range,
 
 	rng := s.normalizeTokenRange(s.resolveReplacementRange(rngUTF16))
 
+	autoClosedBefore := s.mode.autoClosedPairsSnapshot()
 	oldText := s.text
+	s.mode.adjustAutoClosedPair(rng, len(newText))
 	s.ext().Replace(rng.Start, rng.End, newText)
 
 	if s.IsSingleLine() {
@@ -1084,9 +1167,8 @@ func (s *InputBaseState[M]) ReplaceAndMarkTextInRange(rngUTF16 *gpui.UTF16Range,
 	// U:input/base/state.rs:4208-4211.
 	s.displayMap.adjustFoldsForEdit(oldText, rng, newText)
 	s.displayMap.onTextChanged(s.text, rng, newText, w)
-	if s.IsCodeEditor() {
-		s.hooks.driveHighlighter(s, replacementInputEdit(oldText, s.text, rng, newText), s.text, s.mode.isFolding(), w, cx)
-	}
+	s.updateHighlighter(highlighterUpdate{selectedRange: rng, oldText: oldText, newText: s.text, changeText: newText, force: true}, w, cx)
+	s.updateFoldCandidatesIncremental(rng, newText)
 	s.hooks.refreshLanguageFeatures(s, w, cx)
 	if newText == "" {
 		// Canceling the IME input cancels the selection.
@@ -1110,6 +1192,7 @@ func (s *InputBaseState[M]) ReplaceAndMarkTextInRange(rngUTF16 *gpui.UTF16Range,
 	active := s.activeSelection()
 	if s.pushHistory(oldText, rng, newText, requestedIntent, selectionBefore, &active) {
 		s.undoManager.recordSelections([]cursorSelection{selectionBefore}, []cursorSelection{s.activeSelection()})
+		s.undoManager.recordAutoClosedPairs(autoClosedBefore, s.mode.autoClosedPairsSnapshot())
 	}
 	if newText == "" {
 		s.undoManager.commitTransaction()

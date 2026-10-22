@@ -293,8 +293,7 @@ func TestTextareaAddingACursorSplitsTheTypingGesture(t *testing.T) {
 	assertCursors(t, v, "a|1\n2|\n3")
 }
 
-// U:input/base/state.rs:9419-9437; indent_inline is editor/indent.rs's
-// (the editor ticket), so only the backspace half runs.
+// U:input/base/state.rs:9419-9437
 func TestTextareaReadonlyMultiCursorCommandsLeaveStateUnchanged(t *testing.T) {
 	v := buildTextarea(t, plainTextarea)
 	setupCursors(v, "a|b\nc|d")
@@ -302,6 +301,7 @@ func TestTextareaReadonlyMultiCursorCommandsLeaveStateUnchanged(t *testing.T) {
 		before := slices.Collect(s.selections.iter())
 		s.SetReadonly(true, cx)
 		s.backspace(&Backspace{}, w, cx)
+		s.indentInline(&IndentInline{}, w, cx)
 		wantValue(t, s, "ab\ncd\n")
 		if !slices.Equal(slices.Collect(s.selections.iter()), before) {
 			t.Fatal("readonly commands leave the selections alone")

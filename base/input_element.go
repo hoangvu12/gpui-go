@@ -17,14 +17,11 @@ package base
 //     StrokePathBuilder + Window.PaintPath; paint_quad(fill(..)) →
 //     Window.PaintQuad(gpui.Fill(..)).
 //
-// This ticket ports the paths a single-line input and a plain unwrapped
-// multi-line layout take. Joining with later tickets: the editor
-// scrollbar (EditorScrollbar, U:input/base/element.rs:117-292), the
-// line-number gutter paint, fold icons, indent guides, inline-completion
-// ghost lines, search-match / hover / range-decoration paths and syntax
-// highlighting (U:input/base/element.rs:746-878, 1136-1408, 1990-2140),
-// and inline-token layout (U:input/base/element.rs:1408-1866). The
-// line-number column width is ported (it only depends on the mode).
+// The code-editor paths (editor scrollbar, gutter, fold icons, indent
+// guides, ghost lines, search-match / hover / range-decoration paths and
+// syntax highlighting) are editor_element.go and editor_indent.go; the
+// diagnostics underlines, semantic tokens and hover-definition hitbox
+// join with ticket 24.
 
 import (
 	"math"
@@ -641,12 +638,71 @@ func layoutLines[M InputModeKind](state *InputBaseState[M], displayText *rope.Ro
 	return lines
 }
 
-// highlightLines is the composed highlight styles of the visible lines
-// (U:input/base/element.rs:1989-2139). Outside a code editor it composes
-// the mode's decoration layers, which join with the decorations port;
-// with none it is nil, like upstream with no layers.
-func (e *textElement[M]) highlightLines(*InputBaseState[M], gpui.TextRange) []gpui.HighlightRange {
-	return nil
+// highlightLines is the composed highlight styles of the visible lines:
+// the highlighter's styles per contiguous group of visible lines, the
+// hover-definition style, then the application decorations; nil when
+// nothing styles them (U:input/base/element.rs:1989-2139). Diagnostics
+// and semantic tokens join with ticket 24.
+func (e *textElement[M]) highlightLines(state *InputBaseState[M], visibleBufferLines []int, visible gpui.TextRange, app *gpui.App) []gpui.HighlightRange {
+	highlighter := state.mode.currentHighlighter()
+	if highlighter == nil {
+		if state.masked {
+			return nil
+		}
+		return composeDecorationCollections(nil, state.extras.decorationLayers(), visible)
+	}
+	resolver := state.editorStyle.HighlightStyles
+	if resolver == nil {
+		resolver = noHighlightStyles{}
+	}
+	ext := state.ext()
+	multiLine := state.IsMultiLine()
+	var styles []gpui.HighlightRange
+	// The byte ranges of the flushed groups: the composed styles are
+	// clipped to them so the runs cover exactly the visible lines' bytes.
+	var groups []gpui.TextRange
+	flush := func(startLine, endLine int, skip bool) {
+		byteStart := ext.LineStartOffset(startLine)
+		byteEnd := ext.LineEndOffset(endLine)
+		if multiLine {
+			// +1 for the `\n`.
+			byteEnd = ext.LineStartOffset(endLine + 1)
+		}
+		rng := gpui.TextRange{Start: byteStart, End: byteEnd}
+		if skip {
+			styles = append(styles, gpui.HighlightRange{Range: rng})
+		} else {
+			styles = append(styles, highlighter.Styles(rng, resolver)...)
+		}
+		groups = append(groups, rng)
+	}
+	rangeStart, hasStart := 0, false
+	for i, line := range visibleBufferLines {
+		if ext.SliceLine(line).Len() > maxHighlightLineLength {
+			if hasStart {
+				flush(rangeStart, line-1, false)
+				hasStart = false
+			}
+			flush(line, line, true)
+			continue
+		}
+		if !hasStart {
+			rangeStart, hasStart = line, true
+		}
+		if i+1 < len(visibleBufferLines) && visibleBufferLines[i+1] == line+1 {
+			continue
+		}
+		flush(rangeStart, line, false)
+		hasStart = false
+	}
+
+	if hover, ok := state.hooks.hoverDefinitionStyle(state, app); ok {
+		styles = append(styles, hover)
+	}
+	if !state.masked {
+		styles = composeDecorationCollections(styles, state.extras.decorationLayers(), visible)
+	}
+	return clipStylesToRanges(styles, groups)
 }
 
 // textPrepaintState is PrepaintState (U:input/base/element.rs:2149-2200)
@@ -663,6 +719,17 @@ type textPrepaintState struct {
 	documentColorPaths []coloredPath
 	hitbox             gpui.Hitbox
 	bounds             gpui.Bounds
+	// The code-editor layout (U:input/base/element.rs:2149-2183).
+	lineNumbers           []lineNumberLayout
+	hoverHighlightPath    *gpui.Path
+	searchMatchPaths      []searchMatchPath
+	rangeDecorationFills  []coloredPath
+	rangeDecorationFrames []coloredPath
+	indentGuidesPath      *gpui.Path
+	foldIconLayout        foldIconLayout
+	ghostLines            []*gpui.ShapedLine
+	ghostFirstLine        *gpui.ShapedLine
+	ghostLinesHeight      float32
 }
 
 type coloredPath struct {
@@ -832,7 +899,7 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 		displayText = rope.FromStr(strings.Repeat(string(inputMaskChar), text.LenChars()))
 	}
 
-	lineNumberWidth, _ := layoutLineNumbers(state, &text, textSize, textStyle, w)
+	lineNumberWidth, lineNumberDigits := layoutLineNumbers(state, &text, textSize, textStyle, w)
 
 	var wrapWidth *float32
 	if multiLine && state.softWrap {
@@ -857,7 +924,7 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 	visibleStartOffset := ext.LineStartOffset(visibleRange.Start)
 	visibleEndOffset := ext.LineEndOffset(max(visibleRange.End-1, 0))
 
-	highlightStyles := e.highlightLines(state, gpui.TextRange{Start: visibleStartOffset, End: visibleEndOffset})
+	highlightStyles := e.highlightLines(state, visibleBufferLines, gpui.TextRange{Start: visibleStartOffset, End: visibleEndOffset}, app)
 
 	lineByteOffsets := make([]int, len(visibleBufferLines))
 	for i, bl := range visibleBufferLines {
@@ -954,6 +1021,9 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 	}
 	layout.lines = lines
 
+	ghostFirstLine, ghostLines := layoutInlineCompletion(state, layout.visibleRange, textSize, w)
+	ghostLinesHeight := float32(len(ghostLines)) * lineHeight
+
 	totalWrappedLines := state.displayMap.wrapRowCount()
 	emptyBottom := emptyBottomHeight(state.IsCodeEditor(), state.scrollBeyondLastLine, bounds.Size.Height, lineHeight)
 
@@ -961,15 +1031,20 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 	if longestLineWidth+lineNumberWidth+inputRightMargin > bounds.Size.Width {
 		scrollWidth = longestLineWidth + lineNumberWidth + inputRightMargin
 	}
+	// Empty bottom and ghost lines both describe extra height past the last
+	// row, so take the max rather than summing.
 	scrollSize := gpui.Size{
 		Width:  scrollWidth,
-		Height: max(float32(totalWrappedLines)*lineHeight+emptyBottom, bounds.Size.Height),
+		Height: max(float32(totalWrappedLines)*lineHeight+max(emptyBottom, ghostLinesHeight), bounds.Size.Height),
 	}
 	if layout.textAlign == gpui.TextAlignRight || layout.textAlign == gpui.TextAlignCenter {
 		scrollSize.Width = longestLineWidth + lineNumberWidth
 	}
 
+	// Fold icons and their hitboxes use the unscrolled x, so they stay fixed
+	// in the gutter during horizontal scroll.
 	inputBounds := bounds
+	originalX := bounds.Origin.X
 	infos, cursorScrollOffset, currentRow, hasCurrentRow := e.layoutCursors(layout, &bounds, scrollSize, app)
 	// Menus position at the active caret.
 	for _, info := range infos {
@@ -980,28 +1055,56 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 		}
 	}
 
+	searchMatchPaths := layoutSearchMatches(state, layout, bounds)
 	selectionPaths := e.layoutSelections(layout, bounds, w, app)
+	hoverHighlightPath := layoutHoverHighlight(state, layout, bounds)
 	var documentColorPaths []coloredPath
 	for _, dc := range documentColors {
 		if path, ok := layoutMatchRange(dc.rng.Start, dc.rng.End, layout, bounds); ok {
 			documentColorPaths = append(documentColorPaths, coloredPath{path, dc.color})
 		}
 	}
+	scaleFactor, err := w.ScaleFactor()
+	if err != nil || scaleFactor <= 0 {
+		scaleFactor = 1
+	}
+	rangeFills, rangeFrames := layoutRangeDecorations(state, layout, bounds, scaleFactor, gpui.ContentMask(w))
+
+	lineNumbers := layoutLineNumberLines(state, layout, lineNumberDigits, textSize, font, currentRow, hasCurrentRow, w)
+	indentGuidesPath := layoutIndentGuides(state, bounds, layout, textStyle, w)
+	_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], _ *gpui.Window, _ *inputCx[M]) {
+		s.editorScrollbarSnapshot = &editorScrollbarSnapshot{
+			layout:             newEditorScrollbarLayout(inputBounds, layout.lineNumberWidth, scrollSize, s.editorPaddings),
+			cursorScrollOffset: cursorScrollOffset,
+			softWrap:           s.softWrap,
+		}
+	})
+	foldIcons := e.layoutFoldIcons(originalX, bounds, layout, w, app)
 
 	hitbox := w.InsertHitbox(inputBounds, gpui.HitboxNormal)
 	tokenElements := e.prepaintTokens(layout, bounds, measuredTokens, w, app)
 	return textPrepaintState{
-		lastLayout:         layout,
-		scrollSize:         scrollSize,
-		cursorInfos:        infos,
-		cursorScrollOffset: cursorScrollOffset,
-		currentRow:         currentRow,
-		hasCurrentRow:      hasCurrentRow,
-		selectionPaths:     selectionPaths,
-		tokenElements:      tokenElements,
-		documentColorPaths: documentColorPaths,
-		hitbox:             hitbox,
-		bounds:             bounds,
+		lineNumbers:           lineNumbers,
+		hoverHighlightPath:    hoverHighlightPath,
+		searchMatchPaths:      searchMatchPaths,
+		rangeDecorationFills:  rangeFills,
+		rangeDecorationFrames: rangeFrames,
+		indentGuidesPath:      indentGuidesPath,
+		foldIconLayout:        foldIcons,
+		ghostLines:            ghostLines,
+		ghostFirstLine:        ghostFirstLine,
+		ghostLinesHeight:      ghostLinesHeight,
+		lastLayout:            layout,
+		scrollSize:            scrollSize,
+		cursorInfos:           infos,
+		cursorScrollOffset:    cursorScrollOffset,
+		currentRow:            currentRow,
+		hasCurrentRow:         hasCurrentRow,
+		selectionPaths:        selectionPaths,
+		tokenElements:         tokenElements,
+		documentColorPaths:    documentColorPaths,
+		hitbox:                hitbox,
+		bounds:                bounds,
 	}
 }
 
@@ -1023,6 +1126,35 @@ func (e *textElement[M]) Paint(_ *gpui.GlobalElementID, _ *gpui.InspectorElement
 	lineHeight := w.LineHeight()
 	origin := bounds.Origin
 	topPadding := layout.visibleTop
+	disabled := state.disabled
+	var activeLineColor *gpui.Hsla
+	if editorStyle.EditorActiveLine != nil {
+		c := *editorStyle.EditorActiveLine
+		if disabled {
+			c = c.Opacity(0.5)
+		}
+		activeLineColor = &c
+	}
+	editorBackground := editorStyle.Background
+	if disabled {
+		editorBackground = editorBackground.Opacity(0.5)
+	}
+	isCurrent := func(row int) bool { return prepaint.hasCurrentRow && prepaint.currentRow == row }
+
+	// The active line background (U:input/base/element.rs:2897-2921).
+	if prepaint.lineNumbers != nil {
+		offsetY := topPadding
+		for i, ln := range prepaint.lineNumbers {
+			height := lineHeight * float32(ln.rows)
+			if isCurrent(layout.visibleBufferLines[i]) && activeLineColor != nil {
+				w.PaintQuad(gpui.Fill(gpui.Bounds{
+					Origin: gpui.Point{X: inputBounds.Origin.X, Y: origin.Y + offsetY},
+					Size:   gpui.Size{Width: bounds.Size.Width, Height: height},
+				}, gpui.SolidBackground(*activeLineColor)))
+			}
+			offsetY += height
+		}
+	}
 
 	// Keep the scrollbar offset positive, starting from the left.
 	var scrollOffset float32
@@ -1037,16 +1169,44 @@ func (e *textElement[M]) Paint(_ *gpui.GlobalElementID, _ *gpui.InspectorElement
 	// Glyph backgrounds first, so a highlighted range sits under the
 	// selections and the text.
 	offsetY := topPadding
-	for _, line := range layout.lines {
+	for i, line := range layout.lines {
 		p := gpui.Point{X: origin.X + layout.lineNumberWidth + scrollOffset, Y: origin.Y + offsetY}
 		line.paintBackground(p, lineHeight, textAlign, &contentWidth, w)
 		offsetY += line.size(lineHeight).Height
+		// Ghost lines shift every later line down.
+		if i < len(layout.visibleBufferLines) && isCurrent(layout.visibleBufferLines[i]) {
+			offsetY += prepaint.ghostLinesHeight
+		}
 	}
 
-	// Selections.
+	// Indent guides.
+	if prepaint.indentGuidesPath != nil {
+		w.PaintPath(prepaint.indentGuidesPath, gpui.SolidBackground(editorStyle.Border.Opacity(0.85)))
+	}
+
+	// Application decorations sit below the user's selection.
+	for _, cp := range prepaint.rangeDecorationFills {
+		w.PaintPath(cp.path, gpui.SolidBackground(cp.color))
+	}
+	for _, cp := range prepaint.rangeDecorationFrames {
+		w.PaintPath(cp.path, gpui.SolidBackground(cp.color))
+	}
+
+	// Search matches, selections, the hover highlight.
 	if windowIsActive(w) {
+		secondary := editorStyle.Selection
+		secondary.S = 0.1
+		for _, m := range prepaint.searchMatchPaths {
+			w.PaintPath(m.path, gpui.SolidBackground(secondary))
+			if m.active {
+				w.PaintPath(m.path, gpui.SolidBackground(editorStyle.Selection))
+			}
+		}
 		for _, path := range prepaint.selectionPaths {
 			w.PaintPath(path, gpui.SolidBackground(editorStyle.Selection))
+		}
+		if prepaint.hoverHighlightPath != nil {
+			w.PaintPath(prepaint.hoverHighlightPath, gpui.SolidBackground(secondary))
 		}
 	}
 
@@ -1059,12 +1219,24 @@ func (e *textElement[M]) Paint(_ *gpui.GlobalElementID, _ *gpui.InspectorElement
 		w.PaintPath(dc.path, gpui.SolidBackground(c))
 	}
 
-	// Text.
+	// Text, with the inline-completion ghost lines after the cursor row.
 	offsetY = topPadding
-	for _, line := range layout.lines {
-		p := gpui.Point{X: origin.X + layout.lineNumberWidth + scrollOffset, Y: origin.Y + offsetY}
+	cursorRowY, hasCursorRowY := float32(0), false
+	for i, line := range layout.lines {
+		lineY := origin.Y + offsetY
+		p := gpui.Point{X: origin.X + layout.lineNumberWidth + scrollOffset, Y: lineY}
 		line.paint(p, lineHeight, textAlign, &contentWidth, w)
 		offsetY += line.size(lineHeight).Height
+		if i >= len(layout.visibleBufferLines) || !isCurrent(layout.visibleBufferLines[i]) {
+			continue
+		}
+		cursorRowY, hasCursorRowY = lineY, true
+		for _, ghost := range prepaint.ghostLines {
+			gp := gpui.Point{X: origin.X + layout.lineNumberWidth, Y: origin.Y + offsetY}
+			w.PaintQuad(gpui.Fill(gpui.Bounds{Origin: gp, Size: gpui.Size{Width: bounds.Size.Width - layout.lineNumberWidth, Height: lineHeight}}, gpui.SolidBackground(editorBackground)))
+			_ = ghost.Paint(gp, lineHeight, textAlign, &contentWidth, w)
+			offsetY += lineHeight
+		}
 	}
 
 	// Token elements paint over the text (U:input/base/element.rs:3076-3078).
@@ -1078,6 +1250,37 @@ func (e *textElement[M]) Paint(_ *gpui.GlobalElementID, _ *gpui.InspectorElement
 			w.PaintQuad(gpui.Fill(info.bounds, gpui.SolidBackground(editorStyle.Caret)))
 		}
 	}
+
+	// Line numbers: a fixed overlay above horizontally scrolling text,
+	// opaque over the whole gutter (U:input/base/element.rs:3087-3139).
+	if prepaint.lineNumbers != nil {
+		gutterBg := editorBackground
+		if editorStyle.EditorGutterBackground != nil {
+			gutterBg = *editorStyle.EditorGutterBackground
+		}
+		gutter := editorGutterBounds(inputBounds, layout.lineNumberWidth, prepaint.ghostLinesHeight, state.editorPaddings)
+		w.PaintQuad(gpui.Fill(gutter, gpui.SolidBackground(gutterBg)))
+		offsetY := topPadding
+		for i, ln := range prepaint.lineNumbers {
+			p := gpui.Point{X: inputBounds.Origin.X, Y: origin.Y + offsetY}
+			height := lineHeight * float32(ln.rows)
+			current := isCurrent(layout.visibleBufferLines[i])
+			if current && activeLineColor != nil {
+				w.PaintQuad(gpui.Fill(gpui.Bounds{
+					Origin: gpui.Point{X: gutter.Origin.X, Y: p.Y},
+					Size:   gpui.Size{Width: gutter.Size.Width, Height: height},
+				}, gpui.SolidBackground(*activeLineColor)))
+			}
+			_ = ln.number.Paint(p, lineHeight, gpui.TextAlignLeft, nil, w)
+			offsetY += height
+			if len(prepaint.ghostLines) > 0 && current {
+				offsetY += prepaint.ghostLinesHeight
+			}
+		}
+	}
+
+	// Fold icons: on gutter hover, the current line, or folded.
+	e.paintFoldIcons(&prepaint.foldIconLayout, prepaint.currentRow, prepaint.hasCurrentRow, w, app)
 
 	_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
 		geometryChanged := s.lastBounds == nil || *s.lastBounds != bounds ||
@@ -1105,6 +1308,19 @@ func (e *textElement[M]) Paint(_ *gpui.GlobalElementID, _ *gpui.InspectorElement
 			cx.Notify()
 		}
 	})
+
+	// The inline completion's first line, after the cursor on its row.
+	if focused && prepaint.ghostFirstLine != nil && hasCursorRowY {
+		for _, info := range prepaint.cursorInfosWithScroll() {
+			if !info.isActive {
+				continue
+			}
+			p := gpui.Point{X: info.bounds.Origin.X + info.bounds.Size.Width, Y: cursorRowY}
+			w.PaintQuad(gpui.Fill(gpui.Bounds{Origin: p, Size: gpui.Size{Width: prepaint.ghostFirstLine.Width() + 4, Height: lineHeight}}, gpui.SolidBackground(editorBackground)))
+			_ = prepaint.ghostFirstLine.Paint(p, lineHeight, textAlign, nil, w)
+			break
+		}
+	}
 
 	e.paintMouseListeners(w)
 }

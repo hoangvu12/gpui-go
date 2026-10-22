@@ -48,6 +48,7 @@ func blinkMs(d interface{ Milliseconds() int64 }) int64 { return d.Milliseconds(
 // U:input/base/blink_cursor.rs:127-147
 func TestBlinkCursorRepeatedPausesKeepCursorVisibleUntilIdle(t *testing.T) {
 	ta := gpui.NewTestApp()
+	shutdownAtCleanup(t, ta)
 	cursor := newTestBlinkCursor(ta)
 	if blinkVisible(ta, cursor) {
 		t.Fatal("a new cursor is visible")
@@ -77,6 +78,7 @@ func TestBlinkCursorRepeatedPausesKeepCursorVisibleUntilIdle(t *testing.T) {
 // U:input/base/blink_cursor.rs:149-178
 func TestBlinkCursorPausingACursorThatIsNotBlinkingDoesNotStartIt(t *testing.T) {
 	ta := gpui.NewTestApp()
+	shutdownAtCleanup(t, ta)
 	// Never focused: the epoch is still zero.
 	cursor := newTestBlinkCursor(ta)
 
@@ -99,6 +101,7 @@ func TestBlinkCursorPausingACursorThatIsNotBlinkingDoesNotStartIt(t *testing.T) 
 // U:input/base/blink_cursor.rs:180-203
 func TestBlinkCursorBlurringAPausedCursorLeavesTheNextFocusBlinking(t *testing.T) {
 	ta := gpui.NewTestApp()
+	shutdownAtCleanup(t, ta)
 	cursor := newTestBlinkCursor(ta)
 	blinkDo(ta, cursor, func(b *blinkCursor, cx *gpui.Context[blinkCursor]) { b.start(cx) })
 
@@ -124,6 +127,7 @@ func TestBlinkCursorBlurringAPausedCursorLeavesTheNextFocusBlinking(t *testing.T
 // U:input/base/blink_cursor.rs:205-229
 func TestBlinkCursorStoppingAPausedCursorEndsTheBlinkLoop(t *testing.T) {
 	ta := gpui.NewTestApp()
+	shutdownAtCleanup(t, ta)
 	cursor := newTestBlinkCursor(ta)
 	blinkDo(ta, cursor, func(b *blinkCursor, cx *gpui.Context[blinkCursor]) { b.start(cx) })
 	blinkDo(ta, cursor, func(b *blinkCursor, cx *gpui.Context[blinkCursor]) { b.pause(cx) })
@@ -149,6 +153,7 @@ func TestBlinkCursorStoppingAPausedCursorEndsTheBlinkLoop(t *testing.T) {
 // U:input/base/blink_cursor.rs:231-249
 func TestBlinkCursorStoppingABlinkingCursorEndsTheBlinkLoop(t *testing.T) {
 	ta := gpui.NewTestApp()
+	shutdownAtCleanup(t, ta)
 	cursor := newTestBlinkCursor(ta)
 	blinkDo(ta, cursor, func(b *blinkCursor, cx *gpui.Context[blinkCursor]) { b.start(cx) })
 	blinkDo(ta, cursor, func(b *blinkCursor, cx *gpui.Context[blinkCursor]) { b.stop(cx) })

@@ -121,10 +121,15 @@ func (b *blinkCursor) replaceTask(cx *gpui.Context[blinkCursor], delay time.Dura
 	b.dropTask()
 	this := cx.Entity().Downgrade()
 	b.task = cx.App().Spawn(func(acx *gpui.AsyncApp) struct{} {
-		acx.Await(acx.App().Background().Spawn(func(run *gpui.TaskRun) struct{} {
+		slept := acx.Await(acx.App().Background().Spawn(func(run *gpui.TaskRun) bool {
 			run.Sleep(delay)
-			return struct{}{}
+			return true
 		}))
+		// A cancelled sleep (the task dropped, or the application shutting
+		// down) ends the body, as a dropped Rust task stops at its await.
+		if !slept {
+			return struct{}{}
+		}
 		acx.Update(func(app *gpui.App) {
 			_ = this.TryUpdate(app, then)
 		})

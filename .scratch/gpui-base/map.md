@@ -107,6 +107,7 @@ Blocking edges live in each ticket's `Blocked by:`; the frontier is computed fro
 - [TextView](issues/28-text-view.md) — inline flow, node render, TextViewState, TextView; ~75 upstream tests ported, 81 deferred to 29/30 with hooks; App.Shutdown now retires the app image codec's atlas slot.
 - [Textarea](issues/21-textarea.md) — display map (wrap/fold), inline tokens, Textarea, multi-line builders; 75 upstream tests ported, 61 editor-only state.rs tests left for 23/24.
 - [Composite controls](issues/25-composite-controls.md) — Tree, NavStack, Resizable (exact split), Questionnaire; 35/35 upstream tests; drawNotify works around the core's notify-while-drawing delivery.
+- [Editor basics](issues/23-editor-basics.md) — Editor mode: language config, auto-close, indent, folding, gutter, editor scrollbar, ghost text, highlighting hooks, decorations, search; 80 of 83 upstream tests ported (3 n/a).
 - Package layout (orchestrator, routine): one `base` package mirroring the single crate; dependency-free data structures (rope, sum tree, segmentation) in subpackages under `base/`.
 
 ## Not yet specified

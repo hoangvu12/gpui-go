@@ -1,12 +1,8 @@
 package base
 
 // Ported multi-line tests of U:input/base/state.rs (the ones the single-line
-// ticket left), in upstream order. The upstream harness opens most of them
-// on InputView::<EditorMode>::new (EditorState::new(..).language("sql"));
-// EditorState::new is the editor ticket's, so buildEditor builds the same
-// mode by hand (U:input/base/state.rs:9997-10002 minus the EditorLanguage)
-// and the tests that need a language, a highlighter or another editor
-// facility are recorded not applicable.
+// ticket left), in upstream order. The editor-only ones are
+// editor_state_test.go's.
 
 import (
 	"runtime"
@@ -19,20 +15,24 @@ import (
 	"github.com/hoangvu12/gpui-go/gpui"
 )
 
-// buildEditor is InputView::<EditorMode>::new (U:input/base/state.rs:
-// 4829-4843): the code-editor layout and a searchable state.
+// buildEditor is InputView::<EditorMode>::new: EditorState::new with the
+// "sql" language (U:input/base/state.rs:4829-4843).
 func buildEditor(t *testing.T) *inputView[EditorMode] {
 	t.Helper()
-	return buildEditorSized(t, gpui.Size{})
+	return buildEditorWith(t, gpui.Size{}, func(s EditorState) EditorState { return s })
 }
 
 func buildEditorSized(t *testing.T, size gpui.Size) *inputView[EditorMode] {
 	t.Helper()
+	return buildEditorWith(t, size, func(s EditorState) EditorState { return s })
+}
+
+// buildEditorWith is InputView::build_editor (U:input/base/state.rs:
+// 4835-4842).
+func buildEditorWith(t *testing.T, size gpui.Size, f func(EditorState) EditorState) *inputView[EditorMode] {
+	t.Helper()
 	return buildModeView(t, size, func(w *gpui.Window, cx *gpui.Context[EditorState]) EditorState {
-		s := newInMode[EditorMode](w, cx)
-		s.mode = layoutModeCodeEditor()
-		s.searchable = true
-		return s
+		return f(NewEditorState(w, cx).Language("sql"))
 	})
 }
 
@@ -41,6 +41,7 @@ func buildEditorSized(t *testing.T, size gpui.Size) *inputView[EditorMode] {
 func buildModeView[M InputModeKind](t *testing.T, size gpui.Size, make func(*gpui.Window, *inputCx[M]) InputBaseState[M]) *inputView[M] {
 	t.Helper()
 	ta := gpui.NewTestApp()
+	shutdownAtCleanup(t, ta)
 	ta.Update(func(app *gpui.App) {
 		theme := DefaultTheme()
 		app.SetGlobal(&theme)
@@ -181,8 +182,7 @@ func TestTextareaCursorTreatsCrlfAsOneNewline(t *testing.T) {
 	})
 }
 
-// U:input/base/state.rs:5284-5340 (is_replaceable is search.rs's
-// `replaceable && is_editable()`, read here from its fields).
+// U:input/base/state.rs:5284-5340
 func TestEditorReadonlyRejectsUserEditsOnly(t *testing.T) {
 	v := buildEditor(t)
 	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
@@ -190,7 +190,7 @@ func TestEditorReadonlyRejectsUserEditsOnly(t *testing.T) {
 		s.SetReadonly(true, cx)
 	})
 	v.read(func(s *EditorState) {
-		if s.IsEditable() || (s.replaceable && s.IsEditable()) {
+		if s.IsEditable() || s.IsReplaceable() {
 			t.Fatal("readonly is neither editable nor replaceable")
 		}
 	})

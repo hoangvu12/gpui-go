@@ -245,6 +245,7 @@ func (*emptyTestRoot) Render(*gpui.Window, *gpui.Context[emptyTestRoot]) gpui.An
 func emptyShapedLines(t *testing.T, lens ...int) []*gpui.ShapedLine {
 	t.Helper()
 	ta := gpui.NewTestApp()
+	shutdownAtCleanup(t, ta)
 	_, cx := ta.AddWindowView(func(*emptyTestRoot, *gpui.Window, *gpui.Context[emptyTestRoot]) {})
 	var out []*gpui.ShapedLine
 	cx.Update(func(w *gpui.Window, _ *gpui.App) {

@@ -5,11 +5,9 @@ package base
 // keeps the projected style verbatim and resolves it against the theme
 // palette at the top of every render (U:input/base/state.rs:4358-4360).
 //
-// Fields whose types belong to later tickets join with them:
-// highlight_styles (SharedHighlightStyleResolver,
-// U:input/editor/highlighting.rs:117) with the highlighting port, and
-// fold_icon_renderer (U:input/editor/highlighting.rs:121) with the
-// folding port.
+// The resolver and the fold-icon renderer are interface / func values, so
+// a nil HighlightStyles resolves nothing (NoHighlightStyles) and a nil
+// FoldIconRenderer is None.
 
 import "github.com/hoangvu12/gpui-go/gpui"
 
@@ -27,16 +25,22 @@ type DiagnosticColors struct {
 // (alpha 0, the zero value) is "unset" and resolves from the palette. Nil
 // optional colors are Rust's None.
 type InputEditorStyle struct {
-	Foreground             gpui.Hsla
-	MutedForeground        gpui.Hsla
-	Background             gpui.Hsla
-	Border                 gpui.Hsla
-	Selection              gpui.Hsla
-	Caret                  gpui.Hsla
-	Diagnostics            DiagnosticColors
+	Foreground      gpui.Hsla
+	MutedForeground gpui.Hsla
+	Background      gpui.Hsla
+	Border          gpui.Hsla
+	Selection       gpui.Hsla
+	Caret           gpui.Hsla
+	Diagnostics     DiagnosticColors
+	// HighlightStyles resolves semantic highlight names; nil resolves
+	// nothing (U:input/editor/highlighting.rs:117).
+	HighlightStyles        SharedHighlightStyleResolver
 	EditorInvisible        *gpui.Hsla
 	EditorActiveLine       *gpui.Hsla
 	EditorGutterBackground *gpui.Hsla
+	// FoldIconRenderer renders the gutter fold icons; nil uses the
+	// built-in chevrons (U:input/editor/highlighting.rs:121).
+	FoldIconRenderer FoldIconRenderer
 }
 
 // DefaultInputEditorStyle is `impl Default for InputEditorStyle`: every
@@ -51,6 +55,7 @@ func DefaultInputEditorStyle() InputEditorStyle {
 		Border:          unset,
 		Selection:       unset,
 		Caret:           unset,
+		HighlightStyles: noHighlightStyles{},
 	}
 }
 

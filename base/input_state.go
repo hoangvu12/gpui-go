@@ -12,20 +12,18 @@ package base
 //   - input_state_style.go: InputEditorStyle.
 //
 // The display map is input_display_map.go and its layers; inline tokens
-// are input_inline_tokens.go and input_token_presentation*.go. Parts owned
-// by other modules join with their tickets and are stand-ins here:
+// are input_inline_tokens.go and input_token_presentation*.go; the
+// code-editor modules (language config, auto close, indentation,
+// highlighting, decorations, search) are editor*.go. Parts owned by other
+// modules join with their tickets and are stand-ins here:
 //
-//   - search (U:input/editor/search.rs): update_search has no session; the
-//     Search / Replace actions propagate, which is what a non-searchable
-//     input does (only the multi-line modes can be searchable);
 //   - touch selection (U:input/base/touch.rs): no touch selection exists,
 //     so dismissing it is a no-op;
 //   - the native context menu (U:input/base/native.rs): on_context_menu and
 //     handle_right_click_menu need NativeMenu; a right press still moves
 //     the caret like upstream;
-//   - code-editor language state, highlighter, diagnostics, folding,
-//     indentation, auto close (U:input/editor/*): the hooks and layoutMode
-//     flags are wired; their data joins with the editor tickets.
+//   - diagnostics and the LSP providers (U:input/editor/diagnostics.rs,
+//     editor/lsp/*): ticket 24; the mode hooks keep their default answers.
 //
 // IME: InputBaseState implements the pinned EntityInputHandler
 // (R:input.rs:36-147) and paints register an adapter implementing
@@ -397,14 +395,18 @@ type InputBaseState[M InputModeKind] struct {
 	validatedTokenEdit bool
 	documentRevision   uint64
 
-	searchable             bool
-	replaceable            bool
-	softWrap               bool
-	wrappingIndent         WrappingIndent
-	scrollBeyondLastLine   *int
-	cursorSurroundingLines *int
-	blinkCursor            gpui.Entity[blinkCursor]
-	loading                bool
+	// searchSession is the search over this input (U:input/base/state.rs:
+	// 356-360); searchActivationRevision advances on every open_search.
+	searchSession            SearchSession
+	searchActivationRevision uint64
+	searchable               bool
+	replaceable              bool
+	softWrap                 bool
+	wrappingIndent           WrappingIndent
+	scrollBeyondLastLine     *int
+	cursorSurroundingLines   *int
+	blinkCursor              gpui.Entity[blinkCursor]
+	loading                  bool
 
 	// selections always holds at least one selection; index 0 is the
 	// active cursor.
@@ -453,6 +455,9 @@ type InputBaseState[M InputModeKind] struct {
 	// projected, kept verbatim (U:input/base/state.rs:415-424).
 	editorStyle          InputEditorStyle
 	projectedEditorStyle InputEditorStyle
+	// editorScrollbarSnapshot is what the last text prepaint left for the
+	// editor scrollbar (U:input/base/state.rs:411).
+	editorScrollbarSnapshot *editorScrollbarSnapshot
 
 	maskPattern    MaskPattern
 	maskPatternSet bool
@@ -697,6 +702,7 @@ func newInMode[M InputModeKind](w *gpui.Window, cx *inputCx[M]) InputBaseState[M
 		// prepaint sets the real one (set_font) before it wraps.
 		displayMap:        newInputDisplayMap(gpui.FontDescriptor{}, 0, nil),
 		undoManager:       newUndoManager(),
+		searchSession:     DefaultSearchSession(),
 		replaceable:       true,
 		softWrap:          true,
 		blinkCursor:       cursor,
@@ -768,9 +774,13 @@ func (s InputBaseState[M]) Placeholder(placeholder string) InputBaseState[M] {
 }
 
 // resetHighlighter drops the code editor's highlighter
-// (U:input/base/state.rs:815-823); the highlighter joins with the editor
-// ticket, so only the notify remains.
-func (s *InputBaseState[M]) resetHighlighter(cx *inputCx[M]) { cx.Notify() }
+// (U:input/base/state.rs:815-823).
+func (s *InputBaseState[M]) resetHighlighter(cx *inputCx[M]) {
+	if s.mode.kind == layoutCodeEditor {
+		s.mode.highlighter.h = nil
+	}
+	cx.Notify()
+}
 
 // SetEditorStyle projects the editor style (U:input/base/state.rs:842-845).
 func (s *InputBaseState[M]) SetEditorStyle(style InputEditorStyle) {
@@ -942,14 +952,14 @@ func (s InputBaseState[M]) Readonly(readonly bool) InputBaseState[M] {
 	return s
 }
 
-// SetReadonly is U:input/base/state.rs:1099-1111 (the search session's
-// replace mode joins with the search port).
+// SetReadonly is U:input/base/state.rs:1099-1111.
 func (s *InputBaseState[M]) SetReadonly(readonly bool, cx *inputCx[M]) {
 	if s.readonly == readonly {
 		return
 	}
 	s.readonly = readonly
 	if readonly {
+		s.searchSession.ReplaceMode = false
 		s.hooks.hideContextMenu(s, cx)
 		s.hooks.clearInlineCompletion(s, cx)
 	}
@@ -1129,23 +1139,44 @@ func (s *InputBaseState[M]) nextEndOfWordAt(offset int) int {
 }
 
 // startOfLineAt is the line start of offset; a single line starts at 0.
-// The soft-wrap visual start of a code editor joins with the display map
-// (U:input/base/state.rs:1484-1511).
-func (s *InputBaseState[M]) startOfLineAt(offset int, _ bool) int {
+// A soft-wrapped code editor goes to the visual line start first, then
+// to the logical one (U:input/base/state.rs:1484-1511).
+func (s *InputBaseState[M]) startOfLineAt(offset int, lineEndAffinity bool) int {
 	if s.IsSingleLine() {
 		return 0
 	}
 	row := s.ext().OffsetToPoint(offset).Row
-	return s.ext().LineStartOffset(row)
+	logicalStart := s.ext().LineStartOffset(row)
+	if s.softWrap && s.IsCodeEditor() {
+		wp := s.displayMap.offsetToWrapDisplayPointWithAffinity(offset, lineEndAffinity)
+		if ranges := s.displayMap.wrappedRanges(row); wp.localRow < len(ranges) {
+			if visualStart := logicalStart + ranges[wp.localRow].Start; offset != visualStart {
+				return visualStart
+			}
+		}
+	}
+	return logicalStart
 }
 
-// endOfLineAt is the line end of offset (U:input/base/state.rs:1513-1544).
-func (s *InputBaseState[M]) endOfLineAt(offset int, _ bool) int {
+// endOfLineAt is the line end of offset: a soft-wrapped code editor goes
+// to the end of the row the caret is drawn on first
+// (U:input/base/state.rs:1513-1544).
+func (s *InputBaseState[M]) endOfLineAt(offset int, lineEndAffinity bool) int {
 	if s.IsSingleLine() {
 		return s.text.Len()
 	}
 	row := s.ext().OffsetToPoint(offset).Row
-	return s.ext().LineEndOffset(row)
+	logicalStart := s.ext().LineStartOffset(row)
+	logicalEnd := s.ext().LineEndOffset(row)
+	if s.softWrap && s.IsCodeEditor() {
+		wp := s.displayMap.offsetToWrapDisplayPointWithAffinity(offset, lineEndAffinity)
+		if ranges := s.displayMap.wrappedRanges(row); wp.localRow < len(ranges) {
+			if visualEnd := logicalStart + ranges[wp.localRow].End; offset != visualEnd {
+				return visualEnd
+			}
+		}
+	}
+	return logicalEnd
 }
 
 // Cursor returns the cursor's UTF-8 byte offset
@@ -1282,15 +1313,15 @@ func (s *InputBaseState[M]) cursorBoundary(offset int, bias sumtree.Bias) int {
 	return offset
 }
 
-// previousBoundary is U:input/base/state.rs:3295-3298 (no folds: the
-// visible clamp is the identity).
+// previousBoundary steps back one character, out of a fold
+// (U:input/base/state.rs:3295-3298).
 func (s *InputBaseState[M]) previousBoundary(offset int) int {
-	return s.cursorBoundary(max(offset-1, 0), sumtree.Left)
+	return s.clampOffsetToVisibleBackward(s.cursorBoundary(max(offset-1, 0), sumtree.Left))
 }
 
 // nextBoundary is U:input/base/state.rs:3300-3303.
 func (s *InputBaseState[M]) nextBoundary(offset int) int {
-	return s.cursorBoundary(offset+1, sumtree.Right)
+	return s.clampOffsetToVisibleForward(s.cursorBoundary(offset+1, sumtree.Right))
 }
 
 // showCursor reports whether the caret paints: focused (or a context menu
