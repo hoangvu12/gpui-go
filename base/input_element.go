@@ -20,8 +20,9 @@ package base
 // The code-editor paths (editor scrollbar, gutter, fold icons, indent
 // guides, ghost lines, search-match / hover / range-decoration paths and
 // syntax highlighting) are editor_element.go and editor_indent.go; the
-// diagnostics underlines, semantic tokens and hover-definition hitbox
-// join with ticket 24.
+// diagnostic underline style is editor_diagnostics.go's and the
+// semantic-token styles and hover-definition hitbox come from
+// editor_lsp*.go.
 
 import (
 	"math"
@@ -639,10 +640,10 @@ func layoutLines[M InputModeKind](state *InputBaseState[M], displayText *rope.Ro
 }
 
 // highlightLines is the composed highlight styles of the visible lines:
-// the highlighter's styles per contiguous group of visible lines, the
-// hover-definition style, then the application decorations; nil when
-// nothing styles them (U:input/base/element.rs:1989-2139). Diagnostics
-// and semantic tokens join with ticket 24.
+// the highlighter's styles per contiguous group of visible lines with the
+// hover-definition style, composed with the semantic tokens, the
+// application decorations, then the diagnostics; nil when nothing styles
+// them (U:input/base/element.rs:1989-2139).
 func (e *textElement[M]) highlightLines(state *InputBaseState[M], visibleBufferLines []int, visible gpui.TextRange, app *gpui.App) []gpui.HighlightRange {
 	highlighter := state.mode.currentHighlighter()
 	if highlighter == nil {
@@ -696,12 +697,35 @@ func (e *textElement[M]) highlightLines(state *InputBaseState[M], visibleBufferL
 		hasStart = false
 	}
 
+	var diagnosticStyles []gpui.HighlightRange
+	if diagnostics := state.mode.diagnosticSet(); diagnostics != nil {
+		for entry := range diagnostics.Range(NewInputSelection(visible.Start, visible.End)) {
+			diagnosticStyles = append(diagnosticStyles, gpui.HighlightRange{
+				Range: gpui.TextRange{Start: entry.ByteRange.Start, End: entry.ByteRange.End},
+				Style: diagnosticHighlightStyle(entry.Severity, state.editorStyle.Diagnostics),
+			})
+		}
+	}
+
+	// Range semantic tokens from the LSP provider's cached result, resolved
+	// through the active highlight theme: the same color vocabulary as the
+	// syntax highlighter. Empty when no provider is set.
+	customStyles := state.extras.semanticTokenStyles(state.text, NewInputSelection(visible.Start, visible.End), resolver)
+
 	if hover, ok := state.hooks.hoverDefinitionStyle(state, app); ok {
 		styles = append(styles, hover)
 	}
+
+	// Compose syntax, semantic, application, then diagnostic styles.
+	styles = gpui.CombineHighlights(customStyles, styles)
 	if !state.masked {
 		styles = composeDecorationCollections(styles, state.extras.decorationLayers(), visible)
 	}
+	styles = gpui.CombineHighlights(diagnosticStyles, styles)
+
+	// Some sources reach outside the flushed groups (a diagnostic
+	// straddling the viewport edge, any range inside a fold); clip the
+	// composed styles back to the groups.
 	return clipStylesToRanges(styles, groups)
 }
 
@@ -730,6 +754,9 @@ type textPrepaintState struct {
 	ghostLines            []*gpui.ShapedLine
 	ghostFirstLine        *gpui.ShapedLine
 	ghostLinesHeight      float32
+	// hoverDefinitionHitbox makes a Cmd-hovered symbol clickable
+	// (U:input/base/element.rs:2170).
+	hoverDefinitionHitbox *gpui.Hitbox
 }
 
 type coloredPath struct {
@@ -1071,6 +1098,11 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 	rangeFills, rangeFrames := layoutRangeDecorations(state, layout, bounds, scaleFactor, gpui.ContentMask(w))
 
 	lineNumbers := layoutLineNumberLines(state, layout, lineNumberDigits, textSize, font, currentRow, hasCurrentRow, w)
+	// U:input/base/element.rs:2810.
+	var hoverDefinitionHitbox *gpui.Hitbox
+	if hitbox, ok := state.hooks.hoverDefinitionHitbox(state, w, app); ok {
+		hoverDefinitionHitbox = &hitbox
+	}
 	indentGuidesPath := layoutIndentGuides(state, bounds, layout, textStyle, w)
 	_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], _ *gpui.Window, _ *inputCx[M]) {
 		s.editorScrollbarSnapshot = &editorScrollbarSnapshot{
@@ -1094,6 +1126,7 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 		ghostLines:            ghostLines,
 		ghostFirstLine:        ghostFirstLine,
 		ghostLinesHeight:      ghostLinesHeight,
+		hoverDefinitionHitbox: hoverDefinitionHitbox,
 		lastLayout:            layout,
 		scrollSize:            scrollSize,
 		cursorInfos:           infos,
@@ -1308,6 +1341,11 @@ func (e *textElement[M]) Paint(_ *gpui.GlobalElementID, _ *gpui.InspectorElement
 			cx.Notify()
 		}
 	})
+
+	// U:input/base/element.rs:3173-3177.
+	if prepaint.hoverDefinitionHitbox != nil && !w.Modifiers().Alt {
+		w.SetCursorStyle(gpui.CursorPointingHand, prepaint.hoverDefinitionHitbox)
+	}
 
 	// The inline completion's first line, after the cursor on its row.
 	if focused && prepaint.ghostFirstLine != nil && hasCursorRowY {

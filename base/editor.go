@@ -6,24 +6,26 @@ package base
 // U:input/base/state.rs:9984-10137 and the highlighter / fold-candidate
 // plumbing of U:input/base/state.rs:795-840, 3810-3853.
 //
-// Hooks and extras that dispatch to the LSP providers (hover definition,
-// inline completion, completion triggers, context menus, code actions,
-// go-to-definition, semantic tokens, document colors;
-// U:input/editor/mod.rs:19-152, 183-191, 244-276) and the lsp() accessors
-// (U:input/editor/mod.rs:195-206) belong to the diagnostics / LSP ticket
-// (24); until it lands they keep the trait's default answers.
+// The hooks dispatching to the LSP providers call into
+// editor_lsp*.go; the lsp() / lsp_mut() accessors
+// (U:input/editor/mod.rs:194-206) are editor_lsp.go's Lsp / LspMut.
 
 import (
 	"github.com/hoangvu12/gpui-go/base/rope"
 	"github.com/hoangvu12/gpui-go/gpui"
 )
 
-// EditorExtras is what a code editor adds on top of multi-line text
-// (U:input/base/kind.rs:352-377): its decoration collections. The LSP
-// state joins with ticket 24.
+// EditorExtras is what a code editor adds on top of multi-line text:
+// language features (U:input/base/kind.rs:352-377).
 type EditorExtras struct {
-	decorations decorationCollections[TextDecoration]
-	rangeDecos  decorationCollections[RangeDecoration]
+	lsp                Lsp
+	decorations        decorationCollections[TextDecoration]
+	rangeDecos         decorationCollections[RangeDecoration]
+	inlineCompletion   inlineCompletion
+	contextMenuContent contextMenuContent
+	hoverPopover       *HoverPopoverState
+	hoverDefinition    hoverDefinition
+	contextMenuTask    lspTask
 }
 
 // decorationLayers is U:input/editor/mod.rs:236-238.
@@ -34,15 +36,37 @@ func (e *EditorExtras) rangeDecorations(ranges []InputSelection) []RangeDecorati
 	return e.rangeDecos.intersecting(ranges)
 }
 
-// documentColorSwatches, hoverSymbolRange, inlineCompletionText and
-// contextMenuCapabilities answer from the LSP state (U:input/editor/mod.rs:
-// 244-276), ticket 24's; until then they are empty.
-func (e *EditorExtras) documentColorSwatches(rope.Rope, InputSelection) []inputColoredRange {
-	return nil
+// semanticTokenStyles is U:input/editor/mod.rs:244-251.
+func (e *EditorExtras) semanticTokenStyles(text rope.Rope, rng InputSelection, resolver HighlightStyleResolver) []gpui.HighlightRange {
+	return e.lsp.semanticTokensForRange(text, rng, resolver)
 }
-func (e *EditorExtras) hoverSymbolRange() (InputSelection, bool) { return InputSelection{}, false }
-func (e *EditorExtras) inlineCompletionText() (string, bool)     { return "", false }
-func (e *EditorExtras) contextMenuCapabilities() (bool, bool)    { return false, false }
+
+// documentColorSwatches is U:input/editor/mod.rs:253-259.
+func (e *EditorExtras) documentColorSwatches(text rope.Rope, rng InputSelection) []inputColoredRange {
+	return e.lsp.documentColorsForRange(text, rng)
+}
+
+// hoverSymbolRange is U:input/editor/mod.rs:261-265.
+func (e *EditorExtras) hoverSymbolRange() (InputSelection, bool) {
+	if e.hoverPopover == nil {
+		return InputSelection{}, false
+	}
+	return e.hoverPopover.SymbolRange, true
+}
+
+// inlineCompletionText is the insert text of inline_completion_item
+// (U:input/editor/mod.rs:267-269).
+func (e *EditorExtras) inlineCompletionText() (string, bool) {
+	if e.inlineCompletion.item == nil {
+		return "", false
+	}
+	return e.inlineCompletion.item.InsertText, true
+}
+
+// contextMenuCapabilities is U:input/editor/mod.rs:271-276.
+func (e *EditorExtras) contextMenuCapabilities() (bool, bool) {
+	return e.lsp.DefinitionProvider != nil, len(e.lsp.CodeActionProviders) > 0
+}
 
 // editorModeHooks is `impl InputModeKind for EditorMode`
 // (U:input/editor/mod.rs:13-192).
@@ -51,14 +75,94 @@ type editorModeHooks struct {
 }
 
 // newExtras is EditorExtras::default (U:input/base/kind.rs:364-377).
-func (editorModeHooks) newExtras() InputExtras { return &EditorExtras{} }
+func (editorModeHooks) newExtras() InputExtras { return &EditorExtras{lsp: DefaultLsp()} }
 
-// resetAnnotations drops the decorations (U:input/editor/mod.rs:38-42;
-// the hover popover is ticket 24's).
+// hoverDefinitionStyle is U:input/editor/mod.rs:19-24.
+func (editorModeHooks) hoverDefinitionStyle(s *EditorState, _ *gpui.App) (gpui.HighlightRange, bool) {
+	return s.hoverDefinitionStyle()
+}
+
+// hoverDefinitionHitbox is U:input/editor/mod.rs:26-32.
+func (editorModeHooks) hoverDefinitionHitbox(s *EditorState, w *gpui.Window, _ *gpui.App) (gpui.Hitbox, bool) {
+	return s.hoverDefinitionHitbox(w)
+}
+
+// resetLanguageFeatures is U:input/editor/mod.rs:34-36.
+func (editorModeHooks) resetLanguageFeatures(s *EditorState) { s.editorExtras().lsp.reset() }
+
+// resetAnnotations drops the hover popover and the decorations
+// (U:input/editor/mod.rs:38-42).
 func (editorModeHooks) resetAnnotations(s *EditorState) {
 	e := s.editorExtras()
+	e.hoverPopover = nil
 	e.decorations.clear()
 	e.rangeDecos.clear()
+}
+
+// refreshLanguageFeatures is U:input/editor/mod.rs:60-67.
+func (editorModeHooks) refreshLanguageFeatures(s *EditorState, w *gpui.Window, cx *gpui.Context[EditorState]) {
+	s.editorExtras().lsp.update(s.text, w, cx)
+}
+
+// acceptInlineCompletion is U:input/editor/mod.rs:69-75.
+func (editorModeHooks) acceptInlineCompletion(s *EditorState, w *gpui.Window, cx *gpui.Context[EditorState]) bool {
+	return s.acceptInlineCompletion(w, cx)
+}
+
+// hasInlineCompletion is U:input/editor/mod.rs:77-79.
+func (editorModeHooks) hasInlineCompletion(s *EditorState) bool { return s.hasInlineCompletion() }
+
+// onClick is U:input/editor/mod.rs:81-89.
+func (editorModeHooks) onClick(s *EditorState, event *gpui.MouseDownEvent, offset int, w *gpui.Window, cx *gpui.Context[EditorState]) bool {
+	return s.handleClickHoverDefinition(event, offset, w, cx)
+}
+
+// clearHoverState is U:input/editor/mod.rs:91-96.
+func (editorModeHooks) clearHoverState(s *EditorState, cx *gpui.Context[EditorState]) {
+	s.ClearHoverState(cx)
+}
+
+// onTextTyped is U:input/editor/mod.rs:98-106.
+func (editorModeHooks) onTextTyped(s *EditorState, rng InputSelection, text string, w *gpui.Window, cx *gpui.Context[EditorState]) {
+	s.handleCompletionTrigger(rng, text, w, cx)
+}
+
+// clearInlineCompletion is U:input/editor/mod.rs:108-113.
+func (editorModeHooks) clearInlineCompletion(s *EditorState, cx *gpui.Context[EditorState]) {
+	s.clearInlineCompletion(cx)
+}
+
+// hideContextMenu is U:input/editor/mod.rs:115-120.
+func (editorModeHooks) hideContextMenu(s *EditorState, cx *gpui.Context[EditorState]) {
+	s.hideContextMenu(cx)
+}
+
+// isContextMenuOpen is U:input/editor/mod.rs:122-124.
+func (editorModeHooks) isContextMenuOpen(s *EditorState, _ *gpui.App) bool {
+	return s.isContextMenuOpen()
+}
+
+// handleContextMenuAction is U:input/editor/mod.rs:126-133.
+func (editorModeHooks) handleContextMenuAction(s *EditorState, action gpui.BoxedAction, w *gpui.Window, cx *gpui.Context[EditorState]) bool {
+	return s.handleActionForContextMenu(action, w, cx)
+}
+
+// onHoverDefinition is U:input/editor/mod.rs:135-142.
+func (editorModeHooks) onHoverDefinition(s *EditorState, offset int, w *gpui.Window, cx *gpui.Context[EditorState]) {
+	s.handleHoverDefinition(offset, w, cx)
+}
+
+// onMouseMove is U:input/editor/mod.rs:144-152.
+func (editorModeHooks) onMouseMove(s *EditorState, offset int, event *gpui.MouseMoveEvent, w *gpui.Window, cx *gpui.Context[EditorState]) {
+	s.handleMouseMove(offset, event, w, cx)
+}
+
+// registerActions registers ToggleCodeActions and GoToDefinition
+// (U:input/editor/mod.rs:183-191).
+func (editorModeHooks) registerActions(element *gpui.DivElement, entity gpui.Entity[EditorState], w *gpui.Window) *gpui.DivElement {
+	return element.
+		OnAction(ToggleCodeActionsAction, w.ListenerFor(entity, (*EditorState).onActionToggleCodeActions)).
+		OnAction(GoToDefinitionAction, w.ListenerFor(entity, (*EditorState).onActionGoToDefinition))
 }
 
 // editingSyntaxContext is U:input/editor/mod.rs:44-46, 208-211.

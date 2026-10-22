@@ -737,8 +737,7 @@ func (s *InputBaseState[M]) replaceTextInRangeSilent(rngUTF16 *gpui.UTF16Range, 
 
 // replaceTextInRanges applies a batch of edits (byte ranges in the
 // pre-edit document) as one history transaction
-// (U:input/base/state.rs:3598-3808). The diagnostics reset joins with
-// ticket 24.
+// (U:input/base/state.rs:3598-3808).
 func (s *InputBaseState[M]) replaceTextInRanges(edits []inputTextEdit, w *gpui.Window, cx *inputCx[M]) {
 	if !s.IsEditable() || len(edits) == 0 {
 		return
@@ -828,6 +827,9 @@ func (s *InputBaseState[M]) replaceTextInRanges(edits []inputTextEdit, w *gpui.W
 		s.undoManager.commitTransaction()
 	}
 
+	// One observable update per batch instead of one per edit
+	// (U:input/base/state.rs:3739-3743).
+	s.resetDiagnostics()
 	s.hooks.refreshLanguageFeatures(s, w, cx)
 	s.updateSearch(cx.App())
 
@@ -1071,6 +1073,7 @@ func (s *InputBaseState[M]) ReplaceTextInRange(rngUTF16 *gpui.UTF16Range, newTex
 	} else {
 		s.pushHistory(oldText, rng, newText, requestedIntent, selectionBefore, nil)
 	}
+	s.resetDiagnostics()
 	// Adjust folds before the wrap map: drop overlapping folds, shift the
 	// others (U:input/base/state.rs:4090-4093).
 	s.displayMap.adjustFoldsForEdit(oldText, rng, newText)
@@ -1164,6 +1167,7 @@ func (s *InputBaseState[M]) ReplaceAndMarkTextInRange(rngUTF16 *gpui.UTF16Range,
 	}
 
 	s.hooks.adjustAnnotations(s, rng, len(newText))
+	s.resetDiagnostics()
 	// U:input/base/state.rs:4208-4211.
 	s.displayMap.adjustFoldsForEdit(oldText, rng, newText)
 	s.displayMap.onTextChanged(s.text, rng, newText, w)

@@ -2,9 +2,9 @@ package base
 
 // Ported editor tests of U:input/base/state.rs (the 61 tickets 20 and 21
 // left for the editor), in upstream order; harness in
-// textarea_state_test.go. Not applicable here: the diagnostics test
-// (U:input/base/state.rs:4898-4955, ticket 24), the cached-view consumer
-// test (U:input/base/state.rs:4957-5019, no AnyView::cached in the Go
+// textarea_state_test.go. The diagnostics test (U:input/base/state.rs:
+// 4898-4955) is editor_lsp_test.go's. Not applicable here: the
+// cached-view consumer test (U:input/base/state.rs:4957-5019, no AnyView::cached in the Go
 // core) and the native context-menu test (U:input/base/state.rs:
 // 5251-5282, native menus not ported).
 
@@ -327,15 +327,21 @@ func TestEditorReplaceTextInRangesDrivesTheHighlighterOnce(t *testing.T) {
 	}
 }
 
-// U:input/base/state.rs:7393-7440 (deviation: the hover-popover half
-// needs present_hover, an LSP type of ticket 24; the decoration half runs).
+// U:input/base/state.rs:7392-7440
 func TestEditorBlurKeepsDecorations(t *testing.T) {
 	v := buildEditor(t)
 	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
 		s.SetValue("select 1", w, cx)
 		bold := float32(700)
 		s.CreateDecorationsCollection([]TextDecoration{NewTextDecoration(NewInputSelection(0, 6), gpui.HighlightStyle{FontWeight: &bold})}, cx)
+		s.PresentHover(NewInputSelection(0, 6), LspHover{Contents: LspHoverContentsScalar(LspMarkedStringString("docs"))}, cx)
+		if s.HoverPopover() == nil {
+			t.Fatal("present_hover shows the hover")
+		}
 		s.onBlur(w, cx)
+		if s.HoverPopover() != nil {
+			t.Fatal("blur should hide the hover popover")
+		}
 		nonEmpty := false
 		for _, layer := range s.extras.decorationLayers() {
 			nonEmpty = nonEmpty || len(layer) > 0

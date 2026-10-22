@@ -5,9 +5,9 @@ package base
 // layoutMode is pub(crate) upstream and stays unexported. The CodeEditor
 // variant carries its layout flags (rows, line numbers, indent guides,
 // folding, auto close, smart indent), its tab size, language,
-// highlighter cell and factory, and the auto-closed pairs. Its
-// DiagnosticSet (U:input/base/mode.rs:49, diagnostics/diagnostics_mut)
-// belongs to the diagnostics ticket (24) and joins with it.
+// highlighter cell and factory, the auto-closed pairs and its
+// DiagnosticSet (U:input/base/mode.rs:49; diagnostics / diagnostics_mut
+// are editor_diagnostics.go's diagnosticSet).
 //
 // Go adaptations: the enum is one struct with a kind; Box<EditorLanguage>
 // and the Rc<RefCell<..>> highlighter are pointers, so copies of the mode
@@ -48,6 +48,8 @@ type layoutMode struct {
 	autoClosed  autoClosedPairs
 	autoClose   bool
 	smartIndent bool
+	// diagnostics is the code editor's DiagnosticSet.
+	diagnostics *DiagnosticSet
 }
 
 // layoutModePlainText is LayoutMode::plain_text and Default
@@ -74,6 +76,7 @@ func layoutModeCodeEditor(language *editorLanguage) layoutMode {
 		folding:      true,
 		autoClose:    true,
 		smartIndent:  true,
+		diagnostics:  NewDiagnosticSet(rope.New()),
 	}
 }
 

@@ -30,10 +30,7 @@ package base
 //
 // EditorMode's hook set and EditorExtras are editor.go's (the editor's
 // impl lives with the editor code upstream, U:input/editor/mod.rs:13-192,
-// 234-277). Hooks and extras whose types are ported by the diagnostics /
-// LSP ticket (24) keep their default answers there: semantic_token_styles
-// (LSP semantic tokens), document colors, the hover and inline-completion
-// state and the context-menu providers.
+// 234-277); the LSP state they answer from is editor_lsp*.go's.
 
 import (
 	"github.com/hoangvu12/gpui-go/base/rope"
@@ -124,9 +121,12 @@ type InputExtras interface {
 	rangeDecorations(ranges []InputSelection) []RangeDecoration
 	// inlineCompletionText is the insert_text of inline_completion_item,
 	// the inline completion to paint as ghost text
-	// (U:input/base/kind.rs:115-118); the item itself is an LSP type
-	// (ticket 24).
+	// (U:input/base/kind.rs:115-118): the ghost-line paint reads only that
+	// field.
 	inlineCompletionText() (string, bool)
+	// semanticTokenStyles are the semantic-token styles of a visible
+	// range, when an LSP supplies them (U:input/base/kind.rs:91-99).
+	semanticTokenStyles(text rope.Rope, rng InputSelection, resolver HighlightStyleResolver) []gpui.HighlightRange
 }
 
 // inputColoredRange is one (Range<usize>, Hsla) pair of
@@ -150,6 +150,9 @@ func (noInputExtras) rangeDecorations([]InputSelection) []RangeDecoration {
 	return nil
 }
 func (noInputExtras) inlineCompletionText() (string, bool) { return "", false }
+func (noInputExtras) semanticTokenStyles(rope.Rope, InputSelection, HighlightStyleResolver) []gpui.HighlightRange {
+	return nil
+}
 
 // SyntaxContext is the syntax context at an offset, for editing decisions
 // (U:input/editor/highlighting.rs:84-89). It is declared here because the

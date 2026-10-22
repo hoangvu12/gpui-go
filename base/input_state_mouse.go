@@ -5,10 +5,8 @@ package base
 //
 // Not ported here: the native right-click menu (handle_right_click_menu,
 // U:input/base/state.rs:2095-2124, needs NativeMenu from native.rs), the
-// touch edit-menu reopen/keep/scroll steps (touch.rs) and the
-// code-editor diagnostic popover on mouse move (diagnostics.rs). A right
-// press still moves the caret like upstream (U:input/base/state.rs:
-// 2335-2344).
+// touch edit-menu reopen/keep/scroll steps (touch.rs). A right press still
+// moves the caret like upstream (U:input/base/state.rs:2335-2344).
 
 import (
 	"github.com/hoangvu12/gpui-go/base/sumtree"
@@ -175,7 +173,8 @@ func (s *InputBaseState[M]) onMouseUp(_ *gpui.MouseUpEvent, _ *gpui.Window, _ *i
 }
 
 // onMouseMove clears hover state outside the input and forwards the
-// offset under the pointer to the mode (U:input/base/state.rs:2393-2438).
+// offset under the pointer to the mode; a code editor shows the
+// diagnostic under the pointer (U:input/base/state.rs:2393-2438).
 func (s *InputBaseState[M]) onMouseMove(event *gpui.MouseMoveEvent, w *gpui.Window, cx *inputCx[M]) {
 	if s.lastBounds == nil || !s.lastBounds.Contains(event.Position) {
 		s.hooks.clearHoverState(s, cx)
@@ -183,10 +182,32 @@ func (s *InputBaseState[M]) onMouseMove(event *gpui.MouseMoveEvent, w *gpui.Wind
 	}
 	offset, _ := s.indexForMousePosition(event.Position)
 	s.hooks.onMouseMove(s, offset, event, w, cx)
+
+	if s.IsCodeEditor() {
+		// Keep the current popover while the pointer stays on the same
+		// diagnostic, so moving over a squiggle neither repaints nor
+		// rebuilds the popover.
+		var diagnostic DiagnosticEntry
+		found := false
+		if set := s.mode.diagnosticSet(); set != nil {
+			diagnostic, found = set.ForOffset(offset)
+		}
+		switch {
+		case found:
+			if s.diagnosticPopover == nil || !s.diagnosticPopover.Equal(diagnostic) {
+				s.diagnosticPopover = &diagnostic
+				cx.Notify()
+			}
+		case s.diagnosticPopover != nil:
+			s.diagnosticPopover = nil
+			cx.Notify()
+		}
+	}
 }
 
 // onScrollWheel scrolls, stopping propagation only when the offset
-// changed (U:input/base/state.rs:2440-2467).
+// changed, and hides the diagnostic popover (U:input/base/state.rs:
+// 2440-2467).
 func (s *InputBaseState[M]) onScrollWheel(event *gpui.ScrollWheelEvent, w *gpui.Window, cx *inputCx[M]) {
 	lineHeight := w.LineHeight()
 	if s.lastLayout != nil {
@@ -200,6 +221,11 @@ func (s *InputBaseState[M]) onScrollWheel(event *gpui.ScrollWheelEvent, w *gpui.
 
 	if s.scrollHandle.Offset() != old {
 		cx.StopPropagation()
+	}
+
+	if s.diagnosticPopover != nil {
+		s.diagnosticPopover = nil
+		cx.Notify()
 	}
 }
 

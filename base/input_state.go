@@ -21,9 +21,10 @@ package base
 //     so dismissing it is a no-op;
 //   - the native context menu (U:input/base/native.rs): on_context_menu and
 //     handle_right_click_menu need NativeMenu; a right press still moves
-//     the caret like upstream;
-//   - diagnostics and the LSP providers (U:input/editor/diagnostics.rs,
-//     editor/lsp/*): ticket 24; the mode hooks keep their default answers.
+//     the caret like upstream.
+//
+// Diagnostics and the LSP providers are editor_diagnostics.go and
+// editor_lsp*.go (U:input/editor/diagnostics.rs, editor/lsp/*).
 //
 // IME: InputBaseState implements the pinned EntityInputHandler
 // (R:input.rs:36-147) and paints register an adapter implementing
@@ -463,8 +464,17 @@ type InputBaseState[M InputModeKind] struct {
 	maskPatternSet bool
 	placeholder    string
 
-	enableContextMenu   bool
+	// diagnosticPopover is the diagnostic requested by pointer hover; the
+	// application renders it (U:input/base/state.rs:434-435).
+	diagnosticPopover *DiagnosticEntry
+
+	enableContextMenu bool
+	// completionInserting is set while a completion item is inserted
+	// (U:input/base/state.rs:446-447).
 	completionInserting bool
+	// overlayActionHandler is the application's overlay action handler
+	// (U:input/base/state.rs:448-457).
+	overlayActionHandler InputOverlayActionHandler[M]
 
 	// pendingUpdate requests the highlighter and LSP refresh on render.
 	pendingUpdate bool
@@ -1046,6 +1056,7 @@ func equalIntPtr(a, b *int) bool {
 // DefaultValue sets the default value (U:input/base/state.rs:1216-1227).
 func (s InputBaseState[M]) DefaultValue(value string) InputBaseState[M] {
 	s.text = rope.FromStr(s.normalizeInput(value))
+	s.resetDiagnostics()
 	// Upstream defers set_text to the first prepaint because it needs cx
 	// (U:input/base/state.rs:1223-1224). With no wrap width yet the
 	// wrapper needs no text system, so the Go map takes the text now and
@@ -1349,6 +1360,7 @@ func (s *InputBaseState[M]) onBlur(w *gpui.Window, cx *inputCx[M]) {
 	s.hooks.hideContextMenu(s, cx)
 	s.undoManager.breakTransactionCoalescing()
 	s.hooks.clearHoverState(s, cx)
+	s.diagnosticPopover = nil
 	s.hooks.clearInlineCompletion(s, cx)
 	s.dismissTouchSelection(cx)
 	s.blinkCursor.Update(cx, func(b *blinkCursor, bcx *gpui.Context[blinkCursor]) { b.stop(bcx) })

@@ -7,11 +7,9 @@ package base
 // ghost lines (:1136-1221), fold icons (:1223-1406), the line numbers of
 // prepaint (:2753-2808) and highlight_lines (:1989-2139).
 //
-// Joining with ticket 24: diagnostics underlines and semantic-token
-// styles in highlight_lines, the hover-definition hitbox, and the inline
-// completion item itself (the ghost-line paint reads its insert text
-// through InputExtras.inlineCompletionText, empty until the LSP state
-// supplies it).
+// The ghost-line paint reads the inline completion item's insert text
+// through InputExtras.inlineCompletionText (editor_lsp_completions.go
+// keeps the item).
 
 import (
 	"fmt"
