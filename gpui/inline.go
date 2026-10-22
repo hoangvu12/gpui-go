@@ -49,12 +49,13 @@ package gpui
 // same InlineLayout contract: rows (InlineVisualLine), positioned
 // boxes, a shared alignment anchor, the natural size, paintable text
 // pieces per row, and byte-range geometry (the reference
-// platform_layout.inline_geometry surface). Per-run paint styles
-// (backgrounds, underline, strikethrough) are outside the port's run
-// surface (the text seam carries fonts and letter spacing), so the
-// paragraph paints foreground glyphs with the ambient text style
-// color, like the port's text element; that bound is shared with
-// ticket09/10 and recorded in the evidence.
+// platform_layout.inline_geometry surface). The paint styles (color,
+// background, underline, strikethrough) never cross the shaping seam;
+// the paragraph paints every piece through Base ticket 10's per-run
+// painter (rich_paint.go paintStyledVisualLine) with the document's
+// published runs cut to the piece's byte range (Base ticket 35; the
+// pinned paint_inline_layout paints each PaintFragment with its own
+// PaintStyle, R:text_system/line.rs:195-319).
 
 import (
 	"fmt"
@@ -82,6 +83,13 @@ type inlineTextContent struct {
 	runs       []TextRun
 	fontSize   float32
 	lineHeight float32
+	// paintStyled reports that runs carry their paint styles (color,
+	// background, decorations), like the pin's runs always do
+	// (R:elements/text.rs:903-915: the given runs, else
+	// text_style.to_run). A record without them (the port's Text
+	// element publishes font-only runs, div.go) paints with the
+	// paragraph's ambient text style (inlineParagraphCollector).
+	paintStyled bool
 }
 
 // inlineKind implements inlineContentRecord.
@@ -550,7 +558,7 @@ func (c *inlineParagraphCollector) collectElement(layoutID LayoutID) {
 		textStart := len(c.currentDocument.text)
 		boxStart := len(c.currentDocument.boxes)
 		c.currentDocument.text += record.text
-		c.currentDocument.runs = append(c.currentDocument.runs, record.runs...)
+		c.currentDocument.runs = append(c.currentDocument.runs, c.paintRuns(record)...)
 		c.currentDocument.textStyles = append(c.currentDocument.textStyles, InlineTextStyle{
 			Range:      TextRange{Start: textStart, End: len(c.currentDocument.text)},
 			FontSize:   record.fontSize,
@@ -595,6 +603,26 @@ func (c *inlineParagraphCollector) collectElement(layoutID LayoutID) {
 		c.currentDocument.boxLayoutIDs = append(c.currentDocument.boxLayoutIDs, layoutID)
 		c.recordOpenSpanRanges(textStart, boxStart)
 	}
+}
+
+// paintRuns returns a text record's runs with their paint styles: a
+// paint-styled record's runs as published (a StyledText's own runs,
+// R:elements/text.rs:903-915), else the font runs with the paint fields
+// of the paragraph's ambient text style (TextStyle::to_run,
+// R:style.rs:724-740) — the color the paragraph painted every piece in
+// before Base ticket 35.
+func (c *inlineParagraphCollector) paintRuns(record *inlineTextContent) []TextRun {
+	if record.paintStyled {
+		return record.runs
+	}
+	runs := make([]TextRun, len(record.runs))
+	for i, run := range record.runs {
+		styled := c.textStyle.ToRun(run.Len)
+		styled.Font = run.Font
+		styled.LetterSpacing = run.LetterSpacing
+		runs[i] = styled
+	}
+	return runs
 }
 
 // finishParagraphFor finishes the current paragraph for a non-inline
@@ -898,18 +926,22 @@ func (f *inlineDivFrameState) prepaintChildren(children []AnyElement, w *Window,
 // paintChildren paints the children then the paragraphs (the reference
 // InlineDivFrameState::paint_children): the children's text paints
 // nothing (their fragments are placed), then every measured paragraph
-// paints its inline layout at its committed origin with the ambient
-// text style color.
+// paints its inline layout at its committed origin: the run backgrounds,
+// then the glyphs and decorations (div/inline.rs:475-499
+// paint_background then paint), each piece with the document's runs.
 func (f *inlineDivFrameState) paintChildren(children []AnyElement, w *Window, app *App) {
 	for i := range children {
 		children[i].Paint(w, app)
 	}
-	color := WindowTextStyle(w).Color
 	for _, paragraph := range f.paragraphs {
 		if paragraph.measurement == nil {
 			continue
 		}
-		if err := paintInlineLayout(w, paragraph.measurement.layout, paragraph.paintOrigin, color); err != nil {
+		runs := paragraph.document.runs
+		if err := paintInlineLayout(w, paragraph.measurement.layout, paragraph.paintOrigin, runs, textPaintBackground); err != nil {
+			panic(fmt.Sprintf("gpui: inline paragraph paint background: %v", err))
+		}
+		if err := paintInlineLayout(w, paragraph.measurement.layout, paragraph.paintOrigin, runs, textPaintForeground); err != nil {
 			panic(fmt.Sprintf("gpui: inline paragraph paint: %v", err))
 		}
 		recordInlineFacts(w, paragraph)
@@ -966,10 +998,15 @@ func placeInlineLayout(contentOrigin Point, alignmentOffset float32, w *Window) 
 }
 
 // paintInlineLayout paints one paragraph's inline layout at its origin
-// (the pinned paint_inline_layout): the whole layout is wrapped in one
-// paint layer of its natural size placed at the snapped anchor, and
-// every row's pieces paint at their row origins with the row baseline.
-func paintInlineLayout(w *Window, layout *inlineLayout, origin Point, color Hsla) error {
+// (the pinned paint_inline_layout, R:text_system/line.rs:195-225): the
+// whole layout is wrapped in one paint layer of its natural size placed
+// at the snapped anchor, and every row's pieces paint at their row
+// origins with the row height and baseline (paint_visual_line,
+// line.rs:247-269) in one pass. Each piece paints through the per-run
+// painter with the document's runs cut to the piece's byte range
+// (the pin's fragments carry their own PaintStyle, line.rs:271-319 and
+// 421-464).
+func paintInlineLayout(w *Window, layout *inlineLayout, origin Point, runs []TextRun, pass textPaintPass) error {
 	if len(layout.lines) == 0 {
 		return nil
 	}
@@ -989,7 +1026,8 @@ func paintInlineLayout(w *Window, layout *inlineLayout, origin Point, color Hsla
 			Y: origin.Y + line.Origin.Y + placement.delta.Y,
 		}
 		baselineY := lineOrigin.Y + line.Baseline
-		if err := piece.shaped.paintLine(w, piece.lineIndex, lineOrigin, baselineY, color); err != nil {
+		pieceRuns := cutPaintRuns(runs, piece.byteStart, piece.byteEnd)
+		if err := paintStyledVisualLine(w, piece.shaped, piece.lineIndex, pieceRuns, lineOrigin, piece.lineHeight, line.Size.Height, baselineY, pass); err != nil {
 			_ = frame.scene.EndLayer()
 			return err
 		}

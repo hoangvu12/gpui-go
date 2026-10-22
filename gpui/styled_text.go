@@ -25,10 +25,10 @@ package gpui
 //     they are not exposed — TextLayout answers the geometry queries
 //     (PositionForIndex, IndexForPosition, WrappedText) itself;
 //   - inside a parent inline paragraph the paragraph owns the text's
-//     paint (R:elements/text.rs:1002-1024 current_inline_fragments), and
-//     the port's paragraph painter (inline.go) paints its text in the
-//     ambient color: per-run colors inside a Block/Inline paragraph are
-//     an inline-ticket follow-up.
+//     paint (R:elements/text.rs:1002-1024 current_inline_fragments); the
+//     published runs keep their paint styles and the paragraph painter
+//     (inline.go paintInlineLayout) paints each piece through the same
+//     per-run painter with the runs cut to the piece (Base ticket 35).
 
 import (
 	"fmt"
@@ -322,6 +322,9 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 		runs:       runs,
 		fontSize:   fontSize,
 		lineHeight: lineHeight,
+		// The runs carry their paint styles: a parent paragraph paints
+		// them per run (Base ticket 35, inline.go paintInlineLayout).
+		paintStyled: true,
 	})
 	id := layoutID
 	state.layoutID = &id

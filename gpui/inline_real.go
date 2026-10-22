@@ -43,9 +43,10 @@ package gpui
 // row unless it overflows from an empty row); a box wider than the wrap
 // width overflows its row; hard line breaks arrive through the native
 // line ranges; row clamping drops excess rows after the budget instead
-// of preserving trailing hard breaks; per-run paint styles are outside
-// the port's run surface, so the paragraph paints with the ambient text
-// style color.
+// of preserving trailing hard breaks. The pieces shape with font-only
+// runs (sliceInlineRuns: paint styles never cross the shaping seam);
+// they paint per run through the paragraph's document runs (Base ticket
+// 35, inline.go paintInlineLayout).
 
 import (
 	"fmt"

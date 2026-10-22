@@ -27,6 +27,11 @@ package gpui
 //     single-color row paints exactly like the pin (overhanging ink
 //     included).
 //
+// Base ticket 35: the inline paragraph pieces paint through the same
+// per-line painter (paintStyledVisualLine) with the paragraph document's
+// runs cut to each piece's byte range (inline.go paintInlineLayout, the
+// pinned paint_inline_layout, R:text_system/line.rs:195-225).
+//
 // Recorded deviations (ticket 02):
 //
 //   - a ligature spanning a color boundary stays ONE glyph (the runs
@@ -119,26 +124,72 @@ func paintStyledDocument(w *Window, doc shapedText, runs []TextRun, origin Point
 				Y: origin.Y + float32(row)*lineHeight,
 			}
 			baseline := lineOrigin.Y + paddingTop + ascent
-			segments := rowSegments(doc, runs, row, lineHeight)
-			if pass == textPaintBackground {
-				for _, segment := range segments {
-					if segment.run.BackgroundColor == nil {
-						continue
-					}
-					w.PaintQuad(Fill(Bounds{
-						Origin: Point{X: lineOrigin.X + segment.left, Y: lineOrigin.Y},
-						Size:   Size{Width: segment.w, Height: lineHeight},
-					}, SolidBackground(*segment.run.BackgroundColor)))
-				}
-				continue
-			}
-			for _, segment := range segments {
-				paintRunDecorations(w, segment, lineOrigin.X, baseline, ascent, descent)
-			}
-			paintErr = paintRowGlyphs(w, doc, row, segments, lineOrigin, baseline)
+			paintErr = paintStyledVisualLine(w, doc, row, runs, lineOrigin, lineHeight, lineHeight, baseline, pass)
 		}
 	})
 	return paintErr
+}
+
+// paintStyledVisualLine paints one visual line of a shaped document with
+// its runs in one pass (the pinned paint_visual_line →
+// paint_text_fragment, R:text_system/line.rs:247-319, with the per-run
+// fallback of the file header): the background quads span rowHeight from
+// lineOrigin.Y (line.rs:455-463), the decorations sit on baseline
+// (line.rs:431-454) and the glyphs paint once per color span. The runs
+// cover the document in its own byte indices; selectionLineHeight is the
+// line height the document's selection rectangles are queried with (the
+// row filter of rowSegments). Shared by the standalone painter
+// (paintStyledDocument) and the inline paragraph pieces (inline.go
+// paintInlineLayout, the pinned paint_inline_layout, line.rs:195-225).
+func paintStyledVisualLine(w *Window, doc shapedText, line int, runs []TextRun, lineOrigin Point, selectionLineHeight, rowHeight, baseline float32, pass textPaintPass) error {
+	segments := rowSegments(doc, runs, line, selectionLineHeight)
+	if pass == textPaintBackground {
+		for _, segment := range segments {
+			if segment.run.BackgroundColor == nil {
+				continue
+			}
+			w.PaintQuad(Fill(Bounds{
+				Origin: Point{X: lineOrigin.X + segment.left, Y: lineOrigin.Y},
+				Size:   Size{Width: segment.w, Height: rowHeight},
+			}, SolidBackground(*segment.run.BackgroundColor)))
+		}
+		return nil
+	}
+	ascent, descent := doc.ascent(), doc.descent()
+	for _, segment := range segments {
+		paintRunDecorations(w, segment, lineOrigin.X, baseline, ascent, descent)
+	}
+	return paintRowGlyphs(w, doc, line, segments, lineOrigin, baseline)
+}
+
+// cutPaintRuns cuts runs covering a document to the byte range
+// [start, end), rebasing them to start and keeping every paint field
+// (the inline pieces' runs: a piece's shaped document starts at the
+// piece's first byte). Runs that do not reach the range answer nil.
+func cutPaintRuns(runs []TextRun, start, end int) []TextRun {
+	var cut []TextRun
+	offset := 0
+	for _, run := range runs {
+		runStart, runEnd := offset, offset+run.Len
+		offset = runEnd
+		if runStart >= end {
+			break
+		}
+		from, to := runStart, runEnd
+		if from < start {
+			from = start
+		}
+		if to > end {
+			to = end
+		}
+		if to <= from {
+			continue
+		}
+		piece := run
+		piece.Len = to - from
+		cut = append(cut, piece)
+	}
+	return cut
 }
 
 // rowSegments returns the paint-style runs' rectangles on one visual

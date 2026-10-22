@@ -589,12 +589,15 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 	}
 	state.layoutID = layoutID
 	// The published runs are the runs the element would shape with: one
-	// run of the ambient font covering the text (TextStyle::to_run).
+	// run of the ambient text style covering the text, paint fields
+	// included (TextStyle::to_run, elements/text.rs:903-915), so a nested
+	// inline span's own color and decorations survive the paragraph.
 	publishInlineContent(w, layoutID, &inlineTextContent{
-		text:       t.text,
-		runs:       []TextRun{{Len: len(t.text), Font: textStyle.FontDescriptorOf()}},
-		fontSize:   fontSize,
-		lineHeight: lineHeight,
+		text:        t.text,
+		runs:        []TextRun{textStyle.ToRun(len(t.text))},
+		fontSize:    fontSize,
+		lineHeight:  lineHeight,
+		paintStyled: true,
 	})
 	return layoutID, state
 }
