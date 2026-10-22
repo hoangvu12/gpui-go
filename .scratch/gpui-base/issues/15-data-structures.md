@@ -4,7 +4,7 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: base-port-2 orchestrator (2026-10-22)
 Blocked by: 01
 
@@ -33,3 +33,9 @@ Pure-Go building blocks behave like ropey 2 (byte-indexed, LF lines, UTF-16 metr
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
 - 2026-10-22 — Reopened: the 2026-10-19 worker died with its session and left nothing on disk (status set back to open). Re-claimed the same day by the base-port-2 orchestrator (worktree gpui-go-wt-base, branch base-port-2) and delegated.
+
+## Answer
+
+Resolved 2026-10-22 on `base-port-2`. Subpackages `base/rope` (ropey 2 subset: byte-indexed, LF lines, char/UTF-16/line conversions, persistent copies), `base/sumtree` (SumTree + `NewCursor[D]`), `base/segment` (word/grapheme over `github.com/clipperhouse/uax29/v2` v2.7.0, the first go.mod requirement, plus Base's text_boundary.rs), `base/dataurl` (data-url crate port) and `base/strftime` (chrono strftime subset). THIRD_PARTY_NOTICES.md and its generator's GO_SOURCES updated.
+
+Tests: 57 top-level, all pass on the orchestrator's snapshot rerun; rope property tests against a string model, the Rust segmentation oracle replay (graphemes 3,974/3,974, words 3,969/3,974 = the recorded ZWJ-emoji deviation), the data-url WPT suite in full. Counts, deviations and the ticket-19 hand-off (RopeExt/Point/LSP Position): [evidence](../../../evidence/base/ticket15-data-structures.json).

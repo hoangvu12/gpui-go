@@ -1,0 +1,41 @@
+{
+  "ticket": "15-data-structures",
+  "effort": "gpui-base",
+  "date": "2026-10-22",
+  "branch": "base-port-2",
+  "result": "resolved (RopeExt/Point/LSP Position hand-off to ticket 19)",
+  "summary": "Five dependency-free subpackages under base/: rope (ropey 2 API subset Base uses: byte-indexed, LF lines, char/UTF-16/line conversions, persistent O(1) copies, iterators), sumtree (zed-sum-tree SumTree + Cursor[D] with Bias/Dimensions), segment (word/grapheme over github.com/clipperhouse/uax29/v2 v2.7.0 + Base's text_boundary.rs), dataurl (data-url crate port incl. MIME parsing and forgiving base64), strftime (chrono strftime normal + lenient modes over zone-less time.Time). go.mod gains its first requirement (uax29, approved in ticket 01).",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/input/rope_ext.rs, text_wrapper.rs:59-236, diagnostics.rs:144-246, state.rs:1460,1477, inline_tokens.rs:198, text_boundary.rs, calendar.rs, time_field.rs @ c0820693",
+    "ropey 2.0.0-beta.1, zed-sum-tree 0.2.0, data-url 0.3.2, chrono 0.4.45, unicode-segmentation 1.13.3 (crate sources from the cargo registry)"
+  ],
+  "implementation": {
+    "files": ["base/rope/{doc,errors,node,slice,rope,iter}.go + tests (main, model, prop, rope, rope_ext)", "base/sumtree/{sumtree,cursor}.go + tests (sumtree, base_usage)", "base/segment/{segment,text_boundary}.go + tests + testdata/unicode-segmentation-1.13.3.jsonl", "base/dataurl/{dataurl,mime,base64}.go + tests + testdata (4 web-platform-tests JSON files)", "base/strftime/strftime.go + test", "go.mod", "go.sum", "THIRD_PARTY_NOTICES.md", "reference/native/tools/notices/gen.py (GO_SOURCES synced by the orchestrator)"],
+    "module_added": "github.com/clipperhouse/uax29/v2 v2.7.0 (MIT)"
+  },
+  "tests": {
+    "top_level": 57,
+    "upstream": {
+      "rope_ext.rs": "15 ported (against a test-only RopeExt copy proving the rope exposes every call; RopeExt itself is ticket 19)",
+      "ropey property tests": "9 ported / 4 deviated (line-iterator tests adapted from LF+CR to LF) / 3 N.A. (line modes Base does not enable); seeded 150 cases each against a string model, persistence checked",
+      "zed sum_tree": "3 ported / 1 deviated (test_random without FilterCursor and parallel extend) / 1 N.A. (test_edit: keyed-tree API Base does not use); plus Base text-wrapper and diagnostics tree models",
+      "segmentation": "Base 9 word + 10 grapheme cases pass; recorded Rust oracle replay of 3,974 strings (all UCD 17 conformance strings, Base strings, 1-in-40 random sample, 5 known diffs): graphemes 3,974/3,974, words 3,969/3,974 (the 5 recorded ZWJ-emoji deviations)",
+      "data-url": "Base test_data_url_image data-url half ported (MIME->image format is gpui's, N.A.); crate WPT suite in full: 78 URL, 80 base64, 955 MIME cases; the crate's one known failure (data://test:test/,X) reproduced",
+      "chrono test_strftime_docs": "ported with deviations (no leap second: 5 assertions print :59; zone specifiers and parse_from_str N.A. for zone-less values; %s treats clock time as UTC; localized N.A.); Base time-field formats and calendar date label pass; week-number sweep 1999-2030"
+    },
+    "orchestrator_rerun": [
+      {"where": "git checkout-index snapshot of HEAD + the staged ticket-15 files (ticket 10/14 in-progress files excluded)", "command": "CGO_ENABLED=0 go vet ./base/rope ./base/sumtree ./base/segment ./base/dataurl ./base/strftime && gofmt -l base && go mod verify", "result": "clean; all modules verified"},
+      {"command": "CGO_ENABLED=0 go test ./base/rope ./base/sumtree ./base/segment ./base/dataurl ./base/strftime -count=1 -v", "result": "ok x5, 57 PASS, 0 FAIL, 0 SKIP"},
+      {"command": "CGO_ENABLED=0 go build ./... && go vet ./base", "result": "ok"}
+    ]
+  },
+  "deviations": [
+    "uax29 vs unicode-segmentation 1.13.3: 5 ZWJ-emoji word-bound cases (letter, ' or ., ZWJ emoji sequence); recorded in the segment package doc and pinned by a test (ticket 01 decision)",
+    "invalid UTF-8 given to the rope becomes U+FFFD",
+    "rope: LF line type only; ranges passed as (start, end); ropey builder/chunk cursor/reader-writer/ordering-hash not ported; ropey 2.0.0-beta.1 has no Rope::append (slice-05 research listing it is wrong)",
+    "sumtree: summary context parameter dropped (Go zero values act as zero); cursors via NewCursor[D] (no generic methods); FilterCursor, keyed edits, TreeMap not ported",
+    "strftime: a date-only value prints 00 for %H where chrono errors; lenient mode writes zone specifiers literally"
+  ],
+  "follow_ups": ["ticket 19: RopeExt, Point, LSP Position over rope.Rope (base/rope/rope_ext_test.go is a ready starting copy); state.rs word motion over segment.SplitWordBoundIndices"],
+  "native_artifact": "unchanged (rev 11)"
+}
