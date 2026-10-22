@@ -31,3 +31,4 @@ A multi-line `Textarea` soft-wraps, moves vertically, scrolls and shows inline t
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
 - 2026-10-23 — Claimed and delegated. Owns the ticket-20 input engine files (base/input_{state*,element,layout,kind,movement,base,mode}.go and input.go) in order to replace the placeholder display map and the inline-token stand-ins, plus new base/input_{display_map,wrap_map,fold_map,text_wrapper,inline_line,inline_tokens,token_presentation,textarea}*.go.
+- 2026-10-23 — From ticket 22: add numberStep *NumberStep to InputBaseState, defaulting to a fixed step of 1, plus the Step/StepBy/SetStep builders (U:input/base/state.rs:401,732,9743-9835). Then switch the inputNumberStep stub in base/number_input_step.go to read it. That stub is the one line outside 21's files that this change touches.

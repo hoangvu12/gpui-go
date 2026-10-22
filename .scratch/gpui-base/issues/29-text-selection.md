@@ -30,3 +30,4 @@ Cross-element selection, SelectableText and touch selection handles work as upst
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-23 — Note from the base-port-2 orchestrator: ticket 28 leaves hooks for this ticket: newTextViewSelectionAdapter, textSelectionRegisterInline, textSelectionEnd, textSelectionSelectedText and textWordRangeAt (which defaults to segment.WordRangeAt). This ticket also owns 28's 16 deferred selection tests: 15 from text_view.rs and 1 from inline_virtual_tests.rs. See evidence/base/ticket28-text-view.json.

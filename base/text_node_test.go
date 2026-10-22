@@ -10,7 +10,7 @@ import (
 
 // Ports of the U:text/node.rs tests (3437-4501) that exercise the data
 // model and its pure methods: 30 of 37. The other 7 test the rendering
-// half and are deferred to ticket 28:
+// half; ticket 28 ports them in text_node_render_test.go:
 //   - custom_inline_inherits_marks_and_resolves_link_references (3518):
 //     Paragraph::inline_flow_items, InlineFlowItem's TextStyle, TestApp.
 //   - table_column_uses_prepared_inline_metrics_after_resource_update

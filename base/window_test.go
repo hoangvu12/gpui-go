@@ -20,7 +20,15 @@ func (v *testView) Render(w *gpui.Window, cx *gpui.Context[testView]) gpui.AnyEl
 
 func openTestView(t *testing.T, ta *gpui.TestApp, build func(w *gpui.Window, cx *gpui.Context[testView]) gpui.AnyElement) (gpui.Entity[testView], *gpui.VisualTestContext) {
 	t.Helper()
+	shutdownAtCleanup(t, ta)
 	return ta.AddWindowView(func(v *testView, _ *gpui.Window, _ *gpui.Context[testView]) { v.build = build })
+}
+
+// shutdownAtCleanup shuts the test application down when the test ends,
+// which retires its image codec's native atlas slot (the service bounds
+// live atlases at 8 per process; gpui App.Shutdown).
+func shutdownAtCleanup(t testing.TB, ta *gpui.TestApp) {
+	t.Cleanup(func() { ta.App().Shutdown() })
 }
 
 func debugBounds(t *testing.T, cx *gpui.VisualTestContext, selector string) gpui.Bounds {

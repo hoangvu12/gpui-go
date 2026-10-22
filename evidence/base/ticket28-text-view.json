@@ -1,0 +1,73 @@
+{
+  "ticket": "28-text-view",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved (selection/stream-fade/range-highlight/HTML tests deferred to 29 and 30 with hooks in place)",
+  "summary": "Rich text rendering: text style, utils, InlineElement, Inline (legacy-wrapper re-expression), InlineFlow, inline objects, the node.rs render half (NodeContext, paragraph/code/table/image/list render, caches), TextViewState (background parse queue, 64-update coalescing), TextView and the Text/Markdown/HTML constructors; textInit (copy/select-all) wired into Init.",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/text/{inline,inline_flow,inline_object,inline_element,inline_virtual_tests,node,state,text_view,style,utils,mod}.rs @ c0820693"
+  ],
+  "implementation": {
+    "files": [
+      "base/text_{style,utils,inline,inline_element,inline_flow,inline_object,node_render,state,view}.go",
+      "tests: base/text_{style,utils,inline,inline_flow,inline_flow_real_windows,inline_object,inline_virtual,node_render,state,view,view_upstream}_test.go",
+      "base/lib.go: Init calls textInit (orchestrator)",
+      "base/text_node_test.go header: the 7 node.rs tests ticket 27 deferred now live in text_node_render_test.go (orchestrator)"
+    ]
+  },
+  "tests": {
+    "per_file": {
+      "style.rs": "6/6",
+      "utils.rs": "2/2",
+      "inline.rs": "21: 15 ported, 6 deferred (5 need a wrapping fake text system with a wider mono font and pin ticket-30 range-highlight geometry; 1 retained-layout release test does not fit the weak-keyed side table)",
+      "inline_flow.rs": "10: 5 ported, 5 deviated (the test text system has one width for every family; the property is checked on real fonts by TestRealInlineCodeNearTheWrapWidthDoesNotOverflowTheFlow)",
+      "inline_object.rs": "3: 2 ported, 1 deviated (accessible name in Node.Value; no label field)",
+      "inline_virtual_tests.rs": "2: 1 deviated (no SetRemSize: rem-zoom step dropped), 1 deferred to 29 (selection layer)",
+      "node.rs (the 7 deferred by 27)": "7: 5 ported, 2 deviated (mono width under the test text system; a cloned table shares by pointer)",
+      "state.rs": "82: 21 ported, 2 deviated (large replacement: Markdown half only; coalescing asserted as 64-update batches), 59 deferred to 30 (56 stream fade/range highlight/reveal, 3 HTML parser)",
+      "text_view.rs": "37: 16 ported, 2 deviated (link clicks via OnLinkClick), 19 deferred (15 drag/multi-click selection or the selection adapter -> 29; 1 inline HTML -> 30; 1 h_resizable not ported; 2 cx.opened_url absent in TestApp)"
+    },
+    "real_window": "TestRealInlineCodeNearTheWrapWidthDoesNotOverflowTheFlow (Segoe UI + Consolas); fails, never skips",
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD 9cb2985 + tickets 28 and 22 files + the core codec fix (ticket-21 in-progress files excluded)",
+        "command": "CGO_ENABLED=0 go vet ./base ./gpui && gofmt -l base gpui && go build ./...",
+        "result": "clean"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=1 -v",
+        "result": "ok, 747 PASS (618 + 81 ticket 28 + 48 ticket 22), 0 FAIL, 3 SKIP (ticket-30 markdown HTML deferrals)"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=3",
+        "result": "ok (failed before the codec fix, see core_fix)"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test -p 1 ./gpui ./internal/shutdownspec ./internal/assetspec ./internal/imagespec",
+        "result": "ok"
+      }
+    ]
+  },
+  "core_fix": {
+    "finding": "Under -count=3 the real-window test failed at NewAtlas (status -2, slot limit 8). Bisection with a free-slot probe: every App that decoded an image kept its lazily created image codec (one native atlas slot) for the life of the process; gpui's own tests worked around it with a test-only releaseAppImageCodec. Five base tests (avatar image, inline virtual, table metrics, TextView block kinds, data-URL image) each leaked one slot.",
+    "fix": "gpui/task_ownership.go App.Shutdown disposes the app image codec (it retires with the application, as a window's text atlas retires with the window); the base test helpers openTestView and textTestApp(t) shut the test app down at t.Cleanup (shutdownAtCleanup in base/window_test.go)."
+  },
+  "deviations": [
+    "wrapping over ticket 10's LineWrapper/ShapedLine; word/grapheme splits from base/segment",
+    "row geometry rebuilt from PositionForIndex (TextLayout exposes no line layouts); row end width from shaping the row alone",
+    "boxes holding text are flex columns (a Block div would pull Base's Inline text into a core inline paragraph); the TextView outer box is Block, so callers wrap TextView in a Block parent (inside a default flex row it does not wrap)",
+    "|ShapedLine.Descent()| taken (test windows report it negative); cap height fixed at 0.7 em (no font-metrics API)",
+    "paint_origin moves hitbox/selection geometry only (StyledText places its own text)",
+    "paragraph/code-block/table-data/image caches in weak-keyed side tables",
+    "linked images wrapped in a clickable div (Img takes no click handlers)",
+    "the TextViewState background parser is a queue drained by a delivering task, coalescing 64 updates",
+    "the text-view state stack is a package global (textViewStateStack), not yet in GlobalState"
+  ],
+  "follow_ups": [
+    "29: plug in via newTextViewSelectionAdapter, textSelectionRegisterInline, textSelectionEnd, textSelectionSelectedText, textWordRangeAt; port the 16 selection-dependent deferred tests",
+    "30: plug in via nodeRenderContext.streamFades/rangeBackgrounds and textLeafKey; port the 59 state.rs + 5 inline.rs + 1 text_view.rs deferred tests and un-skip the 3 markdown HTML tests",
+    "optional gpui: font metrics (cap height), a Node accessibility label, the test-window descent sign, Window.SetRemSize, TestApp opened_url, a fake-text-system seam",
+    "move the text-view state stack into GlobalState"
+  ]
+}

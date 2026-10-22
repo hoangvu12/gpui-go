@@ -1,0 +1,44 @@
+{
+  "ticket": "22-input-controls",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved (the number-step engine field is pending in ticket 21's files)",
+  "summary": "NumberInput, OtpInput, TimeField, Select, Combobox, Calendar, DatePicker and ColorPicker over the ticket-20 Input; their initializers join Init in upstream order (U:lib.rs:236-240).",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/{number_input,otp_input,time_field,select,combobox,calendar,date_picker,color_picker}.rs @ c0820693",
+    "upstream-base/ce/crates/base/src/input/base/state.rs test_number_step"
+  ],
+  "implementation": {
+    "files": [
+      "base/{number_input,number_input_step,otp_input,time_field,select,combobox,calendar,date_picker,color_picker}.go + _test.go",
+      "base/lib.go: Init calls comboboxInit, colorPickerInit, selectInit, numberInputInit, timeFieldInit"
+    ]
+  },
+  "tests": {
+    "upstream_in_scope": 42,
+    "ported": 42,
+    "deviated_plumbing_only": 4,
+    "not_applicable": 0,
+    "per_file": "number_input 2, test_number_step 1, otp_input 2, time_field 10, select 6, combobox 2, calendar 9, date_picker 0, color_picker 10",
+    "deviations": [
+      "the select a11y test reads the rendered div via the ticket-17 a11yOf helper",
+      "the calendar names test collects through a slice pointer",
+      "the color picker event test subscribes through an observer entity (no App-level subscribe)",
+      "the color picker keyboard test holds a weak harness handle"
+    ],
+    "go_only": "DatePicker (no upstream tests), OTP/TimeField real key paths, ColorSwatch/ColorPicker a11y, Date display/format, Rust-style float parsing",
+    "orchestrator_rerun": "shared with ticket 28 (evidence/base/ticket28-text-view.json): snapshot of HEAD 9cb2985 + 28 + 22 + the core codec fix; go vet/gofmt/build clean; go test ./base 747 PASS 3 SKIP; -count=3 ok"
+  },
+  "deviations": [
+    "chrono NaiveDate/NaiveTime as small value types over Go time; formatting via base/strftime; Weekday = time.Weekday",
+    "Calendar Matcher is one struct with constructors; DayOfWeek is variadic",
+    "data-carrying enums as structs; Option as (value, ok) or pointers",
+    "parseRustF64 rejects the hex/underscore forms Go's ParseFloat accepts and Rust rejects",
+    "upstream behaviour kept on purpose: hue slider into_degrees()/360 (hues above 180 deg negative); the hex field's suppress flag swallows the next edit after SetValue"
+  ],
+  "follow_ups": [
+    "21 (owns base/input_state*.go): add numberStep *NumberStep to InputBaseState (default fixed 1) and the Step/StepBy/SetStep builders (U:input/base/state.rs:401,732,9743-9835), then switch the inputNumberStep stub in base/number_input_step.go; until then NumberInput steps by 1",
+    "optional gpui: export the clamped Hsla->Rgba conversion and the clamping hsla() constructor (R:color.rs:32-60); color_picker.go carries private copies"
+  ]
+}

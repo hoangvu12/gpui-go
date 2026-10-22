@@ -30,3 +30,4 @@ Range highlights, streaming fade-in and HTML documents (with the minifier) rende
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-23 — Note from the base-port-2 orchestrator: ticket 28 leaves hooks for this ticket: nodeRenderContext.streamFades/rangeBackgrounds and textLeafKey. This ticket also owns 28's 65 deferred tests: 59 from state.rs, 5 from inline.rs and 1 inline HTML test from text_view.rs. It also owns the 3 skipped markdown HTML tests from ticket 27.
