@@ -110,6 +110,7 @@ Blocking edges live in each ticket's `Blocked by:`; the frontier is computed fro
 - [Editor basics](issues/23-editor-basics.md) — Editor mode: language config, auto-close, indent, folding, gutter, editor scrollbar, ghost text, highlighting hooks, decorations, search; 80 of 83 upstream tests ported (3 n/a).
 - [Text selection](issues/29-text-selection.md) — cross-element selection, SelectableText, touch handles, boundaries, TextView adapter; 53/53 upstream + 16 deferred from 28; Root/ElementExt wiring and a core paint-bounds bug follow.
 - [Selection wiring + paint bounds](issues/36-selection-wiring-paint-bounds.md) — Root mounts the selection layer and copies; ElementExt.TextSelectionScope; core: paint uses the prepaint bounds (R:element.rs:537-600).
+- [Dock](issues/26-dock.md) — layout tree/edit/normalize, state + JSON persistence over the frozen fixtures, placement, drag, panels, TabGroup, DockArea; 152/152 upstream tests.
 - Package layout (orchestrator, routine): one `base` package mirroring the single crate; dependency-free data structures (rope, sum tree, segmentation) in subpackages under `base/`.
 
 ## Not yet specified
