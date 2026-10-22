@@ -105,6 +105,7 @@ Blocking edges live in each ticket's `Blocked by:`; the frontier is computed fro
 - [Single-line input](issues/20-single-line-input.md) — InputBaseState engine (modes, blink, movement, edit/history/IME, mouse, layout, render), Input component, Init wires inputInit; 84 of 98 upstream tests ported, 14 not applicable (editor/number/view-cache); placeholder display map until 21.
 - [Input controls](issues/22-input-controls.md) — NumberInput, OtpInput, TimeField, Select, Combobox, Calendar, DatePicker, ColorPicker; 42/42 upstream tests; chrono over Go time.
 - [TextView](issues/28-text-view.md) — inline flow, node render, TextViewState, TextView; ~75 upstream tests ported, 81 deferred to 29/30 with hooks; App.Shutdown now retires the app image codec's atlas slot.
+- [Textarea](issues/21-textarea.md) — display map (wrap/fold), inline tokens, Textarea, multi-line builders; 75 upstream tests ported, 61 editor-only state.rs tests left for 23/24.
 - Package layout (orchestrator, routine): one `base` package mirroring the single crate; dependency-free data structures (rope, sum tree, segmentation) in subpackages under `base/`.
 
 ## Not yet specified

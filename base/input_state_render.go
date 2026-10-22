@@ -73,9 +73,28 @@ func (s *InputBaseState[M]) Render(w *gpui.Window, cx *inputCx[M]) gpui.AnyEleme
 		OnAction(SelectToStartAction, w.ListenerFor(entity, (*self).selectToStart)).
 		OnAction(SelectToEndAction, w.ListenerFor(entity, (*self).selectToEnd)).
 		OnAction(ShowCharacterPaletteAction, w.ListenerFor(entity, (*self).showCharacterPalette)).
-		// ActivateToken activates the token spanning the selection; with
-		// no inline tokens there is none (U:input/base/state.rs:4434-4458).
-		OnAction(ActivateTokenAction, func(*ActivateToken, *gpui.Window, *gpui.App) {}).
+		// ActivateToken opens the token spanning exactly the selection
+		// with a keyboard click (U:input/base/state.rs:4434-4458).
+		OnAction(ActivateTokenAction, func(_ *ActivateToken, w *gpui.Window, app *gpui.App) {
+			var listener InlineTokenClickListener
+			var event InlineTokenClickEvent
+			entity.Read(app, func(state *self, _ *gpui.App) struct{} {
+				for _, span := range state.tokenSpans() {
+					if span.Range() != state.SelectedRange() {
+						continue
+					}
+					if bounds, ok := state.RangeToBounds(span.Range()); ok {
+						click := gpui.ClickEvent{Kind: gpui.ClickEventKeyboard, Keyboard: gpui.KeyboardClickEvent{Bounds: bounds}}
+						listener, event, _ = state.tokenActivation(span.Range().Start, bounds, click)
+					}
+					break
+				}
+				return struct{}{}
+			})
+			if listener != nil {
+				listener(&event, w, app)
+			}
+		}).
 		OnAction(CopyAction, w.ListenerFor(entity, (*self).copy)).
 		OnAction(SearchAction, w.ListenerFor(entity, (*self).onActionSearch)).
 		OnAction(ReplaceAction, w.ListenerFor(entity, (*self).onActionReplace)).

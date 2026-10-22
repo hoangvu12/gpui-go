@@ -11,13 +11,10 @@ package base
 //   - input_state_render.go: Render (action and listener registration).
 //   - input_state_style.go: InputEditorStyle.
 //
-// This ticket ports the single-line engine. Parts owned by other modules
-// join with their tickets and are stand-ins here:
+// The display map is input_display_map.go and its layers; inline tokens
+// are input_inline_tokens.go and input_token_presentation*.go. Parts owned
+// by other modules join with their tickets and are stand-ins here:
 //
-//   - inline tokens (U:input/base/inline_tokens.rs, token_presentation.rs):
-//     no token spans exist, so token_boundary / normalize_token_range are
-//     the identity, edit_tokens records no delta and ActivateToken has no
-//     span to activate (input_state_edit.go);
 //   - search (U:input/editor/search.rs): update_search has no session; the
 //     Search / Replace actions propagate, which is what a non-searchable
 //     input does (only the multi-line modes can be searchable);
@@ -26,11 +23,6 @@ package base
 //   - the native context menu (U:input/base/native.rs): on_context_menu and
 //     handle_right_click_menu need NativeMenu; a right press still moves
 //     the caret like upstream;
-//   - number stepping (number_input.rs NumberStep / StepAction): the
-//     number_step field and step / step_by / set_step join with the
-//     number-input ticket; min / max and the blur clamp are here;
-//   - the display map (U:input/editor/display_map): inputDisplayMap
-//     (input_layout.go);
 //   - code-editor language state, highlighter, diagnostics, folding,
 //     indentation, auto close (U:input/editor/*): the hooks and layoutMode
 //     flags are wired; their data joins with the editor tickets.
@@ -393,6 +385,13 @@ type InputBaseState[M InputModeKind] struct {
 	text        rope.Rope
 	displayMap  inputDisplayMap
 	undoManager *undoManager
+	// inlineTokens is the token store, nil until a token exists
+	// (U:input/base/state.rs:344-355).
+	inlineTokens      *inlineTokenStore
+	pendingToken      *InlineToken
+	pressedToken      *pressedToken
+	tokenPresentation inlineTokenPresentation
+	tokenLayoutCache  *tokenLayoutCache
 
 	replayingHistory   bool
 	validatedTokenEdit bool
@@ -401,6 +400,7 @@ type InputBaseState[M InputModeKind] struct {
 	searchable             bool
 	replaceable            bool
 	softWrap               bool
+	wrappingIndent         WrappingIndent
 	scrollBeyondLastLine   *int
 	cursorSurroundingLines *int
 	blinkCursor            gpui.Entity[blinkCursor]
@@ -437,6 +437,8 @@ type InputBaseState[M InputModeKind] struct {
 	validate              func(text string, app *gpui.App) bool
 	numberMin             *float64
 	numberMax             *float64
+	// numberStep is Option<NumberStep> (U:input/base/state.rs:401).
+	numberStep *NumberStep
 
 	scrollHandle gpui.ScrollHandle
 	// deferredScrollOffset is applied on the next layout.
@@ -487,7 +489,7 @@ type longestLineCache struct {
 type InputState = InputBaseState[InputMode]
 
 // TextareaState is the state of a multi-line text input
-// (U:input/mod.rs:123; the textarea module is a later ticket).
+// (U:input/textarea/mod.rs:10).
 type TextareaState = InputBaseState[TextareaMode]
 
 // EditorState is the state of a code editor (U:input/mod.rs:93).
@@ -685,10 +687,15 @@ func newInMode[M InputModeKind](w *gpui.Window, cx *inputCx[M]) InputBaseState[M
 
 	auto := DefaultAutoScroll()
 	return InputBaseState[M]{
-		hooks:             hooks,
-		extras:            hooks.newExtras(),
-		focusHandle:       focusHandle,
-		mode:              layoutModePlainText(),
+		hooks:       hooks,
+		extras:      hooks.newExtras(),
+		focusHandle: focusHandle,
+		mode:        layoutModePlainText(),
+		// DisplayMap::new(text_style.font(), rem_size, None)
+		// (U:input/base/state.rs:697). The Go window text style is only
+		// readable inside a frame, so the map starts without a font; every
+		// prepaint sets the real one (set_font) before it wraps.
+		displayMap:        newInputDisplayMap(gpui.FontDescriptor{}, 0, nil),
 		undoManager:       newUndoManager(),
 		replaceable:       true,
 		softWrap:          true,
@@ -701,6 +708,7 @@ func newInMode[M InputModeKind](w *gpui.Window, cx *inputCx[M]) InputBaseState[M
 		subscriptions:     subscriptions,
 		keystrokeSub:      keystrokeSub,
 		autoScroll:        &auto,
+		numberStep:        &NumberStep{fixed: 1},
 	}
 }
 
@@ -801,13 +809,21 @@ func (s *InputBaseState[M]) lineAndPositionForOffset(offset int) (int, int, gpui
 
 // SetValue sets the value: history is cleared and no change event is
 // emitted. A single-line caret goes to the end while the view scrolls
-// back to the start (U:input/base/state.rs:916-945). The value is plain
-// text; restoring inline tokens (InputContent) joins with the
-// inline-tokens port.
+// back to the start (U:input/base/state.rs:916-945). A plain value drops
+// every inline token; SetContent restores text with its tokens.
 func (s *InputBaseState[M]) SetValue(value string, w *gpui.Window, cx *inputCx[M]) {
+	s.SetContent(NewInputContent(value), w, cx)
+}
+
+// SetContent is set_value with InputContent: the text together with its
+// inline tokens (U:input/base/state.rs:916-945; see
+// input_inline_tokens.go for why it is a second method).
+func (s *InputBaseState[M]) SetContent(content InputContent, w *gpui.Window, cx *inputCx[M]) {
+	s.inlineTokens = nil
 	s.undoManager.setIgnoring(true)
 	s.emitEvents = false
-	s.replaceText(value, w, cx)
+	s.replaceText(content.Text(), w, cx)
+	s.installTokens(content)
 	s.undoManager.setIgnoring(false)
 	s.emitEvents = true
 
@@ -1020,7 +1036,11 @@ func equalIntPtr(a, b *int) bool {
 // DefaultValue sets the default value (U:input/base/state.rs:1216-1227).
 func (s InputBaseState[M]) DefaultValue(value string) InputBaseState[M] {
 	s.text = rope.FromStr(s.normalizeInput(value))
-	s.displayMap.setText(s.text)
+	// Upstream defers set_text to the first prepaint because it needs cx
+	// (U:input/base/state.rs:1223-1224). With no wrap width yet the
+	// wrapper needs no text system, so the Go map takes the text now and
+	// queries answer before the first paint.
+	s.displayMap.setText(s.text, nil)
 	s.pendingUpdate = true
 	return s
 }
@@ -1407,12 +1427,18 @@ func (s *InputBaseState[M]) EnsureNumberMask() {
 }
 
 // setInputBounds records the container bounds
-// (U:input/base/state.rs:3522-3543). The stand-in display map does not
-// wrap, so a width change has no wrap width to forward.
-func (s *InputBaseState[M]) setInputBounds(newBounds gpui.Bounds, cx *inputCx[M]) {
+// and forwards a width change to the display map
+// (U:input/base/state.rs:3522-3543).
+func (s *InputBaseState[M]) setInputBounds(newBounds gpui.Bounds, w *gpui.Window, cx *inputCx[M]) {
 	widthChanged := s.inputBounds.Size.Width != newBounds.Size.Width
 	s.inputBounds = newBounds
 	if s.lastLayout != nil && widthChanged {
+		// nil disables wrapping.
+		var wrapWidth *float32
+		if s.softWrap {
+			wrapWidth = s.lastLayout.wrapWidth
+		}
+		s.displayMap.onLayoutChanged(wrapWidth, w)
 		if s.IsMultiLine() {
 			s.mode.updateAutoGrow(s.displayMap.wrapRowCount())
 		}
@@ -1541,4 +1567,193 @@ func (s *InputBaseState[M]) SetLoading(loading bool, _ *gpui.Window, cx *inputCx
 func runeLenOr1(s string) int {
 	_, n := utf8.DecodeRuneInString(s)
 	return max(n, 1)
+}
+
+// requireMultiLineMode panics when a multi-line-only method is reached on
+// InputMode; upstream the impl over MultiLineMode does not exist there
+// (U:input/base/state.rs:9854-9856).
+func (s *InputBaseState[M]) requireMultiLineMode(method string) {
+	if !s.IsMultiLine() {
+		panic("base: " + method + " is only available on TextareaState and EditorState")
+	}
+}
+
+// requireTextareaMode panics when a Textarea-only method is reached on
+// another mode (U:input/base/state.rs:9924-9925).
+func (s *InputBaseState[M]) requireTextareaMode(method string) {
+	if _, ok := any(modeOf[M]()).(TextareaMode); !ok {
+		panic("base: " + method + " is only available on TextareaState")
+	}
+}
+
+// Searchable sets whether the built-in search panel and its shortcut are
+// enabled; off by default, on for the code editor. A non-searchable input
+// still answers the search methods and lets the shortcut bubble up
+// (U:input/base/state.rs:9857-9867). Multi-line modes only.
+func (s InputBaseState[M]) Searchable(searchable bool) InputBaseState[M] {
+	s.requireMultiLineMode("Searchable")
+	s.searchable = searchable
+	return s
+}
+
+// SetSearchable is U:input/base/state.rs:9869-9873.
+func (s *InputBaseState[M]) SetSearchable(searchable bool, cx *inputCx[M]) {
+	s.requireMultiLineMode("SetSearchable")
+	s.searchable = searchable
+	cx.Notify()
+}
+
+// SoftWrap sets the soft wrap mode, default true
+// (U:input/base/state.rs:9875-9880, doc(hidden)). Multi-line modes only.
+func (s InputBaseState[M]) SoftWrap(wrap bool) InputBaseState[M] {
+	s.requireMultiLineMode("SoftWrap")
+	s.softWrap = wrap
+	return s
+}
+
+// SetSoftWrap updates the soft wrap mode; wrapping resets the horizontal
+// scroll (U:input/base/state.rs:9882-9902).
+func (s *InputBaseState[M]) SetSoftWrap(wrap bool, w *gpui.Window, cx *inputCx[M]) {
+	s.requireMultiLineMode("SetSoftWrap")
+	s.softWrap = wrap
+	if wrap {
+		wrapWidth := s.inputBounds.Size.Width
+		if s.lastLayout != nil && s.lastLayout.wrapWidth != nil {
+			wrapWidth = *s.lastLayout.wrapWidth
+		}
+		s.displayMap.onLayoutChanged(&wrapWidth, w)
+		offset := s.scrollHandle.Offset()
+		offset.X = 0
+		s.scrollHandle.SetOffset(offset)
+	} else {
+		s.displayMap.onLayoutChanged(nil, w)
+	}
+	cx.Notify()
+}
+
+// WrappingIndent sets how soft-wrapped continuation lines are indented,
+// default WrappingIndentSame (U:input/base/state.rs:9904-9909, doc(hidden)).
+func (s InputBaseState[M]) WrappingIndent(indent WrappingIndent) InputBaseState[M] {
+	s.requireMultiLineMode("WrappingIndent")
+	s.wrappingIndent = indent
+	return s
+}
+
+// SetWrappingIndent is U:input/base/state.rs:9911-9921.
+func (s *InputBaseState[M]) SetWrappingIndent(indent WrappingIndent, w *gpui.Window, cx *inputCx[M]) {
+	s.requireMultiLineMode("SetWrappingIndent")
+	s.wrappingIndent = indent
+	s.displayMap.setWrappingIndent(indent, w)
+	cx.Notify()
+}
+
+// NewTextareaState creates a multi-line text state. Being multi-line is
+// carried by the mode, so the default plain-text layout needs no
+// adjustment (U:input/base/state.rs:9926-9932).
+func NewTextareaState(w *gpui.Window, cx *gpui.Context[TextareaState]) TextareaState {
+	return newInMode[TextareaMode](w, cx)
+}
+
+// SetAutoGrow grows with the content from minRows through maxRows
+// (U:input/base/state.rs:9934-9937). TextareaState only.
+func (s *InputBaseState[M]) SetAutoGrow(minRows, maxRows int, cx *inputCx[M]) {
+	s.requireTextareaMode("SetAutoGrow")
+	s.mode = layoutModeAutoGrow(minRows, max(maxRows, minRows))
+	cx.Notify()
+}
+
+// setRowsField is the rows match of rows / set_rows: auto grow also caps
+// its maximum (U:input/base/state.rs:9946-9958).
+func (m *layoutMode) setRowsField(rows int) {
+	m.rows = rows
+	if m.kind == layoutAutoGrow {
+		m.maxRows = rows
+	}
+}
+
+// Rows sets the number of rows (U:input/base/state.rs:9939-9960,
+// doc(hidden)). TextareaState only.
+func (s InputBaseState[M]) Rows(rows int) InputBaseState[M] {
+	s.requireTextareaMode("Rows")
+	s.mode.setRowsField(rows)
+	return s
+}
+
+// SetRows is U:input/base/state.rs:9962-9976. TextareaState only.
+func (s *InputBaseState[M]) SetRows(rows int, cx *inputCx[M]) {
+	s.requireTextareaMode("SetRows")
+	s.mode.setRowsField(rows)
+	cx.Notify()
+}
+
+// AutoGrow grows with the content from minRows through maxRows
+// (U:input/base/state.rs:9978-9982). TextareaState only.
+func (s InputBaseState[M]) AutoGrow(minRows, maxRows int) InputBaseState[M] {
+	s.requireTextareaMode("AutoGrow")
+	s.mode = layoutModeAutoGrow(minRows, maxRows)
+	return s
+}
+
+// StepBy sets a step computed from the current value and the StepAction
+// (U:input/base/state.rs:9729-9746). InputState only.
+func (s InputBaseState[M]) StepBy(f func(current float64, action StepAction, app *gpui.App) float64) InputBaseState[M] {
+	s.requireInputMode("StepBy")
+	step := NumberStepByValue(f)
+	s.numberStep = &step
+	return s
+}
+
+// Step sets the increment/decrement step of the NumberInput
+// (U:input/base/state.rs:9790-9802). InputState only.
+func (s InputBaseState[M]) Step(step NumberStep) InputBaseState[M] {
+	s.requireInputMode("Step")
+	s.numberStep = &step
+	return s
+}
+
+// SetStep updates the step after construction; nil falls back to emitting
+// the step event (U:input/base/state.rs:9824-9835). InputState only.
+func (s *InputBaseState[M]) SetStep(step *NumberStep, _ *gpui.Window, _ *inputCx[M]) {
+	s.requireInputMode("SetStep")
+	if step != nil {
+		copied := *step
+		step = &copied
+	}
+	s.numberStep = step
+}
+
+// ApplyHighlighterFoldCandidates installs the fold candidates a
+// highlighter extracted, when folding is on
+// (U:input/base/state.rs:853-862).
+func (s *InputBaseState[M]) ApplyHighlighterFoldCandidates(candidates []FoldRange, cx *inputCx[M]) {
+	if s.mode.isFolding() {
+		s.displayMap.setFoldCandidates(candidates)
+	}
+	cx.Notify()
+}
+
+// UnfoldAt unfolds every folded range hiding the position and reports
+// whether any opened. A fold keeps its first and last line visible, so a
+// position on either opens nothing; nested folds all open; candidates are
+// kept (U:input/base/state.rs:10052-10085). EditorState only.
+func (s *InputBaseState[M]) UnfoldAt(position InputPosition, cx *inputCx[M]) bool {
+	if !s.IsCodeEditor() {
+		panic("base: UnfoldAt is only available on EditorState")
+	}
+	ext := s.ext()
+	line := ext.OffsetToPoint(ext.PositionToOffset(position)).Row
+	var covering []int
+	for _, fold := range s.displayMap.foldedRanges() {
+		if line > fold.StartLine && line < fold.EndLine {
+			covering = append(covering, fold.StartLine)
+		}
+	}
+	if len(covering) == 0 {
+		return false
+	}
+	for _, start := range covering {
+		s.displayMap.setFolded(start, false)
+	}
+	cx.Notify()
+	return true
 }

@@ -1,0 +1,60 @@
+{
+  "ticket": "21-textarea",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved (editor-only state.rs tests left for the editor tickets)",
+  "summary": "Multi-line input: the display map (wrap map over a re-expressed text wrapper, fold map, folding, inline lines) replaces ticket 20's placeholder; inline tokens and token presentation; the Textarea component and NewTextareaState; multi-line builders (Searchable, SoftWrap, WrappingIndent, Rows, AutoGrow); incremental map/fold updates on edit; Input.Token/OnTokenClick; plus ticket 22's NumberStep field and Step/StepBy/SetStep builders.",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/input/editor/display_map/* @ c0820693",
+    "upstream-base/ce/crates/base/src/input/base/{inline_tokens,token_presentation,state}.rs, input/textarea/mod.rs"
+  ],
+  "implementation": {
+    "files": [
+      "new: base/input_{display_map,wrap_map,fold_map,folding,text_wrapper,inline_line,inline_tokens,token_presentation,token_presentation_element}.go, base/textarea.go",
+      "changed: base/input_{layout,state,state_edit,state_render,element}.go, base/input.go, base/number_input_step.go (reads numberStep)",
+      "tests: base/input_{text_wrapper,fold_map,inline_tokens}_test.go, base/textarea{,_state,_multi_cursor}_test.go"
+    ]
+  },
+  "tests": {
+    "text_wrapper_rs": "13/13",
+    "fold_map_rs": "1/1",
+    "state_rs": "169 total; 45 ported by ticket 20, test_number_step by 22, the cached-parent test n/a (20); of the remaining 122: 61 ported (18 deviated), 61 not applicable",
+    "deviated_reasons": [
+      "16 open the editor mode by hand (EditorState::new is the editor ticket's)",
+      "block-select drag test skips its LSP hover-definition setup",
+      "read-only multi-cursor test skips indent_inline",
+      "multi-cursor paste feeds insertClipboard (TestApp has no clipboard)",
+      "read-only test checks replaceability from fields (is_replaceable is in search.rs)"
+    ],
+    "not_applicable_reasons": "auto-close/language config/smart indent 42, indent/outdent (editor/indent.rs) 7, search 7, diagnostics 1, cached view 1, native context menu 1, highlighter 1, decorations/hover 1 -> editor tickets 23/24 or core gaps",
+    "go_only": 2,
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD edfa54e + ticket-21 files (25 and 29 in-progress files excluded)",
+        "command": "CGO_ENABLED=0 go vet ./base && gofmt -l base && go build ./...",
+        "result": "clean; no basewip tags"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=1 -v",
+        "result": "ok, 824 PASS (747 + 77), 0 FAIL, 3 SKIP (ticket-30 deferrals); the real-window inline-flow test passes (it hung only in the shared tree while other workers were mid-edit)"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=2",
+        "result": "ok"
+      }
+    ]
+  },
+  "deviations": [
+    "re-wrapping takes the window (the Go text system is per window); a re-wrap with no window and no cached wrapper leaves lines unwrapped until the next paint",
+    "the map starts with no font (window text style readable only during a frame); every prepaint sets it",
+    "DefaultValue loads the map immediately (same result with no wrap width)",
+    "SetValue keeps a string; SetContent is the token-carrying form",
+    "token renderers return gpui.AnyElement",
+    "token and Textarea-only methods panic on the wrong mode (as ticket 20's mode-specific methods)"
+  ],
+  "follow_ups": [
+    "input_change.go (ticket 19): narrow change.tokenDelta from any to *tokenDelta (a typed-nil trap; 21 stores only non-nil deltas)",
+    "editor tickets 23/24: the 61 not-applicable state.rs tests"
+  ]
+}

@@ -409,7 +409,7 @@ func layoutRangeCorners(start, end int, layout *lastLayout) []pointCorners {
 		offset := layout.visibleLineByteOffsets[i]
 		alignment := layout.alignmentOffset(line.longestWidth)
 		for row, shaped := range line.wrappedLines {
-			lineEnd := offset + shaped.Len()
+			lineEnd := offset + shaped.len
 			startIx := max(start, offset)
 			endIx := min(end, lineEnd)
 			isLast := row+1 == len(line.wrappedLines)
@@ -421,12 +421,12 @@ func layoutRangeCorners(start, end int, layout *lastLayout) []pointCorners {
 				if row != 0 {
 					indent = line.wrapIndent
 				}
-				left := alignment + indent + shaped.XForIndex(min(startIx, lineEnd)-offset)
+				left := alignment + indent + shaped.xForIndex(min(startIx, lineEnd)-offset)
 				right := alignment + indent
 				if newline {
-					right += shaped.Width() + layout.spaceWidth
+					right += shaped.width + layout.spaceWidth
 				} else {
-					right += shaped.XForIndex(endIx - offset)
+					right += shaped.xForIndex(endIx - offset)
 				}
 				corners = append(corners, pointCorners{
 					topLeft:     gpui.Point{X: left, Y: y},
@@ -584,6 +584,9 @@ func mustShapeLine(w *gpui.Window, text string, fontSize float32, runs []gpui.Te
 
 // layoutLines shapes the visible lines (U:input/base/element.rs:1867-1987).
 func layoutLines[M InputModeKind](state *InputBaseState[M], displayText *rope.Rope, layout *lastLayout, fontSize float32, runs []gpui.TextRun, bgSegments []inputColoredRange, indicators *whitespaceIndicators, w *gpui.Window) []*inputLineLayout {
+	if state.tokensVisible() {
+		return layoutTokenLines(state, layout, fontSize, runs, w)
+	}
 	if state.IsSingleLine() {
 		text := displayText.String()
 		lineRuns := runs
@@ -626,7 +629,12 @@ func layoutLines[M InputModeKind](state *InputBaseState[M], displayText *rope.Ro
 			wrapped = append(wrapped, mustShapeLine(w, sub, fontSize, lineRuns))
 			lineHasBackground = lineHasBackground || hasBackground(lineRuns)
 		}
-		lines = append(lines, newInputLineLayout(wrapped).withBackground(lineHasBackground).withWhitespaces(indicators))
+		// Continuation lines take the first visual line's indentation width.
+		var wrapIndent float32
+		if item, ok := state.displayMap.line(bufferLine); ok && item.indent > 0 && len(wrapped) > 1 {
+			wrapIndent = wrapped[0].XForIndex(nthCharByteIndex(lineText, int(item.indent)))
+		}
+		lines = append(lines, newInputLineLayout(wrapped).withWrapIndent(wrapIndent).withBackground(lineHasBackground).withWhitespaces(indicators))
 		// +1 for the `\n`.
 		runOffset += len(lineText) + 1
 	}
@@ -651,6 +659,7 @@ type textPrepaintState struct {
 	currentRow         int
 	hasCurrentRow      bool
 	selectionPaths     []*gpui.Path
+	tokenElements      []gpui.AnyElement
 	documentColorPaths []coloredPath
 	hitbox             gpui.Hitbox
 	bounds             gpui.Bounds
@@ -797,6 +806,11 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 	// Past the end of a line a pointer is measured in spaces.
 	spaceWidth := w.TextSystem().LayoutWidth(font, textSize, ' ')
 
+	_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, _ *inputCx[M]) {
+		s.displayMap.setFont(font, textSize, w)
+		s.displayMap.ensureTextPrepared(s.text, w)
+	})
+
 	state := e.read(app)
 	multiLine := state.IsMultiLine()
 	text := state.text
@@ -826,7 +840,18 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 		wrapWidth = &width
 	}
 
+	wrappingIndent := state.wrappingIndent
+	wrapWidthChanged := state.lastLayout == nil || !equalF32Ptr(state.lastLayout.wrapWidth, wrapWidth)
+	wrappingIndentChanged := state.lastLayout == nil || state.lastLayout.wrappingIndent != wrappingIndent
+	if wrapWidthChanged || wrappingIndentChanged {
+		_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, _ *inputCx[M]) {
+			s.displayMap.onLayoutChanged(wrapWidth, w)
+			s.displayMap.setWrappingIndent(wrappingIndent, w)
+		})
+	}
+
 	lineHeight := w.LineHeight()
+	measuredTokens := e.measureTokens(max(bounds.Size.Width-lineNumberWidth-inputRightMargin, 1), lineHeight, bounds.Size.Height, w, app)
 	visibleRange, visibleBufferLines, visibleTop := calculateVisibleRange(state, lineHeight, bounds.Size.Height)
 	ext := state.ext()
 	visibleStartOffset := ext.LineStartOffset(visibleRange.Start)
@@ -855,6 +880,7 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 		visibleRangeOffset:     visibleRangeOffset,
 		lineHeight:             lineHeight,
 		wrapWidth:              wrapWidth,
+		wrappingIndent:         wrappingIndent,
 		lineNumberWidth:        lineNumberWidth,
 		spaceWidth:             spaceWidth,
 		textAlign:              state.textAlign,
@@ -916,6 +942,16 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 		key.width = longestLineWidth
 		state.longestLineWidth = &key
 	}
+	if state.tokensVisible() {
+		switch {
+		case wrapWidth != nil:
+			longestLineWidth = *wrapWidth
+		case state.tokenLayoutCache != nil:
+			longestLineWidth = state.tokenLayoutCache.unwrappedWidth
+		default:
+			longestLineWidth = 0
+		}
+	}
 	layout.lines = lines
 
 	totalWrappedLines := state.displayMap.wrapRowCount()
@@ -953,6 +989,7 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 	}
 
 	hitbox := w.InsertHitbox(inputBounds, gpui.HitboxNormal)
+	tokenElements := e.prepaintTokens(layout, bounds, measuredTokens, w, app)
 	return textPrepaintState{
 		lastLayout:         layout,
 		scrollSize:         scrollSize,
@@ -961,6 +998,7 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 		currentRow:         currentRow,
 		hasCurrentRow:      hasCurrentRow,
 		selectionPaths:     selectionPaths,
+		tokenElements:      tokenElements,
 		documentColorPaths: documentColorPaths,
 		hitbox:             hitbox,
 		bounds:             bounds,
@@ -1029,6 +1067,11 @@ func (e *textElement[M]) Paint(_ *gpui.GlobalElementID, _ *gpui.InspectorElement
 		offsetY += line.size(lineHeight).Height
 	}
 
+	// Token elements paint over the text (U:input/base/element.rs:3076-3078).
+	for _, element := range prepaint.tokenElements {
+		element.Paint(w, app)
+	}
+
 	// Carets (one blink state for every caret).
 	if focused && showCursor {
 		for _, info := range prepaint.cursorInfosWithScroll() {
@@ -1036,7 +1079,7 @@ func (e *textElement[M]) Paint(_ *gpui.GlobalElementID, _ *gpui.InspectorElement
 		}
 	}
 
-	e.state.Update(app, func(s *InputBaseState[M], cx *inputCx[M]) {
+	_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
 		geometryChanged := s.lastBounds == nil || *s.lastBounds != bounds ||
 			s.inputBounds != inputBounds ||
 			s.scrollSize != prepaint.scrollSize ||
@@ -1048,7 +1091,7 @@ func (e *textElement[M]) Paint(_ *gpui.GlobalElementID, _ *gpui.InspectorElement
 		s.lastBounds = &b
 		cursor := s.Cursor()
 		s.lastCursor = &cursor
-		s.setInputBounds(inputBounds, cx)
+		s.setInputBounds(inputBounds, w, cx)
 		sel := selected
 		s.lastSelectedRange = &sel
 		s.scrollSize = prepaint.scrollSize

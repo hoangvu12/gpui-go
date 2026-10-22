@@ -27,21 +27,8 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Stand-ins for later tickets (inline tokens, touch selection, search)
+// Stand-ins for later tickets (touch selection, search)
 // ---------------------------------------------------------------------------
-
-// tokenBoundary snaps offset out of an inline token; with no token spans
-// it is the identity (U:input/base/inline_tokens.rs:257-269).
-func (s *InputBaseState[M]) tokenBoundary(offset int, _ sumtree.Bias) int { return offset }
-
-// normalizeTokenRange widens a range over whole tokens; with no token
-// spans it is the identity (U:input/base/inline_tokens.rs:270-281).
-func (s *InputBaseState[M]) normalizeTokenRange(rng InputSelection) InputSelection { return rng }
-
-// editTokens shifts the token spans over an edit and returns their delta;
-// with no token store there is none (U:input/base/inline_tokens.rs:
-// 282-300).
-func (s *InputBaseState[M]) editTokens(InputSelection, int) any { return nil }
 
 // dismissTouchSelection drops the touch handles and edit menu; with no
 // touch selection it is a no-op (U:input/base/touch.rs:86-92).
@@ -571,7 +558,7 @@ func collapseForIntent(intent editIntent, sel cursorSelection, rng InputSelectio
 // (U:input/base/state.rs:2745-2792). text is the pre-edit text.
 func (s *InputBaseState[M]) pushHistory(text rope.Rope, rng InputSelection, newText string, requestedIntent *editIntent, selectionBefore cursorSelection, selectionAfter *cursorSelection) bool {
 	s.documentRevision++
-	tokenDelta := s.editTokens(rng, len(newText))
+	delta := s.editTokens(rng, len(newText))
 	if s.undoManager.isIgnoring() {
 		return false
 	}
@@ -599,7 +586,11 @@ func (s *InputBaseState[M]) pushHistory(text rope.Rope, rng InputSelection, newT
 
 	openTransaction := s.undoManager.hasOpenTransaction()
 	c := newChange(rng, oldText, newRange, newText)
-	c.tokenDelta = tokenDelta
+	// change.tokenDelta is `any` (input_change.go): store only a non-nil
+	// delta so the undo manager's nil checks see None.
+	if delta != nil {
+		c.tokenDelta = delta
+	}
 	recorded := s.undoManager.recordTransaction(c, intent)
 	// A batch records its own cursor sets; this covers a change that is a
 	// transaction on its own.
@@ -620,9 +611,8 @@ func (s *InputBaseState[M]) redo(_ *Redo, w *gpui.Window, cx *inputCx[M]) {
 }
 
 // replayHistory replays one transaction backwards or forwards
-// (U:input/base/state.rs:2802-2850). With no inline tokens the replay is
-// never token-aware; the auto-closed pairs restore joins with the editor
-// auto-close port.
+// (U:input/base/state.rs:2802-2850). The auto-closed pairs restore joins
+// with the editor auto-close port.
 func (s *InputBaseState[M]) replayHistory(undo bool, w *gpui.Window, cx *inputCx[M]) {
 	if !s.IsEditable() {
 		return
@@ -637,9 +627,9 @@ func (s *InputBaseState[M]) replayHistory(undo bool, w *gpui.Window, cx *inputCx
 	if !ok {
 		return
 	}
-	tokenAware := false
+	tokenAware := s.inlineTokens != nil
 	for _, c := range r.changes {
-		if c.tokenDelta != nil {
+		if d, _ := c.tokenDelta.(*tokenDelta); d != nil {
 			tokenAware = true
 		}
 	}
@@ -656,6 +646,8 @@ func (s *InputBaseState[M]) replayHistory(undo bool, w *gpui.Window, cx *inputCx
 		}
 		rngUTF16 := s.rangeToUTF16(rng)
 		s.replaceTextInRangeSilent(&rngUTF16, text, w, cx)
+		d, _ := c.tokenDelta.(*tokenDelta)
+		s.replayTokens(rng, len(text), d, undo)
 	}
 	s.restoreSelections(r.selections)
 	if tokenAware {
@@ -717,6 +709,19 @@ func (s *InputBaseState[M]) replaceTextInRanges(edits []inputTextEdit, w *gpui.W
 		sorted = append(sorted, inputTextEdit{rng: s.normalizeTokenRange(e.rng), text: e.text})
 	}
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].rng.Start > sorted[j].rng.Start })
+	// Ranges widened over one token merge (U:input/base/state.rs:3624-3638).
+	if len(s.tokenSpans()) > 0 {
+		merged := make([]inputTextEdit, 0, len(sorted))
+		for _, e := range sorted {
+			if n := len(merged); n > 0 && (e.rng.End > merged[n-1].rng.Start || e.rng == merged[n-1].rng) {
+				last := &merged[n-1]
+				last.rng = NewInputSelection(min(e.rng.Start, last.rng.Start), max(e.rng.End, last.rng.End))
+				continue
+			}
+			merged = append(merged, e)
+		}
+		sorted = merged
+	}
 
 	var requestedIntent *editIntent
 	if intent, ok := s.undoManager.takePendingIntent(); ok {
@@ -747,7 +752,10 @@ func (s *InputBaseState[M]) replaceTextInRanges(edits []inputTextEdit, w *gpui.W
 		if s.pushHistory(oldText, e.rng, e.text, requestedIntent, selectionBefore, nil) {
 			recorded = true
 		}
-		s.displayMap.setText(s.text)
+		// Incremental, single-range updates run per edit
+		// (U:input/base/state.rs:3693-3697).
+		s.displayMap.adjustFoldsForEdit(oldText, e.rng, e.text)
+		s.displayMap.onTextChanged(s.text, e.rng, e.text, w)
 
 		if group {
 			if s.IsCodeEditor() {
@@ -981,7 +989,10 @@ func (s *InputBaseState[M]) ReplaceTextInRange(rngUTF16 *gpui.UTF16Range, newTex
 	} else {
 		s.pushHistory(oldText, rng, newText, requestedIntent, selectionBefore, nil)
 	}
-	s.displayMap.setText(s.text)
+	// Adjust folds before the wrap map: drop overlapping folds, shift the
+	// others (U:input/base/state.rs:4090-4093).
+	s.displayMap.adjustFoldsForEdit(oldText, rng, newText)
+	s.displayMap.onTextChanged(s.text, rng, newText, w)
 
 	if s.IsCodeEditor() {
 		s.hooks.driveHighlighter(s, replacementInputEdit(oldText, s.text, rng, newText), s.text, s.mode.isFolding(), w, cx)
@@ -1070,7 +1081,9 @@ func (s *InputBaseState[M]) ReplaceAndMarkTextInRange(rngUTF16 *gpui.UTF16Range,
 	}
 
 	s.hooks.adjustAnnotations(s, rng, len(newText))
-	s.displayMap.setText(s.text)
+	// U:input/base/state.rs:4208-4211.
+	s.displayMap.adjustFoldsForEdit(oldText, rng, newText)
+	s.displayMap.onTextChanged(s.text, rng, newText, w)
 	if s.IsCodeEditor() {
 		s.hooks.driveHighlighter(s, replacementInputEdit(oldText, s.text, rng, newText), s.text, s.mode.isFolding(), w, cx)
 	}
