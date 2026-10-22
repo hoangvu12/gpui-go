@@ -13,9 +13,6 @@ package base
 //     told apart by their y, a row's right end taken from the next row's
 //     start or, for the last character of a row, from the width of the
 //     row's text shaped alone (WindowTextSystem.ShapeLine).
-//   - paint_origin. The port's StyledText prepaint commits its own layout
-//     bounds (gpui/styled_text.go prepaint), so paint_origin positions the
-//     hitbox and selection geometry only.
 //   - The text-view state stack lives in this package's textViewStateStack
 //     global (text_state.go), not in GlobalState (global_state.go is not
 //     this ticket's file).
@@ -353,7 +350,11 @@ func newInlineText(state *inlineState, links []textLinkRange, highlights []inlin
 // (U:text/inline.rs:381-385).
 func (e *inlineText) withTextStyle(style gpui.TextStyle) *inlineText { e.textStyle = &style; return e }
 
-// withPaintOrigin keeps the flow's baseline (U:text/inline.rs:387-391).
+// withPaintOrigin keeps the flow's baseline (U:text/inline.rs:387-391):
+// the hitbox, line span and selection geometry use the flow's unsnapped
+// fragment origin over the layout's bounds (U:text/inline.rs:904, 942).
+// The text itself is placed by StyledText from its own layout bounds
+// (R:elements/text.rs:1002-1018), as upstream.
 func (e *inlineText) withPaintOrigin(origin gpui.Point) *inlineText {
 	e.paintOrigin = &origin
 	return e

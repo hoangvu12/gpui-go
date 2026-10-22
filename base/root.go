@@ -2,16 +2,19 @@ package base
 
 // Window roots and presentation-layer plugins (U:root.rs).
 //
-// Deviations, each joining with the ticket that ports its dependency:
+// Go adaptations and deviations:
 //
-//   - The Copy action handling — the ctrl-c binding (U:root.rs:17-21) and
-//     on_action_copy (U:root.rs:264-273) — needs input::Copy (ticket 20)
-//     and TextSelection::selected_text (ticket 29).
-//   - The TextSelectionLayer child (U:root.rs:293) arrives with ticket 29.
+//   - The copy binding's #[cfg(target_os = "macos")] pair
+//     (U:root.rs:17-21) is a runtime.GOOS check, as in inputInit.
+//   - on_action_copy (U:root.rs:264-273) writes through App.WriteClipboard,
+//     which reports failures the pinned write_to_clipboard only logs; the
+//     error is dropped like the input's copy (input_state_edit.go).
 //   - install_window_hit_test_forwarder (U:root.rs:148-149) is macOS-only.
 
 import (
 	"reflect"
+	"runtime"
+	"strings"
 
 	"github.com/hoangvu12/gpui-go/gpui"
 )
@@ -32,12 +35,18 @@ var (
 // rootContext is the root key context (U:root.rs:12).
 const rootContext = "Root"
 
-// rootInit binds the root keys (U:root.rs:14-23).
+// rootInit binds the root keys (U:root.rs:14-23): Tab, TabPrev and the
+// platform's copy keystroke for input::Copy.
 func rootInit(app *gpui.App) {
 	ctx := rootContext
+	copyKeys := "ctrl-c"
+	if runtime.GOOS == "darwin" {
+		copyKeys = "cmd-c"
+	}
 	app.BindKeys(
 		gpui.NewKeyBinding("tab", rootTabAction.Box(rootTab{}), &ctx),
 		gpui.NewKeyBinding("shift-tab", rootTabPrevAction.Box(rootTabPrev{}), &ctx),
+		gpui.NewKeyBinding(copyKeys, CopyAction.Box(Copy{}), &ctx),
 	)
 }
 
@@ -270,6 +279,18 @@ func (r *Root) onActionTabPrev(_ *rootTabPrev, w *gpui.Window, cx *gpui.Context[
 	r.cycleFocus(w, cx.App(), w.FocusPrev)
 }
 
+// onActionCopy copies the window's text selection (U:root.rs:264-273): the
+// selected text, trimmed, goes to the clipboard; with nothing selected the
+// action propagates.
+func (r *Root) onActionCopy(_ *Copy, w *gpui.Window, cx *gpui.Context[Root]) {
+	text := strings.TrimSpace(TextSelectionSelectedText(w, cx.App()))
+	if text == "" {
+		cx.Propagate()
+		return
+	}
+	_ = cx.App().WriteClipboard(gpui.NewClipboardStringItem(text))
+}
+
 // cycleFocus is the shared body of the Tab handlers: when focus is inside
 // a focus trap and the move leaves it, keep moving until focus is back
 // inside, or until it cycles back to where it started.
@@ -313,8 +334,12 @@ func (r *Root) Render(w *gpui.Window, cx *gpui.Context[Root]) gpui.AnyElement {
 		OnAction(rootTabPrevAction, cx.Listener(func(r *Root, a *rootTabPrev, w *gpui.Window, cx *gpui.Context[Root]) {
 			r.onActionTabPrev(a, w, cx)
 		})).
+		OnAction(CopyAction, cx.Listener(func(r *Root, a *Copy, w *gpui.Window, cx *gpui.Context[Root]) {
+			r.onActionCopy(a, w, cx)
+		})).
 		Relative().
 		SizeFull().
+		Child(TextSelectionLayer{}).
 		Child(r.view).
 		Child(gpui.Div().Absolute().Inset0().Children(overlays...))
 	for _, plugin := range r.plugins {

@@ -267,12 +267,9 @@ func (o *inlineObject) Paint(_ *gpui.GlobalElementID, _ *gpui.InspectorElementID
 		if o.link == nil {
 			w.SetCursorStyle(gpui.CursorIBeam, hitbox)
 		}
-		// The hitbox holds the bounds the object was prepainted at: gpui's
-		// paint phase recomputes layout bounds without the root element
-		// offset its prepaint ran under (ticket 29 report).
-		visible := textBoundsIntersect(hitbox.Bounds, gpui.ContentMask(w))
+		visible := textBoundsIntersect(bounds, gpui.ContentMask(w))
 		if visible.Size.Width > 0 && visible.Size.Height > 0 && textSelectionRegisterInline != nil {
-			textSelectionRegisterInline(view, []gpui.Bounds{visible}, "", nil, hitbox.Bounds, app)
+			textSelectionRegisterInline(view, []gpui.Bounds{visible}, "", nil, bounds, app)
 		}
 		box := *hitbox
 		selectedState := o.selected

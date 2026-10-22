@@ -4,7 +4,7 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: 29
 
@@ -29,3 +29,20 @@ Root mounts the text selection layer and copies the selection, `ElementExt` offe
 ## Comments
 
 - 2026-10-23 — Created by the base-port-2 orchestrator from ticket 29's report, then claimed and delegated.
+- 2026-10-23 — Worker finished. The orchestrator verified it on a snapshot.
+
+## Answer
+
+All three parts are done:
+- Root mounts `TextSelectionLayer` as its first child and copies the selection on ctrl-c (cmd-c on macOS), propagating when the selection is blank.
+- `ElementExt.TextSelectionScope` is added.
+- Core fix: `drawable` stores its bounds at prepaint, and paint passes them to `Element.Paint` instead of re-querying the layout (R:element.rs:537-600). Elements prepainted at an offset now paint at that offset. Inline objects drop 28/29's `hitbox.Bounds` workaround.
+
+28's `paintOrigin` is upstream behaviour, so it stays.
+
+Orchestrator re-run on a snapshot of HEAD plus 36's files:
+- vet, gofmt and build are clean
+- `go test ./base` has 1017 pass and 3 skip, and `-count=2` is ok
+- gpui and 9 spec packages that paint are ok
+
+Follow-up: some manual offset re-application around paint is now redundant but harmless; the evidence lists the sites. Evidence: [ticket36-selection-wiring-paint-bounds.json](../../../evidence/base/ticket36-selection-wiring-paint-bounds.json).

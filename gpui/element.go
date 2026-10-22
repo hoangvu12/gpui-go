@@ -474,6 +474,11 @@ type drawable[L, P any, E Element[L, P]] struct {
 	// populated when the element has an id.
 	global    *GlobalElementID
 	inspector *InspectorElementID
+	// bounds are the layout bounds resolved at prepaint, under the
+	// element offset prepaint ran with, and handed unchanged to paint
+	// (the reference ElementDrawPhase::Prepaint::bounds, element.rs:
+	// 537-545, consumed by Drawable::paint at 557-600).
+	bounds Bounds
 	// inlineFragments is the fragment geometry of this element's layout
 	// node, captured when prepaint runs and replayed around paint (the
 	// reference Drawable's ElementDrawPhase::Prepaint::inline_fragments).
@@ -572,6 +577,7 @@ func (d *drawable[L, P, E]) prepaint(global *GlobalElementID, inspector *Inspect
 		panic(fmt.Sprintf("gpui: prepaint could not resolve layout bounds: %v", err))
 	}
 	d.phase = phasePrepainted
+	d.bounds = bounds
 	// Scope this element's placed fragment geometry around its
 	// prepaint (the reference Drawable::prepaint swaps
 	// window.current_inline_fragments with window.inline_fragments)
@@ -599,7 +605,11 @@ func (d *drawable[L, P, E]) prepaint(global *GlobalElementID, inspector *Inspect
 }
 
 // paint implements elementObject: runs the typed paint phase with the
-// committed bounds and phase states (the reference Drawable::paint).
+// bounds committed at prepaint and the phase states (the reference
+// Drawable::paint, element.rs:557-600, which destructures the Prepaint
+// phase's bounds rather than querying the layout again). An element
+// prepainted under an absolute offset (PrepaintAt, PrepaintAsRoot)
+// therefore paints at that offset whatever offset its paint runs under.
 func (d *drawable[L, P, E]) paint(global *GlobalElementID, inspector *InspectorElementID, w *Window, app *App) {
 	if d.phase != phasePrepainted {
 		panic("gpui: must call prepaint before paint")
@@ -609,10 +619,7 @@ func (d *drawable[L, P, E]) paint(global *GlobalElementID, inspector *InspectorE
 		pushElementID(w, ownID)
 		defer popElementID(w)
 	}
-	bounds, err := layoutBoundsOf(w, d.layoutID)
-	if err != nil {
-		panic(fmt.Sprintf("gpui: paint could not resolve layout bounds: %v", err))
-	}
+	bounds := d.bounds
 	d.phase = phasePainted
 	// Replay the fragments captured at prepaint around paint (the
 	// reference Drawable::paint swaps current_inline_fragments with the
