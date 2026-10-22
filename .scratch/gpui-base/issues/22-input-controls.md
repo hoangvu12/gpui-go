@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: 16, 17, 20
 
 ## Question
@@ -32,3 +32,4 @@ NumberInput, OtpInput, TimeField, Select, Combobox, Calendar, DatePicker and Col
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-23 — Claimed and delegated. Owns new base/{number_input,otp_input,time_field,select,combobox,calendar,date_picker,color_picker}*.go and the Init lines in base/lib.go. It reports any needed input-engine change to the orchestrator (21 owns those files); it also ports state.rs test_number_step.

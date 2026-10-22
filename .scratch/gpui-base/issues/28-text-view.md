@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: 10, 18, 27
 
 ## Question
@@ -31,3 +31,4 @@ TextView renders markdown documents (inline flow with embedded objects, code blo
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
 - 2026-10-22 — Note from the base-port-2 orchestrator: ticket 27 ports the node.rs data model into base/text_node.go; this ticket adds the rendering half (NodeContext, Paragraph/BlockNode render impls, caches) in separate files.
+- 2026-10-23 — Claimed by the base-port-2 successor orchestrator and delegated. Also owns text/inline_virtual_tests.rs and the 7 node.rs tests ticket 27 deferred; renders inline plugins from 27's registry.

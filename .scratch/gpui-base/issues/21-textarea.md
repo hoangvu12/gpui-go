@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: 20
 
 ## Question
@@ -30,3 +30,4 @@ A multi-line `Textarea` soft-wraps, moves vertically, scrolls and shows inline t
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-23 — Claimed and delegated. Owns the ticket-20 input engine files (base/input_{state*,element,layout,kind,movement,base,mode}.go and input.go) in order to replace the placeholder display map and the inline-token stand-ins, plus new base/input_{display_map,wrap_map,fold_map,text_wrapper,inline_line,inline_tokens,token_presentation,textarea}*.go.
