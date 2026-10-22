@@ -11,8 +11,49 @@ lists a few crates the DLL never links. The artifact manifest records the
 cargo tree of the actual build; the crate set is the intersection of the
 metadata's normal-dependency closure with that tree (which drops the
 build-script-only crates such as cc and embed-resource).
+
+The Go sources' own third-party material (the Tailwind CSS palette) is not
+in the cargo graph; GO_SOURCES below is written verbatim between the crate
+table and the license texts. Edit it here, not in the generated file.
 """
 import json, os, re, sys, collections, hashlib
+
+GO_SOURCES = '''
+## Go sources
+
+The Go packages of this module also include material from the project below, which is not part of the native library. Its license text follows it.
+
+### Tailwind CSS 3.4.17
+
+Source: https://github.com/tailwindlabs/tailwindcss (v3.4.17), MIT License.
+
+Covers the default color palette values in `cmd/tailwindgen/palette.go`, `gpui/tailwind_palette_generated.go` and `tw/palette_generated.go`, and the utility class names and scales that `Styled.Class` and the Tailwind-named `Styled` methods follow.
+
+```text
+MIT License
+
+Copyright (c) Tailwind Labs, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+'''
+
 meta = json.load(open(sys.argv[1], encoding='utf-8'))
 out = sys.argv[2]
 pk = {p['id']: p for p in meta['packages']}
@@ -71,6 +112,7 @@ with open(out, 'w', encoding='utf-8', newline='\n') as o:
         o.write("| " + " | ".join(x.replace('|', '/') for x in r) + " |\n")
     if missing:
         o.write("\nThese crates ship no license file in their published source; their declared license is in the table above: " + ", ".join(missing) + ".\n")
+    o.write(GO_SOURCES)
     o.write("\n## License texts\n")
     for h, (t, who) in texts.items():
         o.write("\n### " + who[0].split(' (')[0] + (f" and {len(who)-1} more" if len(who) > 1 else "") + "\n\n")

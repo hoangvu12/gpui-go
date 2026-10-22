@@ -15,50 +15,51 @@ func (i *Interactive[Self]) Group[_ lazy](group string) Self {
 }
 
 // Hover applies a style while the inner div is hovered (DivElement.Hover,
-// div.rs:970).
-func (i *Interactive[Self]) Hover[_ lazy](f func(StyleRefinement) StyleRefinement) Self {
+// div.rs:970). It takes the pinned closure or a StyleBuilder:
+// .Hover(gpui.Styles().Bg(tw.Slate700)).
+func (i *Interactive[Self]) Hover[F StyleArg](f F) Self {
 	i.Interactivity().Hover(f)
 	return i.self
 }
 
 // GroupHover applies a style while the named group is hovered
 // (DivElement.GroupHover, div.rs:980).
-func (i *Interactive[Self]) GroupHover[_ lazy](group string, f func(StyleRefinement) StyleRefinement) Self {
+func (i *Interactive[Self]) GroupHover[F StyleArg](group string, f F) Self {
 	i.Interactivity().GroupHover(group, f)
 	return i.self
 }
 
 // Active applies a style while the inner div is pressed
 // (DivElement.Active, div.rs:1786).
-func (i *Interactive[Self]) Active[_ lazy](f func(StyleRefinement) StyleRefinement) Self {
+func (i *Interactive[Self]) Active[F StyleArg](f F) Self {
 	i.Interactivity().Active(f)
 	return i.self
 }
 
 // GroupActive applies a style while the named group is pressed
 // (DivElement.GroupActive, div.rs:1795).
-func (i *Interactive[Self]) GroupActive[_ lazy](group string, f func(StyleRefinement) StyleRefinement) Self {
+func (i *Interactive[Self]) GroupActive[F StyleArg](group string, f F) Self {
 	i.Interactivity().GroupActive(group, f)
 	return i.self
 }
 
 // Focus applies a style while the inner div's tracked handle is focused
 // (DivElement.Focus, div.rs:1459).
-func (i *Interactive[Self]) Focus[_ lazy](f func(StyleRefinement) StyleRefinement) Self {
+func (i *Interactive[Self]) Focus[F StyleArg](f F) Self {
 	i.Interactivity().Focus(f)
 	return i.self
 }
 
 // InFocus applies a style while focus is within the inner div's tracked
 // handle (DivElement.InFocus, div.rs:1469).
-func (i *Interactive[Self]) InFocus[_ lazy](f func(StyleRefinement) StyleRefinement) Self {
+func (i *Interactive[Self]) InFocus[F StyleArg](f F) Self {
 	i.Interactivity().InFocus(f)
 	return i.self
 }
 
 // FocusVisible applies a style while the inner div is keyboard-focused
 // (DivElement.FocusVisible, div.rs:1481).
-func (i *Interactive[Self]) FocusVisible[_ lazy](f func(StyleRefinement) StyleRefinement) Self {
+func (i *Interactive[Self]) FocusVisible[F StyleArg](f F) Self {
 	i.Interactivity().FocusVisible(f)
 	return i.self
 }

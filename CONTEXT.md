@@ -19,6 +19,18 @@ Persistent application state with a logical identity, independent of any one ren
 A description consumed to construct one placement in an element tree. Reusing the underlying application data is distinct from attaching the same mutable recipe again.
 _Avoid_: Persistent component state, entity.
 
+**Class string**:
+A whitespace-separated list of Tailwind CSS utility classes applied to a styled element, each with at most one state variant (`hover:bg-slate-700`). Each class sets what the fluent method of the same name sets. Classes GPUI cannot express are reported rather than approximated. A gpui-go extension beyond the pin (ADR 0001).
+_Avoid_: className, stylesheet, CSS class.
+
+**StyleBuilder**:
+A standalone style refinement that belongs to no element and carries the whole fluent styling vocabulary. State styles (hover, active, focus, group) accept one in place of the pinned refinement closure.
+_Avoid_: Style object, style sheet.
+
+**Tailwind palette**:
+Tailwind CSS v3.4's default named colors (`slate-800`, `white`, …), available as Go values and as color names in class strings. Distinct from an application's theme colors, which are not class names.
+_Avoid_: Theme, design tokens.
+
 **View identity**:
 The identity that scopes a rendered view's retained element state within its parent path. Sharing model state does not require sharing a view identity.
 
