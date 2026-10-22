@@ -1,12 +1,12 @@
 # gpui-go
 
-gpui-go is a Go port of [GPUI-CE](https://github.com/gpui-ce/gpui-ce), a community-maintained fork of GPUI, the UI framework Zed is built with. It follows GPUI-CE at commit `254b5dbd47cbb5acbcc5bbdcbb322a339276c88a`, aims to behave like that core, and should look about 98% the same on screen. The 98% is a design target that no test reports as a score. You write views, entities and fluent element trees in Go much as you would in Rust, without a Rust toolchain or Rust compile times.
+gpui-go is a Go port of [GPUI-CE](https://github.com/gpui-ce/gpui-ce), a community-maintained fork of GPUI, the UI framework Zed is built with. It follows GPUI-CE at commit `254b5dbd47cbb5acbcc5bbdcbb322a339276c88a`. The goal is to behave like that core and look about 98% the same on screen. The 98% is a design target; no test measures it. You write views, entities and fluent element trees in Go much as you would in Rust, without a Rust toolchain or Rust compile times.
 
 ## What works
 
-The whole GPUI core is ported for Windows on AMD64. That covers layout (Taffy), text shaping and rasterization, the D3D11 and DirectComposition renderer, windows and input, including IME composition. It also covers accessibility through UI Automation, screen capture, the clipboard, drag and drop, SVG and image decoding.
+The whole GPUI core is ported for Windows on AMD64: layout (Taffy), text shaping and rasterization, the D3D11 and DirectComposition renderer, windows and input (including IME composition), accessibility through UI Automation, screen capture, the clipboard, drag and drop, and SVG and image decoding.
 
-GPUI Base, the component library that sits on top of the core, has not been ported. Other operating systems and architectures will come later.
+GPUI Base, the component library that sits on top of the core, is being ported and is not in a release yet. Other operating systems and architectures will come later.
 
 ## Install
 
@@ -16,7 +16,9 @@ You need Go 1.27 or newer on Windows AMD64.
 go get github.com/hoangvu12/gpui-go@v0.1.0
 ```
 
-Build with `CGO_ENABLED=0`. The project uses no cgo, so you need neither a C compiler nor Rust. The native services (text, layout, rendering, accessibility) live in one DLL that is embedded in the module. On first use the loader checks its SHA-256 against the embedded manifest and writes it to a per-user cache under `%LocalAppData%\gpui-go\native`. Nothing is downloaded at run time.
+v0.1.0 is the latest tag. Newer work, including the Tailwind-style authoring described below, is on `main` until the next release: `go get github.com/hoangvu12/gpui-go@main`.
+
+Build with `CGO_ENABLED=0`. The project uses no cgo, so you need neither a C compiler nor Rust. The native services (text, layout, rendering and accessibility) are in one DLL embedded in the module. On first use, the loader checks the DLL's SHA-256 against the embedded manifest and writes it to a per-user cache under `%LocalAppData%\gpui-go\native`. Nothing is downloaded at run time.
 
 ## A first window
 
@@ -51,11 +53,13 @@ func (h *hello) Render(w *gpui.Window, cx *gpui.Context[hello]) gpui.AnyElement 
 }
 ```
 
-The rest of the example creates the app and its Win32 host, opens the window with `App.OpenWindowView`, and presents frames. The present loop is still explicit. The window's `OnRedraw` hook hands the last drawn scene to the window's surface: `gpui.LastDrawnScene` returns the scene the frame loop built, and the window's `Surface.DrawScene` puts it on screen. Text drawn by the element tree presents too: the scene's glyph sprites live in the atlas the window's text system rasterized them into, so the loop passes `Window.GlyphAtlas()` alongside the scene (a scene without sprites ignores it, and drawing a sprite scene with a nil or foreign atlas fails with the typed `ErrSceneSpriteAtlas`). For larger programs, the real-window tests under `internal/*spec` exercise each subsystem against live windows. The [two-window counter](internal/authorspec/counter_window_test.go) is a good place to start, and [the consumer present loop](internal/presentspec/present_spec_test.go) shows element-tree text presented and read back pixel by pixel.
+The rest of the example creates the app and its Win32 host, opens the window with `App.OpenWindowView`, and presents frames. You still write the present loop yourself. The window's `OnRedraw` hook takes the scene the frame loop last built (`gpui.LastDrawnScene`) and draws it with the window's `Surface.DrawScene`. Text needs one more argument. Its glyph sprites live in the atlas the window's text system rasterized them into, so the loop passes `Window.GlyphAtlas()` along with the scene. A scene without sprites ignores the atlas, and a scene with sprites fails with the typed `ErrSceneSpriteAtlas` if the atlas is nil or a different one.
+
+For larger programs, look at the real-window tests under `internal/*spec`, which exercise each subsystem against live windows. The [two-window counter](internal/authorspec/counter_window_test.go) is a good place to start, and [the consumer present loop](internal/presentspec/present_spec_test.go) presents element-tree text and reads it back pixel by pixel.
 
 ## Updating the view from a listener
 
-Listeners run after `Render` returns, so a listener must not capture the entity handle that `cx.Entity()` hands out: in Go a borrow cannot keep a lease alive the way Rust's `Entity<T>` clone does, so that handle is callback-borrowed and expires when the render callback returns. The view's strong self-handle replaces the reference's `cx.entity()` capture pattern:
+Listeners run after `Render` returns, so a listener must not capture the entity handle from `cx.Entity()`. That handle is borrowed for the render callback and expires when the callback returns, because in Go a borrow cannot keep a lease alive the way a cloned Rust `Entity<T>` does. Where Rust GPUI code captures `cx.entity()`, use the view's strong self-handle:
 
 ```go
 type counter struct {
@@ -81,9 +85,9 @@ func (v *counter) Render(w *gpui.Window, cx *gpui.Context[counter]) gpui.AnyElem
 }
 ```
 
-`cx.StrongSelf()` is only valid inside the view's `Render` — it panics elsewhere with a misuse diagnostic. The window drawing the view owns one lease for the handle (shared by every render, so repeated renders do not accumulate leases), and that lease releases when the window closes. Never `Release` or `TransferInto` the self-handle; call `RetainInto` if you need an independently owned copy with its own lifetime, or `Downgrade` for a weak identity.
+`cx.StrongSelf()` works only inside the view's `Render`; anywhere else it panics with a misuse message. The window drawing the view owns one lease for the handle. Every render shares that lease, so repeated renders do not pile up leases, and it is released when the window closes. Never call `Release` or `TransferInto` on the self-handle. Call `RetainInto` for an independently owned copy with its own lifetime, or `Downgrade` for a weak identity.
 
-When a listener only needs to update the view's own state, `cx.Listener` is the lighter and preferred shape — it captures a weak identity, hands your callback the fresh state and context, and becomes a no-op after the view releases:
+When a listener only updates the view's own state, prefer `cx.Listener`. It is lighter: it captures a weak identity, passes your callback the current state and context, and does nothing once the view is released.
 
 ```go
 OnClick(cx.Listener(func(v *counter, _ *gpui.ClickEvent, _ *gpui.Window, cx *gpui.Context[counter]) {
@@ -92,9 +96,11 @@ OnClick(cx.Listener(func(v *counter, _ *gpui.ClickEvent, _ *gpui.Window, cx *gpu
 }))
 ```
 
-Use `cx.StrongSelf()` when porting GPUI code that captured `cx.entity()` into a closure and calls `Update` on it, or when a callback needs the handle as a value (for example to spawn work that updates the view from its result). Both shapes update the entity through an update — never mutate the state pointer captured in a closure directly. The real-window proof of both shapes is the [self-handle corpus](internal/authorspec/self_handle_window_test.go); the deterministic lease and release rules live in [internal/portfixture](internal/portfixture/self_handle_test.go).
+Use `cx.StrongSelf()` when porting GPUI code that captures `cx.entity()` in a closure and calls `Update` on it, or when a callback needs the handle as a value, for example to spawn work that updates the view with its result. Either way, change the entity's state inside an update, and never mutate the state pointer a closure captured. The [self-handle tests](internal/authorspec/self_handle_window_test.go) run both forms in real windows, and [internal/portfixture](internal/portfixture/self_handle_test.go) holds the deterministic lease and release rules.
 
-**Embedded fonts.** Apps that ship their own typefaces (embedded with `go:embed`, for instance) register the bytes before the first text layout:
+## Embedded fonts
+
+Apps that ship their own typefaces, embedded with `go:embed` for instance, register the font bytes before the first text layout:
 
 ```go
 ts, err := gpui.DefaultTextSystem()
@@ -102,11 +108,11 @@ if err != nil { /* ... */ }
 if _, err := ts.AddFont(geistBytes); err != nil { /* the bytes hold no font face */ }
 ```
 
-`TextSystem.AddFont` mirrors GPUI's `add_fonts`: family names come from each font's embedded name table, they appear in `FontNames`, and `FontDescriptor{Family: "Geist"}` resolves to the registered face for shaping and rasterization. Fonts are process-stable; there is no unregister. If a family resolves nowhere — an embedded font that failed to register, or a name that differs from the font's internal family name — `ResolveFont` still returns the fallback font (GPUI's behavior), but `FontIdentity.FamilyFound` is `false`, so the missing font is diagnosable.
+`TextSystem.AddFont` mirrors GPUI's `add_fonts`. Family names come from each font's name table and appear in `FontNames`, and `FontDescriptor{Family: "Geist"}` then resolves to the registered face for shaping and rasterization. A registered font stays for the life of the process; there is no unregister. If a family resolves nowhere, because the font failed to register or the name differs from the font's internal family name, `ResolveFont` still returns the fallback font as GPUI does. `FontIdentity.FamilyFound` is `false` in that case, so you can tell the font is missing.
 
 ## Tailwind-style authoring
 
-GPUI's style methods already follow Tailwind's names. gpui-go completes the mapping so that a Tailwind class always has a method of the same name (`items-center` is `ItemsCenter()`, `px-4` is `Px4()`, `w-1/2` is `W1_2()`, `bg-slate-800` is `Bg(tw.Slate800)`). Package [`tw`](tw) holds the Tailwind v3.4 color palette, state styles take a prebuilt style from `gpui.Styles()`, and `Class` applies a class string the way an HTML `class` attribute does:
+GPUI's style methods already use Tailwind's names, and gpui-go fills in the rest, so most Tailwind utility classes have a method of the same name: `items-center` is `ItemsCenter()`, `px-4` is `Px4()`, `w-1/2` is `W1_2()` and `bg-slate-800` is `Bg(tw.Slate800)`. Package [`tw`](tw) holds the Tailwind v3.4 color palette. The state methods (`Hover`, `Active` and the rest) take a style built with `gpui.Styles()`, and `Class` applies a class string the way an HTML `class` attribute does:
 
 ```go
 gpui.Div().
@@ -124,16 +130,18 @@ gpui.Div().ID("save").Flex().ItemsCenter().Gap2().Px4().Py2().RoundedLg().Bg(tw.
 	Active(gpui.Styles().Bg(tw.Slate900))
 ```
 
-`Class` parses each distinct string once and caches it. A class it cannot apply, such as a typo or a utility GPUI has no equivalent for (`z-10`, `sm:p-4`), is skipped and reported on stderr. `go run github.com/hoangvu12/gpui-go/cmd/twcheck ./...` finds those classes before the program runs. [docs/tailwind.md](docs/tailwind.md) is the full guide for people and coding agents who come from React and Tailwind. It covers the naming rule, what is and is not supported, and the GPUI rules that web code does not teach. These names are gpui-go additions beyond the GPUI-CE pin; [ADR 0001](docs/adr/0001-tailwind-authoring.md) records why.
+`Class` parses each distinct string once and caches the result. A class it cannot apply, such as a typo or a utility GPUI has no equivalent for (`z-10`, `sm:p-4`), is skipped and reported on stderr. `go run github.com/hoangvu12/gpui-go/cmd/twcheck ./...` finds those classes before the program runs.
+
+[docs/tailwind.md](docs/tailwind.md) is the full guide for people and coding agents coming from React and Tailwind. It covers the naming rule, what is supported, and the GPUI rules that web code never needs, such as calling `cx.Notify()` after a state change. These names go beyond the GPUI-CE pin; [ADR 0001](docs/adr/0001-tailwind-authoring.md) records why.
 
 ## Build speed
 
-A one-line edit in a UI package rebuilds in about 1–2 seconds. The fluent methods of `Styled`, `Parent` and `Interactive` (and so of `Div`, `Img`, `Canvas` and every `Component[Self]` component) are generic methods marked with an internal type parameter, `func (s *Styled[Self]) Flex[_ lazy]() Self`. You call them as usual (`d.Flex()`), and Go compiles only the methods a package actually calls. With ordinary methods, every package that mentioned a styled element recompiled the whole 3,100-method vocabulary. The one difference from ordinary methods is that a fluent method cannot be taken as a method value (`f := d.Flex`); wrap it in a closure instead. [internal/buildcostspec](internal/buildcostspec/buildcost_test.go) fails if a consumer package's compiled size grows back.
+A one-line edit in a UI package rebuilds in about 1 to 2 seconds. The fluent methods of `Styled`, `Parent` and `Interactive` (and so of `Div`, `Img`, `Canvas` and every `Component[Self]` component) are generic methods with an internal type parameter: `func (s *Styled[Self]) Flex[_ lazy]() Self`. You call them as usual (`d.Flex()`), and Go compiles only the methods a package calls. With ordinary methods, every package that mentions a styled element would recompile the whole vocabulary of about 3,100 methods. The catch is that you cannot take a fluent method as a method value (`f := d.Flex`); wrap it in a closure instead. [internal/buildcostspec](internal/buildcostspec/buildcost_test.go) fails if a consumer package's compiled size goes over its cap.
 
 ## Status
 
-Version 0.1.0 is the first tagged release. All 34 tickets in the core backlog are closed. The test suite drives real windows on a real GPU device, and the accessibility tree was checked with Narrator. Because this is a 0.x release, the API can still change. The planning record and the upstream research are linked from the [research index](docs/research-index.md).
+Version 0.1.0 is the first tagged release, and all 34 tickets in the core backlog are closed. The test suite drives real windows on a real GPU, and the accessibility tree was checked with Narrator. This is a 0.x release, so the API can still change. The [research index](docs/research-index.md) links the planning record and the upstream research.
 
 ## License
 
-gpui-go is licensed under the [Apache License 2.0](LICENSE), the same license as GPUI-CE. The embedded native library includes third-party crates, and the Tailwind color palette comes from Tailwind CSS (MIT); their licenses are collected in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+gpui-go is licensed under the [Apache License 2.0](LICENSE), the same license as GPUI-CE. The embedded native library includes third-party crates, and the color palette comes from Tailwind CSS (MIT). [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) collects their licenses.
