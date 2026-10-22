@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: 21
 
 ## Question
@@ -30,3 +30,4 @@ Blocked by: 21
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-23 — Claimed and delegated. Owns the input engine files (base/input*.go except the ticket-19 data layer, plus textarea*.go and number_input_step.go) and new base/editor*.go. Also owns the 61 editor-only state.rs tests that 21 marked not applicable, and the 9 element.rs editor tests 20 marked not applicable (gutter, decorations, editor scrollbar).
