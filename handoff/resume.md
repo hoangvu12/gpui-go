@@ -32,7 +32,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - 04 shadow/blur: chat 381132dd, worktree `gpui-go-wt-core-04`, branch `core/04-shadow-blur`
 - 40 gradients: verified, merged and RESOLVED.
 - 64 TSX host APIs: chat 24793476, worktree `gpui-go-wt-core-64`, branch `core/64-tsx-host-apis`
-- RUNNING NOW: 04, 06, 09, 10, 41, 64.
+- 10 hover: verified, merged and RESOLVED.
+- RUNNING NOW: 04, 06, 09, 41, 64.
 
 Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
 
