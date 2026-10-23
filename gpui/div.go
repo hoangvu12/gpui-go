@@ -810,6 +810,15 @@ type DivElement struct {
 	// dropListeners are the type-keyed drop listeners (div.rs
 	// drop_listeners: (TypeId, DropListener<dyn Any>)).
 	dropListeners []typedDropListener
+	// canDropPredicate is the element-level drop predicate (div.rs
+	// can_drop_predicate; CanDrop): hovered and the predicate.
+	canDropPredicate func(value any, hitbox *Hitbox, w *Window, app *App) bool
+	// dragOverStyle is the type-agnostic drag-over style (div.rs
+	// drag_over_style; OnDragOverAny).
+	dragOverStyle func(value any, w *Window, app *App) StyleRefinement
+	// groupDragOverStyles are the type-keyed group drag-over styles
+	// (div.rs group_drag_over_styles; GroupDragOver).
+	groupDragOverStyles []typedGroupStyle
 	// hitboxBehavior is this element's hitbox occlusion behavior (div.rs
 	// Interactivity hitbox behavior; Normal by default).
 	hitboxBehavior HitboxBehavior
@@ -1102,15 +1111,28 @@ type typedMouseListener[E any] struct {
 
 // typedDropListener is one type-keyed drop listener (div.rs
 // (TypeId, DropListener<dyn Any>)): the payload type plus the
-// on-drop callback (canDrop predicates arrive with the fuller drag
-// surface; the hover gate is the pin's default).
+// untyped can-drop predicate, drag-over style and on-drop callback,
+// each optional (dragdrop.go DropListener).
 type typedDropListener struct {
 	// payloadType is the drag value type the listener receives
 	// (reflect.TypeOf of the payload type).
 	payloadType reflect.Type
+	// canDrop, when set, decides whether a drag of the matching type
+	// may drop here (replacing the default hovered gate).
+	canDrop func(value any, hitbox *Hitbox, w *Window, app *App) bool
+	// onDragOver, when set, refines the element's style while a drag
+	// of the matching type that can drop hovers it.
+	onDragOver func(value any, w *Window, app *App) StyleRefinement
 	// onDrop receives the drag value and the mouse-up event when a
 	// drag of the matching type lands on this element.
 	onDrop func(value any, event *MouseUpEvent, w *Window, app *App)
+}
+
+// typedGroupStyle is a group style keyed by the drag payload type
+// (div.rs (TypeId, GroupStyle)).
+type typedGroupStyle struct {
+	payloadType reflect.Type
+	GroupStyle
 }
 
 // OnMouseMove binds a listener to the mouse moves over this element, in

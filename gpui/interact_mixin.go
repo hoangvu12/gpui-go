@@ -148,6 +148,47 @@ func (i *Interactive[Self]) OnDragMove[T any](f func(*DragMoveEvent[T], *Window,
 	return i.self
 }
 
+// OnDropAlt attaches a DropListener for drags of type T to the inner div
+// (DivElement.OnDropAlt, div.rs:1415).
+func (i *Interactive[Self]) OnDropAlt[T any](listener DropListener[T]) Self {
+	i.Interactivity().OnDropAlt(listener)
+	return i.self
+}
+
+// CanDrop gates drops and drag-over styles on the inner div
+// (DivElement.CanDrop, div.rs:1425).
+func (i *Interactive[Self]) CanDrop[_ lazy](predicate func(value any, w *Window, app *App) bool) Self {
+	i.Interactivity().CanDrop(predicate)
+	return i.self
+}
+
+// OnDragOver styles the inner div while a drag of type S hovers it
+// (DivElement.OnDragOver, div.rs:1344).
+func (i *Interactive[Self]) OnDragOver[S any](f func(style StyleRefinement, value *S, w *Window, app *App) StyleRefinement) Self {
+	i.Interactivity().OnDragOver(f)
+	return i.self
+}
+
+// DragOver is OnDragOver (DivElement.DragOver, div.rs:1336).
+func (i *Interactive[Self]) DragOver[S any](f func(style StyleRefinement, value *S, w *Window, app *App) StyleRefinement) Self {
+	i.Interactivity().DragOver(f)
+	return i.self
+}
+
+// OnDragOverAny styles the inner div while any droppable drag hovers it
+// (DivElement.OnDragOverAny, div.rs:1375).
+func (i *Interactive[Self]) OnDragOverAny[_ lazy](f func(style StyleRefinement, value any, w *Window, app *App) StyleRefinement) Self {
+	i.Interactivity().OnDragOverAny(f)
+	return i.self
+}
+
+// GroupDragOver styles the inner div while a drag of type S hovers the
+// named group (DivElement.GroupDragOver, div.rs:1384).
+func (i *Interactive[Self]) GroupDragOver[S any, F StyleArg](group string, f F) Self {
+	i.Interactivity().GroupDragOver[S](group, f)
+	return i.self
+}
+
 // OnAuxClick binds a non-primary click listener (DivElement.OnAuxClick,
 // div.rs:1826).
 func (i *Interactive[Self]) OnAuxClick[_ lazy](f func(*ClickEvent, *Window, *App)) Self {
