@@ -21,6 +21,8 @@ The destination for this map is a research-backed proposal. It covers which brow
 
 ## Decisions so far
 
+- [Spec](spec.md) (2026-10-23, /to-spec): a browser-like core, TSX scripting and Base in `gpui-go-base`; 111 user stories; four test seams (main: a browser-parity harness against headless Chrome fixtures). Triage: ready-for-agent.
+
 - **D0-D14 accepted as recommended** (the user, 2026-10-23: "good"). See [the proposal](../../research/browser-parity/README.md) section 5. D0 means the browser wins over the GPUI-CE pin wherever they differ, with each divergence recorded and its fixtures updated.
 - **D16:** Base goes to a new public repo, `gpui-go-base`. zterm and the gallery move with it for testing only and are never pushed.
 - **Rev 15 approved** (the user: "yea"): one native rebuild covering the Windows bold rule. Per D14 it is built as the R15 group defined by the spec.
