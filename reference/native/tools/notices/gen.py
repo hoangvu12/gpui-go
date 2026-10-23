@@ -143,6 +143,10 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
+### gpui-component (GPUI Base) c0820693
+
+Source: https://github.com/gpui-ce/gpui-component (commit `c08206932417f863062d2ab70cc2854c6ca04238`, `crates/base`), Apache License 2.0, Copyright 2024 - 2026 Longbridge <https://longbridge.com>. The `base` package and its subpackages are a Go port of that crate, and `base/testdata/dock` holds copies of its dock fixtures. The Apache License 2.0 text is this module's own `LICENSE` file.
+
 ### zed-sum-tree 0.2.0
 
 Source: https://crates.io/crates/zed-sum-tree (0.2.0), Apache License 2.0, Copyright 2022 - 2025 Zed Industries, Inc. `base/sumtree` is a Go port of its `sum_tree.rs` and `cursor.rs`. The Apache License 2.0 text is this module's own `LICENSE` file.
