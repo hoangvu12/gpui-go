@@ -54,11 +54,19 @@ package gpui
 // slot-reused) handle yields ErrTextStaleHandle from every query; a
 // malformed handle yields ErrTextBadHandle. Native panics are contained
 // by the service's catch_unwind boundary and surface as typed errors.
+// Lines owned by a window's line-layout cache never exhaust the bound:
+// a shape that reaches it parks the least recently used cache-owned
+// line's handle and retries, and the parked line re-shapes on its next
+// query (Base ticket 40; see TextSystem.shapeHandle). Lines a caller
+// shapes through ShapeText are never parked: their handles are the
+// caller's until Dispose.
 
 import (
+	"container/list"
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -371,6 +379,21 @@ type TextSystem struct {
 	// process-global and safe for concurrent use, so the counter must
 	// be too.
 	liveHandles atomic.Int64
+
+	// evictMu guards evictable, the least-recently-used order of the
+	// cache-owned lines whose native handles may be released under the
+	// live-handle bound (Base ticket 40). The reference has no such
+	// bound: its LineLayoutCache entries are Arc-held layouts with no
+	// platform resource. The port's native service bounds live shaping
+	// handles process-wide (256, frozen at rev 11), so a window — or
+	// several — needing more distinct shaped lines than that across the
+	// current and previous frame (or inside one frame) would fail every
+	// further shape. Instead, a shape that hits the bound parks the
+	// least recently used cache-owned line (its handle is released, its
+	// summary kept) and retries; a parked line re-shapes from its stored
+	// request the next time it is queried. Front = least recently used.
+	evictMu   sync.Mutex
+	evictable list.List
 }
 
 var (
@@ -631,21 +654,24 @@ func (ts *TextSystem) ShapeText(request TextLayoutRequest) (*WrappedLine, error)
 			Weight:        run.Font.Weight,
 			Style:         native.TextFontStyle(run.Font.Style),
 			Features:      featuresToNative(run.Font.Features),
-			Fallbacks:     run.Font.Fallbacks,
+			Fallbacks:     slices.Clone(run.Font.Fallbacks),
 			LetterSpacing: letterSpacing,
 		}
 	}
-	handle, err := ts.svc.Shape(native.ShapeRequest{
+	// The request is kept (deep-copied: the runs above, the constraint
+	// values below) so a parked cache-owned line can re-shape itself.
+	shapeRequest := native.ShapeRequest{
 		Text:      request.Text,
 		FontSize:  request.FontSize,
 		Runs:      specs,
-		WrapWidth: request.WrapWidth,
-		LineClamp: request.LineClamp,
-	})
+		WrapWidth: copyFloat32Ptr(request.WrapWidth),
+		LineClamp: copyUint32Ptr(request.LineClamp),
+	}
+	handle, err := ts.shapeHandle(shapeRequest, nil)
 	if err != nil {
 		return nil, wrapTextError("ShapeText", err)
 	}
-	line := &WrappedLine{system: ts, handle: handle}
+	line := &WrappedLine{system: ts, handle: handle, request: shapeRequest}
 	// The handle counts as live before the summary fetch so the failure
 	// path's own Dispose balances the counter.
 	ts.liveHandles.Add(1)
@@ -672,6 +698,189 @@ func featuresToNative(features []FontFeature) []native.FontFeature {
 func finiteFloat32(v float32) bool {
 	f := float64(v)
 	return !math.IsNaN(f) && !math.IsInf(f, 0)
+}
+
+// copyFloat32Ptr returns a fresh pointer to a copy of *v (nil for nil).
+func copyFloat32Ptr(v *float32) *float32 {
+	if v == nil {
+		return nil
+	}
+	c := *v
+	return &c
+}
+
+// copyUint32Ptr returns a fresh pointer to a copy of *v (nil for nil).
+func copyUint32Ptr(v *uint32) *uint32 {
+	if v == nil {
+		return nil
+	}
+	c := *v
+	return &c
+}
+
+// ---------------------------------------------------------------------------
+// The live-handle bound: parking cache-owned lines (Base ticket 40)
+// ---------------------------------------------------------------------------
+
+// shapeHandle shapes through the native service and, when the
+// process-wide live-handle bound is reached, parks the least recently
+// used cache-owned line (never except, the line being re-shaped) and
+// retries. It fails with the limit only when no cache-owned line is
+// left to park — every live handle is then held outside the caches.
+// The caller does not hold except.mu's peers; except.mu may be held.
+func (ts *TextSystem) shapeHandle(request native.ShapeRequest, except *WrappedLine) (native.ShapingID, error) {
+	for {
+		handle, err := ts.svc.Shape(request)
+		if err == nil {
+			return handle, nil
+		}
+		if !errors.Is(err, native.ErrTextShapingLimit) || !ts.parkOne(except) {
+			return 0, err
+		}
+	}
+}
+
+// parkOne releases the native handle of the least recently used
+// cache-owned line that is not in use right now (its mutex is free) and
+// is not except. It reports whether a handle was released.
+func (ts *TextSystem) parkOne(except *WrappedLine) bool {
+	for {
+		line := ts.takeParkCandidate(except)
+		if line == nil {
+			return false
+		}
+		released := line.parkLocked()
+		line.mu.Unlock()
+		if released {
+			return true
+		}
+	}
+}
+
+// takeParkCandidate removes and returns, locked, the least recently
+// used cache-owned line whose mutex is free (a line in use — mid-query
+// or mid-re-shape — is skipped, never waited for), or nil.
+func (ts *TextSystem) takeParkCandidate(except *WrappedLine) *WrappedLine {
+	ts.evictMu.Lock()
+	defer ts.evictMu.Unlock()
+	for e := ts.evictable.Front(); e != nil; e = e.Next() {
+		line := e.Value.(*WrappedLine)
+		if line == except || !line.mu.TryLock() {
+			continue
+		}
+		ts.evictable.Remove(e)
+		line.lru = nil
+		return line
+	}
+	return nil
+}
+
+// markEvictable enrolls a cache-owned line in the parking order (the
+// line-layout cache owns it: its only disposer is the cache, and every
+// query re-shapes a parked handle transparently). Idempotent.
+func (ts *TextSystem) markEvictable(line *WrappedLine) {
+	line.mu.Lock()
+	defer line.mu.Unlock()
+	if line.disposed.Load() || line.evictable {
+		return
+	}
+	line.evictable = true
+	if !line.parked {
+		ts.evictMu.Lock()
+		line.lru = ts.evictable.PushBack(line)
+		ts.evictMu.Unlock()
+	}
+}
+
+// touchLocked marks the line most recently used. The caller holds
+// line.mu.
+func (ts *TextSystem) touchLocked(line *WrappedLine) {
+	if !line.evictable || line.lru == nil {
+		return
+	}
+	ts.evictMu.Lock()
+	if line.lru != nil {
+		ts.evictable.MoveToBack(line.lru)
+	}
+	ts.evictMu.Unlock()
+}
+
+// forgetLocked removes the line from the parking order. The caller
+// holds line.mu.
+func (ts *TextSystem) forgetLocked(line *WrappedLine) {
+	ts.evictMu.Lock()
+	if line.lru != nil {
+		ts.evictable.Remove(line.lru)
+		line.lru = nil
+	}
+	ts.evictMu.Unlock()
+}
+
+// parkLocked releases the line's native handle, keeping its summary and
+// request: the next query re-shapes it. The caller holds line.mu and
+// has removed the line from the parking order. Reports whether a live
+// handle was released.
+func (l *WrappedLine) parkLocked() bool {
+	if l.parked || l.disposed.Load() {
+		return false
+	}
+	if err := l.system.svc.Dispose(l.handle); err != nil {
+		return false
+	}
+	l.system.liveHandles.Add(-1)
+	l.parked = true
+	return true
+}
+
+// handleLocked returns the line's live native handle, re-shaping a
+// parked line from its stored request first (which may park another
+// cache-owned line under the bound). The caller holds l.mu.
+func (l *WrappedLine) handleLocked(op string) (native.ShapingID, error) {
+	if l.disposed.Load() {
+		return 0, fmt.Errorf("gpui: %s: %w", op, ErrTextStaleHandle)
+	}
+	if !l.parked {
+		l.system.touchLocked(l)
+		return l.handle, nil
+	}
+	handle, err := l.system.shapeHandle(l.request, l)
+	if err != nil {
+		return 0, wrapTextError(op, err)
+	}
+	l.system.liveHandles.Add(1)
+	// The same request re-shapes the same layout; the summary is re-read
+	// so it always describes the live handle.
+	if err := l.refreshSummaryOf(handle); err != nil {
+		if l.system.svc.Dispose(handle) == nil {
+			l.system.liveHandles.Add(-1)
+		}
+		return 0, wrapTextError(op, err)
+	}
+	l.handle = handle
+	l.parked = false
+	if l.evictable {
+		l.system.evictMu.Lock()
+		l.lru = l.system.evictable.PushBack(l)
+		l.system.evictMu.Unlock()
+	}
+	return handle, nil
+}
+
+// withHandle runs f with the line's live native handle under the line's
+// mutex (a parked line re-shapes first; the handle cannot be parked
+// while f runs). f returns the raw native error; withHandle maps it to
+// the gpui seam's typed error under op.
+func (l *WrappedLine) withHandle(op string, f func(native.ShapingID) error) error {
+	if err := l.checkLive(op); err != nil {
+		return err
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	handle, err := l.handleLocked(op)
+	if err != nil {
+		return err
+	}
+	return wrapTextError(op, f(handle))
 }
 
 // ---------------------------------------------------------------------------
@@ -845,8 +1054,25 @@ type TextHit struct {
 // new wrap/clamp constraints.
 type WrappedLine struct {
 	system  *TextSystem
-	handle  native.ShapingID
 	summary TextLayoutSummary
+
+	// mu guards the native handle's use against its parking (Base
+	// ticket 40): every native query runs under it, and the parking
+	// walk only takes lines whose mutex is free.
+	mu sync.Mutex
+	// handle is the native shaping handle; meaningless while parked.
+	handle native.ShapingID
+	// request is the deep-copied shaping request (the wrap/clamp
+	// following Relayout) a parked line re-shapes from.
+	request native.ShapeRequest
+	// evictable marks a line owned by a line-layout cache (text_cache.go):
+	// its handle may be parked under the live-handle bound.
+	evictable bool
+	// parked reports a released handle: the next query re-shapes.
+	parked bool
+	// lru is the line's entry in the system's parking order (nil while
+	// parked, disposed or not evictable).
+	lru *list.Element
 
 	// clustersMu guards the lazily enumerated logical clusters (needed
 	// for beyond-end caret/cluster queries; the clusters are pure text
@@ -870,9 +1096,15 @@ func (l *WrappedLine) checkLive(op string) error {
 // refreshSummary re-reads the native layout summary (after shape and
 // after relayout).
 func (l *WrappedLine) refreshSummary() error {
-	layout, err := l.system.svc.LayoutInfo(l.handle)
+	return wrapTextError("layout summary", l.refreshSummaryOf(l.handle))
+}
+
+// refreshSummaryOf re-reads the summary through handle, returning the
+// raw native error.
+func (l *WrappedLine) refreshSummaryOf(handle native.ShapingID) error {
+	layout, err := l.system.svc.LayoutInfo(handle)
 	if err != nil {
-		return wrapTextError("layout summary", err)
+		return err
 	}
 	summary := TextLayoutSummary{
 		TextLen:        layout.TextLen,
@@ -924,12 +1156,14 @@ func (l *WrappedLine) LineCount() (int, error) {
 // Line returns one visual row's record under the given line height,
 // with the row placement the pinned paint path derives.
 func (l *WrappedLine) Line(index int, lineHeight float32) (TextLine, error) {
-	if err := l.checkLive("Line"); err != nil {
-		return TextLine{}, err
-	}
-	record, err := l.system.svc.Line(l.handle, index, lineHeight)
+	var record native.TextLine
+	err := l.withHandle("Line", func(handle native.ShapingID) error {
+		var err error
+		record, err = l.system.svc.Line(handle, index, lineHeight)
+		return err
+	})
 	if err != nil {
-		return TextLine{}, wrapTextError("Line", err)
+		return TextLine{}, err
 	}
 	return TextLine{
 		Index:         record.Index,
@@ -945,12 +1179,14 @@ func (l *WrappedLine) Line(index int, lineHeight float32) (TextLine, error) {
 
 // Fragments dumps the paint fragments in visual order.
 func (l *WrappedLine) Fragments() ([]TextFragment, error) {
-	if err := l.checkLive("Fragments"); err != nil {
-		return nil, err
-	}
-	records, err := l.system.svc.Fragments(l.handle)
+	var records []native.TextFragment
+	err := l.withHandle("Fragments", func(handle native.ShapingID) error {
+		var err error
+		records, err = l.system.svc.Fragments(handle)
+		return err
+	})
 	if err != nil {
-		return nil, wrapTextError("Fragments", err)
+		return nil, err
 	}
 	fragments := make([]TextFragment, len(records))
 	for i, record := range records {
@@ -969,12 +1205,14 @@ func (l *WrappedLine) Fragments() ([]TextFragment, error) {
 // Glyphs dumps the positioned glyphs (line-local x, baseline-relative
 // y) in fragment order.
 func (l *WrappedLine) Glyphs() ([]TextGlyph, error) {
-	if err := l.checkLive("Glyphs"); err != nil {
-		return nil, err
-	}
-	records, err := l.system.svc.Glyphs(l.handle)
+	var records []native.TextGlyph
+	err := l.withHandle("Glyphs", func(handle native.ShapingID) error {
+		var err error
+		records, err = l.system.svc.Glyphs(handle)
+		return err
+	})
 	if err != nil {
-		return nil, wrapTextError("Glyphs", err)
+		return nil, err
 	}
 	glyphs := make([]TextGlyph, len(records))
 	for i, record := range records {
@@ -1023,9 +1261,14 @@ func (l *WrappedLine) Caret(byteIndex int, affinity CaretAffinity, lineHeight fl
 		}
 		return caret, nil
 	}
-	record, err := l.system.svc.Caret(l.handle, byteIndex, native.CaretAffinity(affinity), lineHeight)
+	var record native.TextCaret
+	err := l.withHandle("Caret", func(handle native.ShapingID) error {
+		var err error
+		record, err = l.system.svc.Caret(handle, byteIndex, native.CaretAffinity(affinity), lineHeight)
+		return err
+	})
 	if err != nil {
-		return TextCaret{}, wrapTextError("Caret", err)
+		return TextCaret{}, err
 	}
 	caret := TextCaret{
 		Index:    record.Index,
@@ -1051,12 +1294,14 @@ func (l *WrappedLine) Caret(byteIndex int, affinity CaretAffinity, lineHeight fl
 // (the pinned closest_caret_for_pixel_point: Ok = inside a visual row,
 // Err = the edge caret for an outside point).
 func (l *WrappedLine) HitTest(x, y, lineHeight float32) (TextHit, error) {
-	if err := l.checkLive("HitTest"); err != nil {
-		return TextHit{}, err
-	}
-	record, err := l.system.svc.HitTest(l.handle, x, y, lineHeight)
+	var record native.TextHit
+	err := l.withHandle("HitTest", func(handle native.ShapingID) error {
+		var err error
+		record, err = l.system.svc.HitTest(handle, x, y, lineHeight)
+		return err
+	})
 	if err != nil {
-		return TextHit{}, wrapTextError("HitTest", err)
+		return TextHit{}, err
 	}
 	return TextHit{
 		Index:    record.Index,
@@ -1112,12 +1357,14 @@ func (l *WrappedLine) ByteIndexForPixelPoint(x, y, lineHeight float32) (int, boo
 // byte range under a line height (empty ranges produce none; rectangle
 // heights are exactly the line height).
 func (l *WrappedLine) SelectionRects(start, end int, lineHeight float32) ([]TextRect, error) {
-	if err := l.checkLive("SelectionRects"); err != nil {
-		return nil, err
-	}
-	records, err := l.system.svc.SelectionRects(l.handle, start, end, lineHeight)
+	var records []native.TextRect
+	err := l.withHandle("SelectionRects", func(handle native.ShapingID) error {
+		var err error
+		records, err = l.system.svc.SelectionRects(handle, start, end, lineHeight)
+		return err
+	})
 	if err != nil {
-		return nil, wrapTextError("SelectionRects", err)
+		return nil, err
 	}
 	if len(records) == 0 {
 		return nil, nil
@@ -1144,9 +1391,14 @@ func (l *WrappedLine) ClusterBefore(byteIndex int, affinity CaretAffinity) (Text
 	if byteIndex > l.summary.TextLen {
 		return l.logicalClusterBefore(byteIndex)
 	}
-	record, err := l.system.svc.Cluster(l.handle, byteIndex, native.CaretAffinity(affinity), native.ClusterBefore)
+	var record native.TextCluster
+	err := l.withHandle("ClusterBefore", func(handle native.ShapingID) error {
+		var err error
+		record, err = l.system.svc.Cluster(handle, byteIndex, native.CaretAffinity(affinity), native.ClusterBefore)
+		return err
+	})
 	if err != nil {
-		return TextCluster{}, wrapTextError("ClusterBefore", err)
+		return TextCluster{}, err
 	}
 	return TextCluster{Present: record.Present, Range: TextRange{Start: record.Range.Start, End: record.Range.End}}, nil
 }
@@ -1164,9 +1416,14 @@ func (l *WrappedLine) ClusterAfter(byteIndex int, affinity CaretAffinity) (TextC
 	if byteIndex > l.summary.TextLen {
 		return l.logicalClusterAfter(byteIndex)
 	}
-	record, err := l.system.svc.Cluster(l.handle, byteIndex, native.CaretAffinity(affinity), native.ClusterAfter)
+	var record native.TextCluster
+	err := l.withHandle("ClusterAfter", func(handle native.ShapingID) error {
+		var err error
+		record, err = l.system.svc.Cluster(handle, byteIndex, native.CaretAffinity(affinity), native.ClusterAfter)
+		return err
+	})
 	if err != nil {
-		return TextCluster{}, wrapTextError("ClusterAfter", err)
+		return TextCluster{}, err
 	}
 	return TextCluster{Present: record.Present, Range: TextRange{Start: record.Range.Start, End: record.Range.End}}, nil
 }
@@ -1243,21 +1500,32 @@ func (l *WrappedLine) Clusters() ([]TextRange, error) {
 // lock (the caller holds clustersMu).
 func (l *WrappedLine) clustersUncached() ([]TextRange, error) {
 	var clusters []TextRange
-	index := 0
-	for {
-		cluster, err := l.system.svc.Cluster(l.handle, index, native.CaretDownstream, native.ClusterAfter)
-		if err != nil {
-			return nil, wrapTextError("Clusters", err)
+	var advanceErr error
+	err := l.withHandle("Clusters", func(handle native.ShapingID) error {
+		index := 0
+		for {
+			cluster, err := l.system.svc.Cluster(handle, index, native.CaretDownstream, native.ClusterAfter)
+			if err != nil {
+				return err
+			}
+			if !cluster.Present {
+				return nil
+			}
+			if cluster.Range.End <= index {
+				advanceErr = fmt.Errorf("gpui: Clusters: %w: logical cluster %d..%d does not advance caret %d", ErrTextValue, cluster.Range.Start, cluster.Range.End, index)
+				return nil
+			}
+			clusters = append(clusters, TextRange{Start: cluster.Range.Start, End: cluster.Range.End})
+			index = cluster.Range.End
 		}
-		if !cluster.Present {
-			return clusters, nil
-		}
-		if cluster.Range.End <= index {
-			return nil, fmt.Errorf("gpui: Clusters: %w: logical cluster %d..%d does not advance caret %d", ErrTextValue, cluster.Range.Start, cluster.Range.End, index)
-		}
-		clusters = append(clusters, TextRange{Start: cluster.Range.Start, End: cluster.Range.End})
-		index = cluster.Range.End
+	})
+	if err != nil {
+		return nil, err
 	}
+	if advanceErr != nil {
+		return nil, advanceErr
+	}
+	return clusters, nil
 }
 
 // TextCluster is one logical-cluster (grapheme) query result.
@@ -1282,20 +1550,32 @@ func (l *WrappedLine) Relayout(wrapWidth *float32, lineClamp *uint32) error {
 	if lineClamp != nil && *lineClamp < 1 {
 		return fmt.Errorf("gpui: Relayout: %w: line clamp must be >= 1", ErrTextValue)
 	}
-	if err := l.system.svc.Relayout(l.handle, wrapWidth, lineClamp); err != nil {
-		return wrapTextError("Relayout", err)
-	}
-	return l.refreshSummary()
+	return l.withHandle("Relayout", func(handle native.ShapingID) error {
+		if err := l.system.svc.Relayout(handle, wrapWidth, lineClamp); err != nil {
+			return err
+		}
+		// A parked line re-shapes under the constraints it now carries.
+		l.request.WrapWidth = copyFloat32Ptr(wrapWidth)
+		l.request.LineClamp = copyUint32Ptr(lineClamp)
+		return l.refreshSummaryOf(handle)
+	})
 }
 
 // Dispose releases the native shaping handle; the line is stale
 // afterwards (every query fails with ErrTextStaleHandle). Dispose is
-// idempotent.
+// idempotent. A parked line holds no handle: it only leaves the
+// parking order.
 func (l *WrappedLine) Dispose() error {
 	if l == nil {
 		return nil
 	}
 	if l.disposed.Swap(true) {
+		return nil
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.system.forgetLocked(l)
+	if l.parked {
 		return nil
 	}
 	if err := l.system.svc.Dispose(l.handle); err != nil {

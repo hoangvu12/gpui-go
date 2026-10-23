@@ -4,7 +4,7 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: none
 
@@ -23,3 +23,11 @@ Found by the base-gallery build (examples/base-gallery):
 ## Comments
 
 - 2026-10-23 — Created and claimed by the orchestrator from the gallery worker's report.
+
+## Answer
+
+**Sprites.** Images and SVG now go into the window's own sprite atlas, which the present loop already passes, as the pin does (window.rs:4865/5009/5104). `DropImage` removes the image from every window's atlas.
+
+**Shaping cap.** The native handle bound is 256 per process. Cache-owned lines now sit in an LRU and are parked when that bound is hit, then re-shaped when next queried. The live count stays at or under 256, and a failed frame no longer latches. A failed first draw in `OpenWindowView` is logged and retried, where it used to panic the host.
+
+Headless tests cover all three. Orchestrator re-run on a snapshot: gpui (real-host tests skipped), 6 spec packages, base and the gallery are ok. Real-window checks are left until the machine is free. Evidence: [ticket40-core-image-sprites-shaping-cap.json](../../../evidence/base/ticket40-core-image-sprites-shaping-cap.json).

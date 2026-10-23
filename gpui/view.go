@@ -2,6 +2,7 @@ package gpui
 
 import (
 	"fmt"
+	"log"
 	"reflect"
 )
 
@@ -473,7 +474,16 @@ func (a *App) OpenWindowView(opts WindowOptions, build func(w *Window, app *App)
 			defer func() { activeFrame = previousActive }()
 			window.SetRootView(build(window, app))
 			if _, err := DrawWindowFrame(window); err != nil {
-				panic(fmt.Sprintf("gpui: OpenWindowView initial draw: %v", err))
+				// The reference open_window's draw cannot fail; the port's
+				// can (a layout or native failure). A panic here unwound
+				// through the host's window trampoline, which recorded it
+				// and failed Host.Stop much later (Base ticket 40: a window
+				// opened while the shaping handles were exhausted). Treat
+				// it like every later frame (frameloop.go requestFrame's
+				// log_err): log it and leave the window dirty, so the next
+				// frame request draws it again.
+				log.Printf("gpui: window %d initial draw: %v", uint64(window.id), err)
+				window.Refresh()
 			}
 		})
 	}) {
