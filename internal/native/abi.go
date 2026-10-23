@@ -39,8 +39,10 @@ const (
 	// the max_font_bytes scalar); the gpui-perf rebuild (ticket 05) bumped
 	// it to 13: scene service v4 (insert_batch), renderer service v4
 	// (frame-latency waitable swap chains, surface_frame_latency_handle)
-	// and no synthesized bold below weight 600.
-	nativeRevision uint32 = 13
+	// and no synthesized bold below weight 600; the zterm ticket 13 rebuild
+	// bumped it to 14: bold is synthesized only more than 200 above the
+	// matched static face's weight.
+	nativeRevision uint32 = 14
 	// maxBufferLen mirrors GPUI_GO_MAX_BUFFER_LEN.
 	maxBufferLen = 4096
 	// maxTextLen mirrors the text service's MAX_TEXT_BYTES (1 MiB text

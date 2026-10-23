@@ -20,11 +20,14 @@ import (
 // ---------------------------------------------------------------------------
 
 // The artifact identity recorded for the current native build (native
-// revision 13, the gpui-perf ticket 05 rebuild). These constants are the
+// revision 14, the zterm ticket 13 rebuild). These constants are the
 // evidence values the delivery checks compare the module's embedded
 // artifact against; they cite:
 //
-//   - evidence/perf/ticket05-native-rebuild.json (this rebuild's
+//   - evidence/zterm/ticket13-native-rebuild.json (this rebuild's
+//     recording: 18,877,952 bytes; sha256 14e76993…, static CRT,
+//     native revision 14, capability mask 0xFFF), which supersedes
+//   - evidence/perf/ticket05-native-rebuild.json (the previous
 //     recording: 18,877,952 bytes; sha256 0b6e9265…, static CRT,
 //     native revision 13, capability mask 0xFFF), which supersedes
 //   - evidence/consumer-gaps-03-register-fonts.json (the previous
@@ -38,11 +41,11 @@ import (
 // loudly instead of accepting a silent identity drift.
 const (
 	// EvidenceArtifactSHA256 is the recorded SHA-256 of the DLL.
-	EvidenceArtifactSHA256 = "0b6e9265e0d519ecaf56aba6f6905efab0bdc7be936d6085ea42cab28e234450"
+	EvidenceArtifactSHA256 = "14e76993da41b89b063e26cdfc8adc9c82300e29d532abb0bbd765dd8f8d52d0"
 	// EvidenceArtifactBytes is the recorded DLL size.
 	EvidenceArtifactBytes = 18877952
 	// EvidenceNativeRevision is the recorded native bridge revision.
-	EvidenceNativeRevision = 13
+	EvidenceNativeRevision = 14
 	// EvidenceCECommit is the pinned gpui-CE commit of the artifact.
 	EvidenceCECommit = "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a"
 	// EvidenceCRTOutcome is the recorded static-CRT outcome string.
