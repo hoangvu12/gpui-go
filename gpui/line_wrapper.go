@@ -79,6 +79,10 @@ const (
 	LineFragmentKindText LineFragmentKind = iota
 	// LineFragmentKindElement is a non-text element with a fixed width.
 	LineFragmentKindElement
+	// LineFragmentKindTab is one hard tab whose advance the caller
+	// resolved (a display map's tab stop): it wraps exactly like the
+	// '\t' text character, only its width is given instead of measured.
+	LineFragmentKindTab
 )
 
 // LineFragment is one fragment of a line to wrap (legacy
@@ -107,6 +111,17 @@ func LineFragmentElement(width float32, lenUTF8 int) LineFragment {
 	return LineFragment{Kind: LineFragmentKindElement, Width: width, LenUTF8: lenUTF8}
 }
 
+// LineFragmentTab creates a hard-tab fragment of a resolved width: a
+// '\t' character (one byte) that breaks and indents like the text
+// character but advances by width. A '\t' inside a text fragment keeps
+// the legacy width, the tab shaped alone (one full tab stop, as the
+// legacy layout_width measured it). Base ticket 44: Base's input expands
+// tabs to its tab-size columns (Zed's tab map), whose width depends on
+// the tab's column.
+func LineFragmentTab(width float32) LineFragment {
+	return LineFragment{Kind: LineFragmentKindTab, Width: width, LenUTF8: 1}
+}
+
 // Boundary is a boundary between two wrapped lines (legacy
 // line_wrapper.rs:729-742).
 type Boundary struct {
@@ -123,6 +138,9 @@ type wrapCandidate struct {
 	char    rune
 	width   float32
 	lenUTF8 int
+	// fixed marks a text character whose width is given (a resolved
+	// tab, LineFragmentTab) instead of measured.
+	fixed bool
 }
 
 // candidates expands the fragments into candidates (legacy
@@ -133,6 +151,10 @@ func wrapCandidates(fragments []LineFragment) []wrapCandidate {
 	for _, fragment := range fragments {
 		if fragment.Kind == LineFragmentKindElement {
 			out = append(out, wrapCandidate{element: true, width: fragment.Width, lenUTF8: fragment.LenUTF8})
+			continue
+		}
+		if fragment.Kind == LineFragmentKindTab {
+			out = append(out, wrapCandidate{char: '\t', width: fragment.Width, lenUTF8: 1, fixed: true})
 			continue
 		}
 		for _, ch := range fragment.Text {
@@ -190,7 +212,10 @@ func (lw *LineWrapper) WrapLine(fragments []LineFragment, wrapWidth float32) []B
 				firstNonWhitespaceIx = ix
 			}
 			newPrevC = c
-			charWidth := lw.widthForChar(c)
+			charWidth := candidate.width
+			if !candidate.fixed {
+				charWidth = lw.widthForChar(c)
+			}
 			charSpacing := float32(0)
 			if previousTextCharacter {
 				charSpacing = spacing

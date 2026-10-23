@@ -1796,6 +1796,7 @@
         "base/editor_element.go",
         "base/input_element.go",
         "base/input_state.go",
+        "base/input_tab_map.go",
         "base/input_token_presentation_element.go"
       ],
       "tests": {
@@ -2400,7 +2401,8 @@
         "evidence/base/ticket23-editor-basics.json"
       ],
       "go_files": [
-        "base/editor_indent.go"
+        "base/editor_indent.go",
+        "base/input_tab_map.go"
       ],
       "tests": {
         "total": 2,

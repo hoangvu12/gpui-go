@@ -54,30 +54,29 @@ type inputState struct {
 	colorPicker   gpui.Entity[base.ColorPickerState]
 }
 
-// editorExample indents with spaces: a hard tab draws as a missing
-// glyph in the editor (reported upstream of this example).
-const editorExample = `package main
-
-import "fmt"
-
-// Workspace counts lines per file.
-type Workspace struct {
-    Name  string
-    Files map[string]int
-}
-
-func (w *Workspace) Index(path string, lines int) {
-    w.Files[path] = lines
-}
-
-func main() {
-    ws := &Workspace{Name: "gpui-go", Files: map[string]int{}}
-    ws.Index("base/button.go", 128)
-    for path, lines := range ws.Files {
-        fmt.Println(path, lines)
-    }
-}
-`
+// editorExample indents with hard tabs, as gofmt does; the editor draws
+// each at its tab size in columns (TabSize 4, Base ticket 44).
+const editorExample = "package main\n" +
+	"\n" +
+	"import \"fmt\"\n" +
+	"\n" +
+	"// Workspace counts lines per file.\n" +
+	"type Workspace struct {\n" +
+	"\tName  string\n" +
+	"\tFiles map[string]int\n" +
+	"}\n" +
+	"\n" +
+	"func (w *Workspace) Index(path string, lines int) {\n" +
+	"\tw.Files[path] = lines\n" +
+	"}\n" +
+	"\n" +
+	"func main() {\n" +
+	"\tws := &Workspace{Name: \"gpui-go\", Files: map[string]int{}}\n" +
+	"\tws.Index(\"base/button.go\", 128)\n" +
+	"\tfor path, lines := range ws.Files {\n" +
+	"\t\tfmt.Println(path, lines)\n" +
+	"\t}\n" +
+	"}\n"
 
 func (g *gallery) initInputs(w *gpui.Window, cx *gpui.Context[gallery]) {
 	app := cx.App()
@@ -123,7 +122,7 @@ func (g *gallery) initInputs(w *gpui.Window, cx *gpui.Context[gallery]) {
 	})
 	g.editor = gpui.NewEntity(app, w.Scope(), func(st *base.EditorState, ecx *gpui.Context[base.EditorState]) {
 		*st = base.NewEditorState(w, ecx).Language("go").LineNumber(true).Folding(true).IndentGuides(true).
-			DefaultValue(editorExample)
+			TabSize(base.TabSize{TabSize: 4, HardTabs: true}).DefaultValue(editorExample)
 	})
 	g.editorPlain = gpui.NewEntity(app, w.Scope(), func(st *base.EditorState, ecx *gpui.Context[base.EditorState]) {
 		*st = base.NewEditorState(w, ecx).Language("json").LineNumber(false).SoftWrap(true).

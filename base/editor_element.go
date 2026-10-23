@@ -285,9 +285,14 @@ func layoutInlineCompletion[M InputModeKind](state *InputBaseState[M], visibleRa
 	color := state.editorStyle.MutedForeground.Opacity(0.5)
 	font := gpui.WindowTextStyle(w).FontDescriptorOf()
 	lines := strings.Split(text, "\n")
+	// Hard tabs draw as blank columns (input_tab_map.go): the first line
+	// continues the cursor's column, the ghost lines start a line.
+	tabs := state.displayTabs(w)
 	var first *gpui.ShapedLine
 	if lines[0] != "" {
-		first = mustShapeLine(w, lines[0], fontSize, []gpui.TextRun{{Len: len(lines[0]), Font: font, Color: color}})
+		lineStart := state.ext().LineStartOffset(cursorRow)
+		col := tabs.columnAfter(state.text.Slice(lineStart, max(state.Cursor(), lineStart)).String(), 0)
+		first = tabs.shapeLine(w, lines[0], col, fontSize, []gpui.TextRun{{Len: len(lines[0]), Font: font, Color: color}})
 	}
 	ghost := make([]*gpui.ShapedLine, 0, len(lines)-1)
 	for _, line := range lines[1:] {
@@ -295,7 +300,7 @@ func layoutInlineCompletion[M InputModeKind](state *InputBaseState[M], visibleRa
 		if line == "" {
 			line = " "
 		}
-		ghost = append(ghost, mustShapeLine(w, line, fontSize, []gpui.TextRun{{Len: len(line), Font: font, Color: color}}))
+		ghost = append(ghost, tabs.shapeLine(w, line, 0, fontSize, []gpui.TextRun{{Len: len(line), Font: font, Color: color}}))
 	}
 	return first, ghost
 }

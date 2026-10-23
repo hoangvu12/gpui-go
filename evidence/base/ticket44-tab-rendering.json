@@ -1,0 +1,32 @@
+{
+  "ticket": "44-tab-rendering",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved",
+  "research": [
+    "pin: Parley emits every glyph without a control filter (gpui_ce_parley/src/text_system.rs:1267-1287), so a tab paints glyph 0; its width equals a space only in monospace fonts (Consolas 7.70px; Segoe UI 14px tab 9.04px vs space 3.83px)",
+    "gpui_elements editable_text (pin and 0.2.2) inserts a real tab (state.rs:1101) and shapes it unexpanded",
+    "0.2.2: direct_write.rs:536-555 uses IDWriteTextLayout without SetIncrementalTabStop; a headless dwrite.dll probe showed the default: one blank cluster to the next multiple of 4 x font size from the line start ('a\\tb' = 63.697px Consolas, 64.230px Segoe UI at 14px)",
+    "gpui-component (c0820693 and the other local checkouts): no tab expansion; TabSize drives indent insertion and indent geometry, which counts a tab as tab_size columns of space width (indent.rs:38-49, 117-137); the whitespace marker draws an arrow at the tab start (text_wrapper.rs:716-742)",
+    "Zed's editor TabMap (display_map/tab_map.rs) expands a tab at column c to tab_size - c % tab_size columns; no local Zed tree, so this is from the worker's knowledge, not a local citation"
+  ],
+  "implementation": {
+    "gpui": "ShapeText hands the native service a space in its own one-byte run for each tab (blank, byte offsets unchanged), then stretches it with letter spacing to the next 4 em stop measured from its visual row start (DirectWrite's default), re-shaping up to 4 passes; Relayout re-fits. Matches the DirectWrite measurements to about 0.01px",
+    "base": "the input display map follows the tab-map rule: a tab spans tab_size - col % tab_size columns of space width, columns from the buffer line start (also on wrapped rows), using the same one-byte trick so cursor/selection/columns need no mapping; deviation: a click inside a tab snaps to the nearer edge (as 0.2.2's single DirectWrite cluster) where Zed puts it at the start",
+    "new public gpui API": "DefaultTabStop, DefaultTabStopEms, LineFragmentTab, LineFragmentKindTab, UseRealTextSystem (test hook: a hidden test window on the real text service)",
+    "files": [
+      "new: gpui/text_tabs.go, gpui/text_tabs_test.go, base/input_tab_map.go, base/input_tab_map_test.go",
+      "changed: gpui/{text,line_wrapper,testwindow}.go; base/{input_element,input_text_wrapper,input_wrap_map,input_display_map,input_token_presentation_element,editor_element}.go; examples/base-gallery/pages_inputs.go (the editor sample uses hard tabs again)"
+    ],
+    "bug_found": "measuring the space width before the first paint set the font size (0) made the real text service reject the request; now guarded and tested"
+  },
+  "tests": {
+    "orchestrator_rerun": "go build ./... and go vet/gofmt on gpui, base and examples clean; go test ./gpui (real-host skip list) ok; go test ./base -skip Real ok; go test -p 1 ./internal/{richtextspec,inlinespec,textspec,glyphspec,scenespec} -skip 'OnRealGPU|RealWindow|^TestReal' ok (fixture traces unchanged); go test ./examples/... ok",
+    "offscreen": "gallery editor shows blank tab indents; a temporary TextView code block with tabs showed 4 em stops, a mid-line tab aligned to a stop"
+  },
+  "follow_ups": [
+    "by hand on a real window: Tab inserts \\t; tab indents line up with the indent guides; selection across tabs and clicks inside a tab; the whitespace arrow at the tab start; a 4-column tab in a proportional font is about 15px",
+    "performance: each text containing tabs shapes about twice"
+  ]
+}
