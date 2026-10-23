@@ -49,10 +49,21 @@ type Node struct {
 // of the node it was placed at; setting the state recomputes only the
 // bindings on that key.
 type binding struct {
-	key  string
-	fn   goja.Callable
-	node *Node
+	// bucket names the value's source: stateBucket (the host's keyed
+	// state map) or sharedBucket (the app's shared store).
+	bucket string
+	key    string
+	fn     goja.Callable
+	node   *Node
 }
+
+// The binding buckets. A key is prefixed with its bucket in the host's
+// dirty-key and binding indexes, so a state key and a shared key of
+// the same name are two values.
+const (
+	stateBucket  = "state:"
+	sharedBucket = "shared:"
+)
 
 // style is the parsed CSS subset of a style object. Each set field
 // maps to one fluent call in apply.

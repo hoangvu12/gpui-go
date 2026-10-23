@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dop251/goja"
 	"github.com/hoangvu12/gpui-go/gpui"
@@ -84,6 +85,39 @@ type Host struct {
 	describes int
 
 	err error
+
+	// The host services (ticket 64). See scheduler.go and bridge.go.
+	scheduler      Scheduler
+	shared         SharedStore
+	fetcher        Fetcher
+	consoleSink    func(kind, text string)
+	actions        map[string]ResolvedAction
+	actionResolver ActionResolver
+
+	// vmGen is the generation of the live VM: every Load builds a fresh
+	// one, and the timers, frame callbacks and in-flight fetches a
+	// script registered belong to the generation that made them — a
+	// reload drops them (no callbacks into a dead runtime), a failed
+	// reload keeps the old generation alive with its tree.
+	vmGen uint64
+	// inJS counts the Go→JS calls on the stack: a shared-state write
+	// that happens inside one defers its flush to the turn's end.
+	inJS int
+
+	timers         map[int]*timer
+	nextTimerID    int
+	frameCallbacks []*frameCallback
+	nextFrameID    int
+	async          []*asyncWork
+	// rejections holds the promises rejected with no handler yet, by
+	// generation: they are reported (banner and the error hook) only if
+	// nothing handles them by the end of the script turn that rejected
+	// them, as a browser reports unhandled rejections at the end of the
+	// microtask drain.
+	rejections map[*goja.Promise]uint64
+
+	// epoch is performance.now's origin when there is no scheduler.
+	epoch time.Time
 }
 
 // Option configures a host at construction.
@@ -103,14 +137,53 @@ func WithErrorHandler(f func(error)) Option {
 // WithSource sets the dev source Reload compiles.
 func WithSource(s Source) Option { return func(h *Host) { h.source = s } }
 
+// WithScheduler wires the host to the app's foreground executor and
+// clock (AppScheduler): timers, fetch and async-action completions
+// marshal through it onto the host thread. Without one the host still
+// loads and runs handlers; the globals that need it raise a named
+// error. script.View installs the window's app automatically when it
+// renders, so a mounted host needs this only for windowless use or a
+// different clock.
+func WithScheduler(s Scheduler) Option { return func(h *Host) { h.scheduler = s } }
+
+// WithShared hands the host the app's shared state (NewShared): the
+// script's shared(key, init) handles read and write it, Go reads and
+// writes it directly, and the bindings on a key recompute on every
+// write (no re-describe). Ticket 67 hands a plugin's host a gated view
+// of the app's store instead.
+func WithShared(s SharedStore) Option { return func(h *Host) { h.setShared(s) } }
+
+// WithFetcher sets the transport the script's fetch uses. The default
+// is HTTPFetcher (a plain net/http client, no credentials); a plugin
+// host (ticket 67) gets its own, or none.
+func WithFetcher(f Fetcher) Option { return func(h *Host) { h.fetcher = f } }
+
+// WithConsoleSink routes the script's console output to the app
+// (one call per console.log and friends, with the formatted text);
+// the default writes one line to the app's stderr.
+func WithConsoleSink(f func(kind, text string)) Option { return func(h *Host) { h.consoleSink = f } }
+
+// WithActionResolver replaces how invoke/call resolve action names
+// (ticket 67's plugin gate): the default answers from the host's own
+// registrations, a resolver answers only what its grants allow, with a
+// named missing-grant error.
+func WithActionResolver(r ActionResolver) Option { return func(h *Host) { h.actionResolver = r } }
+
 // New returns an empty host (no tree yet; Element renders an empty
 // view until a successful load).
 func New(opts ...Option) *Host {
 	h := &Host{
-		state:     map[string]any{},
-		byKey:     map[string][]*binding{},
-		dirtyKeys: map[string]bool{},
-		banner:    true,
+		state:      map[string]any{},
+		byKey:      map[string][]*binding{},
+		dirtyKeys:  map[string]bool{},
+		banner:     true,
+		timers:     map[int]*timer{},
+		rejections: map[*goja.Promise]uint64{},
+		// fetch works out of the box (the spec's ask); the app installs
+		// its own transport with WithFetcher, and ticket 67's plugin
+		// hosts get their own, gated one (or none).
+		fetcher: HTTPFetcher(),
+		epoch:   time.Now(),
 	}
 	for _, opt := range opts {
 		opt(h)
@@ -125,11 +198,22 @@ func (h *Host) SetSource(s Source) { h.source = s }
 // script's handlers can call, an object it can read): the app's bridge
 // from script events to Go. It is reinstalled on every (re)load,
 // which builds a fresh runtime. Setting a value the host also defines
-// (h, Fragment, useState, state, bind) is a panic: those are the
-// host's.
+// (h, Fragment, useState, state, bind, and every global globals.go
+// and bridge.go provide — setTimeout, fetch, console, call, invoke,
+// shared, ...) is a panic: those are the host's.
+var hostGlobalNames = map[string]bool{
+	"h": true, "Fragment": true, "useState": true, "state": true, "bind": true, "__el": true,
+	"setTimeout": true, "clearTimeout": true, "setInterval": true, "clearInterval": true,
+	"queueMicrotask": true, "requestAnimationFrame": true, "cancelAnimationFrame": true,
+	"performance": true, "console": true, "atob": true, "btoa": true,
+	"TextEncoder": true, "TextDecoder": true, "URL": true, "URLSearchParams": true,
+	"fetch": true, "call": true, "invoke": true, "shared": true,
+}
+
+// SetGlobal installs the value; see hostGlobalNames for the reserved
+// names.
 func (h *Host) SetGlobal(name string, value any) {
-	switch name {
-	case "h", "Fragment", "useState", "state", "bind", "__el":
+	if hostGlobalNames[name] {
 		panic("script: SetGlobal(" + name + ") collides with the host's globals")
 	}
 	if h.globals == nil {
@@ -141,35 +225,64 @@ func (h *Host) SetGlobal(name string, value any) {
 	}
 }
 
+// setShared installs the shared store and subscribes this host to its
+// writes (a write recomputes the bindings on that key).
+func (h *Host) setShared(s SharedStore) {
+	h.shared = s
+	if a, ok := s.(interface{ attach(func(string)) }); ok {
+		a.attach(h.sharedChanged)
+	}
+}
+
 // Load runs a compiled bundle in a fresh goja runtime and describes the
 // tree, keeping every keyed state value. On any failure the previous
 // runtime, tree and bindings stay (the last good UI) and the error is
 // recorded (Err, WithErrorHandler, the banner); the error clears on
 // the next successful load.
+//
+// A successful load drops everything the replaced VM had pending — its
+// timers and frame callbacks are cancelled, its in-flight fetches and
+// async actions are aborted (their promises never settle: the browser
+// aborts in-flight fetches on navigation the same way) — while the
+// keyed state and the shared store keep their values. A failed load
+// keeps the old VM, so its timers and completions keep running.
 func (h *Host) Load(b Bundle) error {
+	oldVM, oldGen := h.vm, h.vmGen
 	vm := goja.New()
-	h.install(vm)
+	gen := oldGen + 1
+	// The candidate VM is the host's from the start: everything the
+	// module's top level does (state, shared, setTimeout) runs in it,
+	// and its errors carry its positions. Every failure path restores
+	// the old VM with its tree, timers and completions.
+	h.vm, h.vmGen = vm, gen
+	h.install(vm, gen)
+	giveUp := func(err error) error {
+		h.vm, h.vmGen = oldVM, oldGen
+		h.dropGeneration(gen) // the failed VM's registrations die with it
+		return h.fail(err)
+	}
 
 	prg, err := goja.Compile(b.Name, b.JS, true)
 	if err != nil {
-		return h.fail(err)
+		return giveUp(err)
 	}
-	if _, err := vm.RunProgram(prg); err != nil {
-		return h.fail(err)
+	h.inJS++
+	_, runErr := vm.RunProgram(prg)
+	h.inJS--
+	if runErr != nil {
+		return giveUp(runErr)
 	}
 	app, ok := goja.AssertFunction(vm.Get(GlobalName).ToObject(vm).Get("App"))
 	if !ok {
-		return h.fail(fmt.Errorf("%s: the bundle exports no App function (export function App() { ... })", b.Name))
+		return giveUp(fmt.Errorf("%s: the bundle exports no App function (export function App() { ... })", b.Name))
 	}
-
-	oldVM := h.vm
-	h.vm = vm
 	if err := h.describe(app); err != nil {
-		h.vm = oldVM
-		return h.fail(err)
+		return giveUp(err)
 	}
 	h.app = app
 	h.err = nil
+	h.dropGeneration(oldGen) // the replaced VM's pending work dies with it
+	h.reportRejections()
 	h.notify()
 	return nil
 }
@@ -258,26 +371,51 @@ func (h *Host) describe(app goja.Callable) error {
 	return nil
 }
 
-// dispatch calls a handler, then applies what it changed: a useState
-// change describes the tree again; a state change recomputes only the
-// bindings on its key. Either way the window is asked to redraw.
-func (h *Host) dispatch(fn goja.Callable, ev goja.Value) error {
-	if _, err := fn(goja.Undefined(), ev); err != nil {
-		h.fail(err)
+// runJS runs one script turn: the body (a handler, a timer callback,
+// a frame callback, a promise settlement), then what it changed — a
+// useState change re-describes the tree, a state or shared change
+// recomputes only the bindings on that key — then a redraw request.
+// body's error (and flush's) is recorded like a handler error: the
+// banner and the error hook, while the last good tree keeps running.
+// Unhandled promise rejections are reported here too, after goja has
+// drained the microtask queue at the end of the call (a browser
+// reports them at the end of the microtask checkpoint).
+func (h *Host) runJS(body func() error) error {
+	h.inJS++
+	// A panic in a Go half-installed function must not leave the host
+	// thinking a script turn is still on the stack.
+	defer func() { h.inJS-- }()
+	bodyErr := body()
+	if bodyErr != nil {
+		h.fail(bodyErr)
 		h.flush()
+		h.reportRejections()
 		h.notify()
-		return err
+		return bodyErr
 	}
 	if err := h.flush(); err != nil {
 		h.fail(err)
+		h.reportRejections()
 		h.notify()
 		return err
 	}
+	h.reportRejections()
 	h.notify()
 	return nil
 }
 
-// flush applies pending state changes.
+// dispatch calls a handler as one script turn (runJS).
+func (h *Host) dispatch(fn goja.Callable, ev goja.Value) error {
+	return h.runJS(func() error {
+		_, err := fn(goja.Undefined(), ev)
+		return err
+	})
+}
+
+// flush applies pending state changes. A state or shared write marks
+// one key dirty (state: the host's map, shared: the store); flush
+// recomputes the bindings on those keys only. rootDirty (a useState
+// write) re-describes the whole tree.
 func (h *Host) flush() error {
 	if h.rootDirty {
 		h.rootDirty = false
@@ -298,12 +436,92 @@ func (h *Host) flush() error {
 
 // compute recomputes one binding into its text node.
 func (h *Host) compute(b *binding) error {
-	v, err := b.fn(goja.Undefined(), h.vm.ToValue(h.state[b.key]))
+	v, err := b.fn(goja.Undefined(), h.vm.ToValue(h.bindingValue(b)))
 	if err != nil {
 		return err
 	}
 	b.node.Text = v.String()
 	return nil
+}
+
+// bindingValue reads what a binding is bound over: the host's state
+// map for state(key) handles, the shared store for shared(key) ones.
+func (h *Host) bindingValue(b *binding) any {
+	if b.bucket == sharedBucket {
+		v, err := h.shared.Read(b.key)
+		if err != nil {
+			return nil // compute's error path covers the report
+		}
+		return v
+	}
+	return h.state[b.key]
+}
+
+// dropGeneration kills the pending work of a VM generation: its timers
+// are cancelled, its frame callbacks dropped, its in-flight fetches
+// and async actions aborted (their promises never settle). Keyed state
+// and the shared store are untouched.
+func (h *Host) dropGeneration(gen uint64) {
+	for id, t := range h.timers {
+		if t.gen == gen {
+			h.clearTimer(id)
+		}
+	}
+	if len(h.frameCallbacks) > 0 {
+		keep := h.frameCallbacks[:0]
+		for _, c := range h.frameCallbacks {
+			if c.gen != gen {
+				keep = append(keep, c)
+			}
+		}
+		h.frameCallbacks = keep
+	}
+	if len(h.async) > 0 {
+		keep := h.async[:0]
+		for _, a := range h.async {
+			if a.gen != gen {
+				keep = append(keep, a)
+			} else if a.cancel != nil {
+				a.cancel()
+			}
+		}
+		h.async = keep
+	}
+	for p, g := range h.rejections {
+		if g == gen {
+			delete(h.rejections, p)
+		}
+	}
+}
+
+// reportRejections reports the promises that were rejected and are
+// still unhandled at the end of a script turn (goja has drained the
+// microtask queue by then): the banner and the error hook, like a
+// handler error, while the last good tree keeps running. A handler
+// attached later is too late — the browser's unhandled-rejection
+// reporting has the same shape.
+func (h *Host) reportRejections() {
+	for p, gen := range h.rejections {
+		if gen != h.vmGen {
+			delete(h.rejections, p)
+			continue
+		}
+		delete(h.rejections, p)
+		reason := p.Result()
+		h.fail(fmt.Errorf("unhandled promise rejection: %s", reason.String()))
+	}
+}
+
+// trackRejection records a rejection (the tracker goja calls when a
+// promise is rejected without a handler), or clears it when a handler
+// arrives.
+func (h *Host) trackRejection(p *goja.Promise, op goja.PromiseRejectionOperation, gen uint64) {
+	switch op {
+	case goja.PromiseRejectionReject:
+		h.rejections[p] = gen
+	case goja.PromiseRejectionHandle:
+		delete(h.rejections, p)
+	}
 }
 
 // fail records a load or handler error for the banner and the error
@@ -326,16 +544,35 @@ func (h *Host) notify() {
 // The script's globals
 // ---------------------------------------------------------------------------
 
-// install defines the runtime's globals: the host's API, then the
-// app's (SetGlobal).
-func (h *Host) install(vm *goja.Runtime) {
+// install defines the runtime's globals: the host's API (the prelude
+// and globals.go's browser globals, bridge.go's Go bridge), then the
+// app's (SetGlobal). gen is the VM's generation — the callbacks a
+// script registers belong to it.
+func (h *Host) install(vm *goja.Runtime, gen uint64) {
 	if _, err := vm.RunProgram(preludeProgram); err != nil {
 		panic(err)
 	}
+	// The Go halves first: browserPrelude wires the JS front ends to
+	// them (__timer, __atob, __hostLog, ...) at run time.
+	h.installGlobals(vm, gen)
+	if _, err := vm.RunProgram(browserPreludeProgram); err != nil {
+		panic(err)
+	}
+	vm.SetPromiseRejectionTracker(func(p *goja.Promise, op goja.PromiseRejectionOperation) {
+		h.trackRejection(p, op, gen)
+	})
 	mustSet(vm, "__el", h.jsxElement)
 	mustSet(vm, "useState", h.useState)
 	mustSet(vm, "state", h.stateHandle)
 	mustSet(vm, "bind", h.bind)
+	mustSet(vm, "invoke", h.jsInvoke)
+	mustSet(vm, "call", func(call goja.FunctionCall) goja.Value {
+		return h.jsCall(call, gen)
+	})
+	mustSet(vm, "shared", h.jsShared)
+	mustSet(vm, "fetch", func(call goja.FunctionCall) goja.Value {
+		return h.jsFetch(call, gen)
+	})
 	for name, value := range h.globals {
 		mustSet(vm, name, value)
 	}
@@ -377,7 +614,7 @@ func (h *Host) stateHandle(call goja.FunctionCall) goja.Value {
 	})
 	mustSet(o, "set", func(call goja.FunctionCall) goja.Value {
 		h.state[key] = call.Argument(0).Export()
-		h.dirtyKeys[key] = true
+		h.dirtyKeys[stateBucket+key] = true
 		return goja.Undefined()
 	})
 	return o
@@ -385,17 +622,23 @@ func (h *Host) stateHandle(call goja.FunctionCall) goja.Value {
 
 // bind declares a computed value: fn(value) becomes the text of the
 // child position the binding is placed at, recomputed only when the
-// state changes.
+// state changes. Both state(key, init) and shared(key, init) handles
+// bind (the same shape); state buckets and shared buckets are distinct
+// namespaces.
 func (h *Host) bind(call goja.FunctionCall) goja.Value {
 	o, ok := call.Argument(0).(*goja.Object)
 	if !ok || o.Get("key") == nil {
-		panic(h.vm.NewTypeError("bind's first argument must be state(key, init)"))
+		panic(h.vm.NewTypeError("bind's first argument must be state(key, init) or shared(key, init)"))
 	}
 	fn, ok := goja.AssertFunction(call.Argument(1))
 	if !ok {
 		panic(h.vm.NewTypeError("bind's second argument must be a function"))
 	}
-	return h.vm.ToValue(&binding{key: o.Get("key").String(), fn: fn})
+	bucket := stateBucket
+	if o.Get("__shared") != nil {
+		bucket = sharedBucket
+	}
+	return h.vm.ToValue(&binding{bucket: bucket, key: o.Get("key").String(), fn: fn})
 }
 
 // ---------------------------------------------------------------------------
@@ -500,7 +743,7 @@ func (h *Host) addChildren(n *Node, kids []goja.Value) {
 			t := &Node{kind: nodeText}
 			e.node = t
 			h.bindings = append(h.bindings, e)
-			h.byKey[e.key] = append(h.byKey[e.key], e)
+			h.byKey[e.bucket+e.key] = append(h.byKey[e.bucket+e.key], e)
 			if err := h.compute(e); err != nil {
 				h.throwf("bind: %v", err)
 			}
