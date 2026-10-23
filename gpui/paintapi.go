@@ -220,9 +220,10 @@ func (w *Window) PaintImage(bounds, imageBounds Bounds, cornerRadii Corners, dat
 // PaintImageWithCornerSmoothing paints an image with smoothed corners
 // (R:window.rs:5078-5175): empty visible or image bounds paint nothing;
 // the frame's atlas tile is fetched or inserted under the pinned
-// RenderImageParams { image_id, frame_index } key (the port's
-// application image atlas, the same atlas the image cache retains frames
-// in); a partially visible image samples the proportional sub-tile
+// RenderImageParams { image_id, frame_index } key in the window's sprite
+// atlas (the atlas its glyphs live in and the present loop passes —
+// Window.GlyphAtlas; deterministic test windows fall back to the
+// application image atlas); a partially visible image samples the proportional sub-tile
 // (rounded and clamped to the tile); the sprite carries the snapped
 // visible bounds, the snapped content mask, the corner radii clamped to
 // the visible size and scaled, the clamped smoothing and the element
@@ -243,9 +244,12 @@ func (w *Window) PaintImageWithCornerSmoothing(bounds, imageBounds Bounds, corne
 	if frameIndex < 0 || frameIndex >= len(data.image.Frames) {
 		return fmt.Errorf("gpui: PaintImage: frame index %d out of range (%d frames)", frameIndex, len(data.image.Frames))
 	}
-	atlas := w.app.ImageAtlas()
-	if atlas == nil {
-		return fmt.Errorf("gpui: PaintImage: the application image atlas is unavailable")
+	// The window's sprite atlas (R:window.rs:5103-5104
+	// self.sprite_atlas.get_or_insert_with): the atlas the present loop
+	// passes, so the sprite batch's texture resolves (Base ticket 40).
+	atlas, err := w.spriteAtlas()
+	if err != nil {
+		return fmt.Errorf("gpui: PaintImage: %w", err)
 	}
 	tile, err := atlas.InsertImageFrame(data.id, frameIndex, &data.image.Frames[frameIndex])
 	if err != nil {
@@ -296,9 +300,10 @@ func (w *Window) PaintImageWithCornerSmoothing(bounds, imageBounds Bounds, corne
 	return nil
 }
 
-// DropImage removes every frame of the image from the sprite atlas
-// (R:window.rs:5203 drop_image; the port's one application image atlas
-// replaces the per-window sprite atlas).
+// DropImage removes every frame of the image from the sprite atlases
+// (R:window.rs:5203 drop_image). The port removes it through the app's
+// drop_image walk (R:app.rs:2815-2825): every open window's sprite atlas
+// plus the application image atlas the image cache retains frames in.
 func (w *Window) DropImage(data *LoadedImage) error {
 	if data == nil || data.image == nil {
 		return nil

@@ -1,0 +1,14 @@
+{
+  "ticket": "42-sheet-deferral-glyph-fallback",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved: both behaviours match upstream; no code change beyond a test",
+  "sheet": "upstream base Sheet pins to the window origin but draws in place, not deferred (sheet.rs:123), unlike Dialog (dialog.rs:548-643); a deferred element escapes parent clips (pinned window.rs:3661-3703, elements/deferred.rs:102-107). Upstream's styled sheet avoids it by mounting in the root layer (component/src/root.rs:156-179). base/sheet.go:173 matches; callers wrap in gpui.Deferred (the gallery does). New test TestSheetInsideAScrollAreaIsClippedUnlessDeferred.",
+  "glyph_fallback": "the native service mirrors the pinned Windows text system: system fonts, Segoe UI, service fallbacks Lilex/IBM Plex Sans/Arial (reference/native/src/text.rs:28-30,913-918 = gpui_windows platform.rs:119-126); per run: run font, run fallbacks, service fallbacks (gpui_ce_parley text_system.rs:943-967); Parley picks per character by coverage (parley shape/mod.rs:611-639); system fallback is per script via a DirectWrite sample (fontique dwrite.rs:115-123) with no sample for the common symbol script (script.rs:158). So upstream on Windows shows the same missing glyphs. Go already forwards FontDescriptor.Fallbacks to the native request (gpui/div.go:268, text.go:634, internal/native/text.go:1088-1102); a probe on rev 11 showed Fallbacks ['Segoe UI Symbol'] renders the symbols. Not made a gpui default (it turns colour emoji monochrome and changes the pinned no-fallback default).",
+  "native_gap": "automatic per-character system fallback would need a native change (DirectWrite per-character font lookup), beyond the pin; the Go workaround is naming the fallback font on the element",
+  "tests": "CGO_ENABLED=0 go test ./base -count=1 -skip Real: ok",
+  "follow_ups": [
+    "examples/base-showcase/showcase.go:274-436 uses symbol glyphs in text; set Fallbacks: [\"Segoe UI Symbol\"] there or draw paths as the gallery does"
+  ]
+}

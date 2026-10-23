@@ -1,0 +1,53 @@
+{
+  "ticket": "16-overlays",
+  "effort": "gpui-base",
+  "date": "2026-10-22",
+  "branch": "base-port-2",
+  "result": "resolved",
+  "summary": "Overlays in the root base package: focus trap (FocusTrapElementOf(el).FocusTrap, ActiveFocusTrap; root.go's placeholder replaced), positioner (Align, ResolvedPosition, sides/corners, occlusion), popup (PopupPriority, anchored content), popover (PopoverState, Trigger), tooltip (TooltipOverlay with show delay/grace period), hover card, dialog (DialogHandle, trigger/backdrop/popup/title/description/close), alert dialog, sheet, toast (ToastManager/ToastStack with sprung stacking). base.Init now runs dialog/focus_trap/popover/sheet init (U:lib.rs:232-235; orchestrator).",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/{focus_trap,positioner,popup,popover,tooltip,hover_card,dialog,alert_dialog,sheet,toast}.rs, lib.rs:227-245 @ c0820693"
+  ],
+  "implementation": {
+    "files": [
+      "base/{focus_trap,positioner,popup,popover,tooltip,hover_card,dialog,alert_dialog,sheet,toast}.go + _test.go",
+      "base/root.go (activeFocusTrap = ActiveFocusTrap)",
+      "base/lib.go (Init wiring; orchestrator)"
+    ]
+  },
+  "tests": {
+    "upstream_ported": 53,
+    "upstream_deviated": 0,
+    "not_applicable": 0,
+    "go_only": 4,
+    "per_module": "positioner 15, popup 3, popover 6, tooltip 3+1, hover_card 3, dialog 6+1, alert_dialog 2+1, sheet 4, toast 11, focus_trap 0+1",
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD f01af3f + the staged ticket-16 files + lib.go (tickets 18/27 in-progress files excluded)",
+        "command": "CGO_ENABLED=0 go vet ./base && gofmt -l base",
+        "result": "clean"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=1 -v",
+        "result": "ok, 292 PASS, 0 FAIL, 0 SKIP"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=2 -run 'Tooltip|HoverCard|Toast|Popover'",
+        "result": "ok"
+      }
+    ]
+  },
+  "gap_2b_block_sites": "every plain upstream div() constructor calls Block() first (popup root, hover-card trigger wrapper + default trigger, dialog trigger wrapper (shared with alert dialog) + closed placeholder + parts + close anchor + backdrop wrapper + host (host still sets Flex itself, U:dialog.rs:560), alert-dialog parts and dispatch wrappers, sheet host + overlay layer, popover content surface + placeholders, tooltip base + renderer wrapper + empty overlay, toast root + stack root); the popup occlusion test harness outer div (U:popup.rs:254, a plain div) also gets Block(). Applied in a follow-up pass at the orchestrator's request; no test result changed.",
+  "deviations": [
+    "no Window.WindowDecorations/Decorations/Tiling in the core: windows are treated as server-decorated (the pinned default, what Windows reports); unexported copies keep the frame-inset logic and its test",
+    "NewDialog/NewSheet/NewAlertDialog take no context; without an explicit FocusHandle they use a keyed-state handle released when the dialog stops drawing (upstream allocates one per render and drops it; Go would leak one per frame); DialogClose's anchor handle likewise",
+    "popover open-popup registration released with its state entity; dismiss subscription cancelled on close",
+    "tooltip/hover-card delays: background timer + foreground continuation, cancelled explicitly where Rust drops the task",
+    "focus trap keeps the wrapped element's id one level below the trap id; traps searched in registration order (upstream HashMap order); manager created on demand",
+    "toast measured heights keyed by the id's string form; Instant = time.Time; iterators return slices"
+  ],
+  "follow_ups": [
+    "optional gpui: Window.WindowDecorations/Tiling; app-level Window.Subscribe"
+  ],
+  "native_artifact": "unchanged (rev 11)"
+}

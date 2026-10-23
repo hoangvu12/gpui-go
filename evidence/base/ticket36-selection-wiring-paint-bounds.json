@@ -1,0 +1,53 @@
+{
+  "ticket": "36-selection-wiring-paint-bounds",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved",
+  "summary": "Root mounts TextSelectionLayer as its first child and copies the selection on ctrl-c/cmd-c; ElementExt gains TextSelectionScope; core fix: Drawable paint uses the bounds stored at prepaint instead of re-querying layout, so elements prepainted at an offset (PrepaintAt/PrepaintAsRoot) paint where they were prepainted.",
+  "pinned_sources": [
+    "reference/ce-source/crates/gpui/src/element.rs:537-600 (Drawable prepaint stores bounds; paint reuses them) @ 254b5dbd",
+    "upstream-base/ce/crates/base/src/root.rs:17-21, 264-273, 293; element_ext.rs:7-13; text/inline_object.rs @ c0820693"
+  ],
+  "implementation": {
+    "files": [
+      "gpui/element.go: drawable.bounds stored at prepaint, passed to Element.Paint (no layoutBoundsOf at paint)",
+      "gpui/element_paint_bounds_test.go (new): fails on the old paint path ((0,0)/(300,300) instead of the prepaint bounds)",
+      "base/root.go: TextSelectionLayer child; copy binding in rootInit; onActionCopy (trim, propagate when empty, else App.WriteClipboard)",
+      "base/element_ext.go: ElementExt[S].TextSelectionScope",
+      "base/text_inline_object.go: registers bounds intersected with the content mask (U:text/inline_object.rs); the hitbox.Bounds workaround from 28/29 retired",
+      "base/text_inline.go: comments only (paint_origin is upstream behaviour, not a deviation)",
+      "tests: base/{root_copy,element_ext,text_inline_object_paint}_test.go"
+    ]
+  },
+  "tests": {
+    "go_only": "gpui 1 file; base 5 (TestInlineObjectPaintsAtItsPrepaintOrigin fails without the fix: (0,0) instead of (80,60) at 2x)",
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD 49f3384 + ticket-36 files (24 and 26 in-progress files excluded)",
+        "command": "CGO_ENABLED=0 go vet ./base ./gpui && gofmt -l base gpui && go build ./...",
+        "result": "clean"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=1 -v",
+        "result": "ok, 1017 PASS (1012 + 5), 0 FAIL, 3 SKIP (ticket-30 deferrals)"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=2",
+        "result": "ok"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test -p 1 ./gpui ./internal/{scenespec,richtextspec,inlinespec,layoutspec,listspec,textframespec,authorspec,presentspec,imagespec}",
+        "result": "all ok (the worker also ran inspectorspec, rendererspec, pathspec, svgspec, assetspec, consumerspec, a11yspec, dropspec, glyphspec, textspec: ok)"
+      }
+    ]
+  },
+  "deviations": [
+    "copy tests check propagation through an app-level OnAction listener (TestApp has no clipboard)",
+    "the copy binding picks cmd-c via runtime.GOOS == \"darwin\"; the clipboard write error is dropped as the input copy does"
+  ],
+  "follow_ups": [
+    "now-redundant manual offset re-application around paint (harmless, stale comments): gpui/render.go:290, gpui/div.go:1359,1717, gpui/deferred.go:14, gpui/anchored.go:10, gpui/list.go:395, gpui/listelement.go:1069; base/positioner.go:17, base/scroll_bounce.go:13, base/virtual_list.go:295, possibly base/motion_reveal.go:78",
+    "base/text_selection_test.go:1009 may use ElementExtOf(..).TextSelectionScope(scope)"
+  ]
+}

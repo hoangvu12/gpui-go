@@ -1,0 +1,70 @@
+{
+  "ticket": "35-inline-styled-runs",
+  "effort": "gpui-base",
+  "date": "2026-10-22",
+  "result": "resolved",
+  "summary": "A StyledText inside a Block/Inline paragraph keeps its per-run colors, backgrounds and decorations: the paragraph paints every inline piece through ticket 10's per-run painter (rich_paint.go paintStyledVisualLine, extracted from paintStyledDocument) with the paragraph document's runs cut to the piece's byte range (cutPaintRuns), in the pinned two passes (background, then glyphs + decorations). StyledText publishes paint-styled runs; font-only records (the port's Text element) take the paint fields of the paragraph's ambient text style.",
+  "pinned_sources": [
+    "reference/ce-source/crates/gpui/src/text_system/line.rs:158-178 (InlineLayout paint_background / paint)",
+    "reference/ce-source/crates/gpui/src/text_system/line.rs:195-225 (paint_inline_layout: row origin, row height, baseline)",
+    "reference/ce-source/crates/gpui/src/text_system/line.rs:247-319 (paint_visual_line, paint_text_fragment: glyphs in fragment.style.color)",
+    "reference/ce-source/crates/gpui/src/text_system/line.rs:421-464 (paint_fragment_decorations_at: background over the row height, underline/strikethrough)",
+    "reference/ce-source/crates/gpui/src/elements/div/inline.rs:475-499 (paint_children: paint_background then paint per paragraph)",
+    "reference/ce-source/crates/gpui/src/elements/text.rs:887-915 (layout publishes InlineContent::Text with the given runs, else text_style.to_run)",
+    "reference/ce-source/crates/gpui/src/elements/text.rs:1002-1024 (the paragraph owns a nested text's paint)",
+    "reference/ce-source/crates/gpui/src/style.rs:724-740 (TextStyle::to_run)"
+  ],
+  "implementation": {
+    "files": [
+      "gpui/rich_paint.go (paintStyledVisualLine extracted; cutPaintRuns)",
+      "gpui/inline.go (inlineTextContent.paintStyled; collector paintRuns; paintInlineLayout takes runs + pass; paintChildren paints background then foreground)",
+      "gpui/styled_text.go (publishes paintStyled runs; deviation note updated)",
+      "gpui/inline_real.go (header note only)",
+      "gpui/inline_runs_test.go (new)",
+      "internal/richtextspec/richtext_inline_test.go (new)",
+      "internal/richtextspec/richtext_inline_real_test.go (new, windows)"
+    ]
+  },
+  "deviations": [
+    "The port's Text element (div.go) publishes font-only runs instead of text_style.to_run; the collector fills their paint fields from the paragraph's (Block/Inline div's) text style, so a plain Text inside a nested Inline span with its own text style paints in the paragraph's style (unchanged from before). Fix belongs in div.go: publish textStyle.ToRun(len) with paintStyled: true.",
+    "Decoration offsets use the piece's shaped ascent/descent (the pin reads the whole InlineLayout's ascent/descent and per-fragment Parley offsets); ticket 10's derived fallbacks apply.",
+    "Each pass opens its own paragraph layer (the pin also wraps each pass in paint_layer)."
+  ],
+  "tests": {
+    "added": 4,
+    "list": [
+      "gpui TestInlineParagraphPaintsStyledRunColors (deterministic glyph transcript via a recording test text system: ambient prefix, then red/green/blue paints each masked at its run edges)",
+      "gpui TestCutPaintRuns",
+      "richtextspec TestInlineStyledTextRunDecorationsTranscript (deterministic: per-run background quads over the row height, green underline, blue strikethrough, shifted by the plain prefix)",
+      "richtextspec TestRealInlineStyledTextRuns (real window: sprites per run color within run masks, decorations and background on the run rectangles; fails, never skips)"
+    ],
+    "commands": [
+      {
+        "command": "CGO_ENABLED=0 go test ./gpui ./internal/inlinespec ./internal/richtextspec -count=1",
+        "result": "ok (gpui 5.6s, inlinespec 1.5s, richtextspec 1.4s); one earlier run hit the load-sensitive TestClockRealHostTimersFireInRealTime order flake (unrelated, passes -count=3 alone)"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./internal/textspec ./internal/scenespec -count=1",
+        "result": "ok"
+      },
+      {
+        "command": "go vet ./gpui ./internal/inlinespec ./internal/richtextspec; gofmt -l gpui internal/inlinespec internal/richtextspec",
+        "result": "clean"
+      }
+    ]
+  },
+  "native": "no change (rev 11 frozen)",
+  "branch": "base-port-2",
+  "orchestrator_follow_up": "gpui/div.go: the plain Text element publishes textStyle.ToRun(len) with paintStyled (elements/text.rs:903-915), so nested inline spans keep their own color/decorations (the worker's reported cross-file change, applied by the orchestrator).",
+  "orchestrator_rerun": [
+    {
+      "where": "git checkout-index snapshot of HEAD 48bfa47 + the staged ticket-35 files + the div.go edit",
+      "command": "CGO_ENABLED=0 go build ./... && go vet ./gpui ./internal/richtextspec ./internal/inlinespec && gofmt -l gpui internal",
+      "result": "clean"
+    },
+    {
+      "command": "CGO_ENABLED=0 go test -p 1 ./gpui ./internal/inlinespec ./internal/richtextspec ./internal/textspec ./internal/scenespec ./internal/authorspec ./internal/layoutspec ./internal/focusspec ./base -count=1",
+      "result": "ok x9 (TestRealInlineStyledTextRuns real window PASS)"
+    }
+  ]
+}

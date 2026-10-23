@@ -1,0 +1,54 @@
+{
+  "ticket": "24-diagnostics-lsp",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved",
+  "summary": "Editor diagnostics (DiagnosticSet over base/sumtree, wavy underlines, the diagnostic popover) and the LSP layer (completions + inline completion behind ghost text, code actions, hover, definitions with the hover-definition hitbox, document colors, semantic tokens, the overlay) hooked into the editor; hand-written lsp-types structs per ticket 01.",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/input/editor/{diagnostics.rs,lsp/*} @ c0820693",
+    "upstream-base/ce/crates/base/src/input/base/state.rs (deferred tests), lsp-types 0.97 field shapes"
+  ],
+  "implementation": {
+    "files": [
+      "new: base/lsp_types.go, base/editor_diagnostics.go, base/editor_lsp{,_completions,_code_actions,_hover,_definitions,_document_colors,_semantic_tokens,_overlay}.go",
+      "engine: base/editor.go, editor_element.go, input_{kind,mode,state,state_edit,state_mouse,element}.go",
+      "tests: base/editor_{diagnostics,lsp_document_colors,lsp_semantic_tokens,lsp}_test.go; editor_state_test.go (blur test now in full)"
+    ],
+    "history": "The worker hit the 2026-10-23 usage limit mid-ticket and was resumed with its context after the reset."
+  },
+  "tests": {
+    "per_file": "diagnostics.rs 1/1, lsp/document_colors.rs 2/2, lsp/semantic_tokens.rs 4/4, other lsp files 0 upstream tests, state.rs deferred by 23: 2/2 (test_noop_scroll_notifies_diagnostic_dismissal; test_blur_keeps_decorations incl. its hover half)",
+    "extra_upstream": "state.rs:7568-7642 ported in full as TestEditorAltDragIgnoresACachedHoverDefinition",
+    "go_only": "10 provider-hook tests through a test window on the virtual clock (150/300/100 ms debounces)",
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD 9132e6d + ticket-24 files (30 in-progress files excluded)",
+        "command": "CGO_ENABLED=0 go vet ./base && gofmt -l base && go build ./...",
+        "result": "clean; no basewip tags"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=1 -v",
+        "result": "ok, 1188 PASS (1169 + 19), 0 FAIL, 3 SKIP (ticket-30 deferrals)"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=2",
+        "result": "ok"
+      }
+    ]
+  },
+  "deviations": [
+    "LSP methods are generic methods on InputBaseState[M] (EditorState is an alias of an instantiated type); exported ones panic on other modes",
+    "provider tasks return gpui.Task[ProviderResult[T]]; trait defaults as optional interfaces plus package functions",
+    "resolve_completions not ported: its item type lsp_types::request::Completion is an empty request-marker enum and Base never calls it",
+    "lsp types: Lsp prefix, Position = InputPosition, Uri as string, serde_json::Value as json.RawMessage, unions as structs, no JSON tags (no transport in Base); CodeAction keeps Title only",
+    "DiagnosticEntry.range is ByteRange (the embedded Diagnostic has Range)",
+    "debounces are cancellable background sleeps; nothing spawns after App.Shutdown",
+    "document-color RGBA->HSLA ported locally (the core's float version is unexported), checked against RgbaToHsla",
+    "on_hover_definition is wired; its only upstream caller is the unported native context menu"
+  ],
+  "follow_ups": [
+    "base/textarea_state_test.go ~454: TestEditorAltDragSelectsABlockAndReplacesEachRow now duplicates TestEditorAltDragIgnoresACachedHoverDefinition minus the hover step (delete or re-comment)",
+    "optional gpui: export rgbaToHsla (gpui/text_run.go)"
+  ]
+}

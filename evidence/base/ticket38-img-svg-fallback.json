@@ -1,0 +1,39 @@
+{
+  "ticket": "38-img-svg-fallback",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved",
+  "summary": "img() and the image cache render SVG through the existing SvgRenderer (core ticket 19's native SVG service), as the pinned img.rs does: un-sniffable asset bytes go to RenderSingleFrame(bytes, 1.0) (Usvg error slot on failure), in-memory ImageFormatSVG images render the same way (Other slot), and LoadedImage carries the 2x smooth scale factor so layout size is pixels / scale.",
+  "pinned_sources": [
+    "reference/ce-source/crates/gpui/src/elements/img.rs:493,611,631,737-740,770-773,788-792; assets.rs:223-224,243,267-270; platform.rs:3659-3663; svg_renderer.rs render_parsed @ 254b5dbd"
+  ],
+  "implementation": {
+    "files": [
+      "gpui/imagecache.go (SVG fallback, LoadedImage scale factor, ErrSVGRendererDeferred removed)",
+      "gpui/img.go (in-memory SVG render; renderSize divides by the scale factor)",
+      "gpui/image.go, gpui/svg.go (comments)",
+      "gpui/img_svg_test.go (new: asset SVG and in-memory SVG -> 48x24 frame at 2x + polychrome sprite; garbage -> Usvg/Other)",
+      "internal/assetspec/imagecache_test.go (orchestrator): the old deferred-service test replaced by TestImageLoadSVGFallbackRendersThroughTheSVGRenderer (6x4 SVG -> one 12x8 frame) and TestImageLoadNonSVGTextIsSVGError"
+    ]
+  },
+  "tests": {
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD badf6ca + ticket-38 files (37 in-progress files excluded)",
+        "command": "CGO_ENABLED=0 go vet ./gpui ./internal/assetspec && go build ./...",
+        "result": "clean"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test -p 1 ./internal/assetspec ./internal/imagespec ./internal/svgspec && go test ./gpui && go test ./base",
+        "result": "all ok"
+      }
+    ],
+    "note": "the worker saw TestWin32InputRealWindowWheelScrolls fail in the shared tree; it passes on the snapshot without ticket 37's in-progress window/list changes"
+  },
+  "deviations": [
+    "RenderSingleFrame parses immediately without first loading ticket 19's bundled fonts (text inside an SVG uses already-loaded and system fonts)",
+    "a native SVG service load failure reports the Other variant (the pin's svg_renderer() cannot fail)"
+  ],
+  "follow_ups": []
+}

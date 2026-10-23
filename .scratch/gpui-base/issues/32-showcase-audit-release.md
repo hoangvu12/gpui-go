@@ -4,9 +4,9 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
-Blocked by: 16, 17, 18, 22, 24, 26, 29, 30, 31
+Status: claimed
+Assignee: base-port-2 orchestrator (2026-10-23)
+Blocked by: 16, 17, 18, 22, 24, 26, 29, 30, 31, 36, 37
 
 ## Question
 
@@ -31,3 +31,5 @@ A maintainer can see every Base module and test accounted for (ported/deviated/n
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-23 — Claimed. Part 1 (delegated, runs alongside 37): the coverage ledger over the source manifest, examples/base-showcase, README/notices. Part 2 (orchestrator, after 37): the full corpus run. Part 3 (only with the user's go-ahead): merge base-port-2 to main, push, tag v0.2.0.
+- 2026-10-23 — Part 1 delivered. It includes the coverage tool (conformance/cmd/basecoverage, `-check` mode), evidence/base/{coverage-ledger.json,COVERAGE.md}, examples/base-showcase (opened a real window under a timeout), and the README Base section. The tool found a go1.27.1 compiler deadlock for importers naming base.InputState and the related types, caused by the generic alias inputCx in exported signatures; the orchestrator fixed it in 235e4f1. It also found 1 GAP, text_view.rs:2227 linked_image_handler…, now added to 37. The ledger is regenerated after 37. Input/Textarea can now go into the showcase.

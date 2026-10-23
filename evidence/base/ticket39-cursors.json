@@ -1,0 +1,30 @@
+{
+  "ticket": "39-cursors",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved: no core bug and no missing Base cursor site; the missing pointer is upstream behaviour (the styled component crate adds it), now covered by tests",
+  "findings": {
+    "base_sites": "all 17 upstream cursor lines in crates/base/src are ported (scrollbar.rs:1609; resizable/resize_handle.rs:264-300 x6; input/base/element.rs:1435,3176; input/base/state.rs:4485,4487; text/inline.rs:980,987; text/inline_flow.rs:274; text/node.rs:2219; text/inline_object.rs:334,364). The earlier 9-vs-16 count was a grep artifact",
+    "button_link": "upstream Base Button (button.rs:207-257) and Link (link.rs:164-208) set no cursor; the pointer comes from the styled component crate (component/src/button/button.rs:655, component/src/link.rs:90), out of scope. A Base-only app shows the arrow, as upstream does",
+    "dock_splitters": "dock splitter cursors are drawn by the skin (upstream examples/showcase/components/dock.rs:126-160); the Go examples lacked the strip",
+    "core_path": "div paint records the cursor on its hitbox (div.go:1697-1704); interact.go resolves it as window.rs:1200-1213; reset at the frame end (render.go:224, window.rs:3277) and on hit-test change (mouseevent.go:590-593, window.rs:6083-6086); App.SetCursorStyle -> Host.SetCursorStyle only while hovered (platform.rs:780-790); WM_SETCURSOR shows the stored handle (events.rs:1170-1211)",
+    "cursor_gate": "the three cursor-gate tests check message results and the visibility flag; the real mouse crossing their shown window resets the flag, so they stay environmental"
+  },
+  "implementation": {
+    "files": [
+      "gpui/interact.go: the two platform calls in resetCursorStyle go through replaceable functions (defaults unchanged); exported WindowCursorStyle(w)",
+      "gpui/cursor_platform_test.go (new, 4 tests with a fake platform)",
+      "base/cursor_test.go (new, 6 tests: styled button Pointer / unstyled Arrow / disabled NotAllowed; input IBeam, disabled Arrow; multi-line IBeam then Crosshair with Alt; resizable handles ResizeColumn/ResizeRow)"
+    ]
+  },
+  "tests": {
+    "orchestrator_rerun": "CGO_ENABLED=0 go vet ./gpui ./base clean; go test ./base -skip Real -run Cursor ok; go test ./gpui -run TestCursor ok (headless only; the user is gaming)",
+    "worker": "gpui 339 pass with the real-host tests skipped; base ok (its run included the 12 TestReal* tests, which briefly showed non-activated windows)"
+  },
+  "follow_ups": [
+    "by hand on a real window when the machine is free: hover an input (I-beam), a resizable handle (resize), a CursorPointer-styled Button (hand); run TestWin32InputRealWindowClickHoverCursor, TestFreshWindowSetCursorAnswersWithArrow, TestWindowBornUnderCursorStyleSeedsIt",
+    "examples: style buttons/links with CursorPointer and add the dock resize strip (forwarded to the gallery worker)",
+    "base has 12 TestReal* real-window tests: run `go test ./base -skip Real` while the user is using the machine"
+  ]
+}

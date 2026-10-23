@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: resolved
+Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: 21
 
 ## Question
@@ -30,3 +30,23 @@ Blocked by: 21
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-23 — Claimed and delegated. Owns the input engine files (base/input*.go except the ticket-19 data layer, plus textarea*.go and number_input_step.go) and new base/editor*.go. Also owns the 61 editor-only state.rs tests that 21 marked not applicable, and the 9 element.rs editor tests 20 marked not applicable (gutter, decorations, editor scrollbar).
+- 2026-10-23 — The worker hit the usage limit, was resumed after the reset, and finished. The orchestrator verified it on a snapshot.
+
+## Answer
+
+Editor mode is ported in base/editor*.go plus changes to the input engine. It covers:
+- `NewEditorState` and the Editor component
+- the language provider and language config
+- auto-close, smart indent and the bracket split on Enter
+- folding, the line-number gutter and the editor scrollbar
+- ghost text painting
+- highlighting hooks, decorations and search
+
+Tests:
+- Ported: 80 of 83 upstream tests in scope, 1 of them deviated: the blur test runs only its decoration half, because the hover half needs LSP (ticket 24).
+- Not applicable: 3. The diagnostics scroll test is ticket 24's, one test needs `AnyView::cached`, and one needs the native context menu.
+- Ticket 21's 16 "editor mode opened by hand" deviations are retired.
+- 23 also fixed a blink-cursor task that kept respawning after `App.Shutdown`.
+
+Orchestrator re-run on a snapshot of HEAD plus 23's files: vet, gofmt and build are clean, `go test ./base` has 943 pass and 3 skip, and `-count=2` is ok. Evidence: [ticket23-editor-basics.json](../../../evidence/base/ticket23-editor-basics.json).

@@ -1,0 +1,58 @@
+{
+  "ticket": "23-editor-basics",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved (diagnostics/LSP hooks left for 24)",
+  "summary": "Editor mode: NewEditorState and the Editor component, language provider/config, auto-close, smart indent and the bracket split on Enter, folding, the line-number gutter, the editor scrollbar, ghost text painting, highlighting hooks (HighlightStyles, FoldIconRenderer), decorations and search; the stand-ins left by 20/21 are filled. Fixes a blink-cursor task that kept respawning after App.Shutdown.",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/input/editor/{mod,indent,language,language_config,auto_close,highlighting,decorations,search}.rs, display_map/fold_map.rs @ c0820693",
+    "upstream-base/ce/crates/base/src/input/base/{state,element}.rs (editor tests)"
+  ],
+  "implementation": {
+    "files": [
+      "new: base/editor{,_language_config,_language,_auto_close,_indent,_highlighting,_decorations,_search,_element}.go",
+      "changed: base/input_{mode,kind,state,state_edit,state_render,state_style,element,blink_cursor,folding,movement}.go; input_change.go (tokenDelta narrowed to *tokenDelta; doc comment by the orchestrator)",
+      "tests: base/editor_{state,element,unit}_test.go; input_mode_test.go, textarea_state_test.go, textarea_multi_cursor_test.go updated; shutdownAtCleanup in the input/textarea harnesses"
+    ],
+    "history": "The worker hit the 2026-10-23 usage limit before writing and was resumed with its context after the reset."
+  },
+  "tests": {
+    "per_file": {
+      "state.rs (left by 20/21)": "61: 58 ported, 1 deviated (test_blur_keeps_decorations: decoration half only; the hover half needs present_hover, LSP -> 24), 3 n/a (diagnostics scroll -> 24; cursor layout consumer needs AnyView::cached; native context menu)",
+      "element.rs (editor)": "9/9",
+      "decorations.rs": "6/6",
+      "search.rs": "5/5",
+      "indent.rs": "2/2"
+    },
+    "ticket21_deviations_retired": "the 16 'editor mode opened by hand' tests now build with NewEditorState(..).Language(\"sql\"); test_code_editor, the read-only multi-cursor and the read-only replaceability tests run in full",
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD 3620dee + ticket-23 files (26 and 29 in-progress files excluded)",
+        "command": "CGO_ENABLED=0 go vet ./base && gofmt -l base && go build ./...",
+        "result": "clean; no basewip tags"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=1 -v",
+        "result": "ok, 943 PASS (862 + 81), 0 FAIL, 3 SKIP (ticket-30 deferrals)"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=2",
+        "result": "ok"
+      }
+    ]
+  },
+  "deviations": [
+    "language-config builders are WithBrackets/WithAutoClosingPairs/WithAutoCloseBefore/WithIndentationRules/WithNotIn (Go cannot share a field and method name)",
+    "Option<Vec>: nil slice is None (ticket 19 convention)",
+    "LanguageProvider defaults in an embeddable BaseLanguageProvider; InputHighlighter default methods as optional interfaces (InputHighlighterBatch, InputHighlighterEditFolds)",
+    "the syntax-provider cache is keyed by an install counter instead of Rc identity",
+    "search matches ASCII-lowercased bytes with strings.Index instead of aho-corasick (same non-overlapping results); the query field is unexported",
+    "editor-only methods panic on the wrong mode (as 20/21)",
+    "blink cursor: replaceTask stops when its sleep returns cancelled (a dropped Rust task stops at its await)"
+  ],
+  "follow_ups": [
+    "24: diagnostics, LSP hooks, semantic-token/diagnostic styles, the hover-definition hitbox, inline-completion text for ghost text",
+    "optional: type input_undo_manager.go autoClosedPairsBefore/After as autoClosedPairs instead of any"
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "ticket": "18-scroll-family",
+  "effort": "gpui-base",
+  "date": "2026-10-22",
+  "branch": "base-port-2",
+  "result": "resolved (optional gpui seams recorded)",
+  "summary": "Scroll family in the root base package: Scrollbar (ScrollbarHandle over gpui.ScrollHandle / UniformListScrollHandle / ListState, modes, drag, throttled MaxFps, styles; the ticket-13 scrollbar value types moved into scrollbar.go), ScrollBounce (spring overscroll), ScrollableMask (wheel-axis remapping, horizontalScrollArea), AutoScroll (drag edge auto-scroll), VirtualList (VVirtualList/HVirtualList with sizing behaviors, ScrollToItem/ScrollToBottom).",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/{scrollbar,scroll_bounce,scrollable_mask,auto_scroll,virtual_list}.rs @ c0820693"
+  ],
+  "implementation": {
+    "files": [
+      "base/{scrollbar,scroll_bounce,scrollable_mask,auto_scroll,virtual_list}.go + _test.go",
+      "base/scrollbar_values.go deleted (types moved unchanged into scrollbar.go)"
+    ]
+  },
+  "tests": {
+    "upstream_ported": 83,
+    "not_applicable": 0,
+    "go_only": 4,
+    "per_module": "scrollbar 35 (22 pure, 13 window), scroll_bounce 23 (10, 13), scrollable_mask 16 (window), virtual_list 7 (4, 3), auto_scroll 2",
+    "adjusted": [
+      "instants are fixed readings of App.Now()",
+      "throttle test advances 34ms instead of 1/30s (whole-ms virtual clock)",
+      "wheel packets relying on Rust's default touch phase pass TouchPhaseMoved (Go zero value is Started)",
+      "gpui.ListState takes no alignment argument (always Top)",
+      "throttle test's cx.observe goes through an observer entity"
+    ],
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD 3bfcc65 + the staged ticket-18 files (ticket 27 in-progress files excluded)",
+        "command": "CGO_ENABLED=0 go vet ./base && gofmt -l base && go build ./...",
+        "result": "clean"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=1 -v",
+        "result": "ok, 379 PASS (292 + 87), 0 FAIL, 0 SKIP"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=3 -run 'Scroll|VirtualList|AutoScroll'",
+        "result": "ok"
+      }
+    ]
+  },
+  "gap_2b_block_sites": [
+    "horizontalScrollArea wrapper div (ScrollableMask's move-up-by-own-height placement is right only under block layout; removing it breaks 6 tests)",
+    "horizontalScrollArea scrolled div (before the caller's style; under Flex the 300px child shrank to the viewport)",
+    "VirtualList inner div (+ flex_shrink 0 on its slot)",
+    "scrollable_mask test views: .relative() mask parents and the nested outer scroller"
+  ],
+  "deviations": [
+    "VirtualList structure: no public core way for an outside element to drive a div's interactivity or set a scroll handle's bounds/max offset, so the inner tracked div holds one content slot sized to the items; Auto sizing positions the slot absolutely (list sizes from its style), Infer sizing keeps it in flow (auto size = content size, where upstream takes a definite available size whole; they agree whenever the size is definite, incl. the default size_full)",
+    "ScrollBounce and VirtualList re-apply their prepaint offset at paint (core elements re-resolve bounds at paint)",
+    "call-site element ids are file:line (no column in Go)",
+    "JsonSchema dropped from ScrollbarMode; DeferredScrollToItem, yellow(), transparent_white() defined locally citing the core pin"
+  ],
+  "follow_ups": [
+    "optional gpui: run a div's interactivity with a custom content size, or exported ScrollHandle bounds/max-offset setters (exact VirtualList sizing)",
+    "optional gpui: export DeferredScrollToItem, Yellow(), TransparentWhite()",
+    "optional gpui: forward the window-root auto-size stretch through an AnyElement (ScrollBounce as an auto-sized window root)",
+    "optional gpui: entity-bound Context.Spawn, app-level Observe"
+  ],
+  "native_artifact": "unchanged (rev 11)"
+}

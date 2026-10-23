@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: resolved
+Assignee: base-port-2 orchestrator (2026-10-22)
 Blocked by: 07, 08, 13, 14
 
 ## Question
@@ -31,3 +31,8 @@ Scrollbar (over ScrollHandle, UniformList and List), ScrollBounce, ScrollableMas
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-22 — Claimed by the base-port-2 orchestrator and delegated.
+
+## Answer
+
+Resolved 2026-10-22. Scrollbar, ScrollBounce, ScrollableMask, AutoScroll and VirtualList in the root `base` package (the scrollbar value types moved into scrollbar.go). All 83 upstream tests ported + 4 Go-only; 379 base tests pass on the orchestrator's snapshot rerun. Main deviation: VirtualList drives scrolling through an inner div with one content slot because the core exposes no external scroll-metrics setter (sizing agrees with upstream whenever the list size is definite). Optional core seams that would remove the deviations are listed in the [evidence](../../../evidence/base/ticket18-scroll-family.json).

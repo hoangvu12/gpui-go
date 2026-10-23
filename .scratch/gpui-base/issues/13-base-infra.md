@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
-Assignee: base-port orchestrator (wave 1d/2a)
+Status: resolved
+Assignee: base-port-2 orchestrator (2026-10-22)
 Blocked by: 05, 06, 09, 11
 
 ## Question
@@ -32,3 +32,12 @@ Blocked by: 05, 06, 09, 11
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-22 — Reopened: the 2026-10-19 worker died with its session and left nothing on disk (status set back to open). Re-claimed the same day by the base-port-2 orchestrator (worktree gpui-go-wt-base, branch base-port-2) and delegated.
+
+## Answer
+
+Resolved 2026-10-22 on `base-port-2`. Package `github.com/hoangvu12/gpui-go/base` (one package mirroring the crate; data structures in subpackages per ticket 15; naming rules in `base/doc.go`: `T::f` → `TF`, `new` → `NewT`, extension traits → wrappers such as `StyledExtOf(gpui.Div()).HFlex()`). Covers lib, theme, theme_tokens (upstream shadcn token names), styled, state_style, element_ext, event, observe, measure, component_traits, actions, geometry, index_path, list_settings, global_state, reduce_motion (SystemParametersInfoW via syscall), root + plugins, history, undo_history.
+
+Tests: 59 (46 upstream ported, 4 of them adapted; 13 Go-only), orchestrator rerun on an index snapshot: all pass, vet/gofmt clean. Not applicable: macos_accessibility.rs, async_util.rs (Go chan), test_support.rs (Kit-only consumer).
+
+Deviations and hand-offs: see [evidence](../../../evidence/base/ticket13-base-infra.json). Main one: Base's crates.io gpui-ce 0.2.2 defaults divs to `display: Block`, our core pin to Flex (map gap 2b); the styled cross-axis test is adapted. Hand-offs: Theme.plot → 14/31; Root Copy + TextSelectionLayer → 20/29; activeFocusTrap → 16; scrollbar values → 18; text_view_state_stack → 28; a gpui `IsTestScheduler` helper would replace the reduce-motion test-scheduler guess.
