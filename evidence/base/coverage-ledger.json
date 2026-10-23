@@ -19,47 +19,32 @@
     "tests": {
       "total": 1238,
       "ported": 1180,
-      "deviated": 38,
+      "deviated": 39,
       "not_applicable": 7,
       "out_of_scope": 12,
       "deferred": 0,
-      "gap": 1
+      "gap": 0
     },
     "tests_crate_only": {
       "total": 1226,
       "ported": 1180,
-      "deviated": 38,
+      "deviated": 39,
       "not_applicable": 7,
       "out_of_scope": 0,
       "deferred": 0,
-      "gap": 1
+      "gap": 0
     },
-    "tests_resolved_by_citation": 1122,
+    "tests_resolved_by_citation": 1125,
     "tests_resolved_by_go_test_name": 85,
-    "tests_resolved_by_evidence_table": 18,
-    "gaps": 1
+    "tests_resolved_by_evidence_table": 16,
+    "gaps": 0
   },
-  "gaps": [
-    "test text/text_view.rs:2227 linked_image_handler_receives_left_middle_and_right_clicks"
-  ],
+  "gaps": [],
   "unknown_citations": [],
-  "citations_beyond_upstream_eof": [
-    "base/input_blink_cursor_test.go:153 U:input/base/blink_cursor.rs:231-249 (the upstream file has 247 lines)",
-    "base/text_selection_word_test.go:7 U:text/selection.rs:198-222 (the upstream file has 173 lines)",
-    "base/text_selection_word_test.go:25 U:text/selection.rs:224-253 (the upstream file has 173 lines)"
-  ],
+  "citations_beyond_upstream_eof": [],
   "unused_overrides": [
-    "text/state.rs::a_line_of_an_inline_flow_counts_as_shown_once_scrolled_to",
-    "text/state.rs::a_position_after_the_last_character_reveals_its_line",
-    "text/state.rs::a_range_starting_on_a_line_break_in_an_inline_flow_reveals_the_next_line",
-    "text/state.rs::a_range_starting_on_a_line_break_reveals_the_next_line",
-    "text/state.rs::a_reveal_that_cannot_be_shown_gives_up",
-    "text/state.rs::a_scrollable_view_scrolls_to_a_line_inside_a_long_paragraph",
-    "text/state.rs::an_enclosing_list_scrolls_to_a_line_of_a_fit_content_view",
-    "text/state.rs::on_reveal_scrolls_a_container_that_ignores_scroll_requests",
-    "text/state.rs::revealing_a_visible_line_does_not_scroll",
-    "text/state.rs::the_end_of_a_block_above_reveals_its_last_line",
-    "text/state.rs::the_end_of_the_text_and_its_separators_reveal_the_last_line"
+    "text/selection.rs::test_char_type_from_char",
+    "text/selection.rs::test_word_range_at"
   ],
   "modules": [
     {
@@ -4805,11 +4790,11 @@
       "tests": {
         "total": 36,
         "ported": 28,
-        "deviated": 4,
+        "deviated": 5,
         "not_applicable": 3,
         "out_of_scope": 0,
         "deferred": 0,
-        "gap": 1
+        "gap": 0
       },
       "reason": "some upstream tests deviate, are not applicable or are deferred (see tests)"
     },
@@ -18925,24 +18910,26 @@
       "name": "test_char_type_from_char",
       "line": 116,
       "status": "ported",
-      "source": "evidence",
+      "source": "citation",
+      "go_tests": [
+        "base/text_selection_word_test.go:TestTextCharTypeFromChar"
+      ],
       "tickets": [
         "29"
-      ],
-      "reason": "ported as TestTextCharTypeFromChar (base/text_selection_word_test.go; its U: line citation is stale); ticket29 evidence text/selection.rs 2/2",
-      "evidence": "evidence/base/ticket29-text-selection.json"
+      ]
     },
     {
       "module": "crates/base/src/text/selection.rs",
       "name": "test_word_range_at",
       "line": 142,
       "status": "ported",
-      "source": "evidence",
+      "source": "citation",
+      "go_tests": [
+        "base/text_selection_word_test.go:TestTextSelectionWordRangeAt"
+      ],
       "tickets": [
         "29"
-      ],
-      "reason": "ported as TestTextSelectionWordRangeAt (base/text_selection_word_test.go; its U: line citation is stale); ticket29 evidence text/selection.rs 2/2",
-      "evidence": "evidence/base/ticket29-text-selection.json"
+      ]
     },
     {
       "module": "crates/base/src/text/state.rs",
@@ -20799,14 +20786,17 @@
       "module": "crates/base/src/text/text_view.rs",
       "name": "linked_image_handler_receives_left_middle_and_right_clicks",
       "line": 2227,
-      "status": "GAP",
-      "source": "none",
+      "status": "deviated",
+      "source": "citation",
+      "go_tests": [
+        "base/text_view_upstream_test.go:TestLinkedImageHandlerReceivesLeftMiddleAndRightClicks"
+      ],
       "tickets": [
         "28",
         "29",
         "30"
       ],
-      "reason": "no Go test cites it and no ticket evidence accounts for it"
+      "reason": "the citing Go test records a deviation (see its comment)"
     },
     {
       "module": "crates/base/src/text/text_view.rs",

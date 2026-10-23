@@ -13,8 +13,7 @@ type override struct {
 }
 
 const (
-	revealReason = "not ported yet: needs a block laid out on many rows (the TestApp text system lays a document on one visual line); all but on_reveal/gives_up also need Window::request_autoscroll — owned by open ticket 37 (ticket30 evidence reveal_not_ported; base/text_range_highlight_reveal_test.go header)"
-	openedURL    = "not applicable: asserts cx.opened_url(), which gpui-go's TestApp does not record (ticket28 evidence text_view.rs; base/text_view_upstream_test.go header)"
+	openedURL = "not applicable: asserts cx.opened_url(), which gpui-go's TestApp does not record (ticket28 evidence text_view.rs; base/text_view_upstream_test.go header)"
 )
 
 // overrides is keyed "module::fn" (module relative to crates/base/src).
@@ -36,17 +35,6 @@ var overrides = map[string]override{
 	"text/text_view.rs::right_click_does_not_open_url_without_handler":               {statusNA, "28", openedURL, false},
 
 	// Deferred to the open ticket 37 (request_autoscroll).
-	"text/state.rs::a_scrollable_view_scrolls_to_a_line_inside_a_long_paragraph":              {statusDeferred, "37", revealReason, false},
-	"text/state.rs::revealing_a_visible_line_does_not_scroll":                                 {statusDeferred, "37", revealReason, false},
-	"text/state.rs::an_enclosing_list_scrolls_to_a_line_of_a_fit_content_view":                {statusDeferred, "37", revealReason, false},
-	"text/state.rs::on_reveal_scrolls_a_container_that_ignores_scroll_requests":               {statusDeferred, "37", revealReason, false},
-	"text/state.rs::a_reveal_that_cannot_be_shown_gives_up":                                   {statusDeferred, "37", revealReason, false},
-	"text/state.rs::a_position_after_the_last_character_reveals_its_line":                     {statusDeferred, "37", revealReason, false},
-	"text/state.rs::the_end_of_the_text_and_its_separators_reveal_the_last_line":              {statusDeferred, "37", revealReason, false},
-	"text/state.rs::the_end_of_a_block_above_reveals_its_last_line":                           {statusDeferred, "37", revealReason, false},
-	"text/state.rs::a_line_of_an_inline_flow_counts_as_shown_once_scrolled_to":                {statusDeferred, "37", revealReason, false},
-	"text/state.rs::a_range_starting_on_a_line_break_reveals_the_next_line":                   {statusDeferred, "37", revealReason, false},
-	"text/state.rs::a_range_starting_on_a_line_break_in_an_inline_flow_reveals_the_next_line": {statusDeferred, "37", revealReason, false},
 
 	// Deviations the evidence names that the citing Go comment does not.
 	"global_state.rs::initialization_is_idempotent_and_suppression_can_be_reset":  {statusDeviated, "13", "adapted: drop(token) becomes Release() (ticket13 evidence upstream_ported_detail)", true},

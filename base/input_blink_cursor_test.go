@@ -150,7 +150,7 @@ func TestBlinkCursorStoppingAPausedCursorEndsTheBlinkLoop(t *testing.T) {
 	}
 }
 
-// U:input/base/blink_cursor.rs:231-249
+// U:input/base/blink_cursor.rs:227-245
 func TestBlinkCursorStoppingABlinkingCursorEndsTheBlinkLoop(t *testing.T) {
 	ta := gpui.NewTestApp()
 	shutdownAtCleanup(t, ta)
