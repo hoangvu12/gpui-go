@@ -275,6 +275,11 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 	fontSize := textStyle.FontSizePixels(rem)
 	lineHeight := PixelSnap(w, textStyle.LineHeightPixels(fontSize, rem))
 	lineClamp := textLineClamp(textStyle)
+	// The pinned TextLayout::layout applies the style's text-transform
+	// before shaping (elements/text.rs:895): the shaped document and the
+	// published inline content carry the transformed text. The mapping
+	// preserves byte length, so the covering runs stay valid.
+	text = applyTextTransformPreservingByteLen(text, textStyle.TextTransform)
 
 	state := l.state
 	measure := func(req MeasureRequest) Size {
@@ -290,6 +295,9 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 			}
 		}
 		truncation := EvaluateTextOverflow(textStyle, req)
+		// The CSS ellipsis marker resolves from the primary font ("…" or
+		// "...", text_truncate.go).
+		truncation = resolveTruncationAffix(frameTextSystem(w), textStyle.FontDescriptorOf(), truncation)
 		// The cached-layout reuse (R:elements/text.rs:931-946): neither
 		// this request nor the cached layout may truncate.
 		if inner := state.inner; inner != nil && inner.size != nil &&
@@ -298,18 +306,21 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 			return *inner.size
 		}
 		seam := frameTextSystem(w)
-		text, runs := applyTextTruncation(text, runs, wrapWidth, textStyle.LineClamp, truncation,
+		// A per-invocation copy: the truncation below rewrites it, and
+		// the measure closure may run more than once.
+		effective := text
+		effective, runs := applyTextTruncation(effective, runs, wrapWidth, textStyle.LineClamp, truncation,
 			func(candidate string, candidateRuns []TextRun, wrapWidth *float32) (shapedText, error) {
 				return shapeStyledRuns(seam, candidate, fontSize, candidateRuns, wrapWidth, nil)
 			})
-		document, err := shapeStyledRuns(seam, text, fontSize, runs, wrapWidth, lineClamp)
+		document, err := shapeStyledRuns(seam, effective, fontSize, runs, wrapWidth, lineClamp)
 		if err != nil {
 			panic(fmt.Sprintf("gpui: StyledText shaping failed: %v", err))
 		}
 		size := document.size(lineHeight)
 		state.inner = &textLayoutInner{
 			len:           document.textLen(),
-			text:          text,
+			text:          effective,
 			document:      document,
 			runs:          mergeDecorationRuns(runs),
 			lineHeight:    lineHeight,

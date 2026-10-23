@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hoangvu12/gpui-go/internal/parity"
+	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/textstyle"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/tracer"
 )
 
@@ -43,6 +44,11 @@ func TestFixtures(t *testing.T) {
 	}
 }
 
-// The tracer's own discriminator: the deliberately-wrong views are in
-// tracer_test.go (package tracer_test), next to the fixture.
-var _ = tracer.Fixture.Name
+// The fixture packages register through the imports above (tracer is
+// ticket 01's, textstyle is ticket 06's); the wrong-view discrimination
+// tests live beside them (fixtures/tracer/tracer_test.go,
+// fixtures/textstyle/textstyle_test.go).
+var (
+	_ = tracer.Fixture.Name
+	_ = textstyle.TransformFixture.Name
+)

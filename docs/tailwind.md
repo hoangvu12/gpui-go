@@ -62,6 +62,8 @@ A class and its style method have the same name:
 | `text-sm`, `text-2xl`, `text-6xl` | `TextSm()`, `Text2xl()`, `Text6xl()` |
 | `font-medium`, `font-bold` | `FontMedium()`, `FontBold()` |
 | `leading-tight`, `uppercase`, `italic`, `underline` | `LeadingTight()`, `Uppercase()`, `Italic()`, `Underline()` |
+| `font-sans`, `font-serif`, `font-mono` | The Windows families Chrome resolves Tailwind's default stacks to (the system UI font, Georgia, Consolas) |
+| `tabular-nums` and the other numeric variants (`proportional-nums`, `lining-nums`, `oldstyle-nums`, `slashed-zero`, `ordinal`, `diagonal-fractions`, `stacked-fractions`, `normal-nums`) | The class sets the OpenType feature (`tnum`, `pnum`, `lnum`, `onum`, `zero`, `ordn`, `frac`, `afrc`; `normal-nums` clears them) |
 | `text-center`, `truncate`, `whitespace-nowrap` | `TextCenter()`, `Truncate()`, `WhitespaceNowrap()` |
 | `rounded-lg`, `rounded-full`, `rounded-t-md` | `RoundedLg()`, `RoundedFull()`, `RoundedTMd()` |
 | `border`, `border-2`, `border-t`, `border-dashed` | `Border1()`, `Border2()`, `BorderT1()`, `BorderDashed()` |
@@ -197,8 +199,6 @@ A rejected class is skipped, the rest of the string still applies, and the reaso
 | `whitespace-pre*`, `break-words`, `break-all`, `hyphens-*`, `text-balance`, `text-pretty` | Only `whitespace-normal` and `whitespace-nowrap` are supported. |
 | `text-justify` | Justified text is not supported. |
 | `antialiased`, `subpixel-antialiased` | GPUI chooses text antialiasing itself. Drop it. |
-| `tabular-nums` and other numeric variants | Call `.FontFeatures(…)`. |
-| `font-sans`, `font-serif`, `font-mono` | Call `.FontFamily("…")` with an installed or embedded family. |
 | `tracking-tight` and other named `tracking-*` | Named values are em-based. Use `tracking-[0.5px]`. |
 | `no-underline` | Leave `underline` out, or call `.TextDecorationNone()`. |
 | `decoration-*`, `underline-offset-*` | Use `underline` with `text-decoration-wavy` / `text-decoration-2` in the same string, or call `.TextDecorationColor(c)`. |

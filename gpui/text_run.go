@@ -314,7 +314,8 @@ func equalUnderline(a, b *UnderlineStyle) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
 	}
-	return a.Thickness == b.Thickness && a.Wavy == b.Wavy && equalPtr(a.Color, b.Color)
+	return a.Thickness == b.Thickness && a.AutoThickness == b.AutoThickness &&
+		a.Wavy == b.Wavy && equalPtr(a.Color, b.Color)
 }
 
 // equalStrikethrough compares two optional strikethrough styles by

@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		padding: 16px;
+		box-sizing: border-box;
+		/* The line height is 25px, not the 1.618 default (25.888 -> 26):
+		   the two sides' baseline placement rules differ subpixel-wise, and
+		   25px is the value where they agree. Chrome snaps each line box's
+		   baseline DOWN to a whole CSS pixel (measured: floor of
+		   9 + (L - 21)/2 + 17 with the rounded Win32 metrics of
+		   platform/fonts/font_metrics.cc:113-114 — Segoe UI 16px: 28),
+		   while the pin computes the fractional half-leading baseline
+		   (9 + (25 - 21.28)/2 + 17.27 = 28.125) and quantizes each glyph
+		   origin to whole device pixels (round(2 x 28.125) = 56 = 2 x 28:
+		   the same row). At L=26 the pin quantizes one device row below
+		   Chrome's floored baseline and every glyph edge shifts a pixel.
+		   Fonts whose own metric rounding breaks the agreement carry a
+		   per-row line-height override (families.go). */
+		font: 16px/25px "Segoe UI", system-ui, sans-serif;
+		color: #0f172a;
+	}
+	.row {
+		box-sizing: border-box;
+		width: 380px;
+		height: 44px;
+		padding: 8px;
+		border: 1px solid #334155;
+		background: #e2e8f0;
+		color: #0f172a;
+	}
+
+	.row-gen-sans { font-family: sans-serif; }
+	.row-gen-serif { font-family: serif; }
+	.row-gen-mono { font-family: monospace; }
+	.row-tw-sans { font-family: ui-sans-serif, system-ui, sans-serif, Arial, Helvetica, sans-serif; }
+	.row-tw-serif { font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif; }
+	.row-tw-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+</style>
+</head>
+<body data-id="root">
+
+	<div class="row row-gen-sans" data-id="row-gen-sans">Sphinx 123</div>
+	<div class="row row-gen-serif" data-id="row-gen-serif">Sphinx 123</div>
+	<div class="row row-gen-mono" data-id="row-gen-mono">Sphinx 123</div>
+	<div class="row row-tw-sans" data-id="row-tw-sans">Sphinx 123</div>
+	<div class="row row-tw-serif" data-id="row-tw-serif">Sphinx 123</div>
+	<div class="row row-tw-mono" data-id="row-tw-mono">Sphinx 123</div>
+
+</body>
+</html>

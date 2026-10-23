@@ -1,0 +1,56 @@
+{
+  "name": "textstyle-generic-families",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T22:50:10Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "row-gen-mono": {
+      "x": 16,
+      "y": 128,
+      "width": 380,
+      "height": 44
+    },
+    "row-gen-sans": {
+      "x": 16,
+      "y": 16,
+      "width": 380,
+      "height": 44
+    },
+    "row-gen-serif": {
+      "x": 16,
+      "y": 72,
+      "width": 380,
+      "height": 44
+    },
+    "row-tw-mono": {
+      "x": 16,
+      "y": 296,
+      "width": 380,
+      "height": 44
+    },
+    "row-tw-sans": {
+      "x": 16,
+      "y": 184,
+      "width": 380,
+      "height": 44
+    },
+    "row-tw-serif": {
+      "x": 16,
+      "y": 240,
+      "width": 380,
+      "height": 44
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

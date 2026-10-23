@@ -682,9 +682,12 @@ func (s *Styled[Self]) NotItalic[_ lazy]() Self {
 	return s.self
 }
 
-// Underline sets a 1px underline (styled.rs:773).
+// Underline sets an underline with the browser's auto geometry
+// (styled.rs:773 sets 1px; the ticket-06 browser rule replaces the
+// thickness and the offset with Chrome's — see UnderlineStyle.
+// AutoThickness and paintRunDecorations).
 func (s *Styled[Self]) Underline[_ lazy]() Self {
-	s.TextStyleMut().Underline = Some(UnderlineStyle{Thickness: 1})
+	s.TextStyleMut().Underline = Some(UnderlineStyle{AutoThickness: true})
 	return s.self
 }
 
@@ -752,7 +755,10 @@ func (s *Styled[Self]) TextDecoration8[_ lazy]() Self {
 	return s.underlineWith(func(u *UnderlineStyle) { u.Thickness = 8 })
 }
 
-// FontFamily sets the font family (styled.rs:873).
+// FontFamily sets the font family (styled.rs:873). The CSS generic
+// families ("sans-serif", "serif", "monospace", case-insensitive)
+// resolve to Chrome's Windows defaults at the native boundary — Arial,
+// Times New Roman and Consolas (text.go resolveGenericFontFamily).
 func (s *Styled[Self]) FontFamily[_ lazy](familyName string) Self {
 	s.TextStyleMut().FontFamily = Some(familyName)
 	return s.self

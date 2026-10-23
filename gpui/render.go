@@ -118,9 +118,18 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 	beginFrameTracking(w)
 
 	baseMask := Bounds{Origin: Point{}, Size: viewport}
+	paint := NewPaintContext(scale, baseMask, 1.0)
+	// The frame's text paint mode input: a non-opaque window background
+	// forces grayscale text (the pin's should_use_subpixel_rendering
+	// first check, window.rs:4926-4931; ticket 06). Test windows are
+	// opaque (the reference test window's default); a real window's
+	// appearance is read once per frame from the live host record, and
+	// a closed-host race falls back to the Opaque default rather than
+	// failing the frame.
+	paint.Background = windowDrawBackground(w)
 	frame := &frameDrawState{
 		scene:         scene,
-		paint:         NewPaintContext(scale, baseMask, 1.0),
+		paint:         paint,
 		viewport:      viewport,
 		scale:         scale,
 		rem:           ds.rem,
@@ -372,6 +381,23 @@ func windowDrawGeometry(w *Window) (Size, float32, error) {
 		return Size{}, 0, err
 	}
 	return bounds.Size, scale, nil
+}
+
+// windowDrawBackground resolves the window's background appearance for
+// the frame's text paint mode (ticket 06): test windows are opaque (the
+// reference test window's background_appearance default), real windows
+// read the live host record; an unreadable host (a closed-window race)
+// falls back to Opaque, the platform default, never failing the frame.
+func windowDrawBackground(w *Window) WindowBackgroundAppearance {
+	ds := drawState(w)
+	if ds.testWindow {
+		return WindowBackgroundOpaque
+	}
+	appearance, err := w.BackgroundAppearance()
+	if err != nil {
+		return WindowBackgroundOpaque
+	}
+	return appearance
 }
 
 // PresentWindow presents the window's last drawn frame through the

@@ -449,7 +449,7 @@ func (s *realShapedText) byteIndexForPixelPoint(point Point, lineHeight float32)
 // testStops returns the stub's caret stops including the end stop (the
 // pinned TestPlatformTextLayout stops, platform.rs:1248-1255).
 func (t *testShapedText) testStops() []caretStop {
-	emWidth := t.fontSize * testTextAdvanceWidth / testTextUnitsPerEm
+	emWidth := t.textSize * testTextAdvanceWidth / testTextUnitsPerEm
 	stops := []caretStop{{index: 0, x: 0}}
 	position := float32(0)
 	index := 0

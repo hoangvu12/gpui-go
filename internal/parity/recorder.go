@@ -31,6 +31,12 @@ import (
 // read out after dispatch (matching the replay's post-dispatch
 // defaultPrevented semantics).
 func instrumentScript(kinds []string) string {
+	// A nil kind list (a fixture with no events) marshals as null,
+	// which is not iterable in the page; an empty list instruments
+	// nothing, which is the intent.
+	if kinds == nil {
+		kinds = []string{}
+	}
 	kindList, _ := json.Marshal(kinds)
 	return fmt.Sprintf(`(() => {
 	window.__events = [];

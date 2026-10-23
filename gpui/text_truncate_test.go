@@ -75,9 +75,19 @@ type truncatePaintRecorder struct {
 	painted *[]string
 }
 
+// paint records the document's text (the ordinary text-element paint
+// path: realShapedText.paint).
 func (r *truncatePaintRecorder) paint(w *Window, origin Point, lineHeight float32, color Hsla) error {
 	*r.painted = append(*r.painted, r.text)
 	return r.shapedText.paint(w, origin, lineHeight, color)
+}
+
+// paintLine records the document's text (the styled-run paint path
+// every text element takes since ticket 06: paintStyledDocument →
+// paintRowGlyphs → paintLine).
+func (r *truncatePaintRecorder) paintLine(w *Window, lineIndex int, origin Point, baseline float32, color Hsla) error {
+	*r.painted = append(*r.painted, r.text)
+	return r.shapedText.paintLine(w, lineIndex, origin, baseline, color)
 }
 
 type truncateView struct {
@@ -196,5 +206,85 @@ func TestStyledTextLineClampTruncatesWrappedText(t *testing.T) {
 	}
 	if rows := strings.Count(styled.Layout().WrappedText(), "\n") + 1; rows != 2 {
 		t.Errorf("WrappedText() = %q: %d rows, want 2", styled.Layout().WrappedText(), rows)
+	}
+}
+
+// noEllipsisPaintSystem is the recording test system whose modeled
+// font LACKS the U+2026 glyph (ticket 06's CSS ellipsis fallback:
+// Chrome's LineTruncator::ComputeEllipsisText, core/layout/inline/
+// line_truncator.cc:103-106, draws "..." when the primary font has
+// no horizontal-ellipsis glyph).
+type noEllipsisPaintSystem struct {
+	*truncatePaintSystem
+}
+
+func (r *noEllipsisPaintSystem) glyphForChar(font FontDescriptor, ch rune) (uint32, bool) {
+	return 0, false
+}
+
+// TestLineClampAloneEndsInEllipsis pins ticket 06's browser rule: a
+// line clamp with NO text-overflow style still truncates, and the last
+// line ends with the CSS ellipsis (css-overflow-4 §line-clamp; Chrome
+// ignores the absence of text-overflow). Shapes through the real text
+// service (the test stub never wraps).
+func TestLineClampAloneEndsInEllipsis(t *testing.T) {
+	ta := NewTestApp()
+	app := ta.App()
+	window := NewTestWindow(app, Size{Width: 600, Height: 200})
+	t.Cleanup(func() { CloseTestWindow(window) })
+	text, err := windowTextSystemOf()
+	if err != nil {
+		t.Fatalf("real text system: %v", err)
+	}
+	drawState(window).text = text
+	var styled *StyledText
+	view := NewEntity(app, window.Scope(), func(v *truncateView, _ *Context[truncateView]) {
+		// LineClamp alone: no TextEllipsis anywhere.
+		v.style = func(d *DivElement) *DivElement { return d.OverflowHidden().LineClamp(2) }
+		v.child = func() AnyElement {
+			styled = NewStyledText("one two three four five six seven eight nine ten eleven twelve")
+			return styled.IntoElement()
+		}
+	})
+	window.SetRootView(ViewOf(view))
+	for frame := range 2 {
+		if _, err := DrawWindowFrame(window); err != nil {
+			t.Fatalf("frame %d: DrawWindowFrame: %v", frame, err)
+		}
+	}
+	got := styled.Layout().Text()
+	if !strings.HasSuffix(got, Ellipsis) {
+		t.Errorf("Text() = %q, want the line clamp's ellipsis suffix", got)
+	}
+	if rows := strings.Count(styled.Layout().WrappedText(), "\n") + 1; rows != 2 {
+		t.Errorf("WrappedText() = %q: %d rows, want the clamp's 2", styled.Layout().WrappedText(), rows)
+	}
+}
+
+// TestEllipsisFallsBackToThreeDotsWhenTheFontLacksU2026 pins the
+// marker resolution: a primary font without the horizontal-ellipsis
+// glyph truncates with "..." instead of "…".
+func TestEllipsisFallsBackToThreeDotsWhenTheFontLacksU2026(t *testing.T) {
+	ta := NewTestApp()
+	app := ta.App()
+	window := NewTestWindow(app, Size{Width: 600, Height: 200})
+	t.Cleanup(func() { CloseTestWindow(window) })
+	var painted []string
+	drawState(window).text = &noEllipsisPaintSystem{
+		truncatePaintSystem: &truncatePaintSystem{testTextSystem: &testTextSystem{}, painted: &painted},
+	}
+	view := NewEntity(app, window.Scope(), func(v *truncateView, _ *Context[truncateView]) {
+		v.style = func(d *DivElement) *DivElement { return d.Truncate() }
+		v.child = func() AnyElement { return Text("Hello wonderful world") }
+	})
+	window.SetRootView(ViewOf(view))
+	if _, err := DrawWindowFrame(window); err != nil {
+		t.Fatalf("DrawWindowFrame: %v", err)
+	}
+	if len(painted) != 1 {
+		t.Fatalf("painted %q, want one document", painted)
+	}
+	if !strings.HasSuffix(painted[0], "...") {
+		t.Errorf("painted %q, want the ... fallback suffix", painted[0])
 	}
 }
