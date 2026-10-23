@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hoangvu12/gpui-go/internal/parity"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/boxpaint"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/tracer"
 )
 

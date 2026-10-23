@@ -285,7 +285,10 @@ func (w *Window) PaintImageWithCornerSmoothing(bounds, imageBounds Bounds, corne
 		subTile.BoundsW, subTile.BoundsH = clampedWidth, clampedHeight
 	}
 
-	radii := scaleCorners(cornerRadii.ClampRadiiForQuadSize(visible.Size), ctx.ScaleFactor)
+	// CSS Backgrounds 3 §corner-overlap: overflowing radii scale by one
+	// common factor (the pin clamped each corner to half the shortest
+	// side; see Corners.ConstrainRadiiForQuadSize).
+	radii := scaleCorners(cornerRadii.ConstrainRadiiForQuadSize(visible.Size), ctx.ScaleFactor)
 	if err := frame.scene.InsertPolychromeSprite(PolychromeSprite{
 		Grayscale:       grayscale,
 		CornerSmoothing: clamp01(cornerSmoothing),

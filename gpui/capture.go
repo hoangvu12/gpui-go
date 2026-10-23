@@ -599,13 +599,16 @@ const (
 	ObjectFitNone
 )
 
-// GetBounds returns the bounds of the content within the element
-// bounds (the pinned ObjectFit::get_bounds): the content size is the
-// capture frame's content size (the crop), treated as logical pixels
-// exactly like the pin's Pixels::from(DevicePixels). Degenerate inputs
-// (non-positive content or bounds size) collapse to a zero-size bounds
-// at the element origin instead of the pin's NaN propagation — a
-// recorded guard, the pinned math is otherwise unchanged.
+// GetBounds returns the bounds of the content within the given bounds
+// (the pinned ObjectFit::get_bounds): the content size is the capture
+// frame's content size (the crop), treated as logical pixels exactly
+// like the pin's Pixels::from(DevicePixels). Fill, contain, cover and
+// scale-down match the pin's (and CSS's) math; none is centred instead
+// of sitting at the origin (CSS object-position 50% 50%; see the
+// default case). Degenerate inputs (non-positive content or bounds
+// size) collapse to a zero-size bounds at the element origin instead
+// of the pin's NaN propagation — a recorded guard, the pinned math is
+// otherwise unchanged.
 func (f ObjectFit) GetBounds(bounds Bounds, contentWidth, contentHeight int32) Bounds {
 	if contentWidth <= 0 || contentHeight <= 0 || bounds.Size.Width <= 0 || bounds.Size.Height <= 0 {
 		return Bounds{Origin: bounds.Origin}
@@ -656,7 +659,13 @@ func (f ObjectFit) GetBounds(bounds Bounds, contentWidth, contentHeight int32) B
 		}
 		return center(width, height)
 	default: // ObjectFitNone
-		return Bounds{Origin: bounds.Origin, Size: Size{Width: imageWidth, Height: imageHeight}}
+		// CSS centres object-fit: none: object-position defaults to 50%
+		// 50%, and the none mode places the content at its intrinsic size
+		// at that position (Chromium's ComputeObjectFitAndPositionRect
+		// resolves the position against base - object_size for every
+		// mode, layout_replaced.cc:453-471). Recorded divergence toward
+		// CSS: the pin pins it at the bounds' origin (style.rs:134-137).
+		return center(imageWidth, imageHeight)
 	}
 }
 

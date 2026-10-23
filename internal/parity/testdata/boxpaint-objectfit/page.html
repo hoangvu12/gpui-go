@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 32px;
+	}
+	.frame {
+		width: 128px;
+		height: 108px;
+	}
+	.frame img {
+		display: block;
+		box-sizing: border-box;
+		width: 128px;
+		height: 108px;
+		border: 4px solid #334155;
+		padding: 12px;
+		background: #e2e8f0;
+	}
+</style>
+</head>
+<body>
+	<div class="frame" data-id="img-none">
+		<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAAYklEQVR4nOzQoQ2AQBBEUSC0gENfB0gKoHAcHkMlKBKS7eBIltwb9eXLjFcp3Tfb1j2y8oaIPw0aGhoaGhoaGhoaGjo/ur+PKbry5nOJbPzp92loaGhoaGhoaGhoaOj86GcAyWkFyAIdzbIAAAAASUVORK5CYII=" style="object-fit: none">
+	</div>
+	<div class="frame" data-id="img-contain">
+		<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAAYklEQVR4nOzQoQ2AQBBEUSC0gENfB0gKoHAcHkMlKBKS7eBIltwb9eXLjFcp3Tfb1j2y8oaIPw0aGhoaGhoaGhoaGjo/ur+PKbry5nOJbPzp92loaGhoaGhoaGhoaOj86GcAyWkFyAIdzbIAAAAASUVORK5CYII=" style="object-fit: contain">
+	</div>
+	<div class="frame" data-id="img-cover">
+		<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAAYklEQVR4nOzQoQ2AQBBEUSC0gENfB0gKoHAcHkMlKBKS7eBIltwb9eXLjFcp3Tfb1j2y8oaIPw0aGhoaGhoaGhoaGjo/ur+PKbry5nOJbPzp92loaGhoaGhoaGhoaOj86GcAyWkFyAIdzbIAAAAASUVORK5CYII=" style="object-fit: cover">
+	</div>
+</body>
+</html>
