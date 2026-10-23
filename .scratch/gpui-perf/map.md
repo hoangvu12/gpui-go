@@ -18,6 +18,7 @@ The goal is to cut gpui-go's per-frame CPU, native-call, allocation and startup 
 ## Decisions so far
 
 - [Frame-cost benchmark](issues/01-frame-cost-benchmark.md): `gpui/perf_bench_test.go` + `native.CallCount`. Baseline: 1,000 divs take 16.5k allocs and 8k native calls per frame; the 300-line text page takes 82k allocs, 129k native calls and about 200 ms per frame; an unchanged refresh costs the same as a rebuild.
+- [View caching](issues/04-view-caching.md): `gpui.CachedView` ports the pin's `cached()` with dirty views, `reuse_prepaint`/`reuse_paint` and scene replay, checked by a cached-vs-uncached differential test. With panes cached, a root-only redraw drops from 9.8 to 3.7 ms on the 1,000-div page and from 236 to 20 ms on the text page. `Refresh` (scene (c)) still bypasses caching, as in the pin.
 
 ## Not yet specified
 
