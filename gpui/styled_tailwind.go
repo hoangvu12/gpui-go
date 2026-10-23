@@ -172,3 +172,109 @@ func (s *Styled[Self]) Opacity95[_ lazy]() Self { return s.Opacity(0.95) }
 
 // Opacity100 makes the element fully opaque (opacity-100).
 func (s *Styled[Self]) Opacity100[_ lazy]() Self { return s.Opacity(1) }
+
+// ---------------------------------------------------------------------------
+// Filters, replaced-content options (browser-core ticket 41)
+// ---------------------------------------------------------------------------
+
+// ObjectFill stretches a replaced element's content to fill its content
+// box (object-fill).
+func (s *Styled[Self]) ObjectFill[_ lazy]() Self {
+	s.StyleMut().ObjectFit = Some(ObjectFitFill)
+	return s.self
+}
+
+// ObjectContain scales a replaced element's content to fit inside its
+// content box (object-contain).
+func (s *Styled[Self]) ObjectContain[_ lazy]() Self {
+	s.StyleMut().ObjectFit = Some(ObjectFitContain)
+	return s.self
+}
+
+// ObjectCover scales a replaced element's content to cover its content
+// box, cropping the overflow (object-cover).
+func (s *Styled[Self]) ObjectCover[_ lazy]() Self {
+	s.StyleMut().ObjectFit = Some(ObjectFitCover)
+	return s.self
+}
+
+// ObjectNone keeps a replaced element's content at its intrinsic size,
+// positioned by the object position (object-none).
+func (s *Styled[Self]) ObjectNone[_ lazy]() Self {
+	s.StyleMut().ObjectFit = Some(ObjectFitNone)
+	return s.self
+}
+
+// ObjectScaleDown scales a replaced element's content down to fit,
+// never up (object-scale-down).
+func (s *Styled[Self]) ObjectScaleDown[_ lazy]() Self {
+	s.StyleMut().ObjectFit = Some(ObjectFitScaleDown)
+	return s.self
+}
+
+// ObjectBottom positions a replaced element's content at the horizontal
+// center, bottom edge (object-bottom).
+func (s *Styled[Self]) ObjectBottom[_ lazy]() Self {
+	return s.ObjectPosition(ObjectCenter(), ObjectBottom())
+}
+
+// ObjectCenter positions a replaced element's content at the center
+// (object-center, the CSS default).
+func (s *Styled[Self]) ObjectCenter[_ lazy]() Self {
+	return s.ObjectPosition(ObjectCenter(), ObjectCenter())
+}
+
+// ObjectLeft positions a replaced element's content at the left edge,
+// vertical center (object-left).
+func (s *Styled[Self]) ObjectLeft[_ lazy]() Self {
+	return s.ObjectPosition(ObjectLeft(), ObjectCenter())
+}
+
+// ObjectLeftBottom positions a replaced element's content at the bottom
+// left corner (object-left-bottom).
+func (s *Styled[Self]) ObjectLeftBottom[_ lazy]() Self {
+	return s.ObjectPosition(ObjectLeft(), ObjectBottom())
+}
+
+// ObjectLeftTop positions a replaced element's content at the top left
+// corner (object-left-top).
+func (s *Styled[Self]) ObjectLeftTop[_ lazy]() Self {
+	return s.ObjectPosition(ObjectLeft(), ObjectTop())
+}
+
+// ObjectRight positions a replaced element's content at the right edge,
+// vertical center (object-right).
+func (s *Styled[Self]) ObjectRight[_ lazy]() Self {
+	return s.ObjectPosition(ObjectRight(), ObjectCenter())
+}
+
+// ObjectRightBottom positions a replaced element's content at the
+// bottom right corner (object-right-bottom).
+func (s *Styled[Self]) ObjectRightBottom[_ lazy]() Self {
+	return s.ObjectPosition(ObjectRight(), ObjectBottom())
+}
+
+// ObjectRightTop positions a replaced element's content at the top
+// right corner (object-right-top).
+func (s *Styled[Self]) ObjectRightTop[_ lazy]() Self {
+	return s.ObjectPosition(ObjectRight(), ObjectTop())
+}
+
+// ObjectTop positions a replaced element's content at the horizontal
+// center, top edge (object-top).
+func (s *Styled[Self]) ObjectTop[_ lazy]() Self {
+	return s.ObjectPosition(ObjectCenter(), ObjectTop())
+}
+
+// RenderingPixelated draws images through the point sampler — hard
+// edges on upscaled pixel art (rendering-pixelated, CSS
+// image-rendering: pixelated).
+func (s *Styled[Self]) RenderingPixelated[_ lazy]() Self {
+	return s.ImageRendering(ImageRenderingPixelated)
+}
+
+// RenderingAuto lets the renderer choose the image sampling (the
+// bilinear default; rendering-auto, CSS image-rendering: auto).
+func (s *Styled[Self]) RenderingAuto[_ lazy]() Self {
+	return s.ImageRendering(ImageRenderingAuto)
+}

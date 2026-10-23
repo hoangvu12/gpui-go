@@ -214,7 +214,7 @@ func strikethroughFor(origin Point, width float32, style StrikethroughStyle, mas
 // positioned and scaled by imageBounds (R:window.rs:5057 paint_image):
 // the visible region is bounds ∩ imageBounds with cornerRadii applied.
 func (w *Window) PaintImage(bounds, imageBounds Bounds, cornerRadii Corners, data *LoadedImage, frameIndex int, grayscale bool) error {
-	return w.PaintImageWithCornerSmoothing(bounds, imageBounds, cornerRadii, 0, data, frameIndex, grayscale)
+	return w.PaintImageWithCornerSmoothing(bounds, imageBounds, cornerRadii, 0, data, frameIndex, grayscale, false)
 }
 
 // PaintImageWithCornerSmoothing paints an image with smoothed corners
@@ -227,9 +227,11 @@ func (w *Window) PaintImage(bounds, imageBounds Bounds, cornerRadii Corners, dat
 // (rounded and clamped to the tile); the sprite carries the snapped
 // visible bounds, the snapped content mask, the corner radii clamped to
 // the visible size and scaled, the clamped smoothing and the element
-// opacity. An invalid frame index is an error (the pin's "caller's job"
-// expect).
-func (w *Window) PaintImageWithCornerSmoothing(bounds, imageBounds Bounds, cornerRadii Corners, cornerSmoothing float32, data *LoadedImage, frameIndex int, grayscale bool) error {
+// opacity. pixelated draws the sprite through the point sampler (CSS
+// image-rendering: pixelated, the native rev-15 per-sprite flag;
+// browser-core ticket 41). An invalid frame index is an error (the
+// pin's "caller's job" expect).
+func (w *Window) PaintImageWithCornerSmoothing(bounds, imageBounds Bounds, cornerRadii Corners, cornerSmoothing float32, data *LoadedImage, frameIndex int, grayscale, pixelated bool) error {
 	frame := currentFrame(w)
 	if data == nil || data.image == nil {
 		return fmt.Errorf("gpui: PaintImage: nil image")
@@ -291,6 +293,7 @@ func (w *Window) PaintImageWithCornerSmoothing(bounds, imageBounds Bounds, corne
 	radii := scaleCorners(cornerRadii.ConstrainRadiiForQuadSize(visible.Size), ctx.ScaleFactor)
 	if err := frame.scene.InsertPolychromeSprite(PolychromeSprite{
 		Grayscale:       grayscale,
+		Pixelated:       pixelated,
 		CornerSmoothing: clamp01(cornerSmoothing),
 		Bounds:          visibleSnapped,
 		ContentMask:     snappedContentMask(ctx.Mask, ctx.ScaleFactor),

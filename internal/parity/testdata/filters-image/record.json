@@ -1,0 +1,32 @@
+{
+  "name": "filters-image",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T21:36:24Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "img-control": {
+      "x": 206,
+      "y": 180,
+      "width": 60,
+      "height": 40
+    },
+    "img-grayscale": {
+      "x": 290,
+      "y": 180,
+      "width": 60,
+      "height": 40
+    },
+    "img-hue-rotate": {
+      "x": 374,
+      "y": 180,
+      "width": 60,
+      "height": 40
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

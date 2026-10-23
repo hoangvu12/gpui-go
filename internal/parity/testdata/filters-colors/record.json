@@ -1,0 +1,62 @@
+{
+  "name": "filters-colors",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T21:38:36Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "brightness": {
+      "x": 56,
+      "y": 208,
+      "width": 120,
+      "height": 48
+    },
+    "contrast": {
+      "x": 192,
+      "y": 208,
+      "width": 120,
+      "height": 48
+    },
+    "control": {
+      "x": 56,
+      "y": 144,
+      "width": 120,
+      "height": 48
+    },
+    "grayscale": {
+      "x": 192,
+      "y": 144,
+      "width": 120,
+      "height": 48
+    },
+    "hue-rotate": {
+      "x": 464,
+      "y": 208,
+      "width": 120,
+      "height": 48
+    },
+    "invert": {
+      "x": 464,
+      "y": 144,
+      "width": 120,
+      "height": 48
+    },
+    "saturate": {
+      "x": 328,
+      "y": 208,
+      "width": 120,
+      "height": 48
+    },
+    "sepia": {
+      "x": 328,
+      "y": 144,
+      "width": 120,
+      "height": 48
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

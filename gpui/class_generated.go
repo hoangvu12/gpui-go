@@ -452,6 +452,34 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.NormalCase()
 	case "not-italic":
 		b.NotItalic()
+	case "object-bottom":
+		b.ObjectBottom()
+	case "object-center":
+		b.ObjectCenter()
+	case "object-contain":
+		b.ObjectContain()
+	case "object-cover":
+		b.ObjectCover()
+	case "object-fill":
+		b.ObjectFill()
+	case "object-left":
+		b.ObjectLeft()
+	case "object-left-bottom":
+		b.ObjectLeftBottom()
+	case "object-left-top":
+		b.ObjectLeftTop()
+	case "object-none":
+		b.ObjectNone()
+	case "object-right":
+		b.ObjectRight()
+	case "object-right-bottom":
+		b.ObjectRightBottom()
+	case "object-right-top":
+		b.ObjectRightTop()
+	case "object-scale-down":
+		b.ObjectScaleDown()
+	case "object-top":
+		b.ObjectTop()
 	case "opacity-0":
 		b.Opacity0()
 	case "opacity-10":
@@ -502,6 +530,10 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.OverflowYHidden()
 	case "relative":
 		b.Relative()
+	case "rendering-auto":
+		b.RenderingAuto()
+	case "rendering-pixelated":
+		b.RenderingPixelated()
 	case "ring-0":
 		b.Ring0()
 	case "ring-1":
@@ -811,4 +843,4 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 }
 
 // methodClassCount is the number of classes applyMethodClass knows.
-const methodClassCount = 399
+const methodClassCount = 415

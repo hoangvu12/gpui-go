@@ -1894,12 +1894,12 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 		mustPaint(frame.scene.PaintQuad(ring, smoothing, frame.paint), "ring")
 	}
 	// paint_backdrop_filter_with_corner_smoothing (window.rs:4487): the
-	// identity filters are dropped; the port's backdrop record carries
-	// one blur, so a chain paints one record per filter in order.
-	for _, filter := range s.BackdropFilter {
-		if !filter.IsIdentity() {
-			mustPaint(frame.scene.PaintBackdropFilterCornerSmoothing(bounds, filter.BlurRadius, radii, smoothing, frame.paint), "backdrop filter")
-		}
+	// identity filters drop; rev 15's record carries a whole composed
+	// chain (the blurs composed by quadrature, the colour functions as
+	// one 4x5 matrix), so a chain paints one record (browser-core
+	// ticket 41; the port once painted one record per filter).
+	if chain := composeFilterChain(s.BackdropFilter); !chain.IsEmpty() {
+		mustPaint(frame.scene.PaintBackdropFilterChain(bounds, chain, radii, smoothing, frame.paint), "backdrop filter")
 	}
 
 	paintUnit := func(w *Window) {
@@ -1981,27 +1981,23 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 		paintUnit(w)
 		return
 	}
-	// with_filter_layer_with_corner_smoothing (window.rs:4537): the port's
-	// filter group carries one blur, so a chain nests one group per
-	// filter (outermost last, applying the filters in order); identity
-	// filters run inline inside WithFilterLayerCornerSmoothing.
-	s.withFilterChain(s.Filter, bounds, radii, smoothing, w, paintUnit)
-}
-
-// withFilterChain runs f inside one content-filter group per filter,
-// the first filter innermost.
-func (s *Style) withFilterChain(filters []Filter, bounds Bounds, radii Corners, smoothing float32, w *Window, f func(*Window)) {
-	if len(filters) == 0 {
-		f(w)
+	// with_filter_layer_with_corner_smoothing (window.rs:4537), rev 15:
+	// one group per chain carrying the whole composed payload — the
+	// blurs as one quadrature-composed radius and the colour functions
+	// as one 4x5 matrix in CSS chain order (browser-core ticket 41; the
+	// port once nested one group per filter, which the depth cap of 2
+	// silently degraded for chains of three or more). An identity chain
+	// runs inline with no group.
+	chain := composeFilterChain(s.Filter)
+	if chain.IsEmpty() {
+		paintUnit(w)
 		return
 	}
-	last := filters[len(filters)-1]
-	frame := currentFrame(w)
-	err := frame.scene.WithFilterLayerCornerSmoothing(bounds, last.BlurRadius, radii, smoothing, frame.paint, func() error {
-		s.withFilterChain(filters[:len(filters)-1], bounds, radii, smoothing, w, f)
+	frame2 := currentFrame(w)
+	if err := frame2.scene.WithFilterLayerChain(bounds, chain, radii, smoothing, frame2.paint, func() error {
+		paintUnit(w)
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		panic(fmt.Sprintf("gpui: DivElement filter paint: %v", err))
 	}
 }

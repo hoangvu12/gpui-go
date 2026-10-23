@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 24px;
+	}
+	.cell {
+		width: 60px;
+		height: 40px;
+	}
+	.cell img {
+		display: block;
+		width: 60px;
+		height: 40px;
+	}
+	.f-grayscale { filter: grayscale(1); }
+	.f-hue-rotate { filter: hue-rotate(90deg); }
+</style>
+</head>
+<body>
+	<div class="cell" data-id="img-control"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAATElEQVR42uzXwQkAMQhFQV28b//NpDVThRBhXgEyePvVMVWeqctfLAwaGhoaGhoaGhoaGvr9KmNqJfafPg0NDQ0NDQ0NDQ0NDb2pOwC1/AQiltoOAAAAAABJRU5ErkJggg=="></div>
+	<div class="cell" data-id="img-grayscale"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAATElEQVR42uzXwQkAMQhFQV28b//NpDVThRBhXgEyePvVMVWeqctfLAwaGhoaGhoaGhoaGvr9KmNqJfafPg0NDQ0NDQ0NDQ0NDb2pOwC1/AQiltoOAAAAAABJRU5ErkJggg==" class="f-grayscale"></div>
+	<div class="cell" data-id="img-hue-rotate"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAATElEQVR42uzXwQkAMQhFQV28b//NpDVThRBhXgEyePvVMVWeqctfLAwaGhoaGhoaGhoaGvr9KmNqJfafPg0NDQ0NDQ0NDQ0NDb2pOwC1/AQiltoOAAAAAABJRU5ErkJggg==" class="f-hue-rotate"></div>
+</body>
+</html>

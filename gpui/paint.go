@@ -627,40 +627,46 @@ func blurRadiusIsIdentity(radius float32) bool {
 
 // filterBoundaryFor builds the matched content-filter boundary pair
 // snapshot, mirroring the pinned with_filter_layer_with_corner_
-// smoothing: snapped bounds, snapped mask, scaled radii, the blur scaled
-// into device pixels, and opacity 1.0 (NOT element opacity — the pinned
-// comment: the group's children already carry it).
-func filterBoundaryFor(bounds Bounds, blurRadius float32, radii Corners, mask Bounds, scale float32, cornerSmoothing float32) (FilterBoundary, bool) {
-	if blurRadiusIsIdentity(blurRadius) {
+// smoothing: snapped bounds, snapped mask, scaled radii, the composed
+// blur radius scaled into device pixels, the composed colour-matrix
+// payload, and opacity 1.0 (NOT element opacity — the pinned comment:
+// the group's children already carry it). An empty chain (every filter
+// identity) reports false: the caller runs inline with no group.
+func filterBoundaryFor(bounds Bounds, chain FilterChain, radii Corners, mask Bounds, scale float32, cornerSmoothing float32) (FilterBoundary, bool) {
+	if chain.IsEmpty() {
 		return FilterBoundary{}, false
 	}
 	return FilterBoundary{
-		Bounds:          snapBounds(bounds, scale),
-		ContentMask:     snappedContentMask(mask, scale),
-		CornerRadii:     scaleCorners(radii, scale),
-		CornerSmoothing: clamp01(cornerSmoothing),
-		BlurRadius:      blurRadius * scale,
-		Opacity:         1.0,
-		IsStart:         true,
+		Bounds:           snapBounds(bounds, scale),
+		ContentMask:      snappedContentMask(mask, scale),
+		CornerRadii:      scaleCorners(radii, scale),
+		CornerSmoothing:  clamp01(cornerSmoothing),
+		BlurRadius:       chain.BlurRadius * scale,
+		ColorMatrix:      chain.ColorMatrix,
+		ColorMatrixCount: uint32(chain.ColorMatrixCount),
+		Opacity:          1.0,
+		IsStart:          true,
 	}, true
 }
 
 // backdropFilterFor builds the scene BackdropFilter record, mirroring the
 // pinned paint_backdrop_filter_with_corner_smoothing: snapped bounds,
-// scaled radii, the blur scaled, and the ELEMENT OPACITY captured at
-// paint time. The second return is false for identity filters (nothing
-// is painted).
-func backdropFilterFor(bounds Bounds, blurRadius float32, radii Corners, mask Bounds, scale, elementOpacity float32, cornerSmoothing float32) (BackdropFilter, bool) {
-	if blurRadiusIsIdentity(blurRadius) {
+// scaled radii, the composed blur scaled, the composed colour-matrix
+// payload, and the ELEMENT OPACITY captured at paint time. The second
+// return is false for an empty chain (nothing is painted).
+func backdropFilterFor(bounds Bounds, chain FilterChain, radii Corners, mask Bounds, scale, elementOpacity float32, cornerSmoothing float32) (BackdropFilter, bool) {
+	if chain.IsEmpty() {
 		return BackdropFilter{}, false
 	}
 	return BackdropFilter{
-		Bounds:          snapBounds(bounds, scale),
-		ContentMask:     snappedContentMask(mask, scale),
-		CornerRadii:     scaleCorners(radii, scale),
-		CornerSmoothing: clamp01(cornerSmoothing),
-		BlurRadius:      blurRadius * scale,
-		Opacity:         elementOpacity,
+		Bounds:           snapBounds(bounds, scale),
+		ContentMask:      snappedContentMask(mask, scale),
+		CornerRadii:      scaleCorners(radii, scale),
+		CornerSmoothing:  clamp01(cornerSmoothing),
+		BlurRadius:       chain.BlurRadius * scale,
+		ColorMatrix:      chain.ColorMatrix,
+		ColorMatrixCount: uint32(chain.ColorMatrixCount),
+		Opacity:          elementOpacity,
 	}, true
 }
 

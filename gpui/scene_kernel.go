@@ -240,7 +240,7 @@ func (k *SceneKernel) InsertBackdropFilter(f BackdropFilter) error {
 	if f.Order != 0 {
 		return fmt.Errorf("gpui: scene insert backdrop filter: record order must be zero, got %d", f.Order)
 	}
-	rec := filterRecordOf(f.Order, f.Bounds, f.ContentMask, f.CornerRadii, f.CornerSmoothing, f.BlurRadius, f.Opacity, false)
+	rec := filterRecordOf(f.Order, f.Bounds, f.ContentMask, f.CornerRadii, f.CornerSmoothing, f.BlurRadius, f.ColorMatrix, f.ColorMatrixCount, f.Opacity, false)
 	if err := k.scene.InsertBackdropFilter(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert backdrop filter: %w", err)
 	}
@@ -256,7 +256,7 @@ func (k *SceneKernel) InsertFilterBoundary(b FilterBoundary) error {
 	if b.Order != 0 {
 		return fmt.Errorf("gpui: scene insert filter boundary: record order must be zero, got %d", b.Order)
 	}
-	rec := filterRecordOf(b.Order, b.Bounds, b.ContentMask, b.CornerRadii, b.CornerSmoothing, b.BlurRadius, b.Opacity, b.IsStart)
+	rec := filterRecordOf(b.Order, b.Bounds, b.ContentMask, b.CornerRadii, b.CornerSmoothing, b.BlurRadius, b.ColorMatrix, b.ColorMatrixCount, b.Opacity, b.IsStart)
 	if err := k.scene.InsertFilterBoundary(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert filter boundary: %w", err)
 	}
@@ -458,6 +458,7 @@ func (k *SceneKernel) Plan() ([]SceneCommand, error) {
 			BatchKind:                SceneBatchKind(rec.PrimitiveKind),
 			Range:                    [2]uint32{rec.RangeStart, rec.RangeEnd},
 			Smoothed:                 rec.Smoothed == 1,
+			Pixelated:                rec.Pixelated == 1,
 			TextureIndex:             rec.TextureIndex,
 			RasterizationVertexCount: rec.RasterizationVertexCount,
 			SpriteCount:              rec.SpriteCount,
@@ -576,7 +577,7 @@ func edgesValue(bits [4]uint32) Edges {
 	}
 }
 
-func filterRecordOf(order uint32, bounds, mask Bounds, radii Corners, smoothing, blur, opacity float32, isStart bool) native.SceneFilterRecord {
+func filterRecordOf(order uint32, bounds, mask Bounds, radii Corners, smoothing, blur float32, matrix [20]float32, matrixCount uint32, opacity float32, isStart bool) native.SceneFilterRecord {
 	rec := native.NewSceneFilterRecord()
 	rec.Order = order
 	rec.Bounds = sceneBoundsRecord(bounds)
@@ -585,36 +586,68 @@ func filterRecordOf(order uint32, bounds, mask Bounds, radii Corners, smoothing,
 		rec.CornerRadii[i] = math.Float32bits(radius)
 	}
 	rec.CornerSmoothing = math.Float32bits(smoothing)
-	rec.BlurRadii[0] = math.Float32bits(blur)
-	rec.FilterCount = 1
 	rec.Opacity = math.Float32bits(opacity)
 	if isStart {
 		rec.IsStart = 1
 	}
+	// The composed chain's payload (rev 15): one blur entry and one
+	// composed colour-matrix entry, in chain order. The blur goes first
+	// (the draw path blurs, then the composite applies the matrix), and
+	// the matrix entry's blur slot stays zero — the record's validation
+	// demands that.
+	count := 0
+	if blur > 0 {
+		rec.BlurRadii[0] = math.Float32bits(blur)
+		rec.FilterTags[0] = 0
+		count = 1
+	}
+	if matrixCount > 0 {
+		rec.FilterTags[count] = 1
+		count++
+		for i, value := range matrix {
+			rec.ColorMatrix[i] = math.Float32bits(value)
+		}
+		rec.ColorMatrixCount = 1
+	}
+	rec.FilterCount = uint32(count)
 	return rec
 }
 
 func backdropValue(rec native.SceneFilterRecord) BackdropFilter {
 	return BackdropFilter{
-		Order:           rec.Order,
-		Bounds:          sceneBoundsValue(rec.Bounds),
-		ContentMask:     sceneBoundsValue(rec.ContentMask),
-		CornerRadii:     cornersValue(rec.CornerRadii),
-		CornerSmoothing: math.Float32frombits(rec.CornerSmoothing),
-		BlurRadius:      math.Float32frombits(rec.BlurRadii[0]),
-		Opacity:         math.Float32frombits(rec.Opacity),
+		Order:            rec.Order,
+		Bounds:           sceneBoundsValue(rec.Bounds),
+		ContentMask:      sceneBoundsValue(rec.ContentMask),
+		CornerRadii:      cornersValue(rec.CornerRadii),
+		CornerSmoothing:  math.Float32frombits(rec.CornerSmoothing),
+		BlurRadius:       math.Float32frombits(rec.BlurRadii[0]),
+		ColorMatrix:      colorMatrixValue(rec),
+		ColorMatrixCount: rec.ColorMatrixCount,
+		Opacity:          math.Float32frombits(rec.Opacity),
 	}
 }
 
 func boundaryValue(rec native.SceneFilterRecord) FilterBoundary {
 	return FilterBoundary{
-		Order:           rec.Order,
-		Bounds:          sceneBoundsValue(rec.Bounds),
-		ContentMask:     sceneBoundsValue(rec.ContentMask),
-		CornerRadii:     cornersValue(rec.CornerRadii),
-		CornerSmoothing: math.Float32frombits(rec.CornerSmoothing),
-		BlurRadius:      math.Float32frombits(rec.BlurRadii[0]),
-		Opacity:         math.Float32frombits(rec.Opacity),
-		IsStart:         rec.IsStart == 1,
+		Order:            rec.Order,
+		Bounds:           sceneBoundsValue(rec.Bounds),
+		ContentMask:      sceneBoundsValue(rec.ContentMask),
+		CornerRadii:      cornersValue(rec.CornerRadii),
+		CornerSmoothing:  math.Float32frombits(rec.CornerSmoothing),
+		BlurRadius:       math.Float32frombits(rec.BlurRadii[0]),
+		ColorMatrix:      colorMatrixValue(rec),
+		ColorMatrixCount: rec.ColorMatrixCount,
+		Opacity:          math.Float32frombits(rec.Opacity),
+		IsStart:          rec.IsStart == 1,
 	}
+}
+
+// colorMatrixValue unpacks the record's composed matrix payload into
+// floats (nil-of-a-sort: all zeros when the count is zero).
+func colorMatrixValue(rec native.SceneFilterRecord) [20]float32 {
+	var matrix [20]float32
+	for i, bits := range rec.ColorMatrix {
+		matrix[i] = math.Float32frombits(bits)
+	}
+	return matrix
 }

@@ -164,7 +164,9 @@ The palette is Tailwind CSS v3.4's default palette. It has 22 families (slate, g
 - **Opacity**: `opacity-<0..100>`, `opacity-[.35]`, `opacity-[35%]`.
 - **Flex and grid**: `flex-grow`, `flex-shrink`, `grid-cols-<n>`, `grid-rows-<n>`, `col-span-<n>`, `row-span-<n>`, `col-start-<n>`, `col-end-<n>`, `row-start-<n>`, `row-end-<n>`.
 - **Aspect ratio**: `aspect-square`, `aspect-video`, `aspect-[4/3]`, `aspect-[1.5]`.
-- **Blur**: `blur-none`, `blur-xs|sm` (4px), `blur` (8px), `blur-md|lg|xl|2xl|3xl` (12/16/24/40/64px) and `blur-[6px]`. `backdrop-blur-*` takes the same values. A blur class replaces the element's filter.
+- **Blur**: `blur-none`, `blur-xs|sm` (4px), `blur` (8px), `blur-md|lg|xl|2xl|3xl` (12/16/24/40/64px) and `blur-[6px]`. `backdrop-blur-*` takes the same values. Filter classes compose in class order (see the next bullet); `blur-none` resets the whole filter chain.
+- **Colour filters**: `grayscale`, `grayscale-0`, `grayscale-[.5]`, `sepia`, `sepia-0`, `invert`, `invert-0`, `invert-[25%]`, `saturate-0…200` and `saturate-[1.25]`, `brightness-0…200` and `brightness-[1.75]`, `contrast-…`, `hue-rotate-0|15|30|60|90|180`, `-hue-rotate-90`, `hue-rotate-[90deg]`. Consecutive filter classes compose in class order — the CSS spelling of `filter: grayscale(1) blur(4)` — like the fluent methods (`.Grayscale(1).Blur(4)`); only the element's own filter chain takes the colour functions, `backdrop-*` stays blur-only.
+- **Replaced-content options**: `object-fill`, `object-contain`, `object-cover`, `object-none`, `object-scale-down`, the nine position keywords `object-left-top` … `object-bottom`, `rendering-pixelated`, `rendering-auto`. They style the img element's paint (CSS applies them to replaced elements only); arbitrary positions call `.ObjectPosition(…)` on the img.
 - **Overflow**: `overflow-hidden|visible|clip` and their `-x`/`-y` forms. `overflow-auto` and `overflow-scroll` (and their `-x`/`-y` forms) make the div scroll, so the element needs `.ID(…)` and must be a Div or a component that embeds `Interactive`.
 
 ## What Class rejects, and what to use instead
@@ -187,9 +189,9 @@ A rejected class is skipped, the rest of the string still applies, and the reaso
 | `ring-offset-*`, `ring-inset` | Not supported. Use `inset-ring-*` for an inset ring. |
 | `bg-gradient-*`, `bg-linear-*`, `bg-radial-*`, `bg-conic-*`, `from-*`, `via-*`, `to-*` | Backgrounds are solid colors only. |
 | `bg-cover`, `bg-center`, `bg-no-repeat`, … | Background images are not supported. Put an `Img` behind the content. |
-| `drop-shadow-*`, `grayscale`, `invert`, `brightness-*`, `contrast-*`, `mix-blend-*`, … | Only `blur-*` and `backdrop-blur-*` filters are supported. |
+| `drop-shadow-*`, `mix-blend-*`, the bare `filter` class | Only blur and the colour filters are supported (see above). Each filter utility applies itself, so the bare `filter` class is not needed. |
 | `float-*`, `clear-*` | Use flex or grid. |
-| `object-*` | Call the img element's `.ObjectFit(…)`. |
+| `object-[10px_20px]` and other arbitrary positions | The keyword classes are supported (see above); call the img's `.ObjectPosition(…)` for arbitrary values. |
 | `order-*` | Reorder the children. |
 | `columns-*`, `break-after-*`, `break-inside-*` | Use grid. |
 | `place-*`, `justify-items-*`, `justify-self-*` | Use `items-*`, `justify-*`, `content-*` and `self-*`. |

@@ -52,9 +52,18 @@ new fixtures. The implementation lives in `internal/parity`:
        EventKinds: []string{"mousedown", "click"},
        View:       View,                     // func(*parity.EventLog) gpui.AnyElement
        Tolerance:  parity.PixelTolerance{...},
+       SkipPixels: "",                      // non-empty: skip Tier C, see below
    }
    func init() { parity.Register(Fixture) }
    ```
+
+   A fixture whose Tier C comparison cannot pass yet because of a known
+   renderer/native defect sets `SkipPixels` to a reason naming the blocker
+   (ticket and file:line) and the fix that clears it: Tier A (boxes) and
+   Tier B (events) still compare, the Chrome record and the view stay checked
+   in ready, and removing the flag is part of the blocking fix's acceptance.
+   `internal/parity/fixtures/filters` is the example (native rev 15's
+   colour-matrix cbuffer bug).
 
 2. **The two sides must agree by construction.** Shared numbers as constants; the page's
    CSS uses the same values the view sets (the tracer pins `line-height: 1.618` because

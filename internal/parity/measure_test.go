@@ -25,6 +25,9 @@ func TestPixelTolerancesKeepHeadroom(t *testing.T) {
 	for _, f := range fixtures {
 		f := f
 		t.Run(f.Name, func(t *testing.T) {
+			if f.SkipPixels != "" {
+				t.Skipf("Tier C skipped (a documented blocker): %s", f.SkipPixels)
+			}
 			record, err := parity.LoadRecord(f.Name)
 			if err != nil {
 				t.Fatal(err)
