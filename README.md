@@ -6,7 +6,7 @@ gpui-go is a Go port of [GPUI-CE](https://github.com/gpui-ce/gpui-ce), a communi
 
 The whole GPUI core is ported for Windows on AMD64. That covers layout (Taffy), text shaping and rasterization, the D3D11 and DirectComposition renderer, windows and input, including IME composition. It also covers accessibility through UI Automation, screen capture, the clipboard, drag and drop, SVG and image decoding.
 
-GPUI Base, the component library that sits on top of the core, has not been ported. Other operating systems and architectures will come later.
+GPUI Base, the component library that sits on top of the core, is ported as the `base` package (see [GPUI Base](#gpui-base) below). Other operating systems and architectures will come later.
 
 ## Install
 
@@ -125,6 +125,25 @@ gpui.Div().ID("save").Flex().ItemsCenter().Gap2().Px4().Py2().RoundedLg().Bg(tw.
 ```
 
 `Class` parses each distinct string once and caches it. A class it cannot apply, such as a typo or a utility GPUI has no equivalent for (`z-10`, `sm:p-4`), is skipped and reported on stderr. `go run github.com/hoangvu12/gpui-go/cmd/twcheck ./...` finds those classes before the program runs. [docs/tailwind.md](docs/tailwind.md) is the full guide for people and coding agents who come from React and Tailwind. It covers the naming rule, what is and is not supported, and the GPUI rules that web code does not teach. These names are gpui-go additions beyond the GPUI-CE pin; [ADR 0001](docs/adr/0001-tailwind-authoring.md) records why.
+
+## GPUI Base
+
+The `github.com/hoangvu12/gpui-go/base` package ports GPUI Base, the `crates/base` crate of [gpui-component](https://github.com/gpui-ce/gpui-component) at commit `c08206932417f863062d2ab70cc2854c6ca04238` (Apache-2.0). Base components are unstyled: they own interaction, focus, keyboard handling and accessibility, and you supply every visual through the Styled API. Call `base.Init(app)` once and make each window's root a `base.Root` around your view, so overlays and text selection get their window layers.
+
+What is ported, one Go file per upstream module:
+
+- Infrastructure: theme tokens, `Root` and its plugins, global state, history and undo, reduced motion, motion (easings, springs, keyframes, presence).
+- Controls: button, toggle and toggle group, checkbox, radio, switch, link, tabs, toolbar, accordion, collapsible, avatar, progress, slider, pagination, table.
+- Overlays: focus trap, positioner, popup, popover, tooltip, hover card, dialog, alert dialog, sheet, toast.
+- Scrolling and lists: scrollbar, scroll bounce, scrollable mask, auto scroll, virtual list.
+- Input and editor: single-line input, textarea, number, OTP and time fields, select, combobox, calendar, date and color pickers, and an editor mode with folding, search, diagnostics and LSP hooks.
+- Composites: tree, navigation stack, resizable panels, questionnaire, and a dock with persisted layouts.
+- Text: Markdown and HTML into a node tree, `TextView`, cross-element text selection, stream fade and range highlights.
+- Plot: scales, bar, line, area, arc, pie, stack and sankey shapes, axes, grids and hover.
+
+`go run ./examples/base-showcase` opens a window with buttons, toggles, a select and a combobox, tabs, a dialog and a popover, a Markdown `TextView`, a plot, a resizable split, a dock and a tree. Input and Textarea are not in the showcase yet, because naming `base.InputState` from another package currently crashes the go1.27.1 compiler (see the example's package comment).
+
+[evidence/base/COVERAGE.md](evidence/base/COVERAGE.md) accounts for every upstream module and test. Each test is listed as ported, deviated, not applicable or deferred, with the reason. `go run ./conformance/cmd/basecoverage` regenerates the ledger from the hashed source manifest and the `U:path:line` citations in the Go tests. Its `-check` flag fails when the ledger is stale or reports a gap. The Markdown and HTML parsers come from goldmark and golang.org/x/net, and segmentation from uax29. Their licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Build speed
 
