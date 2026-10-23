@@ -116,6 +116,11 @@ type Atlas struct {
 
 	closeOnce sync.Once
 	closeErr  error
+
+	// glyphTiles mirrors the native key → tile map for glyph keys
+	// (glyph_cache.go, gpui-perf ticket 02).
+	tilesMu    sync.Mutex
+	glyphTiles map[glyphTileKey]AtlasTile
 }
 
 var (
@@ -162,6 +167,7 @@ func NewAtlas() (*Atlas, error) {
 // queries miss afterwards.
 func (a *Atlas) Dispose() error {
 	a.closeOnce.Do(func() {
+		a.forgetGlyphTiles()
 		a.closeErr = a.svc.Dispose(a.handle)
 	})
 	return a.closeErr
@@ -211,7 +217,7 @@ func (a *Atlas) InsertGlyph(raster *RasterizedGlyph, params RasterGlyphParams) (
 	if err != nil {
 		return AtlasTile{}, fmt.Errorf("gpui: InsertGlyph: %w", err)
 	}
-	return AtlasTile{
+	result := AtlasTile{
 		TextureIndex: tile.TextureIndex,
 		TextureKind:  AtlasTextureKind(tile.TextureKind),
 		TileID:       tile.TileID,
@@ -221,13 +227,16 @@ func (a *Atlas) InsertGlyph(raster *RasterizedGlyph, params RasterGlyphParams) (
 		BoundsW:      tile.BoundsW,
 		BoundsH:      tile.BoundsH,
 		Generation:   tile.Generation,
-	}, nil
+	}
+	a.storeGlyphTile(params, raster.Format, result)
+	return result, nil
 }
 
 // RemoveGlyph removes the key's tile, deallocating its atlas space (the
 // pin's PlatformAtlas::remove). Cache release and GPU completion are
 // separate prerequisites; callers release only after both retire.
 func (a *Atlas) RemoveGlyph(params RasterGlyphParams, format RasterFormat) error {
+	a.forgetGlyphTile(params, format)
 	key := atlasKey(params, format)
 	if err := a.svc.Remove(a.handle, key); err != nil {
 		return fmt.Errorf("gpui: RemoveGlyph: %w", err)
@@ -243,11 +252,12 @@ func (a *Atlas) GlyphTile(params RasterGlyphParams, format RasterFormat) (AtlasT
 	tile, err := a.svc.Query(a.handle, key)
 	if err != nil {
 		if isNativeError(err, native.ErrAtlasNotFound) {
+			a.forgetGlyphTile(params, format)
 			return AtlasTile{}, false, nil
 		}
 		return AtlasTile{}, false, fmt.Errorf("gpui: GlyphTile: %w", err)
 	}
-	return AtlasTile{
+	result := AtlasTile{
 		TextureIndex: tile.TextureIndex,
 		TextureKind:  AtlasTextureKind(tile.TextureKind),
 		TileID:       tile.TileID,
@@ -257,7 +267,9 @@ func (a *Atlas) GlyphTile(params RasterGlyphParams, format RasterFormat) (AtlasT
 		BoundsW:      tile.BoundsW,
 		BoundsH:      tile.BoundsH,
 		Generation:   tile.Generation,
-	}, true, nil
+	}
+	a.storeGlyphTile(params, format, result)
+	return result, true, nil
 }
 
 // TextureCount returns the live texture count of one kind pool.
@@ -292,6 +304,7 @@ func (a *Atlas) Generation() (uint32, error) {
 // generation changes invalidate all physical tiles, even if a logical
 // font/image resource remains alive").
 func (a *Atlas) NotifyDeviceLost() error {
+	a.forgetGlyphTiles()
 	if err := a.svc.NotifyDeviceLost(a.handle); err != nil {
 		return fmt.Errorf("gpui: NotifyDeviceLost: %w", err)
 	}

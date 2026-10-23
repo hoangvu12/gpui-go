@@ -287,6 +287,14 @@ type windowTextSystem interface {
 	// requested survive into the next frame's previous-frame cache, the
 	// rest release. A stateless test system has nothing to rotate.
 	finishFrame()
+	// layoutIndex, reuseLayouts and truncateLayouts are the line-layout
+	// index seam of the cached views' range reuse (WindowTextSystem::
+	// layout_index / reuse_layouts / truncate_layouts →
+	// LineLayoutCache, text_cache.go). A stateless test system has no
+	// cache and answers an empty index.
+	layoutIndex() int
+	reuseLayouts(start, end int)
+	truncateLayouts(index int)
 	// layoutInline lays out one inline document (text plus atomic
 	// element boxes) in one inline formatting context (the reference
 	// PlatformTextSystem::layout_inline). Go owns the algorithm on both
@@ -392,6 +400,12 @@ func (r *realWindowTextSystem) shape(text string, fontSize float32, font FontDes
 // LineLayoutCache::finish_frame), invoked by the window draw's
 // completion (render.go completeFrame, window.rs:3230).
 func (r *realWindowTextSystem) finishFrame() { r.lines.finishFrame() }
+
+// layoutIndex, reuseLayouts and truncateLayouts implement
+// windowTextSystem through the window's line-layout cache.
+func (r *realWindowTextSystem) layoutIndex() int            { return r.lines.layoutIndex() }
+func (r *realWindowTextSystem) reuseLayouts(start, end int) { r.lines.reuseLayouts(start, end) }
+func (r *realWindowTextSystem) truncateLayouts(index int)   { r.lines.truncateLayouts(index) }
 
 // realShapedText adapts the port's WrappedLine into the shapedText seam.
 type realShapedText struct {
@@ -558,21 +572,27 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		// The pinned measure closure: wrap at the known width or the
 		// definite available width (WhiteSpace::Normal); min/max-content
 		// content-based sizing measures unwrapped.
-		var wrapWidth *float32
+		var wrap float32
+		hasWrap := false
 		if textStyle.WhiteSpace == WhiteSpaceNowrap {
-			wrapWidth = nil
+			hasWrap = false
 		} else if req.KnownWidthPresent {
-			width := req.KnownWidth
-			wrapWidth = &width
+			wrap, hasWrap = req.KnownWidth, true
 		} else if req.AvailWidth.Kind == AvailDefinite {
-			width := req.AvailWidth.Definite
-			wrapWidth = &width
+			wrap, hasWrap = req.AvailWidth.Definite, true
 		}
 		// Cached-layout reuse: a shaped layout with a size answers when
 		// the wrap is unconstrained or matches the cached wrap (the
 		// reference's four-condition cache check, truncation aside).
-		if cell.shaped != nil && (wrapWidth == nil || (cell.wrapWidth != nil && *wrapWidth == *cell.wrapWidth)) {
+		if cell.shaped != nil && (!hasWrap || (cell.wrapWidth != nil && wrap == *cell.wrapWidth)) {
 			return cell.size
+		}
+		// The wrap width is boxed only when the text shapes (gpui-perf
+		// ticket 06: cache hits do not allocate).
+		var wrapWidth *float32
+		if hasWrap {
+			boxed := wrap
+			wrapWidth = &boxed
 		}
 		shaped, err := frameTextSystem(w).shape(t.text, fontSize, textStyle.FontDescriptorOf(), wrapWidth, nil)
 		if err != nil {
@@ -703,6 +723,12 @@ type DivElement struct {
 	// Styled vocabulary (div.rs Interactivity::base_style, refined by
 	// every Styled method; ticket base-05).
 	Styled[*DivElement]
+	// a11y is the accessibility authoring state, nil until an a11y
+	// builder runs (div_a11y.go).
+	a11y *divA11yState
+	// styleBoxes lets the div's per-phase style computations share their
+	// boxed style values (styled_refinement.go).
+	styleBoxes styleBoxes
 	// elementID is the optional element identity (div.rs
 	// Interactivity::element_id).
 	elementID *ElementID
@@ -1365,7 +1391,7 @@ type divPrepaintState struct {
 // the base style, the first step of div.rs:3904 compute_style_internal).
 func (d *DivElement) computeStyle() Style {
 	style := DefaultStyle()
-	style.Refine(d.Styled.storage())
+	style.refineBoxed(d.Styled.storage(), &d.styleBoxes)
 	return style
 }
 
@@ -1429,7 +1455,13 @@ func (d *DivElement) requestLayout(global *GlobalElementID, inspector *Inspector
 			}
 			layoutID = id
 		}
-		publishInlineContent(w, layoutID, &inlineContainerContent{children: childLayoutIDs})
+		if len(childLayoutIDs) == 0 {
+			// Leaf divs share one read-only empty record (gpui-perf
+			// ticket 06: no allocation per leaf).
+			publishInlineContent(w, layoutID, emptyInlineContainer)
+		} else {
+			publishInlineContent(w, layoutID, &inlineContainerContent{children: childLayoutIDs})
+		}
 	})
 	return layoutID, state
 }

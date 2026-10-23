@@ -28,6 +28,8 @@ package gpui
 import (
 	"sync"
 	"time"
+
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 var (
@@ -52,6 +54,9 @@ type framePacer struct {
 	mu      sync.Mutex
 	pending map[*Window]struct{}
 	running bool
+	// lastSlot is when the previous frame slot was granted (read and
+	// written by the single running loop goroutine only).
+	lastSlot time.Time
 }
 
 var (
@@ -86,18 +91,28 @@ func (p *framePacer) request(w *Window) {
 	}
 }
 
-// loop waits for vblank, then posts the invalidation of every pending
-// window to the host thread; it exits once a vblank passes with no
-// demand or the host stopped accepting work.
+// loop waits for the next frame slot (waitForSlot), then posts the
+// invalidation of every pending window to the host thread; it exits as
+// soon as no demand is pending (before waiting, so an exiting pacer never
+// consumes a frame-latency signal no frame will pay back) or the host
+// stopped accepting work.
 func (p *framePacer) loop() {
 	for {
-		frameWaitForVsync()
 		p.mu.Lock()
 		if len(p.pending) == 0 {
 			p.running = false
 			p.mu.Unlock()
 			return
 		}
+		var latency *Surface
+		for w := range p.pending {
+			if latency = frameLatencySurfaceOf(w); latency != nil {
+				break
+			}
+		}
+		p.mu.Unlock()
+		p.waitForSlot(latency)
+		p.mu.Lock()
 		batch := make([]*Window, 0, len(p.pending))
 		for w := range p.pending {
 			batch = append(batch, w)
@@ -129,6 +144,36 @@ func (p *framePacer) loop() {
 			return
 		}
 	}
+}
+
+// waitForSlot waits until a frame should start (gpui-perf ticket 05).
+//
+// With a pending window's surface it first waits on the swap chain's
+// frame-latency waitable object (maximum latency 1), so a frame never
+// starts while the previous one is still queued for the GPU. That wait
+// is bounded by one vsync interval: a frame request that did not present
+// leaves the object unsignaled, and the timeout keeps the loop moving.
+//
+// The waitable does not follow the display (the swap chain presents with
+// sync interval 0), so it cannot pace an animation alone. A frame that
+// follows the previous slot within one interval (an animation or other
+// continuous demand) also waits for the vblank as before. The first
+// frame after idle skips that wait and starts at once: its present is
+// composed at the next vblank instead of one vblank later.
+//
+// Without a surface, or when the surface has no waitable, it is the
+// reference DwmFlush wait.
+func (p *framePacer) waitForSlot(latency *Surface) {
+	defer func() { p.lastSlot = time.Now() }()
+	if latency != nil {
+		wait, err := latency.waitFrameLatency(frameDefaultVsyncInterval)
+		if err == nil && wait != native.FrameLatencyUnavailable {
+			if time.Since(p.lastSlot) >= frameDefaultVsyncInterval {
+				return
+			}
+		}
+	}
+	frameWaitForVsync()
 }
 
 // frameWaitForVsync is VSyncProvider::wait_for_vsync (vsync.rs:40-55).

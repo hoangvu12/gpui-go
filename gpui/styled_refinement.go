@@ -171,8 +171,58 @@ type StyleRefinement struct {
 // Refine applies the present fields of r onto s (the derived
 // Refineable::refine for Style).
 func (s *Style) Refine(r *StyleRefinement) {
+	s.refineBoxed(r, nil)
+}
+
+// styleBoxes are the boxed values of an element's last refined Style
+// pointer fields (gpui-perf ticket 06). An element computes its style in
+// request_layout, prepaint and paint from the same refinements; the box
+// cache lets the later computations point at the first one's boxes when
+// the value is bit-identical instead of allocating fresh copies. Style
+// pointer fields are read-only after refinement (nothing writes through
+// them), so sharing a box between Style values is safe, and boxes never
+// alias the refinement itself.
+type styleBoxes struct {
+	alignItems, alignSelf        *AlignItems
+	alignContent, justifyContent *AlignContent
+	background, borderColor      *Background
+	mouseCursor                  *CursorStyle
+}
+
+// refineBoxed writes a present refinement into an Option style field,
+// reusing *box when it holds an equal value (see styleBoxes).
+func refineBoxed[T any](dst **T, src Optional[T], box **T, equal func(a, b T) bool) {
+	if !src.present {
+		return
+	}
+	if *box != nil && equal(**box, src.value) {
+		*dst = *box
+		return
+	}
+	v := src.value
+	*dst = &v
+	*box = &v
+}
+
+func equalComparable[T comparable](a, b T) bool { return a == b }
+
+// equalBackground compares backgrounds bit for bit (so -0 and +0 or NaN
+// payloads never share a box).
+func equalBackground(a, b Background) bool {
+	return math.Float32bits(a.Solid.H) == math.Float32bits(b.Solid.H) &&
+		math.Float32bits(a.Solid.S) == math.Float32bits(b.Solid.S) &&
+		math.Float32bits(a.Solid.L) == math.Float32bits(b.Solid.L) &&
+		math.Float32bits(a.Solid.A) == math.Float32bits(b.Solid.A)
+}
+
+// refineBoxed is Refine with a box cache; a nil cache boxes every value
+// fresh, exactly like Refine.
+func (s *Style) refineBoxed(r *StyleRefinement, boxes *styleBoxes) {
 	if r == nil {
 		return
+	}
+	if boxes == nil {
+		boxes = &styleBoxes{}
 	}
 	refineValue(&s.Display, r.Display)
 	refineValue(&s.Visibility, r.Visibility)
@@ -209,11 +259,11 @@ func (s *Style) Refine(r *StyleRefinement) {
 	refineValue(&s.BorderWidths.Right, r.BorderWidthsRight)
 	refineValue(&s.BorderWidths.Bottom, r.BorderWidthsBottom)
 	refineValue(&s.BorderWidths.Left, r.BorderWidthsLeft)
-	refinePointer(&s.AlignItems, r.AlignItems)
-	refinePointer(&s.AlignSelf, r.AlignSelf)
+	refineBoxed(&s.AlignItems, r.AlignItems, &boxes.alignItems, equalComparable[AlignItems])
+	refineBoxed(&s.AlignSelf, r.AlignSelf, &boxes.alignSelf, equalComparable[AlignItems])
 	refineValue(&s.VerticalAlign, r.VerticalAlign)
-	refinePointer(&s.AlignContent, r.AlignContent)
-	refinePointer(&s.JustifyContent, r.JustifyContent)
+	refineBoxed(&s.AlignContent, r.AlignContent, &boxes.alignContent, equalComparable[AlignContent])
+	refineBoxed(&s.JustifyContent, r.JustifyContent, &boxes.justifyContent, equalComparable[AlignContent])
 	refineValue(&s.Gap.Width, r.GapWidth)
 	refineValue(&s.Gap.Height, r.GapHeight)
 	refineValue(&s.FlexDirection, r.FlexDirection)
@@ -221,8 +271,8 @@ func (s *Style) Refine(r *StyleRefinement) {
 	refineValue(&s.FlexBasis, r.FlexBasis)
 	refineValue(&s.FlexGrow, r.FlexGrow)
 	refineValue(&s.FlexShrink, r.FlexShrink)
-	refinePointer(&s.Background, r.Background)
-	refinePointer(&s.BorderColor, r.BorderColor)
+	refineBoxed(&s.Background, r.Background, &boxes.background, equalBackground)
+	refineBoxed(&s.BorderColor, r.BorderColor, &boxes.borderColor, equalBackground)
 	refineValue(&s.BorderStyle, r.BorderStyle)
 	refineValue(&s.BorderDashedLength, r.BorderDashedLength)
 	refineValue(&s.BorderDashedGap, r.BorderDashedGap)
@@ -245,7 +295,7 @@ func (s *Style) Refine(r *StyleRefinement) {
 		s.BackdropFilter = slices.Clone(filters)
 	}
 	s.Text.Merge(&r.Text)
-	refinePointer(&s.MouseCursor, r.MouseCursor)
+	refineBoxed(&s.MouseCursor, r.MouseCursor, &boxes.mouseCursor, equalComparable[CursorStyle])
 	refinePointer(&s.Opacity, r.Opacity)
 	refinePointer(&s.GridCols, r.GridCols)
 	refinePointer(&s.GridRows, r.GridRows)

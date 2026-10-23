@@ -627,6 +627,7 @@ func endDispatchFrame(w *Window) {
 	} else {
 		fs.inputHandler = nil
 	}
+	fs.renderedInputHandlers = fs.frameInputHandlers
 	fs.frameInputHandlers = nil
 	fs.rendered = fs.next
 	fs.next = nil

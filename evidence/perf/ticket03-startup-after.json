@@ -1,0 +1,74 @@
+{
+  "date": "2026-10-23T05:39:04Z",
+  "first_frame_ms": {
+    "max": 328.823,
+    "median": 248.325,
+    "min": 230.053
+  },
+  "first_service_ready_ms": {
+    "max": 80.486,
+    "median": 63.879,
+    "min": 56.856
+  },
+  "go": "go1.27.1",
+  "label": "ticket 03 (shared load)",
+  "method": "one fresh test process per sample (gpui/perf_startup_test.go); timed from the child test's start: first service = gpui.NewScene(), first frame = the 1,000-div benchmark window opened on the real text system and its first frame drawn; the embedded artifact is already materialized in the user cache",
+  "runs": 11,
+  "samples": [
+    {
+      "first_service_ms": 63.284,
+      "first_frame_ms": 247.651,
+      "native_calls": 16078
+    },
+    {
+      "first_service_ms": 64.747,
+      "first_frame_ms": 275.956,
+      "native_calls": 16078
+    },
+    {
+      "first_service_ms": 80.486,
+      "first_frame_ms": 328.823,
+      "native_calls": 16078
+    },
+    {
+      "first_service_ms": 66.164,
+      "first_frame_ms": 300.363,
+      "native_calls": 16078
+    },
+    {
+      "first_service_ms": 62.093,
+      "first_frame_ms": 233.8,
+      "native_calls": 16078
+    },
+    {
+      "first_service_ms": 63.879,
+      "first_frame_ms": 295.037,
+      "native_calls": 16078
+    },
+    {
+      "first_service_ms": 64.268,
+      "first_frame_ms": 249.273,
+      "native_calls": 16078
+    },
+    {
+      "first_service_ms": 57.708,
+      "first_frame_ms": 230.053,
+      "native_calls": 16078
+    },
+    {
+      "first_service_ms": 60.054,
+      "first_frame_ms": 244.701,
+      "native_calls": 16078
+    },
+    {
+      "first_service_ms": 67.795,
+      "first_frame_ms": 248.325,
+      "native_calls": 16078
+    },
+    {
+      "first_service_ms": 56.856,
+      "first_frame_ms": 237.779,
+      "native_calls": 16078
+    }
+  ]
+}

@@ -1062,7 +1062,7 @@ func (d *DivElement) shouldInsertHitbox(style *Style, w *Window) bool {
 // style transitions are not ported.
 func (d *DivElement) computeStyleInternal(hitbox *Hitbox, es *InteractiveElementState, w *Window, app *App) Style {
 	style := DefaultStyle()
-	style.Refine(d.Styled.storage())
+	style.refineBoxed(d.Styled.storage(), &d.styleBoxes)
 
 	if d.focusHandle != nil {
 		handle := *d.focusHandle
