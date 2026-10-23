@@ -3,7 +3,7 @@
 Parent: ../map.md
 Type: research
 Labels: wayfinder:research
-Status: claimed
+Status: resolved
 Assignee: orchestrator 5 (research worker, batch 1)
 Blocked by: none
 
@@ -22,3 +22,5 @@ Output: research/browser-parity/01-visual-primitives.md, with the top gaps ranke
 ## Comments
 
 ## Answer
+
+Answer: research/browser-parity/01-visual-primitives.md (merged 2026-10-23).

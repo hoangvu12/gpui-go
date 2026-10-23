@@ -3,8 +3,8 @@
 Parent: ../map.md
 Type: research
 Labels: wayfinder:research
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: orchestrator 5 (synthesis worker)
 Blocked by: 01, 02, 03, 04, 05, 06, 08
 
 ## Question

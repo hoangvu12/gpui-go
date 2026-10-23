@@ -3,7 +3,7 @@
 Parent: ../map.md
 Type: research
 Labels: wayfinder:research
-Status: claimed
+Status: resolved
 Assignee: orchestrator 5 (research worker, batch 2)
 Blocked by: none
 
@@ -22,3 +22,5 @@ Output: research/browser-parity/04-text-and-fonts.md, with the top gaps ranked f
 ## Comments
 
 ## Answer
+
+Answer: research/browser-parity/04-text-and-fonts.md (merged 2026-10-23).
