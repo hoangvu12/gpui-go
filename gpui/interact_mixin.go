@@ -64,6 +64,13 @@ func (i *Interactive[Self]) FocusVisible[F StyleArg](f F) Self {
 	return i.self
 }
 
+// WindowControlArea marks the inner div as a control area of the
+// platform window (DivElement.WindowControlArea, div.rs:1443).
+func (i *Interactive[Self]) WindowControlArea[_ lazy](area WindowControlArea) Self {
+	i.Interactivity().WindowControlArea(area)
+	return i.self
+}
+
 // BlockMouseExceptScroll blocks non-scroll mouse interactions behind the
 // inner div (DivElement.BlockMouseExceptScroll, div.rs:1452).
 func (i *Interactive[Self]) BlockMouseExceptScroll[_ lazy]() Self {

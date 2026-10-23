@@ -822,6 +822,9 @@ type DivElement struct {
 	// hitboxBehavior is this element's hitbox occlusion behavior (div.rs
 	// Interactivity hitbox behavior; Normal by default).
 	hitboxBehavior HitboxBehavior
+	// windowControl marks the element as a window control area (div.rs
+	// Interactivity window_control); nil when unset.
+	windowControl *WindowControlArea
 	// tabIndex is the interactivity tab index (div.rs tab_index).
 	tabIndex *int64
 	// tabGroup marks a tab group (div.rs tab_group).
@@ -1224,6 +1227,21 @@ func dropListenerInvoke[T any](f func(*T, *MouseUpEvent, *Window, *App)) func(an
 // hitbox stop reporting hover and scroll eligibility.
 func (d *DivElement) Occlude() *DivElement {
 	d.hitboxBehavior = HitboxBlockMouse
+	return d
+}
+
+// WindowControlArea marks the div's bounds as a control area of the
+// platform window (InteractiveElement::window_control_area, div.rs:1443):
+// the div gets a hitbox, and while that hitbox is in the hit test under
+// the cursor the Windows host answers WM_NCHITTEST with the area's code
+// (Drag → HTCAPTION, Min → HTMINBUTTON, Max → HTMAXBUTTON, Close →
+// HTCLOSE). Use it to draw a custom titlebar on a window opened with
+// Titlebar: &TitlebarOptions{AppearsTransparent: true}. When areas nest
+// (caption buttons inside a drag strip), the outer one wins unless the
+// inner element also calls Occlude, as Zed's caption buttons do.
+func (d *DivElement) WindowControlArea(area WindowControlArea) *DivElement {
+	a := area
+	d.windowControl = &a
 	return d
 }
 
@@ -1775,6 +1793,10 @@ func (d *DivElement) paint(global *GlobalElementID, inspector *InspectorElementI
 							if d.group != nil {
 								groupHitboxPush(*d.group, hitbox.ID(), app)
 								defer groupHitboxPop(*d.group, app)
+							}
+							// insert_window_control_hitbox (div.rs:3068-3073).
+							if d.windowControl != nil {
+								w.InsertWindowControlHitbox(*d.windowControl, *hitbox)
 							}
 							d.paintMouseListeners(*hitbox, es, w, app)
 							// paint_scroll_listener (div.rs:3081).

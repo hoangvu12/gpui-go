@@ -96,6 +96,28 @@ type WindowOptions struct {
 	MinSize Size
 	// MinimizeBox adds WS_MINIMIZEBOX.
 	MinimizeBox bool
+	// Titlebar configures the titlebar (platform.rs WindowOptions::
+	// titlebar). nil keeps the system titlebar (the pin hides it on
+	// Windows when titlebar is None; the port keeps the old default).
+	// AppearsTransparent hides it for a client-drawn titlebar built from
+	// WindowControlArea elements (titlebar.go).
+	Titlebar *TitlebarOptions
+	// Immovable is the pin's !is_movable (platform.rs WindowOptions::
+	// is_movable, default true): window control areas then never answer
+	// HTCAPTION, so the user cannot drag the window by them. The zero
+	// value is movable.
+	Immovable bool
+	// DirectComposition creates the window for a DirectComposition
+	// surface: WS_EX_NOREDIRECTIONBITMAP, which the pin sets on every
+	// window unless GPUI_DISABLE_DIRECT_COMPOSITION is set
+	// (window.rs:491-493). Without a GDI redirection surface the DWM
+	// backdrop (SetBackgroundAppearance Transparent, Blurred, Mica) shows
+	// through the transparent parts of a BackgroundTransparent frame.
+	// Only a DirectComposition swap chain (Renderer.GetOrCreateSurface's
+	// default mode) shows content in such a window; a
+	// SurfaceModeHwndAlphaIgnore surface does not. The zero value keeps
+	// the redirection surface, as before.
+	DirectComposition bool
 	// Show shows the window once created.
 	Show bool
 	// Activate brings the window to the foreground when shown.
@@ -178,6 +200,13 @@ type WindowOptions struct {
 	// element dispatch (Window.DispatchInput); an optional user hook runs
 	// first and consumes the event by returning true, like OnKey.
 	OnMouseInput func(event any) bool
+	// OnHitTestWindowControl answers the host's window-control hit test
+	// (the pin's on_hit_test_window_control, window.rs:1928): the window
+	// control area at a window-local logical position, if any. The host
+	// asks it on WM_NCHITTEST. App.OpenWindow installs one that consults
+	// the window's rendered WindowControlArea elements; a user hook runs
+	// first and wins when it reports an area.
+	OnHitTestWindowControl func(position Point) (WindowControlArea, bool)
 }
 
 // Typed window errors.
@@ -867,6 +896,25 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 				handled = !window.dispatchInput(event, a).Propagate
 			})
 			return handled
+		}
+		// The window-control hit test reads the rendered frame's
+		// WindowControlArea hitboxes (window.rs:1928-1945,
+		// on_hit_test_window_control). It only reads state, so it runs
+		// outside an update; the host asks it on the foreground thread.
+		userHitTest := opts.OnHitTestWindowControl
+		hostOpts.OnHitTestWindowControl = func(position Point) (WindowControlArea, bool) {
+			if userHitTest != nil {
+				if area, ok := userHitTest(position); ok {
+					return area, true
+				}
+			}
+			if window == nil {
+				return 0, false
+			}
+			if _, open := a.windows[window.id]; !open {
+				return 0, false
+			}
+			return window.windowControlAreaAt(position)
 		}
 
 		handle, err := h.OpenWindow(hostOpts)

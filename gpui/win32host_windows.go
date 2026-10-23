@@ -323,9 +323,8 @@ var (
 //
 // Deviation from the reference app window: the reference removes the OS
 // title bar by default (hide_title_bar plus WM_NCCALCSIZE adjustments);
-// this slice keeps the native frame (WS_CAPTION) because the custom
-// title bar's geometry and hit testing arrive with the renderer/input
-// tickets.
+// the port keeps it unless the window opts in with
+// WindowOptions.Titlebar (titlebar_windows.go).
 func registerHostClasses(hInstance uintptr) error {
 	classOnce.Do(func() {
 		var err error
@@ -848,9 +847,29 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 	case wmNcMouseMove:
 		// WM_NCMOUSEMOVE: the same cursor restore plus non-client leave
 		// tracking (ticket26, events.rs handle_nc_mouse_move_msg's cursor
-		// part).
+		// part). A hidden-titlebar window also delivers the move to
+		// element dispatch (titlebar_windows.go).
 		w.restoreCursorAfterHide()
 		w.startMouseLeaveTracking(tmeLeave | tmeNonClient)
+		if w.hideTitleBar {
+			if w.handleNcMouseMoveMsg(lp) {
+				return 0
+			}
+		}
+		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
+		return r
+
+	case wmNCCalcSize, wmNCHitTest, wmExitSizeMove,
+		wmNcLButtonDown, wmNcLButtonDblClk, wmNcRButtonDown, wmNcMButtonDown,
+		wmNcLButtonUp, wmNcRButtonUp, wmNcMButtonUp:
+		// The client-drawn titlebar messages (titlebar_windows.go,
+		// events.rs:105, 108, 116-137 and handle_size_move_loop_exit).
+		// Each falls to DefWindowProcW unless the titlebar code answers
+		// it; a window with the system titlebar and no WindowControlArea
+		// elements always falls through.
+		if result, handled := w.handleTitlebarMsg(message, wparam, lparam); handled {
+			return result
+		}
 		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
 		return r
 
@@ -1083,6 +1102,27 @@ type hostWindow struct {
 	// dmRecord records the Direct Manipulation setup outcome for
 	// diagnostics (the honest COM-call record).
 	dmRecord string
+
+	// --- client-drawn titlebar state (titlebar_windows.go; host thread
+	// only) ---
+
+	// hideTitleBar is the pin's hide_title_bar
+	// (TitlebarOptions.AppearsTransparent).
+	hideTitleBar bool
+	// movable, resizable and minimizable are the pin's is_movable,
+	// is_resizable and is_minimizable, read by the control-area hit test.
+	movable, resizable, minimizable bool
+	// hitTestWindowControl is the pin's hit_test_window_control callback
+	// (WindowOptions.OnHitTestWindowControl).
+	hitTestWindowControl func(position Point) (WindowControlArea, bool)
+	// ncButtonPressed is the caption button (HTMINBUTTON, HTMAXBUTTON,
+	// HTCLOSE) a left press went down on, or 0 (the pin's
+	// nc_button_pressed).
+	ncButtonPressed uintptr
+	// dragging marks a StartWindowMove in progress (the pin's dragging
+	// cell): WM_EXITSIZEMOVE then posts the left release the move loop
+	// swallowed.
+	dragging bool
 }
 
 // newHostWindow builds the record for a window being created. Runs at
@@ -2112,16 +2152,8 @@ func (h *Host) openWindowOnHostThread(opts WindowOptions) (WindowHandle, error) 
 	// Styles follow WindowsWindow::new for a normal window:
 	// WS_SYSMENU (+WS_THICKFRAME|WS_MAXIMIZEBOX when resizable,
 	// +WS_MINIMIZEBOX when minimizable) and WS_EX_APPWINDOW.
-	// Deviation: WS_CAPTION keeps the native title bar in this slice
-	// (see registerHostClasses); WS_EX_NOREDIRECTIONBITMAP arrives with
-	// the DirectComposition renderer (ticket07).
-	style := uintptr(wsSysMenu | wsCaption)
-	if opts.Resizable {
-		style |= wsThickFrame | wsMaximizeBox
-	}
-	if opts.MinimizeBox {
-		style |= wsMinimizeBox
-	}
+	// See win32WindowStyles (titlebar_windows.go) for the deviations.
+	style, exStyle := win32WindowStyles(opts)
 
 	var title16 *uint16
 	if opts.Title != "" {
@@ -2140,7 +2172,7 @@ func (h *Host) openWindowOnHostThread(opts WindowOptions) (WindowHandle, error) 
 	// pointer conversions sit in the call's argument list so the
 	// compiler keeps the buffers alive through the syscall.
 	hwnd, _, callErr := procCreateWindowExW.Call(
-		wsExAppWindow,
+		exStyle,
 		uintptr(unsafe.Pointer(windowClassNamePtr)),
 		uintptr(unsafe.Pointer(title16)),
 		style,
@@ -2187,6 +2219,19 @@ func (h *Host) openWindowOnHostThread(opts WindowOptions) (WindowHandle, error) 
 	w.onGesture = opts.OnGesture
 	w.onMouseInput = opts.OnMouseInput
 	w.minSize = opts.MinSize
+	w.hideTitleBar = opts.Titlebar.hidesTitleBar()
+	w.movable = !opts.Immovable
+	w.resizable = opts.Resizable
+	w.minimizable = opts.MinimizeBox
+	w.hitTestWindowControl = opts.OnHitTestWindowControl
+	if w.hideTitleBar {
+		// The pin's WM_CREATE path (events.rs handle_create_msg ->
+		// notify_frame_changed): recompute the frame now that
+		// WM_NCCALCSIZE knows the titlebar is hidden. It runs before the
+		// border offset is measured, so that offset is the hidden
+		// titlebar's frame.
+		notifyFrameChanged(hwnd)
+	}
 	w.updateBorderOffset()
 
 	// Ticket24: the per-window Direct Manipulation handler
