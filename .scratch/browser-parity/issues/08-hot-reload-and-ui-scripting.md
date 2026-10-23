@@ -3,8 +3,8 @@
 Parent: ../map.md
 Type: research
 Labels: wayfinder:research
-Status: open
-Assignee: unassigned
+Status: resolved
+Assignee: orchestrator 5
 Blocked by: none
 
 ## Question
@@ -25,3 +25,5 @@ Output: research/browser-parity/08-hot-reload-and-ui-scripting.md, with the reco
 ## Comments
 
 ## Answer
+
+Researched by orchestrator 5 directly (the user asked for it right away, without a worker): research/browser-parity/08-hot-reload-and-ui-scripting.md, on branch research/browser-parity. In short: add a Go-only state-keeping dev reload now. Strategically, a zgui-style script layer (Luau in the DLL, or goja). gpuix's model is not recommended: on desktop its reload remounts and loses state. Open for the user: a second language or not, Luau or JS, and plugins.
