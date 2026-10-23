@@ -2057,8 +2057,13 @@ func queryForeground[T any](h *Host, f func() (T, error)) (T, error) {
 }
 
 // runForegroundAsync schedules f on the foreground thread without
-// waiting (fire-and-forget window operations).
+// waiting (fire-and-forget window operations). A window with no host (a
+// test window) has no foreground thread: the operation is a no-op, as on
+// a stale lease.
 func (h *Host) runForegroundAsync(f func()) {
+	if h == nil {
+		return
+	}
 	if h.onHostThread() {
 		h.safeRun(f)
 		return
