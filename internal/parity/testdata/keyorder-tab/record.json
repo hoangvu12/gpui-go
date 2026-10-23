@@ -1,0 +1,71 @@
+{
+  "name": "keyorder-tab",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T21:28:43Z",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "a": {
+      "x": 0,
+      "y": 0,
+      "width": 120,
+      "height": 60
+    },
+    "b": {
+      "x": 0,
+      "y": 60,
+      "width": 120,
+      "height": 60
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 360
+    }
+  },
+  "events": [
+    {
+      "kind": "click",
+      "target": "a",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keydown",
+      "target": "a",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "a"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "a"
+    },
+    {
+      "kind": "keyup",
+      "target": "b",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "b"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "b"
+    }
+  ],
+  "screenshot": "chrome.png"
+}

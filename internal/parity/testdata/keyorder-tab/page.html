@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 480px;
+		height: 360px;
+		display: flex;
+		flex-direction: column;
+		font: 16px/1.618 "Segoe UI", system-ui, sans-serif;
+	}
+	.box {
+		box-sizing: border-box;
+		width: 120px;
+		height: 60px;
+		background: #e2e8f0;
+	}
+	.box:focus {
+		background: #22c55e;
+		outline: none;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div class="box" data-id="a" tabindex="0"></div>
+	<div class="box" data-id="b" tabindex="0"></div>
+	<script>
+	</script>
+</body>
+</html>

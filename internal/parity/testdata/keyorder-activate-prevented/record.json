@@ -1,0 +1,60 @@
+{
+  "name": "keyorder-activate-prevented",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T21:28:48Z",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "btn": {
+      "x": 0,
+      "y": 0,
+      "width": 120,
+      "height": 60
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 360
+    }
+  },
+  "events": [
+    {
+      "kind": "click",
+      "target": "btn",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keydown",
+      "target": "btn",
+      "defaultPrevented": true,
+      "key": " ",
+      "focus": "btn"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": true,
+      "key": " ",
+      "focus": "btn"
+    },
+    {
+      "kind": "keyup",
+      "target": "btn",
+      "defaultPrevented": false,
+      "key": " ",
+      "focus": "btn"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": " ",
+      "focus": "btn"
+    }
+  ],
+  "screenshot": "chrome.png"
+}

@@ -29,23 +29,50 @@ import (
 // in step with the EventLog helpers) that records the kind, the
 // target id and the event object; the final defaultPrevented state is
 // read out after dispatch (matching the replay's post-dispatch
-// defaultPrevented semantics).
+// defaultPrevented semantics). An element's data-events attribute
+// narrows the kinds it binds to (a comma-separated subset of the same
+// vocabulary) - the key fixtures use it to bind key events without
+// click on an ancestor whose click the port does not yet bubble for
+// keyboard activations (docs/browser-parity-harness.md, known
+// divergences). keydown and keyup entries additionally carry the DOM
+// key name (e.key) and the focused element's data-id at listener time
+// (document.activeElement, with body normalized to "" - the replay's
+// KeyDown/KeyUp helpers record the same pair).
 func instrumentScript(kinds []string) string {
 	kindList, _ := json.Marshal(kinds)
 	return fmt.Sprintf(`(() => {
 	window.__events = [];
+	const focusOf = () => {
+		const el = document.activeElement;
+		if (el && el !== document.body && el.dataset && el.dataset.id) return el.dataset.id;
+		return "";
+	};
 	for (const el of document.querySelectorAll('[data-id]')) {
-		for (const kind of %s) {
-			el.addEventListener(kind, e => window.__events.push({kind: kind, target: el.dataset.id, event: e}));
+		let bound = %s;
+		if (el.dataset.events) {
+			bound = el.dataset.events.split(',').map(k => k.trim()).filter(k => k.length > 0);
+		}
+		for (const kind of bound) {
+			el.addEventListener(kind, e => {
+				const entry = {kind: kind, target: el.dataset.id, event: e};
+				if (kind === "keydown" || kind === "keyup") {
+					entry.key = e.key;
+					entry.focus = focusOf();
+				}
+				window.__events.push(entry);
+			});
 		}
 	}
 	return "instrumented";
 })()`, kindList)
 }
 
-// eventsScript reads the recorded transcript out of the page, with
-// each event's final default-prevented state.
-const eventsScript = `JSON.stringify(window.__events.map(r => ({kind: r.kind, target: r.target, defaultPrevented: r.event.defaultPrevented})))`
+// eventsScript reads the recorded transcript out of the page: each
+// event's final default-prevented state (read live from the event
+// object, after the whole dispatch, matching the replay's post-dispatch
+// markDefaultPrevented) and the key and focus fields of key entries
+// (listener-time snapshots).
+const eventsScript = `JSON.stringify(window.__events.map(r => ({kind: r.kind, target: r.target, defaultPrevented: r.event.defaultPrevented, key: r.key || "", focus: r.focus || ""})))`
 
 // RecordFixture records one fixture in headless Chrome and writes its
 // files (record.json, chrome.png, page.html) into
@@ -53,7 +80,7 @@ const eventsScript = `JSON.stringify(window.__events.map(r => ({kind: r.kind, ta
 // --headless with a throwaway profile, and the gpui side is not
 // involved at all.
 func RecordFixture(f Fixture) error {
-	if f.HTML == "" || f.View == nil {
+	if f.HTML == "" || (f.View == nil && f.ViewWithWindow == nil) {
 		return fmt.Errorf("parity: fixture %q is incomplete (name, HTML and view are required)", f.Name)
 	}
 	if err := validate(f); err != nil {
@@ -176,6 +203,14 @@ type headlessChrome struct {
 // The port is picked by briefly listening and closing (a tiny race
 // another process could win), so a launch whose endpoint never comes
 // up is retried on a fresh port.
+//
+// Chrome's smooth-scrolling setting is disabled: with it on, keyboard
+// scrolls arrive as animated (compositor-driven) offsets that land
+// nondeterministically (PaintLayerScrollableArea::ScrollAnimatorEnabled
+// reads the setting, paint_layer_scrollable_area.cc:771-777), which a
+// recorded fixture cannot compare against the port's instant scrolls.
+// The smooth-scrolling ticket (browser-core 45, spec D13) re-records
+// its fixtures when the port scrolls smoothly.
 func launchChrome(path, dir string) (*headlessChrome, error) {
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
@@ -194,6 +229,7 @@ func launchChrome(path, dir string) (*headlessChrome, error) {
 			"--no-first-run",
 			"--no-default-browser-check",
 			"--disable-background-timer-throttling",
+			"--disable-smooth-scrolling",
 			"about:blank",
 		)
 		cmd.Stdout = nil
@@ -458,7 +494,11 @@ func cdpKeyEvents(key gpui.Keystroke, modifiers int) ([]map[string]any, error) {
 	if !ok {
 		if len(key.Key) == 1 {
 			ch := key.Key
-			mapped = cdpKey{Key: strings.ToUpper(ch), Code: "Key" + strings.ToUpper(ch), VK: uint16(ch[0])}
+			// The DOM key value keeps the typed case ("j" reports e.key
+			// "j"; a shifted keystroke would spell "shift-J" and report
+			// "J"), the code is the physical key and the Windows virtual
+			// key code is the unshifted letter.
+			mapped = cdpKey{Key: ch, Code: "Key" + strings.ToUpper(ch), VK: uint16(ch[0])}
 			if ch >= "a" && ch <= "z" {
 				mapped.VK = uint16(ch[0] - 'a' + 'A')
 			}

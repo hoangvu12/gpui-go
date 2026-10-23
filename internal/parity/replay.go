@@ -77,7 +77,7 @@ func (v *fixtureView) Render(w *gpui.Window, cx *gpui.Context[fixtureView]) gpui
 // artifact; Replay fails with the underlying error when it is
 // unavailable (the perf-benchmark and zterm-capture patterns).
 func Replay(t testing.TB, f Fixture) (*ReplayResult, error) {
-	if f.View == nil {
+	if f.View == nil && f.ViewWithWindow == nil {
 		return nil, fmt.Errorf("parity: fixture %q has no view", f.Name)
 	}
 	if err := validate(f); err != nil {
@@ -92,9 +92,14 @@ func Replay(t testing.TB, f Fixture) (*ReplayResult, error) {
 	}
 
 	log := &EventLog{}
+	app := ta.App()
+	build := f.View
+	if build == nil {
+		build = func(l *EventLog) gpui.AnyElement { return f.ViewWithWindow(l, window, app) }
+	}
 	ta.Update(func(app *gpui.App) {
 		root := gpui.NewEntity(app, window.Scope(), func(v *fixtureView, cx *gpui.Context[fixtureView]) {
-			v.build, v.log = f.View, log
+			v.build, v.log = build, log
 		})
 		window.SetRootView(gpui.ViewOf(root))
 	})
@@ -200,7 +205,21 @@ func applyStep(cx *gpui.VisualTestContext, log *EventLog, step Step) error {
 		})
 		log.markDefaultPrevented(before, result.DefaultPrevented)
 	case StepKey:
-		cx.SimulateKeystrokes(step.Key)
+		// One full key press — key down then key up, the recorder's
+		// keyDown+keyUp pair — through the platform dispatch (bindings,
+		// listeners and the core default actions of browser-core 09).
+		// The default-prevented state is marked per half, matching the
+		// recorder's per-event final state.
+		key, err := gpui.ParseKeystroke(step.Key)
+		if err != nil {
+			return err
+		}
+		before := len(log.entries)
+		result := cx.SimulateEvent(&gpui.KeyDownEvent{Keystroke: key})
+		log.markDefaultPrevented(before, result.DefaultPrevented)
+		before = len(log.entries)
+		result = cx.SimulateEvent(&gpui.KeyUpEvent{Keystroke: key})
+		log.markDefaultPrevented(before, result.DefaultPrevented)
 	default:
 		return fmt.Errorf("unknown step kind %q", step.Kind)
 	}

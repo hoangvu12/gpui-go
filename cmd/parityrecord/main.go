@@ -18,6 +18,7 @@ import (
 	"os"
 
 	"github.com/hoangvu12/gpui-go/internal/parity"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/keyorder"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/tracer"
 )
 

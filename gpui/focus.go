@@ -71,6 +71,12 @@ type windowFocusState struct {
 	// (window.rs pending_modifier).
 	pendingModifier modifierTracking
 
+	// keyOrder is the window's key dispatch order (browser-core 09,
+	// spec D5; key_default_action.go): the zero value is the GPUI shape
+	// (bindings before listeners), ListenersBeforeBindings the browser
+	// order.
+	keyOrder KeyDispatchOrder
+
 	// rendered is the last completed frame's dispatch tree and tab
 	// stops (window.rs rendered_frame.dispatch_tree/tab_stops).
 	rendered *renderedFrame
