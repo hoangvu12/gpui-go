@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	.stage {
+		position: relative;
+		width: 640px;
+		height: 400px;
+	}
+	.bars {
+		position: absolute;
+		inset: 0;
+		display: flex;
+	}
+	.bar {
+		width: 80px;
+		height: 100%;
+		flex-shrink: 0;
+	}
+	.b1 { background: #ef4444; }
+	.b2 { background: #f59e0b; }
+	.b3 { background: #22c55e; }
+	.b4 { background: #3b82f6; }
+	.b5 { background: #a855f7; }
+	.b6 { background: #ec4899; }
+	.b7 { background: #ef4444; }
+	.b8 { background: #f59e0b; }
+	.panel {
+		position: absolute;
+		inset: 0;
+		/* The blur length is the sigma: 6px. */
+		backdrop-filter: blur(6px);
+		background: rgba(255, 255, 255, 0.2);
+	}
+</style>
+</head>
+<body>
+	<div class="stage" data-id="backdrop-stage">
+		<div class="bars">
+			<div class="bar b1"></div>
+			<div class="bar b2"></div>
+			<div class="bar b3"></div>
+			<div class="bar b4"></div>
+			<div class="bar b5"></div>
+			<div class="bar b6"></div>
+			<div class="bar b7"></div>
+			<div class="bar b8"></div>
+		</div>
+		<div class="panel" data-id="backdrop-panel"></div>
+	</div>
+</body>
+</html>

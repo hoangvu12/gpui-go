@@ -1,0 +1,26 @@
+{
+  "name": "shadow-backdrop",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T22:30:53Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "backdrop-panel": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "backdrop-stage": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

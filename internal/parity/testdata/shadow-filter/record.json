@@ -1,0 +1,26 @@
+{
+  "name": "shadow-filter",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T22:05:32Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "filter-box": {
+      "x": 230,
+      "y": 145,
+      "width": 180,
+      "height": 110
+    },
+    "filter-card": {
+      "x": 182,
+      "y": 97,
+      "width": 276,
+      "height": 206
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}
