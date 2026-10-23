@@ -37,7 +37,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - 09: verified, merged and RESOLVED. Watch the native shaping-handle cap: it flakes under a big parity run.
 - 13 key code: chat 119765e8, worktree `gpui-go-wt-core-13`, branch `core/13-key-code`
 - 64: verified, merged and RESOLVED.
-- RUNNING NOW: 04, 06, 11, 13, 41.
+- 65 TSX bundling: chat 7a8ff981, worktree `gpui-go-wt-core-65`, branch `core/65-tsx-bundling`
+- RUNNING NOW: 04, 06, 11, 13, 41, 65.
 
 Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
 
