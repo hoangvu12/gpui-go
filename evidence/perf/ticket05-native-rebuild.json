@@ -1,0 +1,329 @@
+{
+  "ticket": "gpui-perf 05: native rebuild (bulk scene insert, low-latency present, weight-500 face)",
+  "date": "2026-10-23",
+  "dll": {
+    "before": {
+      "native_revision": 12,
+      "sha256": "88595f1332a26f4e2e9bc5d2d899e8abe330b6290078747a0fb2a738e654a941",
+      "bytes": 18866688
+    },
+    "after": {
+      "native_revision": 13,
+      "sha256": "0b6e9265e0d519ecaf56aba6f6905efab0bdc7be936d6085ea42cab28e234450",
+      "bytes": 18877952,
+      "gzip9_bytes": 7539285,
+      "capabilities_mask": "0xFFF",
+      "crt_outcome": "static: no VCRUNTIME/MSVCP/UCRT/api-ms-win-crt imports present; only OS system components are imported",
+      "toolchain": "rustc 1.97.0, x86_64-pc-windows-msvc, RUSTFLAGS=-C target-feature=+crt-static",
+      "services": {
+        "scene": 4,
+        "renderer": 4,
+        "text": "2 (behavior change only)"
+      }
+    },
+    "note": "reference/README.md said revision 12 and the handoff said 'rev 11': the embedded manifest and lib.rs both said 12, so this rebuild is 13."
+  },
+  "frame_benchmark": {
+    "source": "gpui/perf_bench_test.go (ticket 01), TestPerfFrameReport; before = this branch with the rev-12 DLL embedded, after = rev 13 + the batched Go scene path; both best of runs (before 3, after 5) on the same machine (i5-14400F, 16 CPUs)",
+    "results": [
+      {
+        "name": "FrameDivs",
+        "before": {
+          "ms_per_frame": 10.200026,
+          "native_calls_per_frame": 8037,
+          "allocs_per_frame": 16477,
+          "bytes_per_frame": 5023588,
+          "quads_per_frame": 5000,
+          "sprites_per_frame": 0
+        },
+        "after": {
+          "ms_per_frame": 8.458304761904762,
+          "native_calls_per_frame": 3048,
+          "allocs_per_frame": 16477,
+          "bytes_per_frame": 5023499,
+          "quads_per_frame": 5000,
+          "sprites_per_frame": 0
+        },
+        "native_calls_change_pct": -62.1,
+        "ms_change_pct": -17.1
+      },
+      {
+        "name": "FrameText",
+        "before": {
+          "ms_per_frame": 190.3123,
+          "native_calls_per_frame": 129292,
+          "allocs_per_frame": 81578,
+          "bytes_per_frame": 18660078,
+          "quads_per_frame": 0,
+          "sprites_per_frame": 18252
+        },
+        "after": {
+          "ms_per_frame": 182.8,
+          "native_calls_per_frame": 110914,
+          "allocs_per_frame": 81582,
+          "bytes_per_frame": 18660965,
+          "quads_per_frame": 0,
+          "sprites_per_frame": 18252
+        },
+        "native_calls_change_pct": -14.2,
+        "ms_change_pct": -3.9
+      },
+      {
+        "name": "FrameRefreshDivs",
+        "before": {
+          "ms_per_frame": 9.282190647482015,
+          "native_calls_per_frame": 8037,
+          "allocs_per_frame": 16419,
+          "bytes_per_frame": 5020265,
+          "quads_per_frame": 5000,
+          "sprites_per_frame": 0
+        },
+        "after": {
+          "ms_per_frame": 7.909004487179487,
+          "native_calls_per_frame": 3048,
+          "allocs_per_frame": 16418,
+          "bytes_per_frame": 5020317,
+          "quads_per_frame": 5000,
+          "sprites_per_frame": 0
+        },
+        "native_calls_change_pct": -62.1,
+        "ms_change_pct": -14.8
+      },
+      {
+        "name": "FrameRefreshText",
+        "before": {
+          "ms_per_frame": 189.68496666666667,
+          "native_calls_per_frame": 129292,
+          "allocs_per_frame": 81577,
+          "bytes_per_frame": 18660997,
+          "quads_per_frame": 0,
+          "sprites_per_frame": 18252
+        },
+        "after": {
+          "ms_per_frame": 186.3199,
+          "native_calls_per_frame": 110914,
+          "allocs_per_frame": 81579,
+          "bytes_per_frame": 18661237,
+          "quads_per_frame": 0,
+          "sprites_per_frame": 18252
+        },
+        "native_calls_change_pct": -14.2,
+        "ms_change_pct": -1.8
+      }
+    ],
+    "note": "Native calls and allocs/bytes are deterministic; ms/frame is wall time. The remaining text-page calls are the per-glyph text/glyph/atlas calls (ticket 02), not scene inserts."
+  },
+  "weights_vs_directwrite": {
+    "source": "bold probe from orchestrator 2 (%TEMP%/boldprobe, cmd/headless), copied and pointed at this worktree; 'Regular Bold text' at 14px, grayscale, Segoe UI/.SystemUIFont. ink = summed coverage; DirectWrite reference = browser-like CSS matching (500 -> the Regular face, synthesis only from 600).",
+    "before_rev12": [
+      {
+        "weight": 400,
+        "gpui_font_id": "0x8000000000000000",
+        "gpui_width": 105.602,
+        "gpui_ink": 298.57,
+        "dwrite_browserlike_weight": 400,
+        "dwrite_width": 106.012,
+        "dwrite_ink": 257.49,
+        "ink_ratio": 1.1596
+      },
+      {
+        "weight": 500,
+        "gpui_font_id": "0x8000000000000003",
+        "gpui_width": 105.602,
+        "gpui_ink": 473.86,
+        "dwrite_browserlike_weight": 400,
+        "dwrite_width": 106.012,
+        "dwrite_ink": 257.49,
+        "ink_ratio": 1.8403
+      },
+      {
+        "weight": 600,
+        "gpui_font_id": "0x8000000000000001",
+        "gpui_width": 109.628,
+        "gpui_ink": 399.18,
+        "dwrite_browserlike_weight": 600,
+        "dwrite_width": 110.079,
+        "dwrite_ink": 355.07,
+        "ink_ratio": 1.1242
+      },
+      {
+        "weight": 700,
+        "gpui_font_id": "0x8000000000000002",
+        "gpui_width": 114.639,
+        "gpui_ink": 530.35,
+        "dwrite_browserlike_weight": 700,
+        "dwrite_width": 115.042,
+        "dwrite_ink": 485.47,
+        "ink_ratio": 1.0925
+      }
+    ],
+    "after_rev13": [
+      {
+        "weight": 400,
+        "gpui_font_id": "0x8000000000000000",
+        "gpui_width": 105.602,
+        "gpui_ink": 298.57,
+        "dwrite_browserlike_weight": 400,
+        "dwrite_width": 106.012,
+        "dwrite_ink": 257.49,
+        "ink_ratio": 1.1596
+      },
+      {
+        "weight": 500,
+        "gpui_font_id": "0x8000000000000000",
+        "gpui_width": 105.602,
+        "gpui_ink": 298.57,
+        "dwrite_browserlike_weight": 400,
+        "dwrite_width": 106.012,
+        "dwrite_ink": 257.49,
+        "ink_ratio": 1.1596
+      },
+      {
+        "weight": 600,
+        "gpui_font_id": "0x8000000000000001",
+        "gpui_width": 109.628,
+        "gpui_ink": 399.18,
+        "dwrite_browserlike_weight": 600,
+        "dwrite_width": 110.079,
+        "dwrite_ink": 355.07,
+        "ink_ratio": 1.1242
+      },
+      {
+        "weight": 700,
+        "gpui_font_id": "0x8000000000000002",
+        "gpui_width": 114.639,
+        "gpui_ink": 530.35,
+        "dwrite_browserlike_weight": 700,
+        "dwrite_width": 115.042,
+        "dwrite_ink": 485.47,
+        "ink_ratio": 1.0925
+      }
+    ],
+    "full_ladder_before": [
+      "gpui w=300 font=0x8000000000000003 width=26.18 ink=63.0",
+      "dwrite \"Segoe UI\" request w=300 -> font weight 300 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGOEUIL.TTF upem=2048",
+      "gpui w=350 font=0x8000000000000004 width=27.02 ink=75.9",
+      "dwrite \"Segoe UI\" request w=350 -> font weight 350 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGOEUISL.TTF upem=2048",
+      "gpui w=400 font=0x8000000000000000 width=27.86 ink=88.4",
+      "dwrite \"Segoe UI\" request w=400 -> font weight 400 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGOEUI.TTF upem=2048",
+      "gpui w=500 font=0x8000000000000005 width=27.86 ink=143.1",
+      "dwrite \"Segoe UI\" request w=500 -> font weight 600 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGUISB.TTF upem=2048",
+      "gpui w=550 font=0x8000000000000001 width=28.91 ink=119.0",
+      "dwrite \"Segoe UI\" request w=550 -> font weight 600 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGUISB.TTF upem=2048",
+      "gpui w=600 font=0x8000000000000001 width=28.91 ink=119.0",
+      "dwrite \"Segoe UI\" request w=600 -> font weight 600 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGUISB.TTF upem=2048",
+      "gpui w=650 font=0x8000000000000002 width=30.18 ink=160.0",
+      "dwrite \"Segoe UI\" request w=650 -> font weight 700 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGOEUIB.TTF upem=2048",
+      "gpui w=700 font=0x8000000000000002 width=30.18 ink=160.0",
+      "dwrite \"Segoe UI\" request w=700 -> font weight 700 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGOEUIB.TTF upem=2048",
+      "gpui w=800 font=0x8000000000000006 width=31.85 ink=193.9",
+      "dwrite \"Segoe UI\" request w=800 -> font weight 900 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGUIBL.TTF upem=2048",
+      "gpui w=900 font=0x8000000000000006 width=31.85 ink=193.9",
+      "dwrite \"Segoe UI\" request w=900 -> font weight 900 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGUIBL.TTF upem=2048"
+    ],
+    "full_ladder_after": [
+      "gpui w=300 font=0x8000000000000003 width=26.18 ink=63.0",
+      "dwrite \"Segoe UI\" request w=300 -> font weight 300 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGOEUIL.TTF upem=2048",
+      "gpui w=350 font=0x8000000000000004 width=27.02 ink=75.9",
+      "dwrite \"Segoe UI\" request w=350 -> font weight 350 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGOEUISL.TTF upem=2048",
+      "gpui w=400 font=0x8000000000000000 width=27.86 ink=88.4",
+      "dwrite \"Segoe UI\" request w=400 -> font weight 400 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGOEUI.TTF upem=2048",
+      "gpui w=500 font=0x8000000000000000 width=27.86 ink=88.4",
+      "dwrite \"Segoe UI\" request w=500 -> font weight 600 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGUISB.TTF upem=2048",
+      "gpui w=550 font=0x8000000000000001 width=28.91 ink=119.0",
+      "dwrite \"Segoe UI\" request w=550 -> font weight 600 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGUISB.TTF upem=2048",
+      "gpui w=600 font=0x8000000000000001 width=28.91 ink=119.0",
+      "dwrite \"Segoe UI\" request w=600 -> font weight 600 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGUISB.TTF upem=2048",
+      "gpui w=650 font=0x8000000000000002 width=30.18 ink=160.0",
+      "dwrite \"Segoe UI\" request w=650 -> font weight 700 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGOEUIB.TTF upem=2048",
+      "gpui w=700 font=0x8000000000000002 width=30.18 ink=160.0",
+      "dwrite \"Segoe UI\" request w=700 -> font weight 700 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGOEUIB.TTF upem=2048",
+      "gpui w=800 font=0x8000000000000006 width=31.85 ink=193.9",
+      "dwrite \"Segoe UI\" request w=800 -> font weight 900 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGUIBL.TTF upem=2048",
+      "gpui w=900 font=0x8000000000000006 width=31.85 ink=193.9",
+      "dwrite \"Segoe UI\" request w=900 -> font weight 900 simulations=0 file=C:\\WINDOWS\\FONTS\\SEGUIBL.TTF upem=2048"
+    ],
+    "images": [
+      "evidence/perf/ticket05/weights-gpui-before-rev12.png",
+      "evidence/perf/ticket05/weights-gpui-after-rev13.png",
+      "evidence/perf/ticket05/weights-dwrite-browserlike.png"
+    ],
+    "summary": "Only weight 500 changed: it now resolves to the Regular face's FontId (0x8000000000000000, same as 400) with ink 298.6 instead of the synthesized-bold 473.9 (heavier than real Semibold 600 at 399.2). Its ink ratio against the browser-like DirectWrite render is now 1.16, the same as 400 (the remaining gap is the shared gamma/contrast difference, not weight). 300-450 and 550-900 are unchanged. DirectWrite's own GetFirstMatchingFont maps 500 to Semibold; the fix follows CSS/browsers as the ticket asks."
+  },
+  "present_latency": {
+    "animation_frames": 61,
+    "animation_ms": 255.03,
+    "animation_ms_per_frame": 4.180819672131148,
+    "final_wait_result": 0,
+    "idle_platform_wakes": 0,
+    "idle_presents_in_300ms": 0,
+    "method": "real window 320x200, present hook draws LastDrawnScene through Renderer.DrawScene; notify from idle (60 ms gap) to the present hook's return; DwmFlush = the same window with its surface unregistered from the frame source",
+    "notify_to_present_ms_dwmflush": {
+      "median": 4.369,
+      "p90": 17.528,
+      "sorted": [
+        1.568,
+        3.335,
+        3.674,
+        3.811,
+        3.875,
+        4.196,
+        4.198,
+        4.208,
+        4.25,
+        4.251,
+        4.27,
+        4.344,
+        4.369,
+        4.39,
+        4.406,
+        4.464,
+        4.768,
+        4.905,
+        4.919,
+        5.206,
+        5.392,
+        11.116,
+        17.528,
+        17.803,
+        17.987
+      ]
+    },
+    "notify_to_present_ms_waitable": {
+      "median": 0.542,
+      "p90": 1.131,
+      "sorted": [
+        0,
+        0.504,
+        0.515,
+        0.517,
+        0.523,
+        0.523,
+        0.525,
+        0.527,
+        0.531,
+        0.538,
+        0.538,
+        0.538,
+        0.542,
+        0.543,
+        0.559,
+        0.565,
+        0.57,
+        0.587,
+        0.59,
+        1.043,
+        1.112,
+        1.114,
+        1.131,
+        4.848,
+        5.414
+      ]
+    },
+    "samples": 25,
+    "test": "TestFrameLatencyWaitableRealWindow",
+    "display_refresh_hz": 239,
+    "note": "notify->present measures from the notify to the present hook's DrawScene return (submission), from idle. The waitable path starts the first frame after idle immediately; the DwmFlush path first waits for the next composition. Continuous frames stay vblank paced (4.18 ms/frame at 239 Hz). Idle: 0 presents in 300 ms."
+  },
+  "fixtures": "No bit-exact fixture changed: textspec, glyphspec, scenespec, pathspec, fontspec and conformance pass unchanged. No fixture renders weight 500, so the intended weight-500 change has no fixture to update."
+}
