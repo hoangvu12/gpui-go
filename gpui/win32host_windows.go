@@ -628,6 +628,7 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		// Re-associate the window with its monitor when its center left
 		// the current display (ticket26, handle_move_msg's display check).
 		w.maybeUpdateDisplayOnMove()
+		reportOnscreenTestWindow(w, false)
 		if w.onMoved != nil {
 			w.onMoved()
 		}
@@ -899,6 +900,9 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		// handle_window_visibility_changed); default processing always
 		// continues.
 		w.handleWindowVisibilityChanged(wparam)
+		if wparam != 0 {
+			reportOnscreenTestWindow(w, true)
+		}
 		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
 		return r
 
@@ -2302,11 +2306,22 @@ func (h *Host) openWindowOnHostThread(opts WindowOptions) (WindowHandle, error) 
 		// (a window opened smaller than its own floor opens at the
 		// floor).
 		cx, cy = w.clampClientDeviceSize(cx, cy)
+		if offscreenTestWindows() {
+			// Test binaries park windows off the desktop
+			// (testwindows_windows.go).
+			x, y = offscreenTestPosition(x, y)
+		}
 		r := w.windowRectFromClient(x, y, cx, cy)
 		procSetWindowPos.Call(hwnd, 0,
 			uintptr(int64(r.left)), uintptr(int64(r.top)),
 			uintptr(int64(r.right-r.left)), uintptr(int64(r.bottom-r.top)),
 			uintptr(swpNoZOrder|swpNoActivate))
+	} else if offscreenTestWindows() {
+		// A test window opened at the default position keeps the default
+		// size and moves off the desktop (testwindows_windows.go).
+		procSetWindowPos.Call(hwnd, 0,
+			uintptr(offscreenTestOrigin), uintptr(offscreenTestOrigin), 0, 0,
+			uintptr(swpNoSize|swpNoZOrder|swpNoActivate))
 	}
 
 	if opts.Show {
@@ -2530,6 +2545,11 @@ func (wh WindowHandle) SetBounds(bounds Bounds) {
 			cy = w.clientH
 		}
 		cx, cy = w.clampClientDeviceSize(cx, cy)
+		if offscreenTestWindows() {
+			// Test binaries keep windows off the desktop
+			// (testwindows_windows.go).
+			x, y = offscreenTestPosition(x, y)
+		}
 		r := w.windowRectFromClient(x, y, cx, cy)
 		procSetWindowPos.Call(wh.hwnd, 0,
 			uintptr(int64(r.left)), uintptr(int64(r.top)),
