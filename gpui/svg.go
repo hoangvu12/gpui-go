@@ -414,8 +414,9 @@ func (r *SvgRenderer) RenderParsed(svg *ParsedSvg, size SvgSize) (*SvgImage, err
 // RenderSingleFrame renders the given bytes into an image buffer at a
 // scaling factor (svg_renderer.rs render_single_frame, lines 275-282:
 // parse, then render_parsed at the factor). This is the resource-image
-// entry the img element's SVG fallback consumes (a deferred element
-// path — ticket17's ErrSVGRendererDeferred seam).
+// entry the image loaders' SVG fallback consumes (imagecache.go
+// renderSVG for un-sniffed resource bytes, img.rs:737-740; img.go
+// decodeImageData for ImageFormatSVG, platform.rs:3659-3663).
 func (r *SvgRenderer) RenderSingleFrame(bytes []byte, scale float32) (*SvgImage, error) {
 	svg, err := r.parseNow(bytes)
 	if err != nil {

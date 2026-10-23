@@ -34,8 +34,11 @@ const (
 	ImageFormatTIFF = native.ImageFormatTIFF
 	ImageFormatICO  = native.ImageFormatICO
 	ImageFormatPNM  = native.ImageFormatPNM
-	// ImageFormatSVG is the probe-reported tag (the SVG renderer is a
-	// deferred service); decode rejects it.
+	// ImageFormatSVG is the probe-reported tag. The image codec's decode
+	// rejects it; SVG bytes render through the SvgRenderer instead
+	// (svg.go, ticket19): an ImageSourceImage of this format via
+	// render_single_frame (platform.rs:3659-3663, img.go
+	// decodeImageData).
 	ImageFormatSVG = native.ImageFormatSVG
 )
 
@@ -244,7 +247,8 @@ func (c *ImageCodec) Dispose() error { return c.atlas.Dispose() }
 
 // ErrImageFormatUnknown reports bytes the resource-entry sniff could
 // not recognize: the caller routes them to the SVG renderer exactly
-// like the pin's img.rs (the SVG renderer itself is a deferred service).
+// like the pin's img.rs:737-740 (imagecache.go renderSVG over
+// SvgRenderer.RenderSingleFrame).
 var ErrImageFormatUnknown = native.ErrImageFormatUnknown
 
 // DecodeResource decodes through the resource entry (the sniffed
