@@ -142,7 +142,8 @@ func (s *elementScroll) clamp(bounds Bounds, style *Style, contentSize Size, w *
 // restricted or the other axis scrolls too; without
 // allow_concurrent_scroll only the larger axis moves. The offset cell
 // moves unclamped and a change notifies the view that was rendering at
-// registration. A nil receiver registers nothing.
+// registration. A nil receiver registers nothing. Page deltas resolve
+// against the hitbox's own visible size (browser-core ticket 02).
 func (s *elementScroll) paintListener(hitbox Hitbox, style *Style, w *Window) {
 	if s == nil {
 		return
@@ -161,7 +162,7 @@ func (s *elementScroll) paintListener(hitbox Hitbox, style *Style, w *Window) {
 			return
 		}
 		old := *offset
-		delta := e.Delta.PixelDelta(lineHeight)
+		delta := e.Delta.PixelDeltaFor(lineHeight, box.Bounds.Size)
 		if restrict && e.Delta.Precise() && ongoing != nil {
 			ongoing.Filter(&delta, e.TouchPhase, app)
 		}
@@ -230,9 +231,20 @@ func signum32(v float32) float32 {
 
 // coalesceScrollDelta is R:interactive.rs:621-661 ScrollDelta::coalesce:
 // same-variant deltas add per axis when the signs agree, otherwise the
-// newer delta wins; mixed variants yield the newer delta.
+// newer delta wins; mixed variants yield the newer delta. The port's
+// Pages variant follows the same rules (browser-core ticket 02).
 func coalesceScrollDelta(a, b ScrollDelta) ScrollDelta {
-	if a.IsPixels != b.IsPixels {
+	kind := func(d ScrollDelta) int {
+		switch {
+		case d.IsPixels:
+			return 1
+		case d.IsPages:
+			return 2
+		default:
+			return 0
+		}
+	}
+	if kind(a) != kind(b) {
 		return b
 	}
 	combine := func(x, y float32) float32 {
@@ -241,10 +253,14 @@ func coalesceScrollDelta(a, b ScrollDelta) ScrollDelta {
 		}
 		return y
 	}
-	if a.IsPixels {
+	switch kind(b) {
+	case 1:
 		return ScrollDelta{Pixels: Point{X: combine(a.Pixels.X, b.Pixels.X), Y: combine(a.Pixels.Y, b.Pixels.Y)}, IsPixels: true}
+	case 2:
+		return ScrollDelta{Pages: Point{X: combine(a.Pages.X, b.Pages.X), Y: combine(a.Pages.Y, b.Pages.Y)}, IsPages: true}
+	default:
+		return ScrollDelta{Lines: Point{X: combine(a.Lines.X, b.Lines.X), Y: combine(a.Lines.Y, b.Lines.Y)}}
 	}
-	return ScrollDelta{Lines: Point{X: combine(a.Lines.X, b.Lines.X), Y: combine(a.Lines.Y, b.Lines.Y)}}
 }
 
 // withElementOffsetVoid is the void form of WithElementOffset.

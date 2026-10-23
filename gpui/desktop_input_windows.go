@@ -181,14 +181,39 @@ func win32LogicalPoint(x, y int32, scale float32) Point {
 	return Point{X: float32(x) / scale, Y: float32(y) / scale}
 }
 
+// mouseHeldBit maps a MouseButton to its bit of a hostWindow's
+// mouseButtonsHeld set (browser-core ticket 02). Buttons outside the
+// client-message set (none today) report 0 and never affect the capture
+// release policy.
+func mouseHeldBit(button MouseButton) uint8 {
+	switch button {
+	case MouseButtonLeft:
+		return 1 << 0
+	case MouseButtonRight:
+		return 1 << 1
+	case MouseButtonMiddle:
+		return 1 << 2
+	case MouseButtonButton4:
+		return 1 << 3
+	case MouseButtonButton5:
+		return 1 << 4
+	}
+	return 0
+}
+
 // handleMouseDownMsg is events.rs:489-517 handle_mouse_down_msg: capture
 // the mouse to this window (SetCapture, so the release and the drag
 // moves arrive here even outside the client area), then translate the
 // press — device-pixel position to logical, the live modifiers, the
 // click count — and deliver it through the input callback. It returns 0
 // when the application handled the event and 1 otherwise; a missing
-// callback reports 1 after the capture, like the pin.
+// callback reports 1 after the capture, like the pin. The press also
+// records the button in the window's held-button set (browser-core
+// ticket 02): the capture is released only once no button remains held.
 func (w *hostWindow) handleMouseDownMsg(button MouseButton, lp uintptr, input func(event any) bool) uintptr {
+	if bit := mouseHeldBit(button); bit != 0 {
+		w.mouseButtonsHeld |= bit
+	}
 	procSetCapture.Call(w.hwnd)
 	if input == nil {
 		return 1
@@ -209,9 +234,21 @@ func (w *hostWindow) handleMouseDownMsg(button MouseButton, lp uintptr, input fu
 
 // handleMouseUpMsg is events.rs:519-544 handle_mouse_up_msg: release the
 // mouse capture, then translate and deliver the release with the
-// current click count.
+// current click count. Browser-core ticket 02 (research browser-parity
+// 03 §5 gap 4, Chromium's pointer-capture policy): the release clears
+// the button's held bit, and the capture is released only when no
+// button remains held — releasing one of two held buttons keeps the
+// drag's capture, so a second held button no longer loses it. An
+// unpaired release (nothing tracked as held) still releases, matching
+// the pin's unconditional behavior for messages it never saw a press
+// for.
 func (w *hostWindow) handleMouseUpMsg(button MouseButton, lp uintptr, input func(event any) bool) uintptr {
-	procReleaseCapture.Call()
+	if bit := mouseHeldBit(button); bit != 0 {
+		w.mouseButtonsHeld &^= bit
+	}
+	if w.mouseButtonsHeld == 0 {
+		procReleaseCapture.Call()
+	}
 	if input == nil {
 		return 1
 	}

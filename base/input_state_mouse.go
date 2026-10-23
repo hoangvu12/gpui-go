@@ -207,13 +207,21 @@ func (s *InputBaseState[M]) onMouseMove(event *gpui.MouseMoveEvent, w *gpui.Wind
 
 // onScrollWheel scrolls, stopping propagation only when the offset
 // changed, and hides the diagnostic popover (U:input/base/state.rs:
-// 2440-2467).
+// 2440-2467). Page deltas resolve against the input's own visible
+// bounds (browser-core ticket 02).
 func (s *InputBaseState[M]) onScrollWheel(event *gpui.ScrollWheelEvent, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	lineHeight := w.LineHeight()
 	if s.lastLayout != nil {
 		lineHeight = s.lastLayout.lineHeight
 	}
-	delta := event.Delta.PixelDelta(lineHeight)
+	// The input's viewport is its last laid-out bounds; before the first
+	// layout there is nothing to page through, so a page delta resolves
+	// to zero and line/pixel deltas are unaffected.
+	viewport := gpui.Size{}
+	if s.lastBounds != nil {
+		viewport = s.lastBounds.Size
+	}
+	delta := event.Delta.PixelDeltaFor(lineHeight, viewport)
 
 	old := s.scrollHandle.Offset()
 	target := gpui.Point{X: old.X + delta.X, Y: old.Y + delta.Y}

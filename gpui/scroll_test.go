@@ -249,6 +249,12 @@ func TestScrollCoalesceScrollDelta(t *testing.T) {
 		{ScrollDelta{}, ScrollDeltaPixels(0, -4), ScrollDeltaPixels(0, -4)},
 		// +0 has signum 1: a positive delta accumulates onto zero.
 		{ScrollDeltaLines(0, 0), ScrollDeltaLines(3, 1), ScrollDeltaLines(3, 1)},
+		// Pages accumulate like the other inexact variant (a page-scroll
+		// wheel's notches coalesce), and a variant mix yields the newer delta.
+		{ScrollDeltaPages(0, -1), ScrollDeltaPages(0, -1), ScrollDeltaPages(0, -2)},
+		{ScrollDeltaPages(0, -1), ScrollDeltaPages(0, 1), ScrollDeltaPages(0, 1)},
+		{ScrollDeltaLines(0, -1), ScrollDeltaPages(0, -1), ScrollDeltaPages(0, -1)},
+		{ScrollDeltaPages(0, -1), ScrollDeltaLines(0, -1), ScrollDeltaLines(0, -1)},
 	}
 	for i, c := range cases {
 		if got := coalesceScrollDelta(c.a, c.b); got != c.want {
@@ -327,6 +333,48 @@ func TestScrollDivWheelTranscript(t *testing.T) {
 	if ix, off := handle.LogicalScrollTop(); ix != 0 || off != -40 {
 		t.Fatalf("logical scroll top = (%d, %v), want (0, -40)", ix, off)
 	}
+}
+
+// TestScrollDivWheelPageScroll is the page-granularity wheel transcript
+// (browser-core ticket 02): the WHEEL_PAGESCROLL sentinel's one page per
+// notch, as a Pages delta. Chromium resolves a page delta against the
+// scroller's own visible length with the page step
+// max(0.875×length, length−40) (blink ScrollableArea::PageStep →
+// cc/input/scroll_utils.cc:51-56 CalculatePageStep): a 100px-tall
+// scroller steps 87.5px per notch, applies UNCLAMPED like the other
+// inexact deltas, clamps at the next prepaint, and a y-only scroller
+// takes a horizontal page delta on y.
+func TestScrollDivWheelPageScroll(t *testing.T) {
+	handle := NewScrollHandle()
+	rec := &scrollSteps{}
+	f := newScrollFixture(t, Size{Width: 400, Height: 300}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
+		return observeWheel(rec, func() string { return pt(handle.Offset()) },
+			divScroller(handle, 100, 300, func(d *DivElement) *DivElement { return d.OverflowYScroll() }))
+	})
+	if handle.MaxOffset() != (Point{Y: 200}) {
+		t.Fatalf("max offset = %v, want (0,200)", handle.MaxOffset())
+	}
+	steps := []struct {
+		name  string
+		x, y  float32
+		delta ScrollDelta
+	}{
+		{"pages(0,-1)", 50, 50, ScrollDeltaPages(0, -1)},
+		{"pages(0,-1)", 50, 50, ScrollDeltaPages(0, -1)},
+		{"pages(0,-2)", 50, 50, ScrollDeltaPages(0, -2)},
+		{"pages(-1,0)", 50, 50, ScrollDeltaPages(-1, 0)},
+	}
+	for _, s := range steps {
+		f.wheel(s.x, s.y, s.delta, TouchPhaseMoved)
+		bounds, _ := WindowDebugBound(f.window, "content")
+		rec.add("%s frame=%s content.y=%g", s.name, pt(handle.Offset()), bounds.Origin.Y)
+	}
+	wantScrollSteps(t, "div page wheel", rec.take(), []string{
+		"dispatch=(0,-87.5)", "pages(0,-1) frame=(0,-87.5) content.y=-87.5",
+		"dispatch=(0,-175)", "pages(0,-1) frame=(0,-175) content.y=-175",
+		"dispatch=(0,-350)", "pages(0,-2) frame=(0,-200) content.y=-200",
+		"dispatch=(0,-287.5)", "pages(-1,0) frame=(0,-200) content.y=-200",
+	})
 }
 
 // TestScrollDivRestrictScrollToAxis checks restrict_scroll_to_axis on a
@@ -769,6 +817,37 @@ func TestScrollListWheelTranscript(t *testing.T) {
 	if px := state.ScrollPxOffsetForScrollbar(); px != (Point{Y: -85}) {
 		t.Fatalf("scroll px offset = %v, want (0,-85)", px)
 	}
+}
+
+// TestScrollListWheelPageScroll is the list's page-granularity wheel
+// transcript (browser-core ticket 02): a Pages delta resolves against
+// the list's own visible height (100px → the 87.5px Chromium page step,
+// cc/input/scroll_utils.cc:51-56) and clamps eagerly like the list's
+// other wheel deltas.
+func TestScrollListWheelPageScroll(t *testing.T) {
+	state := NewListState(10, 0).MeasureAll()
+	rec := &scrollSteps{}
+	top := func() string {
+		o := state.LogicalScrollTop()
+		return fmt.Sprintf("(%d,%g)", o.ItemIx, o.OffsetInItem)
+	}
+	f := newScrollFixture(t, Size{Width: 100, Height: 100}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
+		return observeWheel(rec, top, List(state, listRows(20)).SizeFull())
+	})
+	at := func(e ...ScrollDelta) {
+		f.app.Update(func(a *App) {
+			for _, d := range e {
+				f.window.dispatchInput(&ScrollWheelEvent{Position: Point{X: 50, Y: 50}, Delta: d, TouchPhase: TouchPhaseMoved}, a)
+			}
+		})
+		rec.add("frame=%s", top())
+	}
+	at(ScrollDeltaPages(0, -1))
+	at(ScrollDeltaPages(0, -1))
+	wantScrollSteps(t, "list page wheel", rec.take(), []string{
+		"dispatch=(4,7.5)", "frame=(4,7.5)",
+		"dispatch=(5,0)", "frame=(5,0)",
+	})
 }
 
 // TestScrollListResetAfterPaintBeforeScroll ports R:list.rs:1814-1855.

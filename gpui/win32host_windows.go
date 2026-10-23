@@ -996,8 +996,15 @@ type hostWindow struct {
 	// from it at the current scale factor.
 	minSize   Size
 	minimized bool
-	dirty     bool
-	title     string
+	// mouseButtonsHeld is the set of client-message buttons currently
+	// pressed in this window (one mouseHeldBit per button; host thread
+	// only) — the capture release policy's input (browser-core ticket
+	// 02): ReleaseCapture runs only once no button remains held. While a
+	// window holds the capture, every press and release is delivered to
+	// it, so the per-window set is authoritative during a drag.
+	mouseButtonsHeld uint8
+	dirty            bool
+	title            string
 
 	// Callbacks from WindowOptions (nil keeps the default policy).
 	shouldClose func() bool
