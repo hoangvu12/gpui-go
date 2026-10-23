@@ -1,0 +1,37 @@
+{
+  "ticket": "gpui-perf 08: intermittent 'host loop exited' in the inset-shadow real-GPU tests",
+  "date": "2026-10-23",
+  "base": "main 61d7ec0 (combined gpui-perf tree)",
+  "verdict": "test-teardown race; no runtime bug",
+  "root_cause": "renderInsetPanel's cleanup posts window.Close (an async WM_CLOSE) and then polls window.Alive() through a sync helper that t.Fatalf's when host.Post is dropped. Closing the last window quits the host loop by design (quitOnLastWindow: WM_NCDESTROY -> WM_GPUI_CLOSE_ONE_WINDOW -> PostQuitMessage). When the first poll's Post lands after the quit, Post correctly returns false and the helper fails the test. The poll usually wins because its wake message gets queued ahead of the close-one-window message; the timing is perturbed but not caused by the gpui-perf changes.",
+  "failing_log": {
+    "capture": "GPUI_WINHOST_TRACE=1 scenespec.test -test.run TestInsetShadow -test.count=150 -test.v (first failure: iteration 150)",
+    "failing_tail": [
+      "window msg id=0x10 (WM_CLOSE) ... id=0x2 (WM_DESTROY) id=0x82 (WM_NCDESTROY)",
+      "[winhost] quit-on-last platformhwnd=22707be windows=0",
+      "[winhost] loop exit WM_QUIT thread=27292",
+      "inset_shadow_gpu_test.go:78: foreground post was dropped: the host loop exited"
+    ],
+    "passing_tail": [
+      "window msg id=0x10 ... id=0x2 id=0x82",
+      "[winhost] wake ... / wake drained   <- the Alive poll runs before the quit (reads false)",
+      "[winhost] quit-on-last ...",
+      "[winhost] stop-quit closure / loop exit WM_QUIT"
+    ]
+  },
+  "same_pattern_elsewhere": {
+    "affected": [
+      "internal/scenespec/inset_shadow_gpu_test.go (all three TestInsetShadow* tests share renderInsetPanel)",
+      "internal/authorspec/drag_preview_text_window_test.go (identical cleanup, latent)"
+    ],
+    "safe": "every other real-window cleanup polls !window.Alive() directly; Alive reports false on a stopped host (queryForeground returns ErrHostStopped)"
+  },
+  "fix": "both cleanups poll !window.Alive() directly instead of through the post-or-fail sync",
+  "regression_test": "internal/winhostspec TestAlivePollSurvivesQuitOnLastWindow forces the losing side of the race (loop already exited before the first poll): Post reports the drop, Alive reads false",
+  "rates": {
+    "method": "one test binary per side, built with CGO_ENABLED=0; scenespec.test -test.run TestInsetShadow -test.count=400 -test.v; real shown windows; run sequentially on the same machine",
+    "before": {"runs": 1200, "failures": 6, "all_post_dropped": true, "per_test": {"BlurPaintsFromPaddingEdge": "3/400", "BlurZeroPaintsInsideBorder": "2/400", "BorderlessUnchanged": "1/400"}},
+    "after": {"runs": 1200, "failures": 0, "target_test_runs": 400},
+    "isolated_before": "0 failures in 150 single-test processes (fresh-process timing; consistent with the 0.5% in-process rate, not proof of a difference)"
+  }
+}
