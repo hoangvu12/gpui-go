@@ -16,7 +16,13 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - Real-window run: the user was present, and `CGO_ENABLED=0 go test -p 1 ./... -count=1` passed 50 packages. Only headlessspec fails, environmentally: it needs reference/ce-source, which is absent in this worktree.
 - Gallery: `go run ./examples/base-gallery` (55 pages). The user looked at it and said "looks good".
 
-**Open**
+**UPDATE 2026-10-23 (orchestrator 3)**
+- **Bold:** done, with no Go fix. Weight 700 is the correct real Segoe UI Bold. Weight 500 (and 450-500) maps to Regular plus fake bold in the native layer (fontique font.rs:97-103, matching.rs:386, then native glyph.rs:1192-1199). The fix needs DLL rev 12, which is the user's decision. Evidence is in `%TEMP%\boldprobe\out\`.
+- **v0.2.0:** tagged on 7a1b25b and pushed.
+- **zgui / GPUI Fast research:** done, in `research/zgui-vs-gpui-fast/README.md`. Proposals await the user.
+- **Corrections to the items above:** the shaping cap is 256 and evicts LRU since ticket 40. The 60k allocs/frame figure is unmeasured.
+
+**Open (history)**
 1. The user said bold text looks different from a browser. A worker started by orchestrator 2 is investigating: Base's requested weight, real Segoe UI Bold vs synthetic bold, whether the weight reaches the rasterizer, and a side-by-side against plain DirectWrite, rendered offscreen. Orchestrator 2 forwards its result to you by Roboco message. If it's a Go-side fix, verify it (headless, with the bit-exact textspec/glyphspec fixtures unchanged), commit it, and merge it to main. If it needs native work, tell the user, because the DLL is frozen at rev 11.
 2. Then tag v0.2.0 on main (annotated, same style as v0.1.0) and push the tag. The user approved the release; the tag only waited for the real-window run (green) and the bold result.
 3. The user's NEW research request is your first task: "look at zgui and gpui-fast, to see how they made it so it's better than gpui". The user's chart (`C:\Users\ADMIN\AppData\Local\Roboco\profiles\local\uploads\9665e9a9-image.png`) compares zgui with gpui-fast, a fast GPUI variant, not base GPUI. zgui wins on:
