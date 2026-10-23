@@ -177,6 +177,19 @@ Baseline first (before the integration branch is cut), then after rev 16, same h
 5. **`Present1` in DComp mode.** Keep dirty-rect partial present for composition swap chains after the verification test, or restrict partial present to the hwnd mode and always present full in mode 0 (Chromium's DComp path ignores update rects)?
 6. **Blend-group cost cap.** Blending needs a backdrop copy per group; above some size it is a full-window pass. Cap it (e.g. blend groups > 25% of window area render via the full-window route) or leave unbounded?
 
+### 8.1 What the references say (2026-10-24, orchestrator 6)
+
+These answers were checked against zgui (`%TEMP%\research-src\zgui-head`), gpui-fast, the GPUI-CE pin and orchestrator 5's research notes. gpuix's renderer is an empty submodule on disk, so it couldn't be checked. Nothing the user has said decides any of these; the closest is "as similar to browser as possible". Paths are relative to each project's root.
+
+| Q | What the references do | Proposed answer |
+|---|---|---|
+| 1 pool budget | zgui caps isolated layers at 1024 textures / 64 MiB. It evicts parked layers first, then returns a hard error that exits the app (`crates/zgui-gpu/src/lib.rs:2226-2246`). gpui-fast silently demotes scroll layers over a 64 MiB tile budget and counts them (`crates/gpui/src/fast/layers/policy.rs:248-251`, `fast/stats.rs:91`). The CE pin silently draws depth > 2 groups inline. Research report 01 already calls a silently missing blur a bug. | Keep a cap and never crash. Make overflow observable: a debug-stats counter plus a debug-build warning. **The user decides** between silent, warning or error. |
+| 2 property-only frames | zgui has them automatically: a transform or opacity change marks the node COMPOSITE (no layout or paint), and scale/rotate/skew promote to a cached layer with no `will-change` (`crates/zgui/src/scene.rs:3227-3314`, `crates/zgui/src/compose_style.rs:1099-1179`). Chrome does the same. gpui-fast and the CE pin rebuild every animation frame. | **Automatic**, detected from an active transform/opacity transition. |
+| 3 full-present threshold | No reference uses a percentage of the window. zgui redraws damage scissored into a retained target, merges nearby rects and caps at 16 regions (`MAX_REGIONS`, `crates/zgui-gpu/src/lib.rs:6806-6916`), and repaints fully on a new scene or resize. | Use zgui's rule: merge rects, cap at 16 regions, full redraw on new scene or resize. Drop the 50% guess and measure at 54. |
+| 4 gradient stop cap | zgui: a 256-texel ramp texture for up to 64 stops on axis-aligned gradients, CPU raster beyond that, and an API limit of 1024 (`crates/zgui-gpu/src/lib.rs:6164-6272`, `crates/zgui/src/canvas.rs:190-191`). gpui-fast and the CE pin support only 2 stops. | Raise the ramp-path cap to 64. Above that, resample to 64 stops in Go, warning in debug. |
+| 5 Present1 in DComp mode | No reference does partial present in any mode. All of them present full; none calls `Present1`. | Keep the design: retained target, readback test, DComp partial present only if the test passes. Otherwise present full, and damage-scissored redraw still saves the GPU work. |
+| 6 blend-group cost cap | No reference implements blend modes. | Leave unbounded and measure at 54. Any later cap must not change pixels. |
+
 ---
 
 ## Appendix A: record layouts
