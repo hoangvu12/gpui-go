@@ -287,6 +287,14 @@ type windowTextSystem interface {
 	// requested survive into the next frame's previous-frame cache, the
 	// rest release. A stateless test system has nothing to rotate.
 	finishFrame()
+	// layoutIndex, reuseLayouts and truncateLayouts are the line-layout
+	// index seam of the cached views' range reuse (WindowTextSystem::
+	// layout_index / reuse_layouts / truncate_layouts →
+	// LineLayoutCache, text_cache.go). A stateless test system has no
+	// cache and answers an empty index.
+	layoutIndex() int
+	reuseLayouts(start, end int)
+	truncateLayouts(index int)
 	// layoutInline lays out one inline document (text plus atomic
 	// element boxes) in one inline formatting context (the reference
 	// PlatformTextSystem::layout_inline). Go owns the algorithm on both
@@ -392,6 +400,12 @@ func (r *realWindowTextSystem) shape(text string, fontSize float32, font FontDes
 // LineLayoutCache::finish_frame), invoked by the window draw's
 // completion (render.go completeFrame, window.rs:3230).
 func (r *realWindowTextSystem) finishFrame() { r.lines.finishFrame() }
+
+// layoutIndex, reuseLayouts and truncateLayouts implement
+// windowTextSystem through the window's line-layout cache.
+func (r *realWindowTextSystem) layoutIndex() int            { return r.lines.layoutIndex() }
+func (r *realWindowTextSystem) reuseLayouts(start, end int) { r.lines.reuseLayouts(start, end) }
+func (r *realWindowTextSystem) truncateLayouts(index int)   { r.lines.truncateLayouts(index) }
 
 // realShapedText adapts the port's WrappedLine into the shapedText seam.
 type realShapedText struct {

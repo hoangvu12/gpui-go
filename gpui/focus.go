@@ -83,6 +83,10 @@ type windowFocusState struct {
 	// frameInputHandlers are the focused registrations of the frame
 	// under construction (window.rs next_frame.input_handlers).
 	frameInputHandlers []InputHandler
+	// renderedInputHandlers are the last completed frame's registrations
+	// (window.rs rendered_frame.input_handlers): the list a cached view's
+	// reused paint range indexes into (view_cache.go reusePaint).
+	renderedInputHandlers []InputHandler
 
 	// focusLostListeners are notified when the focused handle is
 	// released (window.rs focus_lost_listeners).
@@ -604,6 +608,7 @@ func (w *Window) requestRefresh() {
 	if w == nil || w.isDrawing() {
 		return
 	}
+	w.markRefreshing()
 	w.markFrameDirty()
 }
 

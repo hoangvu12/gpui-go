@@ -299,25 +299,29 @@ func (w *Window) TakeAutoscroll() (Bounds, bool) {
 // prepaintStateIndex marks how far the frame under construction's
 // prepaint registrations reach (window.rs PrepaintStateIndex,
 // R:window.rs:1124-1131, taken by prepaint_index, R:window.rs:3712-3721),
-// so a discarded prepaint can be cut back to it (transact).
+// so a discarded prepaint can be cut back to it (transact) and a cached
+// view's prepaint range can be reused by the next frame (reuse_prepaint,
+// view_cache.go).
 //
-// Mapping onto the port: hitboxes, deferred draws and the dispatch tree
-// are the pin's fields. The port also registers tab stops and their
+// Mapping onto the port: hitboxes, deferred draws, the dispatch tree, the
+// accessed element states (the frame's ordered log) and the line-layout
+// index are the pin's fields. The port also registers tab stops and their
 // groups during prepaint (gpui/div.go registerDivElementDispatch; the pin
 // does so at paint, outside a transaction) and allows mouse listeners
-// then, so both are marked as well. The pin's tooltip requests have no
-// port counterpart. Two pinned fields are not cut back: the accessed
-// element states (a set here, not a list: a state touched only by the
-// discarded prepaint is retained one more frame) and the line-layout
-// index (the port's line cache only marks lines in use, so a discarded
-// layout stays cached one more frame).
+// then, so both are marked as well (mouse listeners for transact only:
+// reuse carries them with the paint range, as the pin). The pin's tooltip
+// requests have no port counterpart. A cut-back accessed element state
+// leaves the frame's log but stays in its retention set (retained one more
+// frame).
 type prepaintStateIndex struct {
-	hitboxes       int
-	mouseListeners int
-	deferredDraws  int
-	dispatchTree   int
-	tabStops       int
-	tabStopPath    tabStopPath
+	hitboxes              int
+	mouseListeners        int
+	deferredDraws         int
+	dispatchTree          int
+	tabStops              int
+	tabStopPath           tabStopPath
+	accessedElementStates int
+	lineLayout            int
 }
 
 // prepaintIndex is window.rs prepaint_index (R:window.rs:3712-3721).
@@ -326,13 +330,16 @@ func (w *Window) prepaintIndex() prepaintStateIndex {
 	if next == nil {
 		panic("gpui: no frame is being built (prepaint runs inside a window draw)")
 	}
+	frame := currentFrame(w)
 	return prepaintStateIndex{
-		hitboxes:       len(next.hitboxes),
-		mouseListeners: len(next.mouseListeners),
-		deferredDraws:  len(currentFrame(w).deferredDraws),
-		dispatchTree:   len(next.dispatchTree.nodes),
-		tabStops:       len(next.tabStops.insertionHistory),
-		tabStopPath:    append(tabStopPath{}, next.tabStops.currentPath...),
+		hitboxes:              len(next.hitboxes),
+		mouseListeners:        len(next.mouseListeners),
+		deferredDraws:         len(frame.deferredDraws),
+		dispatchTree:          len(next.dispatchTree.nodes),
+		tabStops:              len(next.tabStops.insertionHistory),
+		tabStopPath:           append(tabStopPath{}, next.tabStops.currentPath...),
+		accessedElementStates: len(frame.accessedElementStateLog),
+		lineLayout:            frame.text.layoutIndex(),
 	}
 }
 
@@ -345,6 +352,8 @@ func (w *Window) truncatePrepaint(index prepaintStateIndex) {
 	next.mouseListeners = next.mouseListeners[:index.mouseListeners]
 	frame := currentFrame(w)
 	frame.deferredDraws = frame.deferredDraws[:index.deferredDraws]
+	frame.accessedElementStateLog = frame.accessedElementStateLog[:index.accessedElementStates]
+	frame.text.truncateLayouts(index.lineLayout)
 	truncateDispatchTree(next.dispatchTree, index.dispatchTree)
 	truncateTabStops(next.tabStops, index.tabStops, index.tabStopPath)
 }

@@ -297,6 +297,12 @@ func (t *testTextSystem) inlineMetrics(font FontDescriptor, fontSize float32) In
 // free to rebuild).
 func (t *testTextSystem) finishFrame() {}
 
+// layoutIndex, reuseLayouts and truncateLayouts implement
+// windowTextSystem: the deterministic system caches no lines.
+func (t *testTextSystem) layoutIndex() int            { return 0 }
+func (t *testTextSystem) reuseLayouts(start, end int) {}
+func (t *testTextSystem) truncateLayouts(index int)   {}
+
 // testTextXHeight is the stub's x_height (516 font units).
 const testTextXHeight = 516.0
 

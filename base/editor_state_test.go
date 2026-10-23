@@ -3,9 +3,9 @@ package base
 // Ported editor tests of U:input/base/state.rs (the 61 tickets 20 and 21
 // left for the editor), in upstream order; harness in
 // textarea_state_test.go. The diagnostics test (U:input/base/state.rs:
-// 4898-4955) is editor_lsp_test.go's. Not applicable here: the
-// cached-view consumer test (U:input/base/state.rs:4957-5019, no AnyView::cached in the Go
-// core) and the native context-menu test (U:input/base/state.rs:
+// 4898-4955) is editor_lsp_test.go's and the cached-view consumer test
+// (U:input/base/state.rs:4957-5019) is input_cached_view_test.go's. Not
+// applicable here: the native context-menu test (U:input/base/state.rs:
 // 5251-5282, native menus not ported).
 
 import (
