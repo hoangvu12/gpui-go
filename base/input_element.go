@@ -184,7 +184,7 @@ func (e *textElement[M]) paintMouseListeners(w *gpui.Window) {
 		switch ev := event.(type) {
 		case *gpui.MouseMoveEvent:
 			if ev.PressedButton != nil && *ev.PressedButton == gpui.MouseButtonLeft {
-				_ = state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
+				_ = state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 					s.onDragMove(ev, w, cx)
 				})
 			}
@@ -193,7 +193,7 @@ func (e *textElement[M]) paintMouseListeners(w *gpui.Window) {
 				return
 			}
 			// Stop the autoscroll and the selecting on release.
-			state.Update(app, func(s *InputBaseState[M], _ *inputCx[M]) {
+			state.Update(app, func(s *InputBaseState[M], _ *gpui.Context[InputBaseState[M]]) {
 				s.autoScroll.Stop()
 				s.selecting = false
 				s.columnSelectStart = nil
@@ -900,7 +900,7 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 	// Past the end of a line a pointer is measured in spaces.
 	spaceWidth := w.TextSystem().LayoutWidth(font, textSize, ' ')
 
-	_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, _ *inputCx[M]) {
+	_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, _ *gpui.Context[InputBaseState[M]]) {
 		s.displayMap.setFont(font, textSize, w)
 		s.displayMap.ensureTextPrepared(s.text, w)
 	})
@@ -938,7 +938,7 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 	wrapWidthChanged := state.lastLayout == nil || !equalF32Ptr(state.lastLayout.wrapWidth, wrapWidth)
 	wrappingIndentChanged := state.lastLayout == nil || state.lastLayout.wrappingIndent != wrappingIndent
 	if wrapWidthChanged || wrappingIndentChanged {
-		_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, _ *inputCx[M]) {
+		_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, _ *gpui.Context[InputBaseState[M]]) {
 			s.displayMap.onLayoutChanged(wrapWidth, w)
 			s.displayMap.setWrappingIndent(wrappingIndent, w)
 		})
@@ -1104,7 +1104,7 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 		hoverDefinitionHitbox = &hitbox
 	}
 	indentGuidesPath := layoutIndentGuides(state, bounds, layout, textStyle, w)
-	_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], _ *gpui.Window, _ *inputCx[M]) {
+	_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], _ *gpui.Window, _ *gpui.Context[InputBaseState[M]]) {
 		s.editorScrollbarSnapshot = &editorScrollbarSnapshot{
 			layout:             newEditorScrollbarLayout(inputBounds, layout.lineNumberWidth, scrollSize, s.editorPaddings),
 			cursorScrollOffset: cursorScrollOffset,
@@ -1315,7 +1315,7 @@ func (e *textElement[M]) Paint(_ *gpui.GlobalElementID, _ *gpui.InspectorElement
 	// Fold icons: on gutter hover, the current line, or folded.
 	e.paintFoldIcons(&prepaint.foldIconLayout, prepaint.currentRow, prepaint.hasCurrentRow, w, app)
 
-	_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
+	_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 		geometryChanged := s.lastBounds == nil || *s.lastBounds != bounds ||
 			s.inputBounds != inputBounds ||
 			s.scrollSize != prepaint.scrollSize ||

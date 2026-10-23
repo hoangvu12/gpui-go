@@ -82,7 +82,7 @@ type inlineCompletion struct {
 // handleCompletionTrigger schedules the inline completion and, when the
 // typed text triggers it, requests the completion menu
 // (U:input/editor/lsp/completions.rs:122-224).
-func (s *InputBaseState[M]) handleCompletionTrigger(rng InputSelection, newText string, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) handleCompletionTrigger(rng InputSelection, newText string, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.completionInserting {
 		return
 	}
@@ -131,7 +131,7 @@ func (s *InputBaseState[M]) handleCompletionTrigger(rng InputSelection, newText 
 
 		if len(completions) == 0 {
 			acx.AsyncApp.Update(func(app *gpui.App) {
-				_ = editor.TryUpdate(app, func(s *InputBaseState[M], cx *inputCx[M]) {
+				_ = editor.TryUpdate(app, func(s *InputBaseState[M], cx *gpui.Context[InputBaseState[M]]) {
 					menu := &s.editorExtras().contextMenuContent.completion
 					menu.Open = false
 					menu.Items = nil
@@ -143,7 +143,7 @@ func (s *InputBaseState[M]) handleCompletionTrigger(rng InputSelection, newText 
 		}
 
 		_ = acx.Update(func(w *gpui.Window, app *gpui.App) {
-			_ = editor.TryUpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
+			_ = editor.TryUpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 				if !s.focusHandle.IsFocused(w) {
 					return
 				}
@@ -160,7 +160,7 @@ func (s *InputBaseState[M]) handleCompletionTrigger(rng InputSelection, newText 
 
 // hideContextMenu closes the completion and code-action menus and drops
 // their request (U:input/editor/lsp/completions.rs:226-231).
-func (s *InputBaseState[M]) hideContextMenu(cx *inputCx[M]) {
+func (s *InputBaseState[M]) hideContextMenu(cx *gpui.Context[InputBaseState[M]]) {
 	e := s.editorExtras()
 	e.contextMenuContent.completion.Open = false
 	e.contextMenuContent.codeAction.Open = false
@@ -177,7 +177,7 @@ func (s *InputBaseState[M]) isContextMenuOpen() bool {
 // handleActionForContextMenu offers the action to the open menu's
 // overlay handler; a handled primary Enter or Escape closes the menu
 // (U:input/editor/lsp/completions.rs:238-261).
-func (s *InputBaseState[M]) handleActionForContextMenu(action gpui.BoxedAction, w *gpui.Window, cx *inputCx[M]) bool {
+func (s *InputBaseState[M]) handleActionForContextMenu(action gpui.BoxedAction, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) bool {
 	closesOverlay := EnterIsPrimary(action) || action.Equal(EscapeAction.Box(Escape{}))
 	e := s.editorExtras()
 	var kind InputOverlayKind
@@ -202,7 +202,7 @@ func (s *InputBaseState[M]) handleActionForContextMenu(action gpui.BoxedAction, 
 
 // scheduleInlineCompletion requests an inline completion after the
 // debounce (U:input/editor/lsp/completions.rs:263-333).
-func (s *InputBaseState[M]) scheduleInlineCompletion(w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) scheduleInlineCompletion(w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	// Clear any existing inline completion on text change.
 	s.clearInlineCompletion(cx)
 
@@ -225,7 +225,7 @@ func (s *InputBaseState[M]) scheduleInlineCompletion(w *gpui.Window, cx *inputCx
 		var task gpui.Task[ProviderResult[LspInlineCompletionResponse]]
 		requested := false
 		err := acx.Update(func(w *gpui.Window, app *gpui.App) {
-			_ = editor.TryUpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
+			_ = editor.TryUpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 				// The cursor moved during the debounce, or the menu is open.
 				if s.Cursor() != offset || s.isContextMenuOpen() {
 					return
@@ -250,7 +250,7 @@ func (s *InputBaseState[M]) scheduleInlineCompletion(w *gpui.Window, cx *inputCx
 		}
 
 		_ = acx.Update(func(w *gpui.Window, app *gpui.App) {
-			_ = editor.TryUpdateIn(app, w, func(s *InputBaseState[M], _ *gpui.Window, cx *inputCx[M]) {
+			_ = editor.TryUpdateIn(app, w, func(s *InputBaseState[M], _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 				// Only apply if the cursor still has not moved and the menu
 				// did not open while fetching.
 				if s.Cursor() != offset || s.isContextMenuOpen() {
@@ -275,7 +275,7 @@ func (s *InputBaseState[M]) hasInlineCompletion() bool {
 
 // clearInlineCompletion drops the suggestion and its request
 // (U:input/editor/lsp/completions.rs:341-345).
-func (s *InputBaseState[M]) clearInlineCompletion(cx *inputCx[M]) {
+func (s *InputBaseState[M]) clearInlineCompletion(cx *gpui.Context[InputBaseState[M]]) {
 	e := s.editorExtras()
 	e.inlineCompletion.item = nil
 	e.inlineCompletion.task.drop()
@@ -284,7 +284,7 @@ func (s *InputBaseState[M]) clearInlineCompletion(cx *inputCx[M]) {
 
 // acceptInlineCompletion inserts the suggestion at the cursor; false when
 // there is none (U:input/editor/lsp/completions.rs:347-363).
-func (s *InputBaseState[M]) acceptInlineCompletion(w *gpui.Window, cx *inputCx[M]) bool {
+func (s *InputBaseState[M]) acceptInlineCompletion(w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) bool {
 	e := s.editorExtras()
 	item := e.inlineCompletion.item
 	if item == nil {

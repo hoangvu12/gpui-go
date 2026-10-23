@@ -245,7 +245,7 @@ func (s InputBaseState[M]) Folding(folding bool) InputBaseState[M] {
 
 // SetFolding sets folding at runtime; disabling clears every fold
 // (U:input/base/state.rs:10039-10050). EditorState only.
-func (s *InputBaseState[M]) SetFolding(folding bool, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetFolding(folding bool, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.requireEditorMode("SetFolding")
 	s.mode.folding = folding
 	if !folding {
@@ -263,7 +263,7 @@ func (s InputBaseState[M]) LineNumber(lineNumber bool) InputBaseState[M] {
 }
 
 // SetLineNumber is U:input/base/state.rs:10096-10102. EditorState only.
-func (s *InputBaseState[M]) SetLineNumber(lineNumber bool, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetLineNumber(lineNumber bool, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.requireEditorMode("SetLineNumber")
 	s.mode.lineNumber = lineNumber
 	cx.Notify()
@@ -278,7 +278,7 @@ func (s InputBaseState[M]) AutoClose(autoClose bool) InputBaseState[M] {
 }
 
 // SetAutoClose is U:input/base/state.rs:10115-10119. EditorState only.
-func (s *InputBaseState[M]) SetAutoClose(autoClose bool, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetAutoClose(autoClose bool, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.requireEditorMode("SetAutoClose")
 	s.mode.setAutoClose(autoClose)
 	cx.Notify()
@@ -293,7 +293,7 @@ func (s InputBaseState[M]) SmartIndent(smartIndent bool) InputBaseState[M] {
 }
 
 // SetSmartIndent is U:input/base/state.rs:10132-10136. EditorState only.
-func (s *InputBaseState[M]) SetSmartIndent(smartIndent bool, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetSmartIndent(smartIndent bool, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.requireEditorMode("SetSmartIndent")
 	s.mode.setSmartIndent(smartIndent)
 	cx.Notify()
@@ -301,7 +301,7 @@ func (s *InputBaseState[M]) SetSmartIndent(smartIndent bool, _ *gpui.Window, cx 
 
 // SetHighlighter sets the highlighter language of a code editor and
 // requests a refresh (U:input/base/state.rs:795-813).
-func (s *InputBaseState[M]) SetHighlighter(language string, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetHighlighter(language string, cx *gpui.Context[InputBaseState[M]]) {
 	if s.mode.kind == layoutCodeEditor {
 		s.mode.language.setName(language)
 		s.mode.highlighter.h = nil
@@ -311,7 +311,7 @@ func (s *InputBaseState[M]) SetHighlighter(language string, cx *inputCx[M]) {
 
 // SetHighlighterFactory installs the parser/highlighter adapter of the
 // code-editor mode (U:input/base/state.rs:825-835).
-func (s *InputBaseState[M]) SetHighlighterFactory(factory InputHighlighterFactory, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetHighlighterFactory(factory InputHighlighterFactory, cx *gpui.Context[InputBaseState[M]]) {
 	s.mode.setHighlighterFactory(factory)
 	s.pendingUpdate = true
 	s.tokenLayoutCache = nil
@@ -335,7 +335,7 @@ type highlighterUpdate struct {
 
 // updateHighlighter is LayoutMode::update_highlighter: create the
 // highlighter if needed and hand it the edit (U:input/base/mode.rs:268-301).
-func (s *InputBaseState[M]) updateHighlighter(u highlighterUpdate, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) updateHighlighter(u highlighterUpdate, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.mode.kind != layoutCodeEditor {
 		return
 	}
@@ -351,7 +351,7 @@ func (s *InputBaseState[M]) updateHighlighter(u highlighterUpdate, w *gpui.Windo
 
 // updateHighlighterBatch is LayoutMode::update_highlighter_batch
 // (U:input/base/mode.rs:303-325).
-func (s *InputBaseState[M]) updateHighlighterBatch(edits []InputEditWithText, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) updateHighlighterBatch(edits []InputEditWithText, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.mode.kind != layoutCodeEditor || !s.mode.ensureHighlighter() {
 		return
 	}

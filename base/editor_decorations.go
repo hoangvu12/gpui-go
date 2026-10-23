@@ -475,7 +475,7 @@ func (c RangeDecorationCollection) GetRanges(app *gpui.App) []InputSelection {
 // collection of geometric decorations; ranges track edits like text
 // decorations, folding changes only their projection
 // (U:input/editor/decorations.rs:496-524). EditorState only.
-func (s *InputBaseState[M]) CreateRangeDecorationsCollection(decorations []RangeDecoration, cx *inputCx[M]) RangeDecorationCollection {
+func (s *InputBaseState[M]) CreateRangeDecorationsCollection(decorations []RangeDecoration, cx *gpui.Context[InputBaseState[M]]) RangeDecorationCollection {
 	s.requireEditorMode("CreateRangeDecorationsCollection")
 	id := s.editorExtras().rangeDecos.create(normalizeDecorations(&s.text, decorations))
 	cx.Notify()
@@ -486,7 +486,7 @@ func (s *InputBaseState[M]) CreateRangeDecorationsCollection(decorations []Range
 // of text decorations; the first collection wins when overlapping
 // decorations set the same property (U:input/editor/decorations.rs:
 // 526-554). EditorState only.
-func (s *InputBaseState[M]) CreateDecorationsCollection(decorations []TextDecoration, cx *inputCx[M]) TextDecorationCollection {
+func (s *InputBaseState[M]) CreateDecorationsCollection(decorations []TextDecoration, cx *gpui.Context[InputBaseState[M]]) TextDecorationCollection {
 	s.requireEditorMode("CreateDecorationsCollection")
 	id := s.editorExtras().decorations.create(normalizeDecorations(&s.text, decorations))
 	cx.Notify()
@@ -494,6 +494,6 @@ func (s *InputBaseState[M]) CreateDecorationsCollection(decorations []TextDecora
 }
 
 // editorWeakSelf is cx.entity().downgrade() for an EditorState context.
-func editorWeakSelf[M InputModeKind](cx *inputCx[M]) gpui.WeakEntity[EditorState] {
+func editorWeakSelf[M InputModeKind](cx *gpui.Context[InputBaseState[M]]) gpui.WeakEntity[EditorState] {
 	return any(cx.Entity().Downgrade()).(gpui.WeakEntity[EditorState])
 }

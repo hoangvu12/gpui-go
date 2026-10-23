@@ -100,7 +100,7 @@ func (s *SearchSession) updateQuery(query string, caseInsensitive bool) {
 // OpenSearch opens the search session or re-invokes it; every call
 // advances SearchActivationRevision, so call it from a user gesture, never
 // from a render pass (U:input/editor/search.rs:95-134).
-func (s *InputBaseState[M]) OpenSearch(replaceMode bool, cx *inputCx[M]) {
+func (s *InputBaseState[M]) OpenSearch(replaceMode bool, cx *gpui.Context[InputBaseState[M]]) {
 	if !s.searchable {
 		return
 	}
@@ -134,7 +134,7 @@ func (s *InputBaseState[M]) SearchSession() *SearchSession { return &s.searchSes
 func (s *InputBaseState[M]) SearchActivationRevision() uint64 { return s.searchActivationRevision }
 
 // SetSearchReplaceMode is U:input/editor/search.rs:150-154 (doc(hidden)).
-func (s *InputBaseState[M]) SetSearchReplaceMode(replaceMode bool, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetSearchReplaceMode(replaceMode bool, cx *gpui.Context[InputBaseState[M]]) {
 	s.searchSession.ReplaceMode = replaceMode && s.IsReplaceable()
 	cx.Notify()
 }
@@ -147,7 +147,7 @@ func (s *InputBaseState[M]) IsReplaceable() bool { return s.replaceable && s.IsE
 // SetSearchQuery sets the query and highlights its matches without the
 // built-in panel, the entry point of a custom search UI
 // (U:input/editor/search.rs:164-182).
-func (s *InputBaseState[M]) SetSearchQuery(query string, caseInsensitive bool, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetSearchQuery(query string, caseInsensitive bool, cx *gpui.Context[InputBaseState[M]]) {
 	s.searchSession.activate()
 	s.searchSession.updateQuery(query, caseInsensitive)
 	s.searchSession.Matcher.Update(s.text)
@@ -156,14 +156,14 @@ func (s *InputBaseState[M]) SetSearchQuery(query string, caseInsensitive bool, c
 
 // CloseSearch hides the panel and the highlights, keeping the query
 // (U:input/editor/search.rs:184-189).
-func (s *InputBaseState[M]) CloseSearch(cx *inputCx[M]) {
+func (s *InputBaseState[M]) CloseSearch(cx *gpui.Context[InputBaseState[M]]) {
 	s.searchSession.close()
 	cx.Notify()
 }
 
 // NextSearchMatch moves to the next match and reveals it with padding
 // (U:input/editor/search.rs:191-198).
-func (s *InputBaseState[M]) NextSearchMatch(cx *inputCx[M]) (InputSelection, bool) {
+func (s *InputBaseState[M]) NextSearchMatch(cx *gpui.Context[InputBaseState[M]]) (InputSelection, bool) {
 	s.syncSearchMatcher()
 	rng, ok := s.searchSession.Matcher.Next()
 	if !ok {
@@ -174,7 +174,7 @@ func (s *InputBaseState[M]) NextSearchMatch(cx *inputCx[M]) (InputSelection, boo
 }
 
 // PreviousSearchMatch is U:input/editor/search.rs:200-207.
-func (s *InputBaseState[M]) PreviousSearchMatch(cx *inputCx[M]) (InputSelection, bool) {
+func (s *InputBaseState[M]) PreviousSearchMatch(cx *gpui.Context[InputBaseState[M]]) (InputSelection, bool) {
 	s.syncSearchMatcher()
 	rng, ok := s.searchSession.Matcher.NextBack()
 	if !ok {
@@ -186,7 +186,7 @@ func (s *InputBaseState[M]) PreviousSearchMatch(cx *inputCx[M]) (InputSelection,
 
 // ReplaceCurrentSearchMatch replaces the current match and moves on;
 // reports whether there was one (U:input/editor/search.rs:209-241).
-func (s *InputBaseState[M]) ReplaceCurrentSearchMatch(replacement string, w *gpui.Window, cx *inputCx[M]) bool {
+func (s *InputBaseState[M]) ReplaceCurrentSearchMatch(replacement string, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) bool {
 	if !s.IsReplaceable() {
 		return false
 	}
@@ -217,7 +217,7 @@ func (s *InputBaseState[M]) ReplaceCurrentSearchMatch(replacement string, w *gpu
 
 // ReplaceAllSearchMatches replaces every match and returns the count
 // (U:input/editor/search.rs:243-267).
-func (s *InputBaseState[M]) ReplaceAllSearchMatches(replacement string, w *gpui.Window, cx *inputCx[M]) int {
+func (s *InputBaseState[M]) ReplaceAllSearchMatches(replacement string, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) int {
 	if !s.IsReplaceable() {
 		return 0
 	}
@@ -257,7 +257,7 @@ func (s *InputBaseState[M]) syncSearchMatcher() { s.searchSession.Matcher.Update
 // onActionSearch leaves the shortcut to the ancestors of an input that is
 // not searchable, so a custom search UI can take it
 // (U:input/editor/search.rs:284-292).
-func (s *InputBaseState[M]) onActionSearch(_ *Search, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) onActionSearch(_ *Search, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if !s.searchable {
 		cx.Propagate()
 		return
@@ -266,7 +266,7 @@ func (s *InputBaseState[M]) onActionSearch(_ *Search, _ *gpui.Window, cx *inputC
 }
 
 // onActionReplace is U:input/editor/search.rs:294-305.
-func (s *InputBaseState[M]) onActionReplace(_ *Replace, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) onActionReplace(_ *Replace, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if !s.searchable {
 		cx.Propagate()
 		return

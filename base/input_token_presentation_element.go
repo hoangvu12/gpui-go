@@ -95,7 +95,7 @@ func (e *textElement[M]) tokenElement(token *InlineTokenContext, w *gpui.Window,
 			if w.DefaultPrevented() {
 				return
 			}
-			_ = state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
+			_ = state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 				s.pressedToken = nil
 				if event.ClickCount == 2 {
 					if span, ok := findTokenAt(s.tokenSpans(), start); ok {
@@ -109,7 +109,7 @@ func (e *textElement[M]) tokenElement(token *InlineTokenContext, w *gpui.Window,
 			})
 		}).
 		OnMouseMove(func(event *gpui.MouseMoveEvent, _ *gpui.Window, app *gpui.App) {
-			state.Update(app, func(s *InputBaseState[M], _ *inputCx[M]) {
+			state.Update(app, func(s *InputBaseState[M], _ *gpui.Context[InputBaseState[M]]) {
 				if p := s.pressedToken; p != nil {
 					if abs32(event.Position.X-p.position.X)+abs32(event.Position.Y-p.position.Y) > 4 {
 						s.pressedToken = nil
@@ -118,7 +118,7 @@ func (e *textElement[M]) tokenElement(token *InlineTokenContext, w *gpui.Window,
 			})
 		}).
 		OnClick(func(event *gpui.ClickEvent, w *gpui.Window, app *gpui.App) {
-			a := state.UpdateWith(app, func(s *InputBaseState[M], cx *inputCx[M]) activation {
+			a := state.UpdateWith(app, func(s *InputBaseState[M], cx *gpui.Context[InputBaseState[M]]) activation {
 				pressed := s.pressedToken
 				s.pressedToken = nil
 				if pressed == nil || pressed.start != start || pressed.revision != s.documentRevision {
@@ -184,7 +184,7 @@ func (e *textElement[M]) measureTokens(width, lineHeight, viewport float32, w *g
 		if state.tokenLayoutCache == nil {
 			return nil
 		}
-		e.state.Update(app, func(s *InputBaseState[M], _ *inputCx[M]) { s.displayMap.setInlineMetrics(nil, w) })
+		e.state.Update(app, func(s *InputBaseState[M], _ *gpui.Context[InputBaseState[M]]) { s.displayMap.setInlineMetrics(nil, w) })
 		return nil
 	}
 	revision := state.documentRevision
@@ -230,7 +230,7 @@ func (e *textElement[M]) measureTokens(width, lineHeight, viewport float32, w *g
 		elements[token.Range().Start] = element
 	}
 
-	_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
+	_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 		cache := s.tokenLayoutCache
 		s.tokenLayoutCache = nil
 		if cache == nil {

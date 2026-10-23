@@ -40,17 +40,17 @@ func TestEditorNoopScrollNotifiesDiagnosticDismissal(t *testing.T) {
 	var input gpui.Entity[EditorState]
 	opts := gpui.WindowOptions{Bounds: gpui.Bounds{Size: gpui.Size{Width: 400, Height: 100}}}
 	tw := ta.OpenWindowWithOptions[emptyEditorRoot](opts, func(_ *emptyEditorRoot, w *gpui.Window, cx *gpui.Context[emptyEditorRoot]) {
-		input = gpui.NewEntity(cx, w.Scope(), func(s *EditorState, scx *inputCx[EditorMode]) { *s = NewEditorState(w, scx) })
+		input = gpui.NewEntity(cx, w.Scope(), func(s *EditorState, scx *gpui.Context[InputBaseState[EditorMode]]) { *s = NewEditorState(w, scx) })
 	})
 	v := &inputView[EditorMode]{input: input, cx: gpui.NewVisualTestContext(tw.Window(), ta)}
-	v.update(func(s *EditorState, _ *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.PresentDiagnostic(DiagnosticEntry{}, cx)
 	})
 	notifications := observeInput(v.cx, v.input)
 	*notifications = 0
 	scroll := &gpui.ScrollWheelEvent{Delta: gpui.ScrollDeltaPixels(0, -40)}
 
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.inputBounds = gpui.Bounds{Size: gpui.Size{Width: 100, Height: 20}}
 		s.scrollSize = gpui.Size{Width: 100, Height: 20}
 		s.onScrollWheel(scroll, w, cx)
@@ -64,7 +64,7 @@ func TestEditorNoopScrollNotifiesDiagnosticDismissal(t *testing.T) {
 	if *notifications != 1 {
 		t.Fatalf("notifications = %d: clearing a diagnostic must notify even when scrolling is clamped", *notifications)
 	}
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.onScrollWheel(scroll, w, cx)
 	})
 	if *notifications != 1 {
@@ -82,14 +82,14 @@ func TestEditorAltDragIgnoresACachedHoverDefinition(t *testing.T) {
 	}
 	for _, modifiers := range mods {
 		setupCursors(v, "|abcd\nabcd\nabcd")
-		v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) { s.Focus(w, cx) })
+		v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) { s.Focus(w, cx) })
 		var start, end gpui.Point
 		v.read(func(s *EditorState) {
 			start = columnPosition(s, 0, 1, 0.5)
 			end = columnPosition(s, 2, 3, 2.5)
 			end.X -= 0.5
 		})
-		v.update(func(s *EditorState, _ *gpui.Window, _ *inputCx[EditorMode]) {
+		v.update(func(s *EditorState, _ *gpui.Window, _ *gpui.Context[InputBaseState[EditorMode]]) {
 			s.editorExtras().hoverDefinition.update(NewInputSelection(0, 4), []LspLocationLink{{TargetURI: "file:///tmp/column-selection.rs"}})
 		})
 		left := gpui.MouseButtonLeft
@@ -121,7 +121,7 @@ func (p *testHoverProvider) Hover(_ rope.Rope, offset int, _ *gpui.Window, app *
 func TestEditorHoverProviderShowsThePopoverAfterTheDelay(t *testing.T) {
 	v := buildEditor(t)
 	provider := &testHoverProvider{}
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue("select value", w, cx)
 		s.LspMut().HoverProvider = provider
 	})
@@ -146,7 +146,7 @@ func TestEditorHoverProviderShowsThePopoverAfterTheDelay(t *testing.T) {
 			t.Fatalf("hover symbol range = %v, %v", r, ok)
 		}
 	})
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.onBlur(w, cx)
 		if s.HoverPopover() != nil {
 			t.Fatal("blur hides the hover")
@@ -177,7 +177,7 @@ func (p *testCompletionProvider) InlineCompletion(_ rope.Rope, _ int, _ LspInlin
 // 263-363, U:input/editor/mod.rs:267-269).
 func TestEditorInlineCompletionIsTheGhostTextUntilAccepted(t *testing.T) {
 	v := buildEditor(t)
-	v.update(func(s *EditorState, _ *gpui.Window, _ *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, _ *gpui.Window, _ *gpui.Context[InputBaseState[EditorMode]]) {
 		s.LspMut().CompletionProvider = &testCompletionProvider{inline: "ect"}
 	})
 	v.update(editorType("sel"))
@@ -190,7 +190,7 @@ func TestEditorInlineCompletionIsTheGhostTextUntilAccepted(t *testing.T) {
 	})
 	v.cx.AdvanceClock(1)
 	v.cx.RunUntilParked()
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		if text, ok := s.extras.inlineCompletionText(); !ok || text != "ect" {
 			t.Fatalf("ghost text = %q, %v", text, ok)
 		}
@@ -211,17 +211,17 @@ func TestEditorCompletionTriggerOpensTheMenu(t *testing.T) {
 	v := buildEditor(t)
 	provider := &testCompletionProvider{trigger: true, items: []LspCompletionItem{{Label: "select"}}}
 	var routed []InputOverlayKind
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.Focus(w, cx)
 		s.LspMut().CompletionProvider = provider
-		s.SetOverlayActionHandler(func(kind InputOverlayKind, _ gpui.BoxedAction, _ *gpui.Window, _ *inputCx[EditorMode]) bool {
+		s.SetOverlayActionHandler(func(kind InputOverlayKind, _ gpui.BoxedAction, _ *gpui.Window, _ *gpui.Context[InputBaseState[EditorMode]]) bool {
 			routed = append(routed, kind)
 			return true
 		})
 	})
 	v.update(editorType("s"))
 	v.cx.RunUntilParked()
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		menu := s.CompletionMenuState()
 		if !menu.Open || len(menu.Items) != 1 || menu.Query != "s" || menu.Revision() == 0 {
 			t.Fatalf("menu = %+v", menu)
@@ -254,7 +254,7 @@ func TestEditorGoToDefinitionSelectsTheTarget(t *testing.T) {
 	v := buildEditor(t)
 	target := NewLspRange(NewInputPosition(1, 0), NewInputPosition(1, 3))
 	provider := &testDefinitionProvider{locations: []LspLocationLink{{TargetURI: "file:///a.sql", TargetSelectionRange: target}}}
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue("foo\nbar", w, cx)
 		s.Focus(w, cx)
 		s.LspMut().DefinitionProvider = provider
@@ -267,7 +267,7 @@ func TestEditorGoToDefinitionSelectsTheTarget(t *testing.T) {
 	v.read(func(s *EditorState) { wantSelected(t, s, 4, 7) })
 
 	var shown []LspShowDocumentParams
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.moveTo(0, nil, cx)
 		provider.locations[0].TargetURI = "https://example.com/doc"
 		s.LspMut().ShowDocument = func(params *LspShowDocumentParams, _ *gpui.Window, _ *gpui.App) bool {
@@ -289,7 +289,7 @@ func TestEditorGoToDefinitionSelectsTheTarget(t *testing.T) {
 func TestEditorSecondaryClickFollowsTheHoveredDefinition(t *testing.T) {
 	v := buildEditor(t)
 	target := NewLspRange(NewInputPosition(1, 0), NewInputPosition(1, 3))
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue("foo\nbar", w, cx)
 		s.Focus(w, cx)
 		s.LspMut().DefinitionProvider = &testDefinitionProvider{locations: []LspLocationLink{{TargetURI: "file:///a.sql", TargetSelectionRange: target}}}
@@ -347,13 +347,13 @@ func (p *testCodeActionProvider) PerformCodeAction(_ gpui.Entity[EditorState], a
 func TestEditorCodeActionsGatherAndPerform(t *testing.T) {
 	v := buildEditor(t)
 	ok, failing := &testCodeActionProvider{id: "ok"}, &testCodeActionProvider{id: "bad", fail: true}
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.Focus(w, cx)
 		s.LspMut().CodeActionProviders = []CodeActionProvider{failing, ok}
 		s.onActionToggleCodeActions(&ToggleCodeActions{}, w, cx)
 	})
 	v.cx.RunUntilParked()
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		menu := s.CodeActionMenuState()
 		if !menu.Open || len(menu.Items) != 1 || menu.Items[0].ProviderID != "ok" {
 			t.Fatalf("code-action menu = %+v", menu)
@@ -392,7 +392,7 @@ func (testSemanticTokensProvider) SemanticTokens(_ rope.Rope, _ InputSelection, 
 // (U:input/editor/lsp/mod.rs:94-113, document_colors.rs, semantic_tokens.rs).
 func TestEditorRefreshFetchesDocumentColorsAndSemanticTokens(t *testing.T) {
 	v := buildEditor(t)
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue("red x", w, cx)
 		lsp := s.LspMut()
 		lsp.DocumentColorProvider = testDocumentColorProvider{}
@@ -412,7 +412,7 @@ func TestEditorRefreshFetchesDocumentColorsAndSemanticTokens(t *testing.T) {
 			t.Fatalf("semantic styles = %+v", styles)
 		}
 	})
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue("other", w, cx)
 		if len(s.Lsp().documentColors) != 0 || len(s.Lsp().semanticTokens) != 0 {
 			t.Fatal("set_value resets the LSP state")
@@ -425,7 +425,7 @@ func TestEditorRefreshFetchesDocumentColorsAndSemanticTokens(t *testing.T) {
 // (U:input/base/state.rs:2412-2437, element.rs:29-47).
 func TestEditorDiagnosticPopoverFollowsThePointer(t *testing.T) {
 	v := buildEditor(t)
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue("select 1", w, cx)
 		s.DiagnosticsMut().Push(NewDiagnostic(NewInputPosition(0, 0), NewInputPosition(0, 6), "unknown").WithSeverity(DiagnosticSeverityError))
 		cx.Notify()
@@ -448,7 +448,7 @@ func TestEditorDiagnosticPopoverFollowsThePointer(t *testing.T) {
 			t.Fatal("leaving the diagnostic hides the popover")
 		}
 	})
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.ReplaceTextInRange(nil, "x", w, cx)
 		if s.Diagnostics().Len() != 0 {
 			t.Fatal("an edit resets the diagnostics")

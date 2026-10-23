@@ -25,14 +25,14 @@ type CodeActionItem struct {
 }
 
 // onActionToggleCodeActions is U:input/editor/lsp/code_actions.rs:43-50.
-func (s *InputBaseState[M]) onActionToggleCodeActions(_ *ToggleCodeActions, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) onActionToggleCodeActions(_ *ToggleCodeActions, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.handleCodeActionTrigger(w, cx)
 }
 
 // handleCodeActionTrigger asks every provider for the selection's code
 // actions and opens the menu with them
 // (U:input/editor/lsp/code_actions.rs:52-113).
-func (s *InputBaseState[M]) handleCodeActionTrigger(w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) handleCodeActionTrigger(w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	e := s.editorExtras()
 	providers := append([]CodeActionProvider(nil), e.lsp.CodeActionProviders...)
 	rng := s.SelectedRange()
@@ -64,7 +64,7 @@ func (s *InputBaseState[M]) handleCodeActionTrigger(w *gpui.Window, cx *inputCx[
 
 		if len(codeActions) == 0 {
 			acx.AsyncApp.Update(func(app *gpui.App) {
-				_ = editor.TryUpdate(app, func(s *InputBaseState[M], cx *inputCx[M]) {
+				_ = editor.TryUpdate(app, func(s *InputBaseState[M], cx *gpui.Context[InputBaseState[M]]) {
 					menu := &s.editorExtras().contextMenuContent.codeAction
 					menu.Open = false
 					menu.Items = nil
@@ -75,7 +75,7 @@ func (s *InputBaseState[M]) handleCodeActionTrigger(w *gpui.Window, cx *inputCx[
 			return struct{}{}
 		}
 		_ = acx.Update(func(w *gpui.Window, app *gpui.App) {
-			_ = editor.TryUpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
+			_ = editor.TryUpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 				if !s.focusHandle.IsFocused(w) {
 					return
 				}
@@ -94,7 +94,7 @@ func (s *InputBaseState[M]) handleCodeActionTrigger(w *gpui.Window, cx *inputCx[
 
 // PerformCodeAction performs item with the provider it came from
 // (U:input/editor/lsp/code_actions.rs:115-136). EditorState only.
-func (s *InputBaseState[M]) PerformCodeAction(item *CodeActionItem, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) PerformCodeAction(item *CodeActionItem, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	e := s.lspExtras("PerformCodeAction")
 	var provider CodeActionProvider
 	for _, p := range e.lsp.CodeActionProviders {

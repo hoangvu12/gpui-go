@@ -65,13 +65,13 @@ func (s *InputBaseState[M]) updatePreferredColumn() {
 }
 
 // moveTo moves the cursor to offset (U:input/base/movement.rs:57-69).
-func (s *InputBaseState[M]) moveTo(offset int, direction *moveDirection, cx *inputCx[M]) {
+func (s *InputBaseState[M]) moveTo(offset int, direction *moveDirection, cx *gpui.Context[InputBaseState[M]]) {
 	s.moveToWithAffinity(offset, direction, false, cx)
 }
 
 // moveToWithAffinity moves the cursor, carrying the caret's line-end
 // affinity (U:input/base/movement.rs:71-96).
-func (s *InputBaseState[M]) moveToWithAffinity(offset int, direction *moveDirection, lineEndAffinity bool, cx *inputCx[M]) {
+func (s *InputBaseState[M]) moveToWithAffinity(offset int, direction *moveDirection, lineEndAffinity bool, cx *gpui.Context[InputBaseState[M]]) {
 	s.undoManager.breakTransactionCoalescing()
 	s.selections.removeAllButActive()
 	offset = s.cursorBoundary(offset, sumtree.Left)
@@ -166,7 +166,7 @@ type cursorMove struct {
 // moveAllCursors moves every cursor through f, collapsing each, merges
 // overlaps and runs the post-move sequence
 // (U:input/base/movement.rs:201-237).
-func (s *InputBaseState[M]) moveAllCursors(f func(sel cursorSelection) cursorMove, direction *moveDirection, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) moveAllCursors(f func(sel cursorSelection) cursorMove, direction *moveDirection, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.undoManager.breakTransactionCoalescing()
 	activeAffinity := false
 	activeID := s.activeSelection().id
@@ -192,7 +192,7 @@ func (s *InputBaseState[M]) moveAllCursors(f func(sel cursorSelection) cursorMov
 
 // moveVertical moves every cursor by moveLines rows
 // (U:input/base/movement.rs:239-291).
-func (s *InputBaseState[M]) moveVertical(moveLines int, collapse bool, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) moveVertical(moveLines int, collapse bool, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.IsSingleLine() {
 		return
 	}
@@ -227,7 +227,7 @@ func (s *InputBaseState[M]) moveVertical(moveLines int, collapse bool, w *gpui.W
 
 // left moves left; a lone cursor at the start propagates the keystroke to
 // an ancestor (U:input/base/movement.rs:293-317).
-func (s *InputBaseState[M]) left(_ *MoveLeft, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) left(_ *MoveLeft, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.selections.isSingle() && s.activeSelection().isEmpty() && s.Cursor() == 0 {
 		cx.Propagate()
 		return
@@ -242,7 +242,7 @@ func (s *InputBaseState[M]) left(_ *MoveLeft, w *gpui.Window, cx *inputCx[M]) {
 }
 
 // right mirrors left (U:input/base/movement.rs:319-343).
-func (s *InputBaseState[M]) right(_ *MoveRight, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) right(_ *MoveRight, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.selections.isSingle() && s.activeSelection().isEmpty() && s.Cursor() == s.text.Len() {
 		cx.Propagate()
 		return
@@ -257,7 +257,7 @@ func (s *InputBaseState[M]) right(_ *MoveRight, w *gpui.Window, cx *inputCx[M]) 
 }
 
 // up is U:input/base/movement.rs:345-351.
-func (s *InputBaseState[M]) up(action *MoveUp, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) up(action *MoveUp, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.hooks.handleContextMenuAction(s, MoveUpAction.Box(*action), w, cx) {
 		return
 	}
@@ -265,7 +265,7 @@ func (s *InputBaseState[M]) up(action *MoveUp, w *gpui.Window, cx *inputCx[M]) {
 }
 
 // down is U:input/base/movement.rs:353-359.
-func (s *InputBaseState[M]) down(action *MoveDown, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) down(action *MoveDown, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.hooks.handleContextMenuAction(s, MoveDownAction.Box(*action), w, cx) {
 		return
 	}
@@ -273,7 +273,7 @@ func (s *InputBaseState[M]) down(action *MoveDown, w *gpui.Window, cx *inputCx[M
 }
 
 // pageUp is U:input/base/movement.rs:361-372.
-func (s *InputBaseState[M]) pageUp(_ *MovePageUp, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) pageUp(_ *MovePageUp, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.IsSingleLine() || s.lastLayout == nil {
 		return
 	}
@@ -282,7 +282,7 @@ func (s *InputBaseState[M]) pageUp(_ *MovePageUp, w *gpui.Window, cx *inputCx[M]
 }
 
 // pageDown is U:input/base/movement.rs:374-390.
-func (s *InputBaseState[M]) pageDown(_ *MovePageDown, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) pageDown(_ *MovePageDown, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.IsSingleLine() || s.lastLayout == nil {
 		return
 	}
@@ -291,7 +291,7 @@ func (s *InputBaseState[M]) pageDown(_ *MovePageDown, w *gpui.Window, cx *inputC
 }
 
 // home is U:input/base/movement.rs:392-402.
-func (s *InputBaseState[M]) home(_ *MoveHome, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) home(_ *MoveHome, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.moveAllCursors(func(sel cursorSelection) cursorMove {
 		offset := s.startOfLineAt(sel.cursorOffset(), s.lineEndAffinityFor(sel))
 		return cursorMove{offset: offset, anchor: s.preferredColumnFor(offset)}
@@ -300,7 +300,7 @@ func (s *InputBaseState[M]) home(_ *MoveHome, w *gpui.Window, cx *inputCx[M]) {
 
 // end keeps the caret at the end of the visual row it is on
 // (U:input/base/movement.rs:404-415).
-func (s *InputBaseState[M]) end(_ *MoveEnd, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) end(_ *MoveEnd, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.moveAllCursors(func(sel cursorSelection) cursorMove {
 		offset := s.endOfLineAt(sel.cursorOffset(), s.lineEndAffinityFor(sel))
 		return cursorMove{offset: offset, anchor: s.preferredColumnFor(offset), affinity: true}
@@ -308,17 +308,17 @@ func (s *InputBaseState[M]) end(_ *MoveEnd, w *gpui.Window, cx *inputCx[M]) {
 }
 
 // moveToStart is U:input/base/movement.rs:417-424.
-func (s *InputBaseState[M]) moveToStart(_ *MoveToStart, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) moveToStart(_ *MoveToStart, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.moveTo(0, nil, cx)
 }
 
 // moveToEnd is U:input/base/movement.rs:426-428.
-func (s *InputBaseState[M]) moveToEnd(_ *MoveToEnd, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) moveToEnd(_ *MoveToEnd, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.moveTo(s.text.Len(), nil, cx)
 }
 
 // moveToPreviousWord is U:input/base/movement.rs:430-445.
-func (s *InputBaseState[M]) moveToPreviousWord(_ *MoveToPreviousWord, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) moveToPreviousWord(_ *MoveToPreviousWord, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.moveAllCursors(func(sel cursorSelection) cursorMove {
 		offset := s.previousStartOfWordAt(sel.cursorOffset())
 		return cursorMove{offset: offset, anchor: s.preferredColumnFor(offset)}
@@ -326,7 +326,7 @@ func (s *InputBaseState[M]) moveToPreviousWord(_ *MoveToPreviousWord, w *gpui.Wi
 }
 
 // moveToNextWord is U:input/base/movement.rs:447-462.
-func (s *InputBaseState[M]) moveToNextWord(_ *MoveToNextWord, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) moveToNextWord(_ *MoveToNextWord, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.moveAllCursors(func(sel cursorSelection) cursorMove {
 		offset := s.nextEndOfWordAt(sel.cursorOffset())
 		return cursorMove{offset: offset, anchor: s.preferredColumnFor(offset)}

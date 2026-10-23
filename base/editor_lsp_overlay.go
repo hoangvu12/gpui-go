@@ -71,7 +71,7 @@ type InputOverlayActionHandler[M InputModeKind] func(kind InputOverlayKind, acti
 
 // PresentCompletionItems opens the completion menu with items
 // (U:input/editor/lsp/overlay.rs:67-84).
-func (s *InputBaseState[M]) PresentCompletionItems(triggerStartOffset int, query string, items []LspCompletionItem, cx *inputCx[M]) {
+func (s *InputBaseState[M]) PresentCompletionItems(triggerStartOffset int, query string, items []LspCompletionItem, cx *gpui.Context[InputBaseState[M]]) {
 	menu := &s.lspExtras("PresentCompletionItems").contextMenuContent.completion
 	menu.TriggerStartOffset = &triggerStartOffset
 	menu.Query = query
@@ -83,7 +83,7 @@ func (s *InputBaseState[M]) PresentCompletionItems(triggerStartOffset int, query
 
 // PresentCodeActions opens the code-action menu with items
 // (U:input/editor/lsp/overlay.rs:86-96).
-func (s *InputBaseState[M]) PresentCodeActions(items []CodeActionItem, cx *inputCx[M]) {
+func (s *InputBaseState[M]) PresentCodeActions(items []CodeActionItem, cx *gpui.Context[InputBaseState[M]]) {
 	menu := &s.lspExtras("PresentCodeActions").contextMenuContent.codeAction
 	menu.Items = items
 	menu.Open = len(menu.Items) > 0
@@ -93,14 +93,14 @@ func (s *InputBaseState[M]) PresentCodeActions(items []CodeActionItem, cx *input
 
 // PresentHover shows hover anchored to symbolRange
 // (U:input/editor/lsp/overlay.rs:98-109).
-func (s *InputBaseState[M]) PresentHover(symbolRange InputSelection, hover LspHover, cx *inputCx[M]) {
+func (s *InputBaseState[M]) PresentHover(symbolRange InputSelection, hover LspHover, cx *gpui.Context[InputBaseState[M]]) {
 	s.lspExtras("PresentHover").hoverPopover = &HoverPopoverState{SymbolRange: symbolRange, Hover: hover}
 	cx.Notify()
 }
 
 // PresentDiagnostic shows diagnostic as the diagnostic popover
 // (U:input/editor/lsp/overlay.rs:111-118).
-func (s *InputBaseState[M]) PresentDiagnostic(diagnostic DiagnosticEntry, cx *inputCx[M]) {
+func (s *InputBaseState[M]) PresentDiagnostic(diagnostic DiagnosticEntry, cx *gpui.Context[InputBaseState[M]]) {
 	s.requireEditorMode("PresentDiagnostic")
 	s.diagnosticPopover = &diagnostic
 	cx.Notify()
@@ -108,7 +108,7 @@ func (s *InputBaseState[M]) PresentDiagnostic(diagnostic DiagnosticEntry, cx *in
 
 // ClearDiagnosticPopover hides the diagnostic popover
 // (U:input/editor/lsp/overlay.rs:120-124).
-func (s *InputBaseState[M]) ClearDiagnosticPopover(cx *inputCx[M]) {
+func (s *InputBaseState[M]) ClearDiagnosticPopover(cx *gpui.Context[InputBaseState[M]]) {
 	s.requireEditorMode("ClearDiagnosticPopover")
 	if s.diagnosticPopover != nil {
 		s.diagnosticPopover = nil
@@ -118,7 +118,7 @@ func (s *InputBaseState[M]) ClearDiagnosticPopover(cx *inputCx[M]) {
 
 // RouteOverlayAction offers action to the open menu's overlay handler
 // (U:input/editor/lsp/overlay.rs:126-133).
-func (s *InputBaseState[M]) RouteOverlayAction(action gpui.BoxedAction, w *gpui.Window, cx *inputCx[M]) bool {
+func (s *InputBaseState[M]) RouteOverlayAction(action gpui.BoxedAction, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) bool {
 	s.requireEditorMode("RouteOverlayAction")
 	return s.handleActionForContextMenu(action, w, cx)
 }
@@ -138,7 +138,7 @@ func (s *InputBaseState[M]) HasOverlayActionHandler() bool {
 
 // DismissCompletionOverlay closes the completion menu
 // (U:input/editor/lsp/overlay.rs:152-157).
-func (s *InputBaseState[M]) DismissCompletionOverlay(cx *inputCx[M]) {
+func (s *InputBaseState[M]) DismissCompletionOverlay(cx *gpui.Context[InputBaseState[M]]) {
 	menu := &s.lspExtras("DismissCompletionOverlay").contextMenuContent.completion
 	if menu.Open {
 		menu.Open = false
@@ -148,7 +148,7 @@ func (s *InputBaseState[M]) DismissCompletionOverlay(cx *inputCx[M]) {
 
 // DismissCodeActionOverlay closes the code-action menu
 // (U:input/editor/lsp/overlay.rs:159-164).
-func (s *InputBaseState[M]) DismissCodeActionOverlay(cx *inputCx[M]) {
+func (s *InputBaseState[M]) DismissCodeActionOverlay(cx *gpui.Context[InputBaseState[M]]) {
 	menu := &s.lspExtras("DismissCodeActionOverlay").contextMenuContent.codeAction
 	if menu.Open {
 		menu.Open = false
@@ -159,7 +159,7 @@ func (s *InputBaseState[M]) DismissCodeActionOverlay(cx *inputCx[M]) {
 // InsertCompletion inserts item: its text edit, else its insert text at
 // the end of fallbackRange, else its label over fallbackRange; then the
 // editor takes focus (U:input/editor/lsp/overlay.rs:166-197).
-func (s *InputBaseState[M]) InsertCompletion(item *LspCompletionItem, fallbackRange InputSelection, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) InsertCompletion(item *LspCompletionItem, fallbackRange InputSelection, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.requireEditorMode("InsertCompletion")
 	rng := fallbackRange
 	newText := item.Label
@@ -204,7 +204,7 @@ func (s *InputBaseState[M]) HoverPopover() *HoverPopoverState {
 
 // DismissLspOverlays closes the menus and the hover
 // (U:input/editor/lsp/overlay.rs:213-216).
-func (s *InputBaseState[M]) DismissLspOverlays(cx *inputCx[M]) {
+func (s *InputBaseState[M]) DismissLspOverlays(cx *gpui.Context[InputBaseState[M]]) {
 	s.requireEditorMode("DismissLspOverlays")
 	s.hideContextMenu(cx)
 	s.ClearHoverState(cx)

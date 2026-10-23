@@ -330,7 +330,7 @@ func (s *InputBaseState[M]) checkTokenMode() error {
 
 // replaceToken replaces a range with a token as one atomic, validated edit
 // (U:input/base/inline_tokens.rs:333-373).
-func (s *InputBaseState[M]) replaceToken(rng InputSelection, token InlineToken, w *gpui.Window, cx *inputCx[M]) error {
+func (s *InputBaseState[M]) replaceToken(rng InputSelection, token InlineToken, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) error {
 	if err := s.checkTokenMode(); err != nil {
 		return err
 	}
@@ -391,14 +391,14 @@ func (s *InputBaseState[M]) requireTokenMode(method string) {
 
 // ReplaceWithToken replaces the selection with an atomic token; no
 // delimiter is added (U:input/base/inline_tokens.rs:392-400).
-func (s *InputBaseState[M]) ReplaceWithToken(token InlineToken, w *gpui.Window, cx *inputCx[M]) error {
+func (s *InputBaseState[M]) ReplaceWithToken(token InlineToken, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) error {
 	s.requireTokenMode("ReplaceWithToken")
 	return s.replaceToken(s.SelectedRange(), token, w, cx)
 }
 
 // ReplaceRangeWithToken replaces a UTF-8 byte range, expanding overlaps to
 // whole tokens (U:input/base/inline_tokens.rs:401-410).
-func (s *InputBaseState[M]) ReplaceRangeWithToken(rng InputSelection, token InlineToken, w *gpui.Window, cx *inputCx[M]) error {
+func (s *InputBaseState[M]) ReplaceRangeWithToken(rng InputSelection, token InlineToken, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) error {
 	s.requireTokenMode("ReplaceRangeWithToken")
 	return s.replaceToken(rng, token, w, cx)
 }

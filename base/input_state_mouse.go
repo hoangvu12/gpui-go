@@ -14,18 +14,18 @@ import (
 )
 
 // selectLeft is U:input/base/state.rs:1316-1319.
-func (s *InputBaseState[M]) selectLeft(_ *SelectLeft, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) selectLeft(_ *SelectLeft, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.undoManager.breakTransactionCoalescing()
 	s.selectAllCursorsTo(func(sel cursorSelection) int { return s.previousBoundary(sel.cursorOffset()) }, cx)
 }
 
 // selectRight is U:input/base/state.rs:1321-1323.
-func (s *InputBaseState[M]) selectRight(_ *SelectRight, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) selectRight(_ *SelectRight, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.selectAllCursorsTo(func(sel cursorSelection) int { return s.nextBoundary(sel.cursorOffset()) }, cx)
 }
 
 // selectUp is U:input/base/state.rs:1325-1341.
-func (s *InputBaseState[M]) selectUp(_ *SelectUp, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) selectUp(_ *SelectUp, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.IsSingleLine() {
 		return
 	}
@@ -35,7 +35,7 @@ func (s *InputBaseState[M]) selectUp(_ *SelectUp, _ *gpui.Window, cx *inputCx[M]
 }
 
 // selectDown is U:input/base/state.rs:1343-1359.
-func (s *InputBaseState[M]) selectDown(_ *SelectDown, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) selectDown(_ *SelectDown, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.IsSingleLine() {
 		return
 	}
@@ -45,25 +45,25 @@ func (s *InputBaseState[M]) selectDown(_ *SelectDown, _ *gpui.Window, cx *inputC
 }
 
 // onActionSelectAll is U:input/base/state.rs:1361-1368.
-func (s *InputBaseState[M]) onActionSelectAll(_ *SelectAll, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) onActionSelectAll(_ *SelectAll, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.SelectAll(w, cx)
 }
 
 // selectToStart is U:input/base/state.rs:1370-1378.
-func (s *InputBaseState[M]) selectToStart(_ *SelectToStart, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) selectToStart(_ *SelectToStart, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.undoManager.breakTransactionCoalescing()
 	s.selectAllCursorsTo(func(cursorSelection) int { return 0 }, cx)
 }
 
 // selectToEnd is U:input/base/state.rs:1380-1389.
-func (s *InputBaseState[M]) selectToEnd(_ *SelectToEnd, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) selectToEnd(_ *SelectToEnd, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.undoManager.breakTransactionCoalescing()
 	end := s.text.Len()
 	s.selectAllCursorsTo(func(cursorSelection) int { return end }, cx)
 }
 
 // selectToStartOfLine is U:input/base/state.rs:1391-1402.
-func (s *InputBaseState[M]) selectToStartOfLine(_ *SelectToStartOfLine, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) selectToStartOfLine(_ *SelectToStartOfLine, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.undoManager.breakTransactionCoalescing()
 	s.selectAllCursorsTo(func(sel cursorSelection) int {
 		return s.startOfLineAt(sel.cursorOffset(), s.lineEndAffinityFor(sel))
@@ -71,7 +71,7 @@ func (s *InputBaseState[M]) selectToStartOfLine(_ *SelectToStartOfLine, _ *gpui.
 }
 
 // selectToEndOfLine is U:input/base/state.rs:1404-1421.
-func (s *InputBaseState[M]) selectToEndOfLine(_ *SelectToEndOfLine, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) selectToEndOfLine(_ *SelectToEndOfLine, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.undoManager.breakTransactionCoalescing()
 	s.selectAllCursorsToWithAffinity(func(sel cursorSelection) (int, bool) {
 		return s.endOfLineAt(sel.cursorOffset(), s.lineEndAffinityFor(sel)), true
@@ -79,20 +79,20 @@ func (s *InputBaseState[M]) selectToEndOfLine(_ *SelectToEndOfLine, _ *gpui.Wind
 }
 
 // selectToPreviousWord is U:input/base/state.rs:1423-1434.
-func (s *InputBaseState[M]) selectToPreviousWord(_ *SelectToPreviousWordStart, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) selectToPreviousWord(_ *SelectToPreviousWordStart, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.undoManager.breakTransactionCoalescing()
 	s.selectAllCursorsTo(func(sel cursorSelection) int { return s.previousStartOfWordAt(sel.cursorOffset()) }, cx)
 }
 
 // selectToNextWord is U:input/base/state.rs:1436-1444.
-func (s *InputBaseState[M]) selectToNextWord(_ *SelectToNextWordEnd, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) selectToNextWord(_ *SelectToNextWordEnd, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.undoManager.breakTransactionCoalescing()
 	s.selectAllCursorsTo(func(sel cursorSelection) int { return s.nextEndOfWordAt(sel.cursorOffset()) }, cx)
 }
 
 // onMouseDown places the caret, selects a word or line, or starts a
 // drag (U:input/base/state.rs:2273-2371).
-func (s *InputBaseState[M]) onMouseDown(event *gpui.MouseDownEvent, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) onMouseDown(event *gpui.MouseDownEvent, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	// A token that consumed the press must not also place the caret.
 	if w.DefaultPrevented() {
 		return
@@ -162,7 +162,7 @@ func (s *InputBaseState[M]) onMouseDown(event *gpui.MouseDownEvent, w *gpui.Wind
 }
 
 // onMouseUp ends the drag (U:input/base/state.rs:2373-2391).
-func (s *InputBaseState[M]) onMouseUp(_ *gpui.MouseUpEvent, _ *gpui.Window, _ *inputCx[M]) {
+func (s *InputBaseState[M]) onMouseUp(_ *gpui.MouseUpEvent, _ *gpui.Window, _ *gpui.Context[InputBaseState[M]]) {
 	if s.activeSelection().isEmpty() {
 		s.activeSelectionMut().reversed = false
 	}
@@ -175,7 +175,7 @@ func (s *InputBaseState[M]) onMouseUp(_ *gpui.MouseUpEvent, _ *gpui.Window, _ *i
 // onMouseMove clears hover state outside the input and forwards the
 // offset under the pointer to the mode; a code editor shows the
 // diagnostic under the pointer (U:input/base/state.rs:2393-2438).
-func (s *InputBaseState[M]) onMouseMove(event *gpui.MouseMoveEvent, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) onMouseMove(event *gpui.MouseMoveEvent, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.lastBounds == nil || !s.lastBounds.Contains(event.Position) {
 		s.hooks.clearHoverState(s, cx)
 		return
@@ -208,7 +208,7 @@ func (s *InputBaseState[M]) onMouseMove(event *gpui.MouseMoveEvent, w *gpui.Wind
 // onScrollWheel scrolls, stopping propagation only when the offset
 // changed, and hides the diagnostic popover (U:input/base/state.rs:
 // 2440-2467).
-func (s *InputBaseState[M]) onScrollWheel(event *gpui.ScrollWheelEvent, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) onScrollWheel(event *gpui.ScrollWheelEvent, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	lineHeight := w.LineHeight()
 	if s.lastLayout != nil {
 		lineHeight = s.lastLayout.lineHeight
@@ -231,7 +231,7 @@ func (s *InputBaseState[M]) onScrollWheel(event *gpui.ScrollWheelEvent, w *gpui.
 
 // updateScrollOffset clamps an offset into the scrollable range and
 // notifies only on change (U:input/base/state.rs:2469-2497).
-func (s *InputBaseState[M]) updateScrollOffset(offset *gpui.Point, cx *inputCx[M]) {
+func (s *InputBaseState[M]) updateScrollOffset(offset *gpui.Point, cx *gpui.Context[InputBaseState[M]]) {
 	o := s.scrollHandle.Offset()
 	if offset != nil {
 		o = *offset
@@ -261,7 +261,7 @@ func clampF(v, lo, hi float32) float32 { return min(max(v, lo), hi) }
 
 // scrollTo reveals offset; a direction keeps the edges on the same side
 // (U:input/base/state.rs:2499-2514).
-func (s *InputBaseState[M]) scrollTo(offset int, direction *moveDirection, cx *inputCx[M]) {
+func (s *InputBaseState[M]) scrollTo(offset int, direction *moveDirection, cx *gpui.Context[InputBaseState[M]]) {
 	padding := scrollPaddingMinimal
 	if direction != nil {
 		padding = scrollPaddingSurroundingLines
@@ -271,7 +271,7 @@ func (s *InputBaseState[M]) scrollTo(offset int, direction *moveDirection, cx *i
 
 // scrollToWithPadding reveals offset with an independent direction
 // restriction and padding (U:input/base/state.rs:2516-2610).
-func (s *InputBaseState[M]) scrollToWithPadding(offset int, direction *moveDirection, padding scrollPadding, cx *inputCx[M]) {
+func (s *InputBaseState[M]) scrollToWithPadding(offset int, direction *moveDirection, padding scrollPadding, cx *gpui.Context[InputBaseState[M]]) {
 	layout := s.lastLayout
 	if layout == nil || s.lastBounds == nil {
 		return
@@ -442,13 +442,13 @@ func extendSelection(sel *cursorSelection, offset int, wordRange *cursorSelectio
 
 // selectTo extends the active selection to offset, clearing the affinity
 // (U:input/base/state.rs:3132-3135).
-func (s *InputBaseState[M]) selectTo(offset int, cx *inputCx[M]) {
+func (s *InputBaseState[M]) selectTo(offset int, cx *gpui.Context[InputBaseState[M]]) {
 	s.selectToWithAffinity(offset, false, cx)
 }
 
 // selectToWithAffinity extends the active selection carrying the caret's
 // line-end affinity (U:input/base/state.rs:3137-3162).
-func (s *InputBaseState[M]) selectToWithAffinity(offset int, lineEndAffinity bool, cx *inputCx[M]) {
+func (s *InputBaseState[M]) selectToWithAffinity(offset int, lineEndAffinity bool, cx *gpui.Context[InputBaseState[M]]) {
 	s.hooks.clearInlineCompletion(s, cx)
 
 	s.cursorLineEndAffinity = lineEndAffinity
@@ -465,14 +465,14 @@ func (s *InputBaseState[M]) selectToWithAffinity(offset int, lineEndAffinity boo
 
 // selectAllCursorsTo extends every selection to f's offset and merges
 // overlaps (U:input/base/state.rs:3164-3172).
-func (s *InputBaseState[M]) selectAllCursorsTo(f func(sel cursorSelection) int, cx *inputCx[M]) {
+func (s *InputBaseState[M]) selectAllCursorsTo(f func(sel cursorSelection) int, cx *gpui.Context[InputBaseState[M]]) {
 	s.selectAllCursorsToWithAffinity(func(sel cursorSelection) (int, bool) { return f(sel), false }, false, cx)
 }
 
 // selectAllCursorsToWithAffinity extends selections with caret affinity,
 // preserving the column anchors through vertical moves
 // (U:input/base/state.rs:3174-3219).
-func (s *InputBaseState[M]) selectAllCursorsToWithAffinity(f func(sel cursorSelection) (int, bool), preserveColumn bool, cx *inputCx[M]) {
+func (s *InputBaseState[M]) selectAllCursorsToWithAffinity(f func(sel cursorSelection) (int, bool), preserveColumn bool, cx *gpui.Context[InputBaseState[M]]) {
 	s.pauseBlinkCursor(cx)
 	s.undoManager.breakTransactionCoalescing()
 	s.hooks.clearInlineCompletion(s, cx)
@@ -508,7 +508,7 @@ func (s *InputBaseState[M]) selectAllCursorsToWithAffinity(f func(sel cursorSele
 // onDragMove extends the selection while the left button drags, with
 // vertical autoscroll in a multi-line input
 // (U:input/base/state.rs:3385-3436).
-func (s *InputBaseState[M]) onDragMove(event *gpui.MouseMoveEvent, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) onDragMove(event *gpui.MouseMoveEvent, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.text.Len() == 0 || s.lastLayout == nil || !s.focusHandle.IsFocused(w) || !s.selecting {
 		return
 	}
@@ -523,7 +523,7 @@ func (s *InputBaseState[M]) onDragMove(event *gpui.MouseMoveEvent, w *gpui.Windo
 		if d, ok := delta.Get(); ok {
 			scrollDelta = gpui.Some(-d)
 		}
-		s.autoScroll.Set(scrollDelta, cx, func(delta float32, state *InputBaseState[M], cx *inputCx[M]) {
+		s.autoScroll.Set(scrollDelta, cx, func(delta float32, state *InputBaseState[M], cx *gpui.Context[InputBaseState[M]]) {
 			current := state.scrollHandle.Offset()
 			target := gpui.Point{X: current.X, Y: current.Y + delta}
 			state.updateScrollOffset(&target, cx)
@@ -537,7 +537,7 @@ func (s *InputBaseState[M]) onDragMove(event *gpui.MouseMoveEvent, w *gpui.Windo
 // dragSelectTo is the shared body of on_drag_move and its autoscroll
 // tick: extend the columnar block or the selection to position
 // (U:input/base/state.rs:3408-3415, 3424-3433).
-func (s *InputBaseState[M]) dragSelectTo(position gpui.Point, cx *inputCx[M]) {
+func (s *InputBaseState[M]) dragSelectTo(position gpui.Point, cx *gpui.Context[InputBaseState[M]]) {
 	offset, affinity, columnsPastLineEnd := s.resolveMousePosition(position)
 	if s.columnSelectStart != nil {
 		s.buildColumnarSelection(*s.columnSelectStart, columnarPoint{offset: offset, columnsPastLineEnd: columnsPastLineEnd}, cx)

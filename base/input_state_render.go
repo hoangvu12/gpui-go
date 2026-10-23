@@ -7,7 +7,7 @@ package base
 import "github.com/hoangvu12/gpui-go/gpui"
 
 // Render implements gpui.Render (U:input/base/state.rs:4355-4511).
-func (s *InputBaseState[M]) Render(w *gpui.Window, cx *inputCx[M]) gpui.AnyElement {
+func (s *InputBaseState[M]) Render(w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) gpui.AnyElement {
 	// Before anything reads it: the element resolves this style during
 	// layout and paint, both after this call in the same frame.
 	tokens := ThemeGlobal(cx.App()).Tokens
@@ -110,7 +110,7 @@ func (s *InputBaseState[M]) Render(w *gpui.Window, cx *inputCx[M]) gpui.AnyEleme
 		scrollWheel(event, w, app)
 	})
 	if s.IsMultiLine() && !s.disabled {
-		d.OnModifiersChanged(cx.Listener(func(_ *self, _ *gpui.ModifiersChangedEvent, _ *gpui.Window, cx *inputCx[M]) {
+		d.OnModifiersChanged(cx.Listener(func(_ *self, _ *gpui.ModifiersChangedEvent, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 			cx.Notify()
 		}))
 	}

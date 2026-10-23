@@ -24,7 +24,7 @@ import (
 
 // dismissTouchSelection drops the touch handles and edit menu; with no
 // touch selection it is a no-op (U:input/base/touch.rs:86-92).
-func (s *InputBaseState[M]) dismissTouchSelection(*inputCx[M]) {}
+func (s *InputBaseState[M]) dismissTouchSelection(*gpui.Context[InputBaseState[M]]) {}
 
 // ---------------------------------------------------------------------------
 // selection.rs: select_word / select_line
@@ -33,7 +33,7 @@ func (s *InputBaseState[M]) dismissTouchSelection(*inputCx[M]) {}
 // selectWord selects the word at offset on double-click; a masked value
 // has no word boundaries, so it takes all of it
 // (U:input/base/selection.rs:22-43).
-func (s *InputBaseState[M]) selectWord(offset int, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) selectWord(offset int, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	start, end := 0, s.text.Len()
 	if !s.masked {
 		var ok bool
@@ -52,7 +52,7 @@ func (s *InputBaseState[M]) selectWord(offset int, _ *gpui.Window, cx *inputCx[M
 
 // selectLine selects the line at offset on triple-click
 // (U:input/base/selection.rs:45-55).
-func (s *InputBaseState[M]) selectLine(offset int, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) selectLine(offset int, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	start, end := textSelectorLineRange(&s.text, offset)
 	s.undoManager.breakTransactionCoalescing()
 	s.selections.removeAllButActive()
@@ -122,7 +122,7 @@ func (s *InputBaseState[M]) indentOfNextLineAt(offset int) string {
 // deleteSelections deletes every selection as one batch; collapsed
 // cursors expand through collapsedTarget first
 // (U:input/base/state.rs:1630-1683).
-func (s *InputBaseState[M]) deleteSelections(silent bool, collapsedIntent editIntent, collapsedTarget func(offset int) InputSelection, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) deleteSelections(silent bool, collapsedIntent editIntent, collapsedTarget func(offset int) InputSelection, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if !s.IsEditable() {
 		return
 	}
@@ -161,7 +161,7 @@ func (s *InputBaseState[M]) deleteSelections(silent bool, collapsedIntent editIn
 
 // backspace deletes backwards; a lone cursor at the start propagates the
 // keystroke (U:input/base/state.rs:1797-1848).
-func (s *InputBaseState[M]) backspace(_ *Backspace, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) backspace(_ *Backspace, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.selections.isSingle() && s.activeSelection().isEmpty() && s.Cursor() == 0 {
 		cx.Propagate()
 		return
@@ -179,14 +179,14 @@ func (s *InputBaseState[M]) backspace(_ *Backspace, w *gpui.Window, cx *inputCx[
 }
 
 // delete deletes forwards (U:input/base/state.rs:1850-1858).
-func (s *InputBaseState[M]) delete(_ *Delete, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) delete(_ *Delete, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.deleteSelections(false, editIntentDeleteForward, func(offset int) InputSelection {
 		return NewInputSelection(offset, s.nextBoundary(offset))
 	}, w, cx)
 }
 
 // deleteToBeginningOfLine is U:input/base/state.rs:1860-1879.
-func (s *InputBaseState[M]) deleteToBeginningOfLine(_ *DeleteToBeginningOfLine, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) deleteToBeginningOfLine(_ *DeleteToBeginningOfLine, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.deleteSelections(true, editIntentAtomic, func(offset int) InputSelection {
 		start := s.startOfLineAt(offset, s.lineEndAffinityAt(offset))
 		if start == offset {
@@ -197,7 +197,7 @@ func (s *InputBaseState[M]) deleteToBeginningOfLine(_ *DeleteToBeginningOfLine, 
 }
 
 // deleteToEndOfLine is U:input/base/state.rs:1881-1900.
-func (s *InputBaseState[M]) deleteToEndOfLine(_ *DeleteToEndOfLine, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) deleteToEndOfLine(_ *DeleteToEndOfLine, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.deleteSelections(true, editIntentAtomic, func(offset int) InputSelection {
 		end := s.endOfLineAt(offset, s.lineEndAffinityAt(offset))
 		if end == offset {
@@ -208,14 +208,14 @@ func (s *InputBaseState[M]) deleteToEndOfLine(_ *DeleteToEndOfLine, w *gpui.Wind
 }
 
 // deletePreviousWord is U:input/base/state.rs:1902-1915.
-func (s *InputBaseState[M]) deletePreviousWord(_ *DeleteToPreviousWordStart, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) deletePreviousWord(_ *DeleteToPreviousWordStart, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.deleteSelections(true, editIntentAtomic, func(offset int) InputSelection {
 		return NewInputSelection(s.previousStartOfWordAt(offset), offset)
 	}, w, cx)
 }
 
 // deleteNextWord is U:input/base/state.rs:1917-1930.
-func (s *InputBaseState[M]) deleteNextWord(_ *DeleteToNextWordEnd, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) deleteNextWord(_ *DeleteToNextWordEnd, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.deleteSelections(true, editIntentAtomic, func(offset int) InputSelection {
 		return NewInputSelection(offset, s.nextEndOfWordAt(offset))
 	}, w, cx)
@@ -224,7 +224,7 @@ func (s *InputBaseState[M]) deleteNextWord(_ *DeleteToNextWordEnd, w *gpui.Windo
 // enter inserts a newline in a multi-line input; a single line (or submit
 // on Enter) propagates and only emits PressEnter
 // (U:input/base/state.rs:1932-2047).
-func (s *InputBaseState[M]) enter(action *Enter, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) enter(action *Enter, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.hooks.handleContextMenuAction(s, EnterAction.Box(*action), w, cx) {
 		return
 	}
@@ -271,7 +271,7 @@ func (s *InputBaseState[M]) enter(action *Enter, w *gpui.Window, cx *inputCx[M])
 // a `{`, an indented middle line holding the cursor, and the `}` line.
 // Smart indent controls it, independently of automatic closing; it is
 // skipped inside strings and comments (U:input/base/state.rs:1966-2021).
-func (s *InputBaseState[M]) splitBracketsOnEnter(w *gpui.Window, cx *inputCx[M]) bool {
+func (s *InputBaseState[M]) splitBracketsOnEnter(w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) bool {
 	if !s.IsCodeEditor() || !s.activeSelection().isEmpty() {
 		return false
 	}
@@ -317,7 +317,7 @@ func (s *InputBaseState[M]) splitBracketsOnEnter(w *gpui.Window, cx *inputCx[M])
 }
 
 // Clean clears the text (U:input/base/state.rs:2049-2053).
-func (s *InputBaseState[M]) Clean(w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) Clean(w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.replaceText("", w, cx)
 	s.setSelection(0, 0)
 	s.scrollTo(0, nil, cx)
@@ -325,7 +325,7 @@ func (s *InputBaseState[M]) Clean(w *gpui.Window, cx *inputCx[M]) {
 
 // escape dismisses, collapses extra cursors, cancels IME, cleans on
 // escape, or propagates (U:input/base/state.rs:2055-2093).
-func (s *InputBaseState[M]) escape(action *Escape, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) escape(action *Escape, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.hooks.handleContextMenuAction(s, EscapeAction.Box(*action), w, cx) {
 		return
 	}
@@ -359,19 +359,19 @@ func (s *InputBaseState[M]) escape(action *Escape, w *gpui.Window, cx *inputCx[M
 }
 
 // addCursorAbove is U:input/base/state.rs:2126-2133.
-func (s *InputBaseState[M]) addCursorAbove(_ *AddCursorAbove, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) addCursorAbove(_ *AddCursorAbove, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.addCursorVertical(-1, cx)
 }
 
 // addCursorBelow is U:input/base/state.rs:2135-2142.
-func (s *InputBaseState[M]) addCursorBelow(_ *AddCursorBelow, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) addCursorBelow(_ *AddCursorBelow, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.addCursorVertical(1, cx)
 }
 
 // addCursorVertical adds a cursor one display row above or below each
 // cursor, keeping the column; duplicates and stuck cursors are skipped
 // (U:input/base/state.rs:2144-2190).
-func (s *InputBaseState[M]) addCursorVertical(moveLines int, cx *inputCx[M]) {
+func (s *InputBaseState[M]) addCursorVertical(moveLines int, cx *gpui.Context[InputBaseState[M]]) {
 	if !s.IsMultiLine() {
 		return
 	}
@@ -415,7 +415,7 @@ func (s *InputBaseState[M]) addCursorVertical(moveLines int, cx *inputCx[M]) {
 // addCursorAt adds a collapsed cursor at offset, rejected inside an
 // existing selection or on an existing cursor
 // (U:input/base/state.rs:2192-2216).
-func (s *InputBaseState[M]) addCursorAt(offset int, cx *inputCx[M]) {
+func (s *InputBaseState[M]) addCursorAt(offset int, cx *gpui.Context[InputBaseState[M]]) {
 	if !s.IsMultiLine() {
 		return
 	}
@@ -434,7 +434,7 @@ func (s *InputBaseState[M]) addCursorAt(offset int, cx *inputCx[M]) {
 // buildColumnarSelection builds a block selection, one selection per
 // display row over the same column span
 // (U:input/base/state.rs:2218-2256).
-func (s *InputBaseState[M]) buildColumnarSelection(start, end columnarPoint, cx *inputCx[M]) {
+func (s *InputBaseState[M]) buildColumnarSelection(start, end columnarPoint, cx *gpui.Context[InputBaseState[M]]) {
 	if !s.IsMultiLine() {
 		return
 	}
@@ -470,7 +470,7 @@ func (s *InputBaseState[M]) columnarRowColumn(p columnarPoint) (int, int) {
 }
 
 // showCharacterPalette is U:input/base/state.rs:2612-2619.
-func (s *InputBaseState[M]) showCharacterPalette(_ *ShowCharacterPalette, w *gpui.Window, _ *inputCx[M]) {
+func (s *InputBaseState[M]) showCharacterPalette(_ *ShowCharacterPalette, w *gpui.Window, _ *gpui.Context[InputBaseState[M]]) {
 	_ = w.ShowCharacterPalette()
 }
 
@@ -498,7 +498,7 @@ func (s *InputBaseState[M]) selectedTexts() []string {
 // copy copies the selections, one per line (U:input/base/state.rs:
 // 2636-2644). The platform write's error is dropped like the pinned
 // write_to_clipboard, which logs it.
-func (s *InputBaseState[M]) copy(_ *Copy, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) copy(_ *Copy, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if !s.IsCopyable() {
 		return
 	}
@@ -507,7 +507,7 @@ func (s *InputBaseState[M]) copy(_ *Copy, _ *gpui.Window, cx *inputCx[M]) {
 
 // cut copies then deletes the selections as one atomic edit
 // (U:input/base/state.rs:2646-2657).
-func (s *InputBaseState[M]) cut(_ *Cut, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) cut(_ *Cut, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if !s.IsCopyable() {
 		return
 	}
@@ -518,7 +518,7 @@ func (s *InputBaseState[M]) cut(_ *Cut, w *gpui.Window, cx *inputCx[M]) {
 
 // paste inserts the clipboard text (U:input/base/state.rs:2659-2666). A
 // read failure is the pinned None.
-func (s *InputBaseState[M]) paste(_ *Paste, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) paste(_ *Paste, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if !s.IsEditable() {
 		return
 	}
@@ -533,7 +533,7 @@ func (s *InputBaseState[M]) paste(_ *Paste, w *gpui.Window, cx *inputCx[M]) {
 // dropped on a single line, and a multi-line input with matching counts
 // takes one line per selection; a clipboard without text is left alone
 // (U:input/base/state.rs:2668-2712).
-func (s *InputBaseState[M]) insertClipboard(item gpui.ClipboardItem, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) insertClipboard(item gpui.ClipboardItem, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	newText, ok := item.Text()
 	if !ok || newText == "" {
 		return
@@ -647,18 +647,18 @@ func (s *InputBaseState[M]) pushHistory(text rope.Rope, rng InputSelection, newT
 }
 
 // undo is U:input/base/state.rs:2794-2796.
-func (s *InputBaseState[M]) undo(_ *Undo, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) undo(_ *Undo, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.replayHistory(true, w, cx)
 }
 
 // redo is U:input/base/state.rs:2798-2800.
-func (s *InputBaseState[M]) redo(_ *Redo, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) redo(_ *Redo, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.replayHistory(false, w, cx)
 }
 
 // replayHistory replays one transaction backwards or forwards
 // (U:input/base/state.rs:2802-2850).
-func (s *InputBaseState[M]) replayHistory(undo bool, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) replayHistory(undo bool, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if !s.IsEditable() {
 		return
 	}
@@ -729,7 +729,7 @@ func (s *InputBaseState[M]) restoreSelections(sels []cursorSelection) {
 
 // replaceTextInRangeSilent replaces without UI reactions such as
 // completion (U:input/base/state.rs:3583-3596).
-func (s *InputBaseState[M]) replaceTextInRangeSilent(rngUTF16 *gpui.UTF16Range, newText string, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) replaceTextInRangeSilent(rngUTF16 *gpui.UTF16Range, newText string, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.silentReplaceText = true
 	s.ReplaceTextInRange(rngUTF16, newText, w, cx)
 	s.silentReplaceText = false
@@ -738,7 +738,7 @@ func (s *InputBaseState[M]) replaceTextInRangeSilent(rngUTF16 *gpui.UTF16Range, 
 // replaceTextInRanges applies a batch of edits (byte ranges in the
 // pre-edit document) as one history transaction
 // (U:input/base/state.rs:3598-3808).
-func (s *InputBaseState[M]) replaceTextInRanges(edits []inputTextEdit, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) replaceTextInRanges(edits []inputTextEdit, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if !s.IsEditable() || len(edits) == 0 {
 		return
 	}
@@ -909,7 +909,7 @@ func compareInts(a, b int) int {
 
 // TextForRange returns the text of a UTF-16 range and the range actually
 // used (U:input/base/state.rs:3857-3867).
-func (s *InputBaseState[M]) TextForRange(rngUTF16 gpui.UTF16Range, _ *gpui.Window, _ *inputCx[M]) (string, *gpui.UTF16Range, bool) {
+func (s *InputBaseState[M]) TextForRange(rngUTF16 gpui.UTF16Range, _ *gpui.Window, _ *gpui.Context[InputBaseState[M]]) (string, *gpui.UTF16Range, bool) {
 	rng := s.rangeFromUTF16(rngUTF16)
 	adjusted := s.rangeToUTF16(rng)
 	return s.text.Slice(rng.Start, rng.End).String(), &adjusted, true
@@ -917,7 +917,7 @@ func (s *InputBaseState[M]) TextForRange(rngUTF16 gpui.UTF16Range, _ *gpui.Windo
 
 // SelectedTextRange is the active selection in UTF-16 units
 // (U:input/base/state.rs:3869-3879).
-func (s *InputBaseState[M]) SelectedTextRange(_ bool, _ *gpui.Window, _ *inputCx[M]) (gpui.UTF16Selection, bool) {
+func (s *InputBaseState[M]) SelectedTextRange(_ bool, _ *gpui.Window, _ *gpui.Context[InputBaseState[M]]) (gpui.UTF16Selection, bool) {
 	return gpui.UTF16Selection{
 		Range:    s.rangeToUTF16(s.SelectedRange()),
 		Reversed: s.activeSelection().reversed,
@@ -926,7 +926,7 @@ func (s *InputBaseState[M]) SelectedTextRange(_ bool, _ *gpui.Window, _ *inputCx
 
 // MarkedTextRange is the IME composition range in UTF-16 units
 // (U:input/base/state.rs:3881-3888).
-func (s *InputBaseState[M]) MarkedTextRange(_ *gpui.Window, _ *inputCx[M]) (gpui.UTF16Range, bool) {
+func (s *InputBaseState[M]) MarkedTextRange(_ *gpui.Window, _ *gpui.Context[InputBaseState[M]]) (gpui.UTF16Range, bool) {
 	if s.imeMarkedRange == nil {
 		return gpui.UTF16Range{}, false
 	}
@@ -935,7 +935,7 @@ func (s *InputBaseState[M]) MarkedTextRange(_ *gpui.Window, _ *inputCx[M]) (gpui
 
 // UnmarkText ends the composition and its transaction
 // (U:input/base/state.rs:3890-3893).
-func (s *InputBaseState[M]) UnmarkText(_ *gpui.Window, _ *inputCx[M]) {
+func (s *InputBaseState[M]) UnmarkText(_ *gpui.Window, _ *gpui.Context[InputBaseState[M]]) {
 	s.imeMarkedRange = nil
 	s.undoManager.commitTransaction()
 }
@@ -943,7 +943,7 @@ func (s *InputBaseState[M]) UnmarkText(_ *gpui.Window, _ *inputCx[M]) {
 // ReplaceTextInRange replaces a UTF-16 range (nil: the IME marked range,
 // else the selection) with newText; invalid text is rejected
 // (U:input/base/state.rs:3895-4135).
-func (s *InputBaseState[M]) ReplaceTextInRange(rngUTF16 *gpui.UTF16Range, newText string, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) ReplaceTextInRange(rngUTF16 *gpui.UTF16Range, newText string, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	var requestedIntent *editIntent
 	if intent, ok := s.undoManager.takePendingIntent(); ok {
 		requestedIntent = &intent
@@ -1120,7 +1120,7 @@ func (s *InputBaseState[M]) resolveReplacementRange(rngUTF16 *gpui.UTF16Range) I
 
 // ReplaceAndMarkTextInRange inserts the IME's temporary composition text
 // (U:input/base/state.rs:4137-4266).
-func (s *InputBaseState[M]) ReplaceAndMarkTextInRange(rngUTF16 *gpui.UTF16Range, newText string, newSelectedRangeUTF16 *gpui.UTF16Range, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) ReplaceAndMarkTextInRange(rngUTF16 *gpui.UTF16Range, newText string, newSelectedRangeUTF16 *gpui.UTF16Range, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	var requestedIntent *editIntent
 	if intent, ok := s.undoManager.takePendingIntent(); ok {
 		requestedIntent = &intent
@@ -1206,7 +1206,7 @@ func (s *InputBaseState[M]) ReplaceAndMarkTextInRange(rngUTF16 *gpui.UTF16Range,
 
 // BoundsForRange positions the IME candidates
 // (U:input/base/state.rs:4268-4326).
-func (s *InputBaseState[M]) BoundsForRange(rngUTF16 gpui.UTF16Range, bounds gpui.Bounds, _ *gpui.Window, _ *inputCx[M]) (gpui.Bounds, bool) {
+func (s *InputBaseState[M]) BoundsForRange(rngUTF16 gpui.UTF16Range, bounds gpui.Bounds, _ *gpui.Window, _ *gpui.Context[InputBaseState[M]]) (gpui.Bounds, bool) {
 	layout := s.lastLayout
 	if layout == nil {
 		return gpui.Bounds{}, false
@@ -1254,7 +1254,7 @@ func (s *InputBaseState[M]) BoundsForRange(rngUTF16 gpui.UTF16Range, bounds gpui
 
 // CharacterIndexForPoint is the UTF-16 offset under a window point
 // (U:input/base/state.rs:4328-4345).
-func (s *InputBaseState[M]) CharacterIndexForPoint(p gpui.Point, _ *gpui.Window, _ *inputCx[M]) (int, bool) {
+func (s *InputBaseState[M]) CharacterIndexForPoint(p gpui.Point, _ *gpui.Window, _ *gpui.Context[InputBaseState[M]]) (int, bool) {
 	layout := s.lastLayout
 	if layout == nil || s.lastBounds == nil {
 		return 0, false
@@ -1285,7 +1285,7 @@ type inputElementHandler[M InputModeKind] struct {
 	elementBounds gpui.Bounds
 }
 
-func (h *inputElementHandler[M]) update(w *gpui.Window, app *gpui.App, f func(*InputBaseState[M], *gpui.Window, *inputCx[M])) {
+func (h *inputElementHandler[M]) update(w *gpui.Window, app *gpui.App, f func(*InputBaseState[M], *gpui.Window, *gpui.Context[InputBaseState[M]])) {
 	_ = h.view.UpdateIn(app, w, f)
 }
 
@@ -1294,7 +1294,9 @@ func (h *inputElementHandler[M]) AcceptsTextInput(*gpui.Window, *gpui.App) bool 
 
 // ReplaceTextInRange implements gpui.InputHandler.
 func (h *inputElementHandler[M]) ReplaceTextInRange(rng *gpui.UTF16Range, text string, w *gpui.Window, app *gpui.App) {
-	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) { s.ReplaceTextInRange(rng, text, w, cx) })
+	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
+		s.ReplaceTextInRange(rng, text, w, cx)
+	})
 }
 
 // DispatchInput implements gpui.InputHandler.
@@ -1304,7 +1306,7 @@ func (h *inputElementHandler[M]) DispatchInput(input string, w *gpui.Window, app
 
 // SelectedTextRange implements gpui.IMEInputHandler.
 func (h *inputElementHandler[M]) SelectedTextRange(ignoreDisabledInput bool, w *gpui.Window, app *gpui.App) (sel gpui.UTF16Selection, ok bool) {
-	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
+	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 		sel, ok = s.SelectedTextRange(ignoreDisabledInput, w, cx)
 	})
 	return sel, ok
@@ -1312,13 +1314,15 @@ func (h *inputElementHandler[M]) SelectedTextRange(ignoreDisabledInput bool, w *
 
 // MarkedTextRange implements gpui.IMEInputHandler.
 func (h *inputElementHandler[M]) MarkedTextRange(w *gpui.Window, app *gpui.App) (rng gpui.UTF16Range, ok bool) {
-	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) { rng, ok = s.MarkedTextRange(w, cx) })
+	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
+		rng, ok = s.MarkedTextRange(w, cx)
+	})
 	return rng, ok
 }
 
 // TextForRange implements gpui.IMEInputHandler.
 func (h *inputElementHandler[M]) TextForRange(rng gpui.UTF16Range, w *gpui.Window, app *gpui.App) (text string, adjusted *gpui.UTF16Range, ok bool) {
-	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
+	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 		text, adjusted, ok = s.TextForRange(rng, w, cx)
 	})
 	return text, adjusted, ok
@@ -1326,19 +1330,19 @@ func (h *inputElementHandler[M]) TextForRange(rng gpui.UTF16Range, w *gpui.Windo
 
 // ReplaceAndMarkTextInRange implements gpui.IMEInputHandler.
 func (h *inputElementHandler[M]) ReplaceAndMarkTextInRange(rng *gpui.UTF16Range, text string, newSelectedRange *gpui.UTF16Range, w *gpui.Window, app *gpui.App) {
-	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
+	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 		s.ReplaceAndMarkTextInRange(rng, text, newSelectedRange, w, cx)
 	})
 }
 
 // UnmarkText implements gpui.IMEInputHandler.
 func (h *inputElementHandler[M]) UnmarkText(w *gpui.Window, app *gpui.App) {
-	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) { s.UnmarkText(w, cx) })
+	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) { s.UnmarkText(w, cx) })
 }
 
 // BoundsForRange implements gpui.IMEInputHandler.
 func (h *inputElementHandler[M]) BoundsForRange(rng gpui.UTF16Range, w *gpui.Window, app *gpui.App) (b gpui.Bounds, ok bool) {
-	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
+	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 		b, ok = s.BoundsForRange(rng, h.elementBounds, w, cx)
 	})
 	return b, ok
@@ -1346,7 +1350,7 @@ func (h *inputElementHandler[M]) BoundsForRange(rng gpui.UTF16Range, w *gpui.Win
 
 // CharacterIndexForPoint implements gpui.IMEInputHandler.
 func (h *inputElementHandler[M]) CharacterIndexForPoint(p gpui.Point, w *gpui.Window, app *gpui.App) (index int, ok bool) {
-	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
+	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 		index, ok = s.CharacterIndexForPoint(p, w, cx)
 	})
 	return index, ok

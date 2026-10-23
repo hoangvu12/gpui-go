@@ -45,7 +45,7 @@ func (h *hoverDefinition) isSame(offset int) bool { return h.symbolRange.Contain
 // handleHoverDefinition asks for the definitions under the pointer and
 // underlines the symbol when there are some
 // (U:input/editor/lsp/definitions.rs:59-102).
-func (s *InputBaseState[M]) handleHoverDefinition(offset int, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) handleHoverDefinition(offset int, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	e := s.editorExtras()
 	provider := e.lsp.DefinitionProvider
 	if provider == nil {
@@ -66,7 +66,7 @@ func (s *InputBaseState[M]) handleHoverDefinition(offset int, w *gpui.Window, cx
 			return struct{}{}
 		}
 		acx.AsyncApp.Update(func(app *gpui.App) {
-			_ = editor.TryUpdate(app, func(s *InputBaseState[M], cx *inputCx[M]) {
+			_ = editor.TryUpdate(app, func(s *InputBaseState[M], cx *gpui.Context[InputBaseState[M]]) {
 				e := s.editorExtras()
 				if len(locations) == 0 {
 					e.hoverDefinition.clear()
@@ -88,7 +88,7 @@ func (s *InputBaseState[M]) handleHoverDefinition(offset int, w *gpui.Window, cx
 // works before the symbol was hovered. A blur, a cursor move or an edit
 // before the answer cancels it (U:input/editor/lsp/definitions.rs:
 // 104-136).
-func (s *InputBaseState[M]) onActionGoToDefinition(_ *GoToDefinition, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) onActionGoToDefinition(_ *GoToDefinition, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	offset := s.Cursor()
 	e := s.editorExtras()
 	provider := e.lsp.DefinitionProvider
@@ -97,7 +97,7 @@ func (s *InputBaseState[M]) onActionGoToDefinition(_ *GoToDefinition, w *gpui.Wi
 	}
 	text := s.text
 	response := provider.Definitions(text, offset, w, cx.App())
-	blurSubscription := cx.OnBlur(s.focusHandle, w, func(s *InputBaseState[M], _ *gpui.Window, _ *inputCx[M]) {
+	blurSubscription := cx.OnBlur(s.focusHandle, w, func(s *InputBaseState[M], _ *gpui.Window, _ *gpui.Context[InputBaseState[M]]) {
 		s.editorExtras().lsp.dropDefinitionTask()
 	})
 	// The subscription lives as long as the task (`_blur_subscription`
@@ -108,7 +108,7 @@ func (s *InputBaseState[M]) onActionGoToDefinition(_ *GoToDefinition, w *gpui.Wi
 			return struct{}{}
 		}
 		_ = acx.Update(func(w *gpui.Window, app *gpui.App) {
-			_ = editor.TryUpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
+			_ = editor.TryUpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 				// The task ends here; its subscription goes with it.
 				s.editorExtras().lsp.definitionBlur.Cancel()
 				if s.Cursor() != offset || !s.text.Equal(text) || !s.focusHandle.IsFocused(w) {
@@ -126,7 +126,7 @@ func (s *InputBaseState[M]) onActionGoToDefinition(_ *GoToDefinition, w *gpui.Wi
 // handleClickHoverDefinition follows the underlined definition on a
 // secondary-modifier click; true when handled
 // (U:input/editor/lsp/definitions.rs:138-164).
-func (s *InputBaseState[M]) handleClickHoverDefinition(event *gpui.MouseDownEvent, offset int, w *gpui.Window, cx *inputCx[M]) bool {
+func (s *InputBaseState[M]) handleClickHoverDefinition(event *gpui.MouseDownEvent, offset int, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) bool {
 	if !event.Modifiers.Secondary() || event.Modifiers.Alt {
 		return false
 	}
@@ -142,7 +142,7 @@ func (s *InputBaseState[M]) handleClickHoverDefinition(event *gpui.MouseDownEven
 // goToDefinition offers the location to the host's show-document hook,
 // then opens an http(s) target in the browser or selects the target range
 // in this document (U:input/editor/lsp/definitions.rs:166-203).
-func (s *InputBaseState[M]) goToDefinition(location *LspLocationLink, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) goToDefinition(location *LspLocationLink, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	scheme, hasScheme := uriScheme(location.TargetURI)
 	external := hasScheme && (scheme == "https" || scheme == "http")
 

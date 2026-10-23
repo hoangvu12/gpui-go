@@ -19,20 +19,28 @@ import (
 	"github.com/hoangvu12/gpui-go/gpui"
 )
 
-type editorFn = func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode])
+type editorFn = func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]])
 
-func editorEnter(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) { s.enter(&Enter{}, w, cx) }
-
-func editorType(text string) editorFn {
-	return func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) { s.ReplaceTextInRange(nil, text, w, cx) }
+func editorEnter(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
+	s.enter(&Enter{}, w, cx)
 }
 
-func editorBackspace(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+func editorType(text string) editorFn {
+	return func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
+		s.ReplaceTextInRange(nil, text, w, cx)
+	}
+}
+
+func editorBackspace(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 	s.backspace(&Backspace{}, w, cx)
 }
 
-func editorUndo(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) { s.undo(&Undo{}, w, cx) }
-func editorRedo(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) { s.redo(&Redo{}, w, cx) }
+func editorUndo(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
+	s.undo(&Undo{}, w, cx)
+}
+func editorRedo(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
+	s.redo(&Redo{}, w, cx)
+}
 
 // testLanguages is set_test_syntax_provider's TestLanguages
 // (U:input/base/state.rs:4770-4784).
@@ -88,7 +96,7 @@ func assertSearchRevealsWithPaddingAfterManualScroll(t *testing.T, previous bool
 	start := first + 5 + strings.Index(text[first+5:], "match")
 	expected := NewInputSelection(start, start+len("match"))
 	three := 3
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetCursorSurroundingLines(&three, w, cx)
 		s.SetValue(text, w, cx)
 		s.SetSearchQuery("match", true, cx)
@@ -98,7 +106,7 @@ func assertSearchRevealsWithPaddingAfterManualScroll(t *testing.T, previous bool
 		}
 	})
 	v.cx.RunUntilParked()
-	v.update(func(s *EditorState, _ *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		y := float32(0)
 		if !previous {
 			y = -s.lastLayout.lineHeight * 80
@@ -115,7 +123,7 @@ func assertSearchRevealsWithPaddingAfterManualScroll(t *testing.T, previous bool
 			t.Fatalf("target must be above the viewport: %v", visible)
 		}
 	})
-	v.update(func(s *EditorState, _ *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		var rng InputSelection
 		var ok bool
 		if previous {
@@ -181,7 +189,7 @@ func pressSearchShortcut(t *testing.T, searchable bool) (*inputView[EditorMode],
 		h.editor, h.requests = editor, requests
 	})
 	v := &inputView[EditorMode]{input: editor, cx: cx}
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) { s.Focus(w, cx) })
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) { s.Focus(w, cx) })
 	v.cx.RunUntilParked()
 	if isMacOS() {
 		v.cx.SimulateKeystrokes("cmd-f")
@@ -221,7 +229,7 @@ func TestEditorSearchShortcutOpensThePanelWhenSearchable(t *testing.T) {
 // U:input/base/state.rs:5629-5653
 func TestEditorSetSearchQueryHighlightsWithoutThePanel(t *testing.T) {
 	v := buildEditorWith(t, gpui.Size{}, func(s EditorState) EditorState { return s.Searchable(false) })
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue("foo bar foo", w, cx)
 		s.SetSearchQuery("foo", true, cx)
 	})
@@ -232,7 +240,7 @@ func TestEditorSetSearchQueryHighlightsWithoutThePanel(t *testing.T) {
 			t.Fatalf("active %v open %v matches %d", session.IsActive(), session.Open, session.Matcher.Len())
 		}
 	})
-	v.update(func(s *EditorState, _ *gpui.Window, cx *inputCx[EditorMode]) { s.CloseSearch(cx) })
+	v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) { s.CloseSearch(cx) })
 	v.read(func(s *EditorState) {
 		if s.SearchSession().IsActive() {
 			t.Fatal("closing ends the search")
@@ -243,7 +251,7 @@ func TestEditorSetSearchQueryHighlightsWithoutThePanel(t *testing.T) {
 // U:input/base/state.rs:5655-5676
 func TestEditorClosedSearchResyncsMatchesAfterEdits(t *testing.T) {
 	v := buildEditorWith(t, gpui.Size{}, func(s EditorState) EditorState { return s.Searchable(false) })
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue("foo bar foo", w, cx)
 		s.SetSearchQuery("foo", true, cx)
 		s.CloseSearch(cx)
@@ -266,13 +274,13 @@ func TestEditorSearchRevealsOffscreenWrappedMatch(t *testing.T) {
 	v := buildEditor(t)
 	text := "match\n" + strings.Repeat("line\n", 80) + "\n" + strings.Repeat("wrapped text ", 500) + "match\n" + strings.Repeat("line\n", 80)
 	three := 3
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetCursorSurroundingLines(&three, w, cx)
 		s.SetValue(text, w, cx)
 		s.SetSearchQuery("match", true, cx)
 	})
 	v.cx.RunUntilParked()
-	v.update(func(s *EditorState, _ *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		if _, ok := s.NextSearchMatch(cx); !ok {
 			t.Fatal("a next match")
 		}
@@ -316,7 +324,7 @@ func (h *recordingHighlighter) FoldRanges(rope.Rope) []FoldRange { return nil }
 func TestEditorReplaceTextInRangesDrivesTheHighlighterOnce(t *testing.T) {
 	var updates [][]string
 	v := buildEditor(t)
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue("aaa bbb ccc", w, cx)
 		s.SetHighlighterFactory(func(string) InputHighlighter { return &recordingHighlighter{updates: &updates} }, cx)
 		s.replaceTextInRanges([]inputTextEdit{{rng: NewInputSelection(0, 3), text: "X"}, {rng: NewInputSelection(8, 11), text: "Y"}}, w, cx)
@@ -330,7 +338,7 @@ func TestEditorReplaceTextInRangesDrivesTheHighlighterOnce(t *testing.T) {
 // U:input/base/state.rs:7392-7440
 func TestEditorBlurKeepsDecorations(t *testing.T) {
 	v := buildEditor(t)
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue("select 1", w, cx)
 		bold := float32(700)
 		s.CreateDecorationsCollection([]TextDecoration{NewTextDecoration(NewInputSelection(0, 6), gpui.HighlightStyle{FontWeight: &bold})}, cx)
@@ -356,7 +364,7 @@ func TestEditorBlurKeepsDecorations(t *testing.T) {
 func TestTextareaOutdentUnindentedUnicodeIsUnchanged(t *testing.T) {
 	v := buildTextarea(t, plainTextarea)
 	setupCursors(v, "|你好\n|世界")
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		s.outdent(false, w, cx)
 		s.outdent(true, w, cx)
 	})
@@ -366,7 +374,7 @@ func TestTextareaOutdentUnindentedUnicodeIsUnchanged(t *testing.T) {
 // U:input/base/state.rs:8015-8035
 func TestEditorDecorationsFollowTyping(t *testing.T) {
 	v := buildEditor(t)
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue("abc def", w, cx)
 		s.CreateDecorationsCollection([]TextDecoration{NewTextDecoration(NewInputSelection(4, 7), gpui.HighlightStyle{})}, cx)
 		s.SetSelectedRange(NewInputSelection(0, 0), cx)
@@ -382,7 +390,7 @@ func TestEditorDecorationsFollowTyping(t *testing.T) {
 func TestEditorBackspacePreservesEscapedQuoteTerminator(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, `{"s":"\"|"}`)
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		setTestSyntaxProvider(stringAllProvider{}, cx.App())
 		s.backspace(&Backspace{}, w, cx)
 	})
@@ -393,7 +401,7 @@ func TestEditorBackspacePreservesEscapedQuoteTerminator(t *testing.T) {
 func TestEditorOrdinaryTypingDoesNotQuerySyntax(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "|")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		setTestSyntaxProvider(syntaxFunc(func(rope.Rope, int) SyntaxContext {
 			panic("ordinary typing must not query syntax")
 		}), cx.App())
@@ -408,7 +416,7 @@ func TestEditorOrdinaryTypingDoesNotQuerySyntax(t *testing.T) {
 func TestEditorAutoCloseIsAtomicAtHistoryLimit(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "|")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		for range 999 {
 			s.ReplaceTextInRange(nil, "a", w, cx)
 		}
@@ -426,7 +434,7 @@ func TestEditorAutoCloseIsAtomicAtHistoryLimit(t *testing.T) {
 func TestEditorCommentCloserIsInsertedLiterally(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "// (|)")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		setTestSyntaxProvider(commentAllProvider{}, cx.App())
 		s.ReplaceTextInRange(nil, ")", w, cx)
 	})
@@ -439,7 +447,7 @@ func TestEditorExplicitRangeSkipDoesNotDeleteExistingCloserOnUndo(t *testing.T) 
 	setupCursors(v, "(a|)")
 	var before string
 	v.read(func(s *EditorState) { before = s.text.String() })
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.ReplaceTextInRange(utf16Range(2, 2), ")", w, cx)
 	})
 	assertCursors(t, v, "(a)|")
@@ -457,7 +465,7 @@ func TestEditorPairRedoRestoresInteriorCursor(t *testing.T) {
 	setupCursors(v, "|")
 	v.update(editorType("("))
 	assertCursors(t, v, "(|)")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.undo(&Undo{}, w, cx)
 		s.redo(&Redo{}, w, cx)
 	})
@@ -541,7 +549,7 @@ func TestEditorBackspacePairWithCjkPrefix(t *testing.T) {
 func TestEditorEnterSplitRespectsSmartIndentOff(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "{|}")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetSmartIndent(false, w, cx)
 		s.enter(&Enter{}, w, cx)
 	})
@@ -552,7 +560,7 @@ func TestEditorEnterSplitRespectsSmartIndentOff(t *testing.T) {
 func TestEditorEnterSplitIsIndependentOfAutoClose(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "{|}")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetAutoClose(false, w, cx)
 		s.enter(&Enter{}, w, cx)
 	})
@@ -571,7 +579,7 @@ func TestEditorLanguageConfigAppliesBeforeRenderAndOnLanguageChange(t *testing.T
 		second := gpui.NewEntity(app, w.Scope(), func(s *EditorState, cx *gpui.Context[EditorState]) {
 			*s = NewEditorState(w, cx).Language("beta")
 		})
-		_ = first.UpdateIn(app, w, func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+		_ = first.UpdateIn(app, w, func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 			s.ReplaceTextInRange(nil, "«", w, cx)
 			wantValue(t, s, "«»")
 			s.SetValue("", w, cx)
@@ -587,7 +595,7 @@ func TestEditorLanguageConfigAppliesBeforeRenderAndOnLanguageChange(t *testing.T
 			s.ReplaceTextInRange(nil, "(", w, cx)
 			wantValue(t, s, "()")
 		})
-		_ = second.UpdateIn(app, w, func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+		_ = second.UpdateIn(app, w, func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 			s.ReplaceTextInRange(nil, "‹", w, cx)
 			wantValue(t, s, "‹›")
 		})
@@ -612,7 +620,7 @@ func TestEditorLanguageServiceReplacementUpdatesSyntaxWithoutRender(t *testing.T
 	v.cx.Update(func(w *gpui.Window, app *gpui.App) {
 		creations := 0
 		SetLanguageProvider(&stringLanguages{creations: &creations}, app)
-		_ = v.input.UpdateIn(app, w, func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+		_ = v.input.UpdateIn(app, w, func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 			s.ReplaceTextInRange(nil, "(", w, cx)
 			s.ReplaceTextInRange(nil, "[", w, cx)
 			wantValue(t, s, "([")
@@ -621,7 +629,7 @@ func TestEditorLanguageServiceReplacementUpdatesSyntaxWithoutRender(t *testing.T
 			}
 		})
 		SetLanguageProvider(&BaseLanguageProvider{}, app)
-		_ = v.input.UpdateIn(app, w, func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+		_ = v.input.UpdateIn(app, w, func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 			s.ReplaceTextInRange(nil, "{", w, cx)
 			wantValue(t, s, "([{}")
 		})
@@ -633,7 +641,7 @@ func TestEditorLanguageConfigUpdatesExistingEditors(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "|")
 	v.cx.Update(func(w *gpui.Window, app *gpui.App) {
-		_ = v.input.UpdateIn(app, w, func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+		_ = v.input.UpdateIn(app, w, func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 			s.SetHighlighter("CUSTOM", cx)
 			s.SetAutoClose(false, w, cx)
 			s.SetSmartIndent(false, w, cx)
@@ -641,7 +649,7 @@ func TestEditorLanguageConfigUpdatesExistingEditors(t *testing.T) {
 		SetLanguageConfig("custom", DefaultLanguageConfig().WithAutoClosingPairs(NewAutoClosingPair("«", "»")), app)
 		// Batched registrations must update every affected language.
 		SetLanguageConfig("other", DefaultLanguageConfig(), app)
-		_ = v.input.UpdateIn(app, w, func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+		_ = v.input.UpdateIn(app, w, func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 			if s.mode.isAutoClose() || s.mode.isSmartIndent() {
 				t.Fatal("registrations keep the editor preferences")
 			}
@@ -659,7 +667,7 @@ func TestEditorAutoCloseBeforeIsLanguageConfigurable(t *testing.T) {
 	v.update(editorType("("))
 	assertCursors(t, v, "(|word")
 	setupCursors(v, "|word")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		SetLanguageConfig(s.LanguageName(), DefaultLanguageConfig().WithAutoCloseBefore("w"), cx.App())
 		s.ReplaceTextInRange(nil, "(", w, cx)
 	})
@@ -670,7 +678,7 @@ func TestEditorAutoCloseBeforeIsLanguageConfigurable(t *testing.T) {
 func TestEditorPairContextRestrictionsArePerPair(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "|")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		setTestSyntaxProvider(commentAllProvider{}, cx.App())
 		SetLanguageConfig(s.LanguageName(), DefaultLanguageConfig().WithAutoClosingPairs(
 			NewAutoClosingPair("(", ")").WithNotIn(SyntaxContextString),
@@ -692,7 +700,7 @@ func TestEditorMulticharDelimitersInsertDeleteAndSkip(t *testing.T) {
 	})
 	v := buildEditor(t)
 	setupCursors(v, "|")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		setTestSyntaxProvider(blockComment, cx.App())
 		SetLanguageConfig(s.LanguageName(), DefaultLanguageConfig().WithAutoClosingPairs(
 			NewAutoClosingPair("/*", "*/").WithNotIn(SyntaxContextString, SyntaxContextComment),
@@ -703,7 +711,7 @@ func TestEditorMulticharDelimitersInsertDeleteAndSkip(t *testing.T) {
 	assertCursors(t, v, "/*|*/")
 	v.update(editorBackspace)
 	assertCursors(t, v, "|")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.undo(&Undo{}, w, cx)
 		s.ReplaceTextInRange(nil, "*", w, cx)
 		s.ReplaceTextInRange(nil, "/", w, cx)
@@ -715,7 +723,7 @@ func TestEditorMulticharDelimitersInsertDeleteAndSkip(t *testing.T) {
 func TestEditorAutoClosedPairsFallbackAndExplicitDisable(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "|")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		rules := DefaultLanguageConfig().WithBrackets(NewBracketPair("«", "»"))
 		rules.AutoClosingPairs = nil
 		SetLanguageConfig(s.LanguageName(), rules, cx.App())
@@ -730,7 +738,7 @@ func TestEditorAutoClosedPairsFallbackAndExplicitDisable(t *testing.T) {
 func TestEditorUndoOpenCompositionPreservesGeneratedPairs(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "|")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		SetLanguageConfig(s.LanguageName(), DefaultLanguageConfig().WithAutoClosingPairs(
 			NewAutoClosingPair("/*", "*/").WithNotIn(SyntaxContextComment),
 		), cx.App())
@@ -749,7 +757,7 @@ func TestEditorUndoOpenCompositionPreservesGeneratedPairs(t *testing.T) {
 func TestEditorUndoDoesNotPromoteLiteralCommentDelimiters(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "/*|*/")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		setTestSyntaxProvider(commentAllProvider{}, cx.App())
 		SetLanguageConfig(s.LanguageName(), DefaultLanguageConfig().WithAutoClosingPairs(
 			NewAutoClosingPair("/*", "*/").WithNotIn(SyntaxContextComment),
@@ -771,7 +779,7 @@ func TestEditorMultipleGeneratedPairsRetainTheirIdentity(t *testing.T) {
 	})
 	v := buildEditor(t)
 	setupCursors(v, "|")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		setTestSyntaxProvider(commentScope, cx.App())
 		SetLanguageConfig(s.LanguageName(), DefaultLanguageConfig().WithAutoClosingPairs(
 			NewAutoClosingPair("/*", "*/").WithNotIn(SyntaxContextComment),
@@ -786,7 +794,7 @@ func TestEditorMultipleGeneratedPairsRetainTheirIdentity(t *testing.T) {
 		s.ReplaceTextInRange(nil, "/", w, cx)
 	})
 	assertCursors(t, v, "/**/|()")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetSelectedRange(NewInputSelection(2, 2), cx)
 		s.backspace(&Backspace{}, w, cx)
 		s.undo(&Undo{}, w, cx)
@@ -799,7 +807,7 @@ func TestEditorMultipleGeneratedPairsRetainTheirIdentity(t *testing.T) {
 func TestEditorReplacingGeneratedOpenerInvalidatesThePair(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "|")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		SetLanguageConfig(s.LanguageName(), DefaultLanguageConfig().WithAutoClosingPairs(
 			NewAutoClosingPair("/*", "*/").WithNotIn(SyntaxContextComment),
 		), cx.App())
@@ -817,7 +825,7 @@ func TestEditorReplacingGeneratedOpenerInvalidatesThePair(t *testing.T) {
 func TestEditorConfigurationPreservesCompiledRegexOptions(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "BEGIN|")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		rules := func(insensitive bool) LanguageConfig {
 			pattern := "begin$"
 			if insensitive {
@@ -839,7 +847,7 @@ func TestEditorIndentPatternsAreAppliedOnEnter(t *testing.T) {
 		regexp.MustCompile(`\bbegin\s*$`), regexp.MustCompile(`^\s*end\b`)))
 	for _, step := range []struct{ before, expected string }{{"begin|", "begin\n  |"}, {"  |end", "  \n|end"}} {
 		setupCursors(v, step.before)
-		v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+		v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 			SetLanguageConfig(s.LanguageName(), rules, cx.App())
 			s.enter(&Enter{}, w, cx)
 		})
@@ -850,7 +858,7 @@ func TestEditorIndentPatternsAreAppliedOnEnter(t *testing.T) {
 // U:input/base/state.rs:8736-8768
 func TestEditorCustomLanguageConfig(t *testing.T) {
 	v := buildEditor(t)
-	v.update(func(s *EditorState, _ *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		SetLanguageConfig(s.LanguageName(), DefaultLanguageConfig().
 			WithBrackets(NewBracketPair("«", "»")).
 			WithAutoClosingPairs(NewAutoClosingPair("«", "»")), cx.App())
@@ -859,7 +867,7 @@ func TestEditorCustomLanguageConfig(t *testing.T) {
 	v.update(editorType("«"))
 	assertCursors(t, v, "«|»")
 	// The default `(` no longer pairs under the custom rules.
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue("\n", w, cx)
 		s.SetSelectedRange(NewInputSelection(0, 0), cx)
 		s.ReplaceTextInRange(nil, "(", w, cx)
@@ -908,7 +916,7 @@ func TestEditorEvenBackslashesStillSkip(t *testing.T) {
 // U:input/base/state.rs:8844-8868
 func TestEditorEditorOptionsSurviveConfigurationReplacement(t *testing.T) {
 	v := buildEditor(t)
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetSmartIndent(false, w, cx)
 		SetLanguageConfig(s.LanguageName(), DefaultLanguageConfig().WithBrackets(NewBracketPair("«", "»")), cx.App())
 	})
@@ -993,9 +1001,13 @@ func TestEditorEnterSmartIndentAfterBrace(t *testing.T) {
 func TestTextareaBlockIndentTracksAllPrecedingEdits(t *testing.T) {
 	v := buildTextarea(t, plainTextarea)
 	setupCursors(v, "|ab\n|cd\n|ef")
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) { s.indent(true, w, cx) })
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
+		s.indent(true, w, cx)
+	})
 	assertCursors(t, v, "  |ab\n  |cd\n  |ef")
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) { s.outdent(true, w, cx) })
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
+		s.outdent(true, w, cx)
+	})
 	assertCursors(t, v, "|ab\n|cd\n|ef")
 }
 
@@ -1003,7 +1015,9 @@ func TestTextareaBlockIndentTracksAllPrecedingEdits(t *testing.T) {
 func TestTextareaBlockOutdentClampsCursorInsideIndent(t *testing.T) {
 	v := buildTextarea(t, plainTextarea)
 	setupCursors(v, "ab\n | cd")
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) { s.outdent(true, w, cx) })
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
+		s.outdent(true, w, cx)
+	})
 	assertCursors(t, v, "ab\n|cd")
 }
 
@@ -1011,7 +1025,7 @@ func TestTextareaBlockOutdentClampsCursorInsideIndent(t *testing.T) {
 func TestTextareaMultiCursorIndentIsOneUndo(t *testing.T) {
 	v := buildTextarea(t, plainTextarea)
 	setupCursors(v, "|1\n|2\n|3")
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		s.indentInline(&IndentInline{}, w, cx)
 		if n := s.undoManager.undoCount(); n != 1 {
 			t.Fatalf("undo count = %d, want 1", n)
@@ -1025,17 +1039,25 @@ func TestTextareaMultiCursorIndentIsOneUndo(t *testing.T) {
 func TestTextareaMultiCursorIndentThenOutdentRoundtrips(t *testing.T) {
 	v := buildTextarea(t, plainTextarea)
 	setupCursors(v, "|1\n|2\n|3")
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) { s.indent(false, w, cx) })
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
+		s.indent(false, w, cx)
+	})
 	assertCursors(t, v, "  |1\n  |2\n  |3")
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) { s.outdent(false, w, cx) })
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
+		s.outdent(false, w, cx)
+	})
 	assertCursors(t, v, "|1\n|2\n|3")
 }
 
 // U:input/base/state.rs:9386-9417
 func TestTextareaInlineOutdentOnlyRemovesLineIndentation(t *testing.T) {
 	v := buildTextarea(t, plainTextarea)
-	indent := func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) { s.indent(false, w, cx) }
-	outdent := func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) { s.outdent(false, w, cx) }
+	indent := func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
+		s.indent(false, w, cx)
+	}
+	outdent := func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
+		s.outdent(false, w, cx)
+	}
 	setupCursors(v, "1|2\n1|2")
 	v.update(indent)
 	assertCursors(t, v, "1  |2\n1  |2")
@@ -1049,13 +1071,17 @@ func TestTextareaInlineOutdentOnlyRemovesLineIndentation(t *testing.T) {
 // U:input/base/state.rs:9458-9492
 func TestTextareaBlockIndentOutdentWithSelection(t *testing.T) {
 	v := buildTextarea(t, plainTextarea)
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		s.SetValue("line1\nline2\nline3", w, cx)
 		s.selections.replaceAll([]cursorSelection{newCursorSelection(s.selections.generateID(), 0, 17)})
 		cx.Notify()
 	})
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) { s.indent(true, w, cx) })
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
+		s.indent(true, w, cx)
+	})
 	v.read(func(s *TextareaState) { wantValue(t, s, "  line1\n  line2\n  line3") })
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) { s.outdent(true, w, cx) })
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
+		s.outdent(true, w, cx)
+	})
 	v.read(func(s *TextareaState) { wantValue(t, s, "line1\nline2\nline3") })
 }

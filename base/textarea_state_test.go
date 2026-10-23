@@ -38,7 +38,7 @@ func buildEditorWith(t *testing.T, size gpui.Size, f func(EditorState) EditorSta
 
 // buildModeView is InputView::build_with (U:input/base/state.rs:4801-4826)
 // in a window of size (the default test display when zero).
-func buildModeView[M InputModeKind](t *testing.T, size gpui.Size, make func(*gpui.Window, *inputCx[M]) InputBaseState[M]) *inputView[M] {
+func buildModeView[M InputModeKind](t *testing.T, size gpui.Size, make func(*gpui.Window, *gpui.Context[InputBaseState[M]]) InputBaseState[M]) *inputView[M] {
 	t.Helper()
 	ta := gpui.NewTestApp()
 	shutdownAtCleanup(t, ta)
@@ -49,7 +49,7 @@ func buildModeView[M InputModeKind](t *testing.T, size gpui.Size, make func(*gpu
 	})
 	var input gpui.Entity[InputBaseState[M]]
 	build := func(r *inputTestRoot[M], w *gpui.Window, cx *gpui.Context[inputTestRoot[M]]) {
-		input = gpui.NewEntity(cx, w.Scope(), func(s *InputBaseState[M], scx *inputCx[M]) { *s = make(w, scx) })
+		input = gpui.NewEntity(cx, w.Scope(), func(s *InputBaseState[M], scx *gpui.Context[InputBaseState[M]]) { *s = make(w, scx) })
 		r.input = input
 	}
 	if size == (gpui.Size{}) {
@@ -94,7 +94,7 @@ func parseCursorSpec(input string) (string, []int) {
 // setupCursors is setup_cursors (U:input/base/state.rs:7514-7534).
 func setupCursors[M InputModeKind](v *inputView[M], spec string) {
 	text, offsets := parseCursorSpec(spec)
-	v.update(func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
+	v.update(func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 		s.SetValue(text, w, cx)
 		sels := make([]cursorSelection, 0, len(offsets))
 		for _, o := range offsets {
@@ -137,7 +137,7 @@ func selectionRanges[M InputModeKind](s *InputBaseState[M]) []InputSelection {
 // U:input/base/state.rs:5194-5231
 func TestTextareaCursorTreatsCrlfAsOneNewline(t *testing.T) {
 	v := buildTextarea(t, plainTextarea)
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		for _, original := range []string{"\r\nlast", "\ufefffirst\r\nlast\n", "first\nlast\r\n"} {
 			s.SetValue(original, w, cx)
 			newline := strings.IndexByte(original, '\n')
@@ -185,7 +185,7 @@ func TestTextareaCursorTreatsCrlfAsOneNewline(t *testing.T) {
 // U:input/base/state.rs:5284-5340
 func TestEditorReadonlyRejectsUserEditsOnly(t *testing.T) {
 	v := buildEditor(t)
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue("hello", w, cx)
 		s.SetReadonly(true, cx)
 	})
@@ -194,17 +194,17 @@ func TestEditorReadonlyRejectsUserEditsOnly(t *testing.T) {
 			t.Fatal("readonly is neither editable nor replaceable")
 		}
 	})
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.ReplaceTextInRange(nil, " world", w, cx)
 		s.ReplaceAndMarkTextInRange(nil, "あ", nil, w, cx)
 	})
 	v.read(func(s *EditorState) { wantValue(t, s, "hello") })
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.Insert(" world", w, cx)
 		s.SetValue("changed", w, cx)
 	})
 	v.read(func(s *EditorState) { wantValue(t, s, "changed") })
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetReadonly(false, cx)
 		s.ReplaceTextInRange(nil, "!", w, cx)
 	})
@@ -218,25 +218,25 @@ func TestEditorReadonlyRejectsUserEditsOnly(t *testing.T) {
 
 // U:input/base/state.rs:5342-5402
 func TestTextareaEditRevealsFarOffscreenCaret(t *testing.T) {
-	v := buildModeView(t, gpui.Size{Width: 720, Height: 400}, func(w *gpui.Window, cx *inputCx[TextareaMode]) TextareaState {
+	v := buildModeView(t, gpui.Size{Width: 720, Height: 400}, func(w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) TextareaState {
 		return NewTextareaState(w, cx).AutoGrow(1, 6)
 	})
 	lines := make([]string, 0, 100)
 	for i := 1; i <= 100; i++ {
 		lines = append(lines, "line "+strconv.Itoa(i))
 	}
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		s.SetValue(strings.Join(lines, "\n"), w, cx)
 		end := s.text.Len()
 		s.setSelection(end, end)
 	})
 	v.cx.RunUntilParked()
-	v.update(func(s *TextareaState, _ *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, _ *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		s.scrollHandle.SetOffset(gpui.Point{})
 		cx.Notify()
 	})
 	v.cx.RunUntilParked()
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		s.ReplaceTextInRange(nil, "X", w, cx)
 	})
 	v.cx.RunUntilParked()
@@ -274,7 +274,7 @@ func fmtInt(i int) string {
 func TestEditorScrollToEobDoesNotOvershootSafeRange(t *testing.T) {
 	v := buildEditor(t)
 	one := 1
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetScrollBeyondLastLine(&one, w, cx)
 		s.SetCursorSurroundingLines(&one, w, cx)
 		lines := make([]string, 0, 50)
@@ -289,7 +289,7 @@ func TestEditorScrollToEobDoesNotOvershootSafeRange(t *testing.T) {
 			t.Fatalf("paint must populate scroll size %v and input bounds %v", s.scrollSize, s.inputBounds)
 		}
 	})
-	v.update(func(s *EditorState, _ *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		down := moveDirectionDown
 		s.moveTo(s.text.Len(), &down, cx)
 		if s.deferredScrollOffset == nil {
@@ -305,7 +305,7 @@ func TestEditorScrollToEobDoesNotOvershootSafeRange(t *testing.T) {
 // U:input/base/state.rs:6696-6722
 func TestTextareaReplaceAllMultiLine(t *testing.T) {
 	v := buildTextarea(t, plainTextarea)
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		s.SetValue("foo\nbar", w, cx)
 		s.ReplaceAll("baz\nqux", w, cx)
 		wantValue(t, s, "baz\nqux")
@@ -322,7 +322,7 @@ func TestTextareaReplaceAllMultiLine(t *testing.T) {
 // U:input/base/state.rs:6763-6783
 func TestEditorReplaceAllCodeEditor(t *testing.T) {
 	v := buildEditor(t)
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue("select 1", w, cx)
 		s.pendingUpdate = false
 		s.ReplaceAll("select 2", w, cx)
@@ -336,7 +336,7 @@ func TestEditorReplaceAllCodeEditor(t *testing.T) {
 // U:input/base/state.rs:6807-6826
 func TestTextareaReplaceTextInRangesSingleEdit(t *testing.T) {
 	v := buildTextarea(t, func(s TextareaState) TextareaState { return s.DefaultValue("hello world") })
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		s.replaceTextInRanges([]inputTextEdit{{rng: sel(0, 5), text: "HELLO"}}, w, cx)
 		wantValue(t, s, "HELLO world")
 		undoAndWant(t, s, w, cx, "hello world")
@@ -347,7 +347,7 @@ func TestTextareaReplaceTextInRangesSingleEdit(t *testing.T) {
 // U:input/base/state.rs:6828-6866
 func TestTextareaReplaceTextInRangesMultiEditTransaction(t *testing.T) {
 	v := buildTextarea(t, func(s TextareaState) TextareaState { return s.DefaultValue("aaa bbb ccc") })
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		s.replaceTextInRanges([]inputTextEdit{{rng: sel(0, 3), text: "X"}, {rng: sel(8, 11), text: "Y"}}, w, cx)
 		wantValue(t, s, "X bbb Y")
 		var cursors []int
@@ -370,7 +370,7 @@ func utf16Range(start, end int) *gpui.UTF16Range { return &gpui.UTF16Range{Start
 // U:input/base/state.rs:6949-6972
 func TestTextareaImeCompositionUndoesAsOneUnit(t *testing.T) {
 	v := buildTextarea(t, func(s TextareaState) TextareaState { return s.DefaultValue("") })
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		s.ReplaceAndMarkTextInRange(nil, "n", utf16Range(1, 1), w, cx)
 		s.ReplaceAndMarkTextInRange(nil, "ni", utf16Range(2, 2), w, cx)
 		s.ReplaceTextInRange(nil, "你", w, cx)
@@ -386,7 +386,7 @@ func TestTextareaImeCompositionUndoesAsOneUnit(t *testing.T) {
 // U:input/base/state.rs:6974-7001
 func TestTextareaEditAfterCompositionIsSeparateUndo(t *testing.T) {
 	v := buildTextarea(t, func(s TextareaState) TextareaState { return s.DefaultValue("") })
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		s.ReplaceAndMarkTextInRange(nil, "n", utf16Range(1, 1), w, cx)
 		s.ReplaceTextInRange(nil, "你", w, cx)
 		wantValue(t, s, "你")
@@ -405,7 +405,7 @@ func TestTextareaEditAfterCompositionIsSeparateUndo(t *testing.T) {
 // U:input/base/state.rs:7003-7023
 func TestTextareaCompositionCancelViaUnmarkDoesNotLeak(t *testing.T) {
 	v := buildTextarea(t, func(s TextareaState) TextareaState { return s.DefaultValue("") })
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		s.ReplaceAndMarkTextInRange(nil, "n", utf16Range(1, 1), w, cx)
 		s.UnmarkText(w, cx)
 		afterCancel := s.undoManager.undoCount()
@@ -462,7 +462,7 @@ func TestEditorAltDragSelectsABlockAndReplacesEachRow(t *testing.T) {
 	}
 	for _, modifiers := range mods {
 		setupCursors(v, "|abcd\nabcd\nabcd")
-		v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) { s.Focus(w, cx) })
+		v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) { s.Focus(w, cx) })
 		var start, end gpui.Point
 		v.read(func(s *EditorState) {
 			start = columnPosition(s, 0, 1, 0.5)
@@ -490,7 +490,7 @@ func TestEditorAltDragSelectsABlockAndReplacesEachRow(t *testing.T) {
 func TestEditorAltDragExtendsUpwardFromAnExistingCursor(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "abcd\nabcd\na|bcd")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) { s.Focus(w, cx) })
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) { s.Focus(w, cx) })
 	var start, end gpui.Point
 	v.read(func(s *EditorState) {
 		start = columnPosition(s, 0, 1, 2.5)
@@ -508,7 +508,7 @@ func TestEditorAltDragExtendsUpwardFromAnExistingCursor(t *testing.T) {
 func TestEditorAltDragOverAShortRowKeepsTheBlockWidth(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "abcdef\nab\nabcdef")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) { s.Focus(w, cx) })
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) { s.Focus(w, cx) })
 	var start, end gpui.Point
 	v.read(func(s *EditorState) {
 		start = columnPosition(s, 0, 1, 0.5)
@@ -563,7 +563,7 @@ func copyKeystroke() string {
 func TestEditorConsumedKeystrokesKeepCursorVisible(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "a|b")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.Focus(w, cx)
 		s.pauseBlinkCursor(cx)
 	})
@@ -589,7 +589,7 @@ func TestEditorMultiCursorActionsRevealHiddenCarets(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "ab\na|b\nab")
 	for action := range 6 {
-		v.update(func(s *EditorState, _ *gpui.Window, cx *inputCx[EditorMode]) {
+		v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 			s.blinkCursor = gpui.NewEntity(cx, cx.Scope(), func(b *blinkCursor, _ *gpui.Context[blinkCursor]) { *b = newBlinkCursor() })
 			s.blinkCursor.Update(cx, func(b *blinkCursor, bcx *gpui.Context[blinkCursor]) { b.start(bcx) })
 		})
@@ -599,7 +599,7 @@ func TestEditorMultiCursorActionsRevealHiddenCarets(t *testing.T) {
 		if caretVisible(v) {
 			t.Fatalf("action %d: hidden phase expected", action)
 		}
-		v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+		v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 			switch action {
 			case 0:
 				s.addCursorAbove(&AddCursorAbove{}, w, cx)
@@ -639,7 +639,7 @@ func addCursorKeystrokes(up bool) string {
 func TestEditorMultiCursorKeyboardDispatch(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "ab\na|b\nab")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) { s.Focus(w, cx) })
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) { s.Focus(w, cx) })
 	v.cx.SimulateKeystrokes(addCursorKeystrokes(true))
 	v.read(func(s *EditorState) {
 		if s.selections.len() != 2 {
@@ -660,7 +660,7 @@ func TestEditorMultiCursorKeyboardDispatch(t *testing.T) {
 func TestEditorMultiCursorPlatformWordSelectionDispatch(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "one |two\none |two")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) { s.Focus(w, cx) })
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) { s.Focus(w, cx) })
 	word := "ctrl-shift-"
 	if isMacOS() || isLinux() {
 		word = "alt-shift-"
@@ -681,7 +681,7 @@ func TestEditorMultiCursorHorizontalSelectionDispatch(t *testing.T) {
 	}
 	v := buildEditor(t)
 	setupCursors(v, "ab\na|b")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) { s.Focus(w, cx) })
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) { s.Focus(w, cx) })
 	v.cx.SimulateKeystrokes(addCursorKeystrokes(true))
 	right, left := "alt-shift-right", "alt-shift-left alt-shift-left"
 	if isLinux() {
@@ -707,7 +707,7 @@ func TestEditorMultiCursorHorizontalSelectionDispatch(t *testing.T) {
 func TestEditorMultiCursorAltClickDispatch(t *testing.T) {
 	v := buildEditor(t)
 	setupCursors(v, "a|b\nab\nab")
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) { s.Focus(w, cx) })
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) { s.Focus(w, cx) })
 	var position gpui.Point
 	v.read(func(s *EditorState) {
 		position = gpui.Point{X: s.lastBounds.Origin.X + s.lastLayout.lineNumberWidth + 2, Y: s.lastBounds.Origin.Y + s.lastLayout.lineHeight*1.5}
@@ -724,7 +724,7 @@ func TestEditorMultiCursorAltClickDispatch(t *testing.T) {
 func TestTextareaWordDeleteUndoRestoresCaret(t *testing.T) {
 	v := buildTextarea(t, plainTextarea)
 	setupCursors(v, "hello|")
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		s.deletePreviousWord(&DeleteToPreviousWordStart{}, w, cx)
 		s.undo(&Undo{}, w, cx)
 		wantSelected(t, s, 5, 5)
@@ -735,7 +735,7 @@ func TestTextareaWordDeleteUndoRestoresCaret(t *testing.T) {
 func TestTextareaMergedDeleteUndoRestoresAllCarets(t *testing.T) {
 	v := buildTextarea(t, plainTextarea)
 	setupCursors(v, "a|b|c")
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		s.backspace(&Backspace{}, w, cx)
 		s.undo(&Undo{}, w, cx)
 	})
@@ -745,7 +745,7 @@ func TestTextareaMergedDeleteUndoRestoresAllCarets(t *testing.T) {
 // U:input/base/state.rs:7961-7977
 func TestEditorShiftEndRespectsSoftWrapEnd(t *testing.T) {
 	v := buildEditor(t)
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue(strings.Repeat("abcdef ", 30), w, cx)
 		width := float32(60)
 		s.displayMap.onLayoutChanged(&width, w)
@@ -764,7 +764,7 @@ func TestEditorShiftEndRespectsSoftWrapEnd(t *testing.T) {
 func TestTextareaColumnSelectionStaysOnUnicodeBoundaries(t *testing.T) {
 	v := buildTextarea(t, plainTextarea)
 	setupCursors(v, "ab\n你好\ncd")
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		s.buildColumnarSelection(columnarPoint{offset: 1}, columnarPoint{offset: 11}, cx)
 		text := s.Value()
 		for sel := range s.selections.iter() {
@@ -790,7 +790,7 @@ func isWindows() bool { return runtime.GOOS == "windows" }
 // U:input/base/state.rs:7319-7390
 func TestEditorUnfoldAt(t *testing.T) {
 	v := buildEditor(t)
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue("a\nb\nc\nd\ne\nf\ng\nh\ni\nj\nk\nl", w, cx)
 		s.ApplyHighlighterFoldCandidates([]FoldRange{NewFoldRange(0, 5), NewFoldRange(2, 4), NewFoldRange(7, 10)}, cx)
 		s.displayMap.setFolded(0, true)
@@ -798,7 +798,7 @@ func TestEditorUnfoldAt(t *testing.T) {
 		s.displayMap.setFolded(7, true)
 	})
 	for _, line := range []uint32{0, 5} {
-		v.update(func(s *EditorState, _ *gpui.Window, cx *inputCx[EditorMode]) {
+		v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 			if s.displayMap.isBufferLineHidden(int(line)) || s.UnfoldAt(NewInputPosition(line, 0), cx) {
 				t.Fatalf("line %d is a visible fold edge", line)
 			}
@@ -807,7 +807,7 @@ func TestEditorUnfoldAt(t *testing.T) {
 			}
 		})
 	}
-	v.update(func(s *EditorState, _ *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		if !s.UnfoldAt(NewInputPosition(3, 0), cx) {
 			t.Fatal("line 3 is hidden")
 		}
@@ -826,7 +826,7 @@ func TestEditorUnfoldAt(t *testing.T) {
 // Go-own: a painted textarea soft-wraps a long line through the legacy
 // LineWrapper facade, and vertical motion steps through its visual rows.
 func TestTextareaSoftWrapsAndMovesThroughVisualRows(t *testing.T) {
-	v := buildModeView(t, gpui.Size{Width: 200, Height: 300}, func(w *gpui.Window, cx *inputCx[TextareaMode]) TextareaState {
+	v := buildModeView(t, gpui.Size{Width: 200, Height: 300}, func(w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) TextareaState {
 		return NewTextareaState(w, cx).DefaultValue(strings.Repeat("word ", 40) + "\nend")
 	})
 	v.draw()
@@ -838,7 +838,7 @@ func TestTextareaSoftWrapsAndMovesThroughVisualRows(t *testing.T) {
 			t.Fatalf("painted visual lines = %d", n)
 		}
 	})
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		s.setCursorTo(0)
 		s.down(&MoveDown{}, w, cx)
 		item, _ := s.displayMap.line(0)

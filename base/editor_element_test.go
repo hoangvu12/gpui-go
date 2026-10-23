@@ -22,7 +22,7 @@ func decorationEditor(t *testing.T, text string, wrap bool) *inputView[EditorMod
 
 // drawEditor is window.draw(cx).clear(cx): notify and run the frame.
 func drawEditor(v *inputView[EditorMode]) {
-	v.update(func(_ *EditorState, _ *gpui.Window, cx *inputCx[EditorMode]) { cx.Notify() })
+	v.update(func(_ *EditorState, _ *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) { cx.Notify() })
 	v.cx.RunUntilParked()
 }
 
@@ -44,14 +44,14 @@ func TestEditorLineNumberGutterResizesWithDocumentLines(t *testing.T) {
 	}
 	drawEditor(v)
 	narrow := width()
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue(strings.Repeat("x\n", 99), w, cx)
 	})
 	drawEditor(v)
 	if middle := width(); middle != narrow {
 		t.Fatalf("one to three digits must share a width: %v != %v", middle, narrow)
 	}
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetValue(strings.Repeat("x\n", 999), w, cx)
 	})
 	drawEditor(v)
@@ -64,7 +64,7 @@ func TestEditorLineNumberGutterResizesWithDocumentLines(t *testing.T) {
 func TestEditorGeometricDecorationsClipScrolledViewportAndCullOffscreenRanges(t *testing.T) {
 	text := strings.Repeat("abcdefghij\n", 100)
 	v := decorationEditor(t, text, false)
-	v.update(func(s *EditorState, _ *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.CreateRangeDecorationsCollection([]RangeDecoration{
 			NewRangeDecoration(NewInputSelection(0, len(text))).WithStyle(RangeDecorationFill),
 			NewRangeDecoration(NewInputSelection(0, len(text))),
@@ -73,7 +73,7 @@ func TestEditorGeometricDecorationsClipScrolledViewportAndCullOffscreenRanges(t 
 		}, cx)
 	})
 	drawEditor(v)
-	v.update(func(s *EditorState, _ *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.SetScrollOffset(gpui.Point{Y: -s.lastLayout.lineHeight * 40}, cx)
 	})
 	// The deferred scroll is committed by prepaint and reflected next frame.
@@ -156,7 +156,7 @@ func TestEditorGeometricDecorationsUseShapedWrapBoundariesAndNewlineCells(t *tes
 func TestEditorGeometricDecorationsIncludeCrlfBoundaries(t *testing.T) {
 	text := "one\r\ntwo\r\nthree"
 	v := decorationEditor(t, text, false)
-	v.update(func(s *EditorState, _ *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		var ds []RangeDecoration
 		for _, r := range [][2]int{{0, 8}, {3, 5}, {4, 5}, {5, 8}, {9, 10}} {
 			ds = append(ds, NewRangeDecoration(NewInputSelection(r[0], r[1])))
@@ -196,7 +196,7 @@ func TestEditorGeometricDecorationsProjectFoldsWithoutChangingTrackedRanges(t *t
 	v := decorationEditor(t, text, false)
 	hidden := NewInputSelection(4, strings.Index(text, "end"))
 	var collection RangeDecorationCollection
-	v.update(func(s *EditorState, _ *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.ApplyHighlighterFoldCandidates([]FoldRange{NewFoldRange(0, 3)}, cx)
 		s.displayMap.setFolded(0, true)
 		collection = s.CreateRangeDecorationsCollection([]RangeDecoration{NewRangeDecoration(hidden)}, cx)
@@ -223,7 +223,7 @@ func TestEditorGeometricDecorationsProjectFoldsWithoutChangingTrackedRanges(t *t
 	if got := collection.GetRanges(app); len(got) != 1 || got[0] != hidden {
 		t.Fatalf("tracked ranges %v, want [%v]", got, hidden)
 	}
-	v.update(func(s *EditorState, _ *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		s.displayMap.setFolded(0, false)
 		cx.Notify()
 	})
@@ -255,7 +255,7 @@ func TestEditorGeometricDecorationsTrackEditsHistoryReplacementAndOwnerLifetime(
 	}
 	r := NewInputSelection
 	var first, second RangeDecorationCollection
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) {
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 		first = s.CreateRangeDecorationsCollection([]RangeDecoration{NewRangeDecoration(r(4, 7))}, cx)
 		second = s.CreateRangeDecorationsCollection([]RangeDecoration{NewRangeDecoration(r(0, 3))}, cx)
 		s.SetSelectedRange(r(0, 0), cx)
@@ -269,19 +269,25 @@ func TestEditorGeometricDecorationsTrackEditsHistoryReplacementAndOwnerLifetime(
 	first.Clear(v.cx.App())
 	want(second, r(1, 4))
 	first.Append([]RangeDecoration{NewRangeDecoration(r(5, 8))}, v.cx.App())
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) { s.ReplaceAll("formatted", w, cx) })
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
+		s.ReplaceAll("formatted", w, cx)
+	})
 	want(first, r(0, 9))
 	v.update(editorUndo)
 	// Annotations are transformed, not snapshotted in undo history.
 	want(first, r(0, 8))
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) { s.SetValue("new", w, cx) })
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
+		s.SetValue("new", w, cx)
+	})
 	want(first, r(0, 3))
 	clone := first
 	first.Dispose(v.cx.App())
 	clone.Append([]RangeDecoration{NewRangeDecoration(r(0, 1))}, v.cx.App())
 	want(clone)
 	want(second, r(0, 3))
-	v.update(func(s *EditorState, w *gpui.Window, cx *inputCx[EditorMode]) { s.SetValue("", w, cx) })
+	v.update(func(s *EditorState, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
+		s.SetValue("", w, cx)
+	})
 	want(second)
 	drawEditor(v)
 }

@@ -33,7 +33,7 @@ func buildTextarea(t *testing.T, f func(TextareaState) TextareaState) *inputView
 // draw is `window.draw(cx).clear(cx)`: the input repaints.
 func (v *inputView[M]) draw() {
 	v.cx.Update(func(w *gpui.Window, app *gpui.App) {
-		v.input.Update(app, func(_ *InputBaseState[M], cx *inputCx[M]) { cx.Notify() })
+		v.input.Update(app, func(_ *InputBaseState[M], cx *gpui.Context[InputBaseState[M]]) { cx.Notify() })
 	})
 	v.cx.RunUntilParked()
 }

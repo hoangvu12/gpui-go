@@ -139,7 +139,7 @@ func (s InputBaseState[M]) IndentGuides(indentGuides bool) InputBaseState[M] {
 }
 
 // SetIndentGuides is U:input/editor/indent.rs:181-195. EditorState only.
-func (s *InputBaseState[M]) SetIndentGuides(indentGuides bool, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetIndentGuides(indentGuides bool, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.requireEditorMode("SetIndentGuides")
 	s.mode.indentGuides = indentGuides
 	cx.Notify()
@@ -147,7 +147,7 @@ func (s *InputBaseState[M]) SetIndentGuides(indentGuides bool, _ *gpui.Window, c
 
 // indentInline is Tab: accept an inline completion, else indent
 // (U:input/editor/indent.rs:199-210).
-func (s *InputBaseState[M]) indentInline(_ *IndentInline, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) indentInline(_ *IndentInline, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.hooks.acceptInlineCompletion(s, w, cx) {
 		return
 	}
@@ -155,27 +155,27 @@ func (s *InputBaseState[M]) indentInline(_ *IndentInline, w *gpui.Window, cx *in
 }
 
 // indentBlock is U:input/editor/indent.rs:212-214.
-func (s *InputBaseState[M]) indentBlock(_ *Indent, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) indentBlock(_ *Indent, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.indent(true, w, cx)
 }
 
 // outdentInline is U:input/editor/indent.rs:216-223.
-func (s *InputBaseState[M]) outdentInline(_ *OutdentInline, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) outdentInline(_ *OutdentInline, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.outdent(false, w, cx)
 }
 
 // outdentBlock is U:input/editor/indent.rs:225-232.
-func (s *InputBaseState[M]) outdentBlock(_ *Outdent, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) outdentBlock(_ *Outdent, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.outdent(true, w, cx)
 }
 
 // indent is U:input/editor/indent.rs:234-236.
-func (s *InputBaseState[M]) indent(block bool, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) indent(block bool, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.applyIndent(indentDirectionIndent, block, w, cx)
 }
 
 // outdent is U:input/editor/indent.rs:238-240.
-func (s *InputBaseState[M]) outdent(block bool, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) outdent(block bool, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.applyIndent(indentDirectionOutdent, block, w, cx)
 }
 
@@ -190,7 +190,7 @@ const (
 // applyIndent indents or outdents every selection as one batch edit, one
 // undo transaction restoring the multi-selection extents
 // (U:input/editor/indent.rs:242-287).
-func (s *InputBaseState[M]) applyIndent(direction indentDirection, block bool, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) applyIndent(direction indentDirection, block bool, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if !s.IsEditable() || !s.IsMultiLine() || !s.mode.isIndentable() {
 		cx.Propagate()
 		return
@@ -360,7 +360,7 @@ func (s InputBaseState[M]) TabSize(tab TabSize) InputBaseState[M] {
 }
 
 // SetTabSize is U:input/editor/indent.rs:505-512. Multi-line modes only.
-func (s *InputBaseState[M]) SetTabSize(tab TabSize, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetTabSize(tab TabSize, cx *gpui.Context[InputBaseState[M]]) {
 	s.requireMultiLineMode("SetTabSize")
 	if s.mode.kind == layoutPlainText || s.mode.kind == layoutCodeEditor {
 		s.mode.tab = tab

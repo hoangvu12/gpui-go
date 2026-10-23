@@ -80,7 +80,7 @@ func (l *Lsp) semanticTokensForRange(text rope.Rope, visibleRange InputSelection
 // updateSemanticTokens refetches the whole document's tokens after a
 // 100ms debounce; the cache is windowed at paint time, so a scroll never
 // refetches (U:input/editor/lsp/semantic_tokens.rs:108-150).
-func (l *Lsp) updateSemanticTokens(text rope.Rope, w *gpui.Window, cx *inputCx[EditorMode]) {
+func (l *Lsp) updateSemanticTokens(text rope.Rope, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 	provider := l.SemanticTokensProvider
 	if provider == nil {
 		return
@@ -102,7 +102,7 @@ func (l *Lsp) updateSemanticTokens(text rope.Rope, w *gpui.Window, cx *inputCx[E
 		}
 		decoded := decodeSemanticTokens(tokens, legend)
 		acx.AsyncApp.Update(func(app *gpui.App) {
-			_ = inputState.TryUpdate(app, func(s *EditorState, cx *inputCx[EditorMode]) {
+			_ = inputState.TryUpdate(app, func(s *EditorState, cx *gpui.Context[InputBaseState[EditorMode]]) {
 				lsp := &s.editorExtras().lsp
 				if !slices.Equal(decoded, lsp.semanticTokens) {
 					lsp.semanticTokens = decoded

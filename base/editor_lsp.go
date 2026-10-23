@@ -104,7 +104,7 @@ func DefaultLsp() Lsp { return Lsp{CompletionMenu: DefaultCompletionMenuOptions(
 
 // update refreshes the LSP state when the text changes
 // (U:input/editor/lsp/mod.rs:94-103).
-func (l *Lsp) update(text rope.Rope, w *gpui.Window, cx *inputCx[EditorMode]) {
+func (l *Lsp) update(text rope.Rope, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 	l.updateDocumentColors(text, w, cx)
 	l.updateSemanticTokens(text, w, cx)
 }
@@ -123,7 +123,7 @@ func (l *Lsp) reset() {
 // ApplyLspEdits applies text edits to the text, each without UI reactions
 // such as completion (U:input/editor/lsp/mod.rs:116-131). EditorState
 // only.
-func (s *InputBaseState[M]) ApplyLspEdits(textEdits []LspTextEdit, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) ApplyLspEdits(textEdits []LspTextEdit, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.requireEditorMode("ApplyLspEdits")
 	for _, edit := range textEdits {
 		start := s.ext().PositionToOffset(edit.Range.Start)

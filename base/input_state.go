@@ -367,9 +367,6 @@ type columnarPoint struct {
 	columnsPastLineEnd int
 }
 
-// inputCx is the context of a mode's state entity.
-type inputCx[M InputModeKind] = gpui.Context[InputBaseState[M]]
-
 // InputBaseState is the shared text-editing engine behind InputState,
 // TextareaState and EditorState (U:input/base/state.rs:328-471). M is the
 // mode marker. Prefer the aliases: write InputState, not
@@ -645,7 +642,7 @@ func (s *InputBaseState[M]) ContextMenuCapabilities() InputContextMenuCapabiliti
 }
 
 // SetTextAlign aligns a single line (U:input/base/state.rs:628-635).
-func (s *InputBaseState[M]) SetTextAlign(textAlign gpui.TextAlign, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetTextAlign(textAlign gpui.TextAlign, cx *gpui.Context[InputBaseState[M]]) {
 	if !s.IsSingleLine() || s.textAlign == textAlign {
 		return
 	}
@@ -654,14 +651,14 @@ func (s *InputBaseState[M]) SetTextAlign(textAlign gpui.TextAlign, cx *inputCx[M
 }
 
 // ToggleMasked flips the password mask (U:input/base/state.rs:637-645).
-func (s *InputBaseState[M]) ToggleMasked(_ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) ToggleMasked(_ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.masked = !s.masked
 	cx.Notify()
 }
 
 // newInMode builds the engine; each mode's constructor sets its layout on
 // top (U:input/base/state.rs:656-765).
-func newInMode[M InputModeKind](w *gpui.Window, cx *inputCx[M]) InputBaseState[M] {
+func newInMode[M InputModeKind](w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) InputBaseState[M] {
 	hooks := hooksOf[M]()
 	focusHandle := cx.App().FocusHandle().TabStop(true)
 	cursor := gpui.NewEntity(cx, cx.Scope(), func(b *blinkCursor, _ *gpui.Context[blinkCursor]) {
@@ -688,16 +685,18 @@ func newInMode[M InputModeKind](w *gpui.Window, cx *inputCx[M]) InputBaseState[M
 	subscriptions := []gpui.Subscription{
 		// Observe the blink cursor to repaint the view when it changes
 		// (U:input/base/state.rs:674-675).
-		cx.Observe(cursor, func(_ *InputBaseState[M], _ gpui.Entity[blinkCursor], cx *inputCx[M]) { cx.Notify() }),
+		cx.Observe(cursor, func(_ *InputBaseState[M], _ gpui.Entity[blinkCursor], cx *gpui.Context[InputBaseState[M]]) {
+			cx.Notify()
+		}),
 		// Blink the cursor when the window is active, pause when it is not
 		// (U:input/base/state.rs:676-686).
-		cx.ObserveWindowActivation(w, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
+		cx.ObserveWindowActivation(w, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 			if windowIsActive(w) && s.focusHandle.IsFocused(w) {
 				s.blinkCursor.Update(cx, func(b *blinkCursor, bcx *gpui.Context[blinkCursor]) { b.start(bcx) })
 			}
 		}),
-		cx.OnFocus(focusHandle, w, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) { s.onFocus(w, cx) }),
-		cx.OnBlur(focusHandle, w, func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) { s.onBlur(w, cx) }),
+		cx.OnFocus(focusHandle, w, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) { s.onFocus(w, cx) }),
+		cx.OnBlur(focusHandle, w, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) { s.onBlur(w, cx) }),
 	}
 
 	auto := DefaultAutoScroll()
@@ -785,7 +784,7 @@ func (s InputBaseState[M]) Placeholder(placeholder string) InputBaseState[M] {
 
 // resetHighlighter drops the code editor's highlighter
 // (U:input/base/state.rs:815-823).
-func (s *InputBaseState[M]) resetHighlighter(cx *inputCx[M]) {
+func (s *InputBaseState[M]) resetHighlighter(cx *gpui.Context[InputBaseState[M]]) {
 	if s.mode.kind == layoutCodeEditor {
 		s.mode.highlighter.h = nil
 	}
@@ -803,7 +802,7 @@ func (s *InputBaseState[M]) SetEditorStyle(style InputEditorStyle) {
 func (s *InputBaseState[M]) SetEditorPaddings(paddings gpui.Edges) { s.editorPaddings = paddings }
 
 // SetPlaceholder is U:input/base/state.rs:874-883.
-func (s *InputBaseState[M]) SetPlaceholder(placeholder string, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetPlaceholder(placeholder string, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.placeholder = placeholder
 	cx.Notify()
 }
@@ -831,14 +830,14 @@ func (s *InputBaseState[M]) lineAndPositionForOffset(offset int) (int, int, gpui
 // emitted. A single-line caret goes to the end while the view scrolls
 // back to the start (U:input/base/state.rs:916-945). A plain value drops
 // every inline token; SetContent restores text with its tokens.
-func (s *InputBaseState[M]) SetValue(value string, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetValue(value string, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.SetContent(NewInputContent(value), w, cx)
 }
 
 // SetContent is set_value with InputContent: the text together with its
 // inline tokens (U:input/base/state.rs:916-945; see
 // input_inline_tokens.go for why it is a second method).
-func (s *InputBaseState[M]) SetContent(content InputContent, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetContent(content InputContent, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.inlineTokens = nil
 	s.undoManager.setIgnoring(true)
 	s.emitEvents = false
@@ -857,7 +856,7 @@ func (s *InputBaseState[M]) SetContent(content InputContent, w *gpui.Window, cx 
 
 // ReplaceAll replaces the whole text, recording it for undo
 // (U:input/base/state.rs:947-968).
-func (s *InputBaseState[M]) ReplaceAll(text string, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) ReplaceAll(text string, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.replaceText(text, w, cx)
 	s.resetSelection()
 	s.resetLSPState()
@@ -876,7 +875,7 @@ func (s *InputBaseState[M]) withEditsAllowed(f func()) {
 
 // Insert inserts text at the cursor and moves the cursor to its end
 // (U:input/base/state.rs:981-998).
-func (s *InputBaseState[M]) Insert(text string, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) Insert(text string, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.withEditsAllowed(func() {
 		s.undoManager.setPendingIntent(editIntentAtomic)
 		cursor := s.Cursor()
@@ -888,7 +887,7 @@ func (s *InputBaseState[M]) Insert(text string, w *gpui.Window, cx *inputCx[M]) 
 
 // Replace replaces the selection and moves the cursor to the end of the
 // replacement (U:input/base/state.rs:1000-1016).
-func (s *InputBaseState[M]) Replace(text string, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) Replace(text string, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.withEditsAllowed(func() {
 		s.undoManager.setPendingIntent(editIntentAtomic)
 		s.replaceTextInRangeSilent(nil, text, w, cx)
@@ -897,7 +896,7 @@ func (s *InputBaseState[M]) Replace(text string, w *gpui.Window, cx *inputCx[M])
 }
 
 // replaceText replaces the whole text (U:input/base/state.rs:1018-1031).
-func (s *InputBaseState[M]) replaceText(text string, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) replaceText(text string, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.withEditsAllowed(func() {
 		s.undoManager.setPendingIntent(editIntentAtomic)
 		rng := gpui.UTF16Range{Start: 0, End: s.text.LenUTF16()}
@@ -942,7 +941,7 @@ func (s InputBaseState[M]) Disabled(disabled bool) InputBaseState[M] {
 }
 
 // SetDisabled is U:input/base/state.rs:1073-1084.
-func (s *InputBaseState[M]) SetDisabled(disabled bool, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetDisabled(disabled bool, cx *gpui.Context[InputBaseState[M]]) {
 	if s.disabled == disabled {
 		return
 	}
@@ -963,7 +962,7 @@ func (s InputBaseState[M]) Readonly(readonly bool) InputBaseState[M] {
 }
 
 // SetReadonly is U:input/base/state.rs:1099-1111.
-func (s *InputBaseState[M]) SetReadonly(readonly bool, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetReadonly(readonly bool, cx *gpui.Context[InputBaseState[M]]) {
 	if s.readonly == readonly {
 		return
 	}
@@ -997,7 +996,7 @@ func (s InputBaseState[M]) SubmitOnEnter(submit bool) InputBaseState[M] {
 }
 
 // SetSubmitOnEnter is U:input/base/state.rs:1141-1144.
-func (s *InputBaseState[M]) SetSubmitOnEnter(submit bool, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetSubmitOnEnter(submit bool, cx *gpui.Context[InputBaseState[M]]) {
 	s.submitOnEnter = submit
 	cx.Notify()
 }
@@ -1009,7 +1008,7 @@ func (s InputBaseState[M]) ShowWhitespaces(show bool) InputBaseState[M] {
 }
 
 // SetShowWhitespaces is U:input/base/state.rs:1153-1157.
-func (s *InputBaseState[M]) SetShowWhitespaces(show bool, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetShowWhitespaces(show bool, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.showWhitespaces = show
 	cx.Notify()
 }
@@ -1022,7 +1021,7 @@ func (s InputBaseState[M]) ScrollBeyondLastLine(rows *int) InputBaseState[M] {
 }
 
 // SetScrollBeyondLastLine is U:input/base/state.rs:1173-1185.
-func (s *InputBaseState[M]) SetScrollBeyondLastLine(rows *int, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetScrollBeyondLastLine(rows *int, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if equalIntPtr(s.scrollBeyondLastLine, rows) {
 		return
 	}
@@ -1038,7 +1037,7 @@ func (s InputBaseState[M]) CursorSurroundingLines(lines *int) InputBaseState[M] 
 }
 
 // SetCursorSurroundingLines is U:input/base/state.rs:1202-1214.
-func (s *InputBaseState[M]) SetCursorSurroundingLines(lines *int, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetCursorSurroundingLines(lines *int, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if equalIntPtr(s.cursorSurroundingLines, lines) {
 		return
 	}
@@ -1079,7 +1078,7 @@ func (s *InputBaseState[M]) UnmaskValue() string { return s.maskPattern.Unmask(s
 
 // Prepare does nothing; it is kept so render paths keep compiling
 // (U:input/base/state.rs:1251-1257, doc(hidden)).
-func (s *InputBaseState[M]) Prepare(*gpui.Window, *inputCx[M]) {}
+func (s *InputBaseState[M]) Prepare(*gpui.Window, *gpui.Context[InputBaseState[M]]) {}
 
 // Text returns the text rope (U:input/base/state.rs:1259-1265). A Rope is
 // a value: the copy costs nothing and later edits do not affect it.
@@ -1093,7 +1092,7 @@ func (s *InputBaseState[M]) CursorPosition() InputPosition {
 
 // SetCursorPosition moves the cursor to a 0-based position and focuses
 // the input (U:input/base/state.rs:1273-1288).
-func (s *InputBaseState[M]) SetCursorPosition(position InputPosition, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetCursorPosition(position InputPosition, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	offset := s.ext().PositionToOffset(position)
 	s.moveTo(offset, nil, cx)
 	s.updatePreferredColumn()
@@ -1102,14 +1101,14 @@ func (s *InputBaseState[M]) SetCursorPosition(position InputPosition, w *gpui.Wi
 
 // Focus focuses the input and starts the caret blink
 // (U:input/base/state.rs:1290-1296).
-func (s *InputBaseState[M]) Focus(w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) Focus(w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.focusHandle.Focus(w)
 	s.blinkCursor.Update(cx, func(b *blinkCursor, bcx *gpui.Context[blinkCursor]) { b.start(bcx) })
 }
 
 // Refresh requests a highlighter and LSP refresh on the next render
 // (U:input/base/state.rs:1298-1314).
-func (s *InputBaseState[M]) Refresh(cx *inputCx[M]) {
+func (s *InputBaseState[M]) Refresh(cx *gpui.Context[InputBaseState[M]]) {
 	s.pendingUpdate = true
 	cx.Notify()
 }
@@ -1235,7 +1234,7 @@ func (s *InputBaseState[M]) ScrollOffset() gpui.Point { return s.scrollHandle.Of
 
 // SetScrollOffset defers a clamped scroll offset to the next layout
 // (U:input/base/state.rs:2924-2930).
-func (s *InputBaseState[M]) SetScrollOffset(offset gpui.Point, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetScrollOffset(offset gpui.Point, cx *gpui.Context[InputBaseState[M]]) {
 	s.deferredScrollOffset = &offset
 	cx.Notify()
 }
@@ -1256,7 +1255,7 @@ func (s *InputBaseState[M]) SelectedRange() InputSelection {
 }
 
 // SelectAll selects the whole text (U:input/base/state.rs:2948-2953).
-func (s *InputBaseState[M]) SelectAll(_ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SelectAll(_ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.undoManager.breakTransactionCoalescing()
 	s.selections.removeAllButActive()
 	s.setSelection(0, s.text.Len())
@@ -1266,7 +1265,7 @@ func (s *InputBaseState[M]) SelectAll(_ *gpui.Window, cx *inputCx[M]) {
 // SetSelectedRange sets the selection by UTF-8 offsets, removing extra
 // cursors; a non-empty range expands to character boundaries
 // (U:input/base/state.rs:2955-2973).
-func (s *InputBaseState[M]) SetSelectedRange(rng InputSelection, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetSelectedRange(rng InputSelection, cx *gpui.Context[InputBaseState[M]]) {
 	rng = s.normalizeTokenRange(rng)
 	endBias := sumtree.Right
 	if rng.Start == rng.End {
@@ -1283,7 +1282,7 @@ func (s *InputBaseState[M]) SetSelectedRange(rng InputSelection, cx *inputCx[M])
 
 // Unselect collapses the selection to the cursor
 // (U:input/base/state.rs:3221-3227).
-func (s *InputBaseState[M]) Unselect(_ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) Unselect(_ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.undoManager.breakTransactionCoalescing()
 	s.setCursorTo(s.Cursor())
 	cx.Notify()
@@ -1345,7 +1344,7 @@ func (s *InputBaseState[M]) showCursor(w *gpui.Window, app *gpui.App) bool {
 }
 
 // onFocus is U:input/base/state.rs:3313-3318.
-func (s *InputBaseState[M]) onFocus(_ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) onFocus(_ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.blinkCursor.Update(cx, func(b *blinkCursor, bcx *gpui.Context[blinkCursor]) { b.start(bcx) })
 	InputBaseStateEvents[M]().Emit(cx, InputEvent{Kind: InputEventFocus})
 }
@@ -1353,7 +1352,7 @@ func (s *InputBaseState[M]) onFocus(_ *gpui.Window, cx *inputCx[M]) {
 // onBlur ends the typing session, stops the blink and clamps a number
 // (U:input/base/state.rs:3320-3341). The selection is kept: an app menu
 // may want to copy it.
-func (s *InputBaseState[M]) onBlur(w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) onBlur(w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.hooks.isContextMenuOpen(s, cx.App()) {
 		return
 	}
@@ -1372,7 +1371,7 @@ func (s *InputBaseState[M]) onBlur(w *gpui.Window, cx *inputCx[M]) {
 // clampNumberValue clamps a number to min/max on blur; out-of-range
 // values are allowed while typing (U:input/base/state.rs:3343-3377). Rust
 // f64 parse/Display are strconv.ParseFloat / FormatFloat('f', -1).
-func (s *InputBaseState[M]) clampNumberValue(w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) clampNumberValue(w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if !s.IsSingleLine() || s.maskPattern.Kind != MaskPatternKindNumber {
 		return
 	}
@@ -1402,7 +1401,7 @@ func (s *InputBaseState[M]) clampNumberValue(w *gpui.Window, cx *inputCx[M]) {
 }
 
 // pauseBlinkCursor is U:input/base/state.rs:3379-3383.
-func (s *InputBaseState[M]) pauseBlinkCursor(cx *inputCx[M]) {
+func (s *InputBaseState[M]) pauseBlinkCursor(cx *gpui.Context[InputBaseState[M]]) {
 	s.blinkCursor.Update(cx, func(b *blinkCursor, bcx *gpui.Context[blinkCursor]) { b.pause(bcx) })
 }
 
@@ -1423,7 +1422,7 @@ func (s *InputBaseState[M]) normalizeInput(newText string) string {
 // isValidInput checks validate, the mask and the pattern
 // (U:input/base/state.rs:3457-3477). The regex crate's is_match is Go
 // regexp's MatchString (both RE2-class).
-func (s *InputBaseState[M]) isValidInput(newText string, cx *inputCx[M]) bool {
+func (s *InputBaseState[M]) isValidInput(newText string, cx *gpui.Context[InputBaseState[M]]) bool {
 	if newText == "" {
 		return true
 	}
@@ -1451,7 +1450,7 @@ func (s InputBaseState[M]) MaskPattern(pattern MaskPattern) InputBaseState[M] {
 }
 
 // SetMaskPattern is U:input/base/state.rs:3497-3509.
-func (s *InputBaseState[M]) SetMaskPattern(pattern MaskPattern, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetMaskPattern(pattern MaskPattern, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.maskPattern = pattern
 	s.maskPatternSet = true
 	if placeholder, ok := s.maskPattern.Placeholder(); ok {
@@ -1472,7 +1471,7 @@ func (s *InputBaseState[M]) EnsureNumberMask() {
 // setInputBounds records the container bounds
 // and forwards a width change to the display map
 // (U:input/base/state.rs:3522-3543).
-func (s *InputBaseState[M]) setInputBounds(newBounds gpui.Bounds, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) setInputBounds(newBounds gpui.Bounds, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	widthChanged := s.inputBounds.Size.Width != newBounds.Size.Width
 	s.inputBounds = newBounds
 	if s.lastLayout != nil && widthChanged {
@@ -1535,7 +1534,7 @@ func (s InputBaseState[M]) Masked(masked bool) InputBaseState[M] {
 }
 
 // SetMasked is U:input/base/state.rs:9754-9758; InputState only.
-func (s *InputBaseState[M]) SetMasked(masked bool, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetMasked(masked bool, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.requireInputMode("SetMasked")
 	s.masked = masked
 	cx.Notify()
@@ -1550,7 +1549,7 @@ func (s InputBaseState[M]) Pattern(pattern *regexp.Regexp) InputBaseState[M] {
 }
 
 // SetPattern is U:input/base/state.rs:9766-9774; InputState only.
-func (s *InputBaseState[M]) SetPattern(pattern *regexp.Regexp, _ *gpui.Window, _ *inputCx[M]) {
+func (s *InputBaseState[M]) SetPattern(pattern *regexp.Regexp, _ *gpui.Window, _ *gpui.Context[InputBaseState[M]]) {
 	s.requireInputMode("SetPattern")
 	s.pattern = pattern
 }
@@ -1564,7 +1563,7 @@ func (s InputBaseState[M]) Validate(f func(text string, app *gpui.App) bool) Inp
 }
 
 // SetValidator is U:input/base/state.rs:9782-9788; InputState only.
-func (s *InputBaseState[M]) SetValidator(f func(text string, app *gpui.App) bool, _ *inputCx[M]) {
+func (s *InputBaseState[M]) SetValidator(f func(text string, app *gpui.App) bool, _ *gpui.Context[InputBaseState[M]]) {
 	s.requireInputMode("SetValidator")
 	s.validate = f
 }
@@ -1586,20 +1585,20 @@ func (s InputBaseState[M]) Max(value float64) InputBaseState[M] {
 }
 
 // SetMin is U:input/base/state.rs:9837-9840; InputState only.
-func (s *InputBaseState[M]) SetMin(value *float64, _ *gpui.Window, _ *inputCx[M]) {
+func (s *InputBaseState[M]) SetMin(value *float64, _ *gpui.Window, _ *gpui.Context[InputBaseState[M]]) {
 	s.requireInputMode("SetMin")
 	s.numberMin = value
 }
 
 // SetMax is U:input/base/state.rs:9842-9845; InputState only.
-func (s *InputBaseState[M]) SetMax(value *float64, _ *gpui.Window, _ *inputCx[M]) {
+func (s *InputBaseState[M]) SetMax(value *float64, _ *gpui.Window, _ *gpui.Context[InputBaseState[M]]) {
 	s.requireInputMode("SetMax")
 	s.numberMax = value
 }
 
 // SetLoading shows a spinner; InputState only
 // (U:input/base/state.rs:9847-9851).
-func (s *InputBaseState[M]) SetLoading(loading bool, _ *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetLoading(loading bool, _ *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.requireInputMode("SetLoading")
 	s.loading = loading
 	cx.Notify()
@@ -1640,7 +1639,7 @@ func (s InputBaseState[M]) Searchable(searchable bool) InputBaseState[M] {
 }
 
 // SetSearchable is U:input/base/state.rs:9869-9873.
-func (s *InputBaseState[M]) SetSearchable(searchable bool, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetSearchable(searchable bool, cx *gpui.Context[InputBaseState[M]]) {
 	s.requireMultiLineMode("SetSearchable")
 	s.searchable = searchable
 	cx.Notify()
@@ -1656,7 +1655,7 @@ func (s InputBaseState[M]) SoftWrap(wrap bool) InputBaseState[M] {
 
 // SetSoftWrap updates the soft wrap mode; wrapping resets the horizontal
 // scroll (U:input/base/state.rs:9882-9902).
-func (s *InputBaseState[M]) SetSoftWrap(wrap bool, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetSoftWrap(wrap bool, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.requireMultiLineMode("SetSoftWrap")
 	s.softWrap = wrap
 	if wrap {
@@ -1683,7 +1682,7 @@ func (s InputBaseState[M]) WrappingIndent(indent WrappingIndent) InputBaseState[
 }
 
 // SetWrappingIndent is U:input/base/state.rs:9911-9921.
-func (s *InputBaseState[M]) SetWrappingIndent(indent WrappingIndent, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetWrappingIndent(indent WrappingIndent, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	s.requireMultiLineMode("SetWrappingIndent")
 	s.wrappingIndent = indent
 	s.displayMap.setWrappingIndent(indent, w)
@@ -1699,7 +1698,7 @@ func NewTextareaState(w *gpui.Window, cx *gpui.Context[TextareaState]) TextareaS
 
 // SetAutoGrow grows with the content from minRows through maxRows
 // (U:input/base/state.rs:9934-9937). TextareaState only.
-func (s *InputBaseState[M]) SetAutoGrow(minRows, maxRows int, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetAutoGrow(minRows, maxRows int, cx *gpui.Context[InputBaseState[M]]) {
 	s.requireTextareaMode("SetAutoGrow")
 	s.mode = layoutModeAutoGrow(minRows, max(maxRows, minRows))
 	cx.Notify()
@@ -1723,7 +1722,7 @@ func (s InputBaseState[M]) Rows(rows int) InputBaseState[M] {
 }
 
 // SetRows is U:input/base/state.rs:9962-9976. TextareaState only.
-func (s *InputBaseState[M]) SetRows(rows int, cx *inputCx[M]) {
+func (s *InputBaseState[M]) SetRows(rows int, cx *gpui.Context[InputBaseState[M]]) {
 	s.requireTextareaMode("SetRows")
 	s.mode.setRowsField(rows)
 	cx.Notify()
@@ -1756,7 +1755,7 @@ func (s InputBaseState[M]) Step(step NumberStep) InputBaseState[M] {
 
 // SetStep updates the step after construction; nil falls back to emitting
 // the step event (U:input/base/state.rs:9824-9835). InputState only.
-func (s *InputBaseState[M]) SetStep(step *NumberStep, _ *gpui.Window, _ *inputCx[M]) {
+func (s *InputBaseState[M]) SetStep(step *NumberStep, _ *gpui.Window, _ *gpui.Context[InputBaseState[M]]) {
 	s.requireInputMode("SetStep")
 	if step != nil {
 		copied := *step
@@ -1768,7 +1767,7 @@ func (s *InputBaseState[M]) SetStep(step *NumberStep, _ *gpui.Window, _ *inputCx
 // ApplyHighlighterFoldCandidates installs the fold candidates a
 // highlighter extracted, when folding is on
 // (U:input/base/state.rs:853-862).
-func (s *InputBaseState[M]) ApplyHighlighterFoldCandidates(candidates []FoldRange, cx *inputCx[M]) {
+func (s *InputBaseState[M]) ApplyHighlighterFoldCandidates(candidates []FoldRange, cx *gpui.Context[InputBaseState[M]]) {
 	if s.mode.isFolding() {
 		s.displayMap.setFoldCandidates(candidates)
 	}
@@ -1779,7 +1778,7 @@ func (s *InputBaseState[M]) ApplyHighlighterFoldCandidates(candidates []FoldRang
 // whether any opened. A fold keeps its first and last line visible, so a
 // position on either opens nothing; nested folds all open; candidates are
 // kept (U:input/base/state.rs:10052-10085). EditorState only.
-func (s *InputBaseState[M]) UnfoldAt(position InputPosition, cx *inputCx[M]) bool {
+func (s *InputBaseState[M]) UnfoldAt(position InputPosition, cx *gpui.Context[InputBaseState[M]]) bool {
 	if !s.IsCodeEditor() {
 		panic("base: UnfoldAt is only available on EditorState")
 	}

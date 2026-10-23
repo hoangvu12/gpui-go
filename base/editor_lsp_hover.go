@@ -21,7 +21,7 @@ type HoverProvider interface {
 
 // handleHoverPopover requests the hover at offset; only the first hover
 // waits (U:input/editor/lsp/hover.rs:25-86).
-func (s *InputBaseState[M]) handleHoverPopover(offset int, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) handleHoverPopover(offset int, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if s.selecting {
 		return
 	}
@@ -50,7 +50,7 @@ func (s *InputBaseState[M]) handleHoverPopover(offset int, w *gpui.Window, cx *i
 		var task gpui.Task[ProviderResult[*LspHover]]
 		requested := false
 		_ = acx.Update(func(w *gpui.Window, app *gpui.App) {
-			_ = this.TryUpdateIn(app, w, func(_ *InputBaseState[M], w *gpui.Window, cx *inputCx[M]) {
+			_ = this.TryUpdateIn(app, w, func(_ *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 				task = provider.Hover(text, offset, w, cx.App())
 				requested = true
 			})
@@ -64,7 +64,7 @@ func (s *InputBaseState[M]) handleHoverPopover(offset int, w *gpui.Window, cx *i
 		}
 
 		acx.AsyncApp.Update(func(app *gpui.App) {
-			_ = this.TryUpdate(app, func(s *InputBaseState[M], cx *inputCx[M]) {
+			_ = this.TryUpdate(app, func(s *InputBaseState[M], cx *gpui.Context[InputBaseState[M]]) {
 				e := s.editorExtras()
 				if result != nil {
 					rng := symbolRange
@@ -85,7 +85,7 @@ func (s *InputBaseState[M]) handleHoverPopover(offset int, w *gpui.Window, cx *i
 // handleMouseMove clears the hover on Alt, follows the definition under a
 // secondary-modifier hover, and otherwise requests the hover popover
 // (U:input/editor/lsp/hover.rs:88-110).
-func (s *InputBaseState[M]) handleMouseMove(offset int, event *gpui.MouseMoveEvent, w *gpui.Window, cx *inputCx[M]) {
+func (s *InputBaseState[M]) handleMouseMove(offset int, event *gpui.MouseMoveEvent, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	if event.Modifiers.Alt {
 		s.ClearHoverState(cx)
 		return
@@ -107,7 +107,7 @@ func (s *InputBaseState[M]) handleMouseMove(offset int, event *gpui.MouseMoveEve
 // ClearHoverState drops the definition underline, the hover popover and
 // the pending hover request (U:input/editor/lsp/hover.rs:112-121).
 // EditorState only.
-func (s *InputBaseState[M]) ClearHoverState(cx *inputCx[M]) {
+func (s *InputBaseState[M]) ClearHoverState(cx *gpui.Context[InputBaseState[M]]) {
 	e := s.lspExtras("ClearHoverState")
 	changed := !e.hoverDefinition.isEmpty() || e.hoverPopover != nil
 	e.hoverDefinition.clear()

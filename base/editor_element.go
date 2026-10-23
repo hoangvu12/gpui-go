@@ -370,7 +370,7 @@ func (e *textElement[M]) layoutFoldIcons(originX float32, bounds gpui.Bounds, la
 			Child(child).
 			OnMouseDown(gpui.MouseButtonLeft, func(_ *gpui.MouseDownEvent, _ *gpui.Window, app *gpui.App) {
 				app.StopPropagation()
-				stateEntity.Update(app, func(s *InputBaseState[M], cx *inputCx[M]) {
+				stateEntity.Update(app, func(s *InputBaseState[M], cx *gpui.Context[InputBaseState[M]]) {
 					s.displayMap.toggleFold(bufferLine)
 					cx.Notify()
 				})

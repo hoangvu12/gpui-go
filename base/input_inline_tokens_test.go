@@ -10,7 +10,7 @@ import (
 	"github.com/hoangvu12/gpui-go/gpui"
 )
 
-func mustToken[M InputModeKind](t *testing.T, s *InputBaseState[M], rng InputSelection, token InlineToken, w *gpui.Window, cx *inputCx[M]) {
+func mustToken[M InputModeKind](t *testing.T, s *InputBaseState[M], rng InputSelection, token InlineToken, w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
 	t.Helper()
 	if err := s.ReplaceRangeWithToken(rng, token, w, cx); err != nil {
 		t.Fatalf("replace %v with token: %v", rng, err)
@@ -27,7 +27,7 @@ func fixedWidthToken(width func() float32) InlineTokenRenderer {
 func TestInputInlineTokenWrapAndSizeRefresh(t *testing.T) {
 	width := float32(4000)
 	v := buildTextarea(t, func(s TextareaState) TextareaState { return s.Rows(4).DefaultValue("@a@b") })
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		mustToken(t, s, sel(0, 2), NewInlineToken("a", "@a"), w, cx)
 		mustToken(t, s, sel(2, 4), NewInlineToken("b", "@b"), w, cx)
 		s.setTokenPresentation(inlineTokenPresentation{}.token(fixedWidthToken(func() float32 { return width })))
@@ -59,14 +59,14 @@ func TestInputInlineTokenWrapAndSizeRefresh(t *testing.T) {
 func TestInputInlineTokenGeometryAndReentrantActivation(t *testing.T) {
 	v := buildInput(t, func(s InputState) InputState { return s.DefaultValue("before @alice after") })
 	target := v.input
-	v.update(func(s *InputState, w *gpui.Window, cx *inputCx[InputMode]) {
+	v.update(func(s *InputState, w *gpui.Window, cx *gpui.Context[InputBaseState[InputMode]]) {
 		mustToken(t, s, sel(7, 13), NewInlineToken("a", "@alice"), w, cx)
 		s.setTokenPresentation(inlineTokenPresentation{}.
 			token(func(*InlineTokenContext, *gpui.Window, *gpui.App) gpui.AnyElement {
 				return gpui.Div().Block().W(gpui.Px(100)).H(gpui.Px(20)).IntoElement()
 			}).
 			onTokenClick(func(_ *InlineTokenClickEvent, w *gpui.Window, app *gpui.App) {
-				_ = target.UpdateIn(app, w, func(s *InputState, w *gpui.Window, cx *inputCx[InputMode]) {
+				_ = target.UpdateIn(app, w, func(s *InputState, w *gpui.Window, cx *gpui.Context[InputBaseState[InputMode]]) {
 					s.SetValue("activated", w, cx)
 				})
 			}))
@@ -93,7 +93,7 @@ func TestInputInlineTokenGeometryAndReentrantActivation(t *testing.T) {
 // U:input/base/state.rs:4606-4636
 func TestInputInlineTokenClickSelectsIt(t *testing.T) {
 	v := buildInput(t, func(s InputState) InputState { return s.DefaultValue("before @alice after") })
-	v.update(func(s *InputState, w *gpui.Window, cx *inputCx[InputMode]) {
+	v.update(func(s *InputState, w *gpui.Window, cx *gpui.Context[InputBaseState[InputMode]]) {
 		mustToken(t, s, sel(7, 13), NewInlineToken("a", "@alice"), w, cx)
 		s.SetSelectedRange(sel(0, 0), cx)
 	})
@@ -114,7 +114,7 @@ func TestInputInlineTokenClickSelectsIt(t *testing.T) {
 // U:input/base/state.rs:4638-4688
 func TestInputInlineTokenEditHistoryAndValidation(t *testing.T) {
 	v := buildInput(t, func(s InputState) InputState { return s.DefaultValue("问 @alice!") })
-	v.update(func(s *InputState, w *gpui.Window, cx *inputCx[InputMode]) {
+	v.update(func(s *InputState, w *gpui.Window, cx *gpui.Context[InputBaseState[InputMode]]) {
 		token := NewInlineToken("alice-1", "@alice").WithLabel("Alice")
 		mustToken(t, s, sel(4, 10), token, w, cx)
 		wantValue(t, s, "问 @alice!")
@@ -175,7 +175,7 @@ func TestInputInlineTokenEditHistoryAndValidation(t *testing.T) {
 // U:input/base/state.rs:4690-4763
 func TestInputInlineTokenTextareaImeAndModes(t *testing.T) {
 	v := buildTextarea(t, plainTextarea)
-	v.update(func(s *TextareaState, w *gpui.Window, cx *inputCx[TextareaMode]) {
+	v.update(func(s *TextareaState, w *gpui.Window, cx *gpui.Context[InputBaseState[TextareaMode]]) {
 		content, err := NewInputContent("@a@b\n后面").WithToken(sel(0, 2), NewInlineToken("a", "@a"))
 		if err == nil {
 			content, err = content.WithToken(sel(2, 4), NewInlineToken("b", "@b"))
@@ -217,7 +217,7 @@ func TestInputInlineTokenTextareaImeAndModes(t *testing.T) {
 	})
 
 	in := buildInput(t, plainInput)
-	in.update(func(s *InputState, w *gpui.Window, cx *inputCx[InputMode]) {
+	in.update(func(s *InputState, w *gpui.Window, cx *gpui.Context[InputBaseState[InputMode]]) {
 		if _, err := NewInputContent("á").WithToken(sel(0, 1), NewInlineToken("bad", "a")); !errors.Is(err, InlineTokenErrorInvalidBoundary) {
 			t.Fatalf("err = %v, want InvalidBoundary", err)
 		}

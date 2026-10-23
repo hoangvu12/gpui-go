@@ -47,7 +47,7 @@ func buildInput(t *testing.T, f func(InputState) InputState) *inputView[InputMod
 
 // update runs f on the state with the window, like
 // `cx.update(|window, cx| input.update(cx, ...))`.
-func (v *inputView[M]) update(f func(s *InputBaseState[M], w *gpui.Window, cx *inputCx[M])) {
+func (v *inputView[M]) update(f func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]])) {
 	v.cx.Update(func(w *gpui.Window, app *gpui.App) {
 		_ = v.input.UpdateIn(app, w, f)
 	})
@@ -78,7 +78,7 @@ func TestInputSetValueSingleLineCaretAtEndViewAtStart(t *testing.T) {
 	value := "https://example.com/v1/users?" + strings.Repeat("x=1&", 120)
 	n := len(value)
 
-	v.update(func(s *InputState, w *gpui.Window, cx *inputCx[InputMode]) {
+	v.update(func(s *InputState, w *gpui.Window, cx *gpui.Context[InputBaseState[InputMode]]) {
 		s.SetValue(value, w, cx)
 		wantSelected(t, s, n, n)
 		if s.deferredScrollOffset == nil || *s.deferredScrollOffset != (gpui.Point{}) {
@@ -101,7 +101,7 @@ func TestInputSetValueSingleLineCaretAtEndViewAtStart(t *testing.T) {
 // handler (Window.HandleInput) and its bound actions through the keymap.
 func TestInputTypingThroughTheWindowReachesTheState(t *testing.T) {
 	v := buildInput(t, plainInput)
-	v.update(func(s *InputState, w *gpui.Window, cx *inputCx[InputMode]) { s.Focus(w, cx) })
+	v.update(func(s *InputState, w *gpui.Window, cx *gpui.Context[InputBaseState[InputMode]]) { s.Focus(w, cx) })
 	v.cx.RunUntilParked()
 	v.cx.SimulateInput("abc")
 	v.cx.SimulateKeystrokes("backspace left")

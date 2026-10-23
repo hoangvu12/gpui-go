@@ -126,7 +126,7 @@ func (l *Lsp) documentColorsForRange(text rope.Rope, visibleRange InputSelection
 
 // updateDocumentColors refetches the colors after a 100ms debounce
 // (U:input/editor/lsp/document_colors.rs:84-123).
-func (l *Lsp) updateDocumentColors(text rope.Rope, w *gpui.Window, cx *inputCx[EditorMode]) {
+func (l *Lsp) updateDocumentColors(text rope.Rope, w *gpui.Window, cx *gpui.Context[InputBaseState[EditorMode]]) {
 	provider := l.DocumentColorProvider
 	if provider == nil {
 		return
@@ -145,7 +145,7 @@ func (l *Lsp) updateDocumentColors(text rope.Rope, w *gpui.Window, cx *inputCx[E
 			return struct{}{}
 		}
 		acx.AsyncApp.Update(func(app *gpui.App) {
-			_ = inputState.TryUpdate(app, func(s *EditorState, cx *inputCx[EditorMode]) {
+			_ = inputState.TryUpdate(app, func(s *EditorState, cx *gpui.Context[InputBaseState[EditorMode]]) {
 				documentColors, ok := documentColorsFromResponse(colors)
 				if !ok {
 					return
