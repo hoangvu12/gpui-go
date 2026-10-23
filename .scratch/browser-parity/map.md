@@ -21,6 +21,8 @@ The destination for this map is a research-backed proposal. It covers which brow
 
 ## Decisions so far
 
+- [Luau for UI scripting](../../docs/adr/0002-luau-ui-scripting.md) (D15, the user, 2026-10-23): a zgui-style script layer with the Luau VM in the native DLL; yaegi was probed and ruled out.
+
 - [Synthesis](issues/07-synthesis.md): the proposal is research/browser-parity/README.md. The core gets browser behaviour without the look; Base becomes the look layer in its own repo. Decisions D0-D16 await the user, then /to-spec.
 
 ## Not yet specified
