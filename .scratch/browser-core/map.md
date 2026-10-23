@@ -29,6 +29,8 @@ The user approved the 76-ticket breakdown on 2026-10-23 ("looks good").
 
 ## Decisions so far
 
+- [01 - Browser-parity harness](issues/01-browser-parity-harness.md): `internal/parity` + `cmd/parityrecord` + guide `docs/browser-parity-harness.md`. Fixtures run at device pixel ratio 2, mapped by `data-id` and `.ID().DebugSelector()`. Records come from headless Chrome over a raw DevTools websocket. Replay uses the hostless test window and real text system, with pixels rendered through a hidden off-screen window. Tier C tolerances are provisional (at least 2x the measured correct values). Known gap: the pin fires click before mouseup (left to the D12 input ticket). Fixture size is limited to the screen height (~1060 device px).
+
 - [02 - Wheel page-scroll setting and capture release](issues/02-wheel-page-scroll-and-capture-release.md): WHEEL_PAGESCROLL becomes a `ScrollDelta` Pages variant, resolved at the scroller with Chromium's page step; mouse capture is released only when no button is held.
 - [03 - Missing cursors and frames for hidden windows](issues/03-cursors-and-hidden-window-frames.md): grab, grabbing, copy and context-menu are runtime-built 32x32 monochrome cursors (Windows has no system ones); minimized or DWM-cloaked windows keep their frame demand pending until visible. Ordinary occlusion is not detected.
 

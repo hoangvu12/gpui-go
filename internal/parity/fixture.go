@@ -1,0 +1,287 @@
+//go:build windows
+
+// Package parity is the browser-parity harness of the browser-core
+// spec's seam 1 (.scratch/browser-parity/spec.md, "Testing Decisions"):
+// one fixture is a small HTML/CSS page, the equivalent gpui-go view and
+// a scripted input sequence; a recorder captures the page once in
+// headless Chrome (element boxes, the event log for the input sequence,
+// a screenshot, the Chromium version) as checked-in files, and a replay
+// test runs the gpui-go view in the hostless test window on the real
+// text system with simulated input and compares
+//
+//   - boxes exactly (Tier A, layout geometry),
+//   - the event log exactly (Tier B, an app-visible transcript),
+//   - pixels approximately (Tier C, a per-fixture tolerance that is
+//     documented as provisional until research 19's calibration runs).
+//
+// The recorder is run by hand (cmd/parityrecord); the replay is an
+// ordinary go test. Everything here is headless and offscreen: the
+// gpui side drives the deterministic test window (virtual clock,
+// simulated input), and the pixel capture renders that window's scene
+// through a hidden, never-shown host window's surface. GPUI_REAL_INPUT_
+// TESTS is never set by this harness.
+//
+// See docs/browser-parity-harness.md for the fixture-writing guide.
+package parity
+
+import (
+	"fmt"
+	"sync"
+
+	"github.com/hoangvu12/gpui-go/gpui"
+)
+
+// Size is a logical (CSS-pixel) viewport size: both the Chrome page and
+// the gpui test window are sized to it, and both sides' device pixel
+// ratio is the test window's fixed 2.0, so one coordinate space serves
+// the whole fixture.
+type Size struct {
+	Width  float32 `json:"width"`
+	Height float32 `json:"height"`
+}
+
+// StepKind is one scripted input step's kind.
+type StepKind string
+
+// The scripted input steps. Positions are logical (CSS) pixels from the
+// viewport's top-left; the same step drives Chrome (CDP input dispatch,
+// full hit testing) and the gpui test window (simulated events).
+const (
+	// StepMove moves the pointer to (X, Y).
+	StepMove StepKind = "move"
+	// StepDown presses the button at (X, Y).
+	StepDown StepKind = "down"
+	// StepUp releases the button at (X, Y).
+	StepUp StepKind = "up"
+	// StepClick is sugar for move, down, up of the left button at
+	// (X, Y) — expanded identically on both sides.
+	StepClick StepKind = "click"
+	// StepKey presses and releases one keystroke ("a", "enter",
+	// "ctrl-a", the pinned keystroke syntax).
+	StepKey StepKind = "key"
+)
+
+// MouseButton names, shared by the recorder and the replay.
+const (
+	ButtonLeft   = "left"
+	ButtonMiddle = "middle"
+	ButtonRight  = "right"
+)
+
+// Step is one scripted input event of a fixture's sequence.
+type Step struct {
+	Kind StepKind
+	X, Y float32
+	// Button is the step's mouse button (ButtonLeft and so on).
+	Button string
+	// Key is the keystroke of a StepKey step, in the pinned keystroke
+	// syntax ("a", "enter", "ctrl-shift-]").
+	Key string
+}
+
+// Move returns a pointer-move step to (x, y).
+func Move(x, y float32) Step { return Step{Kind: StepMove, X: x, Y: y} }
+
+// Down returns a button-press step at (x, y).
+func Down(x, y float32, button string) Step {
+	return Step{Kind: StepDown, X: x, Y: y, Button: button}
+}
+
+// Up returns a button-release step at (x, y).
+func Up(x, y float32, button string) Step {
+	return Step{Kind: StepUp, X: x, Y: y, Button: button}
+}
+
+// Click returns a left-button click step at (x, y).
+func Click(x, y float32) Step { return Step{Kind: StepClick, X: x, Y: y, Button: ButtonLeft} }
+
+// Key returns a keystroke step.
+func Key(keystroke string) Step { return Step{Kind: StepKey, Key: keystroke} }
+
+// PixelTolerance is a fixture's provisional Tier C gate. Every number
+// here is a placeholder until the research-19 calibration (reference
+// repeat noise, injected-defect detection) freezes real thresholds;
+// each fixture carries its own values and the harness reports the
+// measured statistics next to the tolerances when it fails.
+type PixelTolerance struct {
+	// MaxMeanChannelDiff bounds the mean per-channel difference over
+	// the whole image (see pixelStats).
+	MaxMeanChannelDiff float64 `json:"maxMeanChannelDiff"`
+	// MaxROIMeanChannelDiff bounds the mean per-channel difference
+	// within any compared element's box (the whole-image number can
+	// average away one badly wrong element; research 19 §1.2).
+	MaxROIMeanChannelDiff float64 `json:"maxROIMeanChannelDiff"`
+	// MaxHotPixelFraction bounds the fraction of pixels whose mean
+	// channel difference exceeds 32, image-wide and per box.
+	MaxHotPixelFraction float64 `json:"maxHotPixelFraction"`
+}
+
+// Fixture is one browser-parity fixture: an HTML/CSS page, the
+// equivalent gpui-go view, the scripted input sequence, and the
+// comparison policy.
+type Fixture struct {
+	// Name is the fixture's identity: the recorded files live in
+	// internal/parity/testdata/<Name>/.
+	Name string
+	// HTML is the whole page (doctype on). The recorder writes it to a
+	// temp file, loads it in headless Chrome and keeps a copy beside
+	// the recorded files for reference.
+	HTML string
+	// Window is the page's and the gpui test window's logical size.
+	Window Size
+	// View builds the gpui-go view of the page. It receives the event
+	// log the harness's instrumented handlers append to; the returned
+	// element tree becomes the test window's root. The element ids
+	// (Div().ID(...)) map the page's data-id attributes.
+	View func(log *EventLog) gpui.AnyElement
+	// Steps is the scripted input sequence, dispatched to Chrome at
+	// record time and simulated in the test window at replay time.
+	Steps []Step
+	// EventKinds are the event kinds the page's [data-id] elements
+	// listen for (and the view's handlers log): the Tier B transcript's
+	// vocabulary for this fixture. A kind here that the view does not
+	// log (or the reverse) is a transcript difference the comparison
+	// reports. Today the vocabulary is "mousedown", "mouseup" and
+	// "click"; a fixture avoids the kinds whose delivery order the pin
+	// currently gets wrong (see docs/browser-parity-harness.md, known
+	// divergences).
+	EventKinds []string
+	// BoxIDs are the page's data-id values (the gpui elements' ids)
+	// whose boxes are compared exactly, in this order.
+	BoxIDs []string
+	// Tolerance is the provisional Tier C gate.
+	Tolerance PixelTolerance
+}
+
+// EventRecord is one app-visible event of the Tier B transcript.
+type EventRecord struct {
+	// Kind is the canonical event kind ("mousedown", "click", ...).
+	Kind string `json:"kind"`
+	// Target is the element the fixture's listener is bound to: the
+	// page's data-id, the gpui element's id.
+	Target string `json:"target"`
+	// DefaultPrevented is the event's default-prevented state.
+	DefaultPrevented bool `json:"defaultPrevented"`
+}
+
+// EventLog is the fixture-side event recorder the View's handlers
+// append to. The helpers match the page's data-id instrumentation: the
+// recorder's script binds the fixture's EventKinds to every [data-id]
+// element, so one fixture writes both sides' transcript with the same
+// words. The replay marks each dispatched event's recorded entries
+// with the dispatch's default-prevented result, matching the
+// recorder's final-state semantics.
+type EventLog struct {
+	entries []EventRecord
+}
+
+// Events returns the recorded transcript.
+func (l *EventLog) Events() []EventRecord { return l.entries }
+
+// Append records one event.
+func (l *EventLog) Append(kind, target string) {
+	l.entries = append(l.entries, EventRecord{Kind: kind, Target: target})
+}
+
+// markDefaultPrevented sets the default-prevented state of every entry
+// from index on (the entries one dispatched platform event produced),
+// the replay side of the DOM event's final defaultPrevented.
+func (l *EventLog) markDefaultPrevented(from int, prevented bool) {
+	for i := from; i < len(l.entries); i++ {
+		l.entries[i].DefaultPrevented = prevented
+	}
+}
+
+// MouseDown returns an OnMouseDown handler that records a "mousedown"
+// on target.
+func (l *EventLog) MouseDown(target string) func(*gpui.MouseDownEvent, *gpui.Window, *gpui.App) {
+	return func(*gpui.MouseDownEvent, *gpui.Window, *gpui.App) { l.Append("mousedown", target) }
+}
+
+// MouseUp returns an OnMouseUp handler that records a "mouseup" on
+// target.
+func (l *EventLog) MouseUp(target string) func(*gpui.MouseUpEvent, *gpui.Window, *gpui.App) {
+	return func(*gpui.MouseUpEvent, *gpui.Window, *gpui.App) { l.Append("mouseup", target) }
+}
+
+// Click returns an OnClick handler that records a "click" on target.
+func (l *EventLog) Click(target string) func(*gpui.ClickEvent, *gpui.Window, *gpui.App) {
+	return func(*gpui.ClickEvent, *gpui.Window, *gpui.App) { l.Append("click", target) }
+}
+
+// ---------------------------------------------------------------------------
+// The fixture registry
+// ---------------------------------------------------------------------------
+
+var registry struct {
+	mu       sync.Mutex
+	fixtures []Fixture
+	byName   map[string]Fixture
+}
+
+// eventKindVocabulary is the event kinds a fixture's EventKinds may
+// name: exactly the kinds the EventLog helpers bind (and the
+// recorder's page instrumentation understands). Extend the helpers and
+// this set together; a kind outside it fails validation with this
+// message.
+var eventKindVocabulary = map[string]bool{
+	"mousedown": true,
+	"mouseup":   true,
+	"click":     true,
+}
+
+// validate checks a fixture's invariants at record and replay time,
+// so a vocabulary mistake fails before it produces a confusing diff.
+func validate(f Fixture) error {
+	if f.Name == "" {
+		return fmt.Errorf("parity: a fixture must have a name")
+	}
+	for _, kind := range f.EventKinds {
+		if !eventKindVocabulary[kind] {
+			return fmt.Errorf("parity: fixture %q: event kind %q is outside the harness's vocabulary (the EventLog helpers bind mousedown, mouseup and click today; extend them together with the recorder)",
+				f.Name, kind)
+		}
+	}
+	for _, step := range f.Steps {
+		switch step.Kind {
+		case StepMove, StepDown, StepUp, StepClick, StepKey:
+		default:
+			return fmt.Errorf("parity: fixture %q: unknown step kind %q", f.Name, step.Kind)
+		}
+	}
+	return nil
+}
+
+// Register adds a fixture to the harness's registry (a fixture
+// package's init). A duplicate name is a panic: fixture names are file
+// names.
+func Register(f Fixture) {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	if registry.byName == nil {
+		registry.byName = map[string]Fixture{}
+	}
+	if f.Name == "" {
+		panic("parity: a fixture must have a name")
+	}
+	if _, dup := registry.byName[f.Name]; dup {
+		panic(fmt.Sprintf("parity: fixture %q is registered twice", f.Name))
+	}
+	registry.byName[f.Name] = f
+	registry.fixtures = append(registry.fixtures, f)
+}
+
+// All returns every registered fixture in registration order.
+func All() []Fixture {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	return append([]Fixture(nil), registry.fixtures...)
+}
+
+// Lookup returns the registered fixture by name.
+func Lookup(name string) (Fixture, bool) {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	f, ok := registry.byName[name]
+	return f, ok
+}

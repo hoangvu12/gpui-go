@@ -1,0 +1,47 @@
+{
+  "name": "tracer-box-click",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T18:35:02Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "box": {
+      "x": 220,
+      "y": 160,
+      "width": 200,
+      "height": 80
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    }
+  },
+  "events": [
+    {
+      "kind": "mousedown",
+      "target": "box",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "box",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    }
+  ],
+  "screenshot": "chrome.png"
+}
