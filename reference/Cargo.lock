@@ -1340,6 +1340,7 @@ dependencies = [
  "gpui_ce_render",
  "image",
  "lyon",
+ "naga 24.0.0",
  "taffy",
  "wgsl-rs",
  "windows 0.62.2",

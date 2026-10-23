@@ -157,8 +157,8 @@ func (k *SceneKernel) InsertQuad(q Quad) error {
 	rec := native.NewSceneQuadRecord()
 	rec.Bounds = sceneBoundsRecord(q.Bounds)
 	rec.ContentMask = sceneBoundsRecord(q.ContentMask)
-	rec.Background = sceneColorRecord(q.Background.Solid)
-	rec.BorderColor = sceneColorRecord(q.BorderColor.Solid)
+	rec.Background = sceneBackgroundRecord(q.Background.Solid)
+	rec.BorderColor = sceneBackgroundRecord(q.BorderColor.Solid)
 	for i, radius := range [4]float32{q.CornerRadii.TopLeft, q.CornerRadii.TopRight, q.CornerRadii.BottomRight, q.CornerRadii.BottomLeft} {
 		rec.CornerRadii[i] = math.Float32bits(radius)
 	}
@@ -189,7 +189,7 @@ func (k *SceneKernel) InsertShadow(sh Shadow) error {
 	rec.BlurRadius = math.Float32bits(sh.BlurRadius)
 	rec.Bounds = sceneBoundsRecord(sh.Bounds)
 	rec.ContentMask = sceneBoundsRecord(sh.ContentMask)
-	rec.Color = sceneColorRecord(sh.Color.Solid)
+	rec.Color = sceneBackgroundRecord(sh.Color.Solid)
 	rec.ElementBounds = sceneBoundsRecord(sh.ElementBounds)
 	for i, radius := range [4]float32{sh.CornerRadii.TopLeft, sh.CornerRadii.TopRight, sh.CornerRadii.BottomRight, sh.CornerRadii.BottomLeft} {
 		rec.CornerRadii[i] = math.Float32bits(radius)
@@ -318,8 +318,8 @@ func (k *SceneKernel) Quads() ([]Quad, error) {
 			Order:           rec.Order,
 			Bounds:          sceneBoundsValue(rec.Bounds),
 			ContentMask:     sceneBoundsValue(rec.ContentMask),
-			Background:      Background{Solid: sceneColorValue(rec.Background)},
-			BorderColor:     Background{Solid: sceneColorValue(rec.BorderColor)},
+			Background:      Background{Solid: sceneBackgroundValue(rec.Background)},
+			BorderColor:     Background{Solid: sceneBackgroundValue(rec.BorderColor)},
 			BorderStyle:     BorderStyle(rec.BorderStyle),
 			DashedLength:    math.Float32frombits(rec.BorderDashedLength),
 			DashedGap:       math.Float32frombits(rec.BorderDashedGap),
@@ -348,7 +348,7 @@ func (k *SceneKernel) Shadows() ([]Shadow, error) {
 			BlurRadius:         math.Float32frombits(rec.BlurRadius),
 			Bounds:             sceneBoundsValue(rec.Bounds),
 			ContentMask:        sceneBoundsValue(rec.ContentMask),
-			Color:              Background{Solid: sceneColorValue(rec.Color)},
+			Color:              Background{Solid: sceneBackgroundValue(rec.Color)},
 			ElementBounds:      sceneBoundsValue(rec.ElementBounds),
 			ElementCornerRadii: cornersValue(rec.ElementCornerRadii),
 			Inset:              rec.Inset == 1,
@@ -541,6 +541,20 @@ func sceneColorRecord(c Hsla) native.SceneColor {
 
 func sceneColorValue(rec native.SceneColor) Hsla {
 	h, s, l, a := rec.HSLA()
+	return Hsla{H: h, S: s, L: l, A: a}
+}
+
+// sceneBackgroundRecord packs the solid arm of the Go Background (the
+// gradient arm arrives with the browser-core styling ticket; the ABI
+// record carries both).
+func sceneBackgroundRecord(c Hsla) native.SceneBackground {
+	return native.SceneBackgroundOf(c.H, c.S, c.L, c.A)
+}
+
+// sceneBackgroundValue reads the solid arm of a background record (the
+// Go Background is solid-only until the styling tickets land).
+func sceneBackgroundValue(rec native.SceneBackground) Hsla {
+	h, s, l, a := rec.Solid()
 	return Hsla{H: h, S: s, L: l, A: a}
 }
 

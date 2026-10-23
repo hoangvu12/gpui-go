@@ -89,7 +89,8 @@ use windows::Win32::Graphics::Dxgi::DXGI_PRESENT;
 
 use crate::scene::{
     GpuiGoSceneSurfaceRecord, SceneRenderSnapshot, SceneRenderSnapshot as Snapshot,
-    batch_primitive_kind, command_kind, scene_render_snapshot, surface_source_kind,
+    batch_primitive_kind, command_kind, scene_render_snapshot, snapshot_bounds,
+    snapshot_radii, surface_source_kind,
 };
 
 use super::{
@@ -154,6 +155,8 @@ pub(super) enum ShaderModule {
     Blur,
     BlurComposite,
     SmoothedBlurComposite,
+    /// The vendored backdrop mirror-crop pass (rev 15).
+    BackdropCrop,
 }
 
 impl ShaderModule {
@@ -175,6 +178,7 @@ impl ShaderModule {
             Self::Blur => "blur",
             Self::BlurComposite => "blur_composite",
             Self::SmoothedBlurComposite => "smoothed_blur_composite",
+            Self::BackdropCrop => "backdrop_crop",
         }
     }
 
@@ -188,12 +192,94 @@ impl ShaderModule {
 
     /// Both compiled stages plus the draw-constants register the vertex
     /// stage expects (the pin's `bytecode()`; runtime HLSL compilation
-    /// is intentionally unsupported by the pinned artifact).
-    fn bytecode(self) -> Result<gpui_render::artifacts::Dx11Bytecode, i32> {
-        match self.native_shader().dx11 {
-            Dx11Shader::Sm50(bytecode) => Ok(bytecode),
-            Dx11Shader::NativeWindowsBuildRequired => Err(renderer_status::ERR_DEVICE),
+    /// is intentionally unsupported). The six rev-15 pipelines (quads,
+    /// shadows, the blur composites and the backdrop crop) resolve to
+    /// the vendored, patched DXBC this crate's build script compiles
+    /// from `native/shaders/` — the recorded divergences (drop-shadow
+    /// border-box clip-out, CSS gradient geometry and premultiplied
+    /// sRGB mixing, the colour-matrix composite and the backdrop crop)
+    /// live there; every other module keeps the pinned artifact blobs.
+    fn bytecode(self) -> Result<StageBytecode, i32> {
+        match self {
+            Self::Quad => Ok(vendored_bytecode(
+                "quads",
+                include_bytes!(concat!(env!("OUT_DIR"), "/quads.vs_5_0.dxbc")),
+                include_bytes!(concat!(env!("OUT_DIR"), "/quads.ps_5_0.dxbc")),
+                true,
+            )),
+            Self::SmoothedQuad => Ok(vendored_bytecode(
+                "smoothed_quads",
+                include_bytes!(concat!(env!("OUT_DIR"), "/smoothed_quads.vs_5_0.dxbc")),
+                include_bytes!(concat!(env!("OUT_DIR"), "/smoothed_quads.ps_5_0.dxbc")),
+                true,
+            )),
+            Self::Shadow => Ok(vendored_bytecode(
+                "shadows",
+                include_bytes!(concat!(env!("OUT_DIR"), "/shadows.vs_5_0.dxbc")),
+                include_bytes!(concat!(env!("OUT_DIR"), "/shadows.ps_5_0.dxbc")),
+                true,
+            )),
+            Self::SmoothedShadow => Ok(vendored_bytecode(
+                "smoothed_shadows",
+                include_bytes!(concat!(env!("OUT_DIR"), "/smoothed_shadows.vs_5_0.dxbc")),
+                include_bytes!(concat!(env!("OUT_DIR"), "/smoothed_shadows.ps_5_0.dxbc")),
+                true,
+            )),
+            Self::BlurComposite => Ok(vendored_bytecode(
+                "blur_composite",
+                include_bytes!(concat!(env!("OUT_DIR"), "/blur_composite.vs_5_0.dxbc")),
+                include_bytes!(concat!(env!("OUT_DIR"), "/blur_composite.ps_5_0.dxbc")),
+                false,
+            )),
+            Self::SmoothedBlurComposite => Ok(vendored_bytecode(
+                "smoothed_blur_composite",
+                include_bytes!(concat!(env!("OUT_DIR"), "/smoothed_blur_composite.vs_5_0.dxbc")),
+                include_bytes!(concat!(env!("OUT_DIR"), "/smoothed_blur_composite.ps_5_0.dxbc")),
+                false,
+            )),
+            Self::BackdropCrop => Ok(vendored_bytecode(
+                "backdrop_crop",
+                include_bytes!(concat!(env!("OUT_DIR"), "/backdrop_crop.vs_5_0.dxbc")),
+                include_bytes!(concat!(env!("OUT_DIR"), "/backdrop_crop.ps_5_0.dxbc")),
+                false,
+            )),
+            _ => match self.native_shader().dx11 {
+                Dx11Shader::Sm50(bytecode) => Ok(StageBytecode {
+                    vertex: bytecode.vertex,
+                    fragment: bytecode.fragment,
+                    draw_constants: bytecode.draw_constants.map(|binding| binding.register),
+                }),
+                Dx11Shader::NativeWindowsBuildRequired => Err(renderer_status::ERR_DEVICE),
+            },
         }
+    }
+}
+
+/// One pipeline's resolved DXBC stages plus the draw-constants register
+/// the vertex stage expects (the vendored and pinned sources' common
+/// shape; rev 15).
+struct StageBytecode {
+    vertex: &'static [u8],
+    fragment: &'static [u8],
+    draw_constants: Option<u32>,
+}
+
+/// Wraps the vendored DXBC blobs. The instanced pipelines (quads,
+/// shadows) carry the draw-constants register the pinned table assigns
+/// (`DX11_DRAW_CONSTANTS_REGISTER`, b3 — the vendored interface table
+/// pins the same value); the blur-layout pipelines (the composites and
+/// the backdrop crop) carry none.
+fn vendored_bytecode(
+    label: &str,
+    vertex: &'static [u8],
+    fragment: &'static [u8],
+    draw_constants: bool,
+) -> StageBytecode {
+    let _ = label;
+    StageBytecode {
+        vertex,
+        fragment,
+        draw_constants: draw_constants.then_some(shader_interface::DX11_DRAW_CONSTANTS_REGISTER),
     }
 }
 
@@ -245,6 +331,12 @@ struct GlobalElements {
     font_buffer: ID3D11Buffer,
     draw_constants_buffer: ID3D11Buffer,
     sampler: Option<ID3D11SamplerState>,
+    /// The nearest-neighbour sampler of pixelated sprite batches (CSS
+    /// `image-rendering: pixelated`; rev 15).
+    point_sampler: Option<ID3D11SamplerState>,
+    /// The mirror-addressing sampler of the backdrop crop's blur passes
+    /// (CSS filter-effects-2's mirrored backdrop edges; rev 15).
+    mirror_sampler: Option<ID3D11SamplerState>,
 }
 
 impl GlobalElements {
@@ -261,30 +353,108 @@ impl GlobalElements {
             create_constant_buffer(device, std::mem::size_of::<FontRasterizationUniforms>())?;
         let draw_constants_buffer =
             create_constant_buffer(device, std::mem::size_of::<Dx11DrawConstants>())?;
-        let sampler = unsafe {
-            let desc = D3D11_SAMPLER_DESC {
-                Filter: D3D11_FILTER_MIN_MAG_MIP_LINEAR,
-                AddressU: D3D11_TEXTURE_ADDRESS_WRAP,
-                AddressV: D3D11_TEXTURE_ADDRESS_WRAP,
-                AddressW: D3D11_TEXTURE_ADDRESS_WRAP,
-                MipLODBias: 0.0,
-                MaxAnisotropy: 1,
-                ComparisonFunc: D3D11_COMPARISON_ALWAYS,
-                BorderColor: [0.0; 4],
-                MinLOD: 0.0,
-                MaxLOD: D3D11_FLOAT32_MAX,
-            };
-            let mut output = None;
-            device.CreateSamplerState(&desc, Some(&mut output)).map_err(|e| e.code().0)?;
-            output.ok_or(renderer_status::ERR_DEVICE)?
+        let make_sampler = |filter: D3D11_FILTER, address: D3D11_TEXTURE_ADDRESS_MODE| {
+            unsafe {
+                let desc = D3D11_SAMPLER_DESC {
+                    Filter: filter,
+                    AddressU: address,
+                    AddressV: address,
+                    AddressW: address,
+                    MipLODBias: 0.0,
+                    MaxAnisotropy: 1,
+                    ComparisonFunc: D3D11_COMPARISON_ALWAYS,
+                    BorderColor: [0.0; 4],
+                    MinLOD: 0.0,
+                    MaxLOD: D3D11_FLOAT32_MAX,
+                };
+                let mut output = None;
+                device.CreateSamplerState(&desc, Some(&mut output)).map_err(|e| e.code().0)?;
+                output.ok_or(renderer_status::ERR_DEVICE)
+            }
         };
+        let sampler = make_sampler(D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP)?;
+        let point_sampler = make_sampler(D3D11_FILTER_MIN_MAG_MIP_POINT, D3D11_TEXTURE_ADDRESS_WRAP)?;
+        let mirror_sampler =
+            make_sampler(D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR)?;
         Ok(Self {
             globals_buffer,
             font_buffer,
             draw_constants_buffer,
             sampler: Some(sampler),
+            point_sampler: Some(point_sampler),
+            mirror_sampler: Some(mirror_sampler),
         })
     }
+}
+
+// ---------------------------------------------------------------------------
+// The rev-15 composite and backdrop-crop extensions (browser-core
+// ticket 39)
+// ---------------------------------------------------------------------------
+
+/// The composite pass's extension payload, mirroring the vendored
+/// shader's `ColorMatrixUniforms` (the composed colour-matrix filter and
+/// the composite's region-relative sampling offset). 112 bytes.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CompositeExtensionsUniforms {
+    row0: [f32; 4],
+    row1: [f32; 4],
+    row2: [f32; 4],
+    row3: [f32; 4],
+    offset: [f32; 4],
+    sample_offset: [f32; 2],
+    enabled: u32,
+    padding: [u32; 5],
+}
+
+impl Default for CompositeExtensionsUniforms {
+    fn default() -> Self {
+        Self {
+            row0: [1.0, 0.0, 0.0, 0.0],
+            row1: [0.0, 1.0, 0.0, 0.0],
+            row2: [0.0, 0.0, 1.0, 0.0],
+            row3: [0.0, 0.0, 0.0, 1.0],
+            offset: [0.0; 4],
+            sample_offset: [0.0; 2],
+            enabled: 0,
+            padding: [0; 5],
+        }
+    }
+}
+
+/// The backdrop mirror-crop pass's uniform, mirroring the vendored
+/// shader's `BackdropCropUniforms`. 32 bytes.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct BackdropCropUniforms {
+    origin: [f32; 2],
+    source_size: [f32; 2],
+    region_size: [f32; 2],
+    margin: [f32; 2],
+}
+
+/// Which extra bindings one blur pass carries (rev 15): the composite's
+/// colour-matrix extension cbuffer (b5), the crop pass's uniform (b6),
+/// or none (the pinned passes).
+#[derive(Clone, Copy)]
+enum BlurPassExtras<'a> {
+    None,
+    Composite(&'a CompositeExtensionsUniforms),
+    Crop(&'a BackdropCropUniforms),
+}
+
+/// One backdrop's crop state: the source region, the mirrored margins,
+/// the crop layout size (`region + 2*margin`, exactly the texture's
+/// size — the passes' normalized coordinates require the match), and
+/// the crop texture's views.
+struct BackdropCropRegion {
+    origin: [f32; 2],
+    region: [f32; 2],
+    margin: [f32; 2],
+    total: [f32; 2],
+    rtv: Option<ID3D11RenderTargetView>,
+    srv: Option<ID3D11ShaderResourceView>,
 }
 
 // ---------------------------------------------------------------------------
@@ -330,8 +500,7 @@ impl InstancePipeline {
         let bytecode = module.bytecode()?;
         let draw_constants = bytecode
             .draw_constants
-            .ok_or(renderer_status::ERR_DEVICE)?
-            .register;
+            .ok_or(renderer_status::ERR_DEVICE)?;
         let vertex = create_vertex_shader(device, bytecode.vertex)?;
         let fragment = create_fragment_shader(device, bytecode.fragment)?;
         let (buffer, view) = create_instance_buffer(device, element_size, initial_capacity)?;
@@ -363,8 +532,7 @@ impl InstancePipeline {
         }
         let draw_constants = bytecode
             .draw_constants
-            .ok_or(renderer_status::ERR_DEVICE)?
-            .register;
+            .ok_or(renderer_status::ERR_DEVICE)?;
         if draw_constants != self.draw_constants_register {
             return Err(renderer_status::ERR_DEVICE);
         }
@@ -415,15 +583,30 @@ impl InstancePipeline {
         first: u32,
         count: u32,
     ) -> Result<(), i32> {
+        self.draw_instances_sampling(frame, texture, first, count, false)
+    }
+
+    /// `draw_instances` with the sampling choice (rev 15): a pixelated
+    /// batch binds the point sampler instead of the shared bilinear one
+    /// (CSS `image-rendering: pixelated`).
+    fn draw_instances_sampling(
+        &self,
+        frame: &FrameBindings<'_>,
+        texture: Option<&[Option<ID3D11ShaderResourceView>; 1]>,
+        first: u32,
+        count: u32,
+        pixelated: bool,
+    ) -> Result<(), i32> {
         let vertex_count = self
             .specification
             .vertex_count
             .fixed()
             .ok_or(renderer_status::ERR_DEVICE)?;
-        self.draw_with_variant(frame, texture, vertex_count, first, count, false)
+        self.draw_with_variant(frame, texture, vertex_count, first, count, false, pixelated)
     }
 
-    /// The pin's `draw_instances_variant` (the smoothed variant toggle).
+    /// The pin's `draw_instances_variant` (the smoothed variant toggle),
+    /// with the sampling choice (rev 15).
     fn draw_instances_variant(
         &self,
         frame: &FrameBindings<'_>,
@@ -431,6 +614,7 @@ impl InstancePipeline {
         first: u32,
         count: u32,
         use_variant: bool,
+        pixelated: bool,
     ) -> Result<(), i32> {
         let specification = if use_variant {
             self.variant
@@ -444,7 +628,7 @@ impl InstancePipeline {
             .vertex_count
             .fixed()
             .ok_or(renderer_status::ERR_DEVICE)?;
-        self.draw_with_variant(frame, texture, vertex_count, first, count, use_variant)
+        self.draw_with_variant(frame, texture, vertex_count, first, count, use_variant, pixelated)
     }
 
     /// The pin's `draw_vertices` (vertex-pulled, one instance).
@@ -452,13 +636,14 @@ impl InstancePipeline {
         if self.specification.vertex_count.fixed().is_some() {
             return Err(renderer_status::ERR_DEVICE);
         }
-        self.draw_with_variant(frame, None, vertex_count, 0, 1, false)
+        self.draw_with_variant(frame, None, vertex_count, 0, 1, false, false)
     }
 
     /// The pin's `draw_with_variant`: the single place that issues an
     /// instanced draw. The batch base reaches the shader through the
     /// draw-constants cbuffer (`StartInstanceLocation` stays zero, the
     /// shader adds the base itself).
+    #[allow(clippy::too_many_arguments)]
     fn draw_with_variant(
         &self,
         frame: &FrameBindings<'_>,
@@ -467,6 +652,7 @@ impl InstancePipeline {
         first: u32,
         count: u32,
         use_variant: bool,
+        pixelated: bool,
     ) -> Result<(), i32> {
         if count == 0 || vertex_count == 0 {
             return Ok(());
@@ -516,7 +702,13 @@ impl InstancePipeline {
             ctx.VSSetConstantBuffers(self.draw_constants_register, Some(&draw_constants));
             ctx.OMSetBlendState(&self.blend_state, None, 0xFFFFFFFF);
             if let Some(texture) = texture {
-                ctx.PSSetSamplers(PRIMARY_SAMPLER_REGISTER, Some(slice::from_ref(&frame.globals.sampler)));
+                // rev 15: a pixelated batch samples nearest-neighbour.
+                let sampler = if pixelated {
+                    frame.globals.point_sampler.clone()
+                } else {
+                    frame.globals.sampler.clone()
+                };
+                ctx.PSSetSamplers(PRIMARY_SAMPLER_REGISTER, Some(slice::from_ref(&sampler)));
                 // The vertex stage reads the atlas dimensions for tile
                 // coordinates.
                 ctx.VSSetShaderResources(PRIMARY_TEXTURE_REGISTER, Some(texture));
@@ -565,7 +757,15 @@ pub(super) struct DrawPipelines {
     blur_composite_fragment: ID3D11PixelShader,
     smoothed_blur_composite_vertex: ID3D11VertexShader,
     smoothed_blur_composite_fragment: ID3D11PixelShader,
+    /// The vendored backdrop mirror-crop pass (rev 15).
+    backdrop_crop_vertex: ID3D11VertexShader,
+    backdrop_crop_fragment: ID3D11PixelShader,
     blur_params_buffer: ID3D11Buffer,
+    /// The composite extensions cbuffer (b5, the colour matrix and the
+    /// sampling offset; rev 15).
+    composite_extensions_buffer: ID3D11Buffer,
+    /// The backdrop crop cbuffer (b6; rev 15).
+    backdrop_crop_buffer: ID3D11Buffer,
     blur_blend_replace: ID3D11BlendState,
     blur_blend_composite: ID3D11BlendState,
 }
@@ -654,8 +854,17 @@ impl DrawPipelines {
             create_vertex_shader(device, smoothed_blur_composite.vertex)?;
         let smoothed_blur_composite_fragment =
             create_fragment_shader(device, smoothed_blur_composite.fragment)?;
+        let backdrop_crop = ShaderModule::BackdropCrop.bytecode()?;
+        let backdrop_crop_vertex = create_vertex_shader(device, backdrop_crop.vertex)?;
+        let backdrop_crop_fragment = create_fragment_shader(device, backdrop_crop.fragment)?;
         let blur_params_buffer =
             create_constant_buffer(device, std::mem::size_of::<BlurUniforms>())?;
+        let composite_extensions_buffer = create_constant_buffer(
+            device,
+            std::mem::size_of::<CompositeExtensionsUniforms>(),
+        )?;
+        let backdrop_crop_buffer =
+            create_constant_buffer(device, std::mem::size_of::<BackdropCropUniforms>())?;
         let blur_blend_replace = create_blend_state_no_blend(device)?;
         // Premultiplied (One / InvSrcAlpha) — the composite outputs a
         // premultiplied blurred sample; straight-alpha blending would
@@ -688,7 +897,11 @@ impl DrawPipelines {
             blur_composite_fragment,
             smoothed_blur_composite_vertex,
             smoothed_blur_composite_fragment,
+            backdrop_crop_vertex,
+            backdrop_crop_fragment,
             blur_params_buffer,
+            composite_extensions_buffer,
+            backdrop_crop_buffer,
             blur_blend_replace,
             blur_blend_composite,
         })
@@ -807,12 +1020,24 @@ impl BlurResources {
     }
 }
 
+/// The per-surface backdrop crop texture (rev 15): one full-resolution
+/// color target holding the cropped backdrop region plus its mirrored
+/// margins, recreated whenever a backdrop needs a larger one (backdrops
+/// draw strictly sequentially, so one scratch texture serves them all).
+struct BackdropCropTarget {
+    rtv: Option<Option<ID3D11RenderTargetView>>,
+    srv: Option<Option<ID3D11ShaderResourceView>>,
+    width: u32,
+    height: u32,
+}
+
 /// The per-surface, size-dependent draw targets (dropped on resize like
 /// the pin's `recreate_resources`).
 #[derive(Default)]
 pub(super) struct DrawTargets {
     pub(super) path: Option<PathResources>,
     pub(super) blur: Option<BlurResources>,
+    pub(super) backdrop_crop: Option<BackdropCropTarget>,
 }
 
 // ---------------------------------------------------------------------------
@@ -1398,6 +1623,7 @@ fn render_scene(
                         instances.first(),
                         instances.count(),
                         command.smoothed != 0,
+                        false,
                     )?;
                 }
                 batch_primitive_kind::QUADS => {
@@ -1408,6 +1634,7 @@ fn render_scene(
                         instances.first(),
                         instances.count(),
                         command.smoothed != 0,
+                        false,
                     )?;
                 }
                 batch_primitive_kind::PATHS => {
@@ -1450,21 +1677,23 @@ fn render_scene(
                 batch_primitive_kind::MONOCHROME_SPRITES => {
                     let texture = sprite_texture(atlas, 0, command.texture_index)?;
                     let instances = instance_range(command.range_start, command.range_end)?;
-                    draw.pipelines.mono_sprites.draw_instances(
+                    draw.pipelines.mono_sprites.draw_instances_sampling(
                         &frame,
                         Some(&texture),
                         instances.first(),
                         instances.count(),
+                        command.pixelated != 0,
                     )?;
                 }
                 batch_primitive_kind::SUBPIXEL_SPRITES => {
                     let texture = sprite_texture(atlas, 2, command.texture_index)?;
                     let instances = instance_range(command.range_start, command.range_end)?;
-                    draw.pipelines.subpixel_sprites.draw_instances(
+                    draw.pipelines.subpixel_sprites.draw_instances_sampling(
                         &frame,
                         Some(&texture),
                         instances.first(),
                         instances.count(),
+                        command.pixelated != 0,
                     )?;
                 }
                 batch_primitive_kind::POLYCHROME_SPRITES => {
@@ -1476,6 +1705,7 @@ fn render_scene(
                         instances.first(),
                         instances.count(),
                         command.smoothed != 0,
+                        command.pixelated != 0,
                     )?;
                 }
                 batch_primitive_kind::SURFACES => {
@@ -1503,13 +1733,9 @@ fn render_scene(
                             &frame,
                             &current_srv,
                             &current_rtv,
-                            filter.bounds,
-                            filter.content_mask.bounds,
-                            filter.corner_radii,
-                            filter.corner_smoothing,
-                            filter.max_blur_radius(),
-                            filter.opacity,
-                            // Backdrop clips to the rounded rect.
+                            filter,
+                            // Backdrops clip to the rounded rect and
+                            // crop their input to the element (rev 15).
                             true,
                         )?;
                     }
@@ -1564,12 +1790,7 @@ fn render_scene(
                 &frame,
                 &current_srv,
                 &parent_rtv,
-                boundary.bounds,
-                boundary.content_mask.bounds,
-                boundary.corner_radii,
-                boundary.corner_smoothing,
-                boundary.max_blur_radius(),
-                boundary.opacity,
+                boundary,
                 // Content (`filter`) bleeds past its bounds.
                 false,
             )?;
@@ -2088,12 +2309,27 @@ fn dx_blur_pass(
     topology: D3D_PRIMITIVE_TOPOLOGY,
     vertex_count: u32,
     clear: bool,
+    extras: BlurPassExtras<'_>,
 ) -> Result<(), i32> {
     let ctx = frame.device_context;
     update_buffer(ctx, &draw.pipelines.blur_params_buffer, &[params])?;
     let null_srv: [Option<ID3D11ShaderResourceView>; 1] = [None];
     let cbuffers = frame.globals.cbuffers();
     let blur_params = [Some(draw.pipelines.blur_params_buffer.clone())];
+    // The rev-15 extension buffers (b5/b6): the composite's colour
+    // matrix and sampling offset, and the backdrop crop's fold. The
+    // pinned passes bind nothing (their shaders declare neither).
+    let composite_extensions = [Some(draw.pipelines.composite_extensions_buffer.clone())];
+    let backdrop_crop = [Some(draw.pipelines.backdrop_crop_buffer.clone())];
+    match &extras {
+        BlurPassExtras::None => {}
+        BlurPassExtras::Composite(uniforms) => {
+            update_buffer(ctx, &draw.pipelines.composite_extensions_buffer, &[*uniforms])?;
+        }
+        BlurPassExtras::Crop(uniforms) => {
+            update_buffer(ctx, &draw.pipelines.backdrop_crop_buffer, &[*uniforms])?;
+        }
+    }
     unsafe {
         // Unbind any SRV at the blur slot; the target must not be bound
         // as input.
@@ -2111,6 +2347,15 @@ fn dx_blur_pass(
         ctx.PSSetConstantBuffers(0, Some(&cbuffers));
         ctx.VSSetConstantBuffers(DATA_REGISTER, Some(&blur_params));
         ctx.PSSetConstantBuffers(DATA_REGISTER, Some(&blur_params));
+        match &extras {
+            BlurPassExtras::None => {}
+            BlurPassExtras::Composite(_) => {
+                ctx.PSSetConstantBuffers(5, Some(&composite_extensions));
+            }
+            BlurPassExtras::Crop(_) => {
+                ctx.PSSetConstantBuffers(6, Some(&backdrop_crop));
+            }
+        }
         ctx.PSSetSamplers(
             PRIMARY_SAMPLER_REGISTER,
             Some(slice::from_ref(&frame.globals.sampler)),
@@ -2128,7 +2373,21 @@ fn dx_blur_pass(
 /// Blur `source_srv` through the half-res ping/pong textures and
 /// composite the result into `target_rtv` (the pin's
 /// `dx_blur_and_composite`, shared by the backdrop and content-filter
-/// paths).
+/// paths; rev 15 grew the colour-matrix payload and the backdrop's
+/// mirror crop).
+///
+/// rev 15 (browser-core ticket 39):
+/// * The filter record's composed colour matrix applies in the composite
+///   pass (after any blur — a per-pixel linear map commutes with the
+///   uniform-per-channel gaussian, so the CSS chain order is preserved);
+///   a chain with no matrix filters composites exactly as the pin did.
+/// * A backdrop (`clip_rounded`) first crops the source to the element's
+///   pixel-covered bounds with mirrored margins (CSS filter-effects-2
+///   clips the backdrop to the border box; Chromium mirrors the edge
+///   pixels — viz skia_renderer.cc:3254, SkTileMode::kMirror), so
+///   content just outside the element no longer bleeds into the blur.
+///   The blurred input is then the crop texture and the composite
+///   samples it region-relative.
 #[allow(clippy::too_many_arguments)]
 fn dx_blur_and_composite(
     state: &mut RendererState,
@@ -2138,36 +2397,26 @@ fn dx_blur_and_composite(
     frame: &FrameBindings<'_>,
     source_srv: &Option<ID3D11ShaderResourceView>,
     target_rtv: &Option<ID3D11RenderTargetView>,
-    bounds: gpui::Bounds<gpui::ScaledPixels>,
-    content_mask: gpui::Bounds<gpui::ScaledPixels>,
-    corner_radii: gpui::Corners<gpui::ScaledPixels>,
-    corner_smoothing: f32,
-    blur_radius: f32,
-    opacity: f32,
-    // Backdrop clips to the rounded rect; content (`filter`) bleeds past
-    // its bounds.
+    rec: &crate::scene::GpuiGoSceneFilterRecord,
+    // Backdrop clips to the rounded rect and crops its input; content
+    // (`filter`) bleeds past its bounds.
     clip_rounded: bool,
 ) -> Result<(), i32> {
+    let bounds = snapshot_bounds(&rec.bounds);
+    let content_mask = snapshot_bounds(&rec.content_mask);
+    let corner_radii = snapshot_radii(&rec.corner_radii);
+    let corner_smoothing = f32::from_bits(rec.corner_smoothing);
+    let blur_radius = rec.max_blur_radius();
+    let opacity = f32::from_bits(rec.opacity);
+
     let (full_width, full_height, full_vp) = {
         let surface_state = resolve_slot(state, slot_index, slot_generation)?;
         (surface_state.width, surface_state.height, surface_state.viewport)
     };
-    let blur_size = [
-        downsampled_dimension(full_width) as f32,
-        downsampled_dimension(full_height) as f32,
-    ];
     let clip = if clip_rounded {
         FilterCompositeClip::RoundedBounds
     } else {
         FilterCompositeClip::ContentShape
-    };
-    let half_vp = D3D11_VIEWPORT {
-        TopLeftX: 0.0,
-        TopLeftY: 0.0,
-        Width: blur_size[0],
-        Height: blur_size[1],
-        MinDepth: 0.0,
-        MaxDepth: 1.0,
     };
     let (ping_rtv, ping_srv, pong_rtv, pong_srv) = {
         let surface_state = resolve_slot(state, slot_index, slot_generation)?;
@@ -2183,57 +2432,158 @@ fn dx_blur_and_composite(
             blur.pong_srv.clone(),
         )
     };
-    let Some(kernel) = BlurKernel::for_radius(blur_radius) else {
-        return Ok(());
+
+    // The composite extensions: the composed colour matrix (if any) and
+    // the sampling offset (region-relative for the backdrop's crop,
+    // (0, 0) — the pinned formula — otherwise).
+    let mut extensions = CompositeExtensionsUniforms::default();
+    if rec.color_matrix_count > 0 {
+        let mut row = |index: usize| -> [f32; 4] {
+            [
+                f32::from_bits(rec.color_matrix[index]),
+                f32::from_bits(rec.color_matrix[index + 1]),
+                f32::from_bits(rec.color_matrix[index + 2]),
+                f32::from_bits(rec.color_matrix[index + 3]),
+            ]
+        };
+        extensions.row0 = row(0);
+        extensions.row1 = row(5);
+        extensions.row2 = row(10);
+        extensions.row3 = row(15);
+        extensions.offset = [
+            f32::from_bits(rec.color_matrix[4]),
+            f32::from_bits(rec.color_matrix[9]),
+            f32::from_bits(rec.color_matrix[14]),
+            f32::from_bits(rec.color_matrix[19]),
+        ];
+        extensions.enabled = 1;
+    }
+
+    // The blurred input and the normalization the composite samples
+    // against: the full target (the pinned behavior) or the backdrop
+    // crop.
+    let mut blur_source = source_srv.clone();
+    let mut source_size = [full_width as f32, full_height as f32];
+    let mut blur_size = [
+        downsampled_dimension(full_width) as f32,
+        downsampled_dimension(full_height) as f32,
+    ];
+    let kernel = BlurKernel::for_radius(blur_radius);
+    if clip_rounded {
+        let crop = ensure_backdrop_crop(state, slot_index, slot_generation, bounds, blur_radius)?;
+        let crop_uniforms = BackdropCropUniforms {
+            origin: crop.origin,
+            source_size: [full_width as f32, full_height as f32],
+            region_size: crop.region,
+            margin: crop.margin,
+        };
+        // Crop the backdrop into the scratch texture (the region plus
+        // its mirrored margins), through the vendored pass.
+        dx_blur_pass(
+            draw,
+            frame,
+            &draw.pipelines.backdrop_crop_vertex,
+            &draw.pipelines.backdrop_crop_fragment,
+            &draw.pipelines.blur_blend_replace,
+            &crop.rtv,
+            source_srv,
+            BlurUniforms::copy(crop.total),
+            &D3D11_VIEWPORT {
+                TopLeftX: 0.0,
+                TopLeftY: 0.0,
+                Width: crop.total[0],
+                Height: crop.total[1],
+                MinDepth: 0.0,
+                MaxDepth: 1.0,
+            },
+            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+            3,
+            true,
+            BlurPassExtras::Crop(&crop_uniforms),
+        )?;
+        blur_source = crop.srv.clone();
+        source_size = crop.total;
+        blur_size = [
+            downsampled_dimension(crop.total[0] as u32) as f32,
+            downsampled_dimension(crop.total[1] as u32) as f32,
+        ];
+        // Region-relative sampling: uv = (position - (origin - margin))
+        // / total.
+        extensions.sample_offset = [
+            crop.origin[0] - crop.margin[0],
+            crop.origin[1] - crop.margin[1],
+        ];
+    }
+    let half_vp = D3D11_VIEWPORT {
+        TopLeftX: 0.0,
+        TopLeftY: 0.0,
+        Width: blur_size[0],
+        Height: blur_size[1],
+        MinDepth: 0.0,
+        MaxDepth: 1.0,
     };
 
     // Downsample source -> ping, then separable gaussian ping -> pong ->
-    // ping.
-    dx_blur_pass(
-        draw,
-        frame,
-        &draw.pipelines.blur_downsample_vertex,
-        &draw.pipelines.blur_downsample_fragment,
-        &draw.pipelines.blur_blend_replace,
-        &ping_rtv,
-        source_srv,
-        BlurUniforms::downsample([full_width as f32, full_height as f32], blur_size),
-        &half_vp,
-        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        3,
-        true,
-    )?;
-    dx_blur_pass(
-        draw,
-        frame,
-        &draw.pipelines.blur_vertex,
-        &draw.pipelines.blur_fragment,
-        &draw.pipelines.blur_blend_replace,
-        &pong_rtv,
-        &ping_srv,
-        BlurUniforms::gaussian(BlurAxis::Horizontal, blur_size, kernel),
-        &half_vp,
-        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        3,
-        true,
-    )?;
-    dx_blur_pass(
-        draw,
-        frame,
-        &draw.pipelines.blur_vertex,
-        &draw.pipelines.blur_fragment,
-        &draw.pipelines.blur_blend_replace,
-        &ping_rtv,
-        &pong_srv,
-        BlurUniforms::gaussian(BlurAxis::Vertical, blur_size, kernel),
-        &half_vp,
-        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        3,
-        true,
-    )?;
+    // ping. A matrix-only chain (no blur kernel) composites the source
+    // directly.
+    let composited_srv: Option<ID3D11ShaderResourceView>;
+    if let Some(kernel) = kernel {
+        dx_blur_pass(
+            draw,
+            frame,
+            &draw.pipelines.blur_downsample_vertex,
+            &draw.pipelines.blur_downsample_fragment,
+            &draw.pipelines.blur_blend_replace,
+            &ping_rtv,
+            &blur_source,
+            BlurUniforms::downsample(source_size, blur_size),
+            &half_vp,
+            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+            3,
+            true,
+            BlurPassExtras::None,
+        )?;
+        dx_blur_pass(
+            draw,
+            frame,
+            &draw.pipelines.blur_vertex,
+            &draw.pipelines.blur_fragment,
+            &draw.pipelines.blur_blend_replace,
+            &pong_rtv,
+            &ping_srv,
+            BlurUniforms::gaussian(BlurAxis::Horizontal, blur_size, kernel),
+            &half_vp,
+            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+            3,
+            true,
+            BlurPassExtras::None,
+        )?;
+        dx_blur_pass(
+            draw,
+            frame,
+            &draw.pipelines.blur_vertex,
+            &draw.pipelines.blur_fragment,
+            &draw.pipelines.blur_blend_replace,
+            &ping_rtv,
+            &pong_srv,
+            BlurUniforms::gaussian(BlurAxis::Vertical, blur_size, kernel),
+            &half_vp,
+            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+            3,
+            true,
+            BlurPassExtras::None,
+        )?;
+        composited_srv = ping_srv;
+    } else if rec.color_matrix_count > 0 {
+        composited_srv = blur_source;
+    } else {
+        // The pinned early-out: a zero-radius blur chain with no matrix
+        // has nothing to draw.
+        return Ok(());
+    }
 
     // Content blur bleeds ~3*radius past the box; composite over a
-    // dilated rect.
+    // dilated rect. Backdrops clip to their (rounded) bounds.
     let composite_bounds = if clip_rounded {
         bounds
     } else {
@@ -2249,7 +2599,7 @@ fn dx_blur_and_composite(
         opacity,
         clip,
         blur_size,
-        [full_width as f32, full_height as f32],
+        source_size,
     );
     let (composite_vertex, composite_fragment) = if composite_uniforms.corner_smoothing > 0.0 {
         (
@@ -2262,8 +2612,8 @@ fn dx_blur_and_composite(
             &draw.pipelines.blur_composite_fragment,
         )
     };
-    // Composite the blurred result into the target (preserving its
-    // contents).
+    // Composite the result into the target (preserving its contents),
+    // applying the composed colour matrix.
     dx_blur_pass(
         draw,
         frame,
@@ -2271,14 +2621,86 @@ fn dx_blur_and_composite(
         composite_fragment,
         &draw.pipelines.blur_blend_composite,
         target_rtv,
-        &ping_srv,
+        &composited_srv,
         composite_uniforms,
         &full_vp,
         D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
         4,
         false,
+        BlurPassExtras::Composite(&extensions),
     )?;
     Ok(())
+}
+
+/// Allocates (or grows) the surface's backdrop crop texture for one
+/// backdrop's region plus margin and returns the crop coordinates. The
+/// region covers the element's pixel-covered bounds; the margin is the
+/// blur kernel's reach (so the kernel's reads past the region fold back
+/// onto the element's own mirrored content), clamped so the crop stays
+/// within the surface.
+fn ensure_backdrop_crop(
+    state: &mut RendererState,
+    slot_index: usize,
+    slot_generation: u32,
+    bounds: gpui::Bounds<gpui::ScaledPixels>,
+    blur_radius: f32,
+) -> Result<BackdropCropRegion, i32> {
+    let origin = [
+        bounds.origin.x.0.floor().max(0.0),
+        bounds.origin.y.0.floor().max(0.0),
+    ];
+    let region = [
+        (bounds.origin.x.0 + bounds.size.width.0).ceil().max(0.0) - origin[0],
+        (bounds.origin.y.0 + bounds.size.height.0).ceil().max(0.0) - origin[1],
+    ];
+    // The kernel's reach at half resolution is 3*sigma = 1.5*radius
+    // half-res texels = 3*radius full-res pixels; two extra pixels of
+    // slack cover the rounding.
+    let reach = (GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * blur_radius).ceil() + 2.0;
+    let (full_width, full_height) = {
+        let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
+        (surface_state.width, surface_state.height)
+    };
+    let mut margin = [reach, reach];
+    // Clamp the crop inside the surface (a heavily blurred element near
+    // the edge gets a truncated margin; the blur's wrap reads there are
+    // discarded by the region-relative composite anyway).
+    margin[0] = margin[0].min(origin[0]).min((full_width as f32 - origin[0] - region[0]).max(0.0));
+    margin[1] = margin[1].min(origin[1]).min((full_height as f32 - origin[1] - region[1]).max(0.0));
+    let total = [region[0] + 2.0 * margin[0], region[1] + 2.0 * margin[1]];
+    let total_w = (total[0].ceil() as u32).max(1);
+    let total_h = (total[1].ceil() as u32).max(1);
+
+    let device = ensure_device(state)?.device;
+    let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
+    let needs_new = surface_state
+        .draw_targets
+        .backdrop_crop
+        .as_ref()
+        .is_none_or(|crop| crop.width != total_w || crop.height != total_h);
+    if needs_new {
+        let (_, rtv, srv) = create_color_target(&device, total_w, total_h)?;
+        surface_state.draw_targets.backdrop_crop = Some(BackdropCropTarget {
+            rtv: Some(rtv),
+            srv: Some(srv),
+            width: total_w,
+            height: total_h,
+        });
+    }
+    let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
+    let crop = surface_state
+        .draw_targets
+        .backdrop_crop
+        .as_ref()
+        .ok_or(renderer_status::ERR_DEVICE)?;
+    Ok(BackdropCropRegion {
+        origin,
+        region,
+        margin,
+        total: [total_w as f32, total_h as f32],
+        rtv: crop.rtv.clone().flatten(),
+        srv: crop.srv.clone().flatten(),
+    })
 }
 
 /// Copy the offscreen scene texture into the swapchain render target
@@ -2310,6 +2732,7 @@ fn dx_blit(
         D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
         3,
         true,
+        BlurPassExtras::None,
     )
 }
 

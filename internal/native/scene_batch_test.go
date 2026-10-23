@@ -30,7 +30,7 @@ func buildBatchScene(t *testing.T, svc *SceneService, direct bool) *Scene {
 		rec := NewSceneQuadRecord()
 		rec.Bounds = SceneBoundsOf(x, 0, 10, 10)
 		rec.ContentMask = SceneBoundsOf(0, 0, 1000, 1000)
-		rec.Background = SceneColorOf(0.5, 1, 0.5, 1)
+		rec.Background = SceneBackgroundOf(0.5, 1, 0.5, 1)
 		return &rec
 	}
 	sprite := func(x float32, kind uint32) *SceneSpriteRecord {
