@@ -19,7 +19,10 @@ import (
 // low 32 bits: the native entries return i32 in EAX.
 
 // callStatus narrows a SyscallN return value to the native i32 status.
+// Every artifact call goes through it once, so it also counts the call
+// (callcount.go).
 func callStatus(r1 uintptr) int32 {
+	nativeCalls.Add(1)
 	return int32(uint32(r1))
 }
 
