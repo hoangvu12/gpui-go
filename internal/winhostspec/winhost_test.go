@@ -213,6 +213,36 @@ func TestTwoWindowsAreDistinctAliveAndTitled(t *testing.T) {
 	}
 }
 
+// TestAlivePollSurvivesQuitOnLastWindow pins the teardown contract the
+// real-window test helpers rely on (gpui-perf ticket 08): closing the
+// last window quits the host loop, so a "wait until destroyed" poll can
+// run after the loop already exited. It forces that losing side of the
+// race: the loop is gone before the first poll. Alive must then report
+// false (not hang or fail), while Post reports the drop, which is why a
+// poll must call Alive directly instead of wrapping it in a Post that
+// fails the test on a dropped closure.
+func TestAlivePollSurvivesQuitOnLastWindow(t *testing.T) {
+	h := newHost(t)
+	w := openShown(t, h, gpui.WindowOptions{
+		Title:  "winhostspec last window",
+		Show:   true,
+		Bounds: gpui.Bounds{Size: gpui.Size{Width: 200, Height: 120}},
+	})
+	waitFor(t, 10*time.Second, "the window to become visible", w.Visible)
+
+	w.Close()
+	waitDone := make(chan error, 1)
+	go func() { waitDone <- h.Wait() }()
+	if err := recvWithin(t, 10*time.Second, "the host loop to quit after the last window closed", waitDone); err != nil {
+		t.Fatalf("host Wait after quit: %v", err)
+	}
+
+	if h.Post(func() {}) {
+		t.Fatal("Post on an exited host loop accepted the closure")
+	}
+	waitFor(t, time.Second, "the window to read as destroyed", func() bool { return !w.Alive() })
+}
+
 // TestPostedWorkRunsFIFOOnForegroundThread posts a batch of work from a
 // background goroutine and from the test goroutine, checking FIFO
 // ordering and that every closure ran on the host (foreground) thread

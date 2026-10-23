@@ -24,6 +24,7 @@ The goal is to cut gpui-go's per-frame CPU, native-call, allocation and startup 
 - [Scene leak](issues/07-scene-leak.md): a replaced, abandoned or closed-window scene is disposed (after the cached-view replay). Live scenes stay at 1 per window, shown by `LiveSceneCount`.
 - [View caching](issues/04-view-caching.md): `gpui.CachedView` ports the pin's `cached()` with dirty views, `reuse_prepaint`/`reuse_paint` and scene replay, checked by a cached-vs-uncached differential test. With panes cached, a root-only redraw drops from 9.8 to 3.7 ms on the 1,000-div page and from 236 to 20 ms on the text page. `Refresh` (scene (c)) still bypasses caching, as in the pin.
 - [Native rebuild rev 13](issues/05-native-rev-perf-and-weight500.md): DLL `0b6e9265…`. Batched scene inserts cut 1,000-div frames from 8,037 to 3,048 native calls. Waitable swap chains start the first frame after idle immediately (0.5 ms notify-to-present against about 4.5 ms). Weight 500 now uses the real Regular face (no fake bold). Present1 dirty rects are deferred until ticket 04 provides damage information.
+- [Inset-shadow flake](issues/08-inset-shadow-flake.md): a test-teardown race, not a runtime bug. The cleanup polled `Alive` through a post-or-fail sync after closing the last window, which quits the host loop by design. The inset and drag-preview cleanups now poll `Alive` directly. Failures went from 6 of 1,200 to 0 of 1,200.
 
 ## Not yet specified
 

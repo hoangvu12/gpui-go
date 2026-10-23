@@ -102,11 +102,10 @@ func renderInsetPanel(t *testing.T, border, blur float32) ([]byte, gpui.Bounds, 
 				window.Close()
 			}
 		})
-		waitForScene(t, 10*time.Second, "the window to be destroyed", func() bool {
-			alive := true
-			sync(func() { alive = window.Alive() })
-			return !alive
-		})
+		// Closing the last window quits the host loop, so this poll can
+		// run after the loop exited: Alive (false on a stopped host) is
+		// polled directly, never through the post-or-fail sync.
+		waitForScene(t, 10*time.Second, "the window to be destroyed", func() bool { return !window.Alive() })
 	})
 	time.Sleep(150 * time.Millisecond)
 
