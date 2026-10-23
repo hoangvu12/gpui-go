@@ -182,13 +182,13 @@ None: every upstream module and test is accounted for.
 | `src/tabs.rs` | ported | 17 | 1 | 5 | 5 | 0 | 0 | 0 |
 | `src/test_support.rs` | ported | 13 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `src/text/document.rs` | ported | 27 | 2 | 0 | 0 | 0 | 0 | 0 |
-| `src/text/format/html.rs` | ported | 30 | 3 | 6 | 6 | 0 | 0 | 0 |
+| `src/text/format/html.rs` | ported | 30 | 4 | 6 | 6 | 0 | 0 | 0 |
 | `src/text/format/html5minify/mod.rs` | ported | 30 | 1 | 2 | 2 | 0 | 0 | 0 |
 | `src/text/format/markdown.rs` | deviated | 27,30 | 2 | 57 | 55 | 2 | 0 | 0 |
 | `src/text/format/mod.rs` | not_applicable | 27 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `src/text/inline.rs` | deviated | 28,30 | 7 | 20 | 18 | 1 | 1 | 0 |
 | `src/text/inline_element.rs` | ported | 28 | 2 | 0 | 0 | 0 | 0 | 0 |
-| `src/text/inline_flow.rs` | deviated | 28 | 2 | 10 | 7 | 3 | 0 | 0 |
+| `src/text/inline_flow.rs` | deviated | 28 | 3 | 10 | 7 | 3 | 0 | 0 |
 | `src/text/inline_object.rs` | deviated | 28 | 2 | 3 | 2 | 1 | 0 | 0 |
 | `src/text/inline_virtual_tests.rs` | deviated | 28,29 | 0 | 2 | 0 | 2 | 0 | 0 |
 | `src/text/markdown_ext.rs` | ported | 27 | 3 | 0 | 0 | 0 | 0 | 0 |
@@ -228,5 +228,11 @@ None: every upstream module and test is accounted for.
 - `src/text/text_view.rs:1626` list_item_renders_fenced_code_block_at_document_width — not applicable: needs h_resizable/resizable_panel inside a TextView list item, not ported (ticket28 evidence text_view.rs '1 h_resizable not ported')
 - `src/text/text_view.rs:1792` clipped_markdown_link_does_not_open — not applicable: asserts cx.opened_url(), which gpui-go's TestApp does not record (ticket28 evidence text_view.rs; base/text_view_upstream_test.go header)
 - `src/text/text_view.rs:2070` right_click_does_not_open_url_without_handler — not applicable: asserts cx.opened_url(), which gpui-go's TestApp does not record (ticket28 evidence text_view.rs; base/text_view_upstream_test.go header)
+
+## Citation notes
+
+Go citations whose line range runs past the upstream file (stale line numbers; the tests are resolved by the evidence table where needed):
+
+- unknown upstream path: base/cursor_test.go: U:component/button/button.rs
 
 Deviated tests (39) are listed with their citing Go test in the ledger's `tests`.

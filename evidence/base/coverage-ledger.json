@@ -40,7 +40,9 @@
     "gaps": 0
   },
   "gaps": [],
-  "unknown_citations": [],
+  "unknown_citations": [
+    "base/cursor_test.go: U:component/button/button.rs"
+  ],
   "citations_beyond_upstream_eof": [],
   "unused_overrides": [
     "text/selection.rs::test_char_type_from_char",
@@ -4342,6 +4344,7 @@
       "go_files": [
         "base/text_html.go",
         "base/text_markdown.go",
+        "base/text_node_render.go",
         "base/text_state.go"
       ],
       "tests": {
@@ -4487,6 +4490,7 @@
       ],
       "go_files": [
         "base/text_inline_flow.go",
+        "base/text_node_render.go",
         "base/text_range_highlight_state.go"
       ],
       "tests": {
