@@ -102,8 +102,18 @@ pub const GPUI_GO_ABI_VERSION: u32 = 1;
 /// selects synthesized bold for requested weights below 600. The zterm
 /// ticket 13 rebuild bumped it to 14: the text service synthesizes bold
 /// only when the request is more than 200 above the matched static face's
-/// weight (the browser rule).
-pub const GPUI_GO_NATIVE_REVISION: u32 = 14;
+/// weight (the browser rule). The browser-core ticket 39 rebuild bumped
+/// it to 15: the text service follows Chrome's actual Windows rule
+/// (synthesize only when the request is at least 600 over a face below
+/// 600), the scene records grow a linear-gradient background form,
+/// colour-matrix filter payloads, a per-sprite pixelated flag and
+/// drop-shadow border-box clip-out, the backdrop blur input is cropped
+/// at the element edge with mirror addressing, sprite batches can draw
+/// through a point sampler, the text run record grows browser text
+/// fields, and the layout style record grows flow-root, justify items
+/// and variable grid track lists while the measure response carries a
+/// first baseline.
+pub const GPUI_GO_NATIVE_REVISION: u32 = 15;
 
 /// gpui-CE source pin this artifact family is built against (ASCII hex,
 /// zero-padded to 40 bytes in the table).

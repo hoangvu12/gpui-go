@@ -202,14 +202,23 @@ font face — the pinned `add_fonts` failure); 101 panic contained.
   cached; cleared by `font_add`), matching CSS, which synthesizes bold
   only from 600. Faces with a `wght` axis and requests from 600 up are
   unchanged. The resolve record still echoes the requested weight.
-- **Bold synthesis only where a browser draws it (zterm ticket 13,
-  native revision 14, recorded deviation):** the same replacement now
-  also applies from 600 up when the request is within 200 of the
-  selected static face's OS/2 weight (Blink `font_cache_skia.cc`
-  @ d139f187, lines 347-353: synthetic bold only when the request is
-  more than 200 above the matched face). 700 on a family whose heaviest
-  face is SemiBold (600) draws SemiBold as is; 700 over Regular (400) and
-  900 over SemiBold still synthesize. `wght`-axis faces are unchanged.
+- **Bold synthesis only where Chrome on Windows draws it (zterm ticket
+  13, native revision 14; browser-core ticket 39, revision 15,
+  recorded deviation):** the same replacement also applies from 600 up
+  when the selected static face is already at least 600 (its own OS/2
+  weight): Chrome's Windows path synthesizes bold only when the request
+  is at least `kBoldThreshold` (600) and the matched typeface is not
+  bold (`SkTypeface::isBold()`, weight >= 600) —
+  `platform/fonts/win/font_cache_skia_win.cc:484-486` (Chromium
+  0d4dcd4f), the file Windows actually compiles (`platform/BUILD.gn:`
+  `1810-1813`). 700 on a family whose heaviest face is SemiBold (600)
+  draws SemiBold as is, and so does 900 over SemiBold; 600 over Regular
+  (400) and 700 over Medium (500) synthesize, matching the browser.
+  Revision 14 followed the ">200 above the face" rule of
+  `skia/font_cache_skia.cc:347-353`, which sits inside
+  `#if !BUILDFLAG(IS_WIN)` (line 312) and is compiled out on Windows;
+  the weight-matrix gate (`internal/fontspec`) encodes the Windows
+  cells. `wght`-axis faces are unchanged.
 - `font_resolve`: builds the pinned `Font` descriptor (family, weight,
   style, features, fallbacks) and resolves it through
   `PlatformTextSystem::font_id` (`resolve_canonical_font`: family list,

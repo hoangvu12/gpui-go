@@ -1289,25 +1289,34 @@ fn text_font_names_body(
     text_status::OK
 }
 
-/// The weight the pinned resolution should see (gpui-perf ticket 05 and
-/// zterm ticket 13, recorded deviations from the pin). Fontique 0.11.1
-/// (font.rs:97-103) asks for bold synthesis whenever the requested weight
-/// is above the selected face's weight and the face has no `wght` axis,
-/// so 500 on a family whose closest face is the static Regular (400)
-/// rendered Regular through DirectWrite's bold simulation, and 700 on a
-/// family with SemiBold (600) as its heaviest face rendered SemiBold plus
-/// the simulation (a smear browsers never draw). Browsers synthesize only
-/// when the request is more than 200 above the matched face's weight
-/// (Blink font_cache_skia.cc @ d139f187, lines 347-353) and CSS never
-/// synthesizes below 600. When Fontique would synthesize and either rule
-/// says no, the request is replaced by the selected face's own OS/2
-/// weight, which selects the same face with no synthesis; the replacement
-/// is verified (same face bytes, no embolden) and otherwise dropped.
-/// Requests that pass both rules (700 over 400, 900 over 600) and faces
-/// with a `wght` axis (where Fontique sets the axis instead of
-/// emboldening) are unchanged. The oracle `ce-source` stays unmodified;
-/// this runs in the native service before every resolve and every
-/// shaping run.
+/// The weight the pinned resolution should see (gpui-perf ticket 05,
+/// zterm ticket 13 and browser-core ticket 39, recorded deviations from
+/// the pin). Fontique 0.11.1 (font.rs:97-103) asks for bold synthesis
+/// whenever the requested weight is above the selected face's weight and
+/// the face has no `wght` axis, so 500 on a family whose closest face is
+/// the static Regular (400) rendered Regular through DirectWrite's bold
+/// simulation, and 700 on a family with SemiBold (600) as its heaviest
+/// face rendered SemiBold plus the simulation (a smear browsers never
+/// draw). Chrome on Windows synthesizes bold only when the request is
+/// at least 600 AND the matched face is not already 600 or heavier
+/// (Chromium 0d4dcd4f, third_party/blink/renderer/platform/fonts/win/
+/// font_cache_skia_win.cc:484-486 — compiled on Windows per
+/// platform/BUILD.gn:1810-1813 — with kBoldThreshold = 600 from
+/// platform/fonts/font_selection_types.h:183 and SkTypeface::isBold()
+/// meaning weight >= 600, skia src/core/SkTypeface.cpp:491-493). The
+/// ">200 above the face" rule this service previously followed
+/// (skia/font_cache_skia.cc:347-353) is the non-Windows path: it sits
+/// inside `#if !BUILDFLAG(IS_WIN)` (font_cache_skia.cc:312) and is
+/// compiled out on Windows, so 600 over 400 and 700 over 500 must
+/// synthesize and 900 over 600 must not. When Fontique would synthesize
+/// and Chrome would not, the request is replaced by the selected face's
+/// own OS/2 weight, which selects the same face with no synthesis; the
+/// replacement is verified (same face bytes, no embolden) and otherwise
+/// dropped. Requests below 600 (CSS never synthesizes there), requests
+/// whose matched face is already 600 or heavier, and faces with a `wght`
+/// axis (where Fontique sets the axis instead of emboldening) are
+/// unchanged. The oracle `ce-source` stays unmodified; this runs in the
+/// native service before every resolve and every shaping run.
 fn effective_weight(
     state: &mut TextServiceState,
     stack: &TextStack,
@@ -1343,8 +1352,10 @@ fn effective_weight(
         if !(face_weight < weight.0) {
             return None;
         }
-        // Synthesis stays only where a browser would draw it too.
-        if weight.0 >= 600.0 && weight.0 > face_weight + 200.0 {
+        // Synthesis stays only where Chrome on Windows would draw it
+        // too: the request is at least 600 (kBoldThreshold) and the
+        // matched face is below 600 (SkTypeface::isBold()).
+        if weight.0 >= 600.0 && face_weight < 600.0 {
             return None;
         }
         let candidate = FontWeight(face_weight);

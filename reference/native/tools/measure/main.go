@@ -68,10 +68,15 @@ const (
 	// (ticket 05) bumped it to 13: scene insert_batch, frame-latency
 	// waitable swap chains, no synthesized bold below weight 600. The
 	// zterm ticket 13 rebuild bumped it to 14: bold is synthesized only
-	// more than 200 above the matched static face's weight.
+	// more than 200 above the matched static face's weight; the
+	// browser-core ticket 39 rebuild bumped it to 15: Chrome's Windows
+	// bold rule, gradient scene backgrounds, colour-matrix filters, the
+	// drop-shadow clip-out, the backdrop mirror crop, a point sampler,
+	// browser text run fields and layout flow-root/justify/track-list/
+	// baseline fields.
 	// Keep these in sync with reference/native/src/lib.rs
 	// (GPUI_GO_NATIVE_REVISION and the capabilities module).
-	nativeRevision = 14
+	nativeRevision = 15
 
 	// bit 0 bootstrap, bit 1 layout-taffy-0-13-0, bit 2 renderer-d3d11,
 	// bit 3 scene-kernel-v1, bit 4 text-parley-0-11-1, bit 5
