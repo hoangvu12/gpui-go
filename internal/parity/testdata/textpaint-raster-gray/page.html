@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.grid {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+	.row {
+		display: flex;
+		gap: 12px;
+	}
+	.cell {
+		box-sizing: border-box;
+		width: 200px;
+		height: 56px;
+		overflow: hidden;
+		line-height: 1.618;
+		font-family: "Segoe UI", system-ui, sans-serif;
+	}
+	.dark {
+		background: #ffffff;
+		color: #000000;
+	}
+	.light {
+		background: #000000;
+		color: #ffffff;
+	}
+	.grey {
+		background: #ffffff;
+		color: #808080;
+	}
+	.s12 { font-size: 12px; }
+	.s16 { font-size: 16px; }
+	.s24 { font-size: 24px; }
+	.s32 { font-size: 32px; }
+</style>
+</head>
+<body>
+	<div class="grid">
+		<div class="row">
+			<div class="cell dark s12" data-id="dark-12">Hamburg</div>
+			<div class="cell light s12" data-id="light-12">Hamburg</div>
+			<div class="cell grey s12" data-id="grey-12">Hamburg</div>
+		</div>
+		<div class="row">
+			<div class="cell dark s16" data-id="dark-16">Hamburg</div>
+			<div class="cell light s16" data-id="light-16">Hamburg</div>
+			<div class="cell grey s16" data-id="grey-16">Hamburg</div>
+		</div>
+		<div class="row">
+			<div class="cell dark s24" data-id="dark-24">Hamburg</div>
+			<div class="cell light s24" data-id="light-24">Hamburg</div>
+			<div class="cell grey s24" data-id="grey-24">Hamburg</div>
+		</div>
+		<div class="row">
+			<div class="cell dark s32" data-id="dark-32">Hamburg</div>
+			<div class="cell light s32" data-id="light-32">Hamburg</div>
+			<div class="cell grey s32" data-id="grey-32">Hamburg</div>
+		</div>
+	</div>
+</body>
+</html>

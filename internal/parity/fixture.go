@@ -151,6 +151,16 @@ type Fixture struct {
 	BoxIDs []string
 	// Tolerance is the provisional Tier C gate.
 	Tolerance PixelTolerance
+	// ChromeFlags are extra command-line flags the recorder passes to
+	// headless Chrome, after the harness's own flags (per-fixture browser
+	// knobs: AA mode, color profile, hinting). Recording a page under
+	// more than one flag set registers one fixture per flag set (the
+	// textpaint rasterization probes are the pattern). The flags are
+	// record-time only: the replay never reads them, but a fixture whose
+	// record was captured under them compares its replay against that
+	// record, so the flag set is part of the fixture's identity — copy
+	// the flags into the new fixture when cloning one.
+	ChromeFlags []string
 }
 
 // EventRecord is one app-visible event of the Tier B transcript.

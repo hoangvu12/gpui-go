@@ -1,0 +1,86 @@
+{
+  "name": "textpaint-raster",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T20:26:54Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "dark-12": {
+      "x": 8,
+      "y": 70,
+      "width": 200,
+      "height": 56
+    },
+    "dark-16": {
+      "x": 8,
+      "y": 138,
+      "width": 200,
+      "height": 56
+    },
+    "dark-24": {
+      "x": 8,
+      "y": 206,
+      "width": 200,
+      "height": 56
+    },
+    "dark-32": {
+      "x": 8,
+      "y": 274,
+      "width": 200,
+      "height": 56
+    },
+    "grey-12": {
+      "x": 432,
+      "y": 70,
+      "width": 200,
+      "height": 56
+    },
+    "grey-16": {
+      "x": 432,
+      "y": 138,
+      "width": 200,
+      "height": 56
+    },
+    "grey-24": {
+      "x": 432,
+      "y": 206,
+      "width": 200,
+      "height": 56
+    },
+    "grey-32": {
+      "x": 432,
+      "y": 274,
+      "width": 200,
+      "height": 56
+    },
+    "light-12": {
+      "x": 220,
+      "y": 70,
+      "width": 200,
+      "height": 56
+    },
+    "light-16": {
+      "x": 220,
+      "y": 138,
+      "width": 200,
+      "height": 56
+    },
+    "light-24": {
+      "x": 220,
+      "y": 206,
+      "width": 200,
+      "height": 56
+    },
+    "light-32": {
+      "x": 220,
+      "y": 274,
+      "width": 200,
+      "height": 56
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

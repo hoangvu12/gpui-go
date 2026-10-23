@@ -94,6 +94,14 @@ new fixtures. The implementation lives in `internal/parity`:
    are empty, which the Tier B comparison accepts. The `BoxIDs` are then the whole
    fixture; `internal/parity/fixtures/boxpaint` records that way.
 
+   A fixture that needs the browser in a different state (a different text AA mode, a
+   color profile) sets `ChromeFlags`: the recorder appends them to its own flags, so
+   one page can be recorded under several browser configurations as several fixtures —
+   the `textpaint` rasterization fixtures are the pattern (`textpaint-raster` with the
+   default flags, `textpaint-raster-gray` with `--disable-lcd-text`). The flags are
+   record-time only; the replay never reads them, but the record they produced is what
+   the replay is compared against, so copy them when cloning a fixture.
+
 7. Record, from the module root:
 
    ```sh
@@ -117,6 +125,17 @@ new fixtures. The implementation lives in `internal/parity`:
    deliberately-wrong view that must fail the gate (the tracer's
    `TestWrongPaddingFailsOnlyThePixelComparison` is the pattern) and keep it as a test —
    a tolerance that a real defect passes is worthless.
+
+   For a **text-heavy** fixture, calibrate from the ink statistics, not the diff alone:
+   `parity.MeasureInk(img, rect, fgHex, bgHex)` (textmeasure.go) reports the mean ink
+   (total coverage), the ink/full/partial pixel fractions, the partial pixels' edge
+   darkness, the 16-bucket coverage histogram, and the channel spread that tells
+   grayscale edges (0) from LCD fringes — on either the recorded screenshot or the
+   replay capture (`parity.ROIOfDevice` turns a recorded box into the device rectangle
+   at the replay's scale). Two text rasters can differ per pixel (ClearType fringe
+   phase) while carrying the same ink, so the ink numbers are what a text tolerance
+   means. The `textpaint` fixtures are the pattern; the probes under
+   `research/browser-parity/08-raster-probes` are the worked example.
 
 ### Discrimination tests
 
@@ -175,5 +194,10 @@ until the owning spec tickets land, and each should get a fixture the day it is 
   only. Owned by the input bundle (spec D12).
 - **Default line height is 1.618** (CSS `normal` comes with D1): the tracer's page pins
   `line-height: 1.618`.
-- Text rasterization itself differs (Skia gamma/contrast vs the native stack), which is
-  what Tier C's tolerance absorbs; research 19's A/B decides whether that gap needs work.
+- Text rasterization differs in mechanism (Skia's sRGB preblend vs DirectWrite
+  params + the pin's shader), but the ticket-08 A/B
+  (research/browser-parity/08-raster-probes) measured the ink matching within ~5%, so
+  what Tier C's tolerance absorbs is fringe-phase and mode noise, not a rasterization
+  gap; the measured mode divergences (no grayscale window mode; ClearType kept above
+  Chrome's 48-device-px LCD cap) are tracked by report 04 §2(b) and Q21. Text-heavy
+  fixtures calibrate from the ink statistics (`parity.MeasureInk`).

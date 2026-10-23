@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.rows {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+	.it {
+		box-sizing: border-box;
+		width: 480px;
+		height: 64px;
+		overflow: hidden;
+		line-height: 1.618;
+		font-size: 32px;
+	}
+	.tahoma {
+		font-family: "Tahoma", sans-serif;
+	}
+	.segoe {
+		font-family: "Segoe UI", system-ui, sans-serif;
+	}
+	.upright { font-style: normal; }
+	.italic { font-style: italic; }
+</style>
+</head>
+<body>
+	<div class="rows">
+		<div class="it tahoma upright" data-id="tahoma-upright">llllllllll</div>
+		<div class="it tahoma italic" data-id="tahoma-italic">llllllllll</div>
+		<div class="it segoe italic" data-id="segoe-italic">llllllllll</div>
+	</div>
+</body>
+</html>
