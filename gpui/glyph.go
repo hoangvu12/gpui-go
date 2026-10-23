@@ -277,6 +277,12 @@ func (ts *TextSystem) GlyphForChar(fontID FontID, ch rune) (uint32, bool, error)
 // scene color into a Preblend effect; other modes stay
 // color-independent).
 func (ts *TextSystem) PrepareRasterStyle(color Rgba, mode GlyphRenderMode) (PreparedRasterStyle, error) {
+	// A pure function of the request and the rasterizer's construction
+	// state: memoized (glyph_cache.go).
+	memoKey := rasterStyleKey{color: color, mode: mode}
+	if style, ok := ts.raster.lookupStyle(memoKey); ok {
+		return style, nil
+	}
 	glyph, err := glyphServiceOnce()
 	if err != nil {
 		return PreparedRasterStyle{}, err
@@ -297,6 +303,7 @@ func (ts *TextSystem) PrepareRasterStyle(color Rgba, mode GlyphRenderMode) (Prep
 			A: uint8(record.ColorA),
 		}
 	}
+	ts.raster.storeStyle(memoKey, style)
 	return style, nil
 }
 
@@ -306,6 +313,13 @@ func (ts *TextSystem) PrepareRasterStyle(color Rgba, mode GlyphRenderMode) (Prep
 // result carries the baseline-relative bounds, the buffer size, the
 // format and the pixel bytes.
 func (ts *TextSystem) RasterizeGlyph(params RasterGlyphParams) (*RasterizedGlyph, error) {
+	return ts.rasterizeGlyphInto(params, nil)
+}
+
+// rasterizeGlyphInto is RasterizeGlyph offering buf as the pixel dump:
+// the returned pixels may alias buf (glyph_cache.go). A nil buf is
+// exactly RasterizeGlyph.
+func (ts *TextSystem) rasterizeGlyphInto(params RasterGlyphParams, buf []byte) (*RasterizedGlyph, error) {
 	if params.FontSize < 0 || !finiteFloat32(params.FontSize) {
 		return nil, fmt.Errorf("gpui: RasterizeGlyph: %w: font size must be finite and >= 0", ErrGlyphValue)
 	}
@@ -316,22 +330,15 @@ func (ts *TextSystem) RasterizeGlyph(params RasterGlyphParams) (*RasterizedGlyph
 	if err != nil {
 		return nil, err
 	}
-	style := native.NewRasterStyleRecord()
-	style.Mode = uint32(params.RasterStyle.Mode)
-	style.EffectTag = uint32(params.RasterStyle.Effect)
-	style.ColorR = uint32(params.RasterStyle.PreblendColor.R)
-	style.ColorG = uint32(params.RasterStyle.PreblendColor.G)
-	style.ColorB = uint32(params.RasterStyle.PreblendColor.B)
-	style.ColorA = uint32(params.RasterStyle.PreblendColor.A)
-	record, pixels, err := glyph.RasterizeGlyph(native.RasterParams{
+	record, pixels, err := glyph.RasterizeGlyphInto(native.RasterParams{
 		FontID:    native.FontID(params.FontID),
 		GlyphID:   params.GlyphID,
 		FontSize:  params.FontSize,
 		SubpixelX: uint32(params.SubpixelX),
 		SubpixelY: uint32(params.SubpixelY),
 		Scale:     params.ScaleFactor,
-		Style:     style,
-	})
+		Style:     nativeRasterStyle(params.RasterStyle),
+	}, buf)
 	if err != nil {
 		return nil, wrapGlyphError("RasterizeGlyph", err)
 	}
@@ -352,6 +359,11 @@ func (ts *TextSystem) RasterizeGlyph(params RasterGlyphParams) (*RasterizedGlyph
 // PlatformDefault on Windows: ClearType on means Subpixel, else
 // Grayscale).
 func (ts *TextSystem) RecommendedRenderingMode() (TextRenderingMode, error) {
+	// Fixed at the rasterizer's construction (glyph.rs recommended_mode
+	// reads system_subpixel_rendering): memoized (glyph_cache.go).
+	if mode, ok := ts.raster.lookupRecommended(); ok {
+		return mode, nil
+	}
 	glyph, err := glyphServiceOnce()
 	if err != nil {
 		return 0, err
@@ -360,6 +372,7 @@ func (ts *TextSystem) RecommendedRenderingMode() (TextRenderingMode, error) {
 	if err != nil {
 		return 0, wrapGlyphError("RecommendedRenderingMode", err)
 	}
+	ts.raster.storeRecommended(TextRenderingMode(mode))
 	return TextRenderingMode(mode), nil
 }
 
