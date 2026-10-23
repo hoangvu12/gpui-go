@@ -4,9 +4,46 @@
 
 Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_ lazy]` type-parameter marker (gpui/styled.go `lazy`; cmd/stylegen emits it). Go compiles every ordinary method of an instantiated generic type in each package that references it, so plain methods made every UI package recompile the ~3,100-method vocabulary (mordbard UI edit: 37 s → ~2 s; five Component[Self] components: 171 MB → 4.8 MB). Any new Self-returning method on a mixin needs the marker; internal/buildcostspec fails otherwise. Open runtime items (measured, not yet fixed): the >128-distinct-text real-window failure (native shaping handle cap), per-frame glyph re-rasterization (draw_text.go paintGlyphFromAtlas skips the pinned raster_metadata cache), per-node/per-primitive FFI calls, ~60k allocations/frame at 1,000 elements.
 
-## ACTIVE EFFORT (2026-10-19): the GPUI Base port
+## ACTIVE EFFORT (2026-10-23): recreate zgui's terminal app ("zterm") on gpui-go
 
-**HANDOFF 2026-10-23 (orchestrator 2 → orchestrator 3). CURRENT AND AUTHORITATIVE; the long paragraphs below are history.** The predecessor is the Roboco chat "GPUI Base port (orchestrator 2, base-port-2)", id e5e2c030. It handed off at about 43% context, at the user's request.
+**HANDOFF 2026-10-23 (orchestrator 3 → orchestrator 4). CURRENT AND AUTHORITATIVE; everything below it is history.** The predecessor is the Roboco chat this was launched from (orchestrator 3).
+
+**State: all done and pushed, on `main` at e25da53.**
+- The Base port is complete. v0.2.0 is tagged on 7a1b25b.
+- gpui-perf tickets 01-08 are resolved (`.scratch/gpui-perf/`):
+  - native DLL rev 13 (`0b6e9265…`): the weight-500 face, batched scene insert, and a waitable swapchain with maximum latency 1
+  - the glyph raster cache
+  - load-once
+  - allocation cuts
+  - view caching (`gpui.CachedView`)
+  - the scene-leak fix
+  - ticket 08: the inset flake was a test-teardown race; both cleanups now poll `Alive` directly
+- Results, per frame: the text page went from 200 to 28 ms and 1,000 divs from 11.3 to 7.5 ms (`evidence/perf/combined-final.json`).
+- The full suite passes, 51 packages, once `reference/ce-source` has been copied in from `C:\Users\ADMIN\Desktop\nguyenvu\gpui-go\reference\ce-source` (gitignored).
+- Worktrees in use: this one (on `main`), `gpui-go`, and `gpui-go-wt-tailwind` (another effort; leave it alone).
+
+**New goal (the user, 2026-10-23):** "the zgui has an example app: the terminal … that's our next target. see if we can recreate that app on gpui-go, and that will test it." Start with [the research brief](../research/zgui-terminal/README.md). Its key facts:
+- zterm is `zeronsh/zgui` `crates/zgui-desktop/examples/terminal.rs` (@c804b80). It is macOS-only.
+- Each pane embeds Ghostty, which does the grid, glyphs and IME; zgui only draws the shell around the panes (tabs, splits, the ⌘K palette, the sidebar, the theme).
+- So gpui-go must render the terminal grid itself: a ConPTY session through `x/sys/windows`, plus a pure-Go VT emulator (e.g. `charmbracelet/x/vt`).
+- Follow Zed's `terminal`/`terminal_view` design for GPUI parity: style-run batching, merged background rects, and PTY event batching.
+- Known gaps:
+  - `ShapeLine` rejects a forced cell width
+  - the cap of 256 live shaped lines
+  - about 31 ms per 300-line text frame, so cache each pane and repaint only changed rows
+- The perf comparison should run on this PC against Zed's and zeron's terminals, not zterm.
+
+The first step is to plan it with the user (Wayfinder map under `.scratch/`), then implement.
+
+**Conventions:**
+- At most 3 workers, each in its own worktree.
+- Verify worker claims on a snapshot.
+- No push or tag without the user, unless they hand an effort over.
+- A native DLL rebuild needs the user's approval.
+- When the user is gaming, no visible windows (see the skip lists below).
+- Heredocs with quotes break in the Bash tool here, so use the Write tool.
+
+**HANDOFF 2026-10-23 (orchestrator 2 → orchestrator 3). History now.** The predecessor is the Roboco chat "GPUI Base port (orchestrator 2, base-port-2)", id e5e2c030. It handed off at about 43% context, at the user's request.
 
 **State**
 - The Base port is COMPLETE on `base-port-2` (worktree `C:\Users\ADMIN\Desktop\nguyenvu\gpui-go-wt-base`).
