@@ -272,23 +272,23 @@ Each rebuild costs a user approval, an evidence run and pin updates in about 8 p
 
 | # | Question | Recommendation |
 |---|---|---|
-| D0 | When the browser and the GPUI-CE pin differ, does the browser win (with each divergence recorded and its fixtures updated)? This replaces "1:1 pin parity" in PROJECT.md. | **Yes.** It's what "behave like the browser" means. "Fixture" items in §4 then need no separate OK. |
-| D1 | Default line height: the pin's 1.618 × size, or CSS `normal` (about 1.33 for Segoe UI)? | **`normal` by default**, with 1.618 as an opt-in. Changes every app's vertical rhythm. |
-| D2 | Should text min-content wrap at every opportunity (CSS), so flex rows shrink and wrap? | **Yes.** It removes most `min_w_0` workarounds. Rows that relied on text holding them open will start wrapping. |
-| D3 | `position: static` as the default, so `absolute` resolves against the nearest positioned ancestor? | **Yes, in two steps**: add `PositionStatic` as opt-in now, flip the default when Base migrates, with a lint for `absolute` under a non-`relative` parent. |
-| D4 | Tabindex order: HTML (positive ascending first, then 0 in tree order, negative never reached by Tab) instead of the pin's −1 < 0 < 1? | **HTML order.** Handles stay opt-in tab stops, since the core has no buttons. |
-| D5 | Key-binding vs listener order. | **gpuix's compromise**: bindings stay before listeners (GPUI shape), and core defaults (Tab, Escape, keyboard scroll, activation) run after listeners and honour `PreventDefault`. Full browser order is a per-window flag. |
-| D6 | Default display: `flex` (pin) or `block` (browser, gpuix, and newer GPUI-CE `beb5a6d`)? | **`block`**, flipped together with the Base move plus a codemod adding `.Flex()`. First check what the pin `254b5dbd` defaults to ([05 §8](05-layout.md)). |
-| D7 | Is text selectable by default (`user-select: auto`), as in browsers and gpuix? | **Yes.** Opt out with `UserSelect(None)`. Base's selection logic moves into the core. |
-| D8 | Shadow and filter blur: use CSS sizes (Q1/Q2), diverging from the pin? | **Yes**, after the pinned shader is checked (risk 1). |
-| D9 | Group opacity instead of per-primitive alpha (visible on any translucent element with overlapping children)? | **Yes**, in R16. |
-| D10 | Wheel step: Chrome's 100/3 px per line, or the window's line height (about 60 px per notch at 20 px)? | **Chrome's** (100 px per notch at 3 lines). |
-| D11 | Should rem follow the Windows "Text size" setting? | **Yes, by default**, with a per-app opt-out. |
-| D12 | Input bundle: hover survives typing, pointer-leave clears hover, Enter activates on key-down, click goes to the common ancestor, capture retargets? | **Yes, as one bundle.** Each is a browser rule, and each needs only a Tier B transcript update. |
-| D13 | Smooth scrolling on by default (off under reduced motion)? | **Yes.** It's the browser default. |
-| D14 | Two compositor rebuilds (R15 now, R16 later) or one? | **Two.** R15 is ready and small; R16 needs design. |
+| D0 | When the browser and the GPUI-CE pin differ, does the browser win (with each divergence recorded and its fixtures updated)? This replaces "1:1 pin parity" in PROJECT.md. | **Yes.** It's what "behave like the browser" means. "Fixture" items in §4 then need no separate OK. **DECIDED 2026-10-23: accepted as recommended** (the user: "good"). |
+| D1 | Default line height: the pin's 1.618 × size, or CSS `normal` (about 1.33 for Segoe UI)? | **`normal` by default**, with 1.618 as an opt-in. Changes every app's vertical rhythm. **DECIDED 2026-10-23: accepted as recommended** (the user: "good"). |
+| D2 | Should text min-content wrap at every opportunity (CSS), so flex rows shrink and wrap? | **Yes.** It removes most `min_w_0` workarounds. Rows that relied on text holding them open will start wrapping. **DECIDED 2026-10-23: accepted as recommended** (the user: "good"). |
+| D3 | `position: static` as the default, so `absolute` resolves against the nearest positioned ancestor? | **Yes, in two steps**: add `PositionStatic` as opt-in now, flip the default when Base migrates, with a lint for `absolute` under a non-`relative` parent. **DECIDED 2026-10-23: accepted as recommended** (the user: "good"). |
+| D4 | Tabindex order: HTML (positive ascending first, then 0 in tree order, negative never reached by Tab) instead of the pin's −1 < 0 < 1? | **HTML order.** Handles stay opt-in tab stops, since the core has no buttons. **DECIDED 2026-10-23: accepted as recommended** (the user: "good"). |
+| D5 | Key-binding vs listener order. | **gpuix's compromise**: bindings stay before listeners (GPUI shape), and core defaults (Tab, Escape, keyboard scroll, activation) run after listeners and honour `PreventDefault`. Full browser order is a per-window flag. **DECIDED 2026-10-23: accepted as recommended** (the user: "good"). |
+| D6 | Default display: `flex` (pin) or `block` (browser, gpuix, and newer GPUI-CE `beb5a6d`)? | **`block`**, flipped together with the Base move plus a codemod adding `.Flex()`. First check what the pin `254b5dbd` defaults to ([05 §8](05-layout.md)). **DECIDED 2026-10-23: accepted as recommended** (the user: "good"). |
+| D7 | Is text selectable by default (`user-select: auto`), as in browsers and gpuix? | **Yes.** Opt out with `UserSelect(None)`. Base's selection logic moves into the core. **DECIDED 2026-10-23: accepted as recommended** (the user: "good"). |
+| D8 | Shadow and filter blur: use CSS sizes (Q1/Q2), diverging from the pin? | **Yes**, after the pinned shader is checked (risk 1). **DECIDED 2026-10-23: accepted as recommended** (the user: "good"). |
+| D9 | Group opacity instead of per-primitive alpha (visible on any translucent element with overlapping children)? | **Yes**, in R16. **DECIDED 2026-10-23: accepted as recommended** (the user: "good"). |
+| D10 | Wheel step: Chrome's 100/3 px per line, or the window's line height (about 60 px per notch at 20 px)? | **Chrome's** (100 px per notch at 3 lines). **DECIDED 2026-10-23: accepted as recommended** (the user: "good"). |
+| D11 | Should rem follow the Windows "Text size" setting? | **Yes, by default**, with a per-app opt-out. **DECIDED 2026-10-23: accepted as recommended** (the user: "good"). |
+| D12 | Input bundle: hover survives typing, pointer-leave clears hover, Enter activates on key-down, click goes to the common ancestor, capture retargets? | **Yes, as one bundle.** Each is a browser rule, and each needs only a Tier B transcript update. **DECIDED 2026-10-23: accepted as recommended** (the user: "good"). |
+| D13 | Smooth scrolling on by default (off under reduced motion)? | **Yes.** It's the browser default. **DECIDED 2026-10-23: accepted as recommended** (the user: "good"). |
+| D14 | Two compositor rebuilds (R15 now, R16 later) or one? | **Two.** R15 is ready and small; R16 needs design. **DECIDED 2026-10-23: accepted as recommended** (the user: "good"). |
 | D15 | Hot reload and UI scripting. | **DECIDED 2026-10-23: TSX via esbuild + goja, on zgui's model** ([ADR 0003](../../docs/adr/0003-tsx-ui-scripting.md), which supersedes Luau, [ADR 0002](../../docs/adr/0002-luau-ui-scripting.md); probe [09](09-tsx-goja-probe.md)). Plugins, shipping, types and dev reload follow zgui and `tauri dev`. |
-| D16 | The Base repo: name, public or private, and whether zterm and the gallery move with it ([map](../../.scratch/browser-parity/map.md)). | Your call. Moving zterm keeps it a real Base consumer. Keep one core-only example in this repo. |
+| D16 | The Base repo: name, public or private, and whether zterm and the gallery move with it. | **DECIDED 2026-10-23:** the repo is `gpui-go-base`, public. zterm and the gallery move with Base for testing only and are never pushed (the user: "gpui-go-base, public, zterm and gallery just for testing, dont push them"). Creating the GitHub repo and pushing still need the user's go-ahead at that step. |
 
 ## 6. Performance track
 

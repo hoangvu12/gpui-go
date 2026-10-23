@@ -21,13 +21,16 @@ The destination for this map is a research-backed proposal. It covers which brow
 
 ## Decisions so far
 
+- **D0-D14 accepted as recommended** (the user, 2026-10-23: "good"). See [the proposal](../../research/browser-parity/README.md) section 5. D0 means the browser wins over the GPUI-CE pin wherever they differ, with each divergence recorded and its fixtures updated.
+- **D16:** Base goes to a new public repo, `gpui-go-base`. zterm and the gallery move with it for testing only and are never pushed.
+- **Rev 15 approved** (the user: "yea"): one native rebuild covering the Windows bold rule. Per D14 it is built as the R15 group defined by the spec.
+
 - [TSX for UI scripting](../../docs/adr/0003-tsx-ui-scripting.md) (D15, the user, 2026-10-23): TSX via esbuild + goja, on zgui's model. It replaced Luau ([ADR 0002](../../docs/adr/0002-luau-ui-scripting.md)) after [the probe](../../research/browser-parity/09-tsx-goja-probe.md) met every threshold; yaegi was ruled out.
 
 - [Synthesis](issues/07-synthesis.md): the proposal is research/browser-parity/README.md. The core gets browser behaviour without the look; Base becomes the look layer in its own repo. Decisions D0-D16 await the user, then /to-spec.
 
 ## Not yet specified
 
-- The Base repo split: the name, public or private, and whether zterm and the gallery move with it. These are for the user.
 
 ## Out of scope
 

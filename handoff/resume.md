@@ -6,6 +6,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 ## ACTIVE EFFORT (2026-10-23): recreate zgui's terminal app ("zterm") on gpui-go
 
+**DECISIONS IN (2026-10-23):** D0-D14 accepted as recommended. D16: `gpui-go-base`, a public repo; zterm and the gallery are for testing only and never pushed. Rev 15 is approved, to be built as the spec's R15 group. D15 is TSX (ADR 0003). The user is running /to-spec on research/browser-parity/README.md; implementation follows the spec.
+
 **NEW DIRECTION (2026-10-23, the user; see PROJECT.md "Direction change under research"):**
 - The core should behave like the browser, without shipping components.
 - Base moves to a new repo. Its name, visibility, and whether zterm and the gallery move with it are still open for the user.

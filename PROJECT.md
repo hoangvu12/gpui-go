@@ -14,7 +14,9 @@ The user confirmed two things:
 - **Base moves to a new repository** ("yes, we gonna make a new repo for that"). The repo's name, its visibility, and whether zterm and the gallery move with it are still open.
 - **Deep research, including source code, comes first** ("yeah, we gotta do deep research on this, even look at the source code of them?" → "go ahead"). It covers how the core can behave like the browser (web specs plus Chromium/Skia source) where GPUI doesn't define a behaviour or differs.
 
-The research map is [.scratch/browser-parity/map.md](.scratch/browser-parity/map.md). Until the research is done and the user accepts its proposals, the 1:1 GPUI-CE parity goal below still stands, with this direction pending.
+The research map is [.scratch/browser-parity/map.md](.scratch/browser-parity/map.md). **Accepted 2026-10-23.** The research is done (research/browser-parity/README.md), and the user accepted D0-D14 as recommended. **When the browser and the GPUI-CE pin differ, the browser wins**, with each divergence recorded and its fixtures updated. This replaces "full 1:1 GPUI-CE core behavior" below as the behavioural target; the pin stays the starting point and the evidence trail.
+
+The core owns behaviour, browser-like; components move to a new public repo, `gpui-go-base`. UI scripting is TSX via esbuild + goja ([ADR 0003](docs/adr/0003-tsx-ui-scripting.md)). The next step is a spec from the proposal (the user runs /to-spec).
 
 ## Current phase
 
