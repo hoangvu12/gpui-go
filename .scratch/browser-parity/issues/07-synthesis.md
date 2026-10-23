@@ -3,7 +3,7 @@
 Parent: ../map.md
 Type: research
 Labels: wayfinder:research
-Status: claimed
+Status: resolved
 Assignee: orchestrator 5 (synthesis worker)
 Blocked by: 01, 02, 03, 04, 05, 06, 08
 
@@ -19,3 +19,5 @@ Output: research/browser-parity/README.md.
 ## Comments
 
 ## Answer
+
+Answer: research/browser-parity/README.md. It contains 23 quick Go wins (Q1-Q23), 3 native rebuild groups (R15: bold rule, gradients, shadow clip-out, ABI growth; R16: the compositor; R17+: measure first) and user decisions D0-D16. The orchestrator verified D6 and D8 against the pin.

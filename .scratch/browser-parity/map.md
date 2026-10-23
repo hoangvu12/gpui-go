@@ -21,6 +21,8 @@ The destination for this map is a research-backed proposal. It covers which brow
 
 ## Decisions so far
 
+- [Synthesis](issues/07-synthesis.md): the proposal is research/browser-parity/README.md. The core gets browser behaviour without the look; Base becomes the look layer in its own repo. Decisions D0-D16 await the user, then /to-spec.
+
 ## Not yet specified
 
 - The Base repo split: the name, public or private, and whether zterm and the gallery move with it. These are for the user.
