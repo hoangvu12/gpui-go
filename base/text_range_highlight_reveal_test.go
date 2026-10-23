@@ -10,7 +10,9 @@ import (
 )
 
 // Ports of the U:text/state.rs reveal_range module tests (2645-3186). Of
-// 22: 8 ported, 3 deviated, 11 not ported.
+// 22: 8 ported here, 3 deviated here, 11 ported as real-window tests
+// (text_range_highlight_reveal_real_windows_test.go, ticket 37; one of
+// them deviated, see there).
 //   - deviated (they pass, but the test text system cannot exercise what
 //     they pin): an_empty_range_reveals_its_line and
 //     revealing_a_visible_block_does_not_scroll. gpui's TestApp text
@@ -20,19 +22,10 @@ import (
 //     "unmoved" check. a_reveal_not_carried_out_in_time_is_dropped
 //     backdates its request instead of advancing the clock inside the
 //     update (see the test).
-//   - not ported: a_scrollable_view_scrolls_to_a_line_inside_a_long_
-//     paragraph, revealing_a_visible_line_does_not_scroll, an_enclosing_
-//     list_scrolls_to_a_line_of_a_fit_content_view, on_reveal_scrolls_a_
-//     container_that_ignores_scroll_requests, a_reveal_that_cannot_be_
-//     shown_gives_up, a_position_after_the_last_character_reveals_its_
-//     line, the_end_of_the_text_and_its_separators_reveal_the_last_line,
-//     the_end_of_a_block_above_reveals_its_last_line, a_line_of_an_inline_
-//     flow_counts_as_shown_once_scrolled_to, a_range_starting_on_a_line_
-//     break_reveals_the_next_line and its inline-flow twin. Each needs a
-//     block laid out on many rows (above), and all but on_reveal and
-//     gives_up also need an enclosing list to scroll to a line inside one
-//     item, through Window::request_autoscroll, which gpui does not have
-//     (gpui/listelement.go omits the autoscroll request path).
+//   - real windows: the 11 that need a block laid out on many rows, most
+//     also an enclosing list scrolling to a line inside one item through
+//     Window.RequestAutoscroll (gpui/window.go, taken by gpui.List in
+//     prepaint since ticket 37).
 
 // revealContainer is where the view sits in a 200 x 100 frame
 // (U:text/state.rs:2654-2668).
