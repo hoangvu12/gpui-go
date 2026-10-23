@@ -887,9 +887,9 @@ struct TextServiceState {
     /// resolve). Invalidated by `text_font_add` (the only generation
     /// mutator); rebuilt lazily on the next `family_found` query.
     family_names: Option<(u64, std::collections::HashSet<String>)>,
-    /// gpui-perf ticket 05: the effective weight of each (family,
-    /// fallbacks, requested weight bits, style) requested below 600, so
-    /// the face probe runs once per combination. Cleared by
+    /// gpui-perf ticket 05 / zterm ticket 13: the effective weight of
+    /// each requested (family, fallbacks, weight bits, style), so the face
+    /// probe runs once per combination. Cleared by
     /// `text_font_add` (a new face can change the selection).
     weight_fixups: HashMap<WeightKey, u32>,
     slots: Vec<ShapingSlot>,
@@ -1289,29 +1289,31 @@ fn text_font_names_body(
     text_status::OK
 }
 
-/// The weight the pinned resolution should see (gpui-perf ticket 05,
-/// recorded deviation from the pin). Fontique 0.11.1 (font.rs:97-103)
-/// asks for bold synthesis whenever the requested weight is above the
-/// selected face's weight and the face has no `wght` axis, so a request
-/// for 500 on a family whose closest face is the static Regular (400)
-/// renders Regular through DirectWrite's bold simulation — heavier than
-/// a real Medium and heavier than browsers, which synthesize bold only
-/// from 600 up. Below 600 the request is replaced by the selected face's
-/// own OS/2 weight, which selects the same face with no synthesis; the
-/// replacement is verified (same face bytes, no embolden) and otherwise
-/// dropped. Requests from 600 up, and faces with a `wght` axis (where
-/// Fontique sets the axis instead of emboldening), are unchanged. The
-/// oracle `ce-source` stays unmodified; this runs in the native service
-/// before every resolve and every shaping run.
+/// The weight the pinned resolution should see (gpui-perf ticket 05 and
+/// zterm ticket 13, recorded deviations from the pin). Fontique 0.11.1
+/// (font.rs:97-103) asks for bold synthesis whenever the requested weight
+/// is above the selected face's weight and the face has no `wght` axis,
+/// so 500 on a family whose closest face is the static Regular (400)
+/// rendered Regular through DirectWrite's bold simulation, and 700 on a
+/// family with SemiBold (600) as its heaviest face rendered SemiBold plus
+/// the simulation (a smear browsers never draw). Browsers synthesize only
+/// when the request is more than 200 above the matched face's weight
+/// (Blink font_cache_skia.cc @ d139f187, lines 347-353) and CSS never
+/// synthesizes below 600. When Fontique would synthesize and either rule
+/// says no, the request is replaced by the selected face's own OS/2
+/// weight, which selects the same face with no synthesis; the replacement
+/// is verified (same face bytes, no embolden) and otherwise dropped.
+/// Requests that pass both rules (700 over 400, 900 over 600) and faces
+/// with a `wght` axis (where Fontique sets the axis instead of
+/// emboldening) are unchanged. The oracle `ce-source` stays unmodified;
+/// this runs in the native service before every resolve and every
+/// shaping run.
 fn effective_weight(
     state: &mut TextServiceState,
     stack: &TextStack,
     font: &Font,
 ) -> FontWeight {
     let weight = font.weight;
-    if !(weight.0 < 600.0) {
-        return weight;
-    }
     let style_tag = match font.style {
         FontStyle::Normal => 0u8,
         FontStyle::Italic => 1,
@@ -1339,6 +1341,10 @@ fn effective_weight(
         }
         let face_weight = f32::from(probe.weight_class?);
         if !(face_weight < weight.0) {
+            return None;
+        }
+        // Synthesis stays only where a browser would draw it too.
+        if weight.0 >= 600.0 && weight.0 > face_weight + 200.0 {
             return None;
         }
         let candidate = FontWeight(face_weight);
@@ -1550,8 +1556,9 @@ fn shape_document(
     wrap_width: Option<Pixels>,
     line_clamp: Option<usize>,
 ) -> Result<Arc<LineLayout>, i32> {
-    // gpui-perf ticket 05: the same below-600 weight replacement as the
-    // resolve path, so per-run shaping never selects a synthesized bold.
+    // gpui-perf ticket 05 / zterm ticket 13: the same weight replacement as
+    // the resolve path, so per-run shaping synthesizes bold only where a
+    // browser would.
     let mut adjusted: Option<Vec<TextRun>> = None;
     for (index, run) in runs.iter().enumerate() {
         let weight = effective_weight(state, stack, &run.font);

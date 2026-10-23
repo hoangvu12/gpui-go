@@ -136,6 +136,29 @@ and refreshes the embedded pair `internal/native/artifacts/
 MSVC linker embeds a timestamp, so identical sources produce different
 SHA-256s (observed during this ticket).
 
+### Recorded measurements (2026-10-23, the zterm ticket 13 rebuild)
+
+- Toolchain: `rustc 1.97.0`, host/target `x86_64-pc-windows-msvc`,
+  `RUSTFLAGS=-C target-feature=+crt-static`. `ce-source/` is a copy of
+  the main checkout's pinned `254b5dbd…` tree (unmodified).
+- DLL: 18,877,952 bytes, SHA-256
+  `14e76993da41b89b063e26cdfc8adc9c82300e29d532abb0bbd765dd8f8d52d0`,
+  gzip-9 7,539,221 bytes. Native revision 14 (the embedded artifact
+  before it was revision 13, SHA `0b6e9265…`), capability mask `0xFFF`.
+  CRT outcome: **static**.
+- Change: the text service keeps Fontique's bold synthesis on a static
+  face only when the request is at least 600 and more than 200 above the
+  face's OS/2 weight (Blink's rule); otherwise it requests the face's
+  own weight. 700 over SemiBold now draws SemiBold as is; 700 over
+  Regular and 900 over SemiBold still synthesize. Synthetic strength
+  matches Chrome's (700 over 400: ink ratio 1.521 against Chrome's
+  1.517), so it is unchanged. Evidence:
+  [`evidence/zterm/ticket13-native-rebuild.json`](../evidence/zterm/ticket13-native-rebuild.json).
+- `cargo test -p gpui-go-native` still fails to compile the lib test
+  target with the same 5 pre-existing a11y.rs/capture.rs errors; the
+  change is verified through the Go gates
+  (`internal/fontspec` `TestBoldSynthesisFollowsBrowserRule`).
+
 ### Recorded measurements (2026-10-23, the gpui-perf ticket 05 rebuild)
 
 - Toolchain: `rustc 1.97.0`, host/target `x86_64-pc-windows-msvc`,
