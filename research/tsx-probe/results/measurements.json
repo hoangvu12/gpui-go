@@ -1,0 +1,45 @@
+{
+  "build_elements_native_median_ms": 0.663,
+  "build_elements_overhead_ms": -0.04,
+  "build_elements_script_median_ms": 0.638,
+  "cpu_count": 16,
+  "event_bound_first_ms": 0.017,
+  "event_bound_median_ms": 0.001,
+  "event_redescribe_first_ms": 2.662,
+  "event_redescribe_median_ms": 2.316,
+  "first_load_ms": 3.758,
+  "first_load_parts_ms": {
+    "compile": 0.326,
+    "describe": 2.618,
+    "run": 0.059,
+    "transform": 0.685,
+    "vm_start": 0.063
+  },
+  "frame_native_median_ms": 10.259,
+  "frame_overhead_ms": 0.121,
+  "frame_script_median_ms": 10.327,
+  "go": "go1.27.1",
+  "heap_after_30_reloads_kib": 518,
+  "heap_after_load_kib": 504,
+  "heap_per_bare_vm_kib": 8,
+  "nodes": 1053,
+  "reload_first_ms": 3.665,
+  "reload_median_ms": 4.115,
+  "reload_parts_sample_ms": {
+    "compile": 0.513,
+    "describe": 2.142,
+    "run": 0.18,
+    "transform": 0.693,
+    "vm_start": 0.05
+  },
+  "scene_quads_sprites": [
+    10,
+    459
+  ],
+  "state_kept_on_reload": true,
+  "syntax_error_message": "view.tsx:62:27: Expected \"}\" but found \"{\"",
+  "transform_first_ms": 0.917,
+  "transform_median_ms": 0.755,
+  "vm_start_first_ms": 0.087,
+  "vm_start_median_ms": 0.012
+}
