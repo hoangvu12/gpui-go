@@ -1055,6 +1055,58 @@ func (c Corners) ConstrainRadiiForQuadSize(size Size) Corners {
 	}
 }
 
+// OutsetWithCornerCorrection returns the corner radii of this box's
+// shape after the box is dilated ("outset") by the given amount,
+// following CSS Backgrounds 3 §corner-shaping, the "outset-adjusted
+// border radius" (Chromium FloatRoundedRect::Radii::
+// OutsetWithCornerCorrection driving ComputeOutsetAdjustedBorderRadius
+// and AdjustedRadiusDimension, which quote the spec,
+// platform/geometry/float_rounded_rect.cc:131-186 @ 0d4dcd4f, applied
+// to box-shadow spread by ApplySpreadToShadowShape,
+// core/paint/box_painter_base.cc:90-95). Recorded divergence toward
+// CSS (spec decision D8): the pin kept the element's radii unchanged
+// under a shadow's spread, so a `0 0 0 4px` halo on an r=8 box had
+// 8px corners where CSS gives 12px.
+//
+// Each radius grows by the outset, EXCEPT when it is smaller than the
+// outset: then it grows by the cubic ratio rule instead, so a
+// near-square corner does not suddenly become fully rounded, and a
+// zero radius stays zero (a square corner stays square). The size is
+// the ORIGINAL box's size — the coverage ratio is taken before the
+// outset (Chromium captures rect size before outsetting). A negative
+// outset (an inset) simply shrinks the radius by its magnitude,
+// clamped at zero. Pair the result with ConstrainRadiiForQuadSize on
+// the dilated box (Chromium's ApplySpreadToShadowShape calls
+// ConstrainRadii right after the outset).
+func (c Corners) OutsetWithCornerCorrection(size Size, outset float32) Corners {
+	if outset == 0 || size.Width <= 0 || size.Height <= 0 {
+		return c
+	}
+	// coverage = 2 * min(r / edge_width, r / edge_height), the corner's
+	// share of the box (float_rounded_rect.cc:157-159).
+	adjust := func(radius float32) float32 {
+		if radius == 0 {
+			return 0
+		}
+		coverage := 2 * min32(radius/size.Width, radius/size.Height)
+		// AdjustedRadiusDimension (float_rounded_rect.cc:138-152):
+		// 1. if radius > outset or coverage > 1: radius + outset;
+		// 2. ratio = radius / outset;
+		// 3. radius + outset * (1 - (1-ratio)^3 * (1-coverage^3)).
+		if radius > outset || coverage > 1 {
+			return max32(radius+outset, 0)
+		}
+		ratio := radius / outset
+		return max32(radius+outset*(1-(1-ratio)*(1-ratio)*(1-ratio)*(1-coverage*coverage*coverage)), 0)
+	}
+	return Corners{
+		TopLeft:     adjust(c.TopLeft),
+		TopRight:    adjust(c.TopRight),
+		BottomRight: adjust(c.BottomRight),
+		BottomLeft:  adjust(c.BottomLeft),
+	}
+}
+
 // Filter is a graphical filter applied to an element's own content
 // (Styled.Filter, CSS filter) or to the content behind it
 // (Styled.BackdropFilter, CSS backdrop-filter): the pinned enum's one

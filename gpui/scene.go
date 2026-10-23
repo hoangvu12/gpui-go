@@ -553,13 +553,59 @@ func (s *Scene) PaintQuad(pq PaintQuad, cornerSmoothing float32, ctx *PaintConte
 
 // PaintShadow paints one box shadow (the pinned paint_drop_shadows for
 // non-inset shadows, paint_inset_shadows for inset ones), with the
-// element's corner radii.
+// element's corner radii. The record's blur radius is used as the
+// gaussian's σ directly by the pinned shader, so the pin's semantics
+// are σ = BlurRadius: this method stays the bit-exact pin port (the
+// fx-0003 oracle drives it).
 func (s *Scene) PaintShadow(elementBounds Bounds, shadow BoxShadow, elementRadii Corners, cornerSmoothing float32, ctx *PaintContext) error {
 	var record Shadow
 	if shadow.Inset {
 		record = insetShadowFor(elementBounds, shadow, ctx.Mask, ctx.ScaleFactor, ctx.ElementOpacity, elementRadii, cornerSmoothing)
 	} else {
-		record = dropShadowFor(elementBounds, shadow, ctx.Mask, ctx.ScaleFactor, ctx.ElementOpacity, elementRadii, cornerSmoothing)
+		record = dropShadowFor(elementBounds, shadow, ctx.Mask, ctx.ScaleFactor, ctx.ElementOpacity, elementRadii, elementRadii, cornerSmoothing)
+	}
+	return s.InsertShadow(record)
+}
+
+// PaintBoxShadow paints one box shadow with CSS Backgrounds 3
+// geometry — the Style paint path's shadow seam (spec decision D8; the
+// element path in div.go calls it for every shadow). Two recorded
+// divergences toward CSS, both at the CSS-value → record boundary:
+//
+//   - the blur's σ is HALF the CSS blur radius (§shadow-blur, "the
+//     blur is a Gaussian with σ equal to half the blur radius";
+//     Chromium ShadowData::BlurRadiusToStdDev, core/style/shadow_data.h:
+//     76-88 @ 0d4dcd4f — "Per spec, sigma is exactly half the blur
+//     radius", fed to Skia's blur mask filter whose sigma IS the
+//     standard deviation, box_painter_base.cc:339 + cc/paint/
+//     draw_looper.cc:28-30). The pin passed the blur through as σ, so
+//     shadows were twice as blurry as CSS; the shader treats the
+//     record's blur radius as σ, so the CSS radius is halved here.
+//
+//   - a spread grows the shadow shape's corner radii (§corner-shaping,
+//     the outset-adjusted border radius; Chromium
+//     ApplySpreadToShadowShape → OutsetWithCornerCorrection +
+//     ConstrainRadii, box_painter_base.cc:90-95 and
+//     float_rounded_rect.cc:131-219). The pin kept the element's
+//     radii, so a `0 0 0 4px` halo on an r=8 box had 8px corners where
+//     CSS gives 12px. The inset geometry is unchanged: CSS subtracts
+//     the spread from the radii exactly as the pinned record does.
+func (s *Scene) PaintBoxShadow(elementBounds Bounds, shadow BoxShadow, elementRadii Corners, cornerSmoothing float32, ctx *PaintContext) error {
+	css := shadow
+	// σ = blur / 2, exact in f32 (halving the binary exponent).
+	css.BlurRadius = shadow.BlurRadius * 0.5
+	var record Shadow
+	if shadow.Inset {
+		record = insetShadowFor(elementBounds, css, ctx.Mask, ctx.ScaleFactor, ctx.ElementOpacity, elementRadii, cornerSmoothing)
+	} else {
+		shapeRadii := elementRadii
+		if shadow.SpreadRadius != 0 {
+			shadowBox := dilate(offsetBounds(elementBounds, shadow.OffsetX, shadow.OffsetY), shadow.SpreadRadius)
+			shapeRadii = elementRadii.
+				OutsetWithCornerCorrection(elementBounds.Size, shadow.SpreadRadius).
+				ConstrainRadiiForQuadSize(shadowBox.Size)
+		}
+		record = dropShadowFor(elementBounds, css, ctx.Mask, ctx.ScaleFactor, ctx.ElementOpacity, elementRadii, shapeRadii, cornerSmoothing)
 	}
 	return s.InsertShadow(record)
 }

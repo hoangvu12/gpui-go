@@ -1883,19 +1883,27 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 		currentColor = color
 	}
 
-	// paint_drop_shadows_with_corner_smoothing (window.rs:4375): the
-	// non-inset shadows, before the background.
-	for _, shadow := range s.BoxShadow {
-		if !shadow.Inset {
-			mustPaint(frame.scene.PaintShadow(bounds, shadow, radii, smoothing, frame.paint), "drop shadow")
-		}
-	}
-	if ring, ok := s.Ring.outerQuad(bounds, radii, currentColor); ok {
-		mustPaint(frame.scene.PaintQuad(ring, smoothing, frame.paint), "ring")
-	}
 	// paint_backdrop_filter_with_corner_smoothing (window.rs:4487): the
 	// identity filters are dropped; the port's backdrop record carries
-	// one blur, so a chain paints one record per filter in order.
+	// one blur, so a chain paints one record per filter in order. The
+	// backdrop-filter node paints before the element's own filter group,
+	// as in Chromium ("the backdrop-filter node comes first",
+	// core/paint/paint_layer.cc:2629-2635 @ 0d4dcd4f).
+	//
+	// The CSS backdrop-filter blur length is the σ (filter-effects-2;
+	// Chromium FEGaussianBlur takes the raw length,
+	// filter_effect_builder.cc:284-291), and the pin's record already
+	// lands there: the kernel computes σ = 0.5 × the record radius in
+	// TEXELS of the half-resolution blur texture
+	// (gpui_render/src/blur.rs:17 RADIUS_TO_STANDARD_DEVIATION, the
+	// passes' viewport and texture size are downsampled_dimension, dx
+	// blur passes in renderer/draw.rs), so the effective device-pixel σ
+	// IS the record radius — CSS radius × scale, exactly the CSS value.
+	// (The spec's D8 note "the pin uses σ = radius/2" read the texel
+	// conversion without the half-resolution factor; the shadow-filter
+	// Chrome fixture measured the pin value at 0.42 mean channel diff
+	// vs 9.73 for the doubled radius.) No divergence: the pin's value
+	// passes through.
 	for _, filter := range s.BackdropFilter {
 		if !filter.IsIdentity() {
 			mustPaint(frame.scene.PaintBackdropFilterCornerSmoothing(bounds, filter.BlurRadius, radii, smoothing, frame.paint), "backdrop filter")
@@ -1904,6 +1912,39 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 
 	paintUnit := func(w *Window) {
 		frame := currentFrame(w)
+		// paint_drop_shadows_with_corner_smoothing (window.rs:4375): the
+		// non-inset shadows, before the background.
+		//
+		// Recorded divergences toward CSS (D8), all at this Style paint
+		// path — the pin's Scene.PaintShadow keeps the pinned record for
+		// the pin-conformance fixtures:
+		//   - the shadows paint INSIDE the filter group, so `filter:`
+		//     blurs the element's own shadow (filter-effects-1
+		//     §FilterProperty: the filter applies to the whole rendered
+		//     element, including its box-shadow and border; Chromium
+		//     paints the decorations inside the filter effect node, whose
+		//     reference box is the layer's visual overflow including the
+		//     shadow ink — PaintLayer::LocalBoundingBox →
+		//     VisualOverflowRect, paint_layer.cc:2199-2205). The pin
+		//     painted the shadows and the ring above/outside
+		//     with_filter_layer (style.rs:918-930), so its blur never
+		//     touched them.
+		//   - the list paints in REVERSE order so the FIRST shadow paints
+		//     on top (css-backgrounds-3 §box-shadow; Chromium "the
+		//     first-specified shadow is painted on top", shadow_list.h:
+		//     46-47 — box_painter_base.cc:295 iterates i--). The pin
+		//     painted them in list order, so its LAST shadow was on top.
+		//   - PaintBoxShadow: CSS geometry (σ = blur/2, spread-grown
+		//     corner radii).
+		for i := len(s.BoxShadow) - 1; i >= 0; i-- {
+			shadow := s.BoxShadow[i]
+			if !shadow.Inset {
+				mustPaint(frame.scene.PaintBoxShadow(bounds, shadow, radii, smoothing, frame.paint), "drop shadow")
+			}
+		}
+		if ring, ok := s.Ring.outerQuad(bounds, radii, currentColor); ok {
+			mustPaint(frame.scene.PaintQuad(ring, smoothing, frame.paint), "ring")
+		}
 		if s.Background != nil && !s.Background.IsTransparent() {
 			background := *s.Background
 			mustPaint(frame.scene.PaintQuad(PaintQuad{
@@ -1951,12 +1992,16 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 			}
 		}
 		if ring, ok := s.InsetRing.insetShadow(currentColor); ok {
-			mustPaint(frame.scene.PaintShadow(insetBounds, ring, insetRadii, smoothing, frame.paint), "inset ring")
+			mustPaint(frame.scene.PaintBoxShadow(insetBounds, ring, insetRadii, smoothing, frame.paint), "inset ring")
 		}
-		// paint_inset_shadows_with_corner_smoothing (window.rs:4424).
-		for _, shadow := range s.BoxShadow {
+		// paint_inset_shadows_with_corner_smoothing (window.rs:4424) —
+		// reversed so the FIRST shadow paints on top (Chromium
+		// box_painter_base.cc:416 iterates i--, shadow_list.h:46-47),
+		// with PaintBoxShadow's CSS blur (σ = blur/2).
+		for i := len(s.BoxShadow) - 1; i >= 0; i-- {
+			shadow := s.BoxShadow[i]
 			if shadow.Inset {
-				mustPaint(frame.scene.PaintShadow(insetBounds, shadow, insetRadii, smoothing, frame.paint), "inset shadow")
+				mustPaint(frame.scene.PaintBoxShadow(insetBounds, shadow, insetRadii, smoothing, frame.paint), "inset shadow")
 			}
 		}
 
@@ -1985,11 +2030,59 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 	// filter group carries one blur, so a chain nests one group per
 	// filter (outermost last, applying the filters in order); identity
 	// filters run inline inside WithFilterLayerCornerSmoothing.
-	s.withFilterChain(s.Filter, bounds, radii, smoothing, w, paintUnit)
+	//
+	// Recorded divergence toward CSS (D8) at this Style paint path, and
+	// one verified non-divergence:
+	//   - the group's bounds are the element's INK bounds — the border box
+	//     dilated by the drop shadows' and the outer ring's extent — so
+	//     the group's composite covers the blurred shadow instead of
+	//     cutting it at the element bounds (+3σ). Chromium's filter
+	//     reference box is the layer's visual overflow, which the
+	//     box-shadow ink feeds (PaintLayer::LocalBoundingBox →
+	//     VisualOverflowRect, paint_layer.cc:2199-2205, from
+	//     ComputedStyle::BoxDecorationOutsets, computed_style.cc:
+	//     2697-2709). The pin passed the element bounds.
+	//   - the blur's σ is the CSS length (filter-effects-1 §funcdef-
+	//     filter-blur: the length is the standard deviation; Chromium
+	//     FEGaussianBlur(std_deviation = the raw length),
+	//     filter_effect_builder.cc:284-291). The pin's kernel computes
+	//     σ = 0.5 × the record radius in half-resolution TEXELS
+	//     (blur.rs:17; the blur passes run on the downsampled ping/pong
+	//     textures, draw.rs), so the effective device-pixel σ IS the
+	//     record radius — CSS radius × scale, already the CSS value.
+	//     No divergence: the pin's radius passes through (the spec's
+	//     D8 "the pin uses σ = radius/2" read the texel conversion
+	//     without the half-resolution factor; the shadow-filter Chrome
+	//     fixture measured the pin value at 0.42 mean channel diff vs
+	//     9.73 for the doubled radius).
+	var ink Edges
+	for _, shadow := range s.BoxShadow {
+		if shadow.Inset {
+			continue
+		}
+		o := shadow.inkOutsets()
+		ink.Top = max32(ink.Top, o.Top)
+		ink.Right = max32(ink.Right, o.Right)
+		ink.Bottom = max32(ink.Bottom, o.Bottom)
+		ink.Left = max32(ink.Left, o.Left)
+	}
+	if s.Ring.Width > 0 {
+		ink.Top = max32(ink.Top, s.Ring.Width)
+		ink.Right = max32(ink.Right, s.Ring.Width)
+		ink.Bottom = max32(ink.Bottom, s.Ring.Width)
+		ink.Left = max32(ink.Left, s.Ring.Width)
+	}
+	groupBounds := Bounds{
+		Origin: Point{X: bounds.Origin.X - ink.Left, Y: bounds.Origin.Y - ink.Top},
+		Size:   Size{Width: bounds.Size.Width + ink.Left + ink.Right, Height: bounds.Size.Height + ink.Top + ink.Bottom},
+	}
+	s.withFilterChain(s.Filter, groupBounds, radii, smoothing, w, paintUnit)
 }
 
 // withFilterChain runs f inside one content-filter group per filter,
-// the first filter innermost.
+// the first filter innermost. The bounds are the group's (ink-dilated
+// by the caller); the radii stay the element's (a content filter's
+// composite is not clipped to the rounded rect).
 func (s *Style) withFilterChain(filters []Filter, bounds Bounds, radii Corners, smoothing float32, w *Window, f func(*Window)) {
 	if len(filters) == 0 {
 		f(w)
@@ -1997,6 +2090,10 @@ func (s *Style) withFilterChain(filters []Filter, bounds Bounds, radii Corners, 
 	}
 	last := filters[len(filters)-1]
 	frame := currentFrame(w)
+	// σ = the CSS blur length: the pin's kernel takes σ = 0.5 × the
+	// record radius in half-resolution texels, so the effective
+	// device-pixel σ is the record radius itself (see paintBox's note)
+	// — the CSS radius × scale passes through unchanged.
 	err := frame.scene.WithFilterLayerCornerSmoothing(bounds, last.BlurRadius, radii, smoothing, frame.paint, func() error {
 		s.withFilterChain(filters[:len(filters)-1], bounds, radii, smoothing, w, f)
 		return nil

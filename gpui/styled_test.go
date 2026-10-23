@@ -327,8 +327,16 @@ func TestDivPaintsTheBoxInPinnedOrder(t *testing.T) {
 		t.Errorf("paint order: drop %d ring %d bg %d insetRing %d inset %d child %d border %d",
 			dropShadow.Order, ringStrips[0].Order, bg.Order, insetRing.Order, insetShadow.Order, child.Order, borderStrips[0].Order)
 	}
-	if dropShadow.Inset || dropShadow.Bounds != dev(20, 22, 100, 40) || dropShadow.BlurRadius != 4*testScale || dropShadow.CornerRadii != r6 {
+	if dropShadow.Inset || dropShadow.Bounds != dev(20, 22, 100, 40) || dropShadow.CornerRadii != r6 {
 		t.Errorf("drop shadow = %+v", dropShadow)
+	}
+	// Recorded divergence toward CSS (spec D8): the box-shadow blur's σ
+	// is half the CSS blur radius (css-backgrounds-3 §shadow-blur;
+	// Chromium ShadowData::BlurAsSigma, shadow_data.h:76-88), so the
+	// record carries CSS blur 4 as σ 2 logical → 4 device pixels; the
+	// pin passed the blur through as σ (8 device pixels here).
+	if dropShadow.BlurRadius != 4*testScale/2 {
+		t.Errorf("drop shadow blur = %v, want CSS σ = blur/2 = %v device (divergence toward CSS)", dropShadow.BlurRadius, 4*testScale/2)
 	}
 	for _, ring := range ringStrips {
 		if ring.BorderWidths != edges(3) || ring.CornerRadii != corners(9) || !ring.Background.IsTransparent() || ring.BorderColor != painted(green) {
@@ -450,6 +458,10 @@ func TestDebugOutlineAndFilters(t *testing.T) {
 		t.Errorf("outline/background = %+v / %+v", union(quads[:4]), quads[4])
 	}
 	backdrops, err := scene.BackdropFilters()
+	// The filter and backdrop blur radii pass through the pin's record
+	// unchanged: the kernel's σ = 0.5 × the record radius in
+	// half-resolution texels, so the effective device-pixel σ IS the
+	// record radius — the CSS σ (see div.go paintBox; no divergence).
 	if err != nil || len(backdrops) != 1 || backdrops[0].BlurRadius != 8*testScale {
 		t.Errorf("backdrop filters = %+v, %v", backdrops, err)
 	}

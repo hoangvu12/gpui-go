@@ -308,6 +308,29 @@ func (b BoxShadow) WithInset() BoxShadow {
 	return b
 }
 
+// inkOutsets returns this drop shadow's CSS ink outsets: how far the
+// element's painted ink extends beyond its border box on each side.
+// Chromium's ShadowData::RectOutsets (core/style/shadow_data.cc:33-43
+// @ 0d4dcd4f, "3 * sigma is how Skia computes the box blur extent"):
+// ceil(3σ) + spread ∓ offset per side, with σ = blur/2 (the CSS
+// shadow-blur sigma). Used for the filter group's bounds, as
+// Chromium's filter reference box covers the layer's visual overflow,
+// which the box-shadow ink feeds (ComputedStyle::BoxDecorationOutsets,
+// core/style/computed_style.cc:2697-2709 → PaintLayer::
+// LocalBoundingBoxIncludingSelfPaintingDescendants, paint_layer.cc:
+// 2273-2278). Inset shadows contribute no ink outside the box
+// (ShadowList::RectOutsetsIncludingOriginal skips them,
+// shadow_list.cc:38-47).
+func (b BoxShadow) inkOutsets() Edges {
+	blurAndSpread := float32(math.Ceil(float64(3*b.BlurRadius*0.5))) + b.SpreadRadius
+	return Edges{
+		Top:    blurAndSpread - b.OffsetY,
+		Right:  blurAndSpread + b.OffsetX,
+		Bottom: blurAndSpread + b.OffsetY,
+		Left:   blurAndSpread - b.OffsetX,
+	}
+}
+
 // Black is the pinned opaque black (color.rs:68 black()).
 func Black() Hsla { return Hsla{H: 0, S: 0, L: 0, A: 1} }
 
@@ -549,14 +572,16 @@ func intersectLogical(a, b Bounds) Bounds { return intersectBounds(a, b) }
 // dropShadowFor builds the scene Shadow record for a drop shadow,
 // mirroring the pinned paint_drop_shadows_with_corner_smoothing: the
 // dilated (bounds + offset) region with cover bounds, blur scaled, the
-// element's corner radii, and the opacity folded into the color.
-func dropShadowFor(elementBounds Bounds, shadow BoxShadow, mask Bounds, scale, elementOpacity float32, elementRadii Corners, cornerSmoothing float32) Shadow {
+// given shadow-shape radii (the pinned callers pass the element's
+// radii; PaintBoxShadow passes the CSS spread-adjusted radii), and the
+// opacity folded into the color.
+func dropShadowFor(elementBounds Bounds, shadow BoxShadow, mask Bounds, scale, elementOpacity float32, elementRadii, shapeRadii Corners, cornerSmoothing float32) Shadow {
 	shadowBounds := dilate(offsetBounds(elementBounds, shadow.OffsetX, shadow.OffsetY), shadow.SpreadRadius)
 	return Shadow{
 		BlurRadius:         shadow.BlurRadius * scale,
 		Bounds:             coverBounds(shadowBounds, scale),
 		ContentMask:        snappedContentMask(mask, scale),
-		CornerRadii:        scaleCorners(elementRadii, scale),
+		CornerRadii:        scaleCorners(shapeRadii, scale),
 		Color:              shadow.Color.Opacity(elementOpacity),
 		ElementBounds:      coverBounds(elementBounds, scale),
 		ElementCornerRadii: scaleCorners(elementRadii, scale),

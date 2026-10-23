@@ -1,0 +1,26 @@
+{
+  "name": "shadow-blur",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T22:04:07Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "blur-box": {
+      "x": 220,
+      "y": 140,
+      "width": 200,
+      "height": 120
+    },
+    "blur-card": {
+      "x": 164,
+      "y": 84,
+      "width": 312,
+      "height": 232
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}
