@@ -124,6 +124,47 @@ type Capslock struct {
 }
 
 // ---------------------------------------------------------------------------
+// KeyLocation
+// ---------------------------------------------------------------------------
+
+// KeyLocation is the physical location of the key that was pressed
+// (DOM KeyboardEvent.location: browser-core 13, key code and location
+// with Shift kept). Chromium derives it from the DOM code
+// (ui/events/keycodes/dom/keycode_converter.cc:351,
+// KeycodeConverter::DomCodeToLocation): the numpad codes report numpad,
+// the left/right modifier codes report left/right, everything else is
+// standard.
+type KeyLocation uint8
+
+// The four DOM location values (KeyboardEvent's
+// DOM_KEY_LOCATION_* constants).
+const (
+	// KeyLocationStandard is the generic, location-unaware key.
+	KeyLocationStandard KeyLocation = 0
+	// KeyLocationLeft is the left-hand version of a modifier key.
+	KeyLocationLeft KeyLocation = 1
+	// KeyLocationRight is the right-hand version of a modifier key.
+	KeyLocationRight KeyLocation = 2
+	// KeyLocationNumpad is a numeric keypad key.
+	KeyLocationNumpad KeyLocation = 3
+)
+
+// String renders the location as the DOM value it came from.
+func (l KeyLocation) String() string {
+	switch l {
+	case KeyLocationStandard:
+		return "standard"
+	case KeyLocationLeft:
+		return "left"
+	case KeyLocationRight:
+		return "right"
+	case KeyLocationNumpad:
+		return "numpad"
+	}
+	return fmt.Sprintf("KeyLocation(%d)", uint8(l))
+}
+
+// ---------------------------------------------------------------------------
 // Keystroke
 // ---------------------------------------------------------------------------
 
@@ -144,6 +185,20 @@ type Keystroke struct {
 	// binding was pressed, e.g. for s this is "s", for option-s "ß",
 	// and for cmd-s "" (none in the reference).
 	KeyChar string
+
+	// Code is the physical key's DOM code name (DOM
+	// KeyboardEvent.code: "KeyA", "Digit1", "BracketRight"), the
+	// identity of the key regardless of the keyboard layout
+	// (browser-core 13). The Windows translation derives it from the
+	// message's scan code — lParam bits 16-23 plus the extended bit
+	// 24 — never from the virtual key; a parsed or synthesized
+	// keystroke leaves it "" and matching behaves exactly as before.
+	Code string
+
+	// Location is the physical key's location (DOM
+	// KeyboardEvent.location), derived from the code the platform
+	// reported (browser-core 13).
+	Location KeyLocation
 }
 
 // KEYSTROKE_PARSE_EXPECTED_MESSAGE is the sentence explaining what the
@@ -178,13 +233,47 @@ func (e *InvalidKeystrokeError) Error() string {
 // produced the key_char, so a binding with no modifiers and the
 // key_char as its key matches (should_match's #[cfg(target_os =
 // "windows")] branch).
+//
+// browser-core 13: a keystroke that carries the physical code (every
+// platform-produced one does) keeps Shift in its modifiers and its Key
+// is the DOM key value — the shifted character of a shiftable key —
+// so a binding written in either form matches: the key form (the
+// shifted character, no shift: "ctrl-}") matches the typed key with
+// Shift folded away, and the code form (the unshifted physical key
+// with shift: "ctrl-shift-]") matches the typed modifiers with the
+// physical key's unshifted US character. A keystroke without a code
+// (a parsed one, or from a platform that reports none) keeps matching
+// only exactly.
 func (k Keystroke) ShouldMatch(target *KeybindingKeystroke) bool {
 	if k.KeyChar != "" && k.KeyChar != k.Key {
 		if target.inner.Key == k.KeyChar && target.inner.Modifiers == (Modifiers{}) {
 			return true
 		}
 	}
-	return target.inner.Modifiers == k.Modifiers && target.inner.Key == k.Key
+	if target.inner.Modifiers == k.Modifiers && target.inner.Key == k.Key {
+		return true
+	}
+	unshifted, ok := unshiftedUSKeyOfCode(k.Code)
+	if !ok {
+		return false
+	}
+	// The code form: the binding wrote the physical key (the unshifted
+	// US character of the typed code) with shift among its modifiers.
+	if k.Modifiers == target.inner.Modifiers && target.inner.Key == unshifted {
+		return true
+	}
+	// The key form: the binding wrote the shifted character without
+	// shift. Only a typed keystroke whose key is the shifted form of
+	// the physical key (the shift folding happened) matches this way,
+	// so shift plus a letter still requires the binding to carry shift.
+	if k.Modifiers.Shift && k.Key != unshifted {
+		withoutShift := k.Modifiers
+		withoutShift.Shift = false
+		if withoutShift == target.inner.Modifiers && k.Key == target.inner.Key {
+			return true
+		}
+	}
+	return false
 }
 
 // ParseKeystroke parses a keystroke from the reference's key syntax:
@@ -377,6 +466,36 @@ func (k Keystroke) WithSimulatedIME() Keystroke {
 				} else {
 					k.KeyChar = k.Key
 				}
+			}
+		}
+	}
+	return k
+}
+
+// WithSimulatedCode returns this keystroke in the platform's key
+// spelling (browser-core 13): the Code filled from the US layout
+// table when it is empty (a caller that knows the physical key can
+// preset it, the way the parity harness spells a numpad key), the
+// Location the code implies, and — for a shifted key whose platform
+// translation folds it — the shifted-key form: Key "]" with Shift
+// held becomes Key "}" with Shift kept, exactly the keystroke the
+// Windows translation reports for Shift+]. The keystroke syntax
+// cannot spell a physical key, so simulated input and the parity
+// replay use this to produce the same keystroke a real key press
+// carries. Letters do not fold: the platform reports Key "a" for
+// Shift+A (the pin's shape), not the DOM key "A".
+func (k Keystroke) WithSimulatedCode() Keystroke {
+	if k.Code == "" {
+		k.Code = usDomCodeOfKey(k.Key)
+	}
+	if k.Code == "" {
+		return k
+	}
+	k.Location = domKeyLocationOfCode(k.Code)
+	if k.Modifiers.Shift {
+		if unshifted, ok := unshiftedUSKeyOfCode(k.Code); ok && k.Key == unshifted {
+			if shifted, ok := shiftedUSKeyOfCode(k.Code); ok && shifted != "" {
+				k.Key = shifted
 			}
 		}
 	}

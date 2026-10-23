@@ -1,7 +1,7 @@
 {
   "name": "keyorder-tab",
   "chrome": "Chrome/155.0.8059.85",
-  "recordedAt": "2026-10-23T21:28:43Z",
+  "recordedAt": "2026-10-23T22:56:45Z",
   "viewport": {
     "width": 480,
     "height": 360
@@ -43,28 +43,32 @@
       "target": "a",
       "defaultPrevented": false,
       "key": "Tab",
-      "focus": "a"
+      "focus": "a",
+      "code": "Tab"
     },
     {
       "kind": "keydown",
       "target": "root",
       "defaultPrevented": false,
       "key": "Tab",
-      "focus": "a"
+      "focus": "a",
+      "code": "Tab"
     },
     {
       "kind": "keyup",
       "target": "b",
       "defaultPrevented": false,
       "key": "Tab",
-      "focus": "b"
+      "focus": "b",
+      "code": "Tab"
     },
     {
       "kind": "keyup",
       "target": "root",
       "defaultPrevented": false,
       "key": "Tab",
-      "focus": "b"
+      "focus": "b",
+      "code": "Tab"
     }
   ],
   "screenshot": "chrome.png"

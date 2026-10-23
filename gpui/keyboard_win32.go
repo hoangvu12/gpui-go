@@ -20,6 +20,15 @@ package gpui
 //
 // All functions run on the host (foreground) thread, exactly like the
 // reference's window procedure.
+//
+// Deliberate divergence toward the browser (browser-core 13, recorded
+// per D0): the reference clears Shift when the shifted-key conversion
+// replaces the key (keyboard.rs get_keystroke_key), so Ctrl+Shift+]
+// becomes ctrl-} and a binding written ctrl-shift-] never matches
+// (zterm #25). The port keeps Shift in the modifiers and fills the
+// physical code and location (Keystroke.Code/Location, gpui/
+// keycode_win32.go), so the DOM's key/code pair arrives intact and
+// Keystroke.ShouldMatch accepts either binding form.
 
 import (
 	"fmt"
@@ -288,27 +297,40 @@ func win32ModifierEvent(vkey uint8, lastModifiers *Modifiers, lastCapslock *Caps
 // into a keystroke plus its prefer-character-input flag
 // (parse_normal_key + process_key's second return), or returns !ok
 // when the virtual key produces no keystroke (the reference's Option
-// path).
+// path). The keystroke carries the physical code and its location,
+// both derived from the message's scan code — lParam bits 16-23 plus
+// the extended bit 24 — never from the virtual key (browser-core 13;
+// Keystroke.Code documents the Chromium path).
 func win32TranslateKeyDown(vkey uint8, lparam uintptr) (keystroke Keystroke, preferCharacterInput bool, ok bool) {
 	modifiers := win32CurrentModifiers()
-	keyChar, preferCharacterInput := processKey(vkey, uint8(hiword(lparam)&0xFF))
-	key, ok := keystrokeKeyOf(vkey, uint8(hiword(lparam)&0xFF), &modifiers)
+	scanCode := win32ScanCodeOfLParam(lparam)
+	keyChar, preferCharacterInput := processKey(vkey, uint8(scanCode&0xFF))
+	key, ok := keystrokeKeyOf(vkey, uint8(scanCode&0xFF), modifiers)
 	if !ok {
 		return Keystroke{}, false, false
 	}
-	return Keystroke{Modifiers: modifiers, Key: key, KeyChar: keyChar}, preferCharacterInput, true
+	code := domCodeOfScanCode(scanCode)
+	return Keystroke{
+		Modifiers: modifiers,
+		Key:       key,
+		KeyChar:   keyChar,
+		Code:      code,
+		Location:  domKeyLocationOfCode(code),
+	}, preferCharacterInput, true
 }
 
 // keystrokeKeyOf resolves the keystroke key: the immutable names first,
 // then the layout-dependent key with shifted-key conversion
-// (parse_immutable + get_keystroke_key).
-func keystrokeKeyOf(vkey uint8, scanCode uint8, modifiers *Modifiers) (string, bool) {
+// (parse_immutable + get_keystroke_key). The modifiers pass through
+// unchanged — Shift survives the shifted-key conversion (browser-core
+// 13's divergence, above) — so the caller's modifiers value is the
+// keystroke's modifiers.
+func keystrokeKeyOf(vkey uint8, scanCode uint8, modifiers Modifiers) (string, bool) {
 	if key, ok := parseImmutableKey(vkey); ok {
 		return key, true
 	}
 	if modifiers.Shift && needToConvertToShiftedKey(vkey) {
 		if shifted, ok := getShiftedKey(vkey, uint32(scanCode)); ok {
-			modifiers.Shift = false
 			return shifted, true
 		}
 		return "", false

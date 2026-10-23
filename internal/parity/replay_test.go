@@ -9,6 +9,7 @@ import (
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/boxpaint"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/gradient"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/hover"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/keycode"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/keyorder"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/textpaint"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/tracer"

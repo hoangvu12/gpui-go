@@ -77,6 +77,12 @@ type Step struct {
 	// Key is the keystroke of a StepKey step, in the pinned keystroke
 	// syntax ("a", "enter", "ctrl-shift-]").
 	Key string
+	// Code is the physical DOM code of a StepKey step when the
+	// keystroke syntax cannot spell the physical key: "Numpad1" with
+	// Key "1" drives the numpad's 1 (a real key press reports code
+	// Numpad1, key "1" and the numpad location). Empty means the code
+	// is derived from the key (browser-core 13).
+	Code string
 }
 
 // Move returns a pointer-move step to (x, y).
@@ -97,6 +103,16 @@ func Click(x, y float32) Step { return Step{Kind: StepClick, X: x, Y: y, Button:
 
 // Key returns a keystroke step.
 func Key(keystroke string) Step { return Step{Kind: StepKey, Key: keystroke} }
+
+// KeyCode returns a keystroke step with an explicit physical DOM code
+// (browser-core 13): the keystroke's key and modifiers parse as usual
+// and both sides carry the code — the Chrome side sends it to
+// Input.dispatchKeyEvent and the gpui side sets it on the keystroke —
+// so a step can drive keys the keystroke syntax cannot spell (the
+// numpad: KeyCode("1", "Numpad1") types the numpad's 1).
+func KeyCode(keystroke, code string) Step {
+	return Step{Kind: StepKey, Key: keystroke, Code: code}
+}
 
 // PixelTolerance is a fixture's provisional Tier C gate. Every number
 // here is a placeholder until the research-19 calibration (reference
@@ -155,9 +171,9 @@ type Fixture struct {
 	// "pointerenter" and "pointerleave" (the pointer boundary events
 	// of browser-core ticket 10), and "keydown" and "keyup" (ticket 09:
 	// key entries carry the key and the focused element at listener
-	// time); a fixture avoids the kinds whose delivery order the pin
-	// currently gets wrong (see
-	// docs/browser-parity-harness.md, known divergences).
+	// time; ticket 13 adds the physical code and location); a fixture
+	// avoids the kinds whose delivery order the pin currently gets
+	// wrong (see docs/browser-parity-harness.md, known divergences).
 	EventKinds []string
 	// BoxIDs are the page's data-id values (the gpui elements' ids)
 	// whose boxes are compared exactly, in this order.
@@ -195,6 +211,16 @@ type EventRecord struct {
 	// order: a listener that still sees the old focus ran before the
 	// default action changed it.
 	Focus string `json:"focus,omitempty"`
+	// Code is the event's physical DOM code for keydown and keyup
+	// entries (KeyboardEvent.code: "Tab", "BracketRight", "Numpad1";
+	// "" for the mouse kinds and when the platform reports none).
+	// Ticket 13: key entries carry the physical key's identity
+	// regardless of the layout.
+	Code string `json:"code,omitempty"`
+	// Location is the event's key location for keydown and keyup
+	// entries (KeyboardEvent.location: 0 standard, 1 left, 2 right,
+	// 3 numpad; 0 for the mouse kinds).
+	Location int `json:"location,omitempty"`
 }
 
 // EventLog is the fixture-side event recorder the View's handlers
@@ -259,21 +285,23 @@ func (l *EventLog) PointerLeave(target string) func(*gpui.PointerLeaveEvent, *gp
 }
 
 // KeyDown returns an OnKeyDown handler that records a "keydown" on
-// target with the event's key and the focused element's id at
-// listener time (the page side's e.key / document.activeElement pair).
-// The focus field is the order probe of the key fixtures: it proves a
-// listener ran before the default action moved focus.
+// target with the event's key, physical code, location and the
+// focused element's id at listener time (the page side's e.key /
+// e.code / e.location / document.activeElement set). The focus field
+// is the order probe of the key fixtures: it proves a listener ran
+// before the default action moved focus.
 func (l *EventLog) KeyDown(target string) func(*gpui.KeyDownEvent, *gpui.Window, *gpui.App) {
 	return func(e *gpui.KeyDownEvent, w *gpui.Window, app *gpui.App) {
-		l.appendKey("keydown", target, domKeyOf(e.Keystroke.Key), l.focusTarget(w))
+		l.appendKey("keydown", target, domKeyOf(e.Keystroke.Key), e.Keystroke.Code, int(e.Keystroke.Location), l.focusTarget(w))
 	}
 }
 
 // KeyUp returns an OnKeyUp handler that records a "keyup" on target
-// with the event's key and the focused element's id at listener time.
+// with the event's key, physical code, location and the focused
+// element's id at listener time.
 func (l *EventLog) KeyUp(target string) func(*gpui.KeyUpEvent, *gpui.Window, *gpui.App) {
 	return func(e *gpui.KeyUpEvent, w *gpui.Window, app *gpui.App) {
-		l.appendKey("keyup", target, domKeyOf(e.Keystroke.Key), l.focusTarget(w))
+		l.appendKey("keyup", target, domKeyOf(e.Keystroke.Key), e.Keystroke.Code, int(e.Keystroke.Location), l.focusTarget(w))
 	}
 }
 
@@ -282,7 +310,7 @@ func (l *EventLog) KeyUp(target string) func(*gpui.KeyUpEvent, *gpui.Window, *gp
 // listener that calls preventDefault).
 func (l *EventLog) KeyDownPreventDefault(target string) func(*gpui.KeyDownEvent, *gpui.Window, *gpui.App) {
 	return func(e *gpui.KeyDownEvent, w *gpui.Window, app *gpui.App) {
-		l.appendKey("keydown", target, domKeyOf(e.Keystroke.Key), l.focusTarget(w))
+		l.appendKey("keydown", target, domKeyOf(e.Keystroke.Key), e.Keystroke.Code, int(e.Keystroke.Location), l.focusTarget(w))
 		w.PreventDefault()
 	}
 }
@@ -310,9 +338,17 @@ func (l *EventLog) focusTarget(w *gpui.Window) string {
 	return ""
 }
 
-// appendKey records one key event entry.
-func (l *EventLog) appendKey(kind, target, key, focus string) {
-	l.entries = append(l.entries, EventRecord{Kind: kind, Target: target, Key: key, Focus: focus})
+// appendKey records one key event entry with its key, physical code,
+// location and listener-time focus.
+func (l *EventLog) appendKey(kind, target, key, code string, location int, focus string) {
+	l.entries = append(l.entries, EventRecord{
+		Kind:     kind,
+		Target:   target,
+		Key:      key,
+		Code:     code,
+		Location: location,
+		Focus:    focus,
+	})
 }
 
 // domKeyOf maps the pinned keystroke key name onto the DOM key name
