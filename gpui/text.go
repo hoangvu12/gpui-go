@@ -624,7 +624,8 @@ type TextLayoutRequest struct {
 
 // ShapeText shapes the request through the native text service (the
 // pinned PlatformTextSystem::layout_text call) and returns the wrapped
-// line handle carrying the shaping summary.
+// line handle carrying the shaping summary. A negative wrap width wraps
+// at every break opportunity, like a zero one (nativeWrapWidth).
 func (ts *TextSystem) ShapeText(request TextLayoutRequest) (*WrappedLine, error) {
 	if len(request.Runs) == 0 {
 		return nil, fmt.Errorf("gpui: ShapeText: %w: at least one run is required", ErrTextValue)
@@ -632,9 +633,10 @@ func (ts *TextSystem) ShapeText(request TextLayoutRequest) (*WrappedLine, error)
 	if !finiteFloat32(request.FontSize) {
 		return nil, fmt.Errorf("gpui: ShapeText: %w: font size must be finite", ErrTextValue)
 	}
-	if request.WrapWidth != nil && (!finiteFloat32(*request.WrapWidth) || *request.WrapWidth < 0) {
-		return nil, fmt.Errorf("gpui: ShapeText: %w: wrap width must be finite and >= 0", ErrTextValue)
+	if request.WrapWidth != nil && !finiteFloat32(*request.WrapWidth) {
+		return nil, fmt.Errorf("gpui: ShapeText: %w: wrap width must be finite", ErrTextValue)
 	}
+	request.WrapWidth = nativeWrapWidth(request.WrapWidth)
 	if request.LineClamp != nil && *request.LineClamp < 1 {
 		return nil, fmt.Errorf("gpui: ShapeText: %w: line clamp must be >= 1", ErrTextValue)
 	}
@@ -692,6 +694,30 @@ func featuresToNative(features []FontFeature) []native.FontFeature {
 		records[i] = native.FontFeature{Tag: feature.Tag, Value: feature.Value}
 	}
 	return records
+}
+
+// nativeWrapWidth is the wrap width the native text service is handed: a
+// copy of w, with a negative width raised to zero (nil stays nil).
+//
+// Taffy hands a measured child of a padded box narrower than its padding
+// a negative known width (taffy 0.13 flexbox.rs:474 and block.rs:882 do
+// not clamp the content box; a flex row's min-content pass sizes a
+// full-width, min-w-0 child at zero). The pin's text measure passes that
+// width on (R:elements/text.rs:809-827, evaluate_wrap_width), shape_text
+// does not check it (R:text_system.rs:350-363), and parley wraps at it
+// (gpui_ce_parley text_system.rs:917-919, 1116-1117): no cluster with an
+// advance fits, so every break opportunity breaks, as at zero
+// (parley line_break.rs:516-523, 626: next_x <= max_advance). The width
+// it reports is min(wrap width, advance) (R:text_system/line_layout.rs:
+// 646-651), which the measure clamps to zero either way (layout.go
+// snapMeasuredSize). The port's native service rejects negative widths
+// (reference/native/src/text.rs:1535-1543), so the port hands it zero.
+func nativeWrapWidth(w *float32) *float32 {
+	if w == nil {
+		return nil
+	}
+	width := max(*w, 0)
+	return &width
 }
 
 // finiteFloat32 reports whether v is neither NaN nor infinite.
@@ -1538,15 +1564,17 @@ type TextCluster struct {
 
 // Relayout re-shapes the stored text and runs under a new wrap/clamp
 // constraint (the shaping handle's layout update) and refreshes the
-// summary. Wrap widths must be finite and >= 0; clamps >= 1. The
-// logical clusters are pure text facts and survive the re-layout.
+// summary. Wrap widths must be finite (a negative one wraps like zero,
+// nativeWrapWidth); clamps >= 1. The logical clusters are pure text facts
+// and survive the re-layout.
 func (l *WrappedLine) Relayout(wrapWidth *float32, lineClamp *uint32) error {
 	if err := l.checkLive("Relayout"); err != nil {
 		return err
 	}
-	if wrapWidth != nil && (!finiteFloat32(*wrapWidth) || *wrapWidth < 0) {
-		return fmt.Errorf("gpui: Relayout: %w: wrap width must be finite and >= 0", ErrTextValue)
+	if wrapWidth != nil && !finiteFloat32(*wrapWidth) {
+		return fmt.Errorf("gpui: Relayout: %w: wrap width must be finite", ErrTextValue)
 	}
+	wrapWidth = nativeWrapWidth(wrapWidth)
 	if lineClamp != nil && *lineClamp < 1 {
 		return fmt.Errorf("gpui: Relayout: %w: line clamp must be >= 1", ErrTextValue)
 	}

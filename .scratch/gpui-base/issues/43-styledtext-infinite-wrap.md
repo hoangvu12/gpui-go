@@ -4,7 +4,7 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: none
 
@@ -20,3 +20,12 @@ A non-scrollable TextView holding a fenced code block, inside a plain flex-row d
 ## Comments
 
 - 2026-10-23 — Created by the orchestrator from ticket 41's report.
+- 2026-10-23 — Delegated and resolved. The cause was a negative width, not an infinite one.
+
+## Answer
+
+The wrap width was -24, not +Inf. In a flex row's min-content pass, taffy gives a padded box's text a width of 0 minus the padding, without clamping (flexbox.rs:474). The pin passes that straight through to parley. The port's native service rejected it, which failed the frame.
+
+`gpui/text.go` now raises a negative width to 0 before the native call, which behaves identically in parley. NaN and Inf are still rejected.
+
+Two headless tests reproduce the failure and pass with the fix. Evidence: [ticket43-styledtext-negative-wrap.json](../../../evidence/base/ticket43-styledtext-negative-wrap.json).
