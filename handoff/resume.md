@@ -6,6 +6,15 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 ## ACTIVE EFFORT (2026-10-23): recreate zgui's terminal app ("zterm") on gpui-go
 
+**NEW DIRECTION (2026-10-23, the user; see PROJECT.md "Direction change under research"):**
+- The core should behave like the browser, without shipping components.
+- Base moves to a new repo. Its name, visibility, and whether zterm and the gallery move with it are still open for the user.
+- First, deep research that reads browser source: map [.scratch/browser-parity/map.md](../.scratch/browser-parity/map.md).
+- Chromium 0d4dcd4f (sparse) and Skia e71ecd07 are cloned under `%TEMP%esearch-src\`.
+- Batch 1 is running in worktree `gpui-go-wt-browser` (branch `research/browser-parity`), where the workers write files but don't commit: 01 visual primitives (chat a44ba398), 02 motion and compositing (fa3bcda3), 03 input and events (e9cd4b8c).
+- Then batch 2 (04 text and fonts, 05 layout, 06 platform features), then 07, the synthesis for the user. Nothing gets implemented before the user accepts 07.
+- The zgui/gpui-fast benchmark is dropped for now. The user said zgui doesn't support Windows; it actually does, with weaker Windows support.
+
 **ORCHESTRATOR 5 STATUS (2026-10-23; current, read with the handoff below).** This is Roboco chat 43f0a1a1. 06 is resolved and merged (6d61f35). 13 is resolved and merged (ae17675; native rev 14, DLL `14e76993…`). Open for the user: matching Chrome's web-font bold rule would take another rebuild. 09 phase A is merged: `research/zgui-terminal/parity-report.md` counts 91 matched, 18 approximated and 4 missing. Frame times are CPU-only and headless; my re-run had one opening frame at 18.8 ms because the palette draws twice on open. 09 is still claimed. Phase B (the live zgui side-by-side and the on-screen frame pacing) is pending; the worker is chat 2bfd6d53, worktree `gpui-go-wt-zterm-parity`. The user tested both apps by hand ("its pretty alright"). The user asked what gpui-go lacks for apps in general vs zgui and gpui-fast, read from their real source: the answer is in `research/app-gaps/README.md` (f9b0426). PROPOSED to the user, answer pending: (1) a perf benchmark of zterm against zgui using the chart's metrics; (2) Go-side layout animation and fuller drag events in gpui, beyond upstream; (3) one native rebuild for scale/rotate and gradient masks, plus optionally Chrome's web-font bold rule; (4) re-measure. `gpui-go-wt-zterm-dnd` and `gpui-go-wt-zterm-bold` can be removed. Their branches are merged.
 
 **HANDOFF 2026-10-23 (orchestrator 4 → orchestrator 5). CURRENT AND AUTHORITATIVE; everything below it is history.** The user asked for this handoff. The predecessor is the Roboco chat "gpui-go zterm recreation (orchestrator 4)", id 6351756b.
