@@ -1,0 +1,13 @@
+{
+  "note": "CGO_ENABLED=0 go build of research/tsx-probe/sizes/*, go1.27.1 windows/amd64, 2026-10-23. Bytes.",
+  "empty_stripped": 1656320,
+  "goja_only_stripped": 11262464,
+  "gpui_base": 28067840,
+  "gpui_base_stripped": 25560064,
+  "gpui_plus_goja": 44103168,
+  "gpui_plus_goja_stripped": 37276160,
+  "gpui_plus_goja_esbuild_host": 49676288,
+  "gpui_plus_goja_esbuild_host_stripped": 41415680,
+  "added_goja_stripped": 11716096,
+  "added_goja_esbuild_stripped": 15855616
+}

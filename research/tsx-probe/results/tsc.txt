@@ -1,0 +1,13 @@
+TypeScript 5.9.3 (npx -p typescript@5), node v24.18.0, `tsc -p tsconfig.json` (gpui.d.ts + view.tsx), 2026-10-23.
+
+view.tsx as first written: 1 error, a real one the runtime accepted:
+  view.tsx(45,59): error TS2322: Type 'string' is not assignable to type '`#${string}`'.
+  (markColor was Record<Status, string>; fixed to Record<Status, Color>.)
+
+A broken copy (colour typo, justifyContent "space-around", an onMouseEnter prop):
+  view.tsx(43,26): error TS2322: ... Property 'onMouseEnter' does not exist on type 'BaseProps'.
+  view.tsx(45,59): error TS2322: Type 'string' is not assignable to type '`#${string}`'.
+  view.tsx(47,24): error TS2561: Object literal may only specify known properties, but 'colour' does not exist in type 'CSSProperties'. Did you mean to write 'color'?
+  view.tsx(59,33): error TS2322: Type '"space-around"' is not assignable to type '"center" | "space-between" | undefined'.
+
+Timing (node tsc, fixed view, no errors): 1131 ms cold, then 160 and 148 ms.

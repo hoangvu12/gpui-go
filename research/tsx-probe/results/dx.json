@@ -1,0 +1,133 @@
+{
+  "describe_error": "TypeError: style: \"gridArea\" not supported at research.invalid/tsx-probe.(*Host).jsx-fm (native)",
+  "features": [
+    {
+      "feature": "let/const, arrows, template literals",
+      "raw": "ok",
+      "es2020": "ok",
+      "es2017": "ok",
+      "es2015": "ok"
+    },
+    {
+      "feature": "destructuring, default and rest params",
+      "raw": "ok",
+      "es2020": "ok",
+      "es2017": "ok",
+      "es2015": "ok"
+    },
+    {
+      "feature": "spread in arrays/objects",
+      "raw": "ok",
+      "es2020": "ok",
+      "es2017": "ok",
+      "es2015": "ok"
+    },
+    {
+      "feature": "classes, getters",
+      "raw": "ok",
+      "es2020": "ok",
+      "es2017": "ok",
+      "es2015": "ok"
+    },
+    {
+      "feature": "class fields (ES2022)",
+      "raw": "ok",
+      "es2020": "ok",
+      "es2017": "ok",
+      "es2015": "ok"
+    },
+    {
+      "feature": "optional chaining, ??",
+      "raw": "ok",
+      "es2020": "ok",
+      "es2017": "ok",
+      "es2015": "ok"
+    },
+    {
+      "feature": "logical assignment (??=)",
+      "raw": "ok",
+      "es2020": "ok",
+      "es2017": "ok",
+      "es2015": "ok"
+    },
+    {
+      "feature": "Map, Set, Symbol, for-of",
+      "raw": "ok",
+      "es2020": "ok",
+      "es2017": "ok",
+      "es2015": "ok"
+    },
+    {
+      "feature": "generators",
+      "raw": "ok",
+      "es2020": "ok",
+      "es2017": "ok",
+      "es2015": "ok"
+    },
+    {
+      "feature": "async/await + Promise",
+      "raw": "ok",
+      "es2020": "ok",
+      "es2017": "ok",
+      "es2015": "ok"
+    },
+    {
+      "feature": "BigInt",
+      "raw": "ok",
+      "es2020": "ok",
+      "es2017": "ok",
+      "es2015": "goja: TypeError: Cannot convert a BigInt value to a number at pow (native)"
+    },
+    {
+      "feature": "Array.prototype.flat/at, Object.fromEntries",
+      "raw": "ok",
+      "es2020": "ok",
+      "es2017": "ok",
+      "es2015": "ok"
+    },
+    {
+      "feature": "String.prototype.replaceAll",
+      "raw": "ok",
+      "es2020": "ok",
+      "es2017": "ok",
+      "es2015": "ok"
+    },
+    {
+      "feature": "regex named groups, lookbehind",
+      "raw": "ok",
+      "es2020": "ok",
+      "es2017": "ok",
+      "es2015": "ok"
+    },
+    {
+      "feature": "Intl.NumberFormat",
+      "raw": "wrong result",
+      "es2020": "wrong result",
+      "es2017": "wrong result",
+      "es2015": "wrong result"
+    },
+    {
+      "feature": "structuredClone",
+      "raw": "goja: ReferenceError: structuredClone is not defined at \u003ceval\u003e:1:25(6)",
+      "es2020": "goja: ReferenceError: structuredClone is not defined at \u003ceval\u003e:1:25(6)",
+      "es2017": "goja: ReferenceError: structuredClone is not defined at \u003ceval\u003e:1:25(6)",
+      "es2015": "goja: ReferenceError: structuredClone is not defined at \u003ceval\u003e:1:25(6)"
+    },
+    {
+      "feature": "setTimeout (host API)",
+      "raw": "wrong result",
+      "es2020": "wrong result",
+      "es2017": "wrong result",
+      "es2015": "wrong result"
+    },
+    {
+      "feature": "top-level await (module)",
+      "raw": "goja: SyntaxError: SyntaxError: (anonymous): Line 1:7 Unexpected token null",
+      "es2020": "esbuild: Top-level await is not available in the configured target environment (\"es2020\")",
+      "es2017": "esbuild: Top-level await is not available in the configured target environment (\"es2017\")",
+      "es2015": "esbuild: Top-level await is not available in the configured target environment (\"es2015\")"
+    }
+  ],
+  "handler_error": "TypeError: Cannot read property 'count' of undefined at onClick (view.tsx:88:59(6))",
+  "handler_error_tsx_line": 88
+}
