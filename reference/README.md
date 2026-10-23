@@ -136,6 +136,38 @@ and refreshes the embedded pair `internal/native/artifacts/
 MSVC linker embeds a timestamp, so identical sources produce different
 SHA-256s (observed during this ticket).
 
+### Recorded measurements (2026-10-24, the browser-core ticket 39 rebuild)
+
+- Toolchain: `rustc 1.97.0`, host/target `x86_64-pc-windows-msvc`,
+  `RUSTFLAGS=-C target-feature=+crt-static`. `ce-source/` is a copy of
+  the main checkout's pinned `254b5dbd…` tree (unmodified).
+- DLL: 19,104,256 bytes, SHA-256
+  `8b944eae962a75e693ce3fdc8c97c274ad5b8e80c5e1487fd2fd038ebc10c40a`,
+  gzip-9 7,590,625 bytes. Native revision 15 (the embedded artifact
+  before it was revision 14, SHA `14e76993…`), capability mask `0xFFF`.
+  CRT outcome: **static**.
+- Changes: Chrome's actual Windows bold rule (synthesize only when the
+  request is at least 600 over a face below 600 — the rule Windows
+  compiles, not the `>200` non-Windows rule rev 14 followed), the scene
+  records grew gradient backgrounds, colour-matrix filter payloads and
+  per-sprite pixelated flags, drop shadows clip out of the border box,
+  the backdrop blur input is cropped at the element edge with mirrored
+  margins, sprite batches can draw through a point sampler, the text run
+  record grew the browser text fields (with the run_info echo), and the
+  layout records grew flow-root, justify-items/self, variable grid
+  track lists and the measure-response baseline. Three shader-level
+  behaviors the pinned blobs cannot express are compiled from a
+  VENDORED, PATCHED copy of the pinned shader modules
+  (`native/shaders`, built by `native/build.rs` through the same
+  wgsl-rs → Naga 24 → HLSL sm 5.0 → D3DCompile chain; the frozen
+  `ce-source` stays unmodified). Evidence:
+  [`evidence/browser-core/ticket39-native-rebuild.json`](../evidence/browser-core/ticket39-native-rebuild.json).
+- `cargo test -p gpui-go-native` still fails to compile the lib test
+  target with the same 5 pre-existing a11y.rs/capture.rs errors; the
+  changes are verified through the Go gates
+  (`internal/fontspec`, `internal/scenespec`, `internal/textspec`,
+  `internal/layoutspec`, and the rest of the headless suite).
+
 ### Recorded measurements (2026-10-23, the zterm ticket 13 rebuild)
 
 - Toolchain: `rustc 1.97.0`, host/target `x86_64-pc-windows-msvc`,

@@ -1,0 +1,87 @@
+{
+ "ticket": "browser-core 39: the R15 native rebuild (native rev 15)",
+ "date": "2026-10-24",
+ "approval": "the user approved rev 15 in the browser-parity decision round (2026-10-23, D14: 'R15 now and R16 later'); the spec's Native artifact section fixes its contents",
+ "dll": {
+  "before": {
+   "native_revision": 14,
+   "sha256": "14e76993da41b89b063e26cdfc8adc9c82300e29d532abb0bbd765dd8f8d52d0",
+   "bytes": 18877952
+  },
+  "after": {
+   "native_revision": 15,
+   "sha256": "8b944eae962a75e693ce3fdc8c97c274ad5b8e80c5e1487fd2fd038ebc10c40a",
+   "bytes": 19104256,
+   "gzip9_bytes": 7590625,
+   "gzip9_sha256": "98bb2512d2d5e24910f91d8444f6b8bfc36328735c79ecb6f04cd753cb33b415",
+   "capabilities_mask": "0xFFF",
+   "crt_outcome": "static: no VCRUNTIME/MSVCP/UCRT/api-ms-win-crt imports present; only OS system components are imported",
+   "toolchain": "rustc 1.97.0 (2d8144b78 2026-07-07), x86_64-pc-windows-msvc, RUSTFLAGS=-C target-feature=+crt-static",
+   "ce_source": "a copy of the main checkout's pinned 254b5dbd47cbb5acbcc5bbdcbb322a339276c88a tree (unmodified; gitignored)",
+   "services": {
+    "scene": "5 (the background records, the filter tags + colour matrix, the sprite pixelated flags, the pixelated plan split)",
+    "renderer": "the vendored patched quads/shadows/blur-composite/backdrop-crop pipelines plus the point sampler and the backdrop crop path",
+    "text": "3 (the run record's browser text fields, the variation array, the run_info echo)",
+    "layout": "3 (the measure response baseline, the grid-tracks entry, the justify/flow-root style fields)"
+   }
+  }
+ },
+ "changes": [
+  {
+   "item": "Chrome's Windows bold rule",
+   "files": "reference/native/src/text.rs effective_weight",
+   "rule": "synthesis stays only when the request is at least 600 AND the matched static face is below 600: kBoldThreshold (platform/fonts/font_selection_types.h:183) and SkTypeface::isBold (skia src/core/SkTypeface.cpp:491-493), both read at font_cache_skia_win.cc:484-486 (Chromium 0d4dcd4f), the file Windows compiles (platform/BUILD.gn:1810-1813, if (is_win)). The >200 rule rev 14 followed is #if !BUILDFLAG(IS_WIN) (font_cache_skia.cc:312) and never ran on Windows.",
+   "cells_changed": "600 over 400 and 700 over 500 now synthesize; 900 over 600 no longer does; 700 over 600 (the zterm case) stays plain",
+   "gate": "internal/fontspec TestBoldSynthesisFollowsBrowserRule (the Wt450 400/500 family covers the 700/500 cell); green on rev 15, red on rev 14"
+  },
+  {
+   "item": "drop shadows clipped out of the border box",
+   "files": "reference/native/shaders/shadows.rs (vendored copy of the pinned shader, patched)",
+   "rule": "css-backgrounds-3 section box-shadow: an outer shadow is clipped by the border box; Chromium ClipToBorderEdge (third_party/blink/renderer/core/paint/box_painter_base.cc:165-188 @ 0d4dcd4f). The pinned shader multiplied the element shape in only for inset shadows.",
+   "gate": "internal/scenespec TestDropShadowClippedOutOfBorderBoxOnRealGPU: a translucent panel (white a=0.5) over a hard red drop shadow reads 127/127 at its center (the plain blend; rev 14 read 255/128/128 - the shadow under the element), while the row below the panel stays pure red"
+  },
+  {
+   "item": "linear-gradient scene backgrounds",
+   "files": "GpuiGoSceneBackground (72 bytes: tag, color space, solid, angle, two stops) in quad.background/border_color, shadow.color and path.color; snapshot_color builds the pinned Background through linear_gradient(...).color_space(Srgb)",
+   "rule": "the vendored common.rs computes the CSS gradient-line length |W*sin| + |H*cos| (css-images-3; Chromium EndPointsFromAngle, core/css/css_gradient_value.cc:1284-1350) and premultiplied sRGB mixing (css-images-4; Chromium platform/graphics/gradient.cc:287). The pinned shader normalized by the dominant axis and mixed straight in a double-encoded space.",
+   "gate": "internal/scenespec TestGradientBackgroundRecordRoundTrips + TestGradientBackgroundValidationRejectsMalformedRecords (insert, finish, dump, plan; the validation rules)"
+  },
+  {
+   "item": "colour-matrix filters",
+   "files": "GpuiGoSceneFilterRecord grows filter_tags[4], one composed row-major 4x5 color_matrix and color_matrix_count (188 bytes); the vendored filters.rs composite applies it",
+   "rule": "filter-effects-1: the CSS colour functions are 4x5 matrices applied to non-premultiplied RGBA; the composite un-premultiplies, maps, clamps and re-premultiplies. A per-pixel linear map commutes with the uniform-per-channel gaussian, so blur-then-matrix is the CSS chain order for any interleaving; consecutive matrices compose into the single payload (caller arithmetic).",
+   "gate": "internal/scenespec TestColorMatrixFilterRecordRoundTrips + TestColorMatrixFilterValidationRejectsMalformedRecords"
+  },
+  {
+   "item": "the backdrop mirror crop",
+   "files": "renderer/draw.rs dx_blur_and_composite + the vendored backdrop_crop pass (native/shaders/filters.rs)",
+   "rule": "filter-effects-2 clips the backdrop-filter input to the element's border box; Chromium mirrors the edge pixels (SkTileMode::kMirror, components/viz/service/display/skia_renderer.cc:3254 @ 0d4dcd4f). The pinned path blurred the whole current target, so content just outside the element bled in. The crop pass folds out-of-region coordinates back with mirroring and the blurred input is the crop (region plus mirrored margins).",
+   "gate": "record-level coverage via the filter record gates; the GPU path is exercised by the existing backdrop gates (internal/rendererspec, internal/headlessspec) staying green"
+  },
+  {
+   "item": "a point sampler with a per-sprite flag",
+   "files": "the sprite records' pixelated flag (124/104 bytes), the command record's pixelated flag (56 bytes), the plan's sprite-batch split, GlobalElements.point_sampler",
+   "rule": "CSS image-rendering: pixelated means nearest-neighbour scaling; the plan splits sprite batches on the flag so one batch draws through one sampler.",
+   "gate": "internal/scenespec TestPixelatedSpriteFlagSplitsBatches (the plan splits 3 bilinear + 2 pixelated sprites into two commands; the flag round-trips; out-of-range rejected)"
+  },
+  {
+   "item": "text run fields",
+   "files": "GpuiGoTextRunRecord 48 -> 92 bytes (word-break, overflow-wrap, text-wrap, locale, font width, variations, optical size, justify); GpuiGoTextVariation; text_shape gains the variation array; the new text_run_info slot (table 224 bytes, 17 pointers)",
+   "rule": "the fields cross the ABI, validate and round-trip through the stored run records. The pinned TextLayoutRequest/TextRun (crates/gpui/src/text_system.rs:489-519) has no slots and ParleyTextSystem is fully encapsulated, so the shaping behavior is unchanged for them - recorded in TEXT_ABI.md with the exact reason.",
+   "gate": "internal/textspec TestBrowserRunFieldsRoundTripThroughRunInfo, TestBrowserRunFieldsDefaultToCSS, TestBrowserRunFieldsRejectMalformedValues"
+  },
+  {
+   "item": "layout fields",
+   "files": "GpuiMeasureResponse 12 -> 20 bytes (baseline); GpuiGoLayoutRecord 72 -> 80 (the first_baseline echo); GpuiGoLayoutStyleRecord 336 -> 352 (justify-items/self); display tag 4 = flow-root; the new layout_node_set_grid_tracks entry (table 168 bytes) with GpuiGoTrackRecord",
+   "rule": "the measure baseline is stashed per measured node and echoed (Taffy 0.13's stored Layout drops baselines and its leaf compute hardcodes Point::NONE, compute/leaf.rs:157 - the algorithms keep the pinned fallback; recorded in LAYOUT_ABI.md). Track lists are minmax pairs (length/min-content/max-content/auto/fr). justify-items/self map onto Taffy's fields; flow-root is Display::FlowRoot.",
+   "gate": "internal/layoutspec TestFlowRootDisplayLaysOut, TestGridTrackListLaysOut (240px + 1fr at 400px), TestJustifyItemsAndSelfAreAccepted, TestMeasureResponseBaselineEchoes"
+  }
+ ],
+ "vendored_shaders": {
+  "what": "reference/native/shaders holds vendored, patched copies of the pinned gpui_render shader modules (common, corner_smoothing, quads, shadows, filters, a minimal interface), compiled by reference/native/build.rs through the pinned crate's own chain: wgsl-rs -> Naga 24 (HLSL sm_5.0) -> D3DCompile (Fxc). The frozen ce-source stays unmodified.",
+  "pipelines": "quads, smoothed_quads, shadows, smoothed_shadows, blur_composite, smoothed_blur_composite, backdrop_crop (DXBC in OUT_DIR, include_bytes! into the artifact)",
+  "build_dependencies": "naga 24.0.0 (hlsl-out, wgsl-in), wgsl-rs (the pinned rev), windows (Fxc) - the same versions the pinned gpui-render dependency already resolves; host-only, no runtime imports"
+ },
+ "cargo_test": "cargo test -p gpui-go-native still fails to compile the lib test target with the same 5 pre-existing a11y/capture errors (a11y.rs:1361/1367/1385 - the missing accesskit::ActionHandler trait import; capture.rs:1510/1531 - ID3D11Texture2D::default() which windows 0.62.2 does not provide, and two unsafe calls outside unsafe blocks). Nothing new: the rev-15 record changes' test constructors were updated and the test target now fails only on those five. The behavior is verified through the Go gates against this artifact.",
+ "fixtures": "no bit-exact fixture changed: the fx-0001/fx-0002 layout gates, the fx-0005 raster oracle, the scene dumps and the glyphspec bit-exact gates all pass unchanged on rev 15. One environment note: fx-0004's text-geometry trace records fontFamilyCount 94 (captured 2026-10-05); this machine now enumerates 95 system families, so that one gate reports a count mismatch - a machine font-set drift since the recording, not a rev-15 change (no code path in this rebuild touches catalog enumeration; the run before this ticket would see the same)."
+}

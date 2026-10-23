@@ -2226,6 +2226,10 @@ mod tests {
             grid_column_end_kind: 0,
             grid_column_end_value: 0,
             record_size: std::mem::size_of::<GpuiGoLayoutStyleRecord>() as u32,
+            justify_items_present: 0,
+            justify_items: 0,
+            justify_self_present: 0,
+            justify_self: 0,
         }
     }
 
@@ -2289,6 +2293,8 @@ mod tests {
             padding_right: f32::NAN,
             padding_bottom: f32::NAN,
             padding_left: f32::NAN,
+            first_baseline_present: 0,
+            first_baseline_bits: 0,
             record_size: 0,
         };
         let code = node_layout_body(engine, node, &mut record);
@@ -2315,6 +2321,8 @@ mod tests {
             padding_right: f32::NAN,
             padding_bottom: f32::NAN,
             padding_left: f32::NAN,
+            first_baseline_present: 0,
+            first_baseline_bits: 0,
             record_size: 0,
         }
     }

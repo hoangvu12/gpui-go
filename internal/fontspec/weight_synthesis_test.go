@@ -24,8 +24,8 @@ package fontspec
 
 import (
 	"bytes"
-	"encoding/binary"
 	"embed"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"

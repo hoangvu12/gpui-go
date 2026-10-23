@@ -506,7 +506,7 @@ func TestDropShadowClippedOutOfBorderBoxOnRealGPU(t *testing.T) {
 			return -1
 		}
 		for x := x0; x < x1; x++ {
-			i := (y*width + x)*4 + index
+			i := (y*width+x)*4 + index
 			if i >= 0 && i < len(pixels) {
 				sum += int(pixels[i])
 				count++

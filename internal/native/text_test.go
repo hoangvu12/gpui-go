@@ -109,8 +109,8 @@ func TestTextRecordBinaryLayout(t *testing.T) {
 	if got := unsafe.Sizeof(TextFeatureRecord{}); got != 8 {
 		t.Errorf("sizeof(TextFeatureRecord) = %d, want 8", got)
 	}
-	if got := unsafe.Sizeof(TextRunRecord{}); got != 48 {
-		t.Errorf("sizeof(TextRunRecord) = %d, want 48", got)
+	if got := unsafe.Sizeof(TextRunRecord{}); got != 92 {
+		t.Errorf("sizeof(TextRunRecord) = %d, want 92", got)
 	}
 	if got := unsafe.Sizeof(TextLayoutRecord{}); got != 56 {
 		t.Errorf("sizeof(TextLayoutRecord) = %d, want 56", got)
@@ -142,8 +142,8 @@ func TestTextRecordBinaryLayout(t *testing.T) {
 	if got := unsafe.Sizeof(TextGlyphRecord{}); got != 20 {
 		t.Errorf("sizeof(TextGlyphRecord) = %d, want 20", got)
 	}
-	if got := unsafe.Sizeof(textTable{}); got != 216 {
-		t.Errorf("sizeof(textTable) = %d, want 216", got)
+	if got := unsafe.Sizeof(textTable{}); got != 224 {
+		t.Errorf("sizeof(textTable) = %d, want 224", got)
 	}
 	if got := unsafe.Offsetof(FontRecord{}.FamilyFound); got != 32 {
 		t.Errorf("offsetof(FontRecord.FamilyFound) = %d, want 32", got)

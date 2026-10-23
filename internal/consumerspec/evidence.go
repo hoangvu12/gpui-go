@@ -20,13 +20,14 @@ import (
 // ---------------------------------------------------------------------------
 
 // The artifact identity recorded for the current native build (native
-// revision 14, the zterm ticket 13 rebuild). These constants are the
-// evidence values the delivery checks compare the module's embedded
+// revision 15, the browser-core ticket 39 rebuild). These constants are
+// the evidence values the delivery checks compare the module's embedded
 // artifact against; they cite:
 //
-//   - evidence/zterm/ticket13-native-rebuild.json (this rebuild's
-//     recording: 18,877,952 bytes; sha256 14e76993…, static CRT,
-//     native revision 14, capability mask 0xFFF), which supersedes
+//   - evidence/browser-core/ticket39-native-rebuild.json (this rebuild's
+//     recording: 19,104,256 bytes; sha256 8b944eae…, static CRT,
+//     native revision 15, capability mask 0xFFF), which supersedes
+//   - evidence/zterm/ticket13-native-rebuild.json (the previous
 //   - evidence/perf/ticket05-native-rebuild.json (the previous
 //     recording: 18,877,952 bytes; sha256 0b6e9265…, static CRT,
 //     native revision 13, capability mask 0xFFF), which supersedes
@@ -41,11 +42,11 @@ import (
 // loudly instead of accepting a silent identity drift.
 const (
 	// EvidenceArtifactSHA256 is the recorded SHA-256 of the DLL.
-	EvidenceArtifactSHA256 = "14e76993da41b89b063e26cdfc8adc9c82300e29d532abb0bbd765dd8f8d52d0"
+	EvidenceArtifactSHA256 = "8b944eae962a75e693ce3fdc8c97c274ad5b8e80c5e1487fd2fd038ebc10c40a"
 	// EvidenceArtifactBytes is the recorded DLL size.
-	EvidenceArtifactBytes = 18877952
+	EvidenceArtifactBytes = 19104256
 	// EvidenceNativeRevision is the recorded native bridge revision.
-	EvidenceNativeRevision = 14
+	EvidenceNativeRevision = 15
 	// EvidenceCECommit is the pinned gpui-CE commit of the artifact.
 	EvidenceCECommit = "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a"
 	// EvidenceCRTOutcome is the recorded static-CRT outcome string.
