@@ -281,11 +281,21 @@ type viewElement struct {
 	// typeName isolates stateless subtrees (the reference
 	// ElementId::Name(std::any::type_name::<V>())).
 	typeName string
+	// cachedStyle is the cached view's layout style (the reference
+	// cached_style: Some for AnyView::cached / Entity::cached; see
+	// view_cache.go CachedView), nil for an uncached view.
+	cachedStyle *StyleRefinement
 }
 
 // viewElementOf converts one View into its element (the reference
 // IntoElement for View).
 func viewElementOf(view View) AnyElement {
+	return CustomElement[AnyElement, AnyElement](newViewElement(view))
+}
+
+// newViewElement builds the view element (the reference
+// ViewElement::new).
+func newViewElement(view View) *viewElement {
 	if view == nil || isNilReflect(view) {
 		panic("gpui: view element requires a non-nil view")
 	}
@@ -294,7 +304,7 @@ func viewElementOf(view View) AnyElement {
 		id := id
 		elem.entityID = &id
 	}
-	return CustomElement[AnyElement, AnyElement](elem)
+	return elem
 }
 
 // recipeElementOf converts one RenderOnce recipe into its stateless view
@@ -323,13 +333,23 @@ type viewRequestResult struct {
 }
 
 // RequestLayout implements Element: the stateful path renders the view
-// inside its rendered-view scope and requests the rendered element; the
-// stateless path isolates the subtree by type name (the reference
-// ViewElement::request_layout, uncached path).
+// inside its rendered-view scope and requests the rendered element — or,
+// for a cached view, requests one node laid out at the cached style
+// without rendering (R:view.rs:368-404); the stateless path isolates the
+// subtree by type name.
 func (v *viewElement) RequestLayout(global *GlobalElementID, inspector *InspectorElementID, w *Window, app *App) (LayoutID, AnyElement) {
 	var result viewRequestResult
 	if v.entityID != nil {
 		result = withRenderedView(w, *v.entityID, func(w *Window) viewRequestResult {
+			if v.cachedStyle != nil && !w.IsInspectorPicking() {
+				style := DefaultStyle()
+				style.Refine(v.cachedStyle)
+				layoutID, err := requestLayoutOf(w, style)
+				if err != nil {
+					panic(fmt.Sprintf("gpui: cached view request_layout: %v", err))
+				}
+				return viewRequestResult{layoutID: layoutID}
+			}
 			element := v.view.RenderOnce(w, app)
 			return viewRequestResult{layoutID: element.RequestLayout(w, app), element: element}
 		})
@@ -343,12 +363,57 @@ func (v *viewElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 }
 
 // Prepaint implements Element (the reference ViewElement::prepaint,
-// uncached path: set the view id and prepaint the rendered element).
+// R:view.rs:406-485): the stateful path marks the active dispatch node
+// with the view (set_view_id) and prepaints the rendered element; a
+// cached view with no rendered element reuses its previous frame's
+// prepaint range when its cache key holds and it is neither dirty nor
+// refreshing, and otherwise renders, lays itself out as a root at its
+// bounds and prepaints there, recording the new range.
 func (v *viewElement) Prepaint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, element *AnyElement, w *Window, app *App) AnyElement {
 	if v.entityID != nil {
-		return withRenderedView(w, *v.entityID, func(w *Window) AnyElement {
-			element.Prepaint(w, app)
-			return *element
+		entityID := *v.entityID
+		currentDispatchTree(w).SetViewID(entityID)
+		return withRenderedView(w, entityID, func(w *Window) AnyElement {
+			if element.obj != nil {
+				element.Prepaint(w, app)
+				return *element
+			}
+			return WithElementState(w, global, func(state *viewElementState, w *Window) (AnyElement, viewElementState) {
+				ds := drawState(w)
+				contentMask := ContentMask(w)
+				textStyle := WindowTextStyle(w)
+				if state != nil && state.cacheKey.matches(bounds, contentMask, textStyle) && !ds.isViewDirty(entityID) && !ds.refreshing {
+					ds.viewCacheHits++
+					reused := *state
+					prepaintStart := w.prepaintIndex()
+					w.reusePrepaint(state.prepaintStart, state.prepaintEnd)
+					extendAccessedEntities(w, state.accessedEntities)
+					reused.prepaintStart, reused.prepaintEnd = prepaintStart, w.prepaintIndex()
+					return AnyElement{}, reused
+				}
+
+				ds.viewCacheMisses++
+				refreshing := ds.refreshing
+				ds.refreshing = true
+				prepaintStart := w.prepaintIndex()
+				var rendered AnyElement
+				accessed := detectAccessedEntities(w, func() {
+					rendered = v.view.RenderOnce(w, app)
+					rendered.LayoutAsRoot(AvailableSize{
+						Width:  DefiniteAvailableSpace(bounds.Size.Width),
+						Height: DefiniteAvailableSpace(bounds.Size.Height),
+					}, w, app)
+					rendered.PrepaintAt(bounds.Origin, w, app)
+				})
+				prepaintEnd := w.prepaintIndex()
+				ds.refreshing = refreshing
+				return rendered, viewElementState{
+					prepaintStart:    prepaintStart,
+					prepaintEnd:      prepaintEnd,
+					cacheKey:         viewElementCacheKey{bounds: bounds, contentMask: contentMask, textStyle: textStyle},
+					accessedEntities: accessed,
+				}
+			})
 		})
 	}
 	return WithID(w, NameElementID(v.typeName), func(w *Window) AnyElement {
@@ -357,12 +422,35 @@ func (v *viewElement) Prepaint(global *GlobalElementID, inspector *InspectorElem
 	})
 }
 
-// Paint implements Element (the reference ViewElement::paint, uncached
-// path).
+// Paint implements Element (the reference ViewElement::paint,
+// R:view.rs:487-537): a cached view paints its freshly rendered element
+// (refreshing, so nested cached views paint fresh too) or replays its
+// previous frame's paint range, recording the new range.
 func (v *viewElement) Paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, requestLayout *AnyElement, prepaint *AnyElement, w *Window, app *App) {
 	if v.entityID != nil {
 		withRenderedViewVoid(w, *v.entityID, func(w *Window) {
-			prepaint.Paint(w, app)
+			if v.cachedStyle == nil || w.IsInspectorPicking() {
+				prepaint.Paint(w, app)
+				return
+			}
+			WithElementState(w, global, func(state *viewElementState, w *Window) (struct{}, viewElementState) {
+				if state == nil {
+					panic("gpui: cached view paint without its prepaint state")
+				}
+				next := *state
+				paintStart := w.paintIndex()
+				if prepaint.obj != nil {
+					ds := drawState(w)
+					refreshing := ds.refreshing
+					ds.refreshing = true
+					prepaint.Paint(w, app)
+					ds.refreshing = refreshing
+				} else {
+					w.reusePaint(state.paintStart, state.paintEnd)
+				}
+				next.paintStart, next.paintEnd = paintStart, w.paintIndex()
+				return struct{}{}, next
+			})
 		})
 		return
 	}
