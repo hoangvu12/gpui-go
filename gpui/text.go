@@ -394,6 +394,10 @@ type TextSystem struct {
 	// request the next time it is queried. Front = least recently used.
 	evictMu   sync.Mutex
 	evictable list.List
+
+	// raster holds the glyph paint path's caches (glyph_cache.go,
+	// gpui-perf ticket 02).
+	raster rasterCaches
 }
 
 var (
@@ -548,11 +552,16 @@ func (ts *TextSystem) AddFont(data []byte) (FontRegistration, error) {
 // service knows: resolved ids and every font Parley selected while
 // shaping (fragment font ids are registered at shape time).
 func (ts *TextSystem) FontMetrics(fontID FontID) (FontMetrics, error) {
+	// The pin's TextSystem::font_metrics answers from its font_metrics
+	// map after the first query of a font (glyph_cache.go).
+	if metrics, ok := ts.raster.lookupFontMetrics(fontID); ok {
+		return metrics, nil
+	}
 	record, err := ts.svc.FontMetrics(native.FontID(fontID))
 	if err != nil {
 		return FontMetrics{}, wrapTextError("FontMetrics", err)
 	}
-	return FontMetrics{
+	metrics := FontMetrics{
 		UnitsPerEm:         record.UnitsPerEm,
 		Ascent:             record.Ascent,
 		Descent:            record.Descent,
@@ -565,7 +574,9 @@ func (ts *TextSystem) FontMetrics(fontID FontID) (FontMetrics, error) {
 		BoundingBoxY:       record.BoundingBoxY,
 		BoundingBoxWidth:   record.BoundingBoxWidth,
 		BoundingBoxHeight:  record.BoundingBoxHeight,
-	}, nil
+	}
+	ts.raster.storeFontMetrics(fontID, metrics)
+	return metrics, nil
 }
 
 // ---------------------------------------------------------------------------

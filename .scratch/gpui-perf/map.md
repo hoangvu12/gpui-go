@@ -19,6 +19,7 @@ The goal is to cut gpui-go's per-frame CPU, native-call, allocation and startup 
 
 - [Frame-cost benchmark](issues/01-frame-cost-benchmark.md): `gpui/perf_bench_test.go` + `native.CallCount`. Baseline: 1,000 divs take 16.5k allocs and 8k native calls per frame; the 300-line text page takes 82k allocs, 129k native calls and about 200 ms per frame; an unchanged refresh costs the same as a rebuild.
 - [Native load once](issues/03-native-load-once.md): `native.Load` shares one verified load per source while a handle is open, and re-verifies after the last close. The first frame dropped from 391 to 248 ms (median).
+- [Glyph raster cache](issues/02-glyph-raster-cache.md): the pin's raster_metadata cache and atlas lookup-before-raster are ported Go-side, plus pooled single-call rasters. The text page dropped from 129k to 23.5k native calls, 82k to 17k allocs and 200 to 83 ms per frame; sprites are identical.
 
 ## Not yet specified
 

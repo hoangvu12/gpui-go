@@ -413,6 +413,16 @@ func (s *GlyphService) GlyphForChar(fontID FontID, ch rune) (uint32, bool, error
 // capacity protocol retries internally, so the caller always receives
 // the full pixel buffer on success).
 func (s *GlyphService) RasterizeGlyph(params RasterParams) (*RasterRecord, []byte, error) {
+	return s.RasterizeGlyphInto(params, nil)
+}
+
+// RasterizeGlyphInto is RasterizeGlyph with a caller-owned pixel buffer
+// (gpui-perf ticket 02). When buf is non-empty it is offered as the
+// first call's pixel dump: if the raster fits, one native call rasterizes
+// straight into it and the returned pixels alias buf[:n]; if not, the
+// capacity retry uses a fresh exact buffer, as RasterizeGlyph does. A nil
+// buf is exactly RasterizeGlyph.
+func (s *GlyphService) RasterizeGlyphInto(params RasterParams, buf []byte) (*RasterRecord, []byte, error) {
 	if params.FontSize < 0 || !isFiniteFloat32(params.FontSize) {
 		return nil, nil, glyphStatusError(glyphErrBadValue, "font size")
 	}
@@ -430,8 +440,13 @@ func (s *GlyphService) RasterizeGlyph(params RasterParams) (*RasterRecord, []byt
 	out := RasterRecord{}
 	var pixels []byte
 	needed := uint32(0)
-	// First call with a null buffer: learns the byte count (the metadata
-	// record is written either way); second call with the exact buffer.
+	// First call with a null buffer (or the caller's buffer): learns the
+	// byte count (the metadata record is written either way); a too-small
+	// first dump retries with the exact buffer.
+	buf = buf[:cap(buf)]
+	if uint64(len(buf)) > uint64(s.table.maxRasterBytes) {
+		buf = buf[:s.table.maxRasterBytes]
+	}
 	code, err := callGlyphRasterize(
 		s.table.rasterize,
 		uint64(params.FontID),
@@ -442,12 +457,22 @@ func (s *GlyphService) RasterizeGlyph(params RasterParams) (*RasterRecord, []byt
 		math.Float32bits(params.Scale),
 		&style,
 		&out,
-		nil,
-		0,
+		buf,
+		uint32(len(buf)),
 		&needed,
 	)
 	if err != nil {
 		return nil, nil, err
+	}
+	if code == glyphStatusOK && len(buf) > 0 {
+		if needed > uint32(len(buf)) {
+			return nil, nil, glyphStatusError(glyphErrRaster, "raster byte count exceeds the offered buffer")
+		}
+		rec := out
+		if needed == 0 {
+			return &rec, nil, nil
+		}
+		return &rec, buf[:needed], nil
 	}
 	if code == glyphErrCapacity {
 		if needed > s.table.maxRasterBytes {
