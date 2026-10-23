@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 6 (Claude Code)
+Status: resolved
+Assignee: orchestrator 6 (Claude Code); worker chat 29e2ace6
 Blocked by: 01
 Triage: ready-for-agent
 
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 6: verified after merging onto main (rev 15). `go test ./internal/parity/... ./research/browser-parity/08-raster-probes/` is ok, and the probes pass on rev 15. Citations checked: Skia SK_MAX_SIZE_FOR_LCDTEXT 48 (SkScalerContext.cpp:1173-1187), Blink `setSkewX(-1/4)` for synthetic italic (font_platform_data.cc:268), and gpui-go mapping a skew to DWRITE_FONT_SIMULATIONS_OBLIQUE and dropping the angle (reference/native/src/glyph.rs). Outcome: R17 text gamma: NO. Italic slant: YES, a native fix to apply the -0.25 shear as a transform. It goes on the follow-up native rebuild list with the 42/43 text fields; that rebuild needs the user's approval.
 
 ## Answer
 
