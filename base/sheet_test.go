@@ -68,6 +68,64 @@ func TestSheetEscapeUsesTheSameCloseOrderAndRegistersFocusTrap(t *testing.T) {
 	}
 }
 
+// sheetInScrollArea draws a sheet inside a 100x100 scroll area at
+// (20,20) and reports the surface's bounds and the content mask it
+// painted under. deferred wraps the sheet in gpui.Deferred, as a caller
+// does to lift it out of the scroll area's clip.
+func sheetInScrollArea(t *testing.T, deferred bool) (surface, mask, viewport gpui.Bounds) {
+	t.Helper()
+	ta := gpui.NewTestApp()
+	ta.Update(ovInit)
+	_, cx := openTestView(t, ta, func(w *gpui.Window, _ *gpui.Context[testView]) gpui.AnyElement {
+		size := w.ViewportSize()
+		viewport = gpui.Bounds{Size: size}
+		probe := gpui.Canvas(
+			func(gpui.Bounds, *gpui.Window, *gpui.App) struct{} { return struct{}{} },
+			func(b gpui.Bounds, _ struct{}, w *gpui.Window, _ *gpui.App) {
+				surface, mask = b, gpui.ContentMask(w)
+			},
+		).Absolute().Top0().Left0().SizeFull()
+		var sheet any = NewSheet().Surface(probe)
+		if deferred {
+			sheet = gpui.Deferred(sheet)
+		}
+		scroll := gpui.Div().ID("scroll").Absolute().Left(gpui.Px(20)).Top(gpui.Px(20)).
+			W(gpui.Px(100)).H(gpui.Px(100)).OverflowYScroll().
+			Child(gpui.Div().H(gpui.Px(300))).
+			Child(sheet)
+		return gpui.Div().SizeFull().Child(scroll).IntoElement()
+	})
+	ovDraw(t, cx)
+	return surface, mask, viewport
+}
+
+// Ticket 42: upstream's base Sheet anchors at the window origin but is
+// not deferred (U:sheet.rs:123, unlike Dialog's deferred host at
+// U:dialog.rs:548-643), so drawn in place it lays out viewport-sized yet
+// paints under a scrolling ancestor's clip. Upstream's styled sheet never
+// meets one: component Root mounts it in the window's root layer
+// (component/src/root.rs:156-179, 490). A caller that renders the base
+// Sheet inside a scroll area wraps it in gpui.Deferred, which paints it
+// under the window's mask (R:window.rs:3661-3703).
+func TestSheetInsideAScrollAreaIsClippedUnlessDeferred(t *testing.T) {
+	surface, mask, viewport := sheetInScrollArea(t, false)
+	if surface != viewport {
+		t.Fatalf("in-place surface bounds = %v, want the viewport %v", surface, viewport)
+	}
+	scrollArea := gpui.Bounds{Origin: ovPoint(20, 20), Size: gpui.Size{Width: 100, Height: 100}}
+	if mask != scrollArea {
+		t.Fatalf("in-place surface mask = %v, want the scroll area %v (upstream parity: not deferred)", mask, scrollArea)
+	}
+
+	surface, mask, viewport = sheetInScrollArea(t, true)
+	if surface != viewport {
+		t.Fatalf("deferred surface bounds = %v, want the viewport %v", surface, viewport)
+	}
+	if mask != viewport {
+		t.Fatalf("deferred surface mask = %v, want the window %v (not clipped by the scroll area)", mask, viewport)
+	}
+}
+
 // U:sheet.rs:249-269
 func TestSheetPointerAboveTheDismissCutoffIsIgnored(t *testing.T) {
 	cutoff := float32(50)
