@@ -1,0 +1,50 @@
+{
+  "name": "gradient-angles",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T21:30:22Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "grad-0": {
+      "x": 56,
+      "y": 88,
+      "width": 160,
+      "height": 100
+    },
+    "grad-135": {
+      "x": 56,
+      "y": 212,
+      "width": 160,
+      "height": 100
+    },
+    "grad-180": {
+      "x": 240,
+      "y": 212,
+      "width": 160,
+      "height": 100
+    },
+    "grad-37": {
+      "x": 424,
+      "y": 212,
+      "width": 160,
+      "height": 100
+    },
+    "grad-45": {
+      "x": 240,
+      "y": 88,
+      "width": 160,
+      "height": 100
+    },
+    "grad-90": {
+      "x": 424,
+      "y": 88,
+      "width": 160,
+      "height": 100
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

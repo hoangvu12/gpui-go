@@ -689,7 +689,7 @@ func recordPathsFiltersScene(scene *gpui.Scene, rec *recorder, layerCount uint32
 				for i, path := range paths[command.Range[0]:command.Range[1]] {
 					vertices := pathVertices[int(command.Range[0])+i]
 					opFields := commonOpFields("path", path.Order, batchIndex, path.Bounds, path.ContentMask)
-					opFields = append(opFields, spriteColorFields("color", path.Color)...)
+					opFields = append(opFields, spriteColorFields("color", path.Color.Solid)...)
 					opFields = append(opFields, field{"vertexCount", uint64(len(vertices))})
 					// The pinned Path::id is the insertion index; this
 					// fixture's paths sort stably in insertion order, so

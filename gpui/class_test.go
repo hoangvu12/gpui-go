@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"math"
 	"reflect"
 	"strconv"
 	"strings"
@@ -538,7 +539,7 @@ func TestCheckClassesReasons(t *testing.T) {
 		{"bg-brand", "palette color"},
 		{"text-current", "currentColor"},
 		{"border-t-red-500", "per-side border colors"},
-		{"bg-gradient-to-r", "gradients"},
+		{"bg-gradient-to-r", "renamed bg-gradient-* to bg-linear-*"},
 		{"rounded-[50%]", "px or rem"},
 		{"opacity-150", "0–100"},
 		{"grid-cols-0", "takes a count"},
@@ -749,5 +750,181 @@ func TestTailwindColor(t *testing.T) {
 	}
 	if c, _ := TailwindColor("transparent"); c.A != 0 {
 		t.Errorf("transparent alpha = %v", c.A)
+	}
+}
+
+// TestClassGradients checks the Tailwind v4 gradient classes
+// (browser-core ticket 40): bg-linear-* (the eight directions, the
+// angle form and the arbitrary angle), from-* and to-* (colors and
+// percentage positions), and the /srgb modifier (the one interpolation
+// space the record draws).
+func TestClassGradients(t *testing.T) {
+	classTestNoErrors(t)
+	gradient := func(angle float32, from, to GradientStop) Background {
+		return LinearGradientBackground(angle, from, to)
+	}
+	direction := func(dir GradientDirection, from, to GradientStop) Background {
+		return LinearGradientToBackground(dir, from, to)
+	}
+	red := Rgb(0xef4444)
+	blue := Rgb(0x3b82f6)
+	amber := Rgb(0xfbbf24)
+	fuchsia := Rgb(0xc026d3)
+	emerald := Rgb(0x10b981)
+	cyan := Rgb(0x06b6d4)
+	from := func(c Hsla, at float32) GradientStop { return GradientStop{Color: c, Position: at} }
+	classTestCheck(t, []classTestCase{
+		// The direction forms: to-t is 0deg (up), to-r is 90deg (right).
+		{"bg-linear-to-t", func(d *DivElement) *DivElement {
+			return d.Bg(direction(GradientDirectionToTop, from(Hsla{}, 0), from(Hsla{}, 1)))
+		}},
+		{"bg-linear-to-r", func(d *DivElement) *DivElement {
+			return d.Bg(direction(GradientDirectionToRight, from(Hsla{}, 0), from(Hsla{}, 1)))
+		}},
+		{"bg-linear-to-b", func(d *DivElement) *DivElement {
+			return d.Bg(direction(GradientDirectionToBottom, from(Hsla{}, 0), from(Hsla{}, 1)))
+		}},
+		{"bg-linear-to-l", func(d *DivElement) *DivElement {
+			return d.Bg(direction(GradientDirectionToLeft, from(Hsla{}, 0), from(Hsla{}, 1)))
+		}},
+		// A corner keyword resolves against the element's bounds at
+		// paint time (the CSS magic corner).
+		{"bg-linear-to-tr", func(d *DivElement) *DivElement {
+			return d.Bg(direction(GradientDirectionToTopRight, from(Hsla{}, 0), from(Hsla{}, 1)))
+		}},
+		{"bg-linear-to-bl", func(d *DivElement) *DivElement {
+			return d.Bg(direction(GradientDirectionToBottomLeft, from(Hsla{}, 0), from(Hsla{}, 1)))
+		}},
+		// The canonical chain: direction, then the two stops.
+		{"bg-linear-to-r from-red-500 to-blue-500", func(d *DivElement) *DivElement {
+			return d.Bg(direction(GradientDirectionToRight, from(red, 0), from(blue, 1)))
+		}},
+		// The angle form and the negative angle form.
+		{"bg-linear-45 from-amber-400 to-fuchsia-600", func(d *DivElement) *DivElement {
+			return d.Bg(gradient(45, from(amber, 0), from(fuchsia, 1)))
+		}},
+		{"-bg-linear-45 from-amber-400 to-fuchsia-600", func(d *DivElement) *DivElement {
+			return d.Bg(gradient(-45, from(amber, 0), from(fuchsia, 1)))
+		}},
+		// The arbitrary angle form (deg, rad, grad, turn), which
+		// Tailwind emits without an interpolation method — the exact
+		// match for the record's sRGB interpolation.
+		{"bg-linear-[117deg] from-emerald-500 to-cyan-500", func(d *DivElement) *DivElement {
+			return d.Bg(gradient(117, from(emerald, 0), from(cyan, 1)))
+		}},
+		{"bg-linear-[1.5rad]", func(d *DivElement) *DivElement {
+			return d.Bg(gradient(1.5*180/math.Pi, from(Hsla{}, 0), from(Hsla{}, 1)))
+		}},
+		{"bg-linear-[100grad]", func(d *DivElement) *DivElement {
+			return d.Bg(gradient(90, from(Hsla{}, 0), from(Hsla{}, 1)))
+		}},
+		{"bg-linear-[0.25turn]", func(d *DivElement) *DivElement {
+			return d.Bg(gradient(90, from(Hsla{}, 0), from(Hsla{}, 1)))
+		}},
+		// Percentage positions (from-25%, from-[12.5%]).
+		{"bg-linear-90 from-25% from-red-500 to-blue-500 to-[75%]", func(d *DivElement) *DivElement {
+			return d.Bg(gradient(90, from(red, 0.25), from(blue, 0.75)))
+		}},
+		{"bg-linear-90 from-[12.5%] from-red-500 to-blue-500", func(d *DivElement) *DivElement {
+			return d.Bg(gradient(90, from(red, 0.125), from(blue, 1)))
+		}},
+		// The color forms the color stage already parses: palette,
+		// transparent, hex, and the opacity modifier.
+		{"bg-linear-to-b from-transparent to-white/50", func(d *DivElement) *DivElement {
+			return d.Bg(direction(GradientDirectionToBottom, from(Rgb(0).Alpha(0), 0), from(White().Alpha(0.5), 1)))
+		}},
+		{"bg-linear-to-b from-[#ff0000] to-[#0000ff]/[25%]", func(d *DivElement) *DivElement {
+			return d.Bg(direction(GradientDirectionToBottom, from(Rgb(0xff0000), 0), from(Rgb(0x0000ff).Alpha(0.25), 1)))
+		}},
+		// The /srgb modifier is accepted: it selects the one space the
+		// record draws.
+		{"bg-linear-to-r/srgb from-red-500 to-blue-500", func(d *DivElement) *DivElement {
+			return d.Bg(direction(GradientDirectionToRight, from(red, 0), from(blue, 1)))
+		}},
+		{"bg-linear-45/srgb from-amber-400 to-fuchsia-600", func(d *DivElement) *DivElement {
+			return d.Bg(gradient(45, from(amber, 0), from(fuchsia, 1)))
+		}},
+		// A second bg-linear-* keeps the stops an earlier one set
+		// (Tailwind's direction and stops are independent variables).
+		{"bg-linear-to-r from-red-500 to-blue-500 bg-linear-to-b", func(d *DivElement) *DivElement {
+			return d.Bg(direction(GradientDirectionToBottom, from(red, 0), from(blue, 1)))
+		}},
+		// A gradient replaces a solid background (one background, no
+		// CSS background-color under background-image layer).
+		{"bg-slate-800 bg-linear-to-r from-red-500 to-blue-500", func(d *DivElement) *DivElement {
+			return d.Bg(direction(GradientDirectionToRight, from(red, 0), from(blue, 1)))
+		}},
+	})
+}
+
+// TestClassGradientStateVariants checks that gradient classes work under
+// a state variant when the whole gradient lives in that variant, and
+// that a from-*/to-* alone in a variant is reported: it cannot compose
+// with the base's direction, because the state style replaces the
+// background.
+func TestClassGradientStateVariants(t *testing.T) {
+	classTestNoErrors(t)
+	red, blue := Rgb(0xef4444), Rgb(0x3b82f6)
+	d := Div().ID("g").Class("bg-linear-to-r from-red-500 to-blue-500 hover:bg-linear-to-b hover:from-amber-400 hover:to-cyan-500")
+	background, ok := d.StyleMut().Background.Get()
+	if !ok || !equalBackground(background, LinearGradientToBackground(GradientDirectionToRight,
+		GradientStop{Color: red, Position: 0}, GradientStop{Color: blue, Position: 1})) {
+		t.Fatalf("the base gradient = %+v", background)
+	}
+	if d.hoverStyle == nil {
+		t.Fatal("the hover style is missing")
+	}
+	hover, ok := d.hoverStyle.Background.Get()
+	if !ok || !equalBackground(hover, LinearGradientToBackground(GradientDirectionToBottom,
+		GradientStop{Color: Rgb(0xfbbf24), Position: 0}, GradientStop{Color: Rgb(0x06b6d4), Position: 1})) {
+		t.Fatalf("the hover gradient = %+v", hover)
+	}
+
+	reports := classTestCapture(t)
+	Div().ID("g2").Class("bg-linear-to-r from-red-500 to-blue-500 hover:from-amber-400")
+	if len(*reports) != 1 || !strings.Contains((*reports)[0].err.Error(), "sets one stop of a gradient") {
+		t.Errorf("a from- alone in a variant must report: %+v", *reports)
+	}
+}
+
+// TestClassGradientRejections checks the named rejections: via-* (three
+// stops need ticket 52), non-sRGB interpolation modifiers, the
+// composition order, and the position rules.
+func TestClassGradientRejections(t *testing.T) {
+	cases := []struct {
+		classes string
+		want    string
+		is      error
+	}{
+		{"bg-linear-to-r from-red-500 via-orange-400 to-blue-500", "via-orange-400", ErrGradientViaUnsupported},
+		{"via-none", "via-none", ErrGradientViaUnsupported},
+		{"bg-linear-to-r/oklab from-red-500 to-blue-500", "non-sRGB gradient interpolation", ErrGradientInterpolationUnsupported},
+		{"bg-linear-45/oklch", "non-sRGB gradient interpolation", ErrGradientInterpolationUnsupported},
+		{"bg-linear-to-r/longer", "non-sRGB gradient interpolation", ErrGradientInterpolationUnsupported},
+		{"bg-linear-to-r/oklch", "non-sRGB gradient interpolation", ErrGradientInterpolationUnsupported},
+		{"bg-linear-[45deg]/srgb", "takes no modifier", nil},
+		{"bg-linear", "takes a direction or an angle", nil},
+		{"bg-linear-side", "takes a direction or an angle", nil},
+		{"-bg-linear-to-r", "cannot be negative", nil},
+		{"from-red-500", "sets one stop of a gradient", nil},
+		{"from-red-500 bg-linear-to-r", "sets one stop of a gradient", nil},
+		{"bg-linear-to-r from-[10px]", "resolves against the gradient line's length", nil},
+		{"bg-linear-to-r from-red-500 from-50% to-blue-500 to-50%", "same position", nil},
+		{"bg-linear-to-r from-75% to-25%", "must come before", nil},
+		{"bg-linear-[45]", "takes an angle, like bg-linear-[45deg]", nil},
+		{"bg-linear-[to_right]", "takes an angle, like bg-linear-[45deg]", nil},
+	}
+	for _, tc := range cases {
+		err := CheckClasses(tc.classes)
+		if err == nil {
+			t.Errorf("CheckClasses(%q) = nil; want %q", tc.classes, tc.want)
+			continue
+		}
+		if !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("CheckClasses(%q) = %v; want an error mentioning %q", tc.classes, err, tc.want)
+		}
+		if tc.is != nil && !errors.Is(err, tc.is) {
+			t.Errorf("CheckClasses(%q) = %v; want errors.Is %v", tc.classes, err, tc.is)
+		}
 	}
 }

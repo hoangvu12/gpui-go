@@ -221,6 +221,9 @@ func defaultClassErrorHandler(classes string, err error) {
 type classError struct {
 	class  string
 	reason string
+	// err is the sentinel the reason carries (the named gradient
+	// limits), so CheckClasses users can errors.Is it; nil otherwise.
+	err error
 }
 
 func (e *classError) Error() string {
@@ -228,6 +231,23 @@ func (e *classError) Error() string {
 		return fmt.Sprintf("unknown class %q", e.class)
 	}
 	return fmt.Sprintf("%q: %s", e.class, e.reason)
+}
+
+// Unwrap returns the sentinel the rejection carries (errors.Is), if
+// any.
+func (e *classError) Unwrap() error { return e.err }
+
+// classErrorFor builds a Class rejection. A reason that is a named
+// gradient limit's message carries that sentinel (single-sourced: the
+// stages return the sentinels' Error() strings).
+func classErrorFor(class, reason string) error {
+	switch reason {
+	case ErrGradientViaUnsupported.Error():
+		return &classError{class: class, reason: reason, err: ErrGradientViaUnsupported}
+	case ErrGradientInterpolationUnsupported.Error():
+		return &classError{class: class, reason: reason, err: ErrGradientInterpolationUnsupported}
+	}
+	return &classError{class: class, reason: reason}
 }
 
 // ---------------------------------------------------------------------------
@@ -315,7 +335,7 @@ func buildClassSet(classes string) *classSet {
 func (set *classSet) add(token string) error {
 	parts := splitVariants(token)
 	if len(parts) > 2 {
-		return &classError{token, "stacked variants are not supported; use one variant per class"}
+		return &classError{class: token, reason: "stacked variants are not supported; use one variant per class"}
 	}
 	// The important modifier (!p-4, p-4!) changes nothing here.
 	utility := strings.TrimSuffix(strings.TrimPrefix(parts[len(parts)-1], "!"), "!")
@@ -325,7 +345,7 @@ func (set *classSet) add(token string) error {
 	if variant {
 		var reason string
 		if kind, group, reason = parseVariant(parts[0]); reason != "" {
-			return &classError{token, reason}
+			return &classError{class: token, reason: reason}
 		}
 	}
 
@@ -333,11 +353,11 @@ func (set *classSet) add(token string) error {
 		name, _ := strings.CutPrefix(strings.TrimPrefix(utility, "group"), "/")
 		switch {
 		case variant:
-			return &classError{token, "group cannot take a variant"}
+			return &classError{class: token, reason: "group cannot take a variant"}
 		case utility != "group" && name == "":
-			return &classError{token, "group/ needs a name, like group/menu"}
+			return &classError{class: token, reason: "group/ needs a name, like group/menu"}
 		case set.group != nil && *set.group != name:
-			return &classError{token, "an element belongs to one group, and this one is already in another"}
+			return &classError{class: token, reason: "an element belongs to one group, and this one is already in another"}
 		}
 		set.group = &name
 		set.divClasses = append(set.divClasses, token)
@@ -345,7 +365,7 @@ func (set *classSet) add(token string) error {
 	}
 	if x, y, ok := scrollClass(utility); ok {
 		if variant {
-			return &classError{token, "scrolling cannot depend on a state"}
+			return &classError{class: token, reason: "scrolling cannot depend on a state"}
 		}
 		if x {
 			set.base.OverflowX = Some(OverflowScroll)
@@ -366,7 +386,7 @@ func (set *classSet) add(token string) error {
 	if variant {
 		var reason string
 		if state, reason = set.state(kind, group); reason != "" {
-			return &classError{token, reason}
+			return &classError{class: token, reason: reason}
 		}
 		target = &StyleRefinement{}
 		if state != nil {
@@ -379,7 +399,7 @@ func (set *classSet) add(token string) error {
 		if reason == "" {
 			reason = unknownClassReason(utility)
 		}
-		return &classError{token, reason}
+		return classErrorFor(token, reason)
 	}
 	if !variant {
 		set.base = *b.StyleMut()
@@ -516,7 +536,8 @@ type classStage func(b *StyleBuilder, u string) (handled bool, reason string)
 
 // classStages run in order after the method classes. unsupportedClass
 // runs before colorClass so that text-justify and outline-none get their
-// reason rather than "unknown color".
+// reason rather than "unknown color"; gradientClass runs before
+// unsupportedClass so from-/via-/to-/bg-linear-* get gradient reasons.
 var classStages = []classStage{
 	specialClass,
 	lengthClass,
@@ -526,6 +547,7 @@ var classStages = []classStage{
 	gridClass,
 	aspectClass,
 	blurClass,
+	gradientClass,
 	unsupportedClass,
 	colorClass,
 }
@@ -1093,6 +1115,237 @@ func blurClass(b *StyleBuilder, u string) (bool, string) {
 	return true, ""
 }
 
+// ---------------------------------------------------------------------------
+// Gradients (browser-core ticket 40)
+// ---------------------------------------------------------------------------
+
+// bgLinearDirections maps Tailwind v4's bg-linear-to-* values to the
+// CSS direction keywords (tailwindcss v4 utilities.ts,
+// linearGradientDirections: 'to-t' -> "to top", …).
+var bgLinearDirections = map[string]GradientDirection{
+	"to-t":  GradientDirectionToTop,
+	"to-tr": GradientDirectionToTopRight,
+	"to-r":  GradientDirectionToRight,
+	"to-br": GradientDirectionToBottomRight,
+	"to-b":  GradientDirectionToBottom,
+	"to-bl": GradientDirectionToBottomLeft,
+	"to-l":  GradientDirectionToLeft,
+	"to-tl": GradientDirectionToTopLeft,
+}
+
+// gradientClass applies the Tailwind v4 gradient utilities: bg-linear-*
+// (the direction or angle), from-* and to-* (the two stops' colors and
+// positions). Tailwind emits `in oklab` interpolation for the named and
+// numeric forms (utilities.ts resolveInterpolationModifier); the record
+// draws CSS's legacy sRGB interpolation, so those classes render like
+// the equivalent CSS without an interpolation method, and the /srgb
+// modifier opts into exactly that — a recorded class-layer divergence
+// (docs/tailwind.md). via-* (a middle stop) is rejected with
+// ErrGradientViaUnsupported: three stops need the n-stop record
+// (ticket 52).
+//
+// The direction and the stops are separate classes, so they compose in
+// chain order: bg-linear-* starts the gradient (keeping any stops an
+// earlier bg-linear-* in the same string set, Tailwind's variables
+// being independent) and from-*/to-* set one stop of the gradient the
+// same string (or variant) already started.
+func gradientClass(b *StyleBuilder, u string) (bool, string) {
+	if u == "via-none" || strings.HasPrefix(u, "via-") {
+		return true, ErrGradientViaUnsupported.Error()
+	}
+	body := strings.TrimPrefix(u, "-")
+	if value, ok := strings.CutPrefix(body, "bg-linear-"); ok {
+		return bgLinearClass(b, u, value, strings.HasPrefix(u, "-"))
+	}
+	if body == "bg-linear" {
+		return true, "bg-linear takes a direction or an angle: bg-linear-to-r, bg-linear-45, bg-linear-[45deg]"
+	}
+	for _, root := range []string{"from-", "to-"} {
+		if value, ok := strings.CutPrefix(u, root); ok {
+			return gradientStopClass(b, u, root[:len(root)-1], value)
+		}
+	}
+	return false, ""
+}
+
+// bgLinearClass applies one bg-linear-* utility (u for the error
+// messages, value the class's value after bg-linear-, negative marking
+// a leading minus).
+func bgLinearClass(b *StyleBuilder, u, value string, negative bool) (bool, string) {
+	value, modifier, hasModifier := cutModifier(value)
+	keyword, isKeyword := bgLinearDirections[value]
+	var direction GradientDirection
+	var angle float32
+	switch {
+	case strings.HasPrefix(value, "["):
+		inner, ok := arbitrary(value)
+		if !ok {
+			return true, "bg-linear-[…] takes an angle in brackets, like bg-linear-[45deg]"
+		}
+		if hasModifier {
+			return true, "bg-linear-[…] takes no modifier (Tailwind v4 rejects it too)"
+		}
+		degrees, ok := parseAngle(inner)
+		if !ok {
+			return true, "bg-linear-[…] takes an angle, like bg-linear-[45deg] (deg, rad, grad or turn)"
+		}
+		// Tailwind v4's arbitrary form emits no interpolation method, so
+		// it interpolates in CSS's legacy sRGB — exactly what the record
+		// draws. The class matches a real Tailwind page bit for bit.
+		angle = degrees
+		direction = GradientDirectionAngle
+	case isKeyword:
+		if negative {
+			return true, "bg-linear-to-* directions cannot be negative"
+		}
+		direction = keyword
+	default:
+		count, ok := parseCount(value)
+		if !ok {
+			return true, "bg-linear-<value> takes a direction or an angle: bg-linear-to-r, bg-linear-45, bg-linear-[45deg]"
+		}
+		if negative {
+			angle = -float32(count)
+		} else {
+			angle = float32(count)
+		}
+		direction = GradientDirectionAngle
+	}
+	if hasModifier {
+		// The modifier selects the interpolation space (Tailwind v4's
+		// default is oklab); srgb is the one space the record draws.
+		if modifier != "srgb" {
+			return true, ErrGradientInterpolationUnsupported.Error()
+		}
+	}
+	st := b.StyleMut()
+	var gradient LinearGradient
+	if background, ok := st.Background.Get(); ok && background.Kind == BackgroundKindLinearGradient {
+		// Tailwind's direction and stops are independent variables, so a
+		// later bg-linear-* keeps the stops an earlier one set.
+		gradient = background.Gradient
+	} else {
+		gradient.From, gradient.To = gradientDefaultStops()
+	}
+	gradient.Direction = direction
+	gradient.Angle = angle
+	st.Background = Some(Background{Kind: BackgroundKindLinearGradient, Gradient: gradient})
+	return true, ""
+}
+
+// gradientStopClass applies one from-*/to-* utility: a color
+// (from-red-500, from-[#ff0000], from-transparent, from-red-500/50) or a
+// position on the gradient line (from-10%, from-[10%]). root is "from"
+// or "to".
+func gradientStopClass(b *StyleBuilder, u, root, value string) (bool, string) {
+	st := b.StyleMut()
+	background, ok := st.Background.Get()
+	if !ok || background.Kind != BackgroundKindLinearGradient {
+		return true, u + " sets one stop of a gradient: put bg-linear-… earlier in the same class string (or the same variant), like bg-linear-to-r from-… to-…"
+	}
+	stop := &background.Gradient.From
+	other := &background.Gradient.To
+	if root == "to" {
+		stop, other = &background.Gradient.To, &background.Gradient.From
+	}
+	if position, ok := gradientStopPosition(value); ok {
+		stop.Position = position
+	} else if c, isColor, reason := parseColor(value); isColor && reason == "" {
+		stop.Color = c
+	} else if inner, isLength := bracketedLength(value); isLength {
+		return true, u + " takes a percentage position (from-10%, from-[10%]): a length like [" + inner + "] resolves against the gradient line's length, which needs the n-stop record (ticket 52)"
+	} else if reason != "" {
+		return true, reason
+	} else {
+		return true, u + " takes a color (from-red-500, from-[#ff0000], from-transparent) or a position (from-10%)"
+	}
+	if stop.Position == other.Position {
+		return true, "from and to sit at the same position: a hard stop needs the n-stop record (ticket 52, the R16 gradient redesign)"
+	}
+	if background.Gradient.From.Position > background.Gradient.To.Position {
+		return true, "from's position must come before to's: CSS clamps a descending pair into a hard stop, which needs the n-stop record (ticket 52)"
+	}
+	st.Background = Some(background)
+	return true, ""
+}
+
+// gradientStopPosition parses a stop position: n% (a positive
+// integer percent, Tailwind's gradient-color-stop-positions scale) or a
+// bracketed percentage [10%] / [12.5%]. Returns the position as a
+// fraction of the gradient line.
+func gradientStopPosition(value string) (float32, bool) {
+	inner, bracketed := arbitrary(value)
+	if !bracketed {
+		inner = value
+	}
+	if !strings.HasSuffix(inner, "%") {
+		return 0, false
+	}
+	p := strings.TrimSuffix(inner, "%")
+	if bracketed {
+		f, err := strconv.ParseFloat(p, 32)
+		if err != nil || f < 0 || f > 100 {
+			return 0, false
+		}
+		return float32(f) / 100, true
+	}
+	n, err := strconv.ParseUint(p, 10, 32)
+	if err != nil {
+		return 0, false
+	}
+	return float32(n) / 100, true
+}
+
+// bracketedLength reports a bracketed value that is a length: a
+// number followed by a unit, like [10px] (a trailing % is a position,
+// a bare number is neither).
+func bracketedLength(value string) (inner string, ok bool) {
+	if !strings.HasPrefix(value, "[") {
+		return "", false
+	}
+	inner, ok = arbitrary(value)
+	if !ok || inner == "" || strings.HasSuffix(inner, "%") {
+		return "", false
+	}
+	i := 0
+	if inner[i] == '-' || inner[i] == '+' {
+		i++
+	}
+	digits := 0
+	for i < len(inner) && (inner[i] >= '0' && inner[i] <= '9' || inner[i] == '.') {
+		i++
+		digits++
+	}
+	if digits == 0 || i == len(inner) {
+		return "", false // a bare number (no unit) is not a length here
+	}
+	return inner, true
+}
+
+// parseAngle parses a CSS angle with a unit: 45deg, 1.2rad, 100grad,
+// 0.5turn (negative allowed), in degrees. The longer suffixes match
+// first so "grad" never reads as "rad".
+func parseAngle(s string) (float32, bool) {
+	for _, unit := range []struct {
+		suffix string
+		factor float64
+	}{
+		{"grad", 0.9},
+		{"turn", 360},
+		{"deg", 1},
+		{"rad", 180 / math.Pi},
+	} {
+		if v, ok := strings.CutSuffix(s, unit.suffix); ok {
+			f, err := strconv.ParseFloat(v, 32)
+			if err != nil {
+				return 0, false
+			}
+			return float32(f * unit.factor), true
+		}
+	}
+	return 0, false
+}
+
 // unsupportedClasses are the Tailwind utilities GPUI cannot express. A
 // prefix matches the class itself and the class followed by "-",
 // ignoring a leading minus.
@@ -1116,7 +1369,8 @@ var unsupportedClasses = []struct {
 	{[]string{"outline"}, "GPUI draws no focus outline, so outline-* has no effect; drop it (ring-* draws a visible focus ring)"},
 	{[]string{"ring-offset"}, "ring offsets are not supported"},
 	{[]string{"ring-inset"}, "use inset-ring-* for an inset ring"},
-	{[]string{"bg-gradient", "bg-linear", "bg-radial", "bg-conic", "from", "via", "to"}, "gradients are not supported: backgrounds are solid colors (the native renderer is solid-only)"},
+	{[]string{"bg-gradient"}, "Tailwind v4 renamed bg-gradient-* to bg-linear-*; write bg-linear-to-r from-… to-…"},
+	{[]string{"bg-radial", "bg-conic"}, "radial and conic gradients are not supported yet (ticket 52, the R16 gradient redesign); only two-stop linear gradients are"},
 	{[]string{"bg-cover", "bg-contain", "bg-center", "bg-no-repeat", "bg-repeat", "bg-fixed", "bg-clip", "bg-origin", "bg-blend", "bg-none"}, "background images are not supported; put an img element behind the content"},
 	{[]string{"drop-shadow", "grayscale", "invert", "sepia", "brightness", "contrast", "saturate", "hue-rotate", "filter", "mix-blend"}, "only blur filters are supported (blur-*, backdrop-blur-*)"},
 	{[]string{"float", "clear"}, "floats are not supported; use flex or grid"},

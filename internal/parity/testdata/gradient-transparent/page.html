@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 24px;
+	}
+	.box {
+		box-sizing: border-box;
+		width: 160px;
+		height: 100px;
+		display: flex;
+	}
+</style>
+</head>
+<body>
+	<!-- A color fading to transparent must keep its hue on the white
+	     page (premultiplied interpolation): the naive mix would take it
+	     through the transparent stop's rgb (black). -->
+	<div class="box" data-id="fade-down" style="background: linear-gradient(180deg, #ef4444 0%, transparent 100%)"></div>
+	<div class="box" data-id="fade-right" style="background: linear-gradient(90deg, transparent 0%, #ef4444 100%)"></div>
+	<!-- Two stops with different alphas: the premultiplied mix weights
+	     the semi-transparent blue's channels by its alpha on the way. -->
+	<div class="box" data-id="fade-alpha" style="background: linear-gradient(90deg, rgba(59, 130, 246, 0.6) 0%, #ef4444 100%)"></div>
+</body>
+</html>

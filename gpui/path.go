@@ -461,7 +461,15 @@ func (s *Scene) PaintPath(path *Path, color Background, ctx *PaintContext) error
 	}
 	scaled := scalePath(path, ctx.ScaleFactor)
 	mask := scaleBounds(ctx.Mask, ctx.ScaleFactor)
-	shaded := Background{Solid: OpacityHsla(color.Solid, ctx.ElementOpacity)}
+	// The color carries the element opacity: the gradient arm scales
+	// each stop's alpha (Background::opacity), the solid arm keeps the
+	// palette-Hsla path (alpha only, the pin's path).
+	var shaded Background
+	if color.Kind == BackgroundKindLinearGradient {
+		shaded = color.Opacity(ctx.ElementOpacity)
+	} else {
+		shaded = Background{Kind: BackgroundKindSolid, Solid: OpacityHsla(color.Solid, ctx.ElementOpacity)}
+	}
 	return s.InsertPath(scaled, shaded, mask)
 }
 
@@ -497,7 +505,7 @@ func pathRecordOf(path *Path, color Background, contentMask Bounds) *PathRecord 
 	return &PathRecord{
 		Bounds:      path.Bounds,
 		ContentMask: contentMask,
-		Color:       color.Solid,
+		Color:       color,
 		Vertices:    path.Vertices,
 	}
 }
@@ -517,8 +525,9 @@ type PathRecord struct {
 	Bounds Bounds
 	// ContentMask is the clip bounds, device pixels.
 	ContentMask Bounds
-	// Color is the path fill color.
-	Color Hsla
+	// Color is the path fill (the pinned Path's Background: a solid or
+	// a gradient).
+	Color Background
 	// Vertices are the tessellated triangles (xy device pixels, st the
 	// pinned constant (0, 1)).
 	Vertices []PathVertex
@@ -542,7 +551,7 @@ func (k *SceneKernel) InsertPath(rec *PathRecord) error {
 	nativeRec := native.NewScenePathRecord()
 	nativeRec.Bounds = sceneBoundsRecord(rec.Bounds)
 	nativeRec.ContentMask = sceneBoundsRecord(rec.ContentMask)
-	nativeRec.Color = sceneBackgroundRecord(rec.Color)
+	nativeRec.Color = sceneBackgroundRecord(rec.Color, rec.Bounds)
 	nativeRec.VertexCount = uint32(len(rec.Vertices))
 	vertices := make([]native.ScenePathVertexRecord, len(rec.Vertices))
 	for i, vertex := range rec.Vertices {
@@ -585,12 +594,11 @@ func (k *SceneKernel) Paths() ([]PathRecord, [][]PathVertex, error) {
 		cursor += int(rec.VertexCount)
 		x, y, w, height := rec.Bounds.Rect()
 		maskX, maskY, maskW, maskH := rec.ContentMask.Rect()
-		hue, sat, light, alpha := rec.Color.Solid()
 		outRecords[i] = PathRecord{
 			Order:       rec.Order,
 			Bounds:      Bounds{Origin: Point{X: x, Y: y}, Size: Size{Width: w, Height: height}},
 			ContentMask: Bounds{Origin: Point{X: maskX, Y: maskY}, Size: Size{Width: maskW, Height: maskH}},
-			Color:       Hsla{H: hue, S: sat, L: light, A: alpha},
+			Color:       sceneBackgroundValue(rec.Color),
 		}
 	}
 	return outRecords, outVertices, nil
