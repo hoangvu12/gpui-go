@@ -12,7 +12,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - 01 harness: chat 4f488bc4, worktree `gpui-go-wt-core-harness`, branch `core/01-harness`
 - 39 R15: chat 9044df02, worktree `gpui-go-wt-core-r15`, branch `core/39-r15`
 - 02+03: chat ef20e162. Verified, merged (ee8b5c5) and RESOLVED. The worktree `gpui-go-wt-core-small` can be removed.
-- 49 R16 design draft (for the user to review): chat e57b14a1, worktree `gpui-go-wt-core-r16design`, branch `core/49-r16-design`, writing `docs/design/r16-compositor.md`
+- 49 R16 design draft: chat e57b14a1. `docs/design/r16-compositor.md` is merged to main (a4bf560). I checked its citations. 49 stays claimed until the user reviews it; it has 6 open questions in §8.
+- 31+47: chat 8cdf9fd8, worktree `gpui-go-wt-core-small2`, branch `core/31-47-small`
 
 Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
 
