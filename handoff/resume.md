@@ -30,7 +30,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - 10 hover: chat 9fc1818d, worktree `gpui-go-wt-core-10`, branch `core/10-hover`
 - 08 probes: verified, merged and RESOLVED. R17 gamma NO; italic slant YES, which goes on the native follow-up list with 42/43.
 - 04 shadow/blur: chat 381132dd, worktree `gpui-go-wt-core-04`, branch `core/04-shadow-blur`
-- RUNNING NOW: 04, 06, 09, 10, 40, 41.
+- 40 gradients: verified, merged and RESOLVED.
+- RUNNING NOW: 04, 06, 09, 10, 41.
 
 Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
 
