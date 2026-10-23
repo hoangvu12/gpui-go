@@ -22,4 +22,6 @@ Every behaviour check is a browser-parity harness fixture (an HTML page recorded
 
 ## Comments
 
+- 2026-10-24, orchestrator 6: under the approved R16 design (docs/design/r16-compositor.md §3.10), this is the Go half of property-only frames. It needs the native `scene_update_property` (51) and `renderer_surface_draw_scene_damage` (53), shipped in rev 16 (54). Detection is automatic from an active transform or opacity transition, with no opt-in style (user, 2026-10-24).
+
 ## Answer

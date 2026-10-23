@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 6 (Claude Code)
 Blocked by: none
 Triage: ready-for-human
@@ -25,3 +25,15 @@ Every behaviour check is a browser-parity harness fixture (an HTML page recorded
 - **2026-10-24 (orchestrator 6, ticket 49 work):** Design written to [docs/design/r16-compositor.md](../../../docs/design/r16-compositor.md) on branch `core/49-r16-design`. One effect-group record + a group target pool (no nesting cap) carries opacity, transforms, rounded clipping, masks, clip-path and blend modes; the content mask grows to 52 bytes (the pin's `fade_out` finally carried); a gradient table covers n-stop/radial/conic/repeating (R15's 2-stop path stays bit-exact); a filter op chain adds drop-shadow (R15-append); `scene_update_property` + `draw_scene_damage` + `Present1` dirty rects give property-only frames and partial present. Order of work, risks, measurements, proposed ticket 50-53 changes and six open questions for the user are in the doc. Awaiting user review; Status stays claimed until the doc is approved.
 
 ## Answer
+
+The design is in [docs/design/r16-compositor.md](../../../docs/design/r16-compositor.md). The worker (chat e57b14a1) drafted it, and orchestrator 6 verified its Chromium, renderer and pin citations. Orchestrator 6 then answered its six open questions from zgui, gpui-fast, the GPUI-CE pin and orchestrator 5's research (§8.1).
+
+The user approved it on 2026-10-24 ("do rec"):
+- Q1, pool overflow: render inline, with a debug counter and a debug-build warning.
+- Q2: property-only frames are automatic.
+- Q3: damage is capped at 16 merged regions, zgui's rule.
+- Q4: gradients take up to 64 stops, and Go resamples above that.
+- Q5: in DirectComposition mode, partial present is used only after a readback test passes.
+- Q6: blend groups have no cap for now and are measured at 54.
+
+Tickets 50-53 now carry the design and are blocked by 39 as well, because the R16 records extend R15's. Building rev 16 (54) still needs the user's approval.
