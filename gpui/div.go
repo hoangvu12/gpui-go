@@ -1870,7 +1870,10 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 	}
 
 	rem := RemSize(w)
-	radii := s.CornerRadii.ToPixels(rem).ClampRadiiForQuadSize(bounds.Size)
+	// CSS Backgrounds 3 §corner-overlap: overflowing radii scale by one
+	// common factor (the pin clamped each corner to half the shortest
+	// side; see Corners.ConstrainRadiiForQuadSize).
+	radii := s.CornerRadii.ToPixels(rem).ConstrainRadiiForQuadSize(bounds.Size)
 	var smoothing float32
 	if s.CornerSmoothing != nil {
 		smoothing = *s.CornerSmoothing

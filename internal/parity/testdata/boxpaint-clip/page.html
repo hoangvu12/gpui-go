@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 48px;
+	}
+	.clip {
+		box-sizing: border-box;
+		width: 160px;
+		height: 120px;
+		/* The wrapper is a flex row (gpui-go's pin default display), and
+		   the child does not shrink, so it overflows the clip on the
+		   right and bottom exactly like the gpui view. */
+		display: flex;
+		/* A transparent border still reserves its space and still insets
+		   the overflow clip (CSS clips at the padding box). */
+		border: 5px solid transparent;
+		overflow: hidden;
+		background: #ffffff;
+	}
+	.clip-visible {
+		box-sizing: border-box;
+		width: 160px;
+		height: 120px;
+		display: flex;
+		border: 5px solid #334155;
+		overflow: hidden;
+		background: #ffffff;
+	}
+	.child {
+		width: 160px;
+		height: 120px;
+		flex-shrink: 0;
+		background: #dc2626;
+	}
+</style>
+</head>
+<body>
+	<div class="clip" data-id="clip"><div class="child" data-id="child"></div></div>
+	<div class="clip-visible" data-id="clip-visible"><div class="child" data-id="child-visible"></div></div>
+</body>
+</html>

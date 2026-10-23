@@ -127,14 +127,19 @@ func TestObjectFitGetBounds(t *testing.T) {
 			want: gpui.Bounds{Origin: gpui.Point{X: 75, Y: 37.5}, Size: gpui.Size{Width: 50, Height: 25}},
 		},
 		{
-			name: "none keeps the original size at the element origin",
+			// CSS centres object-fit: none at the default object-position
+			// 50% 50% (Chromium's ComputeObjectFitAndPositionRect resolves
+			// the position against base - object_size for every mode,
+			// layout_replaced.cc:453-471): a recorded divergence toward CSS
+			// from the pin, which pins none at the origin (style.rs:134-137).
+			name: "none keeps the original size, centered",
 			fit:  gpui.ObjectFitNone,
 			bounds: gpui.Bounds{
 				Origin: gpui.Point{X: 5, Y: 7},
 				Size:   gpui.Size{Width: 200, Height: 100},
 			},
 			contentWidth: 50, contentHeg: 25,
-			want: gpui.Bounds{Origin: gpui.Point{X: 5, Y: 7}, Size: gpui.Size{Width: 50, Height: 25}},
+			want: gpui.Bounds{Origin: gpui.Point{X: 80, Y: 44.5}, Size: gpui.Size{Width: 50, Height: 25}},
 		},
 	}
 	for _, tc := range cases {

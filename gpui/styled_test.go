@@ -397,19 +397,39 @@ func TestInvisibleDivKeepsLayoutAndPaintsNothing(t *testing.T) {
 	}
 }
 
-// TestOverflowMaskInsetsByVisibleBorder checks style.rs:793-850
-// overflow_mask: clipped overflow masks the children to the bounds inset
-// by a visible border.
-func TestOverflowMaskInsetsByVisibleBorder(t *testing.T) {
-	_, scene := drawStyled(t, gpui.Div().W(gpui.Px(50)).H(gpui.Px(50)).OverflowHidden().Border4().BorderColor(blue).
-		Child(gpui.Div().Size(gpui.Px(100)).Bg(red)).IntoElement())
-	quads := quadsOf(t, scene)
-	if len(quads) != 5 {
-		t.Fatalf("quads = %d, want the child and 4 border strips", len(quads))
+// TestOverflowMaskInsetsByBorderWidths checks style.rs:793-850
+// overflow_mask: clipped overflow masks the children to the bounds
+// inset by the border widths — always, whatever the border color
+// (CSS clips at the padding box: Chromium's LayoutBox::OverflowClipRect
+// contracts the border box by BorderOutsets unconditionally,
+// layout_box.cc:2288-2302; a recorded divergence toward CSS from the
+// pin, which insets only a visible border — style.rs:812-820). The
+// transparent-border case is the observable one: its border still
+// reserves its space and still insets the clip.
+func TestOverflowMaskInsetsByBorderWidths(t *testing.T) {
+	styled := func(borderColor gpui.Hsla) []gpui.Quad {
+		_, scene := drawStyled(t, gpui.Div().W(gpui.Px(50)).H(gpui.Px(50)).OverflowHidden().Border4().BorderColor(borderColor).
+			Child(gpui.Div().Size(gpui.Px(100)).Bg(red)).IntoElement())
+		return quadsOf(t, scene)
 	}
 	want := dev(4, 4, 42, 42)
-	if quads[0].ContentMask != want {
-		t.Errorf("child mask = %+v, want %+v", quads[0].ContentMask, want)
+	for name, tc := range map[string]struct {
+		borderColor gpui.Hsla
+		quads       int
+	}{
+		// A visible border paints its four strips on top of the child.
+		"visible border": {blue, 5},
+		// A transparent border paints nothing itself (is_border_visible)
+		// but still reserves its space and still insets the clip.
+		"transparent border": {gpui.TransparentBlack(), 1},
+	} {
+		quads := styled(tc.borderColor)
+		if len(quads) != tc.quads {
+			t.Fatalf("%s: quads = %d, want %d", name, len(quads), tc.quads)
+		}
+		if quads[0].ContentMask != want {
+			t.Errorf("%s: child mask = %+v, want %+v (the padding box, inset by the border widths)", name, quads[0].ContentMask, want)
+		}
 	}
 }
 

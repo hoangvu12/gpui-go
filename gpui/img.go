@@ -548,8 +548,17 @@ func (d *imgDrawable) Prepaint(global *GlobalElementID, inspector *InspectorElem
 // Paint implements Element (R:img.rs:461-511 inside the
 // Interactivity::paint scopes): a hidden element paints nothing; the
 // element opacity scopes the style box around the text style and overflow
-// mask, inside which the loaded image paints through the object fit with
-// the style's corner radii and smoothing — or the replacement paints.
+// mask, inside which the loaded image paints through the object fit
+// with the style's corner radii and smoothing — or the replacement
+// paints. The object fit runs in the element's content box (border box
+// inset by the border widths and the padding), as CSS fits replaced
+// content (Chromium's LayoutReplaced::ReplacedContentRect from
+// PhysicalContentBoxRect, layout_replaced.cc:474-477), and the image is
+// clipped to that content box: css-images-3 §the-object-fit — "replaced
+// elements always clip their contents to the content box" (Chromium
+// crops the painted source rect to it, image_painter.cc:224-240).
+// Recorded divergence toward CSS: the pin fits and clips in the border
+// box (img.rs:492-493 passes the element bounds to both roles).
 func (d *imgDrawable) Paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *imgLayoutState, prepaint *struct{}, w *Window, app *App) {
 	img := d.img
 	style := img.computeStyle()
@@ -567,13 +576,17 @@ func (d *imgDrawable) Paint(global *GlobalElementID, inspector *InspectorElement
 							return
 						}
 						fw, fh := data.Size(layout.frameIndex)
-						newBounds := img.objectFit.GetBounds(bounds, int32(fw), int32(fh))
+						// The content box, not the border box (see the method
+						// comment): the object fit's base rect and the image's
+						// clip region.
+						contentBox := style.ContentBox(bounds, RemSize(w))
+						newBounds := img.objectFit.GetBounds(contentBox, int32(fw), int32(fh))
 						radii := style.CornerRadii.ToPixels(RemSize(w))
 						var smoothing float32
 						if style.CornerSmoothing != nil {
 							smoothing = *style.CornerSmoothing
 						}
-						if err := w.PaintImageWithCornerSmoothing(bounds, newBounds, radii, smoothing, data, layout.frameIndex, img.grayscale); err != nil {
+						if err := w.PaintImageWithCornerSmoothing(contentBox, newBounds, radii, smoothing, data, layout.frameIndex, img.grayscale); err != nil {
 							log.Printf("gpui: %v", err)
 						}
 					} else if layout.replacement != nil {

@@ -1016,15 +1016,42 @@ func (e AbsoluteLengthEdges) ToPixels(remSize float32) Edges {
 	}
 }
 
-// ClampRadiiForQuadSize clamps every radius to half the shortest side
-// (geometry.rs:2511 Corners::clamp_radii_for_quad_size).
-func (c Corners) ClampRadiiForQuadSize(size Size) Corners {
-	limit := min32(size.Width, size.Height) / 2
+// ConstrainRadiiForQuadSize scales all corner radii by one common
+// factor when adjacent radii overflow the quad: CSS Backgrounds 3
+// §corner-overlap computes f = min(Li/Si) over the four sides, where
+// Si is the sum of the radii at the ends of side i (the top side's
+// top-left + top-right and the bottom side's bottom-left +
+// bottom-right bound the horizontal sums; the left and right sides'
+// vertical pairs bound the vertical sums), and multiplies every radius
+// by f when f < 1. Chromium: FloatRoundedRect::ConstrainRadii
+// (third_party/blink/renderer/platform/geometry/float_rounded_rect.cc:
+// 289-305).
+//
+// Recorded divergence toward CSS: the pin clamps each corner
+// independently to half the shortest side
+// (geometry.rs:2511-2523 clamp_radii_for_quad_size), which is
+// equivalent only when the overflowing radii are equal — on a 40px
+// tall box a single 30px radius stays 30 in CSS and becomes 20 under
+// the clamp, and a 60/20 pair scales to 40/13.33 in CSS and
+// 20/13.33 under the clamp.
+func (c Corners) ConstrainRadiiForQuadSize(size Size) Corners {
+	factor := float32(1)
+	horizontalSum := max32(c.TopLeft+c.TopRight, c.BottomLeft+c.BottomRight)
+	if horizontalSum > size.Width {
+		factor = min32(size.Width/horizontalSum, factor)
+	}
+	verticalSum := max32(c.TopLeft+c.BottomLeft, c.TopRight+c.BottomRight)
+	if verticalSum > size.Height {
+		factor = min32(size.Height/verticalSum, factor)
+	}
+	if factor == 1 {
+		return c
+	}
 	return Corners{
-		TopLeft:     min32(c.TopLeft, limit),
-		TopRight:    min32(c.TopRight, limit),
-		BottomRight: min32(c.BottomRight, limit),
-		BottomLeft:  min32(c.BottomLeft, limit),
+		TopLeft:     c.TopLeft * factor,
+		TopRight:    c.TopRight * factor,
+		BottomRight: c.BottomRight * factor,
+		BottomLeft:  c.BottomLeft * factor,
 	}
 }
 
@@ -1172,12 +1199,22 @@ func (s *Style) TextStyle() *TextStyleRefinement {
 
 // OverflowMask returns the content mask of this style for the given
 // bounds, or nil when the element does not clip its overflow
-// (style.rs:793-850 Style::overflow_mask). A visible border insets the
-// clipped region by the border widths. The pinned axis selection is
-// ported verbatim: with x visible and y clipped the mask spans the
-// border-inset x range and the full bounds height, and vice versa. The
-// pinned fade distances are not carried (the port's content mask has no
-// fade component).
+// (style.rs:793-850 Style::overflow_mask). The clipped region is
+// always inset by the border widths: CSS clips an element's overflow
+// at the padding box whatever the border color (Chromium's
+// LayoutBox::OverflowClipRect contracts the border box by
+// BorderOutsets unconditionally,
+// third_party/blink/renderer/core/layout/layout_box.cc:2288-2302), so
+// a transparent border that reserves space insets the clip too.
+// Recorded divergence toward CSS: the pin insets only when the border
+// color is set and opaque (style.rs:812-820).
+//
+// The pinned axis selection is ported verbatim: with x visible and y
+// clipped the mask spans the border-inset x range and the full bounds
+// height, and vice versa (the CSS overflow-value computation that
+// turns that pair into auto is spec ticket V2's, not this one's). The
+// pinned fade distances are not carried (the port's content mask has
+// no fade component).
 func (s *Style) OverflowMask(bounds Bounds, remSize float32) *Bounds {
 	xVisible := s.OverflowX == OverflowVisible
 	yVisible := s.OverflowY == OverflowVisible
@@ -1186,12 +1223,10 @@ func (s *Style) OverflowMask(bounds Bounds, remSize float32) *Bounds {
 	}
 	minX, minY := bounds.Origin.X, bounds.Origin.Y
 	maxX, maxY := bounds.Right(), bounds.Bottom()
-	if s.BorderColor != nil && !s.BorderColor.IsTransparent() {
-		minX += s.BorderWidths.Left.ToPixels(remSize)
-		maxX -= s.BorderWidths.Right.ToPixels(remSize)
-		minY += s.BorderWidths.Top.ToPixels(remSize)
-		maxY -= s.BorderWidths.Bottom.ToPixels(remSize)
-	}
+	minX += s.BorderWidths.Left.ToPixels(remSize)
+	maxX -= s.BorderWidths.Right.ToPixels(remSize)
+	minY += s.BorderWidths.Top.ToPixels(remSize)
+	maxY -= s.BorderWidths.Bottom.ToPixels(remSize)
 	var mask Bounds
 	switch {
 	case xVisible && !yVisible:
@@ -1202,6 +1237,51 @@ func (s *Style) OverflowMask(bounds Bounds, remSize float32) *Bounds {
 		mask = fromCorners(Point{X: minX, Y: minY}, Point{X: maxX, Y: maxY})
 	}
 	return &mask
+}
+
+// ContentBox returns the element's content box: the bounds inset by
+// the border widths and the padding, clamped at zero size (CSS: the
+// content box; Chromium's PhysicalContentBoxRect contracts the border
+// box by borders and padding,
+// third_party/blink/renderer/core/layout/layout_box.cc:3848-3856).
+// Padding fractions resolve against the element's own width (CSS's
+// all-edges-against-width rule, but against the element's box instead
+// of the containing block — the paint-time approximation, exact for
+// the px and rem padding an object-fit style uses; the layout engine
+// resolves layout-time percentages itself).
+func (s *Style) ContentBox(bounds Bounds, remSize float32) Bounds {
+	borders := s.BorderWidths.ToPixels(remSize)
+	insets := Edges{
+		Top:    borders.Top + definiteEdgePixels(s.Padding.Top, bounds.Size.Width, remSize),
+		Right:  borders.Right + definiteEdgePixels(s.Padding.Right, bounds.Size.Width, remSize),
+		Bottom: borders.Bottom + definiteEdgePixels(s.Padding.Bottom, bounds.Size.Width, remSize),
+		Left:   borders.Left + definiteEdgePixels(s.Padding.Left, bounds.Size.Width, remSize),
+	}
+	width := bounds.Size.Width - insets.Left - insets.Right
+	height := bounds.Size.Height - insets.Top - insets.Bottom
+	if width < 0 {
+		width = 0
+	}
+	if height < 0 {
+		height = 0
+	}
+	return Bounds{
+		Origin: Point{X: bounds.Origin.X + insets.Left, Y: bounds.Origin.Y + insets.Top},
+		Size:   Size{Width: width, Height: height},
+	}
+}
+
+// definiteEdgePixels resolves one definite padding edge against the
+// element's own width (the paint-time convention; see ContentBox).
+func definiteEdgePixels(length DefiniteLength, elementWidth, remSize float32) float32 {
+	switch length.Kind {
+	case DefiniteLengthPx:
+		return length.Value
+	case DefiniteLengthRem:
+		return length.Value * remSize
+	default: // DefiniteLengthFraction
+		return length.Value * max32(elementWidth, 0)
+	}
 }
 
 // isBorderVisible is style.rs:1017 Style::is_border_visible.

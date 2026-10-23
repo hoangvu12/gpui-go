@@ -1,0 +1,38 @@
+{
+  "name": "boxpaint-clip",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T19:20:31Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "child": {
+      "x": 141,
+      "y": 145,
+      "width": 160,
+      "height": 120
+    },
+    "child-visible": {
+      "x": 349,
+      "y": 145,
+      "width": 160,
+      "height": 120
+    },
+    "clip": {
+      "x": 136,
+      "y": 140,
+      "width": 160,
+      "height": 120
+    },
+    "clip-visible": {
+      "x": 344,
+      "y": 140,
+      "width": 160,
+      "height": 120
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

@@ -61,7 +61,14 @@ new fixtures. The implementation lives in `internal/parity`:
    the pin's default line height is 1.618 until D1 lands — anything the two defaults
    disagree on must be pinned explicitly on one side). Fonts must resolve to the same
    files: the view uses the real text system, so `"Segoe UI"` in CSS and the default
-   system UI font in gpui agree on this PC.
+   system UI font in gpui agree on this PC. **Images** go in as an embedded asset: check
+   the PNG in beside the fixture, `//go:embed` it, and inject it into the HTML as a
+   `data:` URI so the recorded `page.html` is self-contained (the object-fit fixture
+   `internal/parity/fixtures/boxpaint` is the template; the gpui side builds the same
+   image with `gpui.NewImage` from the embedded bytes). **Flex defaults:** the pin's
+   default display is flex where the browser's is block — pin `display: flex` on the
+   page's containers (and `flex-shrink: 0` where a child must overflow) so both sides
+   place children identically.
 
 3. **Element ids are the mapping.** Every compared or instrumented HTML element carries
    `data-id="<id>"`; the gpui elements set `.ID("<id>")` (interactive state, click
@@ -81,6 +88,11 @@ new fixtures. The implementation lives in `internal/parity`:
 
 6. Import the fixture package in `internal/parity/replay_test.go`'s import block (blank
    import) so `TestFixtures` picks it up, and in `cmd/parityrecord/main.go`.
+
+   A fixture with no instrumented events (a pure painting fixture) leaves `EventKinds`
+   and `Steps` empty: the recorder's instrumentation binds nothing and both transcripts
+   are empty, which the Tier B comparison accepts. The `BoxIDs` are then the whole
+   fixture; `internal/parity/fixtures/boxpaint` records that way.
 
 7. Record, from the module root:
 

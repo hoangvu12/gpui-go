@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 32px;
+	}
+	.radii-uneven {
+		width: 100px;
+		height: 40px;
+		/* 30px on the top left only: the sides do not overlap, so CSS
+		   keeps 30px where the per-corner clamp gives 20px. */
+		border-radius: 30px 0 0 0;
+		background: #2563eb;
+	}
+	.radii-factor {
+		width: 80px;
+		height: 40px;
+		/* 42px + 21px on the left side (top-left + bottom-left) overflows
+		   the 40px height, so CSS scales every radius by 40/63: the
+		   top-left becomes 26.67px, the top-right and bottom-left 13.33px
+		   — and the left-side pair then meets exactly, with no straight
+		   segment left on that side. The per-corner clamp gives
+		   20/20/0/20 instead. */
+		border-radius: 42px 21px 0 21px;
+		background: #16a34a;
+	}
+</style>
+</head>
+<body>
+	<div class="radii-uneven" data-id="radii-uneven"></div>
+	<div class="radii-factor" data-id="radii-factor"></div>
+</body>
+</html>

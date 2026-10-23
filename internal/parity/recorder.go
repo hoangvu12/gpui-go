@@ -31,6 +31,12 @@ import (
 // read out after dispatch (matching the replay's post-dispatch
 // defaultPrevented semantics).
 func instrumentScript(kinds []string) string {
+	// A fixture with no instrumented events (a painting fixture) has a
+	// nil kinds slice; normalize it to an empty list so the page script
+	// iterates zero kinds instead of JSON's null.
+	if kinds == nil {
+		kinds = []string{}
+	}
 	kindList, _ := json.Marshal(kinds)
 	return fmt.Sprintf(`(() => {
 	window.__events = [];

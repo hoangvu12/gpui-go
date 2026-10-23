@@ -1,0 +1,32 @@
+{
+  "name": "boxpaint-objectfit",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T19:19:02Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "img-contain": {
+      "x": 256,
+      "y": 146,
+      "width": 128,
+      "height": 108
+    },
+    "img-cover": {
+      "x": 416,
+      "y": 146,
+      "width": 128,
+      "height": 108
+    },
+    "img-none": {
+      "x": 96,
+      "y": 146,
+      "width": 128,
+      "height": 108
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}
