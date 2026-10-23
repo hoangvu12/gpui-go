@@ -10,7 +10,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 **ORCHESTRATOR 6 STATUS (2026-10-24; CURRENT).** Claude Code (Opus 5.5) is orchestrating; Roboco chat 3d6efd46. Claimed 01, 02, 03 and 39. Workers are pi + `iroha/dashscope/glm-5.3` side chats:
 - 01 harness: chat 4f488bc4. Verified, merged (a30427d) and RESOLVED. Guide: `docs/browser-parity-harness.md`.
-- 05 box painting: chat e1c615c2, worktree `gpui-go-wt-core-05`, branch `core/05-box-painting`
+- 05 box painting: chat e1c615c2. Verified, merged (93421ec) and RESOLVED.
+- 08 raster probes: chat 29e2ace6, worktree `gpui-go-wt-core-08`, branch `core/08-raster-probes`
 - Pre-existing on main, not caused by us: `internal/portfixture` TestFx0004 fails because the system font-family count went from 94 to 95; `gofmt -l` flags `internal/fontspec/weight_synthesis_test.go`.
 - The harness only runs at device pixel ratio 2, so 07 (175%/100% scales) needs a harness extension first.
 - 39 R15: chat 9044df02, worktree `gpui-go-wt-core-r15`, branch `core/39-r15`
@@ -22,7 +23,7 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
   - 09: chat 6a03afb2, worktree `gpui-go-wt-core-09`, branch `core/09-default-actions`. It also extends the harness with key events.
   - 27: chat 30725570, worktree `gpui-go-wt-core-27`, branch `core/27-system-prefs`
   - 62: chat a1fbc74c, worktree `gpui-go-wt-core-62`, branch `core/62-tsx-host`
-- RUNNING NOW: 39 (R15), 05, 06, 09, 27, 62.
+- RUNNING NOW: 39 (R15), 06, 08, 09, 27, 62.
 
 Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
 
