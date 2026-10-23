@@ -694,7 +694,58 @@ func (r *Renderer) GetOrCreateSurfaceMode(w *Window, mode native.SurfaceMode) (*
 		scale:    scale,
 	}
 	r.surfaces[w.ID()] = surface
+	registerFrameLatencySurface(w, surface)
 	return surface, nil
+}
+
+// Frame-latency surfaces (gpui-perf ticket 05). Every native swap chain
+// is frame-latency waitable with a maximum latency of 1; the window's
+// frame source (frameloop_windows.go) waits on the waitable of the
+// window's surface before it requests a frame, so a frame starts as soon
+// as the swap chain can take it instead of at the next DwmFlush. The
+// registry maps a window to the surface last attached to it; the frame
+// source falls back to DwmFlush for windows without one.
+var (
+	frameLatencyMu       sync.Mutex
+	frameLatencySurfaces = map[*Window]*Surface{}
+)
+
+func registerFrameLatencySurface(w *Window, s *Surface) {
+	frameLatencyMu.Lock()
+	frameLatencySurfaces[w] = s
+	frameLatencyMu.Unlock()
+}
+
+func unregisterFrameLatencySurface(s *Surface) {
+	frameLatencyMu.Lock()
+	if s.window != nil && frameLatencySurfaces[s.window] == s {
+		delete(frameLatencySurfaces, s.window)
+	}
+	frameLatencyMu.Unlock()
+}
+
+// frameLatencySurfaceOf returns the window's registered surface (nil when
+// none).
+func frameLatencySurfaceOf(w *Window) *Surface {
+	frameLatencyMu.Lock()
+	defer frameLatencyMu.Unlock()
+	return frameLatencySurfaces[w]
+}
+
+// waitFrameLatency waits until the surface's swap chain can accept a new
+// frame or the timeout passes. It runs off the foreground thread (the frame source's pacer
+// goroutine); the handle is read under the renderer lock (device-loss
+// recovery replaces it) and the wait itself holds no lock.
+func (s *Surface) waitFrameLatency(timeout time.Duration) (native.FrameLatencyWait, error) {
+	r := s.renderer
+	r.mu.Lock()
+	closed := r.closed
+	handle := s.handle
+	r.mu.Unlock()
+	if closed {
+		return native.FrameLatencyUnavailable, errors.New("gpui: renderer is closed")
+	}
+	return r.svc.WaitFrameLatency(handle, timeout)
 }
 
 // resizeSurfaceLocked resizes a surface when the window extent changed
@@ -823,6 +874,7 @@ func (s *Surface) Destroy() error {
 		return fmt.Errorf("gpui: destroying the surface of window %d: %w", s.windowID, err)
 	}
 	delete(r.surfaces, s.windowID)
+	unregisterFrameLatencySurface(s)
 	return nil
 }
 
@@ -1167,6 +1219,7 @@ func (r *Renderer) Close() error {
 	}
 	r.mu.Unlock()
 	for _, surface := range surfaces {
+		unregisterFrameLatencySurface(surface)
 		if err := r.svc.DestroySurface(surface.handle); err != nil && firstErr == nil {
 			firstErr = fmt.Errorf("gpui: destroying the surface of window %d: %w", surface.windowID, err)
 		}
