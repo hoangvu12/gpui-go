@@ -4,7 +4,7 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: none
 
@@ -25,3 +25,16 @@ Hovering a Base component on a real window shows the cursor upstream shows: the 
 ## Comments
 
 - 2026-10-23 — Created by the base-port-2 orchestrator from the user's report.
+- 2026-10-23 — Delegated (headless only), then resolved.
+
+## Answer
+
+There is no core bug and no missing Base cursor site. All 17 upstream cursor lines are ported, and the hovered element's cursor reaches the Win32 host along the pinned path.
+
+The missing pointer is upstream behaviour. Base's Button and Link set no cursor; upstream's styled component crate adds `cursor_pointer`. Dock splitter cursors come from the example skin, so the gallery now styles both.
+
+Added:
+- a fake-platform seam in gpui/interact.go plus `WindowCursorStyle`
+- 4 gpui tests and 6 base cursor tests
+
+To check by hand on a real window later: an input shows the I-beam, a resizable handle shows a resize cursor, and a CursorPointer-styled Button shows the hand. Evidence: [ticket39-cursors.json](../../../evidence/base/ticket39-cursors.json).
