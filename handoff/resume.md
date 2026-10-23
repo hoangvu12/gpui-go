@@ -6,7 +6,7 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 ## ACTIVE EFFORT (2026-10-23): recreate zgui's terminal app ("zterm") on gpui-go
 
-**ORCHESTRATOR 4 STATUS (2026-10-23, newest):** the user scoped it as UI only ("only the UI, skip logic"), Windows only, placeholder panes. Map and tickets 01-09: [.scratch/zterm/map.md](../.scratch/zterm/map.md). zterm's Luau source is copied, read-only, to `C:\Users\ADMIN\Desktop\nguyenvu\zgui-zterm-src\`. Running, as background Agent workers: 01 capability audit (worktree `gpui-go-wt-zterm-audit`, branch `zterm/audit`), 02 zgui-on-Windows check (`gpui-go-wt-zterm-ref`, `zterm/ref`, no cargo), and 03 app skeleton (`gpui-go-wt-zterm-app`, `zterm/app`). Next: 04, 05, 07 and 08 after 03, then 06, then 09.
+**ORCHESTRATOR 4 STATUS (2026-10-23, newest):** the user scoped it as UI only ("only the UI, skip logic"), Windows only, placeholder panes. Map and tickets 01-09: [.scratch/zterm/map.md](../.scratch/zterm/map.md). zterm's Luau source is copied, read-only, to `C:\Users\ADMIN\Desktop\nguyenvu\zgui-zterm-src\`. 01 (audit) and 02 (zgui runs on Windows with a patch; the user approved cargo) are resolved and merged. 03 (app skeleton) is resolved and merged. Running, as background Agent workers: 05 splits and motion (`gpui-go-wt-zterm-splits`, `zterm/splits`), 10 titlebar and glass (`gpui-go-wt-zterm-chrome`, `zterm/chrome`), and 11+12 ellipsis and can_drop (`gpui-go-wt-zterm-gpuifix`, `zterm/gpuifix`). Next: 07 and 08; 04 after 10; 06 after 04, 05 and 12; then 09.
 
 **HANDOFF 2026-10-23 (orchestrator 3 → orchestrator 4). History now.** The predecessor is the Roboco chat this was launched from (orchestrator 3).
 
