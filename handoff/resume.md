@@ -11,7 +11,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 **ORCHESTRATOR 6 STATUS (2026-10-24; CURRENT).** Claude Code (Opus 5.5) is orchestrating; Roboco chat 3d6efd46. Claimed 01, 02, 03 and 39. Workers are pi + `iroha/dashscope/glm-5.3` side chats:
 - 01 harness: chat 4f488bc4, worktree `gpui-go-wt-core-harness`, branch `core/01-harness`
 - 39 R15: chat 9044df02, worktree `gpui-go-wt-core-r15`, branch `core/39-r15`
-- 02+03: chat ef20e162, worktree `gpui-go-wt-core-small`, branch `core/02-03-small`
+- 02+03: chat ef20e162. Verified, merged (ee8b5c5) and RESOLVED. The worktree `gpui-go-wt-core-small` can be removed.
+- 49 R16 design draft (for the user to review): chat e57b14a1, worktree `gpui-go-wt-core-r16design`, branch `core/49-r16-design`, writing `docs/design/r16-compositor.md`
 
 Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
 
