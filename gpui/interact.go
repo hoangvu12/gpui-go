@@ -659,10 +659,23 @@ func (w *Window) resetCursorStyle(app *App) {
 	}
 	st := interactStateOf(w)
 	st.resolvedCursor, st.resolvedCursorSet = style, true
-	if w.isWindowHovered() {
-		_ = app.SetCursorStyle(style)
+	if windowOwnsCursor(w) {
+		setPlatformCursorStyle(app, style)
 	}
 }
+
+// windowOwnsCursor and setPlatformCursorStyle are reset_cursor_style's
+// platform boundary (window.rs:5686 is_window_hovered, :5691
+// cx.platform.set_cursor_style). The defaults ask the attached host —
+// Host.SetCursorStyle then posts WM_GPUI_CURSOR_STYLE_CHANGED and the
+// window's WM_SETCURSOR shows the handle (platform.rs:780-790,
+// events.rs:1170-1211). Tests substitute recorders so the hovered
+// element's cursor is observed where it leaves for the platform,
+// without a real window.
+var (
+	windowOwnsCursor       = func(w *Window) bool { return w.isWindowHovered() }
+	setPlatformCursorStyle = func(app *App, style CursorStyle) { _ = app.SetCursorStyle(style) }
+)
 
 // resolvedCursorStyle reports the cursor the last reset resolved (test
 // support).
@@ -672,6 +685,18 @@ func resolvedCursorStyle(w *Window) (CursorStyle, bool) {
 		return CursorArrow, false
 	}
 	return st.resolvedCursor, true
+}
+
+// WindowCursorStyle reports the cursor the window last resolved from its
+// rendered frame's cursor requests against the hovered hitboxes
+// (window.rs:1200-1213 Frame::cursor_style, the arrow when no request
+// applies; reset_cursor_style runs at the end of every frame and when a
+// mouse event changes the hit test). It is the style a hovered real
+// window hands to the platform; test windows are never hovered (the
+// pin's TestWindow::is_hovered is false), so this is their observable.
+// ok is false before the first reset.
+func WindowCursorStyle(w *Window) (style CursorStyle, ok bool) {
+	return resolvedCursorStyle(w)
 }
 
 // isWindowHovered is window.rs:2791-2801 is_window_hovered on Windows:
