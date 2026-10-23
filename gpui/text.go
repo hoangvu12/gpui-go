@@ -1132,6 +1132,13 @@ type WrappedLine struct {
 	clustersMu    sync.Mutex
 	clustersCache []TextRange
 
+	// dumps caches the layout's paint dumps (fragments and glyphs) under
+	// mu: they are facts of the layout, so paint reads them without the
+	// native handle and a parked line paints without re-shaping
+	// (gpui-perf ticket 06). Every layout change goes through
+	// refreshSummaryOf, which drops them.
+	dumps *lineDumps
+
 	// disposed marks a locally disposed handle so pre-native-entry
 	// guards can fail fast with the stale-handle error.
 	disposed atomic.Bool
@@ -1154,6 +1161,7 @@ func (l *WrappedLine) refreshSummary() error {
 // refreshSummaryOf re-reads the summary through handle, returning the
 // raw native error.
 func (l *WrappedLine) refreshSummaryOf(handle native.ShapingID) error {
+	l.dumps = nil
 	layout, err := l.system.svc.LayoutInfo(handle)
 	if err != nil {
 		return err
@@ -1231,18 +1239,59 @@ func (l *WrappedLine) Line(index int, lineHeight float32) (TextLine, error) {
 
 // Fragments dumps the paint fragments in visual order.
 func (l *WrappedLine) Fragments() ([]TextFragment, error) {
-	var records []native.TextFragment
-	err := l.withHandle("Fragments", func(handle native.ShapingID) error {
-		var err error
-		records, err = l.system.svc.Fragments(handle)
-		return err
-	})
+	dumps, err := l.paintDumps("Fragments")
 	if err != nil {
 		return nil, err
 	}
-	fragments := make([]TextFragment, len(records))
-	for i, record := range records {
-		fragments[i] = TextFragment{
+	return slices.Clone(dumps.fragments), nil
+}
+
+// Glyphs dumps the positioned glyphs (line-local x, baseline-relative
+// y) in fragment order.
+func (l *WrappedLine) Glyphs() ([]TextGlyph, error) {
+	dumps, err := l.paintDumps("Glyphs")
+	if err != nil {
+		return nil, err
+	}
+	return slices.Clone(dumps.glyphs), nil
+}
+
+// lineDumps are one layout's paint dumps. They are shared: callers must
+// not modify them.
+type lineDumps struct {
+	fragments []TextFragment
+	glyphs    []TextGlyph
+}
+
+// paintDumps returns the layout's fragment and glyph dumps, read from the
+// native layout once per layout (the paint path reads them every frame).
+func (l *WrappedLine) paintDumps(op string) (*lineDumps, error) {
+	if err := l.checkLive(op); err != nil {
+		return nil, err
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.dumps != nil {
+		return l.dumps, nil
+	}
+	handle, err := l.handleLocked(op)
+	if err != nil {
+		return nil, err
+	}
+	fragmentRecords, err := l.system.svc.Fragments(handle)
+	if err != nil {
+		return nil, wrapTextError(op, err)
+	}
+	glyphRecords, err := l.system.svc.Glyphs(handle)
+	if err != nil {
+		return nil, wrapTextError(op, err)
+	}
+	dumps := &lineDumps{
+		fragments: make([]TextFragment, len(fragmentRecords)),
+		glyphs:    make([]TextGlyph, len(glyphRecords)),
+	}
+	for i, record := range fragmentRecords {
+		dumps.fragments[i] = TextFragment{
 			FontID:     FontID(record.FontID),
 			FontSize:   record.FontSize,
 			XStart:     record.XStart,
@@ -1251,31 +1300,16 @@ func (l *WrappedLine) Fragments() ([]TextFragment, error) {
 			GlyphCount: record.GlyphCount,
 		}
 	}
-	return fragments, nil
-}
-
-// Glyphs dumps the positioned glyphs (line-local x, baseline-relative
-// y) in fragment order.
-func (l *WrappedLine) Glyphs() ([]TextGlyph, error) {
-	var records []native.TextGlyph
-	err := l.withHandle("Glyphs", func(handle native.ShapingID) error {
-		var err error
-		records, err = l.system.svc.Glyphs(handle)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	glyphs := make([]TextGlyph, len(records))
-	for i, record := range records {
-		glyphs[i] = TextGlyph{
+	for i, record := range glyphRecords {
+		dumps.glyphs[i] = TextGlyph{
 			ID:      record.ID,
 			X:       record.X,
 			Y:       record.Y,
 			IsEmoji: record.IsEmoji,
 		}
 	}
-	return glyphs, nil
+	l.dumps = dumps
+	return dumps, nil
 }
 
 // Caret returns the caret geometry for a UTF-8 byte index: the full

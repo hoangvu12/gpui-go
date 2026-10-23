@@ -486,13 +486,14 @@ func largestBorderInterior(q Quad) Bounds {
 // (the pinned paint_quad split): returns the strip quads, each with its
 // content mask pre-intersected with the strip bounds (empty strips are
 // dropped). Call only when the background is transparent and the
-// interior is non-empty.
-func paintQuadStrips(q Quad) []Quad {
+// interior is non-empty. The strips come back in a fixed array (at most
+// four) so the per-quad split does not allocate.
+func paintQuadStrips(q Quad) ([4]Quad, int) {
 	outer := q.Bounds
 	inner := largestBorderInterior(q)
 	outerRight := Point{X: outer.Right(), Y: 0}
 	outerBottomRight := Point{X: outer.Right(), Y: outer.Bottom()}
-	strips := []Bounds{
+	strips := [4]Bounds{
 		// Top: from outer.origin to (outer.right, inner.top).
 		fromCorners(outer.Origin, Point{X: outerRight.X, Y: inner.Origin.Y}),
 		// Bottom: from (outer.left, inner.bottom) to outer.bottom_right.
@@ -502,16 +503,17 @@ func paintQuadStrips(q Quad) []Quad {
 		// Right: from inner.top_right to (outer.right, inner.bottom).
 		fromCorners(Point{X: inner.Right(), Y: inner.Origin.Y}, Point{X: outerRight.X, Y: inner.Bottom()}),
 	}
-	var out []Quad
+	var out [4]Quad
+	n := 0
 	for _, strip := range strips {
 		masked := intersectBounds(q.ContentMask, strip)
 		if !isEmptyBounds(masked) {
-			stripQuad := q
-			stripQuad.ContentMask = masked
-			out = append(out, stripQuad)
+			out[n] = q
+			out[n].ContentMask = masked
+			n++
 		}
 	}
-	return out
+	return out, n
 }
 
 // fromCorners is the pinned Bounds::from_corners (size = br - tl).

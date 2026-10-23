@@ -104,6 +104,10 @@ type inlineContainerContent struct {
 // inlineKind implements inlineContentRecord.
 func (c *inlineContainerContent) inlineKind() string { return "container" }
 
+// emptyInlineContainer is the shared record of a container with no
+// children. Records are read-only once published.
+var emptyInlineContainer = &inlineContainerContent{}
+
 // inlineAtomicContent marks content with its own interaction and text
 // layout (the reference InlineContent::Atomic, InteractiveText): the
 // element lays out independently instead of contributing to a
