@@ -1,0 +1,49 @@
+{
+  "ticket": "40-core-image-sprites-shaping-cap",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved",
+  "root_causes": [
+    "PaintImage/PaintSvg inserted tiles into the app image atlas while the present loop passes the window atlas; images failed the atlas check (needs texture 0) and SVG masks could sample the wrong texture. The pin has one sprite atlas per window (window.rs:4865 glyphs, :5009 svg, :5104 images; gpui_windows directx_renderer.rs:387, 1133-1170)",
+    "the native shaping-handle bound (256) is per process; the text element shapes twice (unwrapped + wrapped), so ~128 texts in a frame, or two frames across a page switch, hit it; a failed frame never ran finishFrame, so its lines stayed live and every later frame failed (latched)",
+    "the stop-path panic came from OpenWindowView: a failed first draw panicked inside the host's window trampoline, so Host.Stop reported it"
+  ],
+  "fixes": [
+    "render.go Window.spriteAtlas(): the window's own atlas (as GlyphAtlas); PaintImage and PaintSvg insert there; test windows fall back to the app atlas",
+    "dropImage removes the image from every open window's atlas, ignoring per-window results as the pin does (app.rs:2815-2825), then from the app atlas",
+    "text.go/text_cache.go: the pinned LineLayoutCache::finish_frame rotation (line_layout.rs:1008, window.rs:3230) is kept; cache-owned lines are enrolled in an LRU on TextSystem; on the native limit shapeHandle parks the oldest idle cache-owned line (keeping its summary and request) and retries; parked lines re-shape on the next query; ShapeText lines are never parked; the live count stays at or under 256 and nothing latches",
+    "view.go OpenWindowView: a failed first draw is logged and the window marked for redraw, as the frame loop treats later failed frames"
+  ],
+  "implementation": {
+    "files": [
+      "gpui/{text,text_cache,render,paintapi,svgelement,imagecache,view}.go",
+      "tests: gpui/window_atlas_shaping_windows_test.go (one hidden, never-shown window at -32000: sprite pixels + DrawScene + DropImage; 6x150 texts then 400 in one frame; opening a window with all handles held), gpui/text_cache_bound_windows_test.go (parking without a window, re-shape after Relayout)"
+    ]
+  },
+  "tests": {
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD a780adc + ticket-40 gpui files (ticket-41 in-progress base files excluded)",
+        "command": "CGO_ENABLED=0 go vet ./gpui && gofmt -l gpui && go build ./...",
+        "result": "clean"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./gpui -count=1 -skip 'Real|Win32|Desktop|Cursor.*Window|PowerBroadcast|EndSession|MouseWheelSettings|FreshWindow|WindowBorn|DragDrop|Clipboard|^TestRenderer|DirectManipulationSimulated|DirectManipulationDrain|DropTarget|ThemeChangeObserver'",
+        "result": "ok (headless; the user was gaming)"
+      },
+      {
+        "command": "go test -p 1 ./internal/{scenespec,glyphspec,textspec,imagespec,svgspec,assetspec} -skip 'OnRealGPU|RealWindow'; go test ./base -skip Real; go test ./examples/base-gallery",
+        "result": "all ok"
+      }
+    ]
+  },
+  "deviations": [
+    "images loaded through the image cache are still also kept in the app atlas (the asset tests rely on it), so real windows hold a second GPU copy",
+    "a frame needing more than 256 lines still draws, re-shaping parked lines as used (extra work in that frame)"
+  ],
+  "follow_ups": [
+    "by hand on a real window: a Markdown task tick, a PNG, an animated GIF and an svg() icon present correctly; click through all 55 gallery pages repeatedly (no initial-draw or frame-request log lines); frame time on a page with more than 256 texts; images after resize, DPI change and device-loss recovery; no flicker on first open",
+    "the real-window gpui tests (rendererspec, textframespec, the skipped gpui set) still need a run when the machine is free"
+  ]
+}

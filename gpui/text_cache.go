@@ -59,6 +59,22 @@ package gpui
 //     catalog generation bump); only the discovery point differs,
 //     recorded here. The used bookkeeping on the reference's clear()
 //     is likewise covered by the swap.
+//   - The live-handle bound (Base ticket 40): the reference's cache has
+//     no resource bound — its entries are Arc'd Rust layouts. The
+//     port's entries each hold a native shaping handle, and the native
+//     service bounds live handles at 256 PROCESS-WIDE (frozen at rev
+//     11). The text element measures each text under its unwrapped and
+//     wrapped keys, so ~128 texts in a frame, or a page switch whose
+//     current plus previous frame together hold 256 distinct lines,
+//     reached the bound; the failed frame did not rotate, so every later
+//     frame failed too ("measure callback failed (latched)"). Every
+//     line this cache inserts is therefore enrolled with the text
+//     system's parking order (TextSystem.markEvictable): a shape that
+//     hits the bound releases the least recently used cache-owned
+//     handle and retries, and a parked line re-shapes from its stored
+//     request on its next query. Nothing about the cache's semantics
+//     changes — keys, hits, the rotation and disposal are the
+//     reference's; only the handle under an entry may be re-created.
 //   - Locking: the reference guards previous_frame with a Mutex and
 //     current_frame with an RwLock. The port's draws run on the
 //     foreground host thread, but the public Window.ShapeText facts
@@ -225,6 +241,10 @@ func (c *shapedLineCache) layoutWrappedLine(system *TextSystem, request TextLayo
 		c.current = make(map[shapedLineKey]*WrappedLine)
 	}
 	c.current[key] = line
+	// The cache owns the line: under the process-wide live-handle bound
+	// its native handle may be parked and re-shaped on demand (Base
+	// ticket 40, text.go shapeHandle).
+	system.markEvictable(line)
 	return line, nil
 }
 

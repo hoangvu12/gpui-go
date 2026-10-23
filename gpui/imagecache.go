@@ -514,9 +514,12 @@ func (a *App) appImageCodec() (*ImageCodec, error) {
 }
 
 // ImageAtlas returns the application's image atlas (the decode+atlas
-// pair the image cache retains decoded frames in). It is the reach the
-// pinned test-support has into the window sprite atlas, adapted to the
-// port's single application atlas; nil when the codec is unavailable.
+// pair the image cache retains decoded frames in). Real windows paint
+// their image and SVG sprites into their own sprite atlas
+// (Window.GlyphAtlas — the pin's per-window sprite_atlas, Base ticket
+// 40); deterministic test windows, which own no window atlas, paint
+// into this one, so it stays the test-support reach into painted
+// sprites. Nil when the codec is unavailable.
 func (a *App) ImageAtlas() *Atlas {
 	codec, err := a.appImageCodec()
 	if err != nil {
@@ -548,10 +551,18 @@ func (a *App) retainImage(image *LoadedImage) error {
 // dropImage removes the image's atlas tiles (App::drop_image /
 // Window::drop_image, app.rs lines 2815-2825 and window.rs lines
 // 5202-5214: every frame index under the image's identity). The pin
-// removes from every window's sprite atlas plus the current window;
-// the port has one application atlas, so the walk collapses to a
-// single removal per frame.
+// removes from every window's sprite atlas — where paint_image put the
+// frames (window.rs:5104) — ignoring each window's result
+// (`_ = window.drop_image(..)`); the port walks its open windows' sprite
+// atlases the same way (Base ticket 40), then the application image
+// atlas the cache's retention and the test windows' paints use, whose
+// errors it reports. A key an atlas never held is a no-op removal.
 func (a *App) dropImage(image *LoadedImage) error {
+	for _, atlas := range a.windowSpriteAtlases() {
+		for i := range image.image.Frames {
+			_ = atlas.RemoveImageFrame(image.id, i)
+		}
+	}
 	codec, err := a.appImageCodec()
 	if err != nil {
 		return err
