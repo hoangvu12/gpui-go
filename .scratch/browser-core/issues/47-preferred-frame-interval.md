@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 6 (Claude Code)
+Status: resolved
+Assignee: orchestrator 6 (Claude Code); worker chat 8cdf9fd8
 Blocked by: none
 Triage: ready-for-agent
 
@@ -20,6 +20,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 6: verified on core/31-47-small before merge. Re-ran vet, gofmt, `go build ./...` and `go test ./gpui/... ./base -count=1` (ok). All 16 new tests pass with none skipped. The half-rate test and the hidden-window test passed 10 times in a row (`-count=10`, 239 Hz display). The Chromium citations (type_ahead.cc timeout and cycling, external_begin_frame_source_win.cc OnVSync and SetPreferredInterval) match the source.
 
 - 2026-11-30, worker (core/31-47-small): test-first — the frame-loop test was written and failed red (ratio 0.99, "the window drew on consecutive vblanks") before the pacer change; the API round-trip and unit tests came with it. The real-window tests park both windows far offscreen (origin 20000,20000); `GPUI_REAL_INPUT_TESTS` was never set.
 

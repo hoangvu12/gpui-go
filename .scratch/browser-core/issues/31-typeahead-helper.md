@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 6 (Claude Code)
+Status: resolved
+Assignee: orchestrator 6 (Claude Code); worker chat 8cdf9fd8
 Blocked by: none
 Triage: ready-for-agent
 
@@ -20,6 +20,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 6: verified on core/31-47-small before merge. Re-ran vet, gofmt, `go build ./...` and `go test ./gpui/... ./base -count=1` (ok). All 16 new tests pass with none skipped. The half-rate test and the hidden-window test passed 10 times in a row (`-count=10`, 239 Hz display). The Chromium citations (type_ahead.cc timeout and cycling, external_begin_frame_source_win.cc OnVSync and SetPreferredInterval) match the source.
 
 - 2026-11-30, worker (core/31-47-small): implemented in the gpui core, free of Base (grep: `base/` has no typeahead — the research's finding stands). The three acceptance behaviours are unit tests, as the ticket's checkbox asks — the browser-parity harness fixture applies when a list/tree/menu component (Base) adopts the helper, not to the pure helper.
 
