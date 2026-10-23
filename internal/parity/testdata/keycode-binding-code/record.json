@@ -1,0 +1,69 @@
+{
+  "name": "keycode-binding-code",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T22:54:11Z",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "box": {
+      "x": 0,
+      "y": 0,
+      "width": 120,
+      "height": 60
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 360
+    }
+  },
+  "events": [
+    {
+      "kind": "click",
+      "target": "box",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keydown",
+      "target": "box",
+      "defaultPrevented": false,
+      "key": "}",
+      "focus": "box",
+      "code": "BracketRight"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "}",
+      "focus": "box",
+      "code": "BracketRight"
+    },
+    {
+      "kind": "keyup",
+      "target": "box",
+      "defaultPrevented": false,
+      "key": "}",
+      "focus": "box",
+      "code": "BracketRight"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "}",
+      "focus": "box",
+      "code": "BracketRight"
+    }
+  ],
+  "screenshot": "chrome.png"
+}

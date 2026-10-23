@@ -6,39 +6,25 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 ## ACTIVE EFFORT (2026-10-23): recreate zgui's terminal app ("zterm") on gpui-go
 
-**HANDOFF 2026-10-24 (orchestrator 5 → orchestrator 6). CURRENT.** The user asked for a new orchestrator chat to implement `.scratch/browser-core/` (76 tickets, none started; frontier: 01, 02, 03, 30, 31, 39, 47, 49, 68). The handoff doc is in the user's temp folder (`%TEMP%\gpui-go-handoff-orchestrator6.md`). Model precedent: pi + `iroha/dashscope/glm-5.3` implemented the core backlog. The predecessor is Roboco chat 43f0a1a1.
-
-**ORCHESTRATOR 6 STATUS (2026-10-24; CURRENT).** Claude Code (Opus 5.5) is orchestrating; Roboco chat 3d6efd46. Claimed 01, 02, 03 and 39. Workers are pi + `iroha/dashscope/glm-5.3` side chats:
-- 01 harness: chat 4f488bc4. Verified, merged (a30427d) and RESOLVED. Guide: `docs/browser-parity-harness.md`.
-- 05 box painting: chat e1c615c2. Verified, merged (93421ec) and RESOLVED.
-- 08 raster probes: chat 29e2ace6, worktree `gpui-go-wt-core-08`, branch `core/08-raster-probes`
-- Pre-existing on main, not caused by us: `internal/portfixture` TestFx0004 fails because the system font-family count went from 94 to 95; `gofmt -l` flags `internal/fontspec/weight_synthesis_test.go`.
-- The harness only runs at device pixel ratio 2, so 07 (175%/100% scales) needs a harness extension first.
-- 39 R15: chat 9044df02. Verified (rebuilt: only timestamps differ), merged (921baf6) and RESOLVED. Rev 15 DLL 8b944eae. GAP: the text-run fields and baseline only pass through the ABI; 42 and 43 need a follow-up native change, which needs user approval (asked).
-- 40 gradients: chat d8f26dc5, worktree `gpui-go-wt-core-40`, branch `core/40-gradients`. Two stops only; `via` stays rejected until R16 (52).
-- 02+03: chat ef20e162. Verified, merged (ee8b5c5) and RESOLVED. The worktree `gpui-go-wt-core-small` can be removed.
-- 49 R16 design: APPROVED by the user 2026-10-24 ("do rec", Q1 = warning) and RESOLVED. 50-53 updated and now blocked by 39. Rev 16 (54) still needs approval.
-- 31+47: chat 8cdf9fd8. Verified, merged (7f007ef) and RESOLVED.
-- 06 text style: chat c1c2b31c, worktree `gpui-go-wt-core-06`, branch `core/06-text-style`. Go side only; it stops and reports if a native change is needed.
-- 2026-10-24: the user asked to speed up ("try to do more ... if no blocked"), so the cap is now 6 workers. New workers:
-  - 09: chat 6a03afb2, worktree `gpui-go-wt-core-09`, branch `core/09-default-actions`. It also extends the harness with key events.
-  - 27: chat 30725570, worktree `gpui-go-wt-core-27`, branch `core/27-system-prefs`
-  - 62: chat a1fbc74c, worktree `gpui-go-wt-core-62`, branch `core/62-tsx-host`
-- 27: verified, merged and RESOLVED.
-- 41 filters: chat b48fe0e3, worktree `gpui-go-wt-core-41`, branch `core/41-filters`
-- 62 TSX host: verified, merged and RESOLVED (gpui/script). Its frame-overhead timing test reached 0.66 ms of its 1 ms limit under load; watch it for flakiness.
-- 10 hover: chat 9fc1818d, worktree `gpui-go-wt-core-10`, branch `core/10-hover`
-- 08 probes: verified, merged and RESOLVED. R17 gamma NO; italic slant YES, which goes on the native follow-up list with 42/43.
-- 04 shadow/blur: chat 381132dd, worktree `gpui-go-wt-core-04`, branch `core/04-shadow-blur`
-- 40 gradients: verified, merged and RESOLVED.
-- 64 TSX host APIs: chat 24793476, worktree `gpui-go-wt-core-64`, branch `core/64-tsx-host-apis`
-- 10 hover: verified, merged and RESOLVED.
-- 11 pointer capture: chat 167a7b32, worktree `gpui-go-wt-core-11`, branch `core/11-pointer-capture`
-- 09: verified, merged and RESOLVED. Watch the native shaping-handle cap: it flakes under a big parity run.
-- 13 key code: chat 119765e8, worktree `gpui-go-wt-core-13`, branch `core/13-key-code`
-- 64: verified, merged and RESOLVED.
-- 65 TSX bundling: chat 7a8ff981, worktree `gpui-go-wt-core-65`, branch `core/65-tsx-bundling`
-- RUNNING NOW: 04, 06, 11, 13, 41, 65.
+**HANDOFF 2026-10-24 (orchestrator 6 → orchestrator 7). CURRENT.** The user asked for it because orchestrator 6's context was full (~400k tokens). The handoff doc is `%TEMP%\gpui-go-handoff-orchestrator7.md`; the predecessor is Roboco chat 3d6efd46 (Claude Code, Opus 5.5).
+- **Resolved (16 of 76):** 01, 02, 03, 05, 08, 09, 10, 27, 31, 39 (rev 15, DLL 8b944eae), 40, 47, 49 (the R16 design, approved), 62, 64. Each has a verification comment, and the map's Decisions list a gist of each.
+- **Done but not yet verified or merged:**
+  - 04 (`gpui-go-wt-core-04`, deb007b): it reports a native rev-15 backdrop-crop bug.
+  - 13 (`gpui-go-wt-core-13`, 3123f86).
+- **Running** (notices go to chat 3d6efd46; poll with get_chat/read_chat):
+  - 06 (chat c1c2b31c)
+  - 11 (chat 167a7b32)
+  - 41 (chat b48fe0e3)
+  - 65 (chat 7a8ff981)
+- **Off-screen test windows**, which the user asked for: WIP on branch `core/offscreen-tests` (2a235d4, worktree `gpui-go-wt-core-offscreen`), unverified. Under `go test` it parks windows at (20000, 20000). Switches: `GPUI_TEST_ONSCREEN=1`, `GPUI_REAL_INPUT_TESTS=1`, `GPUI_TEST_REPORT_ONSCREEN=1`. Next: a full suite run, fixes, merge.
+- **Waiting on the user:** a small native follow-up rebuild (rev 15.1), with the text-run fields and baseline for 42/43, the italic shear from 08, and probably the backdrop crop from 04. The alternative is to fold it into R16; rev 16 (54) needs its own approval.
+- **Rules:**
+  - Up to 6 workers (pi + iroha/dashscope/glm-5.3).
+  - Clean up merged worktrees and branches after each merge (the user asked).
+  - Verify before merging.
+  - No push, tag or repo creation.
+  - Headless only.
+  - Never touch the `gpui-go` main checkout.
 
 Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
 

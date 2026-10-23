@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 48px;
+	}
+	.halo {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.wide {
+		width: 180px;
+		height: 120px;
+	}
+	.small {
+		width: 144px;
+		height: 94px;
+	}
+	.wide .box {
+		width: 160px;
+		height: 100px;
+		border-radius: 12px;
+		background: #2563eb;
+		/* CSS grows the shadow's corner radii by the spread: 12 + 8 = 20. */
+		box-shadow: 0 0 0 8px rgba(220, 38, 38, 0.4);
+	}
+	.small .box {
+		width: 120px;
+		height: 70px;
+		border-radius: 4px;
+		background: #16a34a;
+		/* The 4px radius is smaller than the 10px spread, so the ratio
+		   rule grows it to ~11.84px, not the naive 14 (and not the pin's
+		   unchanged 4). */
+		box-shadow: 0 0 0 10px rgba(37, 99, 235, 0.6);
+	}
+</style>
+</head>
+<body>
+	<div class="halo wide" data-id="spread-wide"><div class="box" data-id="spread-wide-box"></div></div>
+	<div class="halo small" data-id="spread-small"><div class="box" data-id="spread-small-box"></div></div>
+</body>
+</html>

@@ -1,0 +1,201 @@
+{
+  "name": "keycode-shifted",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T22:54:06Z",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "box": {
+      "x": 0,
+      "y": 0,
+      "width": 120,
+      "height": 60
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 360
+    }
+  },
+  "events": [
+    {
+      "kind": "click",
+      "target": "box",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keydown",
+      "target": "box",
+      "defaultPrevented": false,
+      "key": "}",
+      "focus": "box",
+      "code": "BracketRight"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "}",
+      "focus": "box",
+      "code": "BracketRight"
+    },
+    {
+      "kind": "keyup",
+      "target": "box",
+      "defaultPrevented": false,
+      "key": "}",
+      "focus": "box",
+      "code": "BracketRight"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "}",
+      "focus": "box",
+      "code": "BracketRight"
+    },
+    {
+      "kind": "keydown",
+      "target": "box",
+      "defaultPrevented": false,
+      "key": "!",
+      "focus": "box",
+      "code": "Digit1"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "!",
+      "focus": "box",
+      "code": "Digit1"
+    },
+    {
+      "kind": "keyup",
+      "target": "box",
+      "defaultPrevented": false,
+      "key": "!",
+      "focus": "box",
+      "code": "Digit1"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "!",
+      "focus": "box",
+      "code": "Digit1"
+    },
+    {
+      "kind": "keydown",
+      "target": "box",
+      "defaultPrevented": false,
+      "key": ":",
+      "focus": "box",
+      "code": "Semicolon"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": ":",
+      "focus": "box",
+      "code": "Semicolon"
+    },
+    {
+      "kind": "keyup",
+      "target": "box",
+      "defaultPrevented": false,
+      "key": ":",
+      "focus": "box",
+      "code": "Semicolon"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": ":",
+      "focus": "box",
+      "code": "Semicolon"
+    },
+    {
+      "kind": "keydown",
+      "target": "box",
+      "defaultPrevented": false,
+      "key": "a",
+      "focus": "box",
+      "code": "KeyA"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "a",
+      "focus": "box",
+      "code": "KeyA"
+    },
+    {
+      "kind": "keyup",
+      "target": "box",
+      "defaultPrevented": false,
+      "key": "a",
+      "focus": "box",
+      "code": "KeyA"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "a",
+      "focus": "box",
+      "code": "KeyA"
+    },
+    {
+      "kind": "keydown",
+      "target": "box",
+      "defaultPrevented": false,
+      "key": "1",
+      "focus": "box",
+      "code": "Numpad1",
+      "location": 3
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "1",
+      "focus": "box",
+      "code": "Numpad1",
+      "location": 3
+    },
+    {
+      "kind": "keyup",
+      "target": "box",
+      "defaultPrevented": false,
+      "key": "1",
+      "focus": "box",
+      "code": "Numpad1",
+      "location": 3
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "1",
+      "focus": "box",
+      "code": "Numpad1",
+      "location": 3
+    }
+  ],
+  "screenshot": "chrome.png"
+}
