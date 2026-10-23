@@ -1,0 +1,25 @@
+# 60 - Property-only animation frames
+
+Parent: ../map.md
+Spec: ../../browser-parity/spec.md
+Type: task
+Labels: wayfinder:task
+Status: open
+Assignee: unassigned
+Blocked by: 44, 56, 58
+Triage: ready-for-agent
+
+**What to build:** Transform and opacity transitions update scene property nodes and skip render, layout and paint; animation frames stop notifying the whole view.
+
+**Blocked by:** 44 (Transition style property and the core motion engine), 56 (Transforms with hit testing), 58 (Damage tracking and paint flashing)
+
+**Status:** ready-for-agent
+
+- [ ] A transform transition runs with zero view renders per frame (observable count).
+- [ ] Frame cost measured and recorded.
+
+Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
+
+## Comments
+
+## Answer

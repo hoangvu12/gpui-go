@@ -21,6 +21,8 @@ The destination for this map is a research-backed proposal. It covers which brow
 
 ## Decisions so far
 
+- [Implementation tickets](../browser-core/map.md): 76 tracer-bullet tickets from the spec, approved 2026-10-23.
+
 - [Spec](spec.md) (2026-10-23, /to-spec): a browser-like core, TSX scripting and Base in `gpui-go-base`; 111 user stories; four test seams (main: a browser-parity harness against headless Chrome fixtures). Triage: ready-for-agent.
 
 - **D0-D14 accepted as recommended** (the user, 2026-10-23: "good"). See [the proposal](../../research/browser-parity/README.md) section 5. D0 means the browser wins over the GPUI-CE pin wherever they differ, with each divergence recorded and its fixtures updated.

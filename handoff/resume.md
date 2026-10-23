@@ -6,7 +6,7 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 ## ACTIVE EFFORT (2026-10-23): recreate zgui's terminal app ("zterm") on gpui-go
 
-**DECISIONS IN (2026-10-23):** D0-D14 accepted as recommended. D16: `gpui-go-base`, a public repo; zterm and the gallery are for testing only and never pushed. Rev 15 is approved, to be built as the spec's R15 group. D15 is TSX (ADR 0003). The spec is written: `.scratch/browser-parity/spec.md` (ready-for-agent). The user confirmed the test seams (a browser-parity harness against headless Chrome fixtures, the native spec packages, the TSX host through the harness, and Base against the public API). Next: split the spec into implementation tickets (for example /to-issues) and start the quick wins.
+**DECISIONS IN (2026-10-23):** D0-D14 accepted as recommended. D16: `gpui-go-base`, a public repo; zterm and the gallery are for testing only and never pushed. Rev 15 is approved, to be built as the spec's R15 group. D15 is TSX (ADR 0003). The spec is written: `.scratch/browser-parity/spec.md` (ready-for-agent). The user confirmed the test seams (a browser-parity harness against headless Chrome fixtures, the native spec packages, the TSX host through the harness, and Base against the public API). Tickets are DONE: 76 in `.scratch/browser-core/` (map + issues/01-76, the user approved the breakdown). Frontier: 01 (the browser-parity harness, which most tickets need), 02, 03, 30, 31, 39 (R15, approved), 47, 49 (R16 design, for the user to review), 68. Next: claim and delegate the frontier, at most 3 workers.
 
 **NEW DIRECTION (2026-10-23, the user; see PROJECT.md "Direction change under research"):**
 - The core should behave like the browser, without shipping components.
