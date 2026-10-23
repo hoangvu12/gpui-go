@@ -127,6 +127,14 @@ func (w *Window) windowControlAreaAt(position Point) (WindowControlArea, bool) {
 	return 0, false
 }
 
+// WindowControlAreaAt reports the window control area the platform would
+// see at position (window-local logical pixels) in the rendered frame:
+// the answer the Windows host gives WM_NCHITTEST. It lets an application
+// test its client-drawn titlebar without a native window.
+func (w *Window) WindowControlAreaAt(position Point) (WindowControlArea, bool) {
+	return w.windowControlAreaAt(position)
+}
+
 // StartWindowMove starts an interactive move of the window, as if the
 // user pressed on the titlebar (window.rs:2817 start_window_move). Call
 // it from a mouse-down listener. On Windows the move runs in the

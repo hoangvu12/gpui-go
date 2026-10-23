@@ -110,6 +110,9 @@ func TestWindowControlAreasInTheRenderedFrame(t *testing.T) {
 		if ok != c.ok || (ok && area != c.want) {
 			t.Errorf("windowControlAreaAt(%v,%v) = %v, %v; want %v, %v", c.x, c.y, area, ok, c.want, c.ok)
 		}
+		if a, k := f.window.WindowControlAreaAt(Point{X: c.x, Y: c.y}); a != area || k != ok {
+			t.Errorf("WindowControlAreaAt(%v,%v) = %v, %v; differs from the host's %v, %v", c.x, c.y, a, k, area, ok)
+		}
 	}
 
 	// The next frame replaces the areas: an empty view has none.
