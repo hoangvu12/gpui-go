@@ -1,6 +1,6 @@
 # ADR 0002: Luau for UI scripting and hot reload
 
-- Status: Accepted (direction). The design and spec are still to come.
+- Status: Accepted (direction). The design and spec are still to come. The language is being re-checked: the user wants the UI developer experience "as similar to browser as possible since LLMs were trained on them", so a TSX probe (esbuild + goja, pure Go) is running; its result is research/browser-parity/09-tsx-goja-probe.md. Plugins, shipping, types and dev reload stay "like zgui" whichever language wins.
 - Date: 2026-10-23
 
 ## Context
