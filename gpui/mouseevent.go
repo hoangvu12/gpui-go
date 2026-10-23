@@ -332,9 +332,14 @@ type HitboxID uint64
 func (h *Hitbox) ID() HitboxID { return HitboxID(h.id) }
 
 // IsHovered reports whether the hitbox with this identity is hovered
-// (window.rs:887-897 HitboxId::is_hovered): true when it captured the
-// pointer, false while the last input modality is keyboard, otherwise
-// the window's last hit-test answer.
+// (window.rs:887-897 HitboxId::is_hovered, without the pin's keyboard
+// suppression): true when it captured the pointer, otherwise the
+// window's last hit-test answer. Browser-core ticket 10 (spec D12:
+// hover survives typing) removed the early-false on the keyboard
+// modality — Chromium's :hover never clears on key input (the only
+// keyboard hook into hover styling is :focus-visible, which reads the
+// modality through FocusVisible instead) — a deliberate divergence
+// toward the browser under D0.
 func (id HitboxID) IsHovered(w *Window) bool {
 	if w == nil {
 		return false
@@ -343,14 +348,13 @@ func (id HitboxID) IsHovered(w *Window) bool {
 	if is.capturedHitbox == uint64(id) {
 		return true
 	}
-	if is.lastInputWasKeyboard {
-		return false
-	}
 	return is.mouseHitTest.contains(uint64(id))
 }
 
 // isHoveredIgnoringLastInput is window.rs:902-908
-// HitboxId::is_hovered_ignoring_last_input.
+// HitboxId::is_hovered_ignoring_last_input. After browser-core
+// ticket 10 it agrees with IsHovered (the keyboard suppression it
+// ignored is gone); it stays as the cursor resolution's named seam.
 func (id HitboxID) isHoveredIgnoringLastInput(w *Window) bool {
 	if w == nil {
 		return false
@@ -362,10 +366,11 @@ func (id HitboxID) isHoveredIgnoringLastInput(w *Window) bool {
 	return is.mouseHitTest.contains(uint64(id))
 }
 
-// IsHovered reports whether this hitbox is currently hovered: false
-// while the last input modality is keyboard (so keyboard navigation
-// suppresses hover highlights), true when this hitbox captured the
-// pointer, and otherwise the hit-test answer (Hitbox::is_hovered).
+// IsHovered reports whether this hitbox is currently hovered: true
+// when this hitbox captured the pointer, and otherwise the hit-test
+// answer (Hitbox::is_hovered). Browser-core ticket 10 removed the
+// pin's keyboard suppression (spec D12: hover survives typing); see
+// HitboxID.IsHovered.
 func (h *Hitbox) IsHovered(w *Window) bool { return HitboxID(h.id).IsHovered(w) }
 
 // IsHoveredIgnoringLastInput is IsHovered without the keyboard
@@ -512,7 +517,9 @@ type windowInputState struct {
 	// defaultPrevented is the current dispatch's prevent-default flag
 	// (window.rs default_prevented).
 	defaultPrevented bool
-	// lastInputModality suppresses hover during keyboard navigation.
+	// lastInputModality drives the focus-visible styles (the only
+	// hover-adjacent consumer left after browser-core ticket 10 removed
+	// the hover suppression, spec D12).
 	lastInputModality inputModality
 	// lastInputWasKeyboard caches the keyboard modality answer
 	// (Window::last_input_was_keyboard).
@@ -660,6 +667,19 @@ func (w *Window) dispatchMouseEvent(event any, app *App) {
 	// (inspector.go's InspectorDispatchMouseEvent).
 	if InspectorDispatchMouseEvent(w, app, event) {
 		return
+	}
+	// The pointer boundary events (browser-core ticket 10): a move (or
+	// the window exit, whose translation already moved the tracked
+	// position off window so the hit test above came up empty) fires
+	// the enter/leave sweeps before the move's own listeners, matching
+	// Chromium's order - the boundary events precede the move
+	// (pointer_event_manager.cc:1353-1365, boundary_event_dispatcher.
+	// cc:190-214).
+	switch e := event.(type) {
+	case *MouseMoveEvent:
+		w.dispatchHoverBoundaryEvents(e.Position, e.Modifiers, app)
+	case *MouseExitEvent:
+		w.dispatchHoverBoundaryEvents(e.Position, e.Modifiers, app)
 	}
 	if fs.rendered == nil {
 		// No completed frame: nothing is listening (the pin dispatches

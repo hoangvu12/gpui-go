@@ -292,12 +292,16 @@ type ElementHoverState struct {
 
 // groupIsActive is div.rs:4215-4217.
 func (s ElementHoverState) groupIsActive(w *Window) bool {
-	return s.Group && !lastInputWasKeyboard(w) && !lastInputWasTouch(w)
+	// Browser-core ticket 10 (D12): hover survives typing, so the
+	// retained hover state no longer consults the keyboard modality
+	// (Chromium's :hover has no keyboard link); the touch suppression
+	// stays (window.rs is_hovered's touch half).
+	return s.Group && !lastInputWasTouch(w)
 }
 
 // elementIsActive is div.rs:4219-4221.
 func (s ElementHoverState) elementIsActive(w *Window) bool {
-	return s.Element && !lastInputWasKeyboard(w) && !lastInputWasTouch(w)
+	return s.Element && !lastInputWasTouch(w)
 }
 
 // mouseDownCell is the shared pending-mouse-down cell (the pinned
@@ -317,6 +321,7 @@ type InteractiveElementState struct {
 	clickedState        *ElementClickedState
 	hoverState          *ElementHoverState
 	hoverListenerState  *bool
+	hoverBoundaryState  *bool
 	pendingMouseDown    *mouseDownCell
 	pendingKeyboardDown *keyboardDownCell
 }
@@ -427,6 +432,10 @@ type interactWindowState struct {
 	hiddenDepth       int
 	resolvedCursor    CursorStyle
 	resolvedCursorSet bool
+	// boundarySweepPending deduplicates the deferred hover-boundary
+	// sweep of the frame under construction (browser-core ticket 10,
+	// hoverboundary.go).
+	boundarySweepPending bool
 }
 
 // interactWindowStates is the per-window registry (the windowDrawStates
@@ -460,9 +469,10 @@ func lastInputWasTouch(w *Window) bool {
 // beginPlatformInputDispatch is the head of window.rs:5739-5760
 // dispatch_event: track the input modality (a key down switches to the
 // keyboard, a mouse move or down to the mouse; other events keep it)
-// and refresh the window when it changed (focus-visible styles and the
-// hover suppression read it), then start propagation and clear the
-// prevent-default flag.
+// and refresh the window when it changed (the focus-visible styles
+// read it — browser-core ticket 10 removed the hover suppression the
+// modality change also refreshed, spec D12), then start propagation
+// and clear the prevent-default flag.
 func (w *Window) beginPlatformInputDispatch(event any, app *App) {
 	is := inputState(w)
 	old := is.lastInputModality
@@ -984,6 +994,30 @@ func (d *DivElement) OnHover(f func(*bool, *Window, *App)) *DivElement {
 	return d
 }
 
+// OnPointerEnter binds a listener to the DOM pointerenter event of this
+// element: it fires when the pointer enters the element's hitbox, after
+// every entered ancestor's listener (outermost first), before the mouse
+// move that caused it (browser-core ticket 10, spec D12; Chromium
+// boundary_event_dispatcher.cc:211-214). Leaving the window fires leave
+// events instead (hoverboundary.go). Requires an ID (the retained hover
+// state keys on it).
+func (d *DivElement) OnPointerEnter(f func(*PointerEnterEvent, *Window, *App)) *DivElement {
+	requireListener("OnPointerEnter", f == nil)
+	d.pointerEnterListeners = append(d.pointerEnterListeners, f)
+	return d
+}
+
+// OnPointerLeave binds a listener to the DOM pointerleave event of this
+// element: it fires when the pointer leaves the element's hitbox (or
+// the window), before any exited ancestor's listener (innermost first)
+// (browser-core ticket 10, spec D12; Chromium
+// boundary_event_dispatcher.cc:190-193). Requires an ID.
+func (d *DivElement) OnPointerLeave(f func(*PointerLeaveEvent, *Window, *App)) *DivElement {
+	requireListener("OnPointerLeave", f == nil)
+	d.pointerLeaveListeners = append(d.pointerLeaveListeners, f)
+	return d
+}
+
 // OnDrag makes this element a drag source for value: once the left
 // button pressed over it moves past the drag threshold, the
 // constructor builds the drag preview view (given the value and the
@@ -1023,6 +1057,7 @@ func (d *DivElement) OnDragAlt(f func(cursorOffset Point, cursorStyle *CursorSty
 func (d *DivElement) requiresElementState() bool {
 	return len(d.clickListeners) > 0 || len(d.auxClickListeners) > 0 ||
 		d.dragListener != nil || len(d.hoverListeners) > 0 ||
+		len(d.pointerEnterListeners) > 0 || len(d.pointerLeaveListeners) > 0 ||
 		d.activeStyle != nil || d.groupActiveStyle != nil
 }
 
@@ -1038,6 +1073,8 @@ func (d *DivElement) shouldInsertHitbox(style *Style, w *Window) bool {
 		d.hoverStyle != nil ||
 		d.groupHoverStyle != nil ||
 		len(d.hoverListeners) > 0 ||
+		len(d.pointerEnterListeners) > 0 ||
+		len(d.pointerLeaveListeners) > 0 ||
 		len(d.mouseUpListeners) > 0 ||
 		len(d.mouseDownListeners) > 0 ||
 		len(d.mouseMoveListeners) > 0 ||
@@ -1267,7 +1304,12 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, es *InteractiveElementSt
 
 	// The hover-state tracker (div.rs:3333-3358): a captured mouse move
 	// that flips the element's hover updates the retained hover state
-	// and notifies the current view.
+	// and notifies the current view. Browser-core ticket 10: the window
+	// exit (MouseExitEvent) also flips it off — the dispatch clears the
+	// hit test before the listeners run, so hovered reads false and the
+	// repaint drops the hover style (the pin clears hover styles the
+	// same way on its platform's MouseExitEvent; Chromium's kMouseLeave
+	// clears hover with a null target, event_handler.cc:1158-1165).
 	_, hasBaseCursor := d.Styled.storage().MouseCursor.Get()
 	if d.hoverStyle != nil || hasBaseCursor {
 		var hoverState *ElementHoverState
@@ -1277,7 +1319,9 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, es *InteractiveElementSt
 		notify := currentViewNotifier(w)
 		box := hitbox
 		w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
-			if _, isMove := event.(*MouseMoveEvent); !isMove {
+			switch event.(type) {
+			case *MouseMoveEvent, *MouseExitEvent:
+			default:
 				return
 			}
 			hovered := box.IsHovered(w)
@@ -1289,7 +1333,8 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, es *InteractiveElementSt
 		})
 	}
 
-	// The group-hover tracker (div.rs:3360-3381).
+	// The group-hover tracker (div.rs:3360-3381). Browser-core ticket 10:
+	// the window exit clears it too (the hit test is empty by then).
 	if group := d.groupHoverStyle; group != nil {
 		if id, ok := groupHitboxGet(group.Group, app); ok {
 			var hoverState *ElementHoverState
@@ -1298,7 +1343,9 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, es *InteractiveElementSt
 			}
 			notify := currentViewNotifier(w)
 			w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
-				if _, isMove := event.(*MouseMoveEvent); !isMove {
+				switch event.(type) {
+				case *MouseMoveEvent, *MouseExitEvent:
+				default:
 					return
 				}
 				groupHovered := id.IsHovered(w)
@@ -1493,8 +1540,20 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, es *InteractiveElementSt
 			updateHover(isHovered, w, app)
 		})
 		// The pin also clears hover on MouseExitEvent (div.rs:3674-3680);
-		// the port's platform input has no mouse-exited event yet.
+		// browser-core ticket 10 wires the port's platform exit event
+		// (WM_MOUSELEAVE, desktop_windows.go), so the leaving window now
+		// reports every hovered element's hover end, like the browser.
+		w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
+			if _, isExit := event.(*MouseExitEvent); !isExit || phase != DispatchBubble {
+				return
+			}
+			updateHover(false, w, app)
+		})
 	}
+
+	// The pointer boundary listeners (browser-core ticket 10): the
+	// DOM pointerenter/pointerleave sweeps drive them (hoverboundary.go).
+	d.paintBoundaryListeners(hitbox, es, w, app)
 
 	// The pressed state (div.rs:3725-3762): both handlers bind
 	// unconditionally because the mouse up may arrive before a frame

@@ -416,6 +416,21 @@ func (w *Window) dispatchInput(event any, app *App) DispatchEventResult {
 	case *MouseUpEvent:
 		is.mousePosition = e.Position
 		is.modifiers = e.Modifiers
+	case *MouseExitEvent:
+		// The pointer left the window (browser-core ticket 10, spec
+		// D12): the event carries the last known position (the Windows
+		// host's WM_MOUSELEAVE reports no coordinates), and the tracked
+		// position moves off window so every hit test comes up empty and
+		// hover clears on every element — Chromium's null-target leave
+		// (core/input/event_handler.cc:1158-1165: "we avoid the hit test
+		// but still clear the hover/active state").
+		exit := *e
+		if exit.Position == (Point{}) {
+			exit.Position = is.mousePosition
+		}
+		translated = &exit
+		is.mousePosition = offWindowMousePosition
+		is.modifiers = e.Modifiers
 	case *ScrollWheelEvent:
 		is.mousePosition = e.Position
 		is.modifiers = e.Modifiers
