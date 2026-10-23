@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 6 (Claude Code)
 Blocked by: 01
 Triage: ready-for-agent
@@ -22,6 +22,7 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+- 2026-10-24, orchestrator 7: verified and merged (3538585). `ShouldMatch` keeps the exact-match path unchanged and adds the key and code forms only for keystrokes that carry a Code, so code-less keystrokes (parsed, simulated, other platforms) match exactly as before. The gpui keymap tests and the re-recorded keyorder fixtures pass in the full suite. The scan-code table matches dom_code_data.inc's win column in a spot check (Digit1 0x0002, BracketRight 0x001b, Semicolon 0x0027, Numpad1 0x004f, NumpadEnter 0xe01c, ArrowLeft 0xe04b). The layout-dependent tests skip on non-US layouts.
 
 ## Answer
 

@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 6 (Claude Code)
 Blocked by: 39
 Triage: ready-for-agent
@@ -23,6 +23,7 @@ Every behaviour check is a browser-parity harness fixture (an HTML page recorded
 ## Comments
 
 - 2026-10-24, worker (core/41-filters): **GAP — native rev 15 never applies the composed colour-matrix payload on GPU, so the three colour-filter fixtures cannot match Chrome yet.** Root cause found and verified on this branch: `reference/native/src/renderer/draw.rs:2327` (and `:2330`, the backdrop-crop uniform) calls `update_buffer(ctx, &buffer, &[*uniforms])` where `*uniforms` is a `&&CompositeExtensionsUniforms`, so the slice's element type is the *reference* (8 bytes) — only the pointer value is copied into the 112-byte `COLOR_MATRIX_LOCALS` cbuffer, the shader's `enabled` (offset 88) reads zero, and every colour function is a GPU no-op. Diagnosis (nothing committed — the native tree and the DLL 8b944eae are untouched, hash re-verified): the scene records carry the matrix and the plan compiles one isolated group per chain (gpui-side tests green); the vendored composite shader's DXBC in the DLL disassembles with the matrix math and the `movc` on `cb5[5].z` present; a local instrumented rebuild proved the shader runs and cb5 binds (an opacity probe through cb2 works; a marker colour written through a correctly-typed `&[**uniforms]` update appears on the real GPU, and grayscale(1) on a red panel then reads (54,54,54)). The fix is native — two dereferences plus an artifact rebuild — and needs the native-rebuild approval, so this ticket ships the complete Go styling side, the recorded fixtures and the skip flags; **removing `SkipPixels` from the three filter fixtures (and unskipping their discriminator tests) is the acceptance for that rebuild**. The same bug disables rev 15's backdrop mirror-crop uniform.
+- 2026-10-24, orchestrator 7: verified and merged (2d616a4). The native bug is confirmed in the source: `match &extras` binds `uniforms: &&T`, so `&[*uniforms]` is `[&T]` and update_buffer (draw.rs:1254-1267, copy_nonoverlapping of data.len() elements) copies 8 pointer bytes. Both the colour-matrix (draw.rs:2327) and the backdrop-crop (:2330) uploads are hit; on the rev 15.1 list. The DLL is untouched (sha256 8b944eae…). Merge with 04 and 40: div.go uses this ticket's one-group-per-chain record (WithFilterLayerChain, PaintBackdropFilterChain) with 04's ink-dilated group bounds and σ notes; class.go and tailwind.md keep both the gradient (40) and filter (41) stages. `go test ./gpui/ ./internal/parity/... ./internal/scenespec ./internal/capturespec` passes on the merged tree, and so does the full suite.
 
 ## Answer
 

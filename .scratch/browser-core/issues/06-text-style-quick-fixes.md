@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 6 (Claude Code)
 Blocked by: 01
 Triage: ready-for-agent
@@ -22,6 +22,7 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+- 2026-10-24, orchestrator 7: verified and merged (f2cc78c). No item needed native support, so nothing from 06 joins the rev 15.1 list. Merge conflicts were only shared lists (fixture imports, class tests) plus a duplicated recorder comment. The textstyle fixtures and the gpui/glyphspec tests pass in the full suite on the merged tree.
 
 ## Answer
 

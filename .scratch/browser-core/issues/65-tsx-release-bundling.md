@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 6 (Claude Code)
 Blocked by: 62
 Triage: ready-for-agent
@@ -22,6 +22,7 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+- 2026-10-24, orchestrator 7: verified and merged (7b1c0f1). `go list -deps ./examples/tsx-hello` links goja but no esbuild and no gpui/script/compile. A planted unclosed JSX in a copy of the sample makes `go generate` fail with `app.tsx:4:1: Unexpected end of file before a closing "div" tag` and exit 1. `-selftest` draws into gpui.NewTestWindow, which has no platform host, so no OS window is created. `go test ./gpui/script/... ./cmd/tsxbundle ./examples/tsx-hello` passes.
 
 ## Answer
 
