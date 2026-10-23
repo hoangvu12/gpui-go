@@ -1209,6 +1209,12 @@ func dropDrawState(w *Window) {
 		if ds.engine != nil {
 			_ = ds.engine.Dispose()
 		}
+		// The window's last drawn scene dies with its runtime (gpui-perf
+		// ticket 07).
+		if ds.lastScene != nil {
+			_ = ds.lastScene.Dispose()
+			ds.lastScene = nil
+		}
 		// A real window's text system owns one native atlas slot (the
 		// service bounds live atlases at 8) and a line-layout cache of
 		// native shaping handles: both retire with the window's element

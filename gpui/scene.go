@@ -3,6 +3,7 @@ package gpui
 import (
 	"errors"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/hoangvu12/gpui-go/internal/native"
 )
@@ -323,15 +324,29 @@ func NewScene() (*Scene, error) {
 	if err != nil {
 		return nil, err
 	}
+	liveScenes.Add(1)
 	return &Scene{kernel: kernel}, nil
 }
 
+// liveScenes counts the scenes NewScene created and Dispose has not yet
+// freed (gpui-perf ticket 07: the native kernel has no live-scene cap,
+// so this is the leak check's observable).
+var liveScenes atomic.Int64
+
+// LiveSceneCount reports how many scenes are live (created by NewScene
+// and not yet disposed) in the process.
+func LiveSceneCount() int64 { return liveScenes.Load() }
+
 // Dispose frees the scene's native state; the scene is unusable
-// afterwards. In-flight native calls hold their own references, so
-// actual destruction is deferred until they return.
+// afterwards (every read reports ErrSceneClosed). In-flight native calls
+// hold their own references, so actual destruction is deferred until
+// they return.
 func (s *Scene) Dispose() error {
 	if s.kernel == nil {
 		return ErrSceneClosed
+	}
+	if s.kernel.scene != nil {
+		defer liveScenes.Add(-1)
 	}
 	return s.kernel.Dispose()
 }
