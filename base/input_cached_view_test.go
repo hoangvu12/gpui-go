@@ -80,7 +80,9 @@ func TestCursorLayoutConsumerUpdatesAfterSelection(t *testing.T) {
 	if *observed != before {
 		t.Fatalf("observed %+v, want %+v", *observed, before)
 	}
-	v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[EditorState]) { s.selectToWithAffinity(3, false, cx) })
+	v.update(func(s *EditorState, _ *gpui.Window, cx *gpui.Context[EditorState]) {
+		s.selectToWithAffinity(3, false, cx)
+	})
 	ta.RunUntilParked()
 	tw.Update(func(_ *cursorConsumerRoot, _ *gpui.Window, cx *gpui.Context[cursorConsumerRoot]) { cx.Notify() })
 	var after cursorLayout

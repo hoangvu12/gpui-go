@@ -276,7 +276,9 @@ func runViewCacheDifferential(t *testing.T, realText bool) {
 	if cached.clicks[2] != 1 || cached.clicks[3] != 1 {
 		t.Fatalf("clicks = %v, want panels 2 and 3 clicked once", cached.clicks)
 	}
-	both(func(_ *vcWindow, cx *VisualTestContext) { cx.SimulateMouseMove(Point{X: 700, Y: 500}, nil, Modifiers{}) })
+	both(func(_ *vcWindow, cx *VisualTestContext) {
+		cx.SimulateMouseMove(Point{X: 700, Y: 500}, nil, Modifiers{})
+	})
 	compare("hover away")
 
 	both(func(side *vcWindow, _ *VisualTestContext) { side.focus[4].Focus(side.window) })
