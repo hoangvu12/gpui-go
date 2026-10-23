@@ -15,10 +15,9 @@ package gpui
 //
 // Recorded deviations:
 //
-//   - text_transform (R:elements/text.rs:636-695) and the text-overflow
-//     truncation (R:elements/text.rs:764-885) are not applied, like the
-//     port's Text element (div.go); a StyledText lays out its text as
-//     given;
+//   - text_transform (R:elements/text.rs:636-695) is not applied, like
+//     the port's Text element (div.go); the text-overflow truncation
+//     (R:elements/text.rs:764-885, 1164-1328) is (text_truncate.go);
 //   - line_layout_for_index / line_layouts return the pin's
 //     WrappedLineLayout, whose port is the native *WrappedLine on real
 //     windows only (test windows shape through the deterministic stub);
@@ -262,8 +261,11 @@ type textLayoutInner struct {
 	runs       []TextRun
 	lineHeight float32
 	wrapWidth  *float32
-	size       *Size
-	bounds     *Bounds
+	// truncateWidth is the truncation width the document was shaped
+	// under (nil: not truncated).
+	truncateWidth *float32
+	size          *Size
+	bounds        *Bounds
 }
 
 // layout requests the measured node (R:elements/text.rs:887-1000).
@@ -272,11 +274,7 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 	rem := RemSize(w)
 	fontSize := textStyle.FontSizePixels(rem)
 	lineHeight := PixelSnap(w, textStyle.LineHeightPixels(fontSize, rem))
-	var lineClamp *uint32
-	if textStyle.LineClamp != nil && *textStyle.LineClamp > 0 {
-		clamp := uint32(*textStyle.LineClamp)
-		lineClamp = &clamp
-	}
+	lineClamp := textLineClamp(textStyle)
 
 	state := l.state
 	measure := func(req MeasureRequest) Size {
@@ -291,25 +289,33 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 				wrapWidth = &width
 			}
 		}
-		// The cached-layout reuse (R:elements/text.rs:931-946,
-		// truncation aside).
+		truncation := EvaluateTextOverflow(textStyle, req)
+		// The cached-layout reuse (R:elements/text.rs:931-946): neither
+		// this request nor the cached layout may truncate.
 		if inner := state.inner; inner != nil && inner.size != nil &&
-			(wrapWidth == nil || (inner.wrapWidth != nil && *wrapWidth == *inner.wrapWidth)) {
+			(wrapWidth == nil || (inner.wrapWidth != nil && *wrapWidth == *inner.wrapWidth)) &&
+			truncation.Width == nil && inner.truncateWidth == nil {
 			return *inner.size
 		}
-		document, err := shapeStyledRuns(frameTextSystem(w), text, fontSize, runs, wrapWidth, lineClamp)
+		seam := frameTextSystem(w)
+		text, runs := applyTextTruncation(text, runs, wrapWidth, textStyle.LineClamp, truncation,
+			func(candidate string, candidateRuns []TextRun, wrapWidth *float32) (shapedText, error) {
+				return shapeStyledRuns(seam, candidate, fontSize, candidateRuns, wrapWidth, nil)
+			})
+		document, err := shapeStyledRuns(seam, text, fontSize, runs, wrapWidth, lineClamp)
 		if err != nil {
 			panic(fmt.Sprintf("gpui: StyledText shaping failed: %v", err))
 		}
 		size := document.size(lineHeight)
 		state.inner = &textLayoutInner{
-			len:        document.textLen(),
-			text:       text,
-			document:   document,
-			runs:       mergeDecorationRuns(runs),
-			lineHeight: lineHeight,
-			wrapWidth:  wrapWidth,
-			size:       &size,
+			len:           document.textLen(),
+			text:          text,
+			document:      document,
+			runs:          mergeDecorationRuns(runs),
+			lineHeight:    lineHeight,
+			wrapWidth:     wrapWidth,
+			truncateWidth: truncation.Width,
+			size:          &size,
 		}
 		return size
 	}

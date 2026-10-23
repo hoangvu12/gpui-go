@@ -512,7 +512,10 @@ type stringLayoutState struct {
 type shapedCell struct {
 	shaped    shapedText
 	wrapWidth *float32
-	size      Size
+	// truncateWidth is the truncation width the document was shaped
+	// under (nil: not truncated).
+	truncateWidth *float32
+	size          Size
 }
 
 // textElement is the Text element: a string displayed as one shaped,
@@ -581,10 +584,13 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		} else if req.AvailWidth.Kind == AvailDefinite {
 			wrap, hasWrap = req.AvailWidth.Definite, true
 		}
-		// Cached-layout reuse: a shaped layout with a size answers when
-		// the wrap is unconstrained or matches the cached wrap (the
-		// reference's four-condition cache check, truncation aside).
-		if cell.shaped != nil && (!hasWrap || (cell.wrapWidth != nil && wrap == *cell.wrapWidth)) {
+		truncation := EvaluateTextOverflow(textStyle, req)
+		// Cached-layout reuse (R:elements/text.rs:931-946): a shaped
+		// layout with a size answers when the wrap is unconstrained or
+		// matches the cached wrap, and neither this request nor the
+		// cached layout truncates.
+		if cell.shaped != nil && (!hasWrap || (cell.wrapWidth != nil && wrap == *cell.wrapWidth)) &&
+			truncation.Width == nil && cell.truncateWidth == nil {
 			return cell.size
 		}
 		// The wrap width is boxed only when the text shapes (gpui-perf
@@ -594,12 +600,22 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 			boxed := wrap
 			wrapWidth = &boxed
 		}
-		shaped, err := frameTextSystem(w).shape(t.text, fontSize, textStyle.FontDescriptorOf(), wrapWidth, nil)
+		seam := frameTextSystem(w)
+		font := textStyle.FontDescriptorOf()
+		text := t.text
+		if truncation.Width != nil {
+			text, _ = applyTextTruncation(text, []TextRun{{Len: len(text), Font: font}}, wrapWidth, textStyle.LineClamp, truncation,
+				func(candidate string, _ []TextRun, wrapWidth *float32) (shapedText, error) {
+					return seam.shape(candidate, fontSize, font, wrapWidth, nil)
+				})
+		}
+		shaped, err := seam.shape(text, fontSize, font, wrapWidth, textLineClamp(textStyle))
 		if err != nil {
 			panic(fmt.Sprintf("gpui: text element shaping failed: %v", err))
 		}
 		cell.shaped = shaped
 		cell.wrapWidth = wrapWidth
+		cell.truncateWidth = truncation.Width
 		cell.size = shaped.size(lineHeight)
 		return cell.size
 	}
