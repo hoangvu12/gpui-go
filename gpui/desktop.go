@@ -79,19 +79,23 @@ const (
 	// CursorClosedHand is the closed (grabbing) hand (platform.rs:3204,
 	// CSS `grabbing`; gpui_macros styles.rs:658 cursor_grabbing). The
 	// pinned Windows loader has no arm for it: util.rs:114's catch-all
-	// loads IDC_ARROW.
+	// loads IDC_ARROW. The port builds a real cursor for it at runtime
+	// (browser-core ticket 03, desktop_cursors_windows.go).
 	CursorClosedHand
 	// CursorOpenHand is the open (grab) hand (platform.rs:3208, CSS
-	// `grab`; styles.rs:651 cursor_grab); IDC_ARROW on Windows
-	// (util.rs:114).
+	// `grab`; styles.rs:651 cursor_grab); the pin loads IDC_ARROW
+	// (util.rs:114) — the port builds a runtime cursor (browser-core
+	// ticket 03).
 	CursorOpenHand
 	// CursorDragCopy is the drag-copy cursor (platform.rs:3268, CSS
-	// `copy`; styles.rs:637 cursor_copy); IDC_ARROW on Windows
-	// (util.rs:114).
+	// `copy`; styles.rs:637 cursor_copy); the pin loads IDC_ARROW
+	// (util.rs:114) — the port builds a runtime cursor (browser-core
+	// ticket 03).
 	CursorDragCopy
 	// CursorContextualMenu is the contextual-menu cursor (platform.rs:3272,
-	// CSS `context-menu`; styles.rs:609 cursor_context_menu); IDC_ARROW
-	// on Windows (util.rs:114).
+	// CSS `context-menu`; styles.rs:609 cursor_context_menu); the pin
+	// loads IDC_ARROW (util.rs:114) — the port builds a runtime cursor
+	// (browser-core ticket 03).
 	CursorContextualMenu
 )
 

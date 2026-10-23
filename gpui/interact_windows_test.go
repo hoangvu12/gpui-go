@@ -245,22 +245,34 @@ func TestInteractWin32ClickStateSystemUpdate(t *testing.T) {
 	}
 }
 
-// TestInteractCursorVariantsWithoutWindowsArm pins the four pinned
+// TestInteractCursorVariantsLoadBuiltCursors pins the four pinned
 // CursorStyle variants moved into desktop.go (platform.rs:3204, 3208,
-// 3268, 3272): the Windows loader has no arm for them, so they load the
-// arrow through load_cursor's catch-all (gpui_windows/src/util.rs:114),
-// and they stay distinct values after OperationNotAllowed.
-func TestInteractCursorVariantsWithoutWindowsArm(t *testing.T) {
+// 3268, 3272): they stay distinct values after OperationNotAllowed,
+// the system-resource table keeps reporting the arrow (the reference's
+// catch-all, gpui_windows/src/util.rs:114 — Windows has no system
+// cursor for these glyphs), and loadCursorHandle replaces the fallback
+// with the runtime-built cursors of browser-core ticket 03
+// (desktop_cursors_windows.go): each style loads a cursor distinct
+// from the arrow.
+func TestInteractCursorVariantsLoadBuiltCursors(t *testing.T) {
 	variants := []CursorStyle{CursorClosedHand, CursorOpenHand, CursorDragCopy, CursorContextualMenu}
+	arrow := loadCursorHandle(CursorArrow)
+	handles := map[uintptr]CursorStyle{}
 	for i, style := range variants {
 		if style != CursorOperationNotAllowed+1+CursorStyle(i) {
 			t.Errorf("variant %d = %d, want %d", i, style, CursorOperationNotAllowed+1+CursorStyle(i))
 		}
 		if got := cursorResourceID(style); got != idcArrow {
-			t.Errorf("cursorResourceID(%d) = %d, want IDC_ARROW", style, got)
+			t.Errorf("cursorResourceID(%d) = %d, want IDC_ARROW (the system-resource table is unchanged)", style, got)
 		}
-		if loadCursorHandle(style) != loadCursorHandle(CursorArrow) {
-			t.Errorf("style %d did not load the shared arrow cursor", style)
+		handle := loadCursorHandle(style)
+		if handle == 0 || handle == arrow {
+			t.Errorf("style %d did not load its built cursor (%#x, arrow %#x)", style, handle, arrow)
+			continue
 		}
+		if other, clash := handles[handle]; clash {
+			t.Errorf("styles %d and %d share one built cursor", other, style)
+		}
+		handles[handle] = style
 	}
 }

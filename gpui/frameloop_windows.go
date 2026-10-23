@@ -20,7 +20,11 @@ package gpui
 // Deviations: the pacer is demand driven — it runs only while some
 // window has an armed wake and exits one vblank after the demand ends
 // (the reference thread invalidates every window on every vblank and the
-// clean frames no-op); the interval fallback uses the reference default
+// clean frames no-op); a minimized or DWM-cloaked window is never
+// invalidated — its demand stays pending until it is visible again
+// (browser-core ticket 03; Chromium's display scheduler draws only for
+// visible windows, display_scheduler.cc:602-607); the interval fallback
+// uses the reference default
 // instead of querying DwmGetCompositionTimingInfo (vsync.rs:58-75). The
 // invalidation itself is posted to the host thread so it lands after the
 // current WM_PAINT's ValidateRect and only for a window still alive.
@@ -95,7 +99,10 @@ func (p *framePacer) request(w *Window) {
 // invalidation of every pending window to the host thread; it exits as
 // soon as no demand is pending (before waiting, so an exiting pacer never
 // consumes a frame-latency signal no frame will pay back) or the host
-// stopped accepting work.
+// stopped accepting work. A hidden window (minimized or DWM-cloaked,
+// browser-core ticket 03) is not invalidated: its demand stays pending,
+// so the pacer keeps checking every frame slot and serves the demand
+// when the window becomes visible again.
 func (p *framePacer) loop() {
 	for {
 		p.mu.Lock()
@@ -122,13 +129,26 @@ func (p *framePacer) loop() {
 
 		accepted := p.host.Post(func() {
 			for _, w := range batch {
-				if w.handle.record() == nil {
+				hw := w.handle.record()
+				if hw == nil {
+					continue
+				}
+				// A hidden window cannot present: a minimized or DWM-cloaked
+				// one keeps its demand pending instead of being invalidated
+				// (browser-core ticket 03; the reference's vsync thread
+				// invalidates unconditionally, gpui_windows platform.rs
+				// 306-345). The pacer re-checks at every frame slot, so a
+				// hidden window costs one IsIconic/DWM query per vblank and
+				// its demand is served — the pending wake, the dirty flag or
+				// the next-frame callbacks — as soon as it is visible again.
+				if !hw.frameVisible() {
+					p.request(w)
 					continue
 				}
 				// InvalidateRect(hwnd, NULL, FALSE): the whole client area,
 				// no background erase; WM_PAINT follows when the thread's
 				// queue is otherwise idle.
-				procFrameInvalidateRect.Call(w.handle.hwnd, 0, 0)
+				procFrameInvalidateRect.Call(hw.hwnd, 0, 0)
 			}
 		})
 		if !accepted {
