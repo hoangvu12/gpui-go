@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: 16, 17, 18, 22, 24, 26, 29, 30, 31, 36, 37
 
 ## Question
@@ -31,3 +31,4 @@ A maintainer can see every Base module and test accounted for (ported/deviated/n
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-23 — Claimed. Part 1 (delegated, runs alongside 37): the coverage ledger over the source manifest, examples/base-showcase, README/notices. Part 2 (orchestrator, after 37): the full corpus run. Part 3 (only with the user's go-ahead): merge base-port-2 to main, push, tag v0.2.0.

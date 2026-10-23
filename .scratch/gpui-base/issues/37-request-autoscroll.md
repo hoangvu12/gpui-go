@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: 30
 
 ## Question
@@ -27,3 +27,4 @@ A TextView inside a scrollable list reveals a line inside a long block, as upstr
 ## Comments
 
 - 2026-10-23 — Created by the base-port-2 orchestrator from ticket 30's report.
+- 2026-10-23 — Claimed and delegated. Owns gpui/window*.go and gpui/list*.go for the autoscroll path, plus base/text_inline*.go and the reveal tests.
