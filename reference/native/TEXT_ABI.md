@@ -126,7 +126,8 @@ record ends in a `record_size` self-check the Go side verifies.
 | `GpuiGoTextFontRequest` | 28 / 4 | weight_bits @0 (f32), style @4 (0 normal/1 italic/2 oblique), feature_count @8, fallback_count @12, reserved[3] @16 (must be 0) |
 | `GpuiGoTextFontRecord` | 40 / 8 | font_id @0 (u64 canonical), generation @8 (u64 catalog generation), weight_bits @16, style @20, feature_count @24, fallback_count @28, family_found @32 (1 = the primary family is in the catalog; 0 = the fallback chain answered — service v2, replacing the v1 reserved word), record_size @36 |
 | `GpuiGoTextFontMetricsRecord` | 52 / 4 | units_per_em @0, ascent/descent/line_gap/underline_position/underline_thickness/cap_height/x_height @4..32, bbox x/y/w/h @32..48, record_size @48 (font units, exactly `gpui::FontMetrics`) |
-| `GpuiGoTextRunRecord` | 48 / 4 | len @0, family_offset @4, family_len @8, fallbacks_offset @12, fallbacks_len @16, weight_bits @20, style @24, feature_offset @28, feature_count @32, letter_spacing_present @36 (0/1), letter_spacing_bits @40, reserved @44 (must be 0) |
+| `GpuiGoTextRunRecord` | 92 / 4 | len @0, family_offset @4, family_len @8, fallbacks_offset @12, fallbacks_len @16, weight_bits @20, style @24, feature_offset @28, feature_count @32, letter_spacing_present @36 (0/1), letter_spacing_bits @40, word_break @44 (0 normal/1 break-all/2 keep-all), overflow_wrap @48 (0 normal/1 anywhere/2 break-word), text_wrap @52 (0 wrap/1 nowrap/2 balance/3 pretty/4 stable), locale_offset @56, locale_len @60 (a BCP 47 substring of the strings buffer; 0 = none), font_width_present @64 (0/1), font_width_bits @68 (CSS font-width ratio, 1.0 = normal), variation_offset @72, variation_count @76 (into the shape request's variation array), opsz_present @80 (0/1; absent = CSS `auto`), opsz_bits @84, justify @88 (0/1) |
+| `GpuiGoTextVariation` | 8 / 4 | tag @0 (4 ASCII chars, big-endian — the feature tags' rule), value @4 (f32 bits, finite) |
 | `GpuiGoTextLayoutRecord` | 56 / 4 | text_len @0, font_size_bits @4, wrap_present @8, wrap_bits @12, clamp_present @16, line_clamp @20, line_count @24, fragment_count @28, glyph_count @32, width_bits @36, ascent_bits @40, descent_bits @44, font_generation @48, record_size @52 |
 | `GpuiGoTextLineRecord` | 36 / 4 | line_index @0, text_start @4, text_end @8, fragment_start @12, fragment_end @16, advance_width_bits @20, line_height_bits @24 (echo), baseline_bits @28, record_size @32 |
 | `GpuiGoTextCaretRecord` | 56 / 4 | index @0, affinity @4 (0 downstream/1 upstream), present @8, x/y/w/h_bits @12..28, cluster_before_present/start/end @28..40, cluster_after_present/start/end @40..52, record_size @52 |
@@ -138,15 +139,15 @@ record ends in a `record_size` self-check the Go side verifies.
 
 ## Table
 
-`GpuiGoTextTable`: 16 function pointers then 21 self-check/capacity
-scalars; size 216, alignment 8. All entries return an i32 status.
+`GpuiGoTextTable`: 17 function pointers then 21 self-check/capacity
+scalars; size 224, alignment 8. All entries return an i32 status.
 
 | Slot | Entry | Signature |
 |---|---|---|
 | 0 | `font_names` | `(buf: *mut u8, capacity: u32, out_count: *mut u32, out_needed: *mut u32) -> i32` |
 | 1 | `font_resolve` | `(req: *const FontRequest, family: *const u8, family_len: u32, features: *const Feature, feature_count: u32, fallbacks: *const u8, fallbacks_len: u32, out: *mut FontRecord) -> i32` |
 | 2 | `font_metrics` | `(font_id: u64, out: *mut MetricsRecord) -> i32` |
-| 3 | `shape` | `(text: *const u8, text_len: u32, runs: *const RunRecord, run_count: u32, features: *const Feature, feature_count: u32, strings: *const u8, strings_len: u32, font_size_bits: u32, wrap_bits: u32, wrap_present: u32, line_clamp: u32, clamp_present: u32, out_handle: *mut u64) -> i32` |
+| 3 | `shape` | `(text: *const u8, text_len: u32, runs: *const RunRecord, run_count: u32, features: *const Feature, feature_count: u32, variations: *const Variation, variation_count: u32, strings: *const u8, strings_len: u32, font_size_bits: u32, wrap_bits: u32, wrap_present: u32, line_clamp: u32, clamp_present: u32, out_handle: *mut u64) -> i32` (rev 15: the variation array) |
 | 4 | `layout` | `(handle: u64, wrap_bits: u32, wrap_present: u32, line_clamp: u32, clamp_present: u32) -> i32` |
 | 5 | `dispose` | `(handle: u64) -> i32` |
 | 6 | `layout_info` | `(handle: u64, out: *mut LayoutRecord) -> i32` |
@@ -159,11 +160,12 @@ scalars; size 216, alignment 8. All entries return an i32 status.
 | 13 | `fragments` | `(handle: u64, records: *mut FragmentRecord, capacity: u32, out_needed: *mut u32) -> i32` |
 | 14 | `glyphs` | `(handle: u64, records: *mut GlyphRecord, capacity: u32, out_needed: *mut u32) -> i32` |
 | 15 | `font_add` | `(data: *const u8, data_len: u32, out_generation: *mut u64) -> i32` |
+| 16 | `run_info` | `(handle: u64, run_index: u32, out: *mut RunRecord) -> i32` (rev 15: echoes one stored run record) |
 
-Self-check scalars: `service_version` (2), `size_of_table` (216),
+Self-check scalars: `service_version` (2), `size_of_table` (224),
 `align_of_table` (8), `size_of_font_request` (28), `size_of_font_record`
 (40), `align_of_font_record` (8), `size_of_metrics_record` (52),
-`size_of_run_record` (48), `size_of_feature_record` (8),
+`size_of_run_record` (92), `size_of_feature_record` (8),
 `size_of_layout_record` (56), `size_of_line_record` (36),
 `size_of_caret_record` (56), `size_of_hit_record` (16),
 `size_of_selection_record` (20), `size_of_cluster_record` (16),
@@ -172,6 +174,22 @@ Self-check scalars: `service_version` (2), `size_of_table` (216),
 `max_text_bytes` (1 MiB), `max_font_bytes` (64 MiB).
 
 ## Status codes
+
+### The rev-15 browser text fields (recorded limit)
+
+The run record grew the CSS text fields — word-break, overflow-wrap,
+text-wrap, locale, font width, variation settings, optical size and
+justify — validated at `shape` and stored with the shaping handle
+(`text_run_info` echoes them). The pinned `TextLayoutRequest`/`TextRun`
+(`crates/gpui/src/text_system.rs:489-519` at the pin) has no slots for
+them, and the pinned `ParleyTextSystem` is fully encapsulated
+(`gpui_ce_parley`'s `parley: Mutex<ParleyState>` is private), so the
+service cannot push them into Parley without vendoring the pinned
+adapter's `parley_paragraph_layout` (a future ticket when the Go styling
+layer needs the behavior — a second `FontContext` would diverge the
+FontIds the glyph service rasterizes). The shaping behavior is therefore
+unchanged for them in rev 15; the fields cross the ABI and round-trip,
+which is what this rebuild was asked to expose.
 
 0 ok; -1 stale handle; -2 bad handle (malformed shaping handle, or a
 font id outside the canonical-bit/registry rules); -3 null argument; -4
