@@ -25,6 +25,7 @@ package base
 //     refinement, as upstream.
 
 import (
+	"strconv"
 	"strings"
 	"sync"
 	"weak"
@@ -79,6 +80,38 @@ type nodeRenderContext struct {
 	streamFades      func(key textLeafKey) []textFadeRange
 	rangeBackgrounds func(key textLeafKey) []textColorRange
 	reveal           *revealRequest
+
+	// anonBlock and anonLeaf number the text leaves without a key (see
+	// leafElementID): the top-level block being rendered and the next
+	// leaf in it.
+	anonBlock int
+	anonLeaf  int
+}
+
+// leafElementID is leaf_element_id (U:text/node.rs:2505-2507).
+//
+// Deviation: upstream names every leaf without a key "p". HTML documents
+// carry no spans (U:text/format/html.rs sets span: None throughout), so
+// every flow paragraph of an HTML document shares that id under the same
+// parent and therefore the flow's element state (U:text/inline_flow.rs:
+// 80-98: one layout key, its layouts, the fragment states). The last flow
+// requested sets the key, the others measure and paint its layout, and the
+// shared fragment states keep only its text: a paragraph with inline code
+// followed by a <pre> drew the <pre>'s code background and no text. A leaf
+// without a key is numbered here instead, in render order within its
+// top-level block, which is stable while the document is unchanged.
+func (cx *nodeRenderContext) leafElementID(key *textLeafKey) gpui.ElementID {
+	if key != nil {
+		return textLeafElementID(key)
+	}
+	n := cx.anonLeaf
+	cx.anonLeaf++
+	return gpui.NamedIntegerElementID("p-"+strconv.Itoa(cx.anonBlock), uint64(n))
+}
+
+// startBlock restarts the keyless leaf numbering for top-level block ix.
+func (cx *nodeRenderContext) startBlock(ix int) {
+	cx.anonBlock, cx.anonLeaf = ix, 0
 }
 
 func defaultNodeRenderContext() *nodeRenderContext {
@@ -323,7 +356,7 @@ func (p *paragraph) render(leafKey *textLeafKey, cx *nodeRenderContext, w *gpui.
 	fades := cx.fades(leafKey)
 	backgrounds := cx.backgrounds(leafKey)
 	if p.shouldRenderInlineFlow() {
-		return newInlineFlow(textLeafElementID(leafKey), p.inlineFlowItems(leafKey, fades, backgrounds, cx, app), cx.linkClickHandler).IntoElement()
+		return newInlineFlow(cx.leafElementID(leafKey), p.inlineFlowItems(leafKey, fades, backgrounds, cx, app), cx.linkClickHandler).IntoElement()
 	}
 	hasImage := false
 	for i := range p.children {
@@ -403,7 +436,7 @@ func (p *paragraph) render(leafKey *textLeafKey, cx *nodeRenderContext, w *gpui.
 	}
 	// Images keep an identified box: an image's element state is its
 	// animation, and the box scopes that state per paragraph.
-	return textBlockDiv().ID(textLeafElementID(leafKey)).Children(children...).IntoElement()
+	return textBlockDiv().ID(cx.leafElementID(leafKey)).Children(children...).IntoElement()
 }
 
 // shouldRenderInlineFlow is U:text/node.rs:2317-2326.
@@ -779,12 +812,13 @@ func tableRows(table *textTable, cx *nodeRenderContext, cellBase func(ix int) *g
 }
 
 // tableActionsRow is the actions row below a table
-// (U:text/node.rs:3183-3194).
+// (U:text/node.rs:3183-3194); upstream's plain div is a Block box whose
+// child spans the full width (gap 2b, see the file comment).
 func tableActionsRow(el *gpui.DivElement, table *textTable, options nodeRenderOptions, cx *nodeRenderContext, w *gpui.Window, app *gpui.App) *gpui.DivElement {
 	if cx.tableActions == nil {
 		return el
 	}
-	return el.Child(gpui.Div().ID(blockElementID("table-actions", table.span, options.ix)).Mt1().
+	return el.Child(textBlockDiv().ID(blockElementID("table-actions", table.span, options.ix)).Mt1().
 		Child(cx.tableActions(table.cachedTableData(), w, app)))
 }
 
@@ -827,8 +861,11 @@ func renderScrollTable(table *textTable, colCount int, options nodeRenderOptions
 	tableStyle := style.Table()
 	frame.Refine(&tableStyle)
 	el := textBlockDiv().Pb(gpui.RemsOf(1)).WFull().Child(
+		// The row track is upstream's plain div (U:text/node.rs:3180), a
+		// Block box under 0.2.2 that stacks the rows; under the pin's Flex
+		// default it laid every row out on one line (gap 2b).
 		horizontalScrollArea(blockElementID("table", table.span, options.ix), handle, &frame,
-			gpui.Div().MinWFull().W(gpui.Px(minTotal)).Children(rows...)))
+			textBlockDiv().MinWFull().W(gpui.Px(minTotal)).Children(rows...)))
 	return tableActionsRow(el, table, options, cx, w, app).IntoElement()
 }
 
@@ -845,7 +882,10 @@ func renderWrapTable(table *textTable, colLens []int, options nodeRenderOptions,
 		return textBlockDiv().MinW16().W(gpui.Fraction(float32(n)))
 	}, w, app)
 	tableStyle := style.Table()
-	inner := StyledExtOf(gpui.Div().WFull().Bg(ThemeGlobal(app).Tokens.Colors.Surface).Border1().
+	// The frame is upstream's plain div (U:text/node.rs:3269-3276), a Block
+	// box under 0.2.2 that stacks the rows; under the pin's Flex default it
+	// laid every row out on one line (gap 2b).
+	inner := StyledExtOf(textBlockDiv().WFull().Bg(ThemeGlobal(app).Tokens.Colors.Surface).Border1().
 		BorderColor(style.Border()).OverflowHidden().Children(rows...)).RefineStyle(&tableStyle)
 	el := textBlockDiv().Pb(gpui.RemsOf(1)).WFull().Child(inner)
 	return tableActionsRow(el, table, options, cx, w, app).IntoElement()
@@ -931,6 +971,7 @@ func (d *parsedDocument) renderRoot(list *gpui.ListState, cx *nodeRenderContext,
 	if list == nil {
 		el := textBlockDiv()
 		for ix, b := range d.blocks {
+			cx.startBlock(ix)
 			el = el.Child(renderBlock(b, nodeRenderOptions{ix: ix, isLast: ix+1 == len(d.blocks)}, cx, w, app))
 		}
 		return el.IntoElement()
@@ -940,6 +981,13 @@ func (d *parsedDocument) renderRoot(list *gpui.ListState, cx *nodeRenderContext,
 		list.Reset(len(blocks))
 	}
 	return gpui.Div().SizeFull().Child(gpui.List(list, func(ix int, w *gpui.Window, app *gpui.App) gpui.AnyElement {
-		return renderBlock(blocks[ix], nodeRenderOptions{ix: ix, isLast: ix+1 == len(blocks)}, cx, w, app)
+		cx.startBlock(ix)
+		// An item is laid out as a root at the list's width. Upstream's
+		// item roots are plain divs (gapped, Root), Block boxes that fill
+		// that width under 0.2.2; a flex root takes its content's width
+		// instead, which shrank a nested table or a code block's
+		// background to its text (gap 2b). The full-width box restores it.
+		return textBlockDiv().WFull().Child(
+			renderBlock(blocks[ix], nodeRenderOptions{ix: ix, isLast: ix+1 == len(blocks)}, cx, w, app)).IntoElement()
 	}).SizeFull()).IntoElement()
 }

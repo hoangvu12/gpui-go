@@ -1,0 +1,30 @@
+{
+  "ticket": "41-textview-tables-html-tabs",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved for tables and HTML paragraphs; tabs need a gpui decision (recorded for the user)",
+  "fixes": [
+    "tables: map gap 2b. Upstream's table frame (U:text/node.rs:3269-3276), scroll row track (:3180) and actions row (:3183-3194) are plain divs, Block under 0.2.2; the port used gpui.Div() (Flex in the pin), so rows went onto one line. They now use textBlockDiv()",
+    "scrollable views: each list item is laid out as a root; upstream's Block roots fill the list width, Flex roots shrank to content (HTML tables, code-block backgrounds). renderRoot wraps each item in a full-width textBlockDiv().WFull() (U:text/document.rs:189-245)",
+    "HTML paragraphs: upstream gives every keyless text paragraph the id \"p\" (U:text/node.rs:2505-2507) and HTML nodes have no spans (format/html.rs), so InlineFlow paragraphs under one parent shared one stored layout (U:text/inline_flow.rs:80-98) and the last rendered won (the <pre> code paragraph painted over the earlier one). Deliberate deviation: nodeRenderContext.leafElementID numbers keyless paragraphs in render order within each top-level block; paragraphs with a span keep upstream's id"
+  ],
+  "tabs": {
+    "finding": "upstream Base does nothing special with tabs (TabSize only drives indent insertion, input/editor/indent.rs:13-43); the pin shapes with parley/harfrust and emits every glyph without a control-character filter (gpui_ce_parley text_system.rs:1273-1285), so \\t paints the missing glyph; Base's 0.2.2 line used DirectWrite IDWriteTextLayout (gpui_windows direct_write.rs:554), which renders a tab as blank space at a tab stop. Measured offscreen: a tab shapes to one space width (Consolas 14px: 'a\\tb' = 'a b' = 23.09px) but paints the missing-glyph box",
+    "decision_for_user": "fixing it means gpui shaping/painting draws nothing for \\t (and optionally advances to a tab stop), diverging from the pin toward 0.2.2"
+  },
+  "implementation": {
+    "files": [
+      "base/text_node_render.go",
+      "base/text_view_layout_test.go (new): TestTextViewTableRowsStack (Markdown + HTML; wrap, scroll-table, scrollable view), TestTextViewHTMLFlowParagraphsKeepTheirOwnLayout, TestLeafElementIDNumbersKeylessLeaves, TestTextViewScrollableCodeBlockFillsWidth; each fails without its fix"
+    ]
+  },
+  "tests": {
+    "orchestrator_rerun": "snapshot of HEAD f4e3170 + the two files: go vet/gofmt clean; go test ./base -skip Real ok; the 4 new tests pass; go test ./examples/base-gallery ok",
+    "offscreen": "gallery HTML page shows bold/italic/code/link and a 3-row full-width table; Markdown table stacks at full width"
+  },
+  "follow_ups": [
+    "user decision: tab rendering in gpui (above)",
+    "a non-scrollable TextView with a fenced code block inside a plain flex-row div fails the frame: 'StyledText shaping failed ... wrap width must be finite and >= 0' (gpui StyledText path; predates these changes) -> ticket 43"
+  ]
+}
