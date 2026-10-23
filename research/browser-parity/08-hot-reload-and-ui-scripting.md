@@ -107,3 +107,30 @@ Constraints:
 - Is a second language for UI acceptable (Luau or TS), or must app UI stay in Go (A, maybe D)?
 - If scripting: Luau (zgui's proven path, needs one native rebuild) or JS/TS through goja (familiar, pure Go)?
 - Should plugins (sandboxed third-party scripts) be a goal? They come almost for free with B.
+
+## Addendum: yaegi probed (2026-10-23, orchestrator 5) [V]
+
+yaegi is Traefik's Go interpreter: github.com/traefik/yaegi `fcb76d1`, last pushed 2026-02-09, 8.4k stars. Interpreted code calls compiled packages through reflect symbol tables made by `yaegi extract`.
+
+The probe is a scratch module in `%TEMP%\yaegi-probe`. It extracts `gpui` symbols, then evaluates snippets with go1.27.1. Results:
+
+| Test | Result |
+|---|---|
+| `gpui.Div()` | works |
+| `gpui.Div().Child(nil)` | reaches gpui: it returns gpui's own nil-child error, so the call went through |
+| `gpui.Div().Flex()` | **panics** (nil pointer) |
+| an interpreted generic type `Box[T]` | works |
+| an interpreted Go 1.27 generic method `func (S) M[T any]` | **panics** ("nil reflect type") |
+
+Why:
+- gpui-go's fluent API (`Flex`, `P`, `Bg`, … about 3,100 methods) is declared as Go 1.27 generic methods with the `[_ lazy]` marker (`gpui/styled.go:223`, `gpui/fluent.go:134`).
+- Generic methods aren't in a type's reflect method set. `reflect.TypeOf(*DivElement).MethodByName("Flex")` is false; only 90 non-generic methods are visible.
+- yaegi can't interpret generic methods either, so it can't run gpui from source.
+
+Workarounds, all rejected:
+- Dropping the `[_ lazy]` marker brings back the 37 s rebuilds this marker fixed (resume.md "Build speed").
+- Free-function wrappers (`gpui.Flex(d)`) would make dev-mode UI code different from shipped code.
+
+Also, GPUI views re-render on every notify, so interpreted render functions would run on hot paths, unlike zgui's describe-once scripts.
+
+**Verdict: yaegi is ruled out** for gpui-go's current API. Option D is closed. Options A (Go dev reload) and B/C (a zgui-style script layer) remain.
