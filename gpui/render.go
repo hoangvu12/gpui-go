@@ -58,6 +58,12 @@ func activeFrameWindow() *Window { return activeFrame }
 // The draw runs inside one application update: notifications emitted
 // while rendering flush when the frame completes, like the reference
 // update_window-wrapped draws.
+//
+// Scene lifetime (gpui-perf ticket 07): the returned scene is the
+// window's last drawn scene. It stays valid until the window's next
+// completed frame replaces it or the window closes; it is then disposed
+// and every read reports ErrSceneClosed. Read or present it before the
+// next frame, or take LastDrawnScene afresh.
 func DrawWindowFrame(w *Window) (*Scene, error) {
 	if w == nil {
 		return nil, fmt.Errorf("gpui: DrawWindowFrame requires a window")
@@ -91,6 +97,10 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gpui: DrawWindowFrame: scene: %w", err)
 	}
+	// invalidate_entities (window.rs:3161, 3316-3322): the views notified
+	// since the last draw, and their ancestor views, are dirty for this
+	// frame's cached views (view_cache.go).
+	invalidateEntities(w, ds)
 	// One fresh layout tree per frame: the reference reuses the window's
 	// engine and clears it every frame; the port resets the engine at
 	// frame start (every outstanding LayoutID of the previous frame
@@ -140,8 +150,16 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 		if completed {
 			completeFrame(w, ds, frame, drawStart)
 		} else {
+			// The abandoned frame's scene is never published: free it
+			// (gpui-perf ticket 07).
+			_ = scene.Dispose()
 			discardDispatchFrame(w)
 			abandonFrameTracking(w)
+			// The abandoned build may have rewritten cached views' ranges
+			// against the discarded frame: the next frame renders every
+			// cached view afresh (view_cache.go).
+			ds.dirtyViews = nil
+			ds.refreshing = true
 		}
 	}()
 
@@ -152,6 +170,8 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 		frame.trackingAccess = true
 		defer func() { frame.trackingAccess = false }()
 		drawErr = drawRoots(w, app, ds, frame)
+		// self.dirty_views.clear() after draw_roots (window.rs:3197).
+		ds.dirtyViews = nil
 	})
 	if drawErr != nil {
 		return nil, drawErr
@@ -195,9 +215,20 @@ func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawSt
 		}()
 		ds.draws++
 		ds.lastDebugBounds = frame.debugBounds
+		// The replaced scene is freed (gpui-perf ticket 07): this frame's
+		// cached views replayed from it during the draw (view_cache.go
+		// reusePaint), which has finished, and every reader takes the
+		// last scene afresh (LastDrawnScene's documented lifetime).
+		if previous := ds.lastScene; previous != nil && previous != frame.scene {
+			_ = previous.Dispose()
+		}
 		ds.lastScene = frame.scene
 		ds.lastInlineFacts = frame.inlineFacts
 		ds.lastDeferredPriorities = deferredPrioritiesOf(frame)
+		// The rendered frame's ordered lists a cached view's reused ranges
+		// index into (view_cache.go; the pin keeps them on rendered_frame).
+		ds.lastAccessedElementStateLog = frame.accessedElementStateLog
+		ds.lastDeferredDraws = frame.deferredDraws
 		evicted := retainElementStates(ds, frame.accessedElementStates)
 		// The frame-finish hook (helpers_frame.go): the completed dispatch
 		// frame swaps into the rendered state through endDispatchFrame (the
@@ -219,6 +250,8 @@ func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawSt
 	// frame awaits presentation (window.rs 3276/3287).
 	ds.refreshRequested = false
 	completeFrameTracking(w, ds.root)
+	// self.refreshing = false (window.rs:3278).
+	ds.refreshing = false
 	// reset_cursor_style after recording the accessed entities
 	// (window.rs 3276-3277; Base ticket 06's interact.go helper): the
 	// completed frame's cursor requests resolve the window cursor.
@@ -383,6 +416,8 @@ func WindowDebugBound(w *Window, selector string) (Bounds, bool) {
 // LastDrawnScene returns the window's last completed frame's finished
 // scene (the reference rendered_frame.scene; painted_quads and the
 // primitive counts are observable through it).
+// It is valid until the window's next completed frame or its close (see
+// DrawWindowFrame's scene lifetime); callers must not dispose it.
 func LastDrawnScene(w *Window) *Scene {
 	ds, ok := windowDrawStates[w]
 	if !ok {

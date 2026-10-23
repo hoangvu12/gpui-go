@@ -63,8 +63,10 @@ const (
 
 // rendererServiceVersion mirrors GPUI_GO_RENDERER_SERVICE_VERSION.
 // Version 2 (ticket16) added the scene drawing entries and the draw
-// scalars.
-const rendererServiceVersion uint32 = 3
+// scalars; version 4 (gpui-perf ticket 05) made every swap chain
+// frame-latency waitable (maximum latency 1) and appended the
+// surface_frame_latency_handle entry.
+const rendererServiceVersion uint32 = 4
 
 func rendererStatusName(code int32) string {
 	switch code {
@@ -367,6 +369,8 @@ type rendererTable struct {
 	deviceInjectLoss     uintptr
 	deviceRebuild        uintptr
 	deviceMarkDrawable   uintptr
+	// surfaceLatencyHandle is surface_frame_latency_handle (version 4).
+	surfaceLatencyHandle uintptr
 	serviceVersion       uint32
 	sizeOfTable          uint32
 	alignOfTable         uint32

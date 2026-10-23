@@ -118,7 +118,9 @@ mod draw;
 use draw::{MAX_INSTANCE_BUFFER_SIZE, PATH_MULTISAMPLE_COUNT};
 
 use windows::core::Interface;
-use windows::Win32::Foundation::{FreeLibrary, HMODULE, HWND};
+use windows::Win32::Foundation::{
+    CloseHandle, DuplicateHandle, FreeLibrary, DUPLICATE_SAME_ACCESS, HANDLE, HMODULE, HWND,
+};
 use windows::Win32::Graphics::Direct3D::{
     D3D_DRIVER_TYPE_UNKNOWN, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1,
 };
@@ -139,8 +141,9 @@ use windows::Win32::Graphics::Dxgi::{
     DXGI_CREATE_FACTORY_FLAGS, DXGI_ERROR_DEVICE_REMOVED, DXGI_ERROR_NOT_FOUND,
     DXGI_MWA_NO_ALT_ENTER, DXGI_PRESENT,
     DXGI_SCALING_NONE, DXGI_SCALING_STRETCH, DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_CHAIN_FLAG,
-    DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL, DXGI_USAGE_RENDER_TARGET_OUTPUT, IDXGIAdapter1, IDXGIDevice,
-    IDXGIFactory6, IDXGISwapChain1,
+    DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT, DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
+    DXGI_USAGE_RENDER_TARGET_OUTPUT, IDXGIAdapter1, IDXGIDevice, IDXGIFactory6, IDXGISwapChain1,
+    IDXGISwapChain2,
 };
 use windows::Win32::System::LibraryLoader::LoadLibraryA;
 
@@ -152,8 +155,23 @@ use windows::Win32::System::LibraryLoader::LoadLibraryA;
 /// (ticket28/29/32, the wave-4 rebuild) added the device-loss entries
 /// (`device_state_check` / `device_inject_loss` / `device_rebuild` /
 /// `device_mark_drawable`), the test-support render-to-image entry
-/// (`surface_render_to_image`) and its record size.
-pub const GPUI_GO_RENDERER_SERVICE_VERSION: u32 = 3;
+/// (`surface_render_to_image`) and its record size. Version 4
+/// (gpui-perf ticket 05) creates every swap chain with
+/// `DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT` and maximum frame
+/// latency 1, and appends `surface_frame_latency_handle` (17 pointers,
+/// table size 184).
+pub const GPUI_GO_RENDERER_SERVICE_VERSION: u32 = 4;
+
+/// The swap-chain flags of every surface (gpui-perf ticket 05): the
+/// frame-latency waitable object. The pin creates its swap chains with
+/// `Flags: 0`; this is a recorded deviation. ResizeBuffers must pass the
+/// same flag. The waitable object lets the frame loop start a frame only
+/// once the swap chain can accept it.
+const SWAP_CHAIN_FLAGS: u32 = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT.0 as u32;
+
+/// The maximum frame latency set on every swap chain (ticket 05): one
+/// queued frame, down from the DXGI default of three.
+pub const RENDERER_MAX_FRAME_LATENCY: u32 = 1;
 
 /// The pin's swap-chain buffer count (`BUFFER_COUNT` in
 /// `directx_renderer.rs`): flip-sequential triple buffering.
@@ -462,7 +480,7 @@ const _: () = assert!(std::mem::size_of::<GpuiGoRetireRecord>() == 20);
 const _: () = assert!(std::mem::align_of::<GpuiGoRetireRecord>() == 4);
 const _: () = assert!(std::mem::size_of::<GpuiGoDeviceInfoRecord>() == 64);
 const _: () = assert!(std::mem::align_of::<GpuiGoDeviceInfoRecord>() == 8);
-const _: () = assert!(std::mem::size_of::<GpuiGoRendererTable>() == 176);
+const _: () = assert!(std::mem::size_of::<GpuiGoRendererTable>() == 184);
 const _: () = assert!(std::mem::align_of::<GpuiGoRendererTable>() == 8);
 
 // ---------------------------------------------------------------------------
@@ -593,8 +611,41 @@ struct SurfaceState {
     /// the surface's lifetime, exactly like the pin's DirectXRenderer
     /// holds its DirectComposition field.
     composition: Option<CompositionTree>,
+    /// The swap chain's frame-latency waitable object (ticket 05); None
+    /// when the swap chain does not expose IDXGISwapChain2.
+    latency_waitable: Option<LatencyWaitable>,
     submissions: HashMap<u64, SubmissionRecord>,
     next_seq: u64,
+}
+
+/// An owned frame-latency waitable handle, closed on drop (when the
+/// surface is destroyed or its swap chain is rebuilt).
+struct LatencyWaitable(HANDLE);
+
+// SAFETY: a kernel handle value is valid process-wide; the owning
+// surface lives behind the renderer's global mutex.
+unsafe impl Send for LatencyWaitable {}
+
+impl Drop for LatencyWaitable {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = CloseHandle(self.0);
+        }
+    }
+}
+
+/// Sets the maximum frame latency and takes the waitable object of a
+/// swap chain created with [`SWAP_CHAIN_FLAGS`] (ticket 05). Failure is
+/// not fatal: the surface keeps working without a waitable and the Go
+/// frame loop keeps its DwmFlush pacing.
+fn configure_frame_latency(swap_chain: &IDXGISwapChain1) -> Option<LatencyWaitable> {
+    let chain2: IDXGISwapChain2 = swap_chain.cast().ok()?;
+    unsafe { chain2.SetMaximumFrameLatency(RENDERER_MAX_FRAME_LATENCY) }.ok()?;
+    let handle = unsafe { chain2.GetFrameLatencyWaitableObject() };
+    if handle.is_invalid() {
+        return None;
+    }
+    Some(LatencyWaitable(handle))
 }
 
 struct SurfaceSlot {
@@ -1080,7 +1131,7 @@ fn create_swap_chain_for_composition(
         Scaling: DXGI_SCALING_STRETCH,
         SwapEffect: DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
         AlphaMode: DXGI_ALPHA_MODE_PREMULTIPLIED,
-        Flags: 0,
+        Flags: SWAP_CHAIN_FLAGS,
     };
     unsafe { dxgi_factory.CreateSwapChainForComposition(device, &desc, None) }
         .map_err(|e| e.code().0)
@@ -1105,7 +1156,7 @@ fn create_swap_chain(
         Scaling: DXGI_SCALING_NONE,
         SwapEffect: DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
         AlphaMode: DXGI_ALPHA_MODE_IGNORE,
-        Flags: 0,
+        Flags: SWAP_CHAIN_FLAGS,
     };
     let swap_chain =
         unsafe { dxgi_factory.CreateSwapChainForHwnd(device, hwnd, &desc, None, None) }
@@ -1286,6 +1337,12 @@ pub struct GpuiGoRendererTable {
     /// gate (the pin's `mark_drawable`, called on the first forced
     /// draw after recovery).
     pub device_mark_drawable: Option<unsafe extern "system" fn() -> i32>,
+    /// `renderer_surface_frame_latency_handle` (version 4, ticket 05): a
+    /// caller-owned duplicate of the surface's frame-latency waitable
+    /// object (0 when the surface has none). The caller waits on it
+    /// outside every renderer lock and closes it.
+    pub surface_frame_latency_handle:
+        Option<unsafe extern "system" fn(surface: u64, out_handle: *mut u64) -> i32>,
     /// Renderer ABI version (see [`GPUI_GO_RENDERER_SERVICE_VERSION`]).
     pub service_version: u32,
     /// `size_of::<GpuiGoRendererTable>()` self-check.
@@ -1332,6 +1389,7 @@ pub(crate) static RENDERER_TABLE: GpuiGoRendererTable = GpuiGoRendererTable {
     device_inject_loss: Some(renderer_device_inject_loss),
     device_rebuild: Some(renderer_device_rebuild),
     device_mark_drawable: Some(renderer_device_mark_drawable),
+    surface_frame_latency_handle: Some(renderer_surface_frame_latency_handle),
     service_version: GPUI_GO_RENDERER_SERVICE_VERSION,
     size_of_table: std::mem::size_of::<GpuiGoRendererTable>() as u32,
     align_of_table: std::mem::align_of::<GpuiGoRendererTable>() as u32,
@@ -1476,6 +1534,7 @@ fn surface_create_body(
         Ok(chain) => chain,
         Err(code) => return code,
     };
+    let latency_waitable = configure_frame_latency(&swap_chain);
 
     let (render_target, render_target_view) =
         match create_render_target_and_its_view(&swap_chain, &device.device) {
@@ -1517,6 +1576,7 @@ fn surface_create_body(
             viewport,
             draw_targets: draw::DrawTargets::default(),
             composition,
+            latency_waitable,
             submissions: HashMap::new(),
             next_seq: 0,
         }),
@@ -1567,7 +1627,7 @@ fn surface_resize_body(surface: u64, width: u32, height: u32) -> i32 {
             width,
             height,
             DXGI_FORMAT_B8G8R8A8_UNORM,
-            DXGI_SWAP_CHAIN_FLAG(0),
+            DXGI_SWAP_CHAIN_FLAG(SWAP_CHAIN_FLAGS as i32),
         ) {
             return e.code().0;
         }
@@ -1892,6 +1952,52 @@ fn submission_retire_body(submission: u64, out: *mut GpuiGoRetireRecord) -> i32 
         };
     }
     renderer_status::OK
+}
+
+/// `surface_frame_latency_handle` body (ticket 05): duplicates the
+/// surface's waitable handle so the caller can wait without holding the
+/// renderer lock and without racing a concurrent destroy or rebuild
+/// (those close the surface's own handle, never the duplicate).
+fn surface_frame_latency_handle_body(surface: u64, out_handle: *mut u64) -> i32 {
+    if out_handle.is_null() {
+        return renderer_status::ERR_NULL_ARG;
+    }
+    unsafe { *out_handle = 0 };
+    let (slot_index, slot_generation) = surface_handle_parts(surface);
+    let state = lock_global();
+    let surface_state = match resolve_slot(&state, slot_index, slot_generation) {
+        Ok(surface) => surface,
+        Err(code) => return code,
+    };
+    let Some(waitable) = surface_state.latency_waitable.as_ref() else {
+        return renderer_status::OK;
+    };
+    // GetCurrentProcess() is the pseudo handle -1.
+    let process = HANDLE(-1isize as *mut core::ffi::c_void);
+    let mut duplicate = HANDLE::default();
+    if let Err(e) = unsafe {
+        DuplicateHandle(process, waitable.0, process, &mut duplicate, 0, false, DUPLICATE_SAME_ACCESS)
+    } {
+        return e.code().0;
+    }
+    unsafe { *out_handle = duplicate.0 as u64 };
+    renderer_status::OK
+}
+
+unsafe extern "system" fn renderer_surface_frame_latency_handle(
+    surface: u64,
+    out_handle: *mut u64,
+) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        surface_frame_latency_handle_body(surface, out_handle)
+    }));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            renderer_status::ERR_PANIC
+        }
+    }
 }
 
 fn surface_destroy_body(surface: u64) -> i32 {
@@ -2352,6 +2458,9 @@ fn device_rebuild_body(out: *mut GpuiGoRebuildRecord) -> i32 {
             }
             _ => None,
         };
+        // The old waitable belongs to the old swap chain: replace it
+        // (dropping closes it) with the rebuilt chain's.
+        surface.latency_waitable = configure_frame_latency(&swap_chain);
         surface.swap_chain = swap_chain;
         surface.render_target = Some(render_target);
         surface.render_target_view = render_target_view;

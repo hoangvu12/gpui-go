@@ -126,16 +126,20 @@ type deferredRootView struct {
 }
 
 func (v *deferredRootView) Render(w *Window, cx *Context[deferredRootView]) AnyElement {
-	return Div().KeyContext("Root").SizeFull().Child(ViewOf(v.panel)).IntoElement()
+	return Div().KeyContext("Root").SizeFull().Child(CachedView(ViewOf(v.panel), Styles().SizeFull())).IntoElement()
 }
 
 // TestDeferredNestedDrawsWithReusedViews ports R:deferred.rs:214-264
-// test_nested_deferred_draws_with_reused_views. Deviation: the port has
-// no view caching (`.cached(..)`), so the panel re-renders with every
-// root notification instead of reusing its subtree; the test still pins
-// the nested draws' bounds and count across repeated frames, and that a
-// nested popover's dispatch node is parented under the popover that
-// deferred it (the pinned set_active_node(parent_node)).
+// test_nested_deferred_draws_with_reused_views: the panel is cached
+// (R:deferred.rs:197-205), so a root notification reuses its subtree —
+// both deferred draw records included — from the previous frame, the
+// second time from ranges that were themselves recorded during a reused
+// frame. Like the pin, the debug bounds are read on the frames that
+// render the panel (a reused range carries no debug bounds,
+// R:window.rs:3723-3772); the reused frames are checked through the
+// deferred draws and the nested menu's replayed quad. The port also pins
+// that a nested popover's dispatch node is parented under the popover
+// that deferred it (the pinned set_active_node(parent_node)).
 func TestDeferredNestedDrawsWithReusedViews(t *testing.T) {
 	ta := NewTestApp()
 	app := ta.App()
@@ -151,29 +155,50 @@ func TestDeferredNestedDrawsWithReusedViews(t *testing.T) {
 		}
 	}
 
-	check := func(step string) {
+	check := func(step string, rendered bool) {
 		t.Helper()
-		bounds, ok := WindowDebugBound(window, "NESTED_MENU")
-		if !ok {
-			t.Fatalf("%s: NESTED_MENU debug bounds not found", step)
-		}
-		if bounds.Size != (Size{Width: 50, Height: 50}) || bounds.Origin != (Point{X: 30, Y: 30}) {
-			t.Fatalf("%s: NESTED_MENU bounds %v, want (30,30 50x50)", step, bounds)
+		if rendered {
+			bounds, ok := WindowDebugBound(window, "NESTED_MENU")
+			if !ok {
+				t.Fatalf("%s: NESTED_MENU debug bounds not found", step)
+			}
+			if bounds.Size != (Size{Width: 50, Height: 50}) || bounds.Origin != (Point{X: 30, Y: 30}) {
+				t.Fatalf("%s: NESTED_MENU bounds %v, want (30,30 50x50)", step, bounds)
+			}
 		}
 		if got := len(drawState(window).lastDeferredPriorities); got != 2 {
 			t.Fatalf("%s: deferred draws = %d, want 2", step, got)
 		}
+		// The nested menu's dispatch node is in the frame whether it was
+		// prepainted or reused (reuse_subtree + the reused deferred draws).
+		tree := focusState(window).rendered.dispatchTree
+		menus := 0
+		for i := range tree.nodes {
+			if ctx := tree.nodes[i].context; ctx != nil && ctx.String() == "NestedMenu" {
+				menus++
+			}
+		}
+		if menus != 1 {
+			t.Fatalf("%s: %d NestedMenu dispatch nodes, want 1", step, menus)
+		}
 	}
-	check("first frame")
+	check("first frame", true)
 
+	draws := WindowDrawCount(window)
 	for i := 0; i < 2; i++ {
 		root.Update(app, func(_ *deferredRootView, cx *Context[deferredRootView]) { cx.Notify() })
 		ta.RunUntilParked()
-		check(fmt.Sprintf("root re-render %d", i+1))
+		check(fmt.Sprintf("root re-render %d", i+1), false)
+	}
+	if WindowDrawCount(window) != draws+2 {
+		t.Fatalf("draws = %d, want %d (one per root notification)", WindowDrawCount(window), draws+2)
+	}
+	if hits := drawState(window).viewCacheHits; hits != 2 {
+		t.Fatalf("cached panel reuses = %d, want 2", hits)
 	}
 	panel.Update(app, func(_ *deferredPanelView, cx *Context[deferredPanelView]) { cx.Notify() })
 	ta.RunUntilParked()
-	check("panel re-render")
+	check("panel re-render", true)
 
 	// The nested popover's key context path runs through the popover that
 	// deferred it and the panel (dispatch tree parenting).

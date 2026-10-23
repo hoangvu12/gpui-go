@@ -108,6 +108,7 @@
 //!   metadata record is still written (the raster work is performed
 //!   either way; the caller retries with the reported size).
 
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::mem::ManuallyDrop;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -534,6 +535,110 @@ pub(crate) fn new_windows_rasterizer() -> WindowsGlyphRasterizer {
     rasterizer
 }
 
+// ---------------------------------------------------------------------------
+// Face probe (gpui-perf ticket 05: weight 450-599 without fake bold)
+// ---------------------------------------------------------------------------
+
+/// What the text service needs to know about the exact face and
+/// synthesis Fontique selected for a FontId: whether it carries the bold
+/// simulation, the face's own OS/2 weight class, and an identity of the
+/// face bytes. `gpui_ce_parley` keeps its font store private, so the only
+/// public route to the selected `RasterFace` is the injected rasterizer:
+/// a probe arms a thread-local flag, asks the store to rasterize glyph 0,
+/// and the rasterizer records the face and returns an error without
+/// drawing anything.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct FaceProbe {
+    pub(crate) embolden: bool,
+    pub(crate) weight_class: Option<u16>,
+    pub(crate) face_index: u32,
+    pub(crate) data_len: usize,
+    pub(crate) data_hash: u64,
+}
+
+impl FaceProbe {
+    fn of(face: &RasterFace<'_>) -> Self {
+        // FNV-1a over the length and the first and last 4 KiB: enough to
+        // tell two faces apart without hashing whole font files.
+        let data = face.data;
+        let mut hash = 0xcbf2_9ce4_8422_2325u64;
+        let mut feed = |bytes: &[u8]| {
+            for &byte in bytes {
+                hash ^= u64::from(byte);
+                hash = hash.wrapping_mul(0x0100_0000_01b3);
+            }
+        };
+        feed(&(data.len() as u64).to_le_bytes());
+        feed(&data[..data.len().min(4096)]);
+        feed(&data[data.len().saturating_sub(4096)..]);
+        FaceProbe {
+            embolden: face.synthesis.embolden,
+            weight_class: os2_weight_class(data, face.face_index),
+            face_index: face.face_index,
+            data_len: data.len(),
+            data_hash: hash,
+        }
+    }
+
+    /// Whether two probes saw the same face bytes and index.
+    pub(crate) fn same_face(&self, other: &FaceProbe) -> bool {
+        self.face_index == other.face_index
+            && self.data_len == other.data_len
+            && self.data_hash == other.data_hash
+    }
+}
+
+thread_local! {
+    static FACE_PROBE_ARMED: Cell<bool> = const { Cell::new(false) };
+    static FACE_PROBE_RESULT: Cell<Option<FaceProbe>> = const { Cell::new(None) };
+}
+
+/// Probes the face behind `font_id` (see [`FaceProbe`]). None when the
+/// font is unknown to the store or the backend never saw the request.
+pub(crate) fn probe_face(parley: &ParleyTextSystem, font_id: FontId) -> Option<FaceProbe> {
+    let raster_style = parley.prepare_raster_style(RasterStyleRequest {
+        scene_color: gpui::rgba(0x000000ff),
+        requested_mode: GlyphRenderMode::Grayscale,
+    });
+    let params = RenderGlyphParams {
+        font_id,
+        glyph_id: GlyphId(0),
+        font_size: px(16.0),
+        subpixel_variant: gpui::point(0, 0),
+        scale_factor: 1.0,
+        raster_style,
+    };
+    FACE_PROBE_RESULT.with(|slot| slot.set(None));
+    FACE_PROBE_ARMED.with(|armed| armed.set(true));
+    let _ = parley.rasterize_glyph(&params);
+    FACE_PROBE_ARMED.with(|armed| armed.set(false));
+    FACE_PROBE_RESULT.with(Cell::take)
+}
+
+/// Reads `usWeightClass` from the OS/2 table of face `index` in `data`
+/// (a single font or a TTC/OTC collection).
+fn os2_weight_class(data: &[u8], index: u32) -> Option<u16> {
+    let u16_at = |offset: usize| -> Option<u16> {
+        Some(u16::from_be_bytes(data.get(offset..offset + 2)?.try_into().ok()?))
+    };
+    let u32_at = |offset: usize| -> Option<u32> {
+        Some(u32::from_be_bytes(data.get(offset..offset + 4)?.try_into().ok()?))
+    };
+    let mut directory = 0usize;
+    if data.get(0..4)? == b"ttcf" {
+        directory = u32_at(12 + 4 * index as usize)? as usize;
+    }
+    let table_count = u16_at(directory + 4)? as usize;
+    for table in 0..table_count {
+        let record = directory + 12 + 16 * table;
+        if data.get(record..record + 4)? == b"OS/2" {
+            let offset = u32_at(record + 8)? as usize;
+            return u16_at(offset + 4);
+        }
+    }
+    None
+}
+
 /// The recorded backend facts (defaults before the first stack
 /// construction: the Swash-only placeholder the text service documented).
 pub(crate) fn backend_facts() -> BackendFacts {
@@ -589,6 +694,10 @@ impl GlyphRasterizer for WindowsGlyphRasterizer {
         face: RasterFace<'_>,
         params: &RenderGlyphParams,
     ) -> Result<RasterizedGlyph> {
+        if FACE_PROBE_ARMED.with(Cell::get) {
+            FACE_PROBE_RESULT.with(|slot| slot.set(Some(FaceProbe::of(&face))));
+            bail!("face probe (gpui-perf ticket 05): no raster produced");
+        }
         match &mut self.backend {
             WindowsRasterBackend::DirectWrite {
                 rasterizer,

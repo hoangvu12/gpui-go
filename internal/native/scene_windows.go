@@ -111,6 +111,23 @@ func callSceneInsertPolySprite(fn uintptr, scene uint64, rec *ScenePolychromeSpr
 	return callStatus(r1), nil
 }
 
+// callSceneInsertBatch hands one packed op stream to scene_insert_batch
+// (gpui-perf ticket 05); outApplied receives the ops applied before a
+// failure (all of them on success).
+func callSceneInsertBatch(fn uintptr, scene uint64, words []uint32, outApplied *uint32) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_insert_batch")
+	}
+	var ptr *uint32
+	if len(words) > 0 {
+		ptr = &words[0]
+	}
+	r1, _, _ := syscall.SyscallN(fn, uintptr(scene), uintptr(unsafe.Pointer(ptr)), uintptr(len(words)), uintptr(unsafe.Pointer(outApplied)))
+	runtime.KeepAlive(words)
+	runtime.KeepAlive(outApplied)
+	return callStatus(r1), nil
+}
+
 func callSceneReplay(fn uintptr, scene uint64, start, end uint32, prev uint64) (int32, error) {
 	if fn == 0 {
 		return 0, nullSlot("scene_replay")

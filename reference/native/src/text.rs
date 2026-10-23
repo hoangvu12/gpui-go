@@ -887,8 +887,16 @@ struct TextServiceState {
     /// resolve). Invalidated by `text_font_add` (the only generation
     /// mutator); rebuilt lazily on the next `family_found` query.
     family_names: Option<(u64, std::collections::HashSet<String>)>,
+    /// gpui-perf ticket 05: the effective weight of each (family,
+    /// fallbacks, requested weight bits, style) requested below 600, so
+    /// the face probe runs once per combination. Cleared by
+    /// `text_font_add` (a new face can change the selection).
+    weight_fixups: HashMap<WeightKey, u32>,
     slots: Vec<ShapingSlot>,
 }
+
+/// Cache key of [`TextServiceState::weight_fixups`].
+type WeightKey = (String, Vec<String>, u32, u8);
 
 static GLOBAL: std::sync::LazyLock<Mutex<TextServiceState>> =
     std::sync::LazyLock::new(|| {
@@ -896,6 +904,7 @@ static GLOBAL: std::sync::LazyLock<Mutex<TextServiceState>> =
             stack: None,
             fonts: HashMap::new(),
             family_names: None,
+            weight_fixups: HashMap::new(),
             slots: Vec::new(),
         })
     });
@@ -1280,6 +1289,68 @@ fn text_font_names_body(
     text_status::OK
 }
 
+/// The weight the pinned resolution should see (gpui-perf ticket 05,
+/// recorded deviation from the pin). Fontique 0.11.1 (font.rs:97-103)
+/// asks for bold synthesis whenever the requested weight is above the
+/// selected face's weight and the face has no `wght` axis, so a request
+/// for 500 on a family whose closest face is the static Regular (400)
+/// renders Regular through DirectWrite's bold simulation — heavier than
+/// a real Medium and heavier than browsers, which synthesize bold only
+/// from 600 up. Below 600 the request is replaced by the selected face's
+/// own OS/2 weight, which selects the same face with no synthesis; the
+/// replacement is verified (same face bytes, no embolden) and otherwise
+/// dropped. Requests from 600 up, and faces with a `wght` axis (where
+/// Fontique sets the axis instead of emboldening), are unchanged. The
+/// oracle `ce-source` stays unmodified; this runs in the native service
+/// before every resolve and every shaping run.
+fn effective_weight(
+    state: &mut TextServiceState,
+    stack: &TextStack,
+    font: &Font,
+) -> FontWeight {
+    let weight = font.weight;
+    if !(weight.0 < 600.0) {
+        return weight;
+    }
+    let style_tag = match font.style {
+        FontStyle::Normal => 0u8,
+        FontStyle::Italic => 1,
+        FontStyle::Oblique => 2,
+    };
+    let fallbacks = font
+        .fallbacks
+        .as_ref()
+        .map(|fallbacks| fallbacks.fallback_list().to_vec())
+        .unwrap_or_default();
+    let key: WeightKey = (font.family.to_string(), fallbacks, weight.0.to_bits(), style_tag);
+    if let Some(bits) = state.weight_fixups.get(&key) {
+        return FontWeight(f32::from_bits(*bits));
+    }
+    let probe_font = |weight: FontWeight| Font {
+        weight,
+        features: FontFeatures::default(),
+        ..font.clone()
+    };
+    let fixed = (|| {
+        let requested = stack.parley.font_id(&probe_font(weight)).ok()?;
+        let probe = crate::glyph::probe_face(&stack.parley, requested)?;
+        if !probe.embolden {
+            return None;
+        }
+        let face_weight = f32::from(probe.weight_class?);
+        if !(face_weight < weight.0) {
+            return None;
+        }
+        let candidate = FontWeight(face_weight);
+        let replaced = stack.parley.font_id(&probe_font(candidate)).ok()?;
+        let check = crate::glyph::probe_face(&stack.parley, replaced)?;
+        (!check.embolden && check.same_face(&probe)).then_some(candidate)
+    })();
+    let effective = fixed.unwrap_or(weight);
+    state.weight_fixups.insert(key, effective.0.to_bits());
+    effective
+}
+
 /// Shared body of `text_font_resolve`.
 fn resolve_font_descriptor(
     state: &mut TextServiceState,
@@ -1300,13 +1371,14 @@ fn resolve_font_descriptor(
         check_feature(feature)?;
     }
     let fallbacks = split_names(fallbacks_bytes, request.fallback_count as usize)?;
-    let font = build_font(
+    let mut font = build_font(
         family,
         weight_from_bits(request.weight_bits)?,
         style_from_u32(request.style)?,
         features,
         &fallbacks,
     );
+    font.weight = effective_weight(state, stack, &font);
     // The pinned resolve_canonical_font (typed Result; the gpui wrapper's
     // resolve_font panics here, which the ABI must not).
     let font_id = stack
@@ -1426,6 +1498,7 @@ fn add_font_body(data: *const u8, data_len: u32, out_generation: *mut u64) -> i3
             // already invalidated by construction; drop it eagerly to free
             // the stale set.
             state.family_names = None;
+            state.weight_fixups.clear();
             unsafe { *out_generation = generation };
             text_status::OK
         }
@@ -1477,6 +1550,17 @@ fn shape_document(
     wrap_width: Option<Pixels>,
     line_clamp: Option<usize>,
 ) -> Result<Arc<LineLayout>, i32> {
+    // gpui-perf ticket 05: the same below-600 weight replacement as the
+    // resolve path, so per-run shaping never selects a synthesized bold.
+    let mut adjusted: Option<Vec<TextRun>> = None;
+    for (index, run) in runs.iter().enumerate() {
+        let weight = effective_weight(state, stack, &run.font);
+        if weight != run.font.weight {
+            let runs = adjusted.get_or_insert_with(|| runs.to_vec());
+            runs[index].font.weight = weight;
+        }
+    }
+    let runs: &[TextRun] = adjusted.as_deref().unwrap_or(runs);
     // Pre-resolve every run's font so an unresolvable family is a typed
     // error (the pinned layout_text expects validated input and panics on
     // resolve failures). This mirrors resolve_canonical_font exactly.

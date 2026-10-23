@@ -1063,6 +1063,36 @@ type windowDrawState struct {
 	// window's scope; this map is the per-window install cache, dropped
 	// with the element runtime (dropDrawState).
 	selfLeases map[EntityID]*entityLease
+	// refreshing is window.rs Window::refreshing (R:window.rs:1316): set
+	// by Window.Refresh / the app refresh effect, it makes every cached
+	// view of the next frame render afresh (view_cache.go); the cached
+	// path also sets it while a cache miss renders. Cleared when a frame
+	// completes.
+	refreshing bool
+	// invalidatedViews are the entities notified since the last draw (the
+	// WindowInvalidator's dirty_views, R:window.rs:148, 189-214);
+	// dirtyViews are the views marked dirty for the frame being drawn
+	// (window.rs dirty_views, R:window.rs:1289) — the notified views and
+	// their ancestor views (view_cache.go invalidateEntities).
+	invalidatedViews map[EntityID]struct{}
+	dirtyViews       map[EntityID]struct{}
+	// lastAccessedElementStateLog and lastDeferredDraws are the last
+	// COMPLETED frame's ordered element-state accesses and deferred draws
+	// (rendered_frame.accessed_element_states / deferred_draws): the
+	// source lists a cached view's reused ranges index into.
+	lastAccessedElementStateLog []string
+	lastDeferredDraws           []*deferredDraw
+	// viewCacheHits and viewCacheMisses count cached-view prepaints that
+	// reused their previous range or rendered afresh (test-support
+	// diagnostics; the pin has none).
+	viewCacheHits, viewCacheMisses uint64
+}
+
+// isViewDirty reports whether the view is dirty in the frame being
+// drawn (window.dirty_views.contains, R:view.rs:434).
+func (ds *windowDrawState) isViewDirty(id EntityID) bool {
+	_, dirty := ds.dirtyViews[id]
+	return dirty
 }
 
 // frameDrawState is one frame's draw state (the reference next_frame
@@ -1104,6 +1134,11 @@ type frameDrawState struct {
 	// previous frame's state, dropping the states of elements that no
 	// longer draw.
 	accessedElementStates map[string]struct{}
+	// accessedElementStateLog is the same accesses in order, duplicates
+	// included (the pin's accessed_element_states Vec): the address space
+	// of the prepaint and paint indices' accessed_element_states_index
+	// (view_cache.go).
+	accessedElementStateLog []string
 	// currentInlineFragments is the fragment geometry of the element
 	// whose prepaint/paint is running (window.current_inline_fragments:
 	// Some — including an empty list — means the element's content
@@ -1173,6 +1208,12 @@ func dropDrawState(w *Window) {
 	if ds, ok := windowDrawStates[w]; ok {
 		if ds.engine != nil {
 			_ = ds.engine.Dispose()
+		}
+		// The window's last drawn scene dies with its runtime (gpui-perf
+		// ticket 07).
+		if ds.lastScene != nil {
+			_ = ds.lastScene.Dispose()
+			ds.lastScene = nil
 		}
 		// A real window's text system owns one native atlas slot (the
 		// service bounds live atlases at 8) and a line-layout cache of
@@ -1422,45 +1463,52 @@ func PixelSnapValue(value, scaleFactor float32) float32 {
 // ---------------------------------------------------------------------------
 
 // layoutContextOf builds the window's current layout context: rem,
-// scale and the current absolute element offset.
-func layoutContextOf(w *Window) *LayoutContext {
+// scale and the current absolute element offset. It returns a value:
+// the engine only reads the context, so callers pass its address and it
+// stays on their stack (gpui-perf ticket 06).
+func layoutContextOf(w *Window) LayoutContext {
 	f := currentFrame(w)
-	return NewLayoutContext(f.rem, f.scale).WithElementOffset(f.elementOffset)
+	return LayoutContext{remSize: f.rem, scaleFactor: f.scale, elementOffset: f.elementOffset}
 }
 
 // requestLayoutOf requests one layout node with the given style and
 // children on the window's engine (window.rs request_layout).
 func requestLayoutOf(w *Window, style Style, children ...LayoutID) (LayoutID, error) {
 	ds := drawState(w)
-	return ds.engine.RequestLayout(layoutContextOf(w), style, children...)
+	ctx := layoutContextOf(w)
+	return ds.engine.RequestLayout(&ctx, style, children...)
 }
 
 // requestMeasuredLayoutOf requests one measured leaf node (window.rs
 // request_measured_layout).
 func requestMeasuredLayoutOf(w *Window, style Style, measure MeasureFunc) (LayoutID, error) {
 	ds := drawState(w)
-	return ds.engine.RequestMeasuredLayout(layoutContextOf(w), style, measure)
+	ctx := layoutContextOf(w)
+	return ds.engine.RequestMeasuredLayout(&ctx, style, measure)
 }
 
 // computeLayoutOf computes one subtree under the given available space
 // (window.rs compute_layout).
 func computeLayoutOf(w *Window, root LayoutID, available AvailableSize) error {
 	ds := drawState(w)
-	return ds.engine.ComputeLayout(layoutContextOf(w), root, available)
+	ctx := layoutContextOf(w)
+	return ds.engine.ComputeLayout(&ctx, root, available)
 }
 
 // layoutBoundsOf queries one node's window-local bounds (window.rs
 // layout_bounds).
 func layoutBoundsOf(w *Window, id LayoutID) (Bounds, error) {
 	ds := drawState(w)
-	return ds.engine.LayoutBounds(layoutContextOf(w), id)
+	ctx := layoutContextOf(w)
+	return ds.engine.LayoutBounds(&ctx, id)
 }
 
 // parentRelativeLayoutBoundsOf queries one node's parent-relative
 // bounds (window.rs parent_relative_layout_bounds; text placement).
 func parentRelativeLayoutBoundsOf(w *Window, id LayoutID) (Bounds, error) {
 	ds := drawState(w)
-	return ds.engine.ParentRelativeLayoutBounds(layoutContextOf(w), id)
+	ctx := layoutContextOf(w)
+	return ds.engine.ParentRelativeLayoutBounds(&ctx, id)
 }
 
 // StretchAutoSizeToFill stretches the given node's auto-sized axes to
@@ -1489,7 +1537,7 @@ func StretchAutoSizeToFill(w *Window, id LayoutID, style Style, viewport Size) e
 	if err := ds.engine.checkID(id, "StretchAutoSizeToFill"); err != nil {
 		return err
 	}
-	record := styleToRecord(&stretched, ctx)
+	record := styleToRecord(&stretched, &ctx)
 	if err := ds.engine.native.SetStyle(id.node, &record); err != nil {
 		return fmt.Errorf("gpui: StretchAutoSizeToFill: %w", err)
 	}
@@ -1570,6 +1618,7 @@ func recordElementStateAccess(w *Window, key string) {
 			ds.frame.accessedElementStates = make(map[string]struct{})
 		}
 		ds.frame.accessedElementStates[key] = struct{}{}
+		ds.frame.accessedElementStateLog = append(ds.frame.accessedElementStateLog, key)
 	}
 }
 

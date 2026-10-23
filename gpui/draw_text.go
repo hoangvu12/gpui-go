@@ -31,14 +31,12 @@ package gpui
 //   state; the port's Scene paint methods take them as parameters (the
 //   port's Scene is the ticket08 scene kernel facade, and the window
 //   host/renderer integration of later tickets will own them).
-// * The pin's paint_glyph_from_atlas consults TextSystem::raster_metadata
-//   (pub(crate) in gpui, not ABI-exposable) to skip rasterization when
-//   the metadata cache already knows the glyph. The port rasterizes and
-//   lets the atlas-level map dedup prevent re-upload and duplicate
-//   tiles: the observable atlas behavior (one tile per key, one upload)
-//   is identical, the raster work is repeated. The native
-//   TextSystem::rasterize_glyph keeps the pin's metadata-consistency
-//   check either way.
+// * The pin's TextSystem::raster_metadata cache (pub(crate) in gpui,
+//   not ABI-exposable) and the atlas's key map live Go-side
+//   (glyph_cache.go, gpui-perf ticket 02): a glyph whose metadata and
+//   tile are known paints with no raster and no atlas call, as in the
+//   pin. The native TextSystem::rasterize_glyph keeps the pin's
+//   metadata-consistency check for the rasterizations that do run.
 // * The pin's should_use_subpixel_rendering consults the platform
 //   window's background transparency, is_subpixel_rendering_supported
 //   and the per-window TextRenderingMode override. The port's host
@@ -673,9 +671,11 @@ func (s *Scene) PaintColorGlyph(
 }
 
 // paintGlyphFromAtlas is the pinned paint_glyph_from_atlas
-// (window.rs:4841-4939): rasterize, skip empty bounds, insert into the
-// atlas and insert the format's sprite primitive with the bounds
-// integer origin + raster bounds origin.
+// (window.rs:4841-4939): the raster bounds from the raster metadata
+// cache, skip empty bounds, the atlas tile from get_or_insert_with
+// (rasterizing only on an atlas miss) and the format's sprite primitive
+// with the bounds integer origin + raster bounds origin. The caches are
+// glyph_cache.go's (gpui-perf ticket 02).
 func (s *Scene) paintGlyphFromAtlas(
 	integerOrigin Point,
 	params RasterGlyphParams,
@@ -685,24 +685,36 @@ func (s *Scene) paintGlyphFromAtlas(
 	atlas *Atlas,
 	ctx *PaintContext,
 ) error {
-	rasterized, err := ts.RasterizeGlyph(params)
+	meta, rasterized, buf, err := ts.rasterBoundsForPaint(params)
 	if err != nil {
 		return fmt.Errorf("gpui: paintGlyphFromAtlas: %w", err)
 	}
-	if rasterized.BoundsW == 0 || rasterized.BoundsH == 0 {
+	defer func() { releaseRasterBuffer(buf) }()
+	if meta.boundsW == 0 || meta.boundsH == 0 {
 		// Empty rasters (spaces, empty outlines) never insert.
 		return nil
 	}
 
-	tile, err := atlas.InsertGlyph(rasterized, params)
-	if err != nil {
-		return fmt.Errorf("gpui: paintGlyphFromAtlas: %w", err)
+	tile, ok := atlas.cachedGlyphTile(params, meta.format)
+	if !ok {
+		// The atlas miss: get_or_insert_with's build closure rasterizes
+		// (unless raster_bounds just did) and inserts.
+		if rasterized == nil {
+			rasterized, buf, err = ts.rasterizeForPaint(params)
+			if err != nil {
+				return fmt.Errorf("gpui: paintGlyphFromAtlas: %w", err)
+			}
+		}
+		tile, err = atlas.InsertGlyph(rasterized, params)
+		if err != nil {
+			return fmt.Errorf("gpui: paintGlyphFromAtlas: %w", err)
+		}
 	}
 
 	bounds := Bounds{
 		Origin: Point{
-			X: integerOrigin.X + float32(rasterized.BoundsX),
-			Y: integerOrigin.Y + float32(rasterized.BoundsY),
+			X: integerOrigin.X + float32(meta.boundsX),
+			Y: integerOrigin.Y + float32(meta.boundsY),
 		},
 		Size: Size{
 			Width:  float32(tile.BoundsW),
@@ -711,7 +723,7 @@ func (s *Scene) paintGlyphFromAtlas(
 	}
 	mask := snappedContentMask(ctx.Mask, ctx.ScaleFactor)
 
-	switch rasterized.Format {
+	switch meta.format {
 	case RasterFormatAlphaMask:
 		return s.InsertMonochromeSprite(MonochromeSprite{
 			Bounds:         bounds,
@@ -736,7 +748,7 @@ func (s *Scene) paintGlyphFromAtlas(
 			Tile:        tile,
 		})
 	default:
-		return fmt.Errorf("gpui: paintGlyphFromAtlas: unknown raster format %d", rasterized.Format)
+		return fmt.Errorf("gpui: paintGlyphFromAtlas: unknown raster format %d", meta.format)
 	}
 }
 
@@ -758,14 +770,13 @@ func (s *Scene) PaintShapedText(
 	if line == nil {
 		return fmt.Errorf("gpui: PaintShapedText: nil line")
 	}
-	fragments, err := line.Fragments()
+	// The layout's shared dumps (read-only here): no native call and no
+	// copy per paint.
+	dumps, err := line.paintDumps("Fragments")
 	if err != nil {
 		return fmt.Errorf("gpui: PaintShapedText: %w", err)
 	}
-	glyphs, err := line.Glyphs()
-	if err != nil {
-		return fmt.Errorf("gpui: PaintShapedText: %w", err)
-	}
+	fragments, glyphs := dumps.fragments, dumps.glyphs
 	summary, err := line.Summary()
 	if err != nil {
 		return fmt.Errorf("gpui: PaintShapedText: %w", err)
@@ -848,14 +859,13 @@ func (s *Scene) PaintShapedTextLine(
 	if err != nil {
 		return fmt.Errorf("gpui: PaintShapedTextLine: %w", err)
 	}
-	fragments, err := line.Fragments()
+	// The layout's shared dumps (read-only here): no native call and no
+	// copy per paint.
+	dumps, err := line.paintDumps("Fragments")
 	if err != nil {
 		return fmt.Errorf("gpui: PaintShapedTextLine: %w", err)
 	}
-	glyphs, err := line.Glyphs()
-	if err != nil {
-		return fmt.Errorf("gpui: PaintShapedTextLine: %w", err)
-	}
+	fragments, glyphs := dumps.fragments, dumps.glyphs
 	if record.FragmentEnd < record.FragmentStart || record.FragmentEnd > len(fragments) {
 		return fmt.Errorf("gpui: PaintShapedTextLine: fragment range %d..%d out of range", record.FragmentStart, record.FragmentEnd)
 	}
