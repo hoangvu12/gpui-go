@@ -21,6 +21,7 @@ The goal is to cut gpui-go's per-frame CPU, native-call, allocation and startup 
 - [Native load once](issues/03-native-load-once.md): `native.Load` shares one verified load per source while a handle is open, and re-verifies after the last close. The first frame dropped from 391 to 248 ms (median).
 - [Glyph raster cache](issues/02-glyph-raster-cache.md): the pin's raster_metadata cache and atlas lookup-before-raster are ported Go-side, plus pooled single-call rasters. The text page dropped from 129k to 23.5k native calls, 82k to 17k allocs and 200 to 83 ms per frame; sprites are identical.
 - [Frame allocations](issues/06-frame-allocations.md): per-element style boxes, a by-value layout context, allocation-free strips, the a11y field and cached line paint dumps (so parked lines no longer re-shape). Divs dropped from 16.5k to 5.4k allocs per frame; the text page from 17.4k to 8.4k allocs and 83 to 31 ms.
+- [View caching](issues/04-view-caching.md): `gpui.CachedView` ports the pin's `cached()` with dirty views, `reuse_prepaint`/`reuse_paint` and scene replay, checked by a cached-vs-uncached differential test. With panes cached, a root-only redraw drops from 9.8 to 3.7 ms on the 1,000-div page and from 236 to 20 ms on the text page. `Refresh` (scene (c)) still bypasses caching, as in the pin.
 
 ## Not yet specified
 

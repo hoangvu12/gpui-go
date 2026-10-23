@@ -1063,6 +1063,36 @@ type windowDrawState struct {
 	// window's scope; this map is the per-window install cache, dropped
 	// with the element runtime (dropDrawState).
 	selfLeases map[EntityID]*entityLease
+	// refreshing is window.rs Window::refreshing (R:window.rs:1316): set
+	// by Window.Refresh / the app refresh effect, it makes every cached
+	// view of the next frame render afresh (view_cache.go); the cached
+	// path also sets it while a cache miss renders. Cleared when a frame
+	// completes.
+	refreshing bool
+	// invalidatedViews are the entities notified since the last draw (the
+	// WindowInvalidator's dirty_views, R:window.rs:148, 189-214);
+	// dirtyViews are the views marked dirty for the frame being drawn
+	// (window.rs dirty_views, R:window.rs:1289) — the notified views and
+	// their ancestor views (view_cache.go invalidateEntities).
+	invalidatedViews map[EntityID]struct{}
+	dirtyViews       map[EntityID]struct{}
+	// lastAccessedElementStateLog and lastDeferredDraws are the last
+	// COMPLETED frame's ordered element-state accesses and deferred draws
+	// (rendered_frame.accessed_element_states / deferred_draws): the
+	// source lists a cached view's reused ranges index into.
+	lastAccessedElementStateLog []string
+	lastDeferredDraws           []*deferredDraw
+	// viewCacheHits and viewCacheMisses count cached-view prepaints that
+	// reused their previous range or rendered afresh (test-support
+	// diagnostics; the pin has none).
+	viewCacheHits, viewCacheMisses uint64
+}
+
+// isViewDirty reports whether the view is dirty in the frame being
+// drawn (window.dirty_views.contains, R:view.rs:434).
+func (ds *windowDrawState) isViewDirty(id EntityID) bool {
+	_, dirty := ds.dirtyViews[id]
+	return dirty
 }
 
 // frameDrawState is one frame's draw state (the reference next_frame
@@ -1104,6 +1134,11 @@ type frameDrawState struct {
 	// previous frame's state, dropping the states of elements that no
 	// longer draw.
 	accessedElementStates map[string]struct{}
+	// accessedElementStateLog is the same accesses in order, duplicates
+	// included (the pin's accessed_element_states Vec): the address space
+	// of the prepaint and paint indices' accessed_element_states_index
+	// (view_cache.go).
+	accessedElementStateLog []string
 	// currentInlineFragments is the fragment geometry of the element
 	// whose prepaint/paint is running (window.current_inline_fragments:
 	// Some — including an empty list — means the element's content
@@ -1577,6 +1612,7 @@ func recordElementStateAccess(w *Window, key string) {
 			ds.frame.accessedElementStates = make(map[string]struct{})
 		}
 		ds.frame.accessedElementStates[key] = struct{}{}
+		ds.frame.accessedElementStateLog = append(ds.frame.accessedElementStateLog, key)
 	}
 }
 

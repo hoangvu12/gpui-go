@@ -41,14 +41,20 @@ package gpui
 //     that point, because a Go *WrappedLine has no refcount to release
 //     them implicitly. A cached line therefore survives at most one
 //     idle frame, exactly like the reference's cache entries.
-//   - The reference's used_lines/used_wrapped_lines bookkeeping exists
-//     for reuse_layouts / truncate_layouts — the deferred-draw
-//     paint-range reuse of reuse_prepaint/reuse_paint (window.rs
-//     3719-3820). The port's deferred draws re-request their elements'
-//     layouts each frame, so those entry points are not ported, and
-//     eviction does not need the used list: an entry leaves the
-//     previous frame by being reused (moved into the current frame) or
-//     dies in the finish_frame swap.
+//   - The reference's used_wrapped_lines bookkeeping (layout_index /
+//     reuse_layouts / truncate_layouts, line_layout.rs:940-1006) serves
+//     the cached views' prepaint/paint range reuse (window.rs
+//     3712-3822; gpui-perf ticket 04, view_cache.go): a reused range
+//     moves the lines its previous frame used into the current frame, so
+//     they survive the rotation although nothing re-requested them. One
+//     deviation: the reference records a key only when it ENTERS the
+//     current frame (a previous-frame hit or a fresh shape); the port
+//     also records current-frame hits, so a cached view's range covers
+//     every line it used even when an earlier element of the same frame
+//     shaped it first. Without that, a line first shaped outside the
+//     cached view would be disposed under the reused view's element
+//     state (the reference's Arc keeps such a line alive; a Go
+//     *WrappedLine has no refcount). It only ever keeps lines longer.
 //   - sync_font_generation: the reference clears both frames when the
 //     platform's font generation moves (fonts were registered). The
 //     native ABI exposes the generation per layout (the shaping
@@ -103,6 +109,11 @@ type shapedLineCache struct {
 	// current holds this frame's entries so far (the reference
 	// current_frame: RwLock<FrameCache>).
 	current map[shapedLineKey]*WrappedLine
+	// previousUsed and currentUsed are the keys each frame used, in order
+	// (the reference used_wrapped_lines): the line-layout index space of
+	// layoutIndex / reuseLayouts / truncateLayouts.
+	previousUsed []shapedLineKey
+	currentUsed  []shapedLineKey
 	// fontGeneration is the font catalog generation the cached lines
 	// were shaped under (sync_font_generation's remembered value);
 	// hasFontGeneration is false before the first shape.
@@ -213,6 +224,8 @@ func (c *shapedLineCache) layoutWrappedLine(system *TextSystem, request TextLayo
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if line, ok := c.current[key]; ok {
+		// Recorded as used (the port's deviation, see the file comment).
+		c.currentUsed = append(c.currentUsed, key)
 		return line, nil
 	}
 	if line, ok := c.previous[key]; ok {
@@ -224,6 +237,7 @@ func (c *shapedLineCache) layoutWrappedLine(system *TextSystem, request TextLayo
 			c.current = make(map[shapedLineKey]*WrappedLine)
 		}
 		c.current[key] = line
+		c.currentUsed = append(c.currentUsed, key)
 		return line, nil
 	}
 	line, err := system.ShapeText(request)
@@ -245,6 +259,7 @@ func (c *shapedLineCache) layoutWrappedLine(system *TextSystem, request TextLayo
 		c.current = make(map[shapedLineKey]*WrappedLine)
 	}
 	c.current[key] = line
+	c.currentUsed = append(c.currentUsed, key)
 	// The cache owns the line: under the process-wide live-handle bound
 	// its native handle may be parked and re-shaped on demand (Base
 	// ticket 40, text.go shapeHandle).
@@ -269,6 +284,48 @@ func (c *shapedLineCache) finishFrame() {
 		_ = line.Dispose()
 	}
 	c.current = nil
+	c.previousUsed, c.currentUsed = c.currentUsed, c.previousUsed[:0]
+}
+
+// layoutIndex is LineLayoutCache::layout_index (line_layout.rs:957-963):
+// how many line uses the current frame has recorded.
+func (c *shapedLineCache) layoutIndex() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.currentUsed)
+}
+
+// reuseLayouts is LineLayoutCache::reuse_layouts (line_layout.rs:
+// 979-998): the lines the previous frame used in [start, end) move into
+// the current frame and are recorded as used again. A range the cache
+// can no longer address (a font-generation clear emptied the use lists
+// mid-frame) is clamped: its lines were released by that clear.
+func (c *shapedLineCache) reuseLayouts(start, end int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	end = min(end, len(c.previousUsed))
+	for ix := start; ix < end; ix++ {
+		key := c.previousUsed[ix]
+		if line, ok := c.previous[key]; ok {
+			delete(c.previous, key)
+			if c.current == nil {
+				c.current = make(map[shapedLineKey]*WrappedLine)
+			}
+			c.current[key] = line
+		}
+		c.currentUsed = append(c.currentUsed, key)
+	}
+}
+
+// truncateLayouts is LineLayoutCache::truncate_layouts (line_layout.rs:
+// 1000-1006): the current frame's use list is cut back to index (a
+// discarded transact prepaint).
+func (c *shapedLineCache) truncateLayouts(index int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if index < len(c.currentUsed) {
+		c.currentUsed = c.currentUsed[:index]
+	}
 }
 
 // clearLocked releases every cached line (LineLayoutCache::clear): a
@@ -283,6 +340,8 @@ func (c *shapedLineCache) clearLocked() {
 	}
 	c.current = nil
 	c.previous = nil
+	c.currentUsed = nil
+	c.previousUsed = nil
 }
 
 // dispose retires the whole cache with its window's element runtime

@@ -16,10 +16,11 @@ package gpui
 //     bounds, so a deferred draw's paint restores the absolute element
 //     offset and the text style stack it prepainted under (the pin
 //     restores them at prepaint only).
-//   - The port has no view caching, so the pinned prepaint/paint range
-//     reuse (reuse_prepaint / reuse_paint of a cached subtree's deferred
-//     draws) has nothing to replay: every frame prepaints and paints its
-//     deferred draws afresh.
+//   - The pinned prepaint/paint range reuse of a cached subtree's
+//     deferred draws (gpui-perf ticket 04, view_cache.go): a deferred
+//     draw carried over by a cached view's reuse_prepaint has no element
+//     and replays the ranges it recorded last frame (R:3635-3652,
+//     3685-3699).
 
 import (
 	"fmt"
@@ -46,10 +47,16 @@ type deferredDraw struct {
 	rem float32
 	// priority orders the deferred draws (higher paints on top).
 	priority int
-	// element is the deferred element.
+	// element is the deferred element; empty for a draw carried over by
+	// a cached view's reuse_prepaint (the pin's element: None).
 	element AnyElement
 	// absoluteOffset is the element offset the element prepaints under.
 	absoluteOffset Point
+	// prepaintStart/End and paintStart/End are the ranges the draw's
+	// prepaint and paint produced in the frame that recorded them (the
+	// pinned DeferredDraw prepaint_range / paint_range).
+	prepaintStart, prepaintEnd prepaintStateIndex
+	paintStart, paintEnd       paintIndex
 }
 
 // DeferDraw defers the drawing of the element, scheduling it to be
@@ -87,12 +94,7 @@ func (w *Window) DeferDraw(element AnyElement, absoluteOffset Point, priority in
 // its rendered view, its element id and text style stacks, its rem size
 // and its absolute element offset.
 func withDeferredDrawScope(w *Window, draw *deferredDraw, f func(*Window)) {
-	frame := currentFrame(w)
-	frame.elementIDs = append(frame.elementIDs[:0:0], draw.elementIDs...)
-	frame.textStyles = append(frame.textStyles[:0:0], draw.textStyles...)
-	if draw.hasParentNode {
-		currentDispatchTree(w).SetActiveNode(draw.parentNode)
-	}
+	restoreDeferredDrawStacks(w, draw)
 	run := func(w *Window) {
 		WithRemSize(w, draw.rem, func(w *Window) struct{} {
 			WithAbsoluteElementOffsetVoid(w, draw.absoluteOffset, f)
@@ -104,6 +106,17 @@ func withDeferredDrawScope(w *Window, draw *deferredDraw, f func(*Window)) {
 		return
 	}
 	run(w)
+}
+
+// restoreDeferredDrawStacks restores a deferred draw's captured element id
+// and text style stacks and makes its dispatch parent the active node.
+func restoreDeferredDrawStacks(w *Window, draw *deferredDraw) {
+	frame := currentFrame(w)
+	frame.elementIDs = append(frame.elementIDs[:0:0], draw.elementIDs...)
+	frame.textStyles = append(frame.textStyles[:0:0], draw.textStyles...)
+	if draw.hasParentNode {
+		currentDispatchTree(w).SetActiveNode(draw.parentNode)
+	}
 }
 
 // deferredDrawTraversalOrder sorts indices [start, end) by priority,
@@ -141,11 +154,20 @@ func prepaintDeferredDraws(w *Window, app *App) {
 		depth++
 		for _, ix := range deferredDrawTraversalOrder(frame.deferredDraws, roundStart, roundEnd) {
 			draw := frame.deferredDraws[ix]
-			withDeferredDrawScope(w, draw, func(w *Window) {
-				frame.deferredPriorities = append(frame.deferredPriorities, draw.priority)
-				defer func() { frame.deferredPriorities = frame.deferredPriorities[:len(frame.deferredPriorities)-1] }()
-				draw.element.Prepaint(w, app)
-			})
+			prepaintStart := w.prepaintIndex()
+			if draw.element.obj != nil {
+				withDeferredDrawScope(w, draw, func(w *Window) {
+					frame.deferredPriorities = append(frame.deferredPriorities, draw.priority)
+					defer func() { frame.deferredPriorities = frame.deferredPriorities[:len(frame.deferredPriorities)-1] }()
+					draw.element.Prepaint(w, app)
+				})
+			} else {
+				// R:3618-3633, 3647-3649: the stacks and the active node are
+				// restored, then the recorded range is reused.
+				restoreDeferredDrawStacks(w, draw)
+				w.reusePrepaint(draw.prepaintStart, draw.prepaintEnd)
+			}
+			draw.prepaintStart, draw.prepaintEnd = prepaintStart, w.prepaintIndex()
 		}
 		frame.elementIDs = nil
 		frame.textStyles = nil
@@ -170,11 +192,19 @@ func paintDeferredDraws(w *Window, app *App) {
 	}
 	for _, ix := range deferredDrawTraversalOrder(frame.deferredDraws, 0, len(frame.deferredDraws)) {
 		draw := frame.deferredDraws[ix]
-		withDeferredDrawScope(w, draw, func(w *Window) {
-			WithContentMaskVoid(w, draw.contentMask, func(w *Window) {
-				draw.element.Paint(w, app)
+		paintStart := w.paintIndex()
+		if draw.element.obj != nil {
+			withDeferredDrawScope(w, draw, func(w *Window) {
+				WithContentMaskVoid(w, draw.contentMask, func(w *Window) {
+					draw.element.Paint(w, app)
+				})
 			})
-		})
+		} else {
+			// R:3679-3683, 3695-3697.
+			restoreDeferredDrawStacks(w, draw)
+			w.reusePaint(draw.paintStart, draw.paintEnd)
+		}
+		draw.paintStart, draw.paintEnd = paintStart, w.paintIndex()
 	}
 	frame.elementIDs = nil
 	frame.textStyles = nil
