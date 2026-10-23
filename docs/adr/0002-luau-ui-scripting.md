@@ -29,8 +29,8 @@ Builds use `CGO_ENABLED=0`, so the Luau VM lives in the native DLL. That needs a
 
 - UI can be written in Luau with reload in about a second (estimated; not yet measured in gpui-go). Go stays the language of the framework and of app logic.
 - The script surface and the Go core share one element and style vocabulary: the browser-like set from research/browser-parity. That vocabulary must be settled before the binding surface is designed.
-- Still open, for the spec:
-  - whether sandboxed plugins (third-party scripts) are a goal;
-  - how scripts are bundled for release;
-  - type definitions and luau-lsp checking;
-  - whether a Go-only dev reload is still wanted for Go-side edits.
+- Decided with the user, 2026-10-23, all "like zgui":
+  - **Plugins: yes, like zgui.** Each plugin runs in its own sandboxed VM (memory limit and a time budget per call). The app declares slots that plugins contribute to. A plugin reaches only what the app grants: specific actions, shared state, fetch, the clipboard, files, and so on. A plugin that fails is left out, and the app keeps running.
+  - **Shipping: like zgui.** Development reads `.luau` files from disk and watches them. Release compiles them to Luau bytecode and embeds them in the binary; a syntax error fails the build with file:line. A shipped app reads nothing from disk except user plugins.
+  - **Types: like zgui.** A generated definition file for luau-lsp covers the whole element, style and event surface. A test fails when the engine accepts something the types lack. There is a `check` command, and debug builds check after every reload and show errors over the window.
+- Still open: whether to have a Go-side auto rebuild and restart (as `tauri dev` does for its Rust backend). The proposal is yes, with keyed Luau state saved across the restart.
