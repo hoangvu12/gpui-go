@@ -4,7 +4,7 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: none
 
@@ -26,3 +26,15 @@ Blocked by: none
 ## Comments
 
 - 2026-10-23 — Created and claimed by the base-port-2 orchestrator from ticket 32's showcase run.
+- 2026-10-23 — Worker finished. The orchestrator updated the assetspec test that pinned the old error and verified on a snapshot.
+
+## Answer
+
+`img()` and the image cache render SVG through ticket 19's SvgRenderer, following the pinned img.rs:
+- asset bytes the codec can't sniff, and in-memory `ImageFormatSVG` images, go to `RenderSingleFrame`
+- `LoadedImage` carries the 2x smooth scale factor, so layout uses pixels divided by the scale
+- failures map to the pinned error variants
+
+The assetspec test that pinned the old "deferred service" error is replaced by a render test and a non-SVG error test.
+
+Orchestrator re-run on a snapshot: gpui, base, assetspec, imagespec and svgspec are ok. Evidence: [ticket38-img-svg-fallback.json](../../../evidence/base/ticket38-img-svg-fallback.json).

@@ -113,6 +113,7 @@ Blocking edges live in each ticket's `Blocked by:`; the frontier is computed fro
 - [Dock](issues/26-dock.md) — layout tree/edit/normalize, state + JSON persistence over the frozen fixtures, placement, drag, panels, TabGroup, DockArea; 152/152 upstream tests.
 - [Diagnostics + LSP](issues/24-diagnostics-lsp.md) — DiagnosticSet, completions/inline completion, code actions, hover, definitions, document colors, semantic tokens, overlay; hand-written lsp types; all upstream tests in scope.
 - [Text extras](issues/30-text-extras.md) — stream fade, range highlights + reveal, HTML (x/net/html) + minifier; all in-scope tests except 11 reveal tests (multi-row layout / request_autoscroll → 37).
+- [img() SVG](issues/38-img-svg-fallback.md) — img() and the image cache render SVG through the native SVG service at the smooth 2x scale, as the pinned img.rs does.
 - Package layout (orchestrator, routine): one `base` package mirroring the single crate; dependency-free data structures (rope, sum tree, segmentation) in subpackages under `base/`.
 
 ## Not yet specified

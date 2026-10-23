@@ -24,9 +24,15 @@ package gpui
 //   - There is no ImageCacheElement / window image_cache_stack in the
 //     port (imagecache.go's deferred pieces), so an img without an
 //     explicit ImageCache uses the window's use_asset path.
-//   - SVG bytes behind ImageSourceImage report the explicit SVG error
-//     (ErrSVGRendererDeferred) exactly like ticket 18's resource loader;
-//     the pin rasterizes them through svg_renderer.render_single_frame.
+//   - SVG bytes (ImageSourceImage with ImageFormatSVG, and resource
+//     bytes the codec cannot sniff) rasterize through the App's
+//     SvgRenderer (svg.go, ticket19) at render_single_frame(bytes, 1.0)
+//     like the pin (platform.rs:3659-3663, img.rs:737-740). The
+//     renderer's parse does not run ticket19's bundled-font
+//     orchestration (ParseSvg's needs-assets suspension) first: SVG
+//     text resolves against the fonts already pushed to the native
+//     registry plus the system fonts, where the pin's resolver would
+//     load the bundled fonts on the first text lookup.
 //   - A zero-frame image (or a zero-height frame) sets no intrinsic
 //     aspect ratio: the pin stores the NaN of 0/0 into the style, which
 //     the port's native layout engine does not accept.
@@ -236,9 +242,11 @@ type imageDecoderLoader struct{}
 // registers the completion redraw of the current view.
 func (w *Window) useDecodedImage(image Image, app *App, notify bool) (ImageAssetResult, bool) {
 	codec, codecErr := app.appImageCodec()
+	// The pinned `let renderer = cx.svg_renderer();` (R:img.rs:611).
+	svg, svgErr := app.SvgRenderer()
 	source := image
 	task, isFirst := FetchAsset[imageDecoderLoader](app, source, func(run *TaskRun) ImageAssetResult {
-		result := decodeImageData(codec, codecErr, source)
+		result := decodeImageData(codec, codecErr, svg, svgErr, source)
 		if result.Err != nil {
 			// The pinned AssetLogger wrapping (asset_cache.rs:40-63).
 			log.Printf("gpui: Failed to load asset: %v", result.Err)
@@ -262,14 +270,24 @@ func (w *Window) useDecodedImage(image Image, app *App, notify bool) (ImageAsset
 // decodeImageData is the pinned ImageDecoder::load body
 // (R:img.rs:607-613 → Image::to_image_data, platform.rs:3626-3668): the
 // known-format clipboard entry decodes the bytes (GIF frames walked, the
-// other formats statically); errors become ImageCacheError::Other (the
-// anyhow conversion).
-func decodeImageData(codec *ImageCodec, codecErr error, image Image) ImageAssetResult {
+// other formats statically) and ImageFormat::Svg renders through
+// svg_renderer.render_single_frame(&self.bytes, 1.0)
+// (platform.rs:3659-3663); errors become ImageCacheError::Other (the
+// anyhow conversion: to_image_data returns anyhow::Result, so even the
+// SVG error lands in Other, R:img.rs:612).
+func decodeImageData(codec *ImageCodec, codecErr error, svg *SvgRenderer, svgErr error, image Image) ImageAssetResult {
+	if image.Format == ImageFormatSVG {
+		if svgErr != nil {
+			return imageErrorResult(ImageCacheErrorOther, svgErr, "")
+		}
+		rendered, err := svg.RenderSingleFrame(image.Bytes, 1.0)
+		if err != nil {
+			return imageErrorResult(ImageCacheErrorOther, err, "")
+		}
+		return ImageAssetResult{Image: newLoadedSvgImage(rendered)}
+	}
 	if codecErr != nil {
 		return imageErrorResult(ImageCacheErrorOther, codecErr, "")
-	}
-	if image.Format == ImageFormatSVG {
-		return imageErrorResult(ImageCacheErrorSVG, fmt.Errorf("%w", ErrSVGRendererDeferred), "")
 	}
 	render, err := codec.DecodeClipboard(image.Bytes, image.Format)
 	if err != nil {
@@ -411,11 +429,12 @@ func absoluteLengthPixels(l Length, rem float32) (float32, bool) {
 }
 
 // renderSize is the pinned RenderImage::render_size (assets.rs:267-270):
-// the frame's pixel size over the image's scale factor (1.0 for every
-// image the port decodes).
+// the frame's pixel size over the image's scale factor (1.0 for decoded
+// raster images, SmoothSvgScaleFactor for a rendered SVG).
 func renderSize(image *LoadedImage, frameIndex int) Size {
 	w, h := image.Size(frameIndex)
-	return Size{Width: float32(w), Height: float32(h)}
+	scale := image.ScaleFactor()
+	return Size{Width: float32(w) / scale, Height: float32(h) / scale}
 }
 
 // RequestLayout implements Element (R:img.rs:277-433): inside the

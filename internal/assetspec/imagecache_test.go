@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -753,11 +754,13 @@ func TestImageLoadURIOKDecodes(t *testing.T) {
 	}
 }
 
-// TestImageLoadSVGFallbackIsExplicitUnsupported pins the SVG signal:
-// bytes the resource entry cannot sniff (the pinned SVG path) fail
-// with the explicit deferred-service error, never a silent skip.
-func TestImageLoadSVGFallbackIsExplicitUnsupported(t *testing.T) {
-	svg := []byte("<svg xmlns=\"http://www.w3.org/2000/svg\"/>")
+// TestImageLoadSVGFallbackRendersThroughTheSVGRenderer pins the SVG
+// path: bytes the resource entry cannot sniff go to the SVG renderer
+// (R:elements/img.rs:737-740) and load as one frame at the smooth 2x
+// scale (R:svg_renderer.rs render_parsed); non-SVG text fails with the
+// Usvg slot (R:elements/img.rs:770-773).
+func TestImageLoadSVGFallbackRendersThroughTheSVGRenderer(t *testing.T) {
+	svg := []byte("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"6\" height=\"4\"><rect width=\"6\" height=\"4\" fill=\"red\"/></svg>")
 	f := newCacheFixture(t, "icon.svg", svg)
 	resource := gpui.EmbeddedResource("icon.svg")
 
@@ -766,14 +769,28 @@ func TestImageLoadSVGFallbackIsExplicitUnsupported(t *testing.T) {
 	}
 	f.ta.RunUntilParked()
 	result, done := f.handle.LoadImage(resource, f.window, f.app)
-	if !done || result.Image != nil || result.Err == nil {
+	if !done || result.Err != nil || result.Image == nil {
 		t.Fatalf("the SVG load = (%+v, %v)", result, done)
 	}
-	if result.Err.Kind != gpui.ImageCacheErrorSVG {
-		t.Fatalf("SVG error kind = %v, want the Usvg/deferred slot", result.Err.Kind)
+	if result.Image.FrameCount() != 1 {
+		t.Fatalf("frames = %d, want 1", result.Image.FrameCount())
 	}
-	if result.Err.Error() != "svg error: gpui: SVG rendering is a deferred service" {
-		t.Fatalf("SVG error = %q", result.Err.Error())
+	if w, h := result.Image.Size(0); w != 12 || h != 8 {
+		t.Fatalf("size = %dx%d, want 12x8 (6x4 at the smooth 2x)", w, h)
+	}
+}
+
+func TestImageLoadNonSVGTextIsSVGError(t *testing.T) {
+	f := newCacheFixture(t, "icon.svg", []byte("not an svg"))
+	resource := gpui.EmbeddedResource("icon.svg")
+	f.handle.LoadImage(resource, f.window, f.app)
+	f.ta.RunUntilParked()
+	result, done := f.handle.LoadImage(resource, f.window, f.app)
+	if !done || result.Image != nil || result.Err == nil {
+		t.Fatalf("the load = (%+v, %v)", result, done)
+	}
+	if result.Err.Kind != gpui.ImageCacheErrorSVG || !strings.HasPrefix(result.Err.Error(), "svg error: ") {
+		t.Fatalf("error = %v %q, want the Usvg slot", result.Err.Kind, result.Err.Error())
 	}
 }
 

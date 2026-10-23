@@ -19,8 +19,7 @@ package gpui
 // interactivity (its object fit and sprite painting landed with Base
 // ticket 08, img.go / paintapi.go), the window image_cache_stack and
 // ImageCacheElement
-// (window.rs/element machinery), the SVG renderer behind the format
-// fallback (ticket19), and wiring
+// (window.rs/element machinery), and wiring
 // is_window_active to real platform activation (the window tickets —
 // the playback policy carries the flag as a parameter).
 
@@ -64,9 +63,10 @@ const (
 	// processing an image (the pinned Arc<image::ImageError>).
 	ImageCacheErrorImage
 	// ImageCacheErrorSVG is ImageCacheError::Usvg: an error processing
-	// an SVG. The pin's slot carries usvg::Error; the port's SVG
-	// renderer is a deferred service (ticket19), so un-sniffed bytes
-	// report the explicit unsupported error here.
+	// an SVG (img.rs:770-773). The pin's slot carries usvg::Error; the
+	// port carries the SvgRenderer's error (svg.go, ticket19), raised
+	// when un-sniffed resource bytes fail to parse or rasterize
+	// (img.rs:737-740, the From<usvg::Error> at img.rs:788-792).
 	ImageCacheErrorSVG
 )
 
@@ -124,12 +124,6 @@ func httpStatusString(status int) string {
 	return strconv.Itoa(status)
 }
 
-// ErrSVGRendererDeferred reports bytes the resource entry could not
-// recognize — the pinned path routes them to the SVG renderer
-// (img.rs's `svg_renderer.render_single_frame`), which is a deferred
-// service in this port, so image loads fail explicitly instead.
-var ErrSVGRendererDeferred = errors.New("gpui: SVG rendering is a deferred service")
-
 // ---------------------------------------------------------------------------
 // Loaded images (assets.rs ImageId/RenderImage identity)
 // ---------------------------------------------------------------------------
@@ -147,10 +141,26 @@ var nextImageID atomic.Uint64
 type LoadedImage struct {
 	id    uint64
 	image *RenderImage
+	// scaleFactor is the pinned RenderImage.scale_factor (assets.rs:223-224,
+	// 1.0 from RenderImage::new at assets.rs:243; SMOOTH_SVG_SCALE_FACTOR
+	// for a rendered SVG, svg_renderer.rs render_parsed). ticket17's
+	// frozen frame model has no such field, so the wrapper carries it;
+	// zero reads as 1.
+	scaleFactor float32
 }
 
 // ID returns the image's unique identity (the pinned RenderImage.id).
 func (i *LoadedImage) ID() uint64 { return i.id }
+
+// ScaleFactor returns the image's render scale factor (the pinned
+// pub(crate) RenderImage.scale_factor): 1 for decoded raster images,
+// SmoothSvgScaleFactor for SVGs rendered through the image loaders.
+func (i *LoadedImage) ScaleFactor() float32 {
+	if i == nil || i.scaleFactor == 0 {
+		return 1
+	}
+	return i.scaleFactor
+}
 
 // RenderImage returns the decoded frame model.
 func (i *LoadedImage) RenderImage() *RenderImage { return i.image }
@@ -235,17 +245,25 @@ type imageLoadCapture struct {
 	registry *AssetRegistry
 	codec    *ImageCodec
 	codecErr error
+	// svg/svgErr are the pinned `let svg_renderer = cx.svg_renderer();`
+	// capture (img.rs:631): the App's SvgRenderer (svg.go, ticket19).
+	svg    *SvgRenderer
+	svgErr error
 }
 
-// newImageLoadCapture snapshots the app's HTTP client, asset registry
-// and image codec on the foreground (the load runs on a worker).
+// newImageLoadCapture snapshots the app's HTTP client, asset registry,
+// image codec and SVG renderer on the foreground (the load runs on a
+// worker; img.rs:628-633).
 func newImageLoadCapture(cx *App) imageLoadCapture {
 	codec, err := cx.appImageCodec()
+	svg, svgErr := cx.SvgRenderer()
 	return imageLoadCapture{
 		client:   cx.HTTPClient(),
 		registry: cx.Assets(),
 		codec:    codec,
 		codecErr: err,
+		svg:      svg,
+		svgErr:   svgErr,
 	}
 }
 
@@ -320,17 +338,38 @@ func (c imageLoadCapture) load(source Resource) ImageAssetResult {
 	// The pinned decode branches by sniffed format (GIF and animated
 	// WebP frame walks, static decode otherwise); ticket17's frozen
 	// ImageCodec owns all of that behind DecodeResource, including the
-	// un-sniffed signal (ErrImageFormatUnknown), which the pin routes
-	// to the SVG renderer — a deferred service here.
+	// un-sniffed signal (ErrImageFormatUnknown: image::guess_format
+	// failed), which routes to the SVG renderer exactly like the pin's
+	// else branch (img.rs:737-740:
+	// svg_renderer.render_single_frame(&bytes, 1.0).map_err(Into::into),
+	// the usvg error becoming ImageCacheError::Usvg).
 	render, err := c.codec.DecodeResource(bytes)
 	if err != nil {
 		if errors.Is(err, ErrImageFormatUnknown) {
-			return imageErrorResult(ImageCacheErrorSVG,
-				fmt.Errorf("%w", ErrSVGRendererDeferred), "")
+			return c.renderSVG(bytes)
 		}
 		return imageErrorResult(ImageCacheErrorImage, err, "")
 	}
 	return ImageAssetResult{Image: newLoadedImage(render)}
+}
+
+// renderSVG is the pinned resource-loader SVG fallback (img.rs:737-740):
+// render_single_frame at a 1.0 scale factor; the rendered image keeps
+// the SMOOTH_SVG_SCALE_FACTOR the render applied (svg_renderer.rs
+// render_parsed sets image.scale_factor) so the img element lays it
+// out at its logical size (assets.rs render_size). A parse/rasterize
+// failure is the Usvg variant. The pin's cx.svg_renderer() cannot fail;
+// the port's lazily created renderer can (the native service is
+// unavailable), and that surfaces as the Other variant.
+func (c imageLoadCapture) renderSVG(bytes []byte) ImageAssetResult {
+	if c.svgErr != nil {
+		return imageErrorResult(ImageCacheErrorOther, c.svgErr, "")
+	}
+	image, err := c.svg.RenderSingleFrame(bytes, 1.0)
+	if err != nil {
+		return imageErrorResult(ImageCacheErrorSVG, err, "")
+	}
+	return ImageAssetResult{Image: newLoadedSvgImage(image)}
 }
 
 // imageErrorResult builds an error result for the variant.
@@ -423,7 +462,18 @@ func utf8Lossy(data []byte) string {
 
 // newLoadedImage wraps one decoded frame model with a fresh identity.
 func newLoadedImage(image *RenderImage) *LoadedImage {
-	return &LoadedImage{id: nextImageID.Add(1), image: image}
+	return &LoadedImage{id: nextImageID.Add(1), image: image, scaleFactor: 1}
+}
+
+// newLoadedSvgImage wraps a rendered SVG with a fresh identity, keeping
+// the scale factor the render applied (svg_renderer.rs render_parsed:
+// RenderImage::new then image.scale_factor = image_scale_factor).
+func newLoadedSvgImage(svg *SvgImage) *LoadedImage {
+	image := newLoadedImage(svg.Image)
+	if svg.ScaleFactor > 0 {
+		image.scaleFactor = svg.ScaleFactor
+	}
+	return image
 }
 
 // NewLoadedImage wraps decoded frames with a fresh image identity (the
