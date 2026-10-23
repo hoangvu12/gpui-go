@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 6 (Claude Code)
+Status: resolved
+Assignee: orchestrator 6 (Claude Code); worker chat e1c615c2
 Blocked by: 01
 Triage: ready-for-agent
 
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 6: verified on core/05-box-painting before merge. Re-ran vet, `go build ./...` and `go test ./internal/parity/... ./gpui/... ./base ./internal/capturespec` (ok). All 4 fixtures and the 6 deliberate-failure tests pass. Re-recording boxpaint-radii gave an identical screenshot. The Chromium citations (FloatRoundedRect::ConstrainRadii, LayoutBox::OverflowClipRect) match the source. Known residual: the pinned shader can't draw a radius past half a side, which R16's rounded mask fixes.
 
 ## Answer
 
