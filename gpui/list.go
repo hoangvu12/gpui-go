@@ -371,7 +371,7 @@ func (u *UniformListElement) Prepaint(global *GlobalElementID, inspector *Inspec
 					Width:  DefiniteAvailableSpace(paddedBounds.Size.Width),
 					Height: DefiniteAvailableSpace(pitch),
 				}, w, app)
-				element.PrepainAt(origin, w, app)
+				element.PrepaintAt(origin, w, app)
 				layout.items = append(layout.items, uniformListItem{element: element, origin: origin})
 			}
 		})

@@ -1,0 +1,54 @@
+{
+  "ticket": "26-dock",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved",
+  "summary": "The dock: layout tree/edit/normalize/builder, active tracking, state and state_convert with JSON persistence over the frozen fixtures, dock placement, drag, panels and the registry, TabGroup and DockArea.",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/dock/** + dock/fixtures/*.json @ c0820693"
+  ],
+  "implementation": {
+    "files": [
+      "base/dock{,_layout_node,_layout_tree,_layout_edit,_layout_normalize,_layout_builder,_active,_state,_state_convert,_placement,_drag,_panel,_registry,_tab_group,_area}.go",
+      "tests: base/dock_{layout,active,state,placement,test_support,tab_group,area}_test.go",
+      "fixtures: base/testdata/dock/*.json (6, copied unchanged)"
+    ],
+    "history": "The worker hit the 2026-10-23 usage limit after its tests were green and was resumed with its context; it re-ran against ticket 36's paint fix."
+  },
+  "tests": {
+    "upstream": 152,
+    "ported": 152,
+    "deviated": 0,
+    "not_applicable": 0,
+    "per_file": "layout/tree 2, layout/edit 13, layout/normalize 11, layout/builder 4, active 7, state 3, state_convert 15, dock_placement 7, drag 4, panel 2, tab_group 27, dock_area 57",
+    "adapted_assertion": "the frozen-tags test compares numbers numerically (Go writes 1.0 as 1)",
+    "real_measurements": "two 300px slots in the 1920px window measure 960/960; a dropped panel splits 960/960; a 200px slot stays 200 beside 1720",
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD f4a75d3 + ticket-26 files and fixtures (24 and 30 in-progress files excluded)",
+        "command": "CGO_ENABLED=0 go vet ./base && gofmt -l base && go build ./...",
+        "result": "clean"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=1 -v",
+        "result": "ok, 1169 PASS (1017 + 152), 0 FAIL, 3 SKIP (ticket-30 deferrals)"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=2",
+        "result": "ok"
+      }
+    ]
+  },
+  "deviations": [
+    "data enums (TabGroupEvent, DockEvent, InsertTarget) as sealed interfaces; Option<Pixels> as *float32; optional indices negative-is-none (InsertTargetTabs uses Ix+HasIx); trait defaults as optional interfaces",
+    "PanelView handles do not own the panel entity (the caller's scope does); area-built placeholders and cached TabGroup/ResizableState entities live in the area's scope and are released when pruned",
+    "the Panel EventEmitter<PanelEvent> bound is not expressible; PanelEvent is defined and, as upstream, nothing in the dock subscribes",
+    "PanelViewsEqual compares panel ids (building a view would add a lease)",
+    "JSON via custom marshalers: frozen tags, {\"panel\": value} shape, version null when absent, missing docks omitted, missing required fields/unknown tags are errors, unknown fields ignored; states compared by value",
+    "docks walked in a fixed left/bottom/right order (upstream iterates a HashMap)",
+    "debug_assert!s in normalize/builder dropped or logged",
+    "gap 2b: plain upstream div() sites call .Block() first"
+  ],
+  "follow_ups": []
+}

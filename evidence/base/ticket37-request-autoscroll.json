@@ -1,0 +1,58 @@
+{
+  "ticket": "37-request-autoscroll",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved",
+  "summary": "Core Window.RequestAutoscroll/TakeAutoscroll and List's autoscroll path (requests taken per item during prepaint, scroll computed with the pinned above/below walks, first pass discarded through a transact rollback and prepainted again); TextView reveal calls it, so a line inside a long block scrolls into view. The inline text row walk replaces per-character position queries. Also ports the uncovered text_view.rs linked-image click test.",
+  "pinned_sources": [
+    "reference/ce-source/crates/gpui/src/window.rs:3165, 3962-3989 (transact), 3991-3999 (request_autoscroll), 4001-4006 (take_autoscroll) @ 254b5dbd",
+    "reference/ce-source/crates/gpui/src/elements/list.rs:1250-1361, 1571-1597 (prepaint_items autoscroll)",
+    "upstream-base/ce/crates/base/src/text/{state,inline,text_view}.rs @ c0820693"
+  ],
+  "implementation": {
+    "files": [
+      "gpui/window.go: pending autoscroll fields (frame-stamped, the port's equivalent of clearing at draw start), RequestAutoscroll, TakeAutoscroll, internal transact rolling back hitboxes, deferred draws, dispatch tree, tab stops and mouse listeners",
+      "gpui/listelement.go: Prepaint follows prepaint_items' autoscroll; header no longer lists the path as omitted (uniform_list has no autoscroll in the pin)",
+      "gpui/list_autoscroll_test.go (new)",
+      "base/text_range_highlight_state.go: w.RequestAutoscroll(line) in requestReveal",
+      "base/text_inline.go: inlineTextRows row walk (doubling + binary search per row end), inlineTextLineBounds/inlineRowsExtent/glyphBoxes over rows; inlineText lays out fresh each frame (bug fix, see deviations)",
+      "base/text_range_highlight_reveal_real_windows_test.go (new), text_range_highlight_reveal_test.go (header), text_view_upstream_test.go (TestLinkedImageHandlerReceivesLeftMiddleAndRightClicks, U:text/text_view.rs:2227-2303)"
+    ]
+  },
+  "tests": {
+    "reveal_tests": "11 left by ticket 30: 10 ported as real-window tests (fail, never skip); 1 deviated (a_reveal_that_cannot_be_shown_gives_up counts laid-out-but-hidden frames up to the attempt limit 8, with 400 words instead of 4000, because the real frame loop keeps drawing while a reveal is pending)",
+    "coverage_gap_closed": "text_view.rs:2227 linked_image_handler_receives_left_middle_and_right_clicks (clicks recorded through the handler; TestApp has no opened_url)",
+    "paint_timing": "test text system 400 words: 1.93s -> 0.06-0.25s, 2.75s -> 0.06s, 1.03s -> 0.03s; real window inlineTextLineBounds 2.3ms -> 1.1ms, glyphBoxes 3.5ms -> 3.8ms",
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD bc44de1 + the ticket-37 working tree (no other workers running)",
+        "command": "CGO_ENABLED=0 go vet ./gpui ./base && gofmt -l gpui base && go build ./...",
+        "result": "clean; no basewip tags"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=1 -v",
+        "result": "ok, 1280 PASS (1268 + 12), 0 FAIL, 0 SKIP"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=2",
+        "result": "ok"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test -p 1 ./gpui ./internal/{listspec,scenespec,inlinespec,layoutspec,authorspec,richtextspec}",
+        "result": "all ok"
+      }
+    ],
+    "environmental": "TestWin32InputRealWindowWheelScrolls failed in about a third of the worker's full gpui runs; instrumented: GetAsyncKeyState(VK_SHIFT)=0x8000, so Shift was held system-wide by interactive use of the machine (nothing in gpui injects Shift); green in 5 consecutive quiet runs and in the orchestrator's run. Same class as the documented cursor gate."
+  },
+  "deviations": [
+    "the autoscroll request is frame-stamped and ignored outside its frame, instead of being cleared at the start of each draw",
+    "transact does not roll back accessed element states or the line-layout index (harmless; see the window.go comment)",
+    "inlineText lays the text out fresh every frame: gpui's TextLayout reuses a cached size without touching the window line cache, so a retained layout pointed at a freed native line ('text shaping handle is stale'); the cache returns the same shaped line, so nothing is reshaped"
+  ],
+  "follow_ups": [
+    "gpui/win32input_windows_test.go:535: guard the per-line check with !event.Modifiers.Shift (it divides by a zero vertical delta when Shift is held)",
+    "gpui/styled_text.go cached-size branch: mark the line used in the window line cache, so retained layouts can be reused as upstream",
+    "performance: paintRowGlyphs fetches all of a long line's glyphs per row (~33% of a 4000-word paint)"
+  ]
+}

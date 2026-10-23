@@ -491,6 +491,16 @@ func (a *App) Shutdown() ShutdownReport {
 	before := s.acks
 	cancelled := a.cancelAllTasksForShutdown()
 	s.run()
+	// The application image codec owns one native atlas slot (the service
+	// bounds live atlases at 8); it retires with the application, like a
+	// window's text atlas retires with the window (element.go
+	// dropDrawState). Without this, every app that decoded an image held
+	// a slot for the life of the process (Base ticket 28: the base test
+	// binary ran out of slots under -count=3).
+	if a.imageCodec != nil {
+		_ = a.imageCodec.Dispose()
+		a.imageCodec = nil
+	}
 	return ShutdownReport{
 		Cancelled:    cancelled,
 		Acknowledged: s.acks - before,

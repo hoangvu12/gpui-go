@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: resolved
+Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: 16, 17, 20
 
 ## Question
@@ -32,3 +32,20 @@ NumberInput, OtpInput, TimeField, Select, Combobox, Calendar, DatePicker and Col
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-23 — Claimed and delegated. Owns new base/{number_input,otp_input,time_field,select,combobox,calendar,date_picker,color_picker}*.go and the Init lines in base/lib.go. It reports any needed input-engine change to the orchestrator (21 owns those files); it also ports state.rs test_number_step.
+- 2026-10-23 — Worker finished. The orchestrator verified it together with 28.
+
+## Answer
+
+NumberInput, OtpInput, TimeField, Select, Combobox, Calendar, DatePicker and ColorPicker are ported in base/{number_input,otp_input,time_field,select,combobox,calendar,date_picker,color_picker}.go. Their initializers join `Init` in upstream order.
+
+Tests: all 42 upstream tests are ported, including state.rs `test_number_step`. 4 of them use different plumbing but keep upstream's assertions.
+
+Deviations:
+- chrono maps to small value types over Go `time`, with formatting through base/strftime.
+- Enums that carry data became structs.
+- Two upstream quirks are kept on purpose: negative hue values above 180°, and the hex field swallowing the next edit.
+
+Open item: the NumberStep field belongs in 21's engine files. Until it lands, NumberInput steps by 1.
+
+Orchestrator re-run on the shared snapshot with 28: `go test ./base` has 747 pass and 3 skip, and `-count=3` is ok. Evidence: [ticket22-input-controls.json](../../../evidence/base/ticket22-input-controls.json).

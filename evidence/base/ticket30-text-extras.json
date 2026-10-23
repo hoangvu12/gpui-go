@@ -1,0 +1,68 @@
+{
+  "ticket": "30-text-extras",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved (in-block reveal scrolling needs a core request_autoscroll; follow-up ticket 37)",
+  "summary": "Streaming fade-in, range highlights with reveal, HTML documents (golang.org/x/net/html per ticket 01) and the html5 minifier; the TextViewState half (motion, rendered text, highlights, reveal, fade tick, TextView.OnReveal/.Motion). The 3 markdown HTML tests skipped since ticket 27 now run.",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/text/{range_highlight,stream_fade,format/html}.rs, text/format/html5minify/*, text/state.rs, text/inline.rs @ c0820693"
+  ],
+  "implementation": {
+    "files": [
+      "new: base/text_{stream_fade,range_highlight,range_highlight_state,html,html5minify}.go",
+      "tests: base/text_{stream_fade,stream_fade_state,range_highlight,range_highlight_state,range_highlight_reveal,range_highlight_real_windows,html}_test.go",
+      "go.mod/go.sum: golang.org/x/net v0.61.0; THIRD_PARTY_NOTICES.md + gen.py GO_SOURCES (BSD-3 block from the module LICENSE, applied by hand as ticket 27 did)",
+      "base/text_markdown_test.go: mdRequireHTMLParser removed (3 tests un-skipped)",
+      "minimal edits to 28's files: text_state.go, text_node_render.go, text_inline.go (+ a bug fix), text_inline_flow.go, text_view.go, comments/headers"
+    ]
+  },
+  "tests": {
+    "per_source": {
+      "stream_fade.rs": "6/6",
+      "range_highlight.rs": "6/6",
+      "format/html.rs": "6/6",
+      "html5minify/mod.rs": "2/2",
+      "state.rs stream_fade module": "12/12",
+      "state.rs range_highlights module": "26/26",
+      "state.rs reveal_range module": "22: 8 ported, 3 deviated, 11 not ported",
+      "state.rs HTML tests": "3/3",
+      "inline.rs (deferred by 28)": "5: 4 ported, 1 deviated (real-window, Consolas)",
+      "text_view.rs inline HTML": "1/1",
+      "markdown HTML (deferred by 27)": "3/3"
+    },
+    "count_correction": "28 recorded 59 deferred state.rs tests; the true count owned here is 63 (12 + 26 + 22 + 3)",
+    "reveal_deviated": [
+      "an_empty_range_reveals_its_line and revealing_a_visible_block_does_not_scroll pass but are weak: the TestApp text system lays a document on one visual line",
+      "a_reveal_not_carried_out_in_time_is_dropped backdates the request by 2s (AdvanceClock would draw the pending frames and carry the reveal out)"
+    ],
+    "reveal_not_ported": "11 need a block laid out on many rows (the test text system cannot); 8 also need Window::request_autoscroll (absent in gpui-go); on_reveal_scrolls_a_container and a_reveal_that_cannot_be_shown_gives_up could run as real-window tests",
+    "inline_deviated": "highlights_follow_centered_and_right_aligned_rows: real shaped text reports the widest row (44px) as the laid-out width where the pin uses the wrap width (R:text_system/line_layout.rs:647-651); rows and highlights stay consistent",
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD c5453e2 + the ticket-30 working tree (no other workers running)",
+        "command": "CGO_ENABLED=0 go mod verify && go vet ./base && gofmt -l base && go build ./...",
+        "result": "all modules verified; clean; no basewip tags"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=1 -v",
+        "result": "ok, 1268 PASS (1188 + 80), 0 FAIL, 0 SKIP"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=2",
+        "result": "ok"
+      }
+    ]
+  },
+  "bug_fixed": "text_inline.go inlineTextLineBounds did not extend the last row by half a line height for text ending in \\n (U:text/inline.rs:698-711); caught by row_walk_matches_the_character_walk",
+  "deviations": [
+    "a scrollable view reveals a whole off-screen block, not a line inside a long block (no request_autoscroll)",
+    "empty text gets one empty run (StyledText rejects text with no runs)",
+    "the two debug-only tracing::warn! calls for <img> without src are dropped",
+    "Rust f32 parse mirrored with strconv (rejects hex floats and digit separators)"
+  ],
+  "follow_ups": [
+    "ticket 37: gpui Window.RequestAutoscroll(bounds) taken by List in prepaint (R:window.rs request_autoscroll, R:elements/list.rs autoscroll path), the call in inlineText.requestReveal, and the 8 reveal tests",
+    "performance: inlineCharStops/inlineTextLineBounds call PositionForIndex per character (a 400-word line spends ~2s painting); upstream uses a row walk"
+  ]
+}

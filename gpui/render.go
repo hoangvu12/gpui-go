@@ -33,6 +33,7 @@ package gpui
 
 import (
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -390,10 +391,12 @@ func LastDrawnScene(w *Window) *Scene {
 	return ds.lastScene
 }
 
-// GlyphAtlas returns the atlas that holds the window's glyphs: the
-// atlas its text system rasterized every frame's glyph sprites into
-// (the element pipeline's per-window atlas; the reference's window
-// text system owns the atlas behind the platform renderer).
+// GlyphAtlas returns the window's sprite atlas: the atlas its text
+// system rasterized every frame's glyph sprites into, and the atlas the
+// window's img() and svg() sprites are painted into as well (the pin's
+// one per-window sprite_atlas; see spriteAtlas). It is the element
+// pipeline's per-window atlas; the reference's platform window owns it
+// behind the renderer.
 //
 // A consumer-owned present loop passes it to Surface.DrawScene and
 // Surface.RenderScene whenever it presents LastDrawnScene(w): the
@@ -430,6 +433,61 @@ func (w *Window) GlyphAtlas() (*Atlas, error) {
 		return nil, fmt.Errorf("gpui: GlyphAtlas: %w (deterministic test windows shape no glyph sprites)", ErrNoGlyphAtlas)
 	}
 	return rts.atlas, nil
+}
+
+// spriteAtlas returns the window's sprite atlas: the ONE atlas the pin
+// paints every sprite kind into — glyphs (window.rs:4865), SVG masks
+// (window.rs:5009) and image frames (window.rs:5104) all go through
+// self.sprite_atlas, the platform window's renderer atlas
+// (window.rs:1541; gpui_windows window.rs:1113 → directx_renderer.rs:387),
+// and the renderer resolves every sprite batch's texture through that
+// same atlas (directx_renderer.rs:1133-1170 draw_*_sprites →
+// self.atlas.get_texture_view). The port's per-window atlas is the one
+// the window's text system owns (GlyphAtlas), so a present loop passing
+// GlyphAtlas() draws image and SVG sprites too (Base ticket 40: images
+// painted into the application's image atlas failed at present with
+// "polychrome sprite batch needs texture 0").
+//
+// Deterministic test windows own no window atlas (they rasterize no
+// glyphs and never present): their image and SVG sprites go into the
+// application image atlas, where the test-support observers read them.
+func (w *Window) spriteAtlas() (*Atlas, error) {
+	ds, ok := windowDrawStates[w]
+	if ok {
+		text := ds.text
+		if ds.frame != nil && ds.frame.text != nil {
+			text = ds.frame.text
+		}
+		if rts, ok := text.(*realWindowTextSystem); ok && rts.atlas != nil {
+			return rts.atlas, nil
+		}
+	}
+	if atlas := w.app.ImageAtlas(); atlas != nil {
+		return atlas, nil
+	}
+	return nil, fmt.Errorf("gpui: the window has no sprite atlas (the application image atlas is unavailable)")
+}
+
+// windowSpriteAtlases returns the sprite atlases of the application's
+// open real windows (the pinned App::drop_image walk over
+// self.windows, app.rs:2815-2825), in window id order.
+func (a *App) windowSpriteAtlases() []*Atlas {
+	ids := make([]WindowID, 0, len(a.windows))
+	for id := range a.windows {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	var atlases []*Atlas
+	for _, id := range ids {
+		ds, ok := windowDrawStates[a.windows[id]]
+		if !ok {
+			continue
+		}
+		if rts, ok := ds.text.(*realWindowTextSystem); ok && rts.atlas != nil {
+			atlases = append(atlases, rts.atlas)
+		}
+	}
+	return atlases
 }
 
 // WindowPrimitiveCounts returns the current frame's quad and glyph

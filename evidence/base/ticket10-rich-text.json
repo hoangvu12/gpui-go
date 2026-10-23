@@ -1,0 +1,111 @@
+{
+  "ticket": "10-rich-text",
+  "effort": "gpui-base",
+  "date": "2026-10-22",
+  "result": "resolved (inline-paragraph per-run paint -> ticket 35; ShapeLine force width -> tickets 21/23)",
+  "summary": "Per-run styled text paint (ticket 02's fallback: shape once, paint each run clipped to its selection rectangles) plus the text APIs Base was written against: TextRun paint fields, HighlightStyle/Highlight/CombineHighlights, Hsla Blend/FadeOut, TextStyle Highlight/ToRun, Window.TextSystem (WindowTextSystem ShapeLine/LayoutWidth/LineWrapper), the legacy ShapedLine facade (Len/Width/WithLen/XForIndex/ClosestIndexForX/IndexForX/Paint/PaintBackground), the legacy LineWrapper (WrapLine, LineFragment, Boundary, MAX_INDENT, letter spacing), StyledText (WithRuns/WithHighlights/WithDefaultHighlights/WithFontFamilyOverrides) and TextLayout (IndexForPosition/PositionForIndex/Bounds/LineHeight/Len/Text/WrappedText).",
+  "pinned_sources": [
+    "reference/ce-source/crates/gpui/src/style.rs:675-740,751-772,1088-1107,1159-1274",
+    "reference/ce-source/crates/gpui/src/color.rs:93-110,227-243",
+    "reference/ce-source/crates/gpui/src/text_system.rs:291-383,489-504",
+    "reference/ce-source/crates/gpui/src/text_system/line.rs:33-79,247-477",
+    "reference/ce-source/crates/gpui/src/text_system/line_layout.rs:405-435,698-770",
+    "reference/ce-source/crates/gpui/src/elements/text.rs:386-634,808-1161",
+    "reference/ce-source/crates/gpui/src/window.rs:2372-2375,4732-4796",
+    "reference/ce-source/crates/gpui/src/platform.rs:1243-1400 (TestPlatformTextLayout geometry)",
+    "legacy gpui-ce beb5a6d crates/gpui/src/text_system.rs:332,430-469,745-760",
+    "legacy gpui-ce beb5a6d crates/gpui/src/text_system/line.rs:22-130",
+    "legacy gpui-ce beb5a6d crates/gpui/src/text_system/line_layout.rs:56-114,849-872",
+    "legacy gpui-ce beb5a6d crates/gpui/src/text_system/line_wrapper.rs:16-158,481-546,670-742",
+    "palette-0.7.7 src/blend/blend_with.rs:57-71, equations.rs:52-140,235-238"
+  ],
+  "implementation": {
+    "files": [
+      "gpui/text.go (TextRun paint fields)",
+      "gpui/text_run.go (new)",
+      "gpui/shaped_line.go (new)",
+      "gpui/rich_paint.go (new)",
+      "gpui/line_wrapper.go (new)",
+      "gpui/styled_text.go (new)",
+      "gpui/rich_text_test.go (new)",
+      "internal/richtextspec/richtext_test.go (new)",
+      "internal/richtextspec/richtext_real_test.go (new, windows)"
+    ]
+  },
+  "tests": {
+    "added": 18,
+    "upstream_ported": 4,
+    "upstream_ported_list": [
+      "style.rs test_basic_highlight_style_combination",
+      "style.rs test_combine_highlights",
+      "legacy line_wrapper.rs test_wrap_line",
+      "legacy line_wrapper.rs test_is_word_char"
+    ],
+    "upstream_deviated": 4,
+    "upstream_deviated_list": [
+      "elements/text.rs centered_text_keeps_its_device_pixel_offset_when_its_parent_moves (scale 2.0 only: the port's test window has no set_scale_factor)",
+      "elements/text.rs text_measurement_replaces_state_when_wrap_width_changes (public Len/Bounds/LineHeight instead of private TextLayoutInner state)",
+      "legacy line_wrapper.rs test_tracking_changes_measured_width (system font instead of bundled .ZedMono)",
+      "gpui_ce_parley styled_document_uses_parley_paint_runs_without_changing_geometry (system fonts; asserts identical shaped geometry, paint styles never cross the seam)"
+    ],
+    "upstream_not_applicable": 24,
+    "upstream_not_applicable_reasons": [
+      "14 legacy truncation tests (test_tracking_changes_truncation_width, test_truncate_line_end/start/middle, test_truncate_multiple_runs_end/start, test_update_run_after_truncation_end, 7 test_multiline_truncation_*): the truncation family is not ported; Base never calls it",
+      "legacy test_wrap_shaped_line: macOS-only, asserts the removed per-glyph WrapBoundary of the legacy shaper",
+      "elements/text.rs 5 text_transform tests + truncation_candidates_keep_complete_graphemes_and_cover_output_with_runs: text transform / overflow truncation are not applied (like the port's Text element)",
+      "elements/text.rs test_into_element_for, text_macro_id, accessible_text_keeps_its_unicode_value_and_stable_identity: the Text element, not StyledText"
+    ],
+    "commands": [
+      {
+        "command": "CGO_ENABLED=0 go test ./gpui ./internal/richtextspec -count=1",
+        "result": "ok (gpui 6.8s, richtextspec 1.0s; TestRealRichText opens a real window, fails rather than skips)"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./internal/textspec ./internal/glyphspec -count=1",
+        "result": "ok"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./internal/inlinespec -count=1",
+        "result": "ok"
+      },
+      {
+        "command": "go vet ./gpui ./internal/richtextspec; gofmt -l gpui internal/richtextspec",
+        "result": "clean"
+      }
+    ],
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD 94c630b + the staged ticket-10 files (ticket 14 in-progress base files excluded)",
+        "command": "CGO_ENABLED=0 go build ./... && go vet ./gpui ./internal/richtextspec && gofmt -l gpui internal/richtextspec",
+        "result": "clean"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./internal/richtextspec -count=1 -v",
+        "result": "ok, 13 PASS incl. TestRealRichText (real window), 0 SKIP"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test -p 1 ./gpui ./internal/textspec ./internal/glyphspec ./internal/inlinespec ./internal/scenespec ./internal/authorspec ./internal/layoutspec -count=1",
+        "result": "ok x7"
+      }
+    ]
+  },
+  "deviations": [
+    "ligature across a color boundary: shaped once, so the ligature stays one glyph; it is painted once per touching color span and clipped at the selection-rectangle x (observed: Calibri 'office' shapes to 4 glyphs and each side shows its run color); a backend reporting the ligature as an atomic cluster would give it one color",
+    "decoration offsets are derived: underline at baseline + descent*0.618 and strikethrough at baseline - ascent*0.5 (the pin's own absent-offset fallbacks, line.rs:437,448); the pin reads Parley run offsets that do not cross the rev-11 ABI",
+    "ShapedLine x/index geometry uses one caret stop per logical cluster (WrappedLine.Clusters + Caret) instead of the legacy per-glyph byte index table; inside a ligature there are per-grapheme stops",
+    "ShapeLine rejects a non-nil force width (ErrTextValue): legacy apply_force_width_to_layout repositions glyphs, which the native paint path cannot; one Base call site passes a force width (input/base/element.rs line-number measurement)",
+    "LayoutWidth and LineWrapper take a FontDescriptor (the seam resolves descriptors) instead of a resolved FontId; WrapLine returns a slice instead of a lazy iterator",
+    "a real-window ShapedLine shares the window line-layout cache entry: valid for its frame and the next (no Arc refcount over native handles)",
+    "StyledText inside a Block/Inline paragraph: the paragraph painter (inline.go, not this ticket's file) paints the text in one ambient color",
+    "the line-layout cache key ignores the run paint fields (they never change shaped geometry)",
+    "CombineHighlights folds active highlights in input order (the pin folds a HashSet with unspecified order)"
+  ],
+  "native_artifact": "unchanged (rev 11)",
+  "branch": "base-port-2",
+  "decision_02_note": "Decision 02 expected a ligature across a color boundary to take one color; the implementation clips each run's paint to its selection rects and Parley splits a ligature's advance across its characters, so each side shows its own run color. Recorded as a deviation (visual-only, arguably closer to per-character intent); no user action needed.",
+  "follow_ups": [
+    "ticket 35: Block/Inline paragraph pieces paint StyledText in one ambient color; route piece painting through paintStyledDocument with the published runs cut to each piece's byte range (gpui/inline.go, gpui/inline_real.go)",
+    "tickets 21/23: WindowTextSystem.ShapeLine rejects a non-nil force width (native paint cannot reposition glyphs); Base's input/base/element.rs line-number measurement passes one, re-express it there",
+    "gpui App.IsTestScheduler (ticket 13 follow-up) still open"
+  ]
+}

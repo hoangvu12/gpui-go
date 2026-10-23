@@ -38,6 +38,8 @@ Consequence for the core record: the ticket-33 audit's "6911/6911 reconciled" as
 
 Base resolves `gpui-ce 0.2.2` **from crates.io** (`upstream-base/ce/Cargo.lock:3057-3060`), which keeps Zed's legacy text system (`LineWrapper`/`LineFragment`/`Boundary`, `ShapedLine::x_for_index`, 4-arg `shape_line`, `layout_width`). Our pin 254b5dbd carries the same version string but replaced that API with the Parley backend. The baseline's "same API line" holds for everything except text. Resolution: a Go-side legacy facade over `ShapeText` ([10](issues/10-rich-text.md)); geometry in input/text is re-expressed, not transliterated.
 
+**2b. Default display.** The same crates.io 0.2.2 line defaults `Style::default().display` to `Block` (`~/.cargo/git/checkouts/gpui-ce-6758b1db058c6497/beb5a6d/crates/gpui/src/style.rs:971`); our pin defaults to `Flex` (`reference/ce-source/crates/gpui/src/style.rs:1024-1027`). Upstream layouts and tests that rely on a plain div stacking as a block differ under the core; found by ticket 13 (styled cross-axis test adapted). Component tickets record each affected site. Convention (ticket 17): where upstream's base element is a plain `div()`, the Go constructor calls `.Block()` before the caller's style, so upstream layout holds and a caller's `.Flex()` still wins.
+
 ### 3. Native-artifact gaps (frozen rev 11) → decision [02](issues/02-native-gap-policy.md)
 
 | Gap | Evidence | Proposed Go-side fallback |
@@ -65,7 +67,7 @@ Everything else (quads with radii/borders, shadows, layers, paths, cursor, point
 | Wave | Tickets | Parallelism |
 |---|---|---|
 | 0 — decisions (user) | [01 dependencies](issues/01-dependency-policy.md), [02 native gaps](issues/02-native-gap-policy.md) | — |
-| 1 — core completion (`gpui/`) | [03](issues/03-frame-loop.md) [04](issues/04-wall-clock-timers.md) [05](issues/05-styled-vocabulary.md) [09](issues/09-state-context-helpers.md) → [06](issues/06-div-interactivity.md) [07](issues/07-scrolling.md) [08](issues/08-element-paint-api.md) → [10](issues/10-rich-text.md) [11](issues/11-a11y-authoring.md) [12](issues/12-test-harness.md) | 4 → 3 → 3 workers |
+| 1 — core completion (`gpui/`) | [35 inline runs](issues/35-inline-styled-runs.md) (follow-up of 10); [03](issues/03-frame-loop.md) [04](issues/04-wall-clock-timers.md) [05](issues/05-styled-vocabulary.md) [09](issues/09-state-context-helpers.md) → [06](issues/06-div-interactivity.md) [07](issues/07-scrolling.md) [08](issues/08-element-paint-api.md) → [10](issues/10-rich-text.md) [11](issues/11-a11y-authoring.md) [12](issues/12-test-harness.md) | 4 → 3 → 3 workers |
 | 2 — Base foundations (`base/`) | [13 infra](issues/13-base-infra.md), [14 motion](issues/14-motion.md), [15 data structures](issues/15-data-structures.md) | 13 ∥ 15, then 14 |
 | 3 — overlays, controls, scroll | [16](issues/16-overlays.md) [17](issues/17-simple-controls.md) [18](issues/18-scroll-family.md), [19 input data](issues/19-input-data-layer.md), [31 plot](issues/31-plot.md) | 5 workers |
 | 4 — input + text | [20](issues/20-single-line-input.md) → [21](issues/21-textarea.md) [22](issues/22-input-controls.md); [27 markdown](issues/27-markdown-parse.md) → [28 TextView](issues/28-text-view.md) | 2 chains |
@@ -89,6 +91,30 @@ Blocking edges live in each ticket's `Blocked by:`; the frontier is computed fro
 - [Test harness — Base-shaped simulate helpers (keystrokes, mouse, drag, a11y node, ComputeStyle)](issues/12-test-harness.md)
 - [Real-window input — button/move/wheel messages routed into element dispatch](issues/34-real-window-input.md)
 - [Element paint API](issues/08-element-paint-api.md) — external painting, Canvas, Deferred, Anchored, Img, animation element, drag preview.
+- [Rich text](issues/10-rich-text.md) — per-run paint fields, HighlightStyle, StyledText/TextLayout, the legacy ShapeLine/LineWrapper facade over ShapeText; ligatures split colors inside the glyph; inline paragraphs → [35](issues/35-inline-styled-runs.md).
+- [Inline styled runs](issues/35-inline-styled-runs.md) — StyledText and Text keep per-run colors/decorations inside inline paragraphs.
+- [Base infra](issues/13-base-infra.md) — `base` package: Init, Theme + shadcn tokens, StyledExt, StateStyle, Root + plugins, GlobalState, reduce motion, History/UndoHistory; 59 tests.
+- [Data structures](issues/15-data-structures.md) — base/rope, base/sumtree, base/segment (uax29 v2.7.0 enters go.mod), base/dataurl, base/strftime; 57 tests.
+- [Motion](issues/14-motion.md) — easings, timing, keyframes, transitions, springs, presence, sequence, reveal in the root base package; 48 upstream tests on the virtual clock; f64 duration scaling deviation.
+- [Input data layer](issues/19-input-data-layer.md) — RopeExt, InputPoint/InputPosition/InputSelection, cursor, change, undo manager, mask patterns; 42 upstream tests.
+- [Simple controls](issues/17-simple-controls.md) — Button pattern + 16 controls (toggle, checkbox, radio, switch, link, tabs, toolbar, accordion, collapsible, avatar, progress, slider, pagination, table); 78 upstream tests; `.Block()` convention for gap 2b.
+- [Overlays](issues/16-overlays.md) — focus trap, positioner, popup, popover, tooltip, hover card, dialog, alert dialog, sheet, toast; 53 upstream tests; Init wires the overlay initializers.
+- [Scroll family](issues/18-scroll-family.md) — scrollbar, scroll bounce, scrollable mask, auto scroll, virtual list; 83 upstream tests; VirtualList content-slot deviation.
+- [Markdown parse](issues/27-markdown-parse.md) — goldmark → mdast adapter → node tree with byte spans; MarkdownPlugin registries; node.rs data model + equality; 82 upstream tests ported/deviated, 10 deferred (3 → 30, 7 rendering → 28); MDX deferred.
+- [Plot](issues/31-plot.md) — scales, shapes (incl. sankey), axis/grid/label/hover, path cache, appear animation; 67/67 upstream tests; solid fills only.
+- [Single-line input](issues/20-single-line-input.md) — InputBaseState engine (modes, blink, movement, edit/history/IME, mouse, layout, render), Input component, Init wires inputInit; 84 of 98 upstream tests ported, 14 not applicable (editor/number/view-cache); placeholder display map until 21.
+- [Input controls](issues/22-input-controls.md) — NumberInput, OtpInput, TimeField, Select, Combobox, Calendar, DatePicker, ColorPicker; 42/42 upstream tests; chrono over Go time.
+- [TextView](issues/28-text-view.md) — inline flow, node render, TextViewState, TextView; ~75 upstream tests ported, 81 deferred to 29/30 with hooks; App.Shutdown now retires the app image codec's atlas slot.
+- [Textarea](issues/21-textarea.md) — display map (wrap/fold), inline tokens, Textarea, multi-line builders; 75 upstream tests ported, 61 editor-only state.rs tests left for 23/24.
+- [Composite controls](issues/25-composite-controls.md) — Tree, NavStack, Resizable (exact split), Questionnaire; 35/35 upstream tests; drawNotify works around the core's notify-while-drawing delivery.
+- [Editor basics](issues/23-editor-basics.md) — Editor mode: language config, auto-close, indent, folding, gutter, editor scrollbar, ghost text, highlighting hooks, decorations, search; 80 of 83 upstream tests ported (3 n/a).
+- [Text selection](issues/29-text-selection.md) — cross-element selection, SelectableText, touch handles, boundaries, TextView adapter; 53/53 upstream + 16 deferred from 28; Root/ElementExt wiring and a core paint-bounds bug follow.
+- [Selection wiring + paint bounds](issues/36-selection-wiring-paint-bounds.md) — Root mounts the selection layer and copies; ElementExt.TextSelectionScope; core: paint uses the prepaint bounds (R:element.rs:537-600).
+- [Dock](issues/26-dock.md) — layout tree/edit/normalize, state + JSON persistence over the frozen fixtures, placement, drag, panels, TabGroup, DockArea; 152/152 upstream tests.
+- [Diagnostics + LSP](issues/24-diagnostics-lsp.md) — DiagnosticSet, completions/inline completion, code actions, hover, definitions, document colors, semantic tokens, overlay; hand-written lsp types; all upstream tests in scope.
+- [Text extras](issues/30-text-extras.md) — stream fade, range highlights + reveal, HTML (x/net/html) + minifier; all in-scope tests except 11 reveal tests (multi-row layout / request_autoscroll → 37).
+- [img() SVG](issues/38-img-svg-fallback.md) — img() and the image cache render SVG through the native SVG service at the smooth 2x scale, as the pinned img.rs does.
+- [request_autoscroll](issues/37-request-autoscroll.md) — core Window.RequestAutoscroll + List autoscroll (transact rollback); in-block reveal; inline row walk; 10 of 11 reveal tests as real-window tests.
 - Package layout (orchestrator, routine): one `base` package mirroring the single crate; dependency-free data structures (rope, sum tree, segmentation) in subpackages under `base/`.
 
 ## Not yet specified

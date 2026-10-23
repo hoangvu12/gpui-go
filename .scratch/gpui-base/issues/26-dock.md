@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: resolved
+Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: 25
 
 ## Question
@@ -30,3 +30,25 @@ DockArea, TabGroup, panels, the registry, layout editing/normalization and JSON 
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-23 — Claimed and delegated. Owns new base/dock*.go and its tests, plus the fixtures copied under base/testdata/dock/.
+- 2026-10-23 — The worker hit the usage limit, was resumed, re-ran against ticket 36 and finished. The orchestrator verified it on a snapshot.
+
+## Answer
+
+The dock is ported in base/dock*.go, with the 6 frozen fixtures in base/testdata/dock/. It covers:
+- the layout tree, edit, normalize and builder
+- active tracking
+- state and state_convert, with JSON persistence through custom `encoding/json` marshalers that keep the frozen tags
+- placement and drag
+- panels and the registry
+- TabGroup and DockArea
+
+Tests: all 152 upstream tests are ported, with none deviated. One assertion compares numbers numerically, because Go writes 1.0 as `1`.
+
+Deviations:
+- Data enums are sealed interfaces.
+- Panel handles don't own the panel entity.
+- `PanelViewsEqual` compares panel ids.
+- The docks are walked in a fixed order.
+
+Orchestrator re-run on a snapshot of HEAD plus 26's files: vet, gofmt and build are clean, `go test ./base` has 1169 pass and 3 skip, and `-count=2` is ok. Evidence: [ticket26-dock.json](../../../evidence/base/ticket26-dock.json).

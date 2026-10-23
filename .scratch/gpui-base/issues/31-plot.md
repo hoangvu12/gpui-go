@@ -4,8 +4,8 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: resolved
+Assignee: base-port-2 orchestrator (2026-10-22)
 Blocked by: 08, 10, 14
 
 ## Question
@@ -31,3 +31,24 @@ Scales, shapes (line/area/bar/arc/pie/radial/stack/sankey), axes, grid, labels, 
 ## Comments
 
 - 2026-10-19 — Created by the GPUI Base port chat from the merged slice inventories (R: = `reference/ce-source/crates/gpui/src`).
+- 2026-10-22 — Claimed by the base-port-2 orchestrator and delegated.
+- 2026-10-23 — The first worker died at the usage-limit stop with 56 of 67 tests ported. A successor orchestrator's fresh worker finished the ticket, and the ticket is resolved.
+
+## Answer
+
+The plot library is in the root `base` package (base/plot*.go), with the Plot theme field in base/theme.go. It covers:
+- scales: band, linear, ordinal, point
+- shapes: arc, area, bar, line, pie, radial line, stack, sankey
+- axis, grid, label, hover readers, the path cache and the plot element
+- the appear animation, with PlotAppearScope
+
+All 67 upstream tests are ported, with none deviated. 8 of the 11 appear tests run windows on the virtual clock.
+
+Deviations:
+- solid colours only (decision 02)
+- no rust_decimal
+- maphash for ShapeKey
+- the appear-scope stack is per window
+- appear memory is keyed by `GlobalElementID.String()`
+
+Orchestrator re-run on a snapshot of HEAD plus 31's files: vet, gofmt and `go build ./...` are clean, `go test ./base` has 533 pass and 3 skip (the ticket-30 deferrals). Evidence: [ticket31-plot.json](../../../evidence/base/ticket31-plot.json).

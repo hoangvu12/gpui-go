@@ -1,0 +1,56 @@
+{
+  "ticket": "19-input-data-layer",
+  "effort": "gpui-base",
+  "date": "2026-10-22",
+  "branch": "base-port-2",
+  "result": "resolved (token-delta and auto-closed-pair types filled by the inline-tokens / auto-close tickets)",
+  "summary": "The headless input data layer in the root base package: RopeExtOf(*rope.Rope) with all 20 RopeExt methods, InputEdit, RopeLines, InputPoint, InputPosition (LSP Position), InputSelection, cursor/selections and text selectors (word ranges over base/segment), change, undo manager with replay, MaskToken/MaskPattern and number-input normalization.",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/input/base/{rope_ext,cursor,selection,change,undo_manager,mask_pattern}.rs @ c0820693"
+  ],
+  "implementation": {
+    "files": [
+      "base/input_rope_ext.go",
+      "base/input_cursor.go",
+      "base/input_selection.go",
+      "base/input_change.go",
+      "base/input_undo_manager.go",
+      "base/input_mask_pattern.go",
+      "+ a _test.go per file",
+      "base/rope/rope_ext_test.go deleted (ticket 15's test-only RopeExt copy; every case is covered by base/input_rope_ext_test.go)"
+    ]
+  },
+  "tests": {
+    "upstream_ported": 42,
+    "detail": "rope_ext 15, cursor 8, selection 2, undo_manager 8, mask_pattern 9 (change.rs has none); 38 exact, 4 adapted (selection Range conversion -> Start/End fields; test_iter_lines skip/take -> Nth/Next; test_place_at px -> float32; normalize_number_input no-copy fast path checked as zero allocations, full-width digit case added)",
+    "not_applicable": 0,
+    "go_only": 1,
+    "orchestrator_rerun": [
+      {
+        "where": "live tree after b152b11 (no workers running)",
+        "command": "CGO_ENABLED=0 go vet ./base ./base/rope && gofmt -l base",
+        "result": "clean"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base ./base/rope -count=1 -v",
+        "result": "ok x2; base 153 PASS (13: 59, 14: 51, 19: 43), 0 FAIL, 0 SKIP"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base/rope -count=1",
+        "result": "ok after the rope_ext_test.go removal"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test -p 1 ./gpui ./internal/scenespec ./internal/inlinespec ./internal/listspec ./internal/authorspec -count=1 (after the PrepaintAt rename)",
+        "result": "ok x5"
+      }
+    ]
+  },
+  "deviations": [
+    "Point, Position and Selection are InputPoint/InputPosition/InputSelection (flat base package; crate-root collisions)",
+    "change.tokenDelta and the undo manager's auto-closed-pairs snapshots are typed any until inline_tokens.rs / auto_close.rs are ported",
+    "optional values: nil slice for no selection snapshot; mask separator 0 = none; Fraction + HasFraction",
+    "IsValid keeps upstream's char-count vs byte-length comparison (mask_pattern.rs:191)",
+    "select_word/select_line belong to the input state ticket; no ropey::Rope re-export (import base/rope)"
+  ],
+  "native_artifact": "unchanged (rev 11)"
+}

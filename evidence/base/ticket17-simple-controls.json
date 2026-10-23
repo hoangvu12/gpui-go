@@ -1,0 +1,78 @@
+{
+  "ticket": "17-simple-controls",
+  "effort": "gpui-base",
+  "date": "2026-10-22",
+  "branch": "base-port-2",
+  "result": "resolved",
+  "summary": "17 upstream control modules in the root base package: Button (the pattern: gpui.Component[*X] over an inner div, RenderOnce recipe, own OnClick/TrackFocus/TabIndex), Toggle, Checkbox(+Indicator), Radio, RadioGroup, Switch(+Track/Thumb), ToggleGroup, Link, Tabs, Toolbar(+Group, roving focus), Accordion(+Item/Header/Panel/Trigger), Collapsible (MotionReveal), Avatar(+Image/Fallback), Progress(+Track/Indicator), Slider (state entity, events, parts), Pagination (pure page math + component), Table parts.",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/{button,toggle,checkbox,radio,radio_group,switch,toggle_group,link,tabs,toolbar,accordion,collapsible,avatar,progress,slider,pagination,table}.rs @ c0820693"
+  ],
+  "implementation": {
+    "files": [
+      "base/<module>.go for each of the 17 modules",
+      "base/<module>_test.go (radio_group/toggle_group tests live in radio_test.go; shared helpers in button_test.go)"
+    ]
+  },
+  "tests": {
+    "upstream_ported": 75,
+    "upstream_deviated": 3,
+    "not_applicable": 0,
+    "go_only": 5,
+    "per_module": "button 8, toggle 7, checkbox 8, radio 5, switch 9, link 7+1 dev, tabs 5, toolbar 7, accordion 3, collapsible 1, progress 3, pagination 4, table 3, slider 4, avatar 0+2 dev",
+    "deviated_list": [
+      "link: TestApp records no opened URLs; asserts Link never calls App.OpenURL instead of cx.opened_url()==None",
+      "avatar x2: the core image element has no debug selector; asserts root size and fallback absence instead of reading avatar-image"
+    ],
+    "go_only_list": [
+      "radio set-position + group role/orientation",
+      "accordion stacking (fails without Block())",
+      "collapsible stacking (fails without Block())",
+      "slider press/release + a11y",
+      "toggle_group/radio_group axis"
+    ],
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD b0199d1 + the staged ticket-17 files (tickets 16/18 in-progress files excluded)",
+        "command": "CGO_ENABLED=0 go vet ./base && gofmt -l base",
+        "result": "clean"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=1 -v",
+        "result": "ok, 235 PASS (153 prior + 82), 0 FAIL, 0 SKIP"
+      }
+    ]
+  },
+  "gap_2b_block_sites": {
+    "handling": "where upstream's base element is a plain div() (Block under crates.io gpui-ce 0.2.2), the constructor calls .Block() before the caller's style, so upstream layout holds and a caller's .Flex() still wins; each file's doc comment lists its sites",
+    "sites": [
+      "link.rs:57",
+      "tabs.rs:200",
+      "toolbar.rs:57",
+      "accordion.rs:26,82,190,261,290",
+      "collapsible.rs:24",
+      "checkbox.rs:67,267",
+      "radio.rs:63",
+      "switch.rs:93,192,247",
+      "radio_group.rs:22",
+      "toggle_group.rs:22",
+      "avatar.rs:21,112",
+      "progress.rs:24,100",
+      "table.rs:24,82,173,231,295",
+      "slider.rs:429,537,648,701",
+      "pagination.rs:115"
+    ],
+    "not_affected": "Button, Toggle, Tab, ToolbarGroup set flex themselves upstream"
+  },
+  "deviations": [
+    "AvatarImage has no interactivity (the core image element has styling methods only)",
+    "upstream enums and Range become structs or (start,end)/(value,ok) pairs",
+    "Slider listener_for -> gpui.Window.ListenerFor; drag payloads unexported with an empty preview; drag-move not exercised by a test",
+    "Collapsible keeps one ordered child list (children and content in call order)"
+  ],
+  "follow_ups": [
+    "optional gpui: DebugSelector on ImgElement would let the two avatar tests port exactly"
+  ],
+  "process_note": "the worker split its work across three sub-agents of its own (beyond the 3-worker cap); later prompts forbid sub-agents",
+  "native_artifact": "unchanged (rev 11)"
+}

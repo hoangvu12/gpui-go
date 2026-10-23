@@ -1,0 +1,42 @@
+{
+  "ticket": "13-base-infra",
+  "effort": "gpui-base",
+  "date": "2026-10-22",
+  "branch": "base-port-2",
+  "result": "resolved (hand-offs to tickets 14, 16, 18, 20, 28, 29, 31)",
+  "summary": "Package github.com/hoangvu12/gpui-go/base: Init/IsMobile, Theme + ThemeGlobal/ThemeGlobalMut, semantic theme tokens (shadcn names: primary, muted, border, ring, ...), scrollbar value types, StyledExt (HFlex/VFlex/RefineStyle/Paddings/Margins/Font*/CornerRadii/Debug*), StateStyle, ElementExt.OnPrepaint, InteractiveElementExt (LockScrollAxis/OnDoubleClick), observe, measure, component traits (Selectable/Disableable/FocusableExt/CollapsibleTrait), ui actions, geometry (Placement/Side/Edges), IndexPath, ListSettings, GlobalState, reduce_motion (SystemParametersInfoW SPI_GETCLIENTAREAANIMATION via syscall), Root + RootPlugin stages, History[T], UndoHistory[T].",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/{lib,theme,theme_tokens,styled,state_style,element_ext,event,observe,measure,component_traits,actions,geometry,index_path,list_settings,global_state,reduce_motion,root,history,undo_history,async_util}.rs @ c0820693",
+    "reference/ce-source/crates/gpui/src/style.rs:1024-1027 (Style::default display Flex at the core pin)"
+  ],
+  "package_layout": "one base package mirroring the crate (base/*.go); dependency-free data structures in subpackages under base/ (ticket 15). Naming: T::f -> TF, new -> NewT, Default -> DefaultT, extension traits -> wrappers (StyledExtOf(gpui.Div()).HFlex()). Recorded in base/doc.go.",
+  "implementation": {
+    "files": ["base/doc.go", "base/lib.go", "base/theme.go", "base/theme_tokens.go", "base/scrollbar_values.go", "base/styled.go", "base/state_style.go", "base/element_ext.go", "base/event.go", "base/observe.go", "base/measure.go", "base/component_traits.go", "base/actions.go", "base/geometry.go", "base/index_path.go", "base/list_settings.go", "base/global_state.go", "base/reduce_motion.go", "base/reduce_motion_windows.go", "base/reduce_motion_other.go", "base/root.go", "base/history.go", "base/undo_history.go", "base/history_test.go", "base/undo_history_test.go", "base/values_test.go", "base/app_test.go", "base/window_test.go"]
+  },
+  "tests": {
+    "total": 59,
+    "upstream_ported": 46,
+    "upstream_ported_detail": "unchanged 42 (history 10, undo_history 14, theme 1, theme_tokens 1, state_style 4, component_traits 2, actions 1, index_path 3, reduce_motion 5, root 1); adapted 4 (styled 1: col-stretch width, see deviations; global_state 2: drop(token) -> Release(); observe 1: normal-build branch only)",
+    "go_only": 13,
+    "not_applicable": ["macos_accessibility.rs (cfg macOS, lib.rs:36; 0 tests)", "async_util.rs (channel re-export replaced by Go chan; 0 tests)", "test_support.rs (only consumer is Kit, out of scope; see deviations)"],
+    "orchestrator_rerun": [
+      {"where": "git checkout-index snapshot of the committed tree + staged base/ (ticket 10/15 in-progress files excluded)", "command": "CGO_ENABLED=0 go vet ./base && gofmt -l base", "result": "clean"},
+      {"command": "CGO_ENABLED=0 go test ./base -count=1 -v", "result": "ok, 59 PASS, 0 FAIL, 0 SKIP"},
+      {"command": "CGO_ENABLED=0 go test ./base -count=3 -run 'Collected|DoubleClick|TabNavigation|ReduceMotion'", "result": "ok"},
+      {"command": "CGO_ENABLED=0 go test ./internal/authorspec ./internal/focusspec -count=1", "result": "ok"}
+    ]
+  },
+  "deviations": [
+    "Retargeting fact (map gap 2b): Base builds against crates.io gpui-ce 0.2.2 whose Style::default is display Block (beb5a6d crates/gpui/src/style.rs:971); the core pin defaults to Flex (style.rs:1024-1027). The styled cross-axis test's col-stretch assertion (styled.rs:283, 200px) becomes 'fills the column's own width' (100px under the default flex row).",
+    "test_support.rs not ported: Kit-only consumer; a Go Observed wrapper would push the element id twice and cannot reach the div hitbox.",
+    "Theme has no plot field yet (PlotMotion needs motion Spring/Transition): ticket 14/31.",
+    "Root: no ctrl-c Copy binding (tickets 20/29), no TextSelectionLayer child (29); activeFocusTrap is a placeholder reporting no trap (16 replaces it); plugin entities owned by the window scope.",
+    "ElementExt::text_selection_scope (29) and GlobalState text_view_state_stack (28) deferred.",
+    "Init covers this ticket's modules only; later modules add their init calls with their tickets.",
+    "reduce_motion treats App.Host()==nil as the test scheduler (real apps call Init after Attach); a gpui App.IsTestScheduler() would replace the guess.",
+    "debug_* helpers always apply (no debug/release split); JSON uses the core's Go color/pixel shapes; schemars/FluentBuilder on scrollbar styles dropped; OngoingScrollLockAxis takes app.",
+    "Scrollbar value types live in base/scrollbar_values.go; ticket 18 moves them into scrollbar.go."
+  ],
+  "follow_ups": ["gpui: App.IsTestScheduler() (or equivalent) to replace the Host()==nil guess", "tickets 14, 16, 18, 20, 28, 29, 31: hand-offs above"],
+  "native_artifact": "unchanged (rev 11)"
+}

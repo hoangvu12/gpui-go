@@ -21,8 +21,10 @@ package gpui
 //     the pin's TextStyle::default color), so the element paints with
 //     the ambient text color unconditionally.
 //   - The pin's Window owns the sprite atlas; the port's element
-//     paints into the application's image atlas (the port's single
-//     application atlas — imagecache.go's recorded adaptation).
+//     paints into the window's sprite atlas too (Window.spriteAtlas —
+//     the GlyphAtlas a present loop passes; Base ticket 40). Only
+//     deterministic test windows, which own no window atlas, fall back
+//     to the application image atlas.
 //   - The mask rasterization runs synchronously on the foreground
 //     paint thread exactly like the pin (render_alpha_mask inside
 //     paint_svg; the distribution contract's "CPU decoding need not
@@ -409,9 +411,13 @@ func PaintSvg(w *Window, app *App, bounds Bounds, path string, data []byte, tran
 	if err != nil {
 		return fmt.Errorf("gpui: PaintSvg: %w", err)
 	}
-	atlas := app.ImageAtlas()
-	if atlas == nil {
-		return fmt.Errorf("gpui: PaintSvg: the application image atlas is unavailable")
+	// The window's sprite atlas (window.rs 5008-5009
+	// self.sprite_atlas.get_or_insert_with): the atlas the present loop
+	// passes, so the monochrome batch resolves its texture there (Base
+	// ticket 40).
+	atlas, err := w.spriteAtlas()
+	if err != nil {
+		return fmt.Errorf("gpui: PaintSvg: %w", err)
 	}
 
 	// The get_or_insert_with cache-hit probe: a live tile draws without

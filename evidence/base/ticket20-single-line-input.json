@@ -1,0 +1,67 @@
+{
+  "ticket": "20-single-line-input",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved (editor/textarea paths and two optional gpui seams recorded)",
+  "summary": "Single-line Input: the shared InputBaseState editing engine (kind hooks, modes incl. masked/pattern/number, blink cursor, movement, edit/history/clipboard/IME, mouse selection, layout, render, InputEditorStyle), the input element and the Input component; IME through Window.HandleInput; Init now runs inputInit (U:lib.rs:241) for the key bindings.",
+  "pinned_sources": [
+    "upstream-base/ce/crates/base/src/input/base/{kind,mode,blink_cursor,movement,state,element,layout,mod}.rs @ c0820693",
+    "upstream-base/ce/crates/base/src/input/input/mod.rs, input/mod.rs, lib.rs:241"
+  ],
+  "implementation": {
+    "files": [
+      "base/input{,_base,_blink_cursor,_element,_kind,_layout,_mode,_movement}.go",
+      "base/input_state{,_edit,_mouse,_render,_style}.go",
+      "tests: base/input_{base,blink_cursor,element,mode,state,state_ops,state_style}_test.go",
+      "base/lib.go: Init calls inputInit (orchestrator)"
+    ],
+    "history": "First worker died at the 2026-10-22 usage-limit stop with 5 non-compiling files; the successor orchestrator gated them with //go:build basewip20 and a fresh worker (2026-10-23) finished and removed the tags."
+  },
+  "tests": {
+    "upstream_in_scope": 98,
+    "ported": 84,
+    "ported_with_deviation": 7,
+    "not_applicable": 14,
+    "go_only": 1,
+    "per_module": "blink_cursor 5/5, mode 4/4, base/mod 2/2, highlighting (InputEditorStyle) 4/4, element 24/33, state single-line 45/50",
+    "not_applicable_reasons": [
+      "element.rs 9: editor gutter (2), geometric decorations (5), decoration precedence (TextDecoration), editor scrollbar layout -> editor/textarea tickets",
+      "state.rs 5: inline tokens (3), test_number_step (number input, ticket 22), cached-parent test (no AnyView::cached in the Go core)"
+    ],
+    "deviations": [
+      "5 clipboard tests feed text through insertClipboard (TestApp has no clipboard: ErrNoHost); copy tests assert IsCopyable/unchanged value",
+      "only_a_multi_line_input_paints_scrollbars: single-line half only",
+      "test_code_editor reads the indent-guides flag directly (has_indent_guides is in indent.rs)"
+    ],
+    "orchestrator_rerun": [
+      {
+        "where": "git checkout-index snapshot of HEAD 8631875 + ticket-20 files + base/lib.go (ticket-28 in-progress files excluded)",
+        "command": "CGO_ENABLED=0 go vet ./base && gofmt -l base && go build ./...",
+        "result": "clean; no basewip tags left"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=1 -v",
+        "result": "ok, 618 PASS (533 + 85), 0 FAIL, 3 SKIP (ticket-30 deferrals)"
+      },
+      {
+        "command": "CGO_ENABLED=0 go test ./base -count=3 -run 'Input|Blink|Mode'",
+        "result": "ok"
+      }
+    ]
+  },
+  "deviations": [
+    "display map is a one-row-per-line placeholder; ticket 21 replaces it with the wrapping map",
+    "code-editor paths (auto-close, smart indent, folding, gutter, editor scrollbar, ghost text, search, decorations), inline tokens, touch selection, search sessions are inert stand-ins for later tickets; Input.token/on_token_click not ported; InputEditorStyle lacks highlight_styles/fold_icon_renderer",
+    "native right-click context menu not ported (right press moves the caret)",
+    "an empty line shapes as one zero-length run (the text layer rejects an empty run list)",
+    "mode-specific methods exist on every mode and panic on the wrong one (upstream: compile error)",
+    "Render uses cx.StrongSelf() (cx.Entity() handle expires after Render)"
+  ],
+  "follow_ups": [
+    "optional gpui: in-memory TestApp clipboard (as the pinned TestPlatform) to port the 5 clipboard tests verbatim",
+    "optional gpui: AnyView::cached view caching (cached-parent test)",
+    "optional gpui: Blue() helper",
+    "21: wrapping display map + multi-line state.rs tests; 22: number input step test; editor tickets: the editor-only paths"
+  ]
+}

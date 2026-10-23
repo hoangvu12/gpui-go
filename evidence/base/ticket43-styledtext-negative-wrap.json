@@ -1,0 +1,22 @@
+{
+  "ticket": "43-styledtext-infinite-wrap",
+  "effort": "gpui-base",
+  "date": "2026-10-23",
+  "branch": "base-port-2",
+  "result": "resolved",
+  "root_cause": "not +Inf: the wrap width was -24. The StyledText measure matches the pin (gpui/styled_text.go:283-293 vs R:elements/text.rs:809-827). In a flex row's min-content pass the padded code-block box (base/text_node_render.go:587) is sized 0, and taffy 0.13 gives its text a known width of 0 - 24 padding without clamping (flexbox.rs:474; the same pinned taffy as upstream). The pin passes Some(-24) through unchecked (R:text_system.rs:350-363) and parley breaks at every opportunity (gpui_ce_parley text_system.rs:917-919, 1116-1117); the port's native service rejects negative widths (reference/native/src/text.rs:1535-1543) and the Go side checked the same, so the frame failed",
+  "fix": "gpui/text.go nativeWrapWidth raises a negative wrap width to 0 before the native call; ShapeText and WrappedLine.Relayout accept negatives and still reject NaN/Inf. Zero and -24 behave the same in parley (line_break.rs:516-523, 626); the reported width is min(wrap, advance) (R:text_system/line_layout.rs:646-651), clamped to 0 by the measure. No DLL change",
+  "implementation": {
+    "files": [
+      "gpui/text.go",
+      "gpui/styled_text_wrap_test.go (new): TestStyledTextUnderPaddedBoxInFlexRowShapes (real text service, headless test window, Base's code-block structure in a flex row), TestShapeTextNegativeWrapWidthWrapsLikeZero; both fail without the fix"
+    ]
+  },
+  "tests": {
+    "orchestrator_rerun": "go vet/gofmt clean; go test ./gpui (real-host skip list) ok; go test -p 1 ./internal/{richtextspec,inlinespec,textspec} -skip 'OnRealGPU|RealWindow|^TestReal' ok; go test ./base -skip Real ok; go test ./examples/base-gallery ok"
+  },
+  "notes": [
+    "the reproduction lives in gpui: base test windows use a fake text system that does not check wrap widths",
+    "headless skip lists for the spec packages need ^TestReal too"
+  ]
+}
