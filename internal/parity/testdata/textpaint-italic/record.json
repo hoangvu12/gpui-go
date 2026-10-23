@@ -1,0 +1,32 @@
+{
+  "name": "textpaint-italic",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T20:27:03Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "segoe-italic": {
+      "x": 80,
+      "y": 248,
+      "width": 480,
+      "height": 64
+    },
+    "tahoma-italic": {
+      "x": 80,
+      "y": 168,
+      "width": 480,
+      "height": 64
+    },
+    "tahoma-upright": {
+      "x": 80,
+      "y": 88,
+      "width": 480,
+      "height": 64
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

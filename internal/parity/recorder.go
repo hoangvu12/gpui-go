@@ -80,7 +80,7 @@ func RecordFixture(f Fixture) error {
 		return err
 	}
 
-	browser, err := launchChrome(chrome, dir)
+	browser, err := launchChrome(chrome, dir, f.ChromeFlags)
 	if err != nil {
 		return err
 	}
@@ -179,10 +179,13 @@ type headlessChrome struct {
 
 // launchChrome starts headless Chrome with a throwaway profile and a
 // picked-free DevTools port, and waits for the endpoint to answer.
+// extraFlags are the fixture's own ChromeFlags, appended after the
+// harness's flags (a duplicate of a harness flag is Chrome's to
+// resolve; keep the sets disjoint).
 // The port is picked by briefly listening and closing (a tiny race
 // another process could win), so a launch whose endpoint never comes
 // up is retried on a fresh port.
-func launchChrome(path, dir string) (*headlessChrome, error) {
+func launchChrome(path, dir string, extraFlags []string) (*headlessChrome, error) {
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
 		// Pick a free port by briefly listening, then hand it to Chrome.
@@ -193,15 +196,18 @@ func launchChrome(path, dir string) (*headlessChrome, error) {
 		port := probe.Addr().(*net.TCPAddr).Port
 		_ = probe.Close()
 
-		cmd := exec.Command(path,
+		args := []string{
 			"--headless=new",
 			fmt.Sprintf("--remote-debugging-port=%d", port),
-			"--user-data-dir="+filepath.Join(dir, "profile"),
+			"--user-data-dir=" + filepath.Join(dir, "profile"),
 			"--no-first-run",
 			"--no-default-browser-check",
 			"--disable-background-timer-throttling",
 			"about:blank",
-		)
+		}
+		// The fixture's flags go before the URL argument.
+		args = append(args[:len(args)-1], append(append([]string{}, extraFlags...), "about:blank")...)
+		cmd := exec.Command(path, args...)
 		cmd.Stdout = nil
 		cmd.Stderr = nil
 		if err := cmd.Start(); err != nil {
