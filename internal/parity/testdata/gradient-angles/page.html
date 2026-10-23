@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 24px;
+	}
+	.row {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 24px;
+	}
+	/* Every box is non-square: the diagonal angles are where the CSS
+	   gradient-line length and the pin's dominant-axis normalization
+	   differ. */
+	.box {
+		box-sizing: border-box;
+		width: 160px;
+		height: 100px;
+		display: flex;
+		/* The CSS the class layer draws: the legacy sRGB interpolation
+		   (no "in oklab") Chrome applies to these stops. */
+	}
+</style>
+</head>
+<body>
+	<div class="row">
+		<div class="box" data-id="grad-0" style="background: linear-gradient(0deg, #ef4444 0%, #3b82f6 100%)"></div>
+		<div class="box" data-id="grad-45" style="background: linear-gradient(45deg, #ef4444 0%, #3b82f6 100%)"></div>
+		<div class="box" data-id="grad-90" style="background: linear-gradient(90deg, #ef4444 0%, #3b82f6 100%)"></div>
+	</div>
+	<div class="row">
+		<div class="box" data-id="grad-135" style="background: linear-gradient(135deg, #ef4444 0%, #3b82f6 100%)"></div>
+		<div class="box" data-id="grad-180" style="background: linear-gradient(180deg, #ef4444 0%, #3b82f6 100%)"></div>
+		<div class="box" data-id="grad-37" style="background: linear-gradient(37deg, #ef4444 0%, #3b82f6 100%)"></div>
+	</div>
+</body>
+</html>

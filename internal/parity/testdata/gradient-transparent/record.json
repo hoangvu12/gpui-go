@@ -1,0 +1,32 @@
+{
+  "name": "gradient-transparent",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T21:30:26Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "fade-alpha": {
+      "x": 424,
+      "y": 150,
+      "width": 160,
+      "height": 100
+    },
+    "fade-down": {
+      "x": 56,
+      "y": 150,
+      "width": 160,
+      "height": 100
+    },
+    "fade-right": {
+      "x": 240,
+      "y": 150,
+      "width": 160,
+      "height": 100
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

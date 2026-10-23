@@ -165,6 +165,7 @@ The palette is Tailwind CSS v3.4's default palette. It has 22 families (slate, g
 - **Flex and grid**: `flex-grow`, `flex-shrink`, `grid-cols-<n>`, `grid-rows-<n>`, `col-span-<n>`, `row-span-<n>`, `col-start-<n>`, `col-end-<n>`, `row-start-<n>`, `row-end-<n>`.
 - **Aspect ratio**: `aspect-square`, `aspect-video`, `aspect-[4/3]`, `aspect-[1.5]`.
 - **Blur**: `blur-none`, `blur-xs|sm` (4px), `blur` (8px), `blur-md|lg|xl|2xl|3xl` (12/16/24/40/64px) and `blur-[6px]`. `backdrop-blur-*` takes the same values. A blur class replaces the element's filter.
+- **Gradients** (two stops, interpolated like CSS): `bg-linear-to-t|tr|r|br|b|bl|l|tl`, `bg-linear-<deg>` (also `-bg-linear-45`), `bg-linear-[45deg]` (deg, rad, grad, turn), then `from-<color>` and `to-<color>` set the two stops (`from-red-500`, `from-[#ff0000]`, `from-transparent`, `from-red-500/50`), and `from-<pos>`/`to-<pos>` their positions (`from-10%`, `from-[12.5%]`). The classes compose in order: `bg-linear-to-r from-red-500 to-blue-500` (Tailwind's default stops are transparent at 0% and 100%, so `bg-linear-to-r` alone paints nothing). The gradient replaces the background color — there is no CSS `background-color` under `background-image` layer. Interpolation is CSS's legacy sRGB, premultiplied: `bg-linear-[45deg]` matches a real Tailwind page bit for bit, and the named and numeric forms (`bg-linear-to-r`, `bg-linear-45`) render the equivalent CSS *without* the `in oklab` Tailwind itself emits — add the `/srgb` modifier to opt into exactly the one space drawn. Under a state variant the whole gradient must live in that variant: `hover:bg-linear-to-r hover:from-red-500 hover:to-blue-500`.
 - **Overflow**: `overflow-hidden|visible|clip` and their `-x`/`-y` forms. `overflow-auto` and `overflow-scroll` (and their `-x`/`-y` forms) make the div scroll, so the element needs `.ID(…)` and must be a Div or a component that embeds `Interactive`.
 
 ## What Class rejects, and what to use instead
@@ -185,7 +186,12 @@ A rejected class is skipped, the rest of the string still applies, and the reaso
 | `inline-block`, `inline-grid`, `table*`, `contents`, `flow-root`, `list-item` | Use `flex`, `grid`, `block`, `inline` or `inline-flex`. |
 | `outline-*` | GPUI draws no focus outline. Drop it, and use `ring-*` for a visible focus ring. |
 | `ring-offset-*`, `ring-inset` | Not supported. Use `inset-ring-*` for an inset ring. |
-| `bg-gradient-*`, `bg-linear-*`, `bg-radial-*`, `bg-conic-*`, `from-*`, `via-*`, `to-*` | Backgrounds are solid colors only. |
+| `bg-gradient-*` | Tailwind v4 renamed it: write `bg-linear-to-r from-… to-…`. |
+| `via-*`, `via-none` | A middle stop makes three, and the scene record carries exactly two stops (ticket 52, the R16 gradient redesign). |
+| `bg-linear-to-r/oklab` and other non-srgb modifiers | Gradients interpolate in sRGB (CSS's legacy default); the record's Oklab arm is the pinned 2.2-curve path, not CSS's (ticket 52). `/srgb` is accepted. |
+| `bg-radial-*`, `bg-conic-*` | Radial and conic gradients need the R16 record (ticket 52); only two-stop linear gradients are supported. |
+| `from-…` before `bg-linear-…` | from-/to- set one stop of the gradient the same class string (or variant) starts: put `bg-linear-…` first. |
+| `from-[10px]` (a length position) | Stop positions are percentages of the gradient line (`from-10%`); a length needs the line's length at paint time (ticket 52). |
 | `bg-cover`, `bg-center`, `bg-no-repeat`, … | Background images are not supported. Put an `Img` behind the content. |
 | `drop-shadow-*`, `grayscale`, `invert`, `brightness-*`, `contrast-*`, `mix-blend-*`, … | Only `blur-*` and `backdrop-blur-*` filters are supported. |
 | `float-*`, `clear-*` | Use flex or grid. |

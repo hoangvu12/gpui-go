@@ -207,12 +207,31 @@ func refineBoxed[T any](dst **T, src Optional[T], box **T, equal func(a, b T) bo
 func equalComparable[T comparable](a, b T) bool { return a == b }
 
 // equalBackground compares backgrounds bit for bit (so -0 and +0 or NaN
-// payloads never share a box).
+// payloads never share a box): the arm, the solid's channels, and the
+// gradient's direction, angle and stops.
 func equalBackground(a, b Background) bool {
+	if a.Kind != b.Kind {
+		return false
+	}
+	if a.Kind == BackgroundKindLinearGradient {
+		return a.Gradient.Direction == b.Gradient.Direction &&
+			math.Float32bits(a.Gradient.Angle) == math.Float32bits(b.Gradient.Angle) &&
+			equalGradientStop(a.Gradient.From, b.Gradient.From) &&
+			equalGradientStop(a.Gradient.To, b.Gradient.To)
+	}
 	return math.Float32bits(a.Solid.H) == math.Float32bits(b.Solid.H) &&
 		math.Float32bits(a.Solid.S) == math.Float32bits(b.Solid.S) &&
 		math.Float32bits(a.Solid.L) == math.Float32bits(b.Solid.L) &&
 		math.Float32bits(a.Solid.A) == math.Float32bits(b.Solid.A)
+}
+
+// equalGradientStop compares two gradient stops bit for bit.
+func equalGradientStop(a, b GradientStop) bool {
+	return math.Float32bits(a.Color.H) == math.Float32bits(b.Color.H) &&
+		math.Float32bits(a.Color.S) == math.Float32bits(b.Color.S) &&
+		math.Float32bits(a.Color.L) == math.Float32bits(b.Color.L) &&
+		math.Float32bits(a.Color.A) == math.Float32bits(b.Color.A) &&
+		math.Float32bits(a.Position) == math.Float32bits(b.Position)
 }
 
 // refineBoxed is Refine with a box cache; a nil cache boxes every value

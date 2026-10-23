@@ -1,0 +1,38 @@
+{
+  "name": "gradient-classes",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T21:30:33Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "class-117": {
+      "x": 148,
+      "y": 212,
+      "width": 160,
+      "height": 100
+    },
+    "class-45": {
+      "x": 332,
+      "y": 88,
+      "width": 160,
+      "height": 100
+    },
+    "class-corner": {
+      "x": 332,
+      "y": 212,
+      "width": 160,
+      "height": 100
+    },
+    "class-to-r": {
+      "x": 148,
+      "y": 88,
+      "width": 160,
+      "height": 100
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

@@ -165,29 +165,54 @@ func OpacityHsla(c Hsla, factor float32) Hsla {
 	return Hsla{H: c.H, S: c.S, L: c.L, A: c.A * clamp01(factor)}
 }
 
-// Background is the solid form of the pinned Background (the packed
-// reference's BackgroundTag::Solid shape; gradients and patterns are
-// later work).
+// Background is the pinned Background's two drawn arms: a solid color
+// or a two-stop linear gradient with CSS semantics (the packed
+// reference's BackgroundTag::Solid and ::LinearGradient shapes; the
+// tag-2/3 pattern arms are not ported). A gradient interpolates its
+// stops premultiplied in the sRGB color space — CSS's legacy default
+// (css-images-4 §coloring-gradient-line) — and its direction is an
+// angle or a CSS keyword (see LinearGradient). The zero value is a
+// transparent solid.
 type Background struct {
-	// Solid is the stored HSL-with-alpha record.
+	// Kind is which arm the background carries.
+	Kind BackgroundKind
+	// Solid is the stored HSL-with-alpha record (the solid arm).
 	Solid Hsla
+	// Gradient is the two-stop linear gradient (the gradient arm).
+	Gradient LinearGradient
 }
 
 // SolidBackground builds a solid background from a color.
-func SolidBackground(c Hsla) Background { return Background{Solid: c} }
-
-// Opacity applies an element opacity (the pinned Background::opacity:
-// alpha multiplied by the clamped factor, hue round-tripped).
-func (b Background) Opacity(factor float32) Background {
-	return Background{Solid: OpacityBackground(b.Solid, factor)}
+func SolidBackground(c Hsla) Background {
+	return Background{Kind: BackgroundKindSolid, Solid: c}
 }
 
-// AsSolid returns the stored solid color.
+// Opacity applies an element opacity (the pinned Background::opacity:
+// the solid's alpha multiplied by the clamped factor with the hue
+// round-tripped, each gradient stop's alpha multiplied by the clamped
+// factor — the pinned LinearColorStop::opacity, alpha only).
+func (b Background) Opacity(factor float32) Background {
+	if b.Kind == BackgroundKindLinearGradient {
+		b.Gradient.From.Color = OpacityHsla(b.Gradient.From.Color, factor)
+		b.Gradient.To.Color = OpacityHsla(b.Gradient.To.Color, factor)
+		return b
+	}
+	return Background{Kind: BackgroundKindSolid, Solid: OpacityBackground(b.Solid, factor)}
+}
+
+// AsSolid returns the stored solid color (the solid arm's value; a
+// gradient's arm is meaningless).
 func (b Background) AsSolid() Hsla { return b.Solid }
 
-// IsTransparent reports whether the background is fully transparent (the
-// pinned Background::is_transparent for the solid tag: a == 0).
-func (b Background) IsTransparent() bool { return b.Solid.A == 0 }
+// IsTransparent reports whether the background is fully transparent
+// (the pinned Background::is_transparent: a solid with a == 0, or a
+// gradient whose every stop has a == 0).
+func (b Background) IsTransparent() bool {
+	if b.Kind == BackgroundKindLinearGradient {
+		return b.Gradient.From.Color.A == 0 && b.Gradient.To.Color.A == 0
+	}
+	return b.Solid.A == 0
+}
 
 // ---------------------------------------------------------------------------
 // Paint parameter types (logical pixels, the paint API surface)
