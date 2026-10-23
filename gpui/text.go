@@ -640,6 +640,8 @@ func (ts *TextSystem) ShapeText(request TextLayoutRequest) (*WrappedLine, error)
 	if request.LineClamp != nil && *request.LineClamp < 1 {
 		return nil, fmt.Errorf("gpui: ShapeText: %w: line clamp must be >= 1", ErrTextValue)
 	}
+	// Hard tabs shape as spaces fitted to the tab stops (text_tabs.go).
+	request, tabs := prepareTabs(request)
 	specs := make([]native.TextRunSpec, len(request.Runs))
 	for i, run := range request.Runs {
 		var letterSpacing *float32
@@ -673,13 +675,22 @@ func (ts *TextSystem) ShapeText(request TextLayoutRequest) (*WrappedLine, error)
 	if err != nil {
 		return nil, wrapTextError("ShapeText", err)
 	}
-	line := &WrappedLine{system: ts, handle: handle, request: shapeRequest}
+	line := &WrappedLine{system: ts, handle: handle, request: shapeRequest, tabs: tabs}
 	// The handle counts as live before the summary fetch so the failure
 	// path's own Dispose balances the counter.
 	ts.liveHandles.Add(1)
 	if err := line.refreshSummary(); err != nil {
 		_ = line.Dispose()
 		return nil, err
+	}
+	if tabs != nil {
+		line.mu.Lock()
+		err := line.fitTabsLocked()
+		line.mu.Unlock()
+		if err != nil {
+			_ = line.Dispose()
+			return nil, wrapTextError("ShapeText", err)
+		}
 	}
 	return line, nil
 }
@@ -1091,6 +1102,10 @@ type WrappedLine struct {
 	// request is the deep-copied shaping request (the wrap/clamp
 	// following Relayout) a parked line re-shapes from.
 	request native.ShapeRequest
+	// tabs is the hard-tab fit of a text holding tabs (nil otherwise):
+	// request then carries the tabs as spaces with their fitted spacing
+	// (text_tabs.go).
+	tabs *tabFit
 	// evictable marks a line owned by a line-layout cache (text_cache.go):
 	// its handle may be parked under the live-handle bound.
 	evictable bool
@@ -1585,7 +1600,14 @@ func (l *WrappedLine) Relayout(wrapWidth *float32, lineClamp *uint32) error {
 		// A parked line re-shapes under the constraints it now carries.
 		l.request.WrapWidth = copyFloat32Ptr(wrapWidth)
 		l.request.LineClamp = copyUint32Ptr(lineClamp)
-		return l.refreshSummaryOf(handle)
+		if err := l.refreshSummaryOf(handle); err != nil {
+			return err
+		}
+		// New rows move the tabs: fit them to their stops again.
+		if l.tabs != nil {
+			return l.fitTabsLocked()
+		}
+		return nil
 	})
 }
 

@@ -206,6 +206,14 @@ func (m *inputDisplayMap) setFont(font gpui.FontDescriptor, fontSize float32, w 
 	m.rebuildFoldProjection()
 }
 
+// setTabSize sets the columns a hard tab expands to (Base ticket 44,
+// input_tab_map.go: Zed's tab map rule; upstream Base has no tab layer).
+func (m *inputDisplayMap) setTabSize(tabSize int, w *gpui.Window) {
+	if m.wrap.setTabSize(tabSize, w) {
+		m.rebuildFoldProjection()
+	}
+}
+
 // ensureTextPrepared is U:input/editor/display_map/display_map.rs:256-261.
 func (m *inputDisplayMap) ensureTextPrepared(text rope.Rope, w *gpui.Window) {
 	if m.wrap.ensureTextPrepared(text, w) {

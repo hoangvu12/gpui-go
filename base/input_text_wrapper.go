@@ -23,6 +23,7 @@ package base
 import (
 	"slices"
 	"sort"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/hoangvu12/gpui-go/base/rope"
@@ -150,6 +151,13 @@ type textWrapper struct {
 
 	// lineWrapper caches the facade wrapper for font and fontSize.
 	lineWrapper *gpui.LineWrapper
+
+	// tabSize is the tab size the display expands hard tabs to (Base
+	// ticket 44, input_tab_map.go); 0 until the mode's is set (the
+	// default then applies). spaceWidth caches the font's space, the
+	// width of one tab column (0 until measured).
+	tabSize    int
+	spaceWidth float32
 }
 
 // newTextWrapper is TextWrapper::new
@@ -248,7 +256,36 @@ func (t *textWrapper) setFont(font gpui.FontDescriptor, fontSize float32, w *gpu
 	t.font = font
 	t.fontSize = fontSize
 	t.lineWrapper = nil
+	t.spaceWidth = 0
 	t.updateAll(t.text, w)
+}
+
+// setTabSize sets the tab size hard tabs expand to, re-wrapping when it
+// changes (Base ticket 44: a tab's width is its columns). It reports
+// whether it changed.
+func (t *textWrapper) setTabSize(tabSize int, w *gpui.Window) bool {
+	if tabSize == t.tabSize {
+		return false
+	}
+	t.tabSize = tabSize
+	t.updateAll(t.text, w)
+	return true
+}
+
+// tabsFor is the display's tab rule (input_tab_map.go): the tab size
+// (the default TabSize's until a mode sets one) and the font's space,
+// measured once per font through the window. Before the first paint
+// sets the font (a zero size) no space is measured and tabs are left to
+// the text system.
+func (t *textWrapper) tabsFor(w *gpui.Window) inputTabs {
+	if t.spaceWidth <= 0 && w != nil && t.fontSize > 0 {
+		t.spaceWidth = w.TextSystem().LayoutWidth(t.font, t.fontSize, ' ')
+	}
+	size := t.tabSize
+	if size == 0 {
+		size = DefaultTabSize().TabSize
+	}
+	return newInputTabs(size, t.spaceWidth, t.font)
 }
 
 // prepareIfNeed is U:input/editor/display_map/text_wrapper.rs:271-278.
@@ -279,9 +316,19 @@ func (t *textWrapper) facadeWrapper(w *gpui.Window) *gpui.LineWrapper {
 func (t *textWrapper) update(changedText rope.Rope, rng InputSelection, newText rope.Rope, w *gpui.Window) {
 	lineWrapper := t.facadeWrapper(w)
 	metrics := t.inlineMetrics
+	tabs := t.tabsFor(w)
 	t.updateWith(changedText, rng, newText, func(line string, wrapWidth float32, lineStart int) []gpui.Boundary {
 		if lineWrapper == nil {
 			return nil
+		}
+		// Hard tabs wrap at their display width (input_tab_map.go), their
+		// columns counted from the buffer line's start.
+		col := 0
+		if strings.Contains(line, "\t") {
+			ext := RopeExtOf(&changedText)
+			if rowStart := ext.LineStartOffset(ext.OffsetToPoint(lineStart).Row); rowStart < lineStart {
+				col = tabs.columnAfter(changedText.Slice(rowStart, lineStart).String(), 0)
+			}
 		}
 		var fragments []gpui.LineFragment
 		offset := 0
@@ -298,16 +345,14 @@ func (t *textWrapper) update(changedText rope.Rope, rng InputSelection, newText 
 				continue
 			}
 			if offset < start {
-				fragments = append(fragments, gpui.LineFragmentText(line[offset:start]))
+				fragments, col = tabs.wrapFragments(fragments, line[offset:start], col)
 			}
 			fragments = append(fragments, gpui.LineFragmentElement(m.width, end-start))
+			col = tabs.columnAfter(line[start:end], col)
 			offset = end
 		}
-		if len(fragments) == 0 {
-			return lineWrapper.WrapLine([]gpui.LineFragment{gpui.LineFragmentText(line)}, wrapWidth)
-		}
-		if offset < len(line) {
-			fragments = append(fragments, gpui.LineFragmentText(line[offset:]))
+		if offset < len(line) || len(fragments) == 0 {
+			fragments, _ = tabs.wrapFragments(fragments, line[offset:], col)
 		}
 		return lineWrapper.WrapLine(fragments, wrapWidth)
 	})
