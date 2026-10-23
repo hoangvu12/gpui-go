@@ -119,12 +119,20 @@ type BackdropFilter struct {
 	CornerRadii Corners
 	// CornerSmoothing in [0, 1].
 	CornerSmoothing float32
-	// BlurRadius is the gaussian blur radius, device pixels (this slice
-	// carries a single-filter chain, the pinned SmallVec's one entry).
+	// BlurRadius is the chain's composed gaussian blur radius, device
+	// pixels (blurs compose by quadrature; colour functions carry no
+	// radius).
 	BlurRadius float32
 	// Opacity is the element opacity captured at paint time, multiplied
 	// into the composited result.
 	Opacity float32
+	// ColorMatrix is the chain's composed row-major 4x5 colour-matrix
+	// payload, valid when ColorMatrixCount is 1 (CSS filter colour
+	// functions; browser-core ticket 41).
+	ColorMatrix [20]float32
+	// ColorMatrixCount is 0 (no colour functions) or 1 (one composed
+	// payload).
+	ColorMatrixCount uint32
 }
 
 // FilterBoundary is the start or end marker of a content-filter
@@ -141,10 +149,19 @@ type FilterBoundary struct {
 	CornerRadii Corners
 	// CornerSmoothing in [0, 1].
 	CornerSmoothing float32
-	// BlurRadius is the gaussian blur radius, device pixels.
+	// BlurRadius is the chain's composed gaussian blur radius, device
+	// pixels (blurs compose by quadrature; colour functions carry no
+	// radius).
 	BlurRadius float32
 	// Opacity of the group (the pinned snapshot uses 1.0).
 	Opacity float32
+	// ColorMatrix is the chain's composed row-major 4x5 colour-matrix
+	// payload, valid when ColorMatrixCount is 1 (CSS filter colour
+	// functions; browser-core ticket 41).
+	ColorMatrix [20]float32
+	// ColorMatrixCount is 0 (no colour functions) or 1 (one composed
+	// payload).
+	ColorMatrixCount uint32
 	// IsStart opens the group; false closes it.
 	IsStart bool
 }
@@ -230,6 +247,9 @@ type SceneCommand struct {
 	Range [2]uint32
 	// Smoothed marks corner-smoothed batches (quads and shadows).
 	Smoothed bool
+	// Pixelated marks sprite batches drawn through the point sampler
+	// (the native rev-15 per-sprite image-rendering flag).
+	Pixelated bool
 	// TextureIndex is the sprite batch's atlas texture (the pinned
 	// PrimitiveBatch texture_id; the kind pool is implied by the batch
 	// kind).
@@ -649,18 +669,35 @@ func (ctx *PaintContext) WithElementOpacity(opacity float32) *PaintContext {
 // blur radii (<= 0) run inline: no marker is inserted and
 // EndFilterGroup must still be called (it is a no-op).
 func (s *Scene) BeginFilterGroup(bounds Bounds, blurRadius float32, radii Corners, cornerSmoothing float32, ctx *PaintContext) error {
-	boundary, ok := filterBoundaryFor(bounds, blurRadius, radii, ctx.Mask, ctx.ScaleFactor, cornerSmoothing)
-	if !ok {
-		return nil
-	}
-	return s.InsertFilterBoundary(boundary)
+	return s.BeginFilterGroupChain(bounds, FilterChain{BlurRadius: blurRadius}, radii, cornerSmoothing, ctx)
 }
 
 // EndFilterGroup closes the innermost content-filter group with the SAME
 // snapshot as its begin (the caller re-supplies the parameters; the
 // pinned with_filter_layer snapshots once — pass the identical values).
 func (s *Scene) EndFilterGroup(bounds Bounds, blurRadius float32, radii Corners, cornerSmoothing float32, ctx *PaintContext) error {
-	boundary, ok := filterBoundaryFor(bounds, blurRadius, radii, ctx.Mask, ctx.ScaleFactor, cornerSmoothing)
+	return s.EndFilterGroupChain(bounds, FilterChain{BlurRadius: blurRadius}, radii, cornerSmoothing, ctx)
+}
+
+// BeginFilterGroupChain inserts the start marker of one content-filter
+// group carrying a whole composed chain (browser-core ticket 41): the
+// blur radii composed by quadrature and the colour-matrix filters
+// composed into one 4x5 payload, the native rev-15 filter record's
+// shape. An empty chain runs inline: no marker is inserted and
+// EndFilterGroupChain must still be called (it is a no-op).
+func (s *Scene) BeginFilterGroupChain(bounds Bounds, chain FilterChain, radii Corners, cornerSmoothing float32, ctx *PaintContext) error {
+	boundary, ok := filterBoundaryFor(bounds, chain, radii, ctx.Mask, ctx.ScaleFactor, cornerSmoothing)
+	if !ok {
+		return nil
+	}
+	return s.InsertFilterBoundary(boundary)
+}
+
+// EndFilterGroupChain closes the innermost content-filter group with
+// the SAME snapshot as its begin (pass the identical chain and
+// parameters; the pinned with_filter_layer snapshots once).
+func (s *Scene) EndFilterGroupChain(bounds Bounds, chain FilterChain, radii Corners, cornerSmoothing float32, ctx *PaintContext) error {
+	boundary, ok := filterBoundaryFor(bounds, chain, radii, ctx.Mask, ctx.ScaleFactor, cornerSmoothing)
 	if !ok {
 		return nil
 	}
@@ -672,7 +709,15 @@ func (s *Scene) EndFilterGroup(bounds Bounds, blurRadius float32, radii Corners,
 // paint_backdrop_filter: the element opacity captured at paint time is
 // stored on the record). Identity blur radii paint nothing.
 func (s *Scene) PaintBackdrop(bounds Bounds, blurRadius float32, radii Corners, cornerSmoothing float32, ctx *PaintContext) error {
-	filter, ok := backdropFilterFor(bounds, blurRadius, radii, ctx.Mask, ctx.ScaleFactor, ctx.ElementOpacity, cornerSmoothing)
+	return s.PaintBackdropFilterChain(bounds, FilterChain{BlurRadius: blurRadius}, radii, cornerSmoothing, ctx)
+}
+
+// PaintBackdropFilterChain paints a backdrop filter carrying a whole
+// composed chain (browser-core ticket 41): the blur composed by
+// quadrature and the colour-matrix payload on one record. An empty
+// chain paints nothing.
+func (s *Scene) PaintBackdropFilterChain(bounds Bounds, chain FilterChain, radii Corners, cornerSmoothing float32, ctx *PaintContext) error {
+	filter, ok := backdropFilterFor(bounds, chain, radii, ctx.Mask, ctx.ScaleFactor, ctx.ElementOpacity, cornerSmoothing)
 	if !ok {
 		return nil
 	}

@@ -1897,8 +1897,10 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 	}
 
 	// paint_backdrop_filter_with_corner_smoothing (window.rs:4487): the
-	// identity filters are dropped; the port's backdrop record carries
-	// one blur, so a chain paints one record per filter in order. The
+	// identity filters drop; rev 15's record carries a whole composed
+	// chain (the blurs composed by quadrature, the colour functions as
+	// one 4x5 matrix), so a chain paints one record (browser-core
+	// ticket 41; the port once painted one record per filter). The
 	// backdrop-filter node paints before the element's own filter group,
 	// as in Chromium ("the backdrop-filter node comes first",
 	// core/paint/paint_layer.cc:2629-2635 @ 0d4dcd4f).
@@ -1917,10 +1919,8 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 	// Chrome fixture measured the pin value at 0.42 mean channel diff
 	// vs 9.73 for the doubled radius.) No divergence: the pin's value
 	// passes through.
-	for _, filter := range s.BackdropFilter {
-		if !filter.IsIdentity() {
-			mustPaint(frame.scene.PaintBackdropFilterCornerSmoothing(bounds, filter.BlurRadius, radii, smoothing, frame.paint), "backdrop filter")
-		}
+	if chain := composeFilterChain(s.BackdropFilter); !chain.IsEmpty() {
+		mustPaint(frame.scene.PaintBackdropFilterChain(bounds, chain, radii, smoothing, frame.paint), "backdrop filter")
 	}
 
 	paintUnit := func(w *Window) {
@@ -2039,10 +2039,18 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 		paintUnit(w)
 		return
 	}
-	// with_filter_layer_with_corner_smoothing (window.rs:4537): the port's
-	// filter group carries one blur, so a chain nests one group per
-	// filter (outermost last, applying the filters in order); identity
-	// filters run inline inside WithFilterLayerCornerSmoothing.
+	chain := composeFilterChain(s.Filter)
+	if chain.IsEmpty() {
+		paintUnit(w)
+		return
+	}
+	// with_filter_layer_with_corner_smoothing (window.rs:4537), rev 15:
+	// one group per chain carrying the whole composed payload — the
+	// blurs as one quadrature-composed radius and the colour functions
+	// as one 4x5 matrix in CSS chain order (browser-core ticket 41; the
+	// port once nested one group per filter, which the depth cap of 2
+	// silently degraded for chains of three or more). An identity chain
+	// runs inline with no group.
 	//
 	// Recorded divergence toward CSS (D8) at this Style paint path, and
 	// one verified non-divergence:
@@ -2089,29 +2097,11 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 		Origin: Point{X: bounds.Origin.X - ink.Left, Y: bounds.Origin.Y - ink.Top},
 		Size:   Size{Width: bounds.Size.Width + ink.Left + ink.Right, Height: bounds.Size.Height + ink.Top + ink.Bottom},
 	}
-	s.withFilterChain(s.Filter, groupBounds, radii, smoothing, w, paintUnit)
-}
-
-// withFilterChain runs f inside one content-filter group per filter,
-// the first filter innermost. The bounds are the group's (ink-dilated
-// by the caller); the radii stay the element's (a content filter's
-// composite is not clipped to the rounded rect).
-func (s *Style) withFilterChain(filters []Filter, bounds Bounds, radii Corners, smoothing float32, w *Window, f func(*Window)) {
-	if len(filters) == 0 {
-		f(w)
-		return
-	}
-	last := filters[len(filters)-1]
-	frame := currentFrame(w)
-	// σ = the CSS blur length: the pin's kernel takes σ = 0.5 × the
-	// record radius in half-resolution texels, so the effective
-	// device-pixel σ is the record radius itself (see paintBox's note)
-	// — the CSS radius × scale passes through unchanged.
-	err := frame.scene.WithFilterLayerCornerSmoothing(bounds, last.BlurRadius, radii, smoothing, frame.paint, func() error {
-		s.withFilterChain(filters[:len(filters)-1], bounds, radii, smoothing, w, f)
+	frame2 := currentFrame(w)
+	if err := frame2.scene.WithFilterLayerChain(groupBounds, chain, radii, smoothing, frame2.paint, func() error {
+		paintUnit(w)
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		panic(fmt.Sprintf("gpui: DivElement filter paint: %v", err))
 	}
 }

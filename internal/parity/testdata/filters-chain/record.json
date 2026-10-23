@@ -1,0 +1,32 @@
+{
+  "name": "filters-chain",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T21:38:43Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "chain-control": {
+      "x": 116,
+      "y": 176,
+      "width": 120,
+      "height": 48
+    },
+    "hue-sepia": {
+      "x": 404,
+      "y": 176,
+      "width": 120,
+      "height": 48
+    },
+    "sepia-hue": {
+      "x": 260,
+      "y": 176,
+      "width": 120,
+      "height": 48
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

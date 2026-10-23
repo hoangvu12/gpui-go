@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 16px;
+	}
+	.row {
+		display: flex;
+		gap: 16px;
+	}
+	.swatch {
+		width: 120px;
+		height: 48px;
+		display: flex;
+	}
+	.swatch > div {
+		width: 24px;
+		height: 48px;
+		flex-shrink: 0;
+	}
+	.red { background: #ff0000; }
+	.green { background: #00ff00; }
+	.blue { background: #0000ff; }
+	.white { background: #ffffff; }
+	.gray { background: #808080; }
+	.f-grayscale { filter: grayscale(1); }
+	.f-sepia { filter: sepia(1); }
+	.f-invert { filter: invert(1); }
+	.f-brightness { filter: brightness(1.5); }
+	.f-contrast { filter: contrast(1.5); }
+	.f-saturate { filter: saturate(2); }
+	.f-hue-rotate { filter: hue-rotate(90deg); }
+</style>
+</head>
+<body>
+	<div class="row">
+		<div class="swatch" data-id="control"><div class="red"></div><div class="green"></div><div class="blue"></div><div class="white"></div><div class="gray"></div></div>
+		<div class="swatch f-grayscale" data-id="grayscale"><div class="red"></div><div class="green"></div><div class="blue"></div><div class="white"></div><div class="gray"></div></div>
+		<div class="swatch f-sepia" data-id="sepia"><div class="red"></div><div class="green"></div><div class="blue"></div><div class="white"></div><div class="gray"></div></div>
+		<div class="swatch f-invert" data-id="invert"><div class="red"></div><div class="green"></div><div class="blue"></div><div class="white"></div><div class="gray"></div></div>
+	</div>
+	<div class="row">
+		<div class="swatch f-brightness" data-id="brightness"><div class="red"></div><div class="green"></div><div class="blue"></div><div class="white"></div><div class="gray"></div></div>
+		<div class="swatch f-contrast" data-id="contrast"><div class="red"></div><div class="green"></div><div class="blue"></div><div class="white"></div><div class="gray"></div></div>
+		<div class="swatch f-saturate" data-id="saturate"><div class="red"></div><div class="green"></div><div class="blue"></div><div class="white"></div><div class="gray"></div></div>
+		<div class="swatch f-hue-rotate" data-id="hue-rotate"><div class="red"></div><div class="green"></div><div class="blue"></div><div class="white"></div><div class="gray"></div></div>
+	</div>
+</body>
+</html>

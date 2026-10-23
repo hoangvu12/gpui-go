@@ -155,6 +155,14 @@ type StyleRefinement struct {
 	Filter         Optional[[]Filter]
 	BackdropFilter Optional[[]Filter]
 
+	// The replaced-content options (CSS object-fit, object-position,
+	// image-rendering; browser-core ticket 41): consumed by the img
+	// element's paint, inert on anything else — like CSS, where they
+	// only affect replaced elements.
+	ObjectFit      Optional[ObjectFit]
+	ObjectPosition Optional[ObjectPosition]
+	ImageRendering Optional[ImageRendering]
+
 	Text TextStyleRefinement
 
 	MouseCursor Optional[CursorStyle]
@@ -313,6 +321,9 @@ func (s *Style) refineBoxed(r *StyleRefinement, boxes *styleBoxes) {
 	if filters, ok := r.BackdropFilter.Get(); ok {
 		s.BackdropFilter = slices.Clone(filters)
 	}
+	refinePointer(&s.ObjectFit, r.ObjectFit)
+	refinePointer(&s.ObjectPosition, r.ObjectPosition)
+	refinePointer(&s.ImageRendering, r.ImageRendering)
 	s.Text.Merge(&r.Text)
 	refineBoxed(&s.MouseCursor, r.MouseCursor, &boxes.mouseCursor, equalComparable[CursorStyle])
 	refinePointer(&s.Opacity, r.Opacity)
@@ -400,6 +411,9 @@ func (r *StyleRefinement) Refine(other *StyleRefinement) {
 	if filters, ok := other.BackdropFilter.Get(); ok {
 		r.BackdropFilter = Some(slices.Clone(filters))
 	}
+	mergeOptional(&r.ObjectFit, other.ObjectFit)
+	mergeOptional(&r.ObjectPosition, other.ObjectPosition)
+	mergeOptional(&r.ImageRendering, other.ImageRendering)
 	r.Text.Merge(&other.Text)
 	mergeOptional(&r.MouseCursor, other.MouseCursor)
 	mergeOptional(&r.Opacity, other.Opacity)

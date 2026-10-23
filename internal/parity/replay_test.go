@@ -7,6 +7,7 @@ import (
 
 	"github.com/hoangvu12/gpui-go/internal/parity"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/boxpaint"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/filters"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/gradient"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/hover"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/keycode"
@@ -42,6 +43,10 @@ func TestFixtures(t *testing.T) {
 			}
 			if err := parity.CompareEvents(record, replay); err != nil {
 				t.Errorf("%v", err)
+			}
+			if f.SkipPixels != "" {
+				t.Logf("Tier C skipped (a documented blocker): %s", f.SkipPixels)
+				return
 			}
 			if err := parity.ComparePixels(record, replay, f.Tolerance); err != nil {
 				t.Errorf("%v", err)

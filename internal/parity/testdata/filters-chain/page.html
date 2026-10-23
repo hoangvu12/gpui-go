@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 24px;
+	}
+	.swatch {
+		width: 120px;
+		height: 48px;
+		display: flex;
+	}
+	.swatch > div {
+		width: 24px;
+		height: 48px;
+		flex-shrink: 0;
+	}
+	.red { background: #ff0000; }
+	.green { background: #00ff00; }
+	.blue { background: #0000ff; }
+	.white { background: #ffffff; }
+	.gray { background: #808080; }
+	.f-sepia-hue { filter: sepia(1) hue-rotate(90deg); }
+	.f-hue-sepia { filter: hue-rotate(90deg) sepia(1); }
+</style>
+</head>
+<body>
+	<div class="swatch" data-id="chain-control"><div class="red"></div><div class="green"></div><div class="blue"></div><div class="white"></div><div class="gray"></div></div>
+	<div class="swatch f-sepia-hue" data-id="sepia-hue"><div class="red"></div><div class="green"></div><div class="blue"></div><div class="white"></div><div class="gray"></div></div>
+	<div class="swatch f-hue-sepia" data-id="hue-sepia"><div class="red"></div><div class="green"></div><div class="blue"></div><div class="white"></div><div class="gray"></div></div>
+</body>
+</html>

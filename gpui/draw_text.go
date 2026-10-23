@@ -128,6 +128,10 @@ type PolychromeSprite struct {
 	Order uint32
 	// Grayscale selects grayscale sampling (the pinned ShaderBool).
 	Grayscale bool
+	// Pixelated draws through the point sampler (nearest-neighbour
+	// sampling, CSS image-rendering: pixelated; the native rev-15
+	// per-sprite flag — browser-core ticket 41).
+	Pixelated bool
 	// Opacity is the sprite opacity.
 	Opacity float32
 	// CornerSmoothing in [0, 1].
@@ -268,6 +272,9 @@ func (k *SceneKernel) insertPolychromeSprite(sprite PolychromeSprite) error {
 		grayscale = 1
 	}
 	rec.Grayscale = grayscale
+	if sprite.Pixelated {
+		rec.Pixelated = 1
+	}
 	rec.Opacity = math.Float32bits(sprite.Opacity)
 	rec.CornerSmoothing = math.Float32bits(sprite.CornerSmoothing)
 	rec.Bounds = sceneBoundsRecord(sprite.Bounds)
@@ -338,6 +345,7 @@ func (k *SceneKernel) polychromeSprites() ([]PolychromeSprite, error) {
 		out = append(out, PolychromeSprite{
 			Order:           rec.Order,
 			Grayscale:       rec.Grayscale != 0,
+			Pixelated:       rec.Pixelated != 0,
 			Opacity:         math.Float32frombits(rec.Opacity),
 			CornerSmoothing: math.Float32frombits(rec.CornerSmoothing),
 			Bounds:          sceneBoundsValue(rec.Bounds),

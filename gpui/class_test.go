@@ -928,3 +928,129 @@ func TestClassGradientRejections(t *testing.T) {
 		}
 	}
 }
+
+// TestClassFiltersAndObjectOptions checks ticket 41's filter and
+// replaced-content classes: the colour filters (bare, scaled, negative
+// and arbitrary), the object-fit/object-position keywords and
+// rendering-pixelated, each against the method chain that writes the
+// same refinement.
+func TestClassFiltersAndObjectOptions(t *testing.T) {
+	classTestNoErrors(t)
+	classTestCheck(t, []classTestCase{
+		{"grayscale", func(d *DivElement) *DivElement { return d.Grayscale(1) }},
+		{"grayscale-0", func(d *DivElement) *DivElement { return d.Grayscale(0) }},
+		{"grayscale-[0.5]", func(d *DivElement) *DivElement { return d.Grayscale(0.5) }},
+		{"grayscale-[50%]", func(d *DivElement) *DivElement { return d.Grayscale(0.5) }},
+		{"sepia", func(d *DivElement) *DivElement { return d.Sepia(1) }},
+		{"sepia-0", func(d *DivElement) *DivElement { return d.Sepia(0) }},
+		{"invert", func(d *DivElement) *DivElement { return d.Invert(1) }},
+		{"invert-0", func(d *DivElement) *DivElement { return d.Invert(0) }},
+		{"invert-[25%]", func(d *DivElement) *DivElement { return d.Invert(0.25) }},
+		{"saturate-0", func(d *DivElement) *DivElement { return d.Saturate(0) }},
+		{"saturate-50", func(d *DivElement) *DivElement { return d.Saturate(0.5) }},
+		{"saturate-200", func(d *DivElement) *DivElement { return d.Saturate(2) }},
+		{"saturate-[1.25]", func(d *DivElement) *DivElement { return d.Saturate(1.25) }},
+		{"brightness-0", func(d *DivElement) *DivElement { return d.Brightness(0) }},
+		{"brightness-50", func(d *DivElement) *DivElement { return d.Brightness(0.5) }},
+		{"brightness-150", func(d *DivElement) *DivElement { return d.Brightness(1.5) }},
+		{"brightness-[1.75]", func(d *DivElement) *DivElement { return d.Brightness(1.75) }},
+		{"contrast-125", func(d *DivElement) *DivElement { return d.Contrast(1.25) }},
+		{"contrast-[0.5]", func(d *DivElement) *DivElement { return d.Contrast(0.5) }},
+		{"hue-rotate-0", func(d *DivElement) *DivElement { return d.HueRotate(0) }},
+		{"hue-rotate-90", func(d *DivElement) *DivElement { return d.HueRotate(90) }},
+		{"-hue-rotate-90", func(d *DivElement) *DivElement { return d.HueRotate(-90) }},
+		{"hue-rotate-[45deg]", func(d *DivElement) *DivElement { return d.HueRotate(45) }},
+		{"object-cover", func(d *DivElement) *DivElement {
+			d.StyleMut().ObjectFit = Some(ObjectFitCover)
+			return d
+		}},
+		{"object-contain", func(d *DivElement) *DivElement {
+			d.StyleMut().ObjectFit = Some(ObjectFitContain)
+			return d
+		}},
+		{"object-fill", func(d *DivElement) *DivElement {
+			d.StyleMut().ObjectFit = Some(ObjectFitFill)
+			return d
+		}},
+		{"object-none", func(d *DivElement) *DivElement {
+			d.StyleMut().ObjectFit = Some(ObjectFitNone)
+			return d
+		}},
+		{"object-scale-down", func(d *DivElement) *DivElement {
+			d.StyleMut().ObjectFit = Some(ObjectFitScaleDown)
+			return d
+		}},
+		{"object-left-top", func(d *DivElement) *DivElement { return d.ObjectPosition(ObjectLeft(), ObjectTop()) }},
+		{"object-right-bottom", func(d *DivElement) *DivElement { return d.ObjectPosition(ObjectRight(), ObjectBottom()) }},
+		{"object-center", func(d *DivElement) *DivElement { return d.ObjectPosition(ObjectCenter(), ObjectCenter()) }},
+		{"object-bottom", func(d *DivElement) *DivElement { return d.ObjectPosition(ObjectCenter(), ObjectBottom()) }},
+		{"object-top", func(d *DivElement) *DivElement { return d.ObjectPosition(ObjectCenter(), ObjectTop()) }},
+		{"object-right", func(d *DivElement) *DivElement { return d.ObjectPosition(ObjectRight(), ObjectCenter()) }},
+		{"rendering-pixelated", func(d *DivElement) *DivElement { return d.RenderingPixelated() }},
+		{"rendering-auto", func(d *DivElement) *DivElement { return d.RenderingAuto() }},
+	})
+}
+
+// TestClassFiltersComposeInOrder checks that consecutive filter classes
+// compose the chain in class order — the CSS spelling — like the fluent
+// methods do (blur first, then the colour function when written in that
+// order).
+func TestClassFiltersComposeInOrder(t *testing.T) {
+	classTestNoErrors(t)
+	classTestCheck(t, []classTestCase{
+		{"grayscale brightness-150", func(d *DivElement) *DivElement { return d.Grayscale(1).Brightness(1.5) }},
+		{"brightness-150 grayscale", func(d *DivElement) *DivElement { return d.Brightness(1.5).Grayscale(1) }},
+		{"blur-sm grayscale", func(d *DivElement) *DivElement { return d.Blur(4).Grayscale(1) }},
+	})
+}
+
+// TestClassFilterErrors checks the filter family's rejections: unknown
+// scale values, arbitrary values that are not numbers, hue-rotate's
+// scale, and the still-unsupported families (drop-shadow, the bare
+// filter composition class, backdrop colour filters).
+func TestClassFilterErrors(t *testing.T) {
+	cases := []struct {
+		classes string
+		want    string
+	}{
+		{"brightness", "brightness needs a scale value"},
+		{"brightness-huge", "brightness-… takes"},
+		{"brightness-[6px]", "brightness-… takes"},
+		{"contrast", "contrast needs a scale value"},
+		{"saturate", "saturate needs a scale value"},
+		{"hue-rotate", "hue-rotate needs a scale value"},
+		{"hue-rotate-45", "hue-rotate-… takes"},
+		{"hue-rotate-[slow]", "hue-rotate-… takes"},
+		{"grayscale-huge", "grayscale-… takes"},
+		{"grayscale-[six]", "grayscale-… takes"},
+		{"drop-shadow", "drop-shadow"},
+		{"filter", "the bare filter class"},
+		{"filter-none", "the bare filter class"},
+		{"mix-blend-multiply", "mix-blend-mode"},
+		{"backdrop-grayscale", "backdrop-blur"},
+		{"backdrop-brightness-50", "backdrop-blur"},
+	}
+	for _, tc := range cases {
+		err := CheckClasses(tc.classes)
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("CheckClasses(%q) = %v; want an error mentioning %q", tc.classes, err, tc.want)
+		}
+	}
+}
+
+// TestClassBlurComposesWithColourFilters checks the filter family's
+// composition rule end to end: blur classes append in class order like
+// the colour functions (both spellings of blur + grayscale compose),
+// and blur-none resets the chain.
+func TestClassBlurComposesWithColourFilters(t *testing.T) {
+	classTestNoErrors(t)
+	classTestCheck(t, []classTestCase{
+		{"grayscale blur-sm", func(d *DivElement) *DivElement { return d.Grayscale(1).Blur(4) }},
+		{"blur-sm grayscale", func(d *DivElement) *DivElement { return d.Blur(4).Grayscale(1) }},
+		{"blur-sm grayscale blur-md", func(d *DivElement) *DivElement { return d.Blur(4).Grayscale(1).Blur(12) }},
+	})
+	d := Div().Class("grayscale blur-md blur-none")
+	if filters, ok := d.StyleMut().Filter.Get(); !ok || len(filters) != 0 {
+		t.Errorf("blur-none = %v, %v; want the reset empty chain", filters, ok)
+	}
+}

@@ -901,6 +901,18 @@ type Style struct {
 	// BackdropFilter applies to the content behind the element
 	// (style.rs:376).
 	BackdropFilter []Filter
+	// ObjectFit, when set, overrides a replaced element's (img, surface)
+	// own fit option — CSS object-fit (browser-core ticket 41); nil keeps
+	// the element's option (img defaults to contain).
+	ObjectFit *ObjectFit
+	// ObjectPosition positions the fitted content inside the content
+	// box — CSS object-position (browser-core ticket 41); nil is the CSS
+	// default 50% 50% (centered).
+	ObjectPosition *ObjectPosition
+	// ImageRendering selects the image sampling quality — CSS
+	// image-rendering (browser-core ticket 41); nil is auto (bilinear,
+	// the pinned sampler).
+	ImageRendering *ImageRendering
 	// Text is the text style refinement the element cascades
 	// (style.rs:380).
 	Text TextStyleRefinement
@@ -1110,18 +1122,40 @@ func (c Corners) OutsetWithCornerCorrection(size Size, outset float32) Corners {
 // Filter is a graphical filter applied to an element's own content
 // (Styled.Filter, CSS filter) or to the content behind it
 // (Styled.BackdropFilter, CSS backdrop-filter): the pinned enum's one
-// variant Blur(Pixels) (style.rs:479-486).
+// variant Blur(Pixels) (style.rs:479-486) plus ticket 41's CSS colour
+// functions (FilterFunction) as one Filter value each — see
+// filter_colors.go for their Chromium-sourced matrices.
 type Filter struct {
-	// BlurRadius is the gaussian blur radius in logical pixels.
+	// BlurRadius is the gaussian blur radius in logical pixels
+	// (FilterFunctionBlur).
 	BlurRadius float32
+	// Function selects the CSS filter function (FilterFunctionBlur for
+	// the pinned blur, the zero value).
+	Function FilterFunction
+	// Amount is the colour function's argument: the [0,1] fraction for
+	// grayscale/sepia/invert/opacity, the unclamped multiplier for
+	// saturate/brightness/contrast, or the degrees for hue-rotate.
+	// Zero for blur.
+	Amount float32
 }
 
 // Blur returns the gaussian blur filter (Filter::Blur).
 func Blur(radius float32) Filter { return Filter{BlurRadius: radius} }
 
 // IsIdentity reports whether the filter has no visible effect
-// (style.rs:495 Filter::is_identity: radius <= 0).
-func (f Filter) IsIdentity() bool { return blurRadiusIsIdentity(f.BlurRadius) }
+// (style.rs:495 Filter::is_identity: radius <= 0 for blur; the CSS
+// colour functions' no-op amounts: 0 for grayscale/sepia/invert/
+// hue-rotate, 1 for saturate/opacity/brightness/contrast).
+func (f Filter) IsIdentity() bool {
+	switch f.Function {
+	case FilterFunctionSaturate, FilterFunctionOpacity, FilterFunctionBrightness, FilterFunctionContrast:
+		return f.Amount == 1
+	case FilterFunctionGrayscale, FilterFunctionSepia, FilterFunctionInvert, FilterFunctionHueRotate:
+		return f.Amount == 0
+	default:
+		return blurRadiusIsIdentity(f.BlurRadius)
+	}
+}
 
 // RingColor is a ring's color (style.rs:173-190): CurrentColor (the
 // default, the element's effective text color like CSS currentColor) or

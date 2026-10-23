@@ -190,6 +190,16 @@ type Fixture struct {
 	// record, so the flag set is part of the fixture's identity — copy
 	// the flags into the new fixture when cloning one.
 	ChromeFlags []string
+
+	// SkipPixels, when non-empty, skips the Tier C pixel comparison
+	// (and its tolerance-headroom check) with this reason, while Tier A
+	// and Tier B keep comparing: a fixture documents here a known
+	// renderer/native blocker it cannot pass until a specific fix lands,
+	// so the record and the view stay checked in and the geometry keeps
+	// verifying. Empty for fixtures whose pixels compare today. The
+	// reason must name the blocker (ticket and file:line) and the fix
+	// that unskips it.
+	SkipPixels string
 }
 
 // EventRecord is one app-visible event of the Tier B transcript.

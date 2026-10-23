@@ -580,13 +580,33 @@ func (d *imgDrawable) Paint(global *GlobalElementID, inspector *InspectorElement
 						// comment): the object fit's base rect and the image's
 						// clip region.
 						contentBox := style.ContentBox(bounds, RemSize(w))
-						newBounds := img.objectFit.GetBounds(contentBox, int32(fw), int32(fh))
+						// The fit: the style's object-fit when set (CSS
+						// object-fit, browser-core ticket 41), else the
+						// element's own option (the pinned StyledImage setter,
+						// contain by default).
+						fit := img.objectFit
+						if style.ObjectFit != nil {
+							fit = *style.ObjectFit
+						}
+						// The position: the style's object-position when set
+						// (CSS object-position, ticket 41; resolved against the
+						// free space like Chromium's ComputeObjectFitAndPositionRect),
+						// else the CSS default 50% 50% (centered).
+						position := ObjectPositionCenter()
+						if style.ObjectPosition != nil {
+							position = *style.ObjectPosition
+						}
+						newBounds := fit.GetPositionedBounds(contentBox, int32(fw), int32(fh), position)
 						radii := style.CornerRadii.ToPixels(RemSize(w))
 						var smoothing float32
 						if style.CornerSmoothing != nil {
 							smoothing = *style.CornerSmoothing
 						}
-						if err := w.PaintImageWithCornerSmoothing(contentBox, newBounds, radii, smoothing, data, layout.frameIndex, img.grayscale); err != nil {
+						// image-rendering: pixelated/crisp-edges draw through the
+						// point sampler (ticket 41; Chromium maps both to
+						// kInterpolationNone, computed_style.cc:1326-1337).
+						pixelated := style.ImageRendering != nil && style.ImageRendering.PointSampled()
+						if err := w.PaintImageWithCornerSmoothing(contentBox, newBounds, radii, smoothing, data, layout.frameIndex, img.grayscale, pixelated); err != nil {
 							log.Printf("gpui: %v", err)
 						}
 					} else if layout.replacement != nil {
