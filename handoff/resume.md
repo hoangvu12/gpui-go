@@ -6,6 +6,39 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 ## ACTIVE EFFORT (2026-10-19): the GPUI Base port
 
+**HANDOFF 2026-10-23 (orchestrator 2 → orchestrator 3). CURRENT AND AUTHORITATIVE; the long paragraphs below are history.** The predecessor is the Roboco chat "GPUI Base port (orchestrator 2, base-port-2)", id e5e2c030. It handed off at about 43% context, at the user's request.
+
+**State**
+- The Base port is COMPLETE on `base-port-2` (worktree `C:\Users\ADMIN\Desktop\nguyenvu\gpui-go-wt-base`).
+- Every ticket in `.scratch/gpui-base/issues/` is resolved except 32's release step: tagging v0.2.0. That includes the follow-ups 36-44, which came from the coverage audit, the gallery, the user's cursor report and the tab question.
+- Coverage: `go run ./conformance/cmd/basecoverage -check` passes. 1226 upstream crate tests: 1180 ported, 39 deviated, 7 not applicable, 0 gaps. 43 user-facing components.
+- `base-port-2` is merged into `main` and PUSHED (origin/main = 7a1b25b, with ticket 44). The user approved the merge, the push and the credits. gpui-component is credited in NOTICE, THIRD_PARTY_NOTICES and gen.py. Symbol font fallback is left as is (it would need a native change).
+- Real-window run: the user was present, and `CGO_ENABLED=0 go test -p 1 ./... -count=1` passed 50 packages. Only headlessspec fails, environmentally: it needs reference/ce-source, which is absent in this worktree.
+- Gallery: `go run ./examples/base-gallery` (55 pages). The user looked at it and said "looks good".
+
+**Open**
+1. The user said bold text looks different from a browser. A worker started by orchestrator 2 is investigating: Base's requested weight, real Segoe UI Bold vs synthetic bold, whether the weight reaches the rasterizer, and a side-by-side against plain DirectWrite, rendered offscreen. Orchestrator 2 forwards its result to you by Roboco message. If it's a Go-side fix, verify it (headless, with the bit-exact textspec/glyphspec fixtures unchanged), commit it, and merge it to main. If it needs native work, tell the user, because the DLL is frozen at rev 11.
+2. Then tag v0.2.0 on main (annotated, same style as v0.1.0) and push the tag. The user approved the release; the tag only waited for the real-window run (green) and the bold result.
+3. The user's NEW research request is your first task: "look at zgui and gpui-fast, to see how they made it so it's better than gpui". The user's chart (`C:\Users\ADMIN\AppData\Local\Roboco\profiles\local\uploads\9665e9a9-image.png`) compares zgui with gpui-fast, a fast GPUI variant, not base GPUI. zgui wins on:
+   - CPU: idle 11x less; busy, heavy and animation 16-28% less
+   - GPU: 12-63% less
+   - memory: up to 8% less
+   - smoothness: 16-19% smoother
+
+   zgui loses on startup work (10% more) and app size (2.7x bigger).
+
+   Find both projects. A local Zed-family fork called "zui" is at `C:\Users\ADMIN\Desktop\nguyenvu\zui`, with cargo checkouts `~/.cargo/git/checkouts/zui-*`; confirm whether that is zgui. gpui-fast isn't on disk. Explain the techniques behind each win: idle frame skipping, damage tracking, retained scenes, batching, glyph caching, present modes, allocation behaviour, and so on. Map them to gpui-go's known runtime costs: per-frame glyph re-rasterization (draw_text.go paintGlyphFromAtlas skips the raster_metadata cache), per-node/per-primitive FFI calls, ~60k allocations/frame at 1,000 elements, and the shaping-handle cap. Research only. Recommendations are proposals until the user accepts them (AGENTS.md). Use the research skill / docs/research-index.md conventions.
+
+**Conventions that still hold**
+- Max 3 workers.
+- No cargo, and no DLL rebuild without the user.
+- No push or tag without the user.
+- When the user is gaming: no visible windows. Use `go test ./base -skip Real`, the gpui skip list `'Real|Win32|Desktop|Cursor.*Window|PowerBroadcast|EndSession|MouseWheelSettings|FreshWindow|WindowBorn|DragDrop|Clipboard|^TestRenderer|DirectManipulationSimulated|DirectManipulationDrain|DropTarget|ThemeChangeObserver'`, `-skip '^TestReal|OnRealGPU|RealWindow'` in the spec packages, and offscreen capture via `GALLERY_CAPTURE_DIR`.
+- Verify worker claims on a `git checkout-index` snapshot.
+- Evidence goes in `evidence/base/ticketNN-*.json`.
+- Heredocs that contain quotes break in the Bash tool here; write files with the Write tool instead.
+
+
 **Restart 2026-10-22 (this worktree):** the user re-authorized the port ("restart the GPUI Base port?" → "yea. go ahead"). Work happens in the worktree `C:\Users\ADMIN\Desktop\nguyenvu\gpui-go-wt-base`, branch `base-port-2` (from `tailwind-authoring` @ ab997d2 = main @ 8eed385 + the Tailwind layer, ADR 0001). Overrides below: **no push and no merge to main without asking the user** (commit per verified batch on base-port-2 only); at most 3 implementer workers at once (the user games on this PC); per-package tests only. Do NOT touch the main checkout `C:\Users\ADMIN\Desktop\nguyenvu\gpui-go` (another chat's uncommitted `fast-test-loop` work); its gitignored `reference/ce-source` may be READ by workers. headlessspec fails in this worktree because ce-source is absent (environmental). Upstream Base: `C:\Users\ADMIN\Desktop\nguyenvu\upstream-base\ce\crates\base\src`; legacy text API: `~/.cargo/git/checkouts/gpui-ce-6758b1db058c6497/beb5a6d`. Workers are background Agent-tool subagents (general-purpose). Inside Base components `Class(...)`/`gpui.Styles()`/`tw` are allowed, but upstream names/tokens come first.
 
 Batches A+B (2026-10-22) RESOLVED and committed: 10 (gpui rich text + legacy text facade), 13 (base/*.go infra; map gap 2b = crates.io 0.2.2 defaults divs to Block, our pin to Flex), 15 (base/{rope,sumtree,segment,dataurl,strftime}, uax29 in go.mod, notices + gen.py GO_SOURCES), 35 (per-run paint in inline paragraphs; plain Text publishes ToRun), 14 (motion in base/animation.go + motion*.go), 19 (input data layer in base/input_*.go). Core API fix: AnyElement.PrepaintAt (PrepainAt kept deprecated). RESOLVED in batch C: 17 (2e348bf; gap-2b convention: constructors over a plain upstream div() call Block() first), 16 (3bfcc65; Init wires dialog/focus_trap/popover/sheet), 18 (8e99b9c). Workers must NOT spawn sub-agents (17's worker forked 3, exceeding the cap). Running (batch D): 27 markdown parse (owns base/text_{markdown,markdown_ext,document,node,mdast}.go, go.mod/go.sum, notices + gen.py; node.rs data model in 27, rendering half in 28), 31 plot (owns base/plot*.go + the Plot field in theme.go), 20 single-line input (owns new base/input_{kind,mode,blink_cursor,movement,state*,element,layout,base}.go + base/input.go; multi-line state.rs tests left for 21). Next frontier: 21 after 20; 22 after 20; 28 after 27; 30 after 28; 25 after 22.
