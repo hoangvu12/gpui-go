@@ -258,6 +258,158 @@ type Window struct {
 	// needs-present and the tracked rendered views). Touched only on the
 	// foreground thread.
 	frames *windowFrameState
+
+	// autoscroll is the pending autoscroll request (window.rs
+	// requested_autoscroll, R:window.rs:1276) and autoscrollFrame the frame
+	// it was made in. The pin clears the request at every draw start
+	// (R:window.rs:3165); the port drops a request made in another frame
+	// when it is taken, which answers the same (Base ticket 37).
+	autoscroll      *Bounds
+	autoscrollFrame *frameDrawState
+}
+
+// RequestAutoscroll asks the containing elements to scroll so that bounds
+// (window coordinates) become visible (window.rs request_autoscroll,
+// R:window.rs:3991-3999). Call it during prepaint: a containing List
+// takes the request after prepainting the item that made it and, when it
+// decides to scroll, prepaints its items again at the new position (see
+// ListElement.Prepaint). As in the pin, a later request in the same frame
+// replaces an earlier one. It panics outside a window draw (the pin's
+// debug_assert_prepaint).
+func (w *Window) RequestAutoscroll(bounds Bounds) {
+	frame := currentFrame(w)
+	w.autoscroll, w.autoscrollFrame = &bounds, frame
+}
+
+// TakeAutoscroll takes the pending autoscroll request, if any (window.rs
+// take_autoscroll, R:window.rs:4001-4006): the containing-element half of
+// RequestAutoscroll. A request is taken at most once; one made in an
+// earlier frame is gone (R:window.rs:3165). It panics outside a window
+// draw.
+func (w *Window) TakeAutoscroll() (Bounds, bool) {
+	frame := currentFrame(w)
+	bounds, madeIn := w.autoscroll, w.autoscrollFrame
+	w.autoscroll, w.autoscrollFrame = nil, nil
+	if bounds == nil || madeIn != frame {
+		return Bounds{}, false
+	}
+	return *bounds, true
+}
+
+// prepaintStateIndex marks how far the frame under construction's
+// prepaint registrations reach (window.rs PrepaintStateIndex,
+// R:window.rs:1124-1131, taken by prepaint_index, R:window.rs:3712-3721),
+// so a discarded prepaint can be cut back to it (transact).
+//
+// Mapping onto the port: hitboxes, deferred draws and the dispatch tree
+// are the pin's fields. The port also registers tab stops and their
+// groups during prepaint (gpui/div.go registerDivElementDispatch; the pin
+// does so at paint, outside a transaction) and allows mouse listeners
+// then, so both are marked as well. The pin's tooltip requests have no
+// port counterpart. Two pinned fields are not cut back: the accessed
+// element states (a set here, not a list: a state touched only by the
+// discarded prepaint is retained one more frame) and the line-layout
+// index (the port's line cache only marks lines in use, so a discarded
+// layout stays cached one more frame).
+type prepaintStateIndex struct {
+	hitboxes       int
+	mouseListeners int
+	deferredDraws  int
+	dispatchTree   int
+	tabStops       int
+	tabStopPath    tabStopPath
+}
+
+// prepaintIndex is window.rs prepaint_index (R:window.rs:3712-3721).
+func (w *Window) prepaintIndex() prepaintStateIndex {
+	next := focusState(w).next
+	if next == nil {
+		panic("gpui: no frame is being built (prepaint runs inside a window draw)")
+	}
+	return prepaintStateIndex{
+		hitboxes:       len(next.hitboxes),
+		mouseListeners: len(next.mouseListeners),
+		deferredDraws:  len(currentFrame(w).deferredDraws),
+		dispatchTree:   len(next.dispatchTree.nodes),
+		tabStops:       len(next.tabStops.insertionHistory),
+		tabStopPath:    append(tabStopPath{}, next.tabStops.currentPath...),
+	}
+}
+
+// truncatePrepaint cuts the frame under construction's prepaint
+// registrations back to index (the Err arm of window.rs transact,
+// R:window.rs:3970-3987).
+func (w *Window) truncatePrepaint(index prepaintStateIndex) {
+	next := focusState(w).next
+	next.hitboxes = next.hitboxes[:index.hitboxes]
+	next.mouseListeners = next.mouseListeners[:index.mouseListeners]
+	frame := currentFrame(w)
+	frame.deferredDraws = frame.deferredDraws[:index.deferredDraws]
+	truncateDispatchTree(next.dispatchTree, index.dispatchTree)
+	truncateTabStops(next.tabStops, index.tabStops, index.tabStopPath)
+}
+
+// truncateDispatchTree is DispatchTree::truncate (R:key_dispatch.rs:
+// 310-321): drop the nodes from index on, with their focus and view
+// entries.
+func truncateDispatchTree(t *DispatchTree, index int) {
+	for _, node := range t.nodes[index:] {
+		if node.hasFocusID {
+			delete(t.focusableNodeIDs, node.focusID)
+		}
+		if node.hasViewID {
+			delete(t.viewNodeIDs, node.viewID)
+		}
+	}
+	t.nodes = t.nodes[:index]
+}
+
+// truncateTabStops drops the tab-stop operations recorded from history
+// index on: their stops leave the order, an id whose latest insertion is
+// dropped falls back to its earlier one, and the group path returns to
+// path (the port's counterpart of cutting back the pin's paint-time tab
+// stops; see prepaintStateIndex).
+func truncateTabStops(t *TabStopMap, history int, path tabStopPath) {
+	t.currentPath = path
+	if history >= len(t.insertionHistory) {
+		return
+	}
+	t.insertionHistory = t.insertionHistory[:history]
+	kept := t.order[:0]
+	dropped := map[uint64]struct{}{}
+	for _, node := range t.order {
+		if node.index < history {
+			kept = append(kept, node)
+		} else {
+			dropped[node.id] = struct{}{}
+		}
+	}
+	t.order = kept
+	for id := range dropped {
+		delete(t.byID, id)
+	}
+	for _, node := range t.order {
+		if _, ok := dropped[node.id]; ok {
+			if prev, ok := t.byID[node.id]; !ok || node.index > prev.index {
+				t.byID[node.id] = node
+			}
+		}
+	}
+}
+
+// transact runs a prepaint whose registrations are discarded when it
+// fails (window.rs transact, R:window.rs:3962-3989): on ok false the
+// frame is cut back to where it stood before f. The List's autoscroll
+// path prepaints its items, learns the requested bounds, and prepaints
+// them again at the new scroll position. (The pin's transact is public;
+// the port keeps it internal, as no caller outside gpui needs it yet.)
+func transact[T any](w *Window, f func(w *Window) (T, bool)) (T, bool) {
+	index := w.prepaintIndex()
+	result, ok := f(w)
+	if !ok {
+		w.truncatePrepaint(index)
+	}
+	return result, ok
 }
 
 // ID returns the window's logical identity. Identities are assigned in

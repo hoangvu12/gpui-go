@@ -30,14 +30,21 @@ package gpui
 // is a Go slice with O(n) cumulative-height walks (identical
 // observables at these sizes); ListAlignment is Top only (the
 // Bottom/chat alignment, follow-tail mode, with_uniform_item_height,
-// the proportional remeasure anchor, the autoscroll request path and the
-// per-item focus-handle retention for off-screen focused items are
-// omitted — no consumers in this slice); ListState.ScrollBy keeps the
+// the proportional remeasure anchor and the per-item focus-handle
+// retention for off-screen focused items are omitted — no consumers in
+// this slice); ListState.ScrollBy keeps the
 // port's clamped, handler-firing scroll body for its programmatic
 // callers (the pinned scroll_by, R:list.rs:565-595, is unclamped above
 // and handler-less; the wheel path uses the pinned scroll body); the
 // scroll mask is the bounds intersection (the uniform-list precedent;
 // the reference routes it through the style's overflow).
+//
+// Base ticket 37 adds the autoscroll request path (R:list.rs:1250-1361,
+// 1571-1597): an item that calls Window.RequestAutoscroll during its
+// prepaint makes the list discard the frame's item prepaint (the pinned
+// Window::transact, gpui/window.go transact), move its scroll top so the
+// requested bounds show, and prepaint the items again there. Base's
+// TextView uses it to reveal a line inside a long block.
 //
 // R: = reference/ce-source/crates/gpui/src (pin 254b5dbd).
 
@@ -1011,30 +1018,122 @@ func (l *ListElement) Prepaint(global *GlobalElementID, inspector *InspectorElem
 
 	padding := resolveListPadding(l.style, bounds.Size, RemSize(w))
 	mask := intersectMask(currentFrame(w).contentMask, bounds)
-	// The measure-all pass precedes the visible walk (R:list.rs:1262-1267).
-	st.layoutAllItems(bounds.Size.Width, l.renderItem, w, app)
-	response := st.layoutItems(&bounds.Size.Width, bounds.Size.Height, padding, l.renderItem, w, app)
-
-	st.lastLayoutBounds = &bounds
-	st.lastPadding = &padding
-
-	state := listPrepaintState{hitbox: &box, scrollTop: response.scrollTop}
-	// Only paint the visible items when there is space for them (taking
-	// the padding into account).
-	if bounds.Size.Height > padding.Top+padding.Bottom {
-		origin := Point{X: bounds.Origin.X, Y: bounds.Origin.Y + padding.Top - response.scrollTop.OffsetInItem}
-		for _, item := range response.itemLayouts {
-			element := item.element
-			WithContentMaskVoid(w, mask, func(w *Window) {
-				WithAbsoluteElementOffsetVoid(w, origin, func(w *Window) {
-					element.Prepaint(w, app)
-				})
-			})
-			state.items = append(state.items, listItemPlacement{element: element, origin: origin, size: item.size})
-			origin.Y += item.size.Height
-		}
+	// An item asking to be scrolled into view moves the scroll top, and
+	// the items are prepainted again there without honoring a second
+	// request (R:list.rs:1571-1597).
+	state, request := st.prepaintItems(bounds, padding, mask, true, l.renderItem, w, app)
+	if request != nil {
+		st.logicalScrollTop = request
+		state, _ = st.prepaintItems(bounds, padding, mask, false, l.renderItem, w, app)
 	}
+	state.hitbox = &box
 	return state
+}
+
+// prepaintItems is StateInner::prepaint_items (R:list.rs:1250-1361): lay
+// out the visible items and prepaint each at its scrolled origin, inside
+// a transaction. When autoscroll is on and an item's prepaint requested
+// an autoscroll (Window.RequestAutoscroll) outside the list's bounds, the
+// transaction is discarded and the scroll top that shows the requested
+// bounds is returned instead: its top at the list's top when it sits
+// above, its bottom at the list's bottom when it sits below.
+func (st *listStateInner) prepaintItems(bounds Bounds, padding listPadding, mask *Bounds, autoscroll bool, renderItem func(int, *Window, *App) AnyElement, w *Window, app *App) (listPrepaintState, *ListOffset) {
+	type result struct {
+		state   listPrepaintState
+		request *ListOffset
+	}
+	r, _ := transact(w, func(w *Window) (result, bool) {
+		// The measure-all pass precedes the visible walk
+		// (R:list.rs:1262-1267).
+		st.layoutAllItems(bounds.Size.Width, renderItem, w, app)
+		response := st.layoutItems(&bounds.Size.Width, bounds.Size.Height, padding, renderItem, w, app)
+
+		// The port records the bounds before the items prepaint (the pin
+		// does so after prepaint_items, R:list.rs:1599-1600), so an item's
+		// prepaint reads this frame's viewport.
+		st.lastLayoutBounds = &bounds
+		st.lastPadding = &padding
+
+		// Avoid honoring autoscroll requests from elements other than our
+		// children (R:list.rs:1278-1279).
+		w.TakeAutoscroll()
+
+		state := listPrepaintState{scrollTop: response.scrollTop}
+		// Only paint the visible items when there is space for them
+		// (taking the padding into account).
+		if bounds.Size.Height > padding.Top+padding.Bottom {
+			origin := Point{X: bounds.Origin.X, Y: bounds.Origin.Y + padding.Top - response.scrollTop.OffsetInItem}
+			for _, item := range response.itemLayouts {
+				element := item.element
+				WithContentMaskVoid(w, mask, func(w *Window) {
+					WithAbsoluteElementOffsetVoid(w, origin, func(w *Window) {
+						element.Prepaint(w, app)
+					})
+				})
+				if requested, ok := w.TakeAutoscroll(); ok && autoscroll {
+					if request := st.autoscrollOffset(requested, item.index, origin, bounds, padding, renderItem, w, app); request != nil {
+						return result{request: request}, false
+					}
+				}
+				state.items = append(state.items, listItemPlacement{element: element, origin: origin, size: item.size})
+				origin.Y += item.size.Height
+			}
+		}
+		return result{state: state}, true
+	})
+	return r.state, r.request
+}
+
+// autoscrollOffset is the scroll top that brings the requested bounds into
+// the list, requested by the item at itemIx prepainted at itemOrigin, or
+// nil when they need no scroll (R:list.rs:1290-1356).
+func (st *listStateInner) autoscrollOffset(requested Bounds, itemIx int, itemOrigin Point, bounds Bounds, padding listPadding, renderItem func(int, *Window, *App) AnyElement, w *Window, app *App) *ListOffset {
+	// An item's height for the walks: its measurement, else it is
+	// rendered and laid out at the list width (R:list.rs:1310-1317,
+	// 1341-1346).
+	heightOf := func(ix int) float32 {
+		if item := st.items[ix]; item.measured {
+			return item.size.Height
+		}
+		element := wrapListItem(ix, renderItem(ix, w, app))
+		return element.LayoutAsRoot(AvailableSize{Width: DefiniteAvailableSpace(bounds.Size.Width), Height: MinContentAvailableSpace()}, w, app).Height
+	}
+	if requested.Top() < bounds.Top() {
+		offsetInItem := requested.Top() - itemOrigin.Y
+		// The requested top can sit above this item's own top. Walk into
+		// earlier items so the offset stays non-negative and no blank
+		// space appears above the list (R:list.rs:1297-1320).
+		for offsetInItem < 0 {
+			if itemIx == 0 {
+				offsetInItem = 0
+				break
+			}
+			itemIx--
+			offsetInItem += heightOf(itemIx)
+		}
+		return &ListOffset{ItemIx: itemIx, OffsetInItem: offsetInItem}
+	}
+	if requested.Bottom() > bounds.Bottom() {
+		// Account for the height of the element down until the autoscroll
+		// bottom, then keep decreasing the scroll top until the available
+		// space is filled (R:list.rs:1327-1355).
+		height := bounds.Size.Height - padding.Top - padding.Bottom
+		height -= requested.Bottom() - itemOrigin.Y
+		ix := itemIx
+		for height > 0 {
+			if ix == 0 {
+				break
+			}
+			ix--
+			height -= heightOf(ix)
+		}
+		offsetInItem := float32(0)
+		if height < 0 {
+			offsetInItem = -height
+		}
+		return &ListOffset{ItemIx: ix, OffsetInItem: offsetInItem}
+	}
+	return nil
 }
 
 // Paint implements Element (R:list.rs:1604-1650): register the wheel

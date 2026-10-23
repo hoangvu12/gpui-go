@@ -170,12 +170,10 @@ func (e *inlineText) withReveal(reveal *revealAt) *inlineText {
 	return e
 }
 
-// requestReveal reports where the line of the pending reveal is and
-// whether it is inside the visible area (U:text/inline.rs:420-467).
-// Deviation: gpui has no Window::request_autoscroll, so no enclosing list
-// is asked to scroll the line into view; a scrollable view still scrolls
-// an off-screen block into view (revealFrame), and TextView.OnReveal
-// receives a laid-out hidden line.
+// requestReveal asks the enclosing list to scroll the line of the pending
+// reveal into view, and reports where it is and whether it is inside the
+// visible area (U:text/inline.rs:420-467; the request is gpui's
+// Window.RequestAutoscroll, taken by gpui.List in prepaint, ticket 37).
 func (e *inlineText) requestReveal(w *gpui.Window) {
 	if e.reveal == nil {
 		return
@@ -204,6 +202,7 @@ func (e *inlineText) requestReveal(w *gpui.Window) {
 		gpui.Point{X: bounds.Left() + hit.left, Y: bounds.Top() + lineHeight*float32(hit.row)},
 		gpui.Point{X: bounds.Left() + max(hit.right, hit.left+1), Y: bounds.Top() + lineHeight*float32(hit.row+1)},
 	)
+	w.RequestAutoscroll(line)
 	// A list scrolls the line to its edge, which layout may miss by a
 	// fraction of a pixel.
 	visible := gpui.ContentMask(w)

@@ -4,7 +4,7 @@ Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: claimed
+Status: resolved
 Assignee: base-port-2 orchestrator (2026-10-23)
 Blocked by: 30
 
@@ -28,3 +28,18 @@ A TextView inside a scrollable list reveals a line inside a long block, as upstr
 
 - 2026-10-23 — Created by the base-port-2 orchestrator from ticket 30's report.
 - 2026-10-23 — Claimed and delegated. Owns gpui/window*.go and gpui/list*.go for the autoscroll path, plus base/text_inline*.go and the reveal tests.
+- 2026-10-23 — Worker finished. The orchestrator verified it on a snapshot.
+
+## Answer
+
+The core now has `Window.RequestAutoscroll` and `TakeAutoscroll`, and `List` handles them during prepaint (window.rs:3962-4006, list.rs:1250-1361). It takes each item's request, computes the scroll with the pinned walks, discards the first pass through a transact rollback, and prepaints again. The TextView reveal calls it, so a line inside a long block scrolls into view.
+
+The inline row walk replaces the per-character position queries. A 400-word line on the test text system now paints in about 0.06s instead of about 2s.
+
+Tests:
+- Of the 11 reveal tests, 10 are ported as real-window tests and 1 is deviated.
+- The uncovered linked-image click test is ported.
+
+Recorded environmental case: the gpui wheel test fails while Shift is physically held on the machine.
+
+Orchestrator re-run on a snapshot: `go test ./base` has 1280 pass and 0 skip, `-count=2` is ok, and gpui plus 6 list/scene/text spec packages are ok. Evidence: [ticket37-request-autoscroll.json](../../../evidence/base/ticket37-request-autoscroll.json).

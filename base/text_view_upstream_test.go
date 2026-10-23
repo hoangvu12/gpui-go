@@ -30,6 +30,9 @@ import (
 //     outer_list_content_total_stable_while_scrolling.
 //   - ported by ticket 30: inline_html_image_after_newline_does_not_panic
 //     (inline HTML, U:text/format/html.rs), at the end of this file.
+//   - ported by ticket 37 (found by the coverage audit, outside the 37
+//     counted above): linked_image_handler_receives_left_middle_and_right_
+//     clicks, deviated like the link tests (no opened_url), at the end.
 //   - deferred (gaps outside this ticket): list_item_renders_fenced_code_
 //     block_at_document_width needs h_resizable/resizable_panel (not
 //     ported); clipped_markdown_link_does_not_open and right_click_does_not
@@ -335,5 +338,57 @@ func TestInlineHTMLImageAfterNewlineDoesNotPanic(t *testing.T) {
 	cx.RunUntilParked()
 	if _, err := gpui.DrawWindowFrame(cx.Window()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// U:text/text_view.rs:2227-2303 (deviated: cx.opened_url() is not in the
+// Go TestApp, as for the link tests above; the handler records the
+// clicks). A linked inline image passes left, middle and right clicks to
+// the link handler.
+func TestLinkedImageHandlerReceivesLeftMiddleAndRightClicks(t *testing.T) {
+	ta := textTestApp(t)
+	type click struct {
+		url   string
+		event gpui.ClickEvent
+	}
+	var clicks []click
+	state := newTextViewStateEntity(ta, `Before [<img src="https://example.com/image.svg" width="32" height="32">](https://example.com/image-link) after.`)
+	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
+		return gpui.Div().Block().W(gpui.Px(160)).Child(NewTextView(state).Selectable(true).
+			OnLinkClick(func(url string, event *gpui.ClickEvent, _ *gpui.Window, _ *gpui.App) {
+				clicks = append(clicks, click{url: url, event: *event})
+			})).IntoElement()
+	})
+	drawText(t, cx)
+
+	b := textViewTextBounds(ta, state)
+	if len(b) < 2 {
+		t.Fatalf("linked image needs text bounds on both sides: %v", b)
+	}
+	if b[1].Left()-b[0].Right() < 24 {
+		t.Fatalf("linked image did not reserve the expected click target: %v", b)
+	}
+	position := gpui.Point{X: b[0].Right() + (b[1].Left()-b[0].Right())*0.5, Y: b[0].Top() + 8}
+	for _, button := range []gpui.MouseButton{gpui.MouseButtonLeft, gpui.MouseButtonMiddle, gpui.MouseButtonRight} {
+		cx.SimulateMouseDown(position, button, gpui.Modifiers{})
+		cx.SimulateMouseUp(position, button, gpui.Modifiers{})
+	}
+
+	if len(clicks) != 3 {
+		t.Fatalf("%d clicks: %+v", len(clicks), clicks)
+	}
+	for _, c := range clicks {
+		if c.url != "https://example.com/image-link" {
+			t.Errorf("url %q", c.url)
+		}
+	}
+	if clicks[0].event.IsRightClick() || clicks[0].event.IsMiddleClick() {
+		t.Errorf("first click %+v", clicks[0].event)
+	}
+	if !clicks[1].event.IsMiddleClick() {
+		t.Errorf("second click %+v", clicks[1].event)
+	}
+	if !clicks[2].event.IsRightClick() {
+		t.Errorf("third click %+v", clicks[2].event)
 	}
 }

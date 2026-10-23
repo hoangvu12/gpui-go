@@ -9,10 +9,12 @@ package base
 //   - TextLayout geometry. The pin's TextLayout (gpui/styled_text.go)
 //     exposes no line_layouts / wrap_boundaries / glyph runs, so the
 //     row walks of text_line_bounds and glyph_boxes are re-expressed over
-//     TextLayout.PositionForIndex: one stop per character boundary, rows
-//     told apart by their y, a row's right end taken from the next row's
-//     start or, for the last character of a row, from the width of the
-//     row's text shaped alone (WindowTextSystem.ShapeLine).
+//     TextLayout.PositionForIndex: rows told apart by the y of their
+//     characters, each row's end found by a search over its characters
+//     (inlineTextRows, ticket 37: the calls scale with the rows, not the
+//     characters), and a row's characters placed by the row's text shaped
+//     alone (WindowTextSystem.ShapeLine), which also gives the row's
+//     right end.
 //   - The text-view state stack lives in this package's textViewStateStack
 //     global (text_state.go), not in GlobalState (global_state.go is not
 //     this ticket's file).
@@ -27,9 +29,9 @@ package base
 //     backgrounds are carried and painted.
 
 import (
-	"reflect"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"unicode/utf8"
 	"weak"
@@ -556,55 +558,39 @@ func (e *inlineText) layoutSelections(layout *gpui.TextLayout, bounds gpui.Bound
 // characters are on: the top of the first row and the bottom of the last.
 // U:text_selection.rs text_rows_extent (ticket 29's module) answers this
 // for layout_selections from the pin's line layouts; this re-expresses it
-// over PositionForIndex.
+// over the row walk (inlineTextRows).
 func inlineRowsExtent(text string, layout *gpui.TextLayout, lineHeight float32) (float32, float32) {
-	top, bottom := float32(0), float32(0)
-	found := false
-	for offset := range text {
-		pos, ok := layout.PositionForIndex(offset)
-		if !ok {
-			continue
-		}
-		if !found || pos.Y < top {
-			top = pos.Y
-		}
-		if !found || pos.Y+lineHeight > bottom {
-			bottom = pos.Y + lineHeight
-		}
-		found = true
-	}
-	if !found {
+	rows := inlineTextRows(text, layout)
+	if len(rows) == 0 {
 		b := layout.Bounds()
 		return b.Top(), b.Bottom()
 	}
-	return top, bottom
+	return rows[0].y, rows[len(rows)-1].y + lineHeight
 }
 
 // inlineTextLineBounds is one box per laid-out row, from the row's start
 // to its last character, clipped to mask; a row followed by another row is
-// extended by half a line height (U:text/inline.rs:671-722). Rows come
-// from the layout's character positions (see the file comment).
+// extended by half a line height (U:text/inline.rs:671-722). Like
+// upstream it walks rows, not characters (inlineTextRows): upstream notes
+// the per-character walk cost O(chars x glyphs) for every selectable
+// inline on every frame.
 func inlineTextLineBounds(text string, layout *gpui.TextLayout, lineHeight float32, mask gpui.Bounds) []gpui.Bounds {
 	origin := layout.Bounds().Origin
-	glyphs := inlineCharStops(text, layout)
 	type row struct {
 		y     float32
 		right float32
 	}
 	var rows []row
-	for i, g := range glyphs {
-		if len(rows) == 0 || rows[len(rows)-1].y != g.pos.Y {
-			rows = append(rows, row{y: g.pos.Y, right: g.pos.X})
-		}
-		right := g.pos.X
-		if i+1 < len(glyphs) && glyphs[i+1].pos.Y == g.pos.Y {
-			right = glyphs[i+1].pos.X
-		} else if g.end == len(text) {
-			if p, ok := layout.PositionForIndex(len(text)); ok && p.Y == g.pos.Y {
-				right = p.X
+	for _, r := range inlineTextRows(text, layout) {
+		// The row reaches its last character's start; the text's last row
+		// reaches the end of the text when that is on it.
+		right := max(r.firstX, r.lastX)
+		if r.end == len(text) {
+			if p, ok := layout.PositionForIndex(len(text)); ok && p.Y == r.y {
+				right = max(right, p.X)
 			}
 		}
-		rows[len(rows)-1].right = max(rows[len(rows)-1].right, right)
+		rows = append(rows, row{y: r.y, right: right})
 	}
 	if len(rows) == 0 {
 		rows = append(rows, row{y: origin.Y, right: origin.X})
@@ -626,20 +612,69 @@ func inlineTextLineBounds(text string, layout *gpui.TextLayout, lineHeight float
 	return out
 }
 
-// inlineCharStop is one character's start position.
-type inlineCharStop struct {
-	start, end int
-	pos        gpui.Point
+// inlineTextRow is one laid-out row of a text: the byte range [start, end)
+// of the characters on it, its y, and the x of its first and last
+// character (window coordinates).
+type inlineTextRow struct {
+	start, end    int
+	y             float32
+	firstX, lastX float32
 }
 
-func inlineCharStops(text string, layout *gpui.TextLayout) []inlineCharStop {
-	var stops []inlineCharStop
-	for offset, c := range text {
-		if pos, ok := layout.PositionForIndex(offset); ok {
-			stops = append(stops, inlineCharStop{start: offset, end: offset + utf8.RuneLen(c), pos: pos})
-		}
+// inlineTextRows is the row walk of U:text/inline.rs:687-721 and
+// 1182-1261 over the port's TextLayout, which exposes no line_layouts or
+// wrap_boundaries (see the file comment). Rows are told apart by the y of
+// their characters' positions, as the character walk did, but each row's
+// end is found by a galloping, then binary, search over its characters,
+// so the PositionForIndex calls scale with the rows (rows x log of the
+// row length), not with the characters. Like the character walk it
+// relies on a row's characters being contiguous in the text: a
+// character's y never decreases with its offset, as rows are laid out in
+// text order.
+func inlineTextRows(text string, layout *gpui.TextLayout) []inlineTextRow {
+	offsets := make([]int, 0, len(text))
+	for offset := range text {
+		offsets = append(offsets, offset)
 	}
-	return stops
+	runeEnd := func(i int) int {
+		if i+1 < len(offsets) {
+			return offsets[i+1]
+		}
+		return len(text)
+	}
+	var rows []inlineTextRow
+	for i := 0; i < len(offsets); {
+		first, ok := layout.PositionForIndex(offsets[i])
+		if !ok {
+			i++
+			continue
+		}
+		// lo is the last character known to be on the row; hi the first
+		// known not to be.
+		lo, lastX, hi := i, first.X, len(offsets)
+		onRow := func(k int) bool {
+			p, ok := layout.PositionForIndex(offsets[k])
+			if ok && p.Y == first.Y {
+				lo, lastX = k, p.X
+				return true
+			}
+			return false
+		}
+		for step := 1; lo+step < len(offsets); step *= 2 {
+			if !onRow(lo + step) {
+				hi = lo + step
+				break
+			}
+		}
+		for hi-lo > 1 {
+			if mid := lo + (hi-lo)/2; !onRow(mid) {
+				hi = mid
+			}
+		}
+		rows = append(rows, inlineTextRow{start: offsets[i], end: runeEnd(lo), y: first.Y, firstX: first.X, lastX: lastX})
+		i = lo + 1
+	}
+	return rows
 }
 
 // paintInlineSelection paints the selection background
@@ -703,11 +738,18 @@ func (e *inlineText) RequestLayout(global *gpui.GlobalElementID, inspector *gpui
 	}
 	runs := textRuns(len(e.text), style, e.highlights)
 	e.fontSize = style.FontSizePixels(gpui.RemSize(w))
-	if r := takeRetainedLayout(e.state); r != nil && r.text == e.text && reflect.DeepEqual(r.runs, runs) && reflect.DeepEqual(r.textStyle, style) {
-		e.styledText = r.styledText.WithRuns(runs)
-	} else {
-		e.styledText = gpui.NewStyledText(e.text).WithRuns(runs)
-	}
+	// Deviation (ticket 37): the previous frame's layout is taken but not
+	// reused. gpui's TextLayout answers an unchanged measure from its own
+	// cached size without asking the window's line cache for its line
+	// again (gpui/styled_text.go measure), and that two-frame cache
+	// disposes a line no frame asked for (gpui/text_cache.go), so a layout
+	// carried over a second frame holds a stale native handle and every
+	// position query on it fails. Upstream's retained layout holds its line
+	// alive (an Arc). Laying the text out afresh asks the cache each frame,
+	// which hands back the same shaped line while the text, runs and style
+	// are unchanged, so the shaping is still not repeated.
+	takeRetainedLayout(e.state)
+	e.styledText = gpui.NewStyledText(e.text).WithRuns(runs)
 	e.retainedRuns, e.retainedStyle = runs, &style
 	id, _ := e.styledText.RequestLayout(global, inspector, w, app)
 	return id, struct{}{}
@@ -882,56 +924,68 @@ type glyphBox struct {
 	left, right float32
 }
 
-// glyphBoxes is U:text/inline.rs:1182-1261 over character positions (see
-// the file comment): characters sorted by the text they draw, each placed
-// on its row and reaching to the next character on the row or to the row's
-// end; every row aligned in alignWidth by align.
+// glyphBoxes is U:text/inline.rs:1182-1261 over the row walk (see the
+// file comment and inlineTextRows): characters sorted by the text they
+// draw, each placed on its row and reaching to the next character on the
+// row or to the row's end; every row aligned in alignWidth by align. A
+// row's characters are placed by its text shaped alone, from the row's
+// first character on, where upstream reads the glyph positions of the
+// line layout; so the cost scales with the rows, not with one
+// PositionForIndex call per character.
 func glyphBoxes(text string, runs []gpui.TextRun, fontSize float32, layout *gpui.TextLayout, align gpui.TextAlign, alignWidth float32, w *gpui.Window) []glyphBox {
 	origin := layout.Bounds().Origin
 	lineHeight := layout.LineHeight()
-	stops := inlineCharStops(text, layout)
 	var boxes []glyphBox
-	for i := 0; i < len(stops); {
-		j := i
-		for j < len(stops) && stops[j].pos.Y == stops[i].pos.Y {
-			j++
+	for _, r := range inlineTextRows(text, layout) {
+		row := int((r.y - origin.Y) / lineHeight)
+		rowText := text[r.start:r.end]
+		rowStart := r.firstX - origin.X
+		// A hard line break ends its row and draws nothing: the row's text
+		// is shaped up to it, and the break sits at the row's end.
+		shaped := rowText
+		if ix := strings.IndexByte(shaped, '\n'); ix >= 0 {
+			shaped = shaped[:ix]
 		}
-		row := int((stops[i].pos.Y - origin.Y) / lineHeight)
-		rowText := text[stops[i].start:stops[j-1].end]
-		rowStart := stops[i].pos.X - origin.X
-		endX := rowStart + inlineShapedWidth(rowText, runs, stops[i].start, fontSize, w)
-		width := endX - rowStart
-		shift := alignedRowLeft(align, alignWidth, width) - rowStart
-		for k := i; k < j; k++ {
-			right := endX
-			if k+1 < j {
-				right = stops[k+1].pos.X - origin.X
+		line := inlineShapedRow(shaped, runs, r.start, fontSize, w)
+		endX := rowStart
+		if line != nil {
+			endX += line.Width()
+		}
+		shift := alignedRowLeft(align, alignWidth, endX-rowStart) - rowStart
+		xOf := func(offset int) float32 {
+			if line == nil || offset >= r.start+len(shaped) {
+				return endX
 			}
+			return rowStart + line.XForIndex(offset-r.start)
+		}
+		for offset, c := range rowText {
+			start := r.start + offset
+			end := start + utf8.RuneLen(c)
 			boxes = append(boxes, glyphBox{
-				text:  gpui.TextRange{Start: stops[k].start, End: stops[k].end},
+				text:  gpui.TextRange{Start: start, End: end},
 				row:   row,
-				left:  shift + stops[k].pos.X - origin.X,
-				right: shift + right,
+				left:  shift + xOf(start),
+				right: shift + xOf(end),
 			})
 		}
-		i = j
 	}
 	sort.SliceStable(boxes, func(a, b int) bool { return boxes[a].text.Start < boxes[b].text.Start })
 	return boxes
 }
 
-// inlineShapedWidth is the advance of a row's text shaped alone with the
-// runs cut to it (offset is the row's start in the runs' text).
-func inlineShapedWidth(rowText string, runs []gpui.TextRun, offset int, fontSize float32, w *gpui.Window) float32 {
+// inlineShapedRow is a row's text shaped alone with the runs cut to it
+// (offset is the row's start in the runs' text), or nil when it is empty
+// or does not shape.
+func inlineShapedRow(rowText string, runs []gpui.TextRun, offset int, fontSize float32, w *gpui.Window) *gpui.ShapedLine {
 	if rowText == "" {
-		return 0
+		return nil
 	}
 	cut := cutTextRuns(runs, offset, offset+len(rowText))
 	line, err := w.TextSystem().ShapeLine(rowText, fontSize, cut, nil)
 	if err != nil {
-		return 0
+		return nil
 	}
-	return line.Width()
+	return line
 }
 
 // cutTextRuns cuts runs covering a text to the byte range [start, end).
