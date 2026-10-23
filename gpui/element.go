@@ -1422,45 +1422,52 @@ func PixelSnapValue(value, scaleFactor float32) float32 {
 // ---------------------------------------------------------------------------
 
 // layoutContextOf builds the window's current layout context: rem,
-// scale and the current absolute element offset.
-func layoutContextOf(w *Window) *LayoutContext {
+// scale and the current absolute element offset. It returns a value:
+// the engine only reads the context, so callers pass its address and it
+// stays on their stack (gpui-perf ticket 06).
+func layoutContextOf(w *Window) LayoutContext {
 	f := currentFrame(w)
-	return NewLayoutContext(f.rem, f.scale).WithElementOffset(f.elementOffset)
+	return LayoutContext{remSize: f.rem, scaleFactor: f.scale, elementOffset: f.elementOffset}
 }
 
 // requestLayoutOf requests one layout node with the given style and
 // children on the window's engine (window.rs request_layout).
 func requestLayoutOf(w *Window, style Style, children ...LayoutID) (LayoutID, error) {
 	ds := drawState(w)
-	return ds.engine.RequestLayout(layoutContextOf(w), style, children...)
+	ctx := layoutContextOf(w)
+	return ds.engine.RequestLayout(&ctx, style, children...)
 }
 
 // requestMeasuredLayoutOf requests one measured leaf node (window.rs
 // request_measured_layout).
 func requestMeasuredLayoutOf(w *Window, style Style, measure MeasureFunc) (LayoutID, error) {
 	ds := drawState(w)
-	return ds.engine.RequestMeasuredLayout(layoutContextOf(w), style, measure)
+	ctx := layoutContextOf(w)
+	return ds.engine.RequestMeasuredLayout(&ctx, style, measure)
 }
 
 // computeLayoutOf computes one subtree under the given available space
 // (window.rs compute_layout).
 func computeLayoutOf(w *Window, root LayoutID, available AvailableSize) error {
 	ds := drawState(w)
-	return ds.engine.ComputeLayout(layoutContextOf(w), root, available)
+	ctx := layoutContextOf(w)
+	return ds.engine.ComputeLayout(&ctx, root, available)
 }
 
 // layoutBoundsOf queries one node's window-local bounds (window.rs
 // layout_bounds).
 func layoutBoundsOf(w *Window, id LayoutID) (Bounds, error) {
 	ds := drawState(w)
-	return ds.engine.LayoutBounds(layoutContextOf(w), id)
+	ctx := layoutContextOf(w)
+	return ds.engine.LayoutBounds(&ctx, id)
 }
 
 // parentRelativeLayoutBoundsOf queries one node's parent-relative
 // bounds (window.rs parent_relative_layout_bounds; text placement).
 func parentRelativeLayoutBoundsOf(w *Window, id LayoutID) (Bounds, error) {
 	ds := drawState(w)
-	return ds.engine.ParentRelativeLayoutBounds(layoutContextOf(w), id)
+	ctx := layoutContextOf(w)
+	return ds.engine.ParentRelativeLayoutBounds(&ctx, id)
 }
 
 // StretchAutoSizeToFill stretches the given node's auto-sized axes to
@@ -1489,7 +1496,7 @@ func StretchAutoSizeToFill(w *Window, id LayoutID, style Style, viewport Size) e
 	if err := ds.engine.checkID(id, "StretchAutoSizeToFill"); err != nil {
 		return err
 	}
-	record := styleToRecord(&stretched, ctx)
+	record := styleToRecord(&stretched, &ctx)
 	if err := ds.engine.native.SetStyle(id.node, &record); err != nil {
 		return fmt.Errorf("gpui: StretchAutoSizeToFill: %w", err)
 	}
