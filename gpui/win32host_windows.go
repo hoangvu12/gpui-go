@@ -823,6 +823,17 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
 		return r
 
+	case wmSysColorChange, wmThemeChanged, wmDwmColorizationColorChanged:
+		// The system-preferences refresh messages (browser-core ticket
+		// 27, system_prefs_windows.go): WM_SYSCOLORCHANGE, WM_THEMECHANGED
+		// and the DWM colourization change re-read the record and notify
+		// on change. Consumed; nothing in DefWindowProcW acts on them.
+		if result, handled := w.handleSystemPrefsChangeMsg(message); handled {
+			return result
+		}
+		r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lp)
+		return r
+
 	case wmDisplayChange:
 		// WM_DISPLAYCHANGE: re-resolve this window's monitor (ticket26,
 		// events.rs handle_display_change_msg).
@@ -1475,6 +1486,10 @@ func NewHost() *Host {
 		validationNumber: newValidationNumber(),
 		desktop: desktopHostState{
 			notif: newSystemNotificationState(),
+			// Ticket 27: the default system-preference record until the
+			// host boot seeds the real reading.
+			systemPrefs:  defaultSystemPreferences(),
+			systemColors: defaultSystemColors(),
 		},
 	}
 }
