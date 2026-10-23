@@ -101,6 +101,10 @@ func simulatedInput(event any) any {
 		return &e
 	case MouseUpEvent:
 		return &e
+	case MouseExitEvent:
+		// Browser-core ticket 10: the window-exit event simulates the
+		// pointer leaving the window (WM_MOUSELEAVE's dispatch).
+		return &e
 	case ScrollWheelEvent:
 		return &e
 	case PinchEvent:
@@ -113,8 +117,8 @@ func simulatedInput(event any) any {
 		return &e
 	case ModifiersChangedEvent:
 		return &e
-	case *MouseMoveEvent, *MouseDownEvent, *MouseUpEvent, *ScrollWheelEvent,
-		*PinchEvent, *FileDropEvent, *KeyDownEvent, *KeyUpEvent, *ModifiersChangedEvent:
+	case *MouseMoveEvent, *MouseDownEvent, *MouseUpEvent, *MouseExitEvent,
+		*ScrollWheelEvent, *PinchEvent, *FileDropEvent, *KeyDownEvent, *KeyUpEvent, *ModifiersChangedEvent:
 		if isNilReflect(event) {
 			panic("gpui: simulated input event is a nil pointer")
 		}

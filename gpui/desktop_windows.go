@@ -1795,10 +1795,20 @@ func (w *hostWindow) startMouseLeaveTracking(flags uint32) {
 // handleMouseLeaveMsg is WM_MOUSELEAVE / WM_NCMOUSELEAVE (events.rs
 // handle_mouse_leave_msg): the window stops being hovered, the shared
 // cursor-visibility flag clears for tight is_cursor_visible semantics,
-// and the hover observer reports false.
+// and the hover observer reports false. Browser-core ticket 10: the
+// leave is also dispatched to element input as a MouseExitEvent (the
+// pin's interactive.rs:666-684 shape), so hover clears on every
+// element the way Chromium's kMouseLeave does — no hit test, hover/
+// active state cleared with a null target (core/input/event_handler.
+// cc:1158-1165). The Windows leave message carries no coordinates,
+// so the event's position stays zero and the window's dispatch fills
+// in its last tracked position (filedrop.go dispatchInput).
 func (w *hostWindow) handleMouseLeaveMsg() uintptr {
 	w.hovered = false
 	w.host.desktop.cursorVisible.Store(true)
+	if input := w.onMouseInput; input != nil {
+		input(&MouseExitEvent{Modifiers: win32CurrentModifiers()})
+	}
 	if w.onHoverStatusChange != nil {
 		w.onHoverStatusChange(false)
 	}

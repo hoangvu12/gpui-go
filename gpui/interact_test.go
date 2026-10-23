@@ -631,8 +631,11 @@ func TestInteractHoverActiveFocusStyles(t *testing.T) {
 		t.Fatal("the press focused the element")
 	}
 	// Mouse-focused: focus-visible does not apply. A key down switches
-	// the modality to the keyboard (window.rs:5748), which also
-	// suppresses hover (window.rs:887-897).
+	// the modality to the keyboard (window.rs:5748), which applies
+	// focus-visible styles — but no longer clears hover (browser-core
+	// ticket 10, spec D12: hover survives typing; Chromium's :hover has
+	// no keyboard link, a deliberate divergence from window.rs:887-897
+	// under D0). The hover style therefore stays applied.
 	style := func() Style {
 		var s Style
 		app.Update(func(app *App) {
@@ -649,8 +652,8 @@ func TestInteractHoverActiveFocusStyles(t *testing.T) {
 		t.Fatalf("focus-visible did not apply after keyboard input: %+v", s.Opacity)
 	}
 	f.draw()
-	if r, b, g := colors(); r != 1 || b != 0 || g != 0 {
-		t.Fatalf("keyboard modality must suppress hover: r%d b%d g%d", r, b, g)
+	if r, b, g := colors(); r != 0 || b != 1 || g != 0 {
+		t.Fatalf("hover must survive typing (browser-core ticket 10, D12): r%d b%d g%d", r, b, g)
 	}
 }
 

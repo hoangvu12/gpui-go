@@ -770,6 +770,13 @@ type DivElement struct {
 	// hoverListeners observe hover transitions (div.rs:2618
 	// hover_listeners).
 	hoverListeners []func(*bool, *Window, *App)
+	// pointerEnterListeners observe the DOM pointerenter boundary event
+	// (browser-core ticket 10; fired outermost-first from the hover
+	// boundary sweeps, hoverboundary.go).
+	pointerEnterListeners []func(*PointerEnterEvent, *Window, *App)
+	// pointerLeaveListeners observe the DOM pointerleave boundary event
+	// (browser-core ticket 10; fired innermost-first).
+	pointerLeaveListeners []func(*PointerLeaveEvent, *Window, *App)
 	// group names this element's hitbox for group styles (div.rs:2586).
 	group *string
 	// hoverStyle, activeStyle, focusStyle, inFocusStyle and

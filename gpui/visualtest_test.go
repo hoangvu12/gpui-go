@@ -533,10 +533,15 @@ func TestTestAppWindowSimulation(t *testing.T) {
 	window.SimulateClick(Point{X: 5, Y: 5}, MouseButtonRight)
 	window.SimulateScroll(Point{X: 5, Y: 5}, Point{X: 0, Y: -12})
 	window.SimulateKeystrokes("ctrl-a backspace")
-	// The first key down switches the input modality to the keyboard,
-	// which suppresses hover (R:window.rs:5746-5750, 887-897); the
-	// redraw's hover check reports the element unhovered (div.rs paint).
-	want := []string{"hover(true)", "click", "aux", "scroll({0 -12})", "hover(false)", "chord"}
+	// The key down switches the input modality to the keyboard
+	// (R:window.rs:5746-5750), which applies focus-visible styles but no
+	// longer clears hover: browser-core ticket 10 (spec D12, hover
+	// survives typing) removed the R:window.rs:887-897 suppression, so
+	// the redraw's hover check reports the element still hovered and
+	// OnHover does not fire (the previous expectation ended with
+	// "hover(false)" before the chord; recorded as an intended behaviour
+	// change).
+	want := []string{"hover(true)", "click", "aux", "scroll({0 -12})", "chord"}
 	if !reflect.DeepEqual(events, want) {
 		t.Fatalf("events %q, want %q", events, want)
 	}

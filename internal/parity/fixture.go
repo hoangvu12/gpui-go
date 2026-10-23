@@ -141,10 +141,11 @@ type Fixture struct {
 	// listen for (and the view's handlers log): the Tier B transcript's
 	// vocabulary for this fixture. A kind here that the view does not
 	// log (or the reverse) is a transcript difference the comparison
-	// reports. Today the vocabulary is "mousedown", "mouseup" and
-	// "click"; a fixture avoids the kinds whose delivery order the pin
-	// currently gets wrong (see docs/browser-parity-harness.md, known
-	// divergences).
+	// reports. The vocabulary is "mousedown", "mouseup", "click",
+	// "pointerenter" and "pointerleave" (the pointer boundary events
+	// of browser-core ticket 10); a fixture avoids the kinds whose
+	// delivery order the pin currently gets wrong (see
+	// docs/browser-parity-harness.md, known divergences).
 	EventKinds []string
 	// BoxIDs are the page's data-id values (the gpui elements' ids)
 	// whose boxes are compared exactly, in this order.
@@ -209,6 +210,19 @@ func (l *EventLog) Click(target string) func(*gpui.ClickEvent, *gpui.Window, *gp
 	return func(*gpui.ClickEvent, *gpui.Window, *gpui.App) { l.Append("click", target) }
 }
 
+// PointerEnter returns an OnPointerEnter handler that records a
+// "pointerenter" on target (browser-core ticket 10: the DOM boundary
+// events, delivered outermost-first on the entered chain).
+func (l *EventLog) PointerEnter(target string) func(*gpui.PointerEnterEvent, *gpui.Window, *gpui.App) {
+	return func(*gpui.PointerEnterEvent, *gpui.Window, *gpui.App) { l.Append("pointerenter", target) }
+}
+
+// PointerLeave returns an OnPointerLeave handler that records a
+// "pointerleave" on target (innermost-first on the exited chain).
+func (l *EventLog) PointerLeave(target string) func(*gpui.PointerLeaveEvent, *gpui.Window, *gpui.App) {
+	return func(*gpui.PointerLeaveEvent, *gpui.Window, *gpui.App) { l.Append("pointerleave", target) }
+}
+
 // ---------------------------------------------------------------------------
 // The fixture registry
 // ---------------------------------------------------------------------------
@@ -225,9 +239,11 @@ var registry struct {
 // this set together; a kind outside it fails validation with this
 // message.
 var eventKindVocabulary = map[string]bool{
-	"mousedown": true,
-	"mouseup":   true,
-	"click":     true,
+	"mousedown":    true,
+	"mouseup":      true,
+	"click":        true,
+	"pointerenter": true,
+	"pointerleave": true,
 }
 
 // validate checks a fixture's invariants at record and replay time,
@@ -238,7 +254,7 @@ func validate(f Fixture) error {
 	}
 	for _, kind := range f.EventKinds {
 		if !eventKindVocabulary[kind] {
-			return fmt.Errorf("parity: fixture %q: event kind %q is outside the harness's vocabulary (the EventLog helpers bind mousedown, mouseup and click today; extend them together with the recorder)",
+			return fmt.Errorf("parity: fixture %q: event kind %q is outside the harness's vocabulary (the EventLog helpers bind mousedown, mouseup, click, pointerenter and pointerleave today; extend them together with the recorder)",
 				f.Name, kind)
 		}
 	}

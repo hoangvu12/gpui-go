@@ -26,7 +26,13 @@ new fixtures. The implementation lives in `internal/parity`:
 - **Tier B — the event transcript, exact.** The page's `[data-id]` elements listen for the
   fixture's `EventKinds`; the view's handlers append to an `EventLog`. Kinds, targets,
   order (including bubble order: target first, then ancestors) and the final
-  `defaultPrevented` state must match exactly.
+  `defaultPrevented` state must match exactly. The vocabulary is `mousedown`, `mouseup`,
+  `click` and the pointer boundary events `pointerenter`/`pointerleave` (browser-core
+  ticket 10): the boundary kinds arrive in Chromium's order — leave events innermost
+  (child) first, enter events outermost (parent) first, all before the move that caused
+  them — and a `Move` step to a point outside the viewport is the DOM-visible half of
+  "the pointer left the window" (it fires the leave on the whole hovered chain); the
+  WM_MOUSELEAVE half is covered by gpui's own window tests.
 - **Tier C — pixels, approximately.** The replay's final frame is rendered offscreen at
   device resolution and compared with the recorded Chrome screenshot under the fixture's
   provisional `PixelTolerance` (mean channel diff and hot-pixel fraction, image-wide and
@@ -74,7 +80,10 @@ new fixtures. The implementation lives in `internal/parity`:
    `data-id="<id>"`; the gpui elements set `.ID("<id>")` (interactive state, click
    handlers need it) and `.DebugSelector("<id>")` (the bounds key) with the same string.
    `BoxIDs` lists the compared ones; `EventKinds` lists the event kinds the page binds and
-   the view logs (`log.MouseDown("box")`, `log.Click("box")` — one helper per kind).
+   the view logs (`log.MouseDown("box")`, `log.Click("box")`,
+   `log.PointerEnter("box")`, `log.PointerLeave("box")` — one helper per kind). The
+   pointer boundary kinds need the element ids: the retained hover state that diffs
+   enter/leave across frames keys on them.
 
 4. **The input script is one vocabulary.** Steps are logical (CSS-pixel) positions:
    `parity.Move/Down/Up/Click/Key`. The recorder dispatches them to Chrome as trusted
@@ -184,3 +193,8 @@ until the owning spec tickets land, and each should get a fixture the day it is 
   `line-height: 1.618`.
 - Text rasterization itself differs (Skia gamma/contrast vs the native stack), which is
   what Tier C's tolerance absorbs; research 19's A/B decides whether that gap needs work.
+
+Divergences fixed by browser-core tickets get their fixture when they land: ticket 10
+(hover) removed two pin behaviours — hover clearing on key presses (D12) and hover
+sticking at the window edge — and added `OnPointerEnter`/`OnPointerLeave` plus the
+`pointerenter`/`pointerleave` transcript kinds (`fixtures/hover` is the fixture).
