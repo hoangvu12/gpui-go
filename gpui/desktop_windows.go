@@ -249,6 +249,11 @@ type desktopCallbacks struct {
 	willOpenAppMenu        func()
 	validateAppMenuCommand func(BoxedAction) bool
 	systemWake             func()
+	// systemPreferencesChanged is the system-preferences observer
+	// (browser-core ticket 27, system_prefs_windows.go): the host
+	// thread runs it with the refreshed record whenever a settings
+	// message changed it.
+	systemPreferencesChanged func(SystemPreferences, SystemColors)
 }
 
 // jumpListState is the in-process jump list (destination_list.rs
@@ -302,6 +307,13 @@ type desktopHostState struct {
 	// systemSettings holds the mouse-wheel parameters
 	// (system_settings.rs WindowsSystemSettings). Host thread.
 	systemSettings MouseWheelSettings
+	// systemPrefs and systemColors are the cached system-preference
+	// record and system colours (browser-core ticket 27,
+	// system_prefs_windows.go): seeded at host boot, refreshed by the
+	// settings messages, host thread only. NewHost seeds the default
+	// so a never-started host answers a sane record.
+	systemPrefs  SystemPreferences
+	systemColors SystemColors
 	// hasPackageIdentity records GetCurrentPackageFullName's answer.
 	hasPackageIdentity bool
 	// appIdentity is SetAppIdentity's record (identifier, name).
@@ -360,6 +372,7 @@ func (h *Host) initDesktopStateOnHostThread() {
 	h.desktop.cursorVisible.Store(true)
 	h.desktop.hasPackageIdentity = probeHasPackageIdentity()
 	h.refreshMouseWheelSettingsOnHostThread()
+	h.seedSystemPreferencesOnHostThread()
 }
 
 // shutdownDesktopStateOnHostThread retires the desktop state at host
@@ -419,6 +432,8 @@ func isFuncZero(v any) bool {
 	case func(BoxedAction):
 		return t == nil
 	case func(BoxedAction) bool:
+		return t == nil
+	case func(SystemPreferences, SystemColors):
 		return t == nil
 	default:
 		return false
@@ -1807,6 +1822,15 @@ func (w *hostWindow) handleCursorStyleChangedMsg(lp uintptr) uintptr {
 // tracked settings and the frame border; a zero action is the theme
 // change path.
 func (w *hostWindow) handleSettingChangeMsg(wparam uintptr, lparam unsafe.Pointer) (uintptr, bool) {
+	// Ticket 27: every WM_SETTINGCHANGE also refreshes the
+	// system-preferences record. Chromium routes specific arms to
+	// specific readers (SPI_SETHIGHCONTRAST to forced colours,
+	// os_settings_provider_win.cc:293-298; any setting change to the
+	// reduced-motion read, animation_win.cc:20-24); the port re-reads
+	// the whole record — the reads are cheap and the refresh is
+	// compare-gated, so the observer only fires when something
+	// actually changed.
+	w.host.refreshSystemPreferencesOnHostThread(false)
 	if wparam != 0 {
 		// The double-click tolerances and interval refresh first
 		// (events.rs:1220 click_state.system_update; Base ticket 34).
