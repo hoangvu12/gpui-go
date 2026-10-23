@@ -14,7 +14,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - 08 raster probes: chat 29e2ace6, worktree `gpui-go-wt-core-08`, branch `core/08-raster-probes`
 - Pre-existing on main, not caused by us: `internal/portfixture` TestFx0004 fails because the system font-family count went from 94 to 95; `gofmt -l` flags `internal/fontspec/weight_synthesis_test.go`.
 - The harness only runs at device pixel ratio 2, so 07 (175%/100% scales) needs a harness extension first.
-- 39 R15: chat 9044df02, worktree `gpui-go-wt-core-r15`, branch `core/39-r15`
+- 39 R15: chat 9044df02. Verified (rebuilt: only timestamps differ), merged (921baf6) and RESOLVED. Rev 15 DLL 8b944eae. GAP: the text-run fields and baseline only pass through the ABI; 42 and 43 need a follow-up native change, which needs user approval (asked).
+- 40 gradients: chat d8f26dc5, worktree `gpui-go-wt-core-40`, branch `core/40-gradients`. Two stops only; `via` stays rejected until R16 (52).
 - 02+03: chat ef20e162. Verified, merged (ee8b5c5) and RESOLVED. The worktree `gpui-go-wt-core-small` can be removed.
 - 49 R16 design: APPROVED by the user 2026-10-24 ("do rec", Q1 = warning) and RESOLVED. 50-53 updated and now blocked by 39. Rev 16 (54) still needs approval.
 - 31+47: chat 8cdf9fd8. Verified, merged (7f007ef) and RESOLVED.
@@ -23,7 +24,7 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
   - 09: chat 6a03afb2, worktree `gpui-go-wt-core-09`, branch `core/09-default-actions`. It also extends the harness with key events.
   - 27: chat 30725570, worktree `gpui-go-wt-core-27`, branch `core/27-system-prefs`
   - 62: chat a1fbc74c, worktree `gpui-go-wt-core-62`, branch `core/62-tsx-host`
-- RUNNING NOW: 39 (R15), 06, 08, 09, 27, 62.
+- RUNNING NOW: 06, 08, 09, 27, 40, 62.
 
 Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
 
