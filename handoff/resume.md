@@ -34,7 +34,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - 64 TSX host APIs: chat 24793476, worktree `gpui-go-wt-core-64`, branch `core/64-tsx-host-apis`
 - 10 hover: verified, merged and RESOLVED.
 - 11 pointer capture: chat 167a7b32, worktree `gpui-go-wt-core-11`, branch `core/11-pointer-capture`
-- RUNNING NOW: 04, 06, 09, 11, 41, 64.
+- 09: verified, merged and RESOLVED. Watch the native shaping-handle cap: it flakes under a big parity run.
+- RUNNING NOW: 04, 06, 11, 41, 64.
 
 Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
 
