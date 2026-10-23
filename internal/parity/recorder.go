@@ -17,7 +17,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/hoangvu12/gpui-go/gpui"
@@ -35,9 +34,11 @@ import (
 // click on an ancestor whose click the port does not yet bubble for
 // keyboard activations (docs/browser-parity-harness.md, known
 // divergences). keydown and keyup entries additionally carry the DOM
-// key name (e.key) and the focused element's data-id at listener time
+// key name (e.key), the physical code (e.code) and location
+// (e.location, KeyboardEvent's DOM_KEY_LOCATION_* value) and the
+// focused element's data-id at listener time
 // (document.activeElement, with body normalized to "" - the replay's
-// KeyDown/KeyUp helpers record the same pair).
+// KeyDown/KeyUp helpers record the same set).
 func instrumentScript(kinds []string) string {
 	// A fixture with no instrumented events (a painting fixture) has a
 	// nil kinds slice; normalize it to an empty list so the page script
@@ -63,6 +64,8 @@ func instrumentScript(kinds []string) string {
 				const entry = {kind: kind, target: el.dataset.id, event: e};
 				if (kind === "keydown" || kind === "keyup") {
 					entry.key = e.key;
+					entry.code = e.code;
+					entry.location = e.location;
 					entry.focus = focusOf();
 				}
 				window.__events.push(entry);
@@ -76,9 +79,10 @@ func instrumentScript(kinds []string) string {
 // eventsScript reads the recorded transcript out of the page: each
 // event's final default-prevented state (read live from the event
 // object, after the whole dispatch, matching the replay's post-dispatch
-// markDefaultPrevented) and the key and focus fields of key entries
-// (listener-time snapshots).
-const eventsScript = `JSON.stringify(window.__events.map(r => ({kind: r.kind, target: r.target, defaultPrevented: r.event.defaultPrevented, key: r.key || "", focus: r.focus || ""})))`
+// markDefaultPrevented) and the key, code, location and focus fields
+// of key entries (listener-time snapshots; the location is a number
+// only key entries carry, 0 otherwise).
+const eventsScript = `JSON.stringify(window.__events.map(r => ({kind: r.kind, target: r.target, defaultPrevented: r.event.defaultPrevented, key: r.key || "", code: r.code || "", location: (r.kind === "keydown" || r.kind === "keyup") ? r.location : 0, focus: r.focus || ""})))`
 
 // RecordFixture records one fixture in headless Chrome and writes its
 // files (record.json, chrome.png, page.html) into
@@ -461,18 +465,56 @@ func (p *cdpPage) dispatchStep(step Step) error {
 		})
 		return err
 	case StepKey:
-		return p.dispatchKey(step.Key)
+		return p.dispatchKey(step.Key, step.Code)
 	default:
 		return fmt.Errorf("unknown step kind %q", step.Kind)
 	}
 }
 
 // dispatchKey presses and releases one keystroke, using the same
-// keystroke syntax the gpui replay parses.
-func (p *cdpPage) dispatchKey(keystroke string) error {
+// keystroke syntax the gpui replay parses. An explicit physical code
+// (Step.Code, the numpad spelling) overrides the key-derived one, and
+// the keystroke takes the platform's spelling first
+// (gpui.Keystroke.WithSimulatedCode), so the DOM key, code and
+// location the page observes are the ones a real key press of the
+// same physical key reports (browser-core 13).
+func (p *cdpPage) dispatchKey(keystroke, code string) error {
 	key, err := gpui.ParseKeystroke(keystroke)
 	if err != nil {
 		return err
+	}
+	if code != "" {
+		key.Code = code
+	}
+	key = key.WithSimulatedCode()
+	events, err := cdpKeyEvents(key)
+	if err != nil {
+		return err
+	}
+	for _, event := range events {
+		if _, err := p.call("Input.dispatchKeyEvent", event); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// cdpKeyEvents maps one platform-spelled keystroke onto the DevTools
+// key events (keyDown then keyUp). Input.dispatchKeyEvent builds the
+// DOM event from what it is given: the key param becomes e.key
+// verbatim, the code param becomes e.code (input_handler.cc's
+// KeyStringToDomKey / CodeStringToDomCode), and the modifiers,
+// location and isKeypad params carry the modifier state and
+// KeyboardEvent.location (input_handler.cc's GetEventModifiers maps
+// location 1/2 to kIsLeft/kIsRight and isKeypad to kIsKeyPad). So the
+// recorder must send the whole set: the DOM key, the physical code,
+// the unshifted Windows virtual key code (nativeVirtualKeyCode keeps
+// the event from being marked skip-if-unhandled) and the location the
+// code implies.
+func cdpKeyEvents(key gpui.Keystroke) ([]map[string]any, error) {
+	vk, ok := cdpVKOfCode[key.Code]
+	if !ok {
+		return nil, fmt.Errorf("the parity recorder cannot type key %q (code %q) yet (extend cdpVKOfCode in internal/parity/recorder.go)", key.Key, key.Code)
 	}
 	modifiers := 0
 	if key.Modifiers.Alt {
@@ -487,43 +529,20 @@ func (p *cdpPage) dispatchKey(keystroke string) error {
 	if key.Modifiers.Shift {
 		modifiers |= 8
 	}
-	events, err := cdpKeyEvents(key, modifiers)
-	if err != nil {
-		return err
-	}
-	for _, event := range events {
-		if _, err := p.call("Input.dispatchKeyEvent", event); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// cdpKeyEvents maps one parsed keystroke onto the DevTools key events
-// (keyDown then keyUp, carrying the Windows virtual key code).
-func cdpKeyEvents(key gpui.Keystroke, modifiers int) ([]map[string]any, error) {
-	mapped, ok := cdpKeys[strings.ToLower(key.Key)]
-	if !ok {
-		if len(key.Key) == 1 {
-			ch := key.Key
-			// The DOM key value keeps the typed case ("j" reports e.key
-			// "j"; a shifted keystroke would spell "shift-J" and report
-			// "J"), the code is the physical key and the Windows virtual
-			// key code is the unshifted letter.
-			mapped = cdpKey{Key: ch, Code: "Key" + strings.ToUpper(ch), VK: uint16(ch[0])}
-			if ch >= "a" && ch <= "z" {
-				mapped.VK = uint16(ch[0] - 'a' + 'A')
-			}
-		} else {
-			return nil, fmt.Errorf("the parity recorder cannot type key %q yet (extend cdpKeys in internal/parity/recorder.go)", key.Key)
-		}
-	}
 	base := map[string]any{
-		"key":                   mapped.Key,
-		"code":                  mapped.Code,
-		"windowsVirtualKeyCode": mapped.VK,
-		"nativeVirtualKeyCode":  mapped.VK,
+		"key":                   domKeyOf(key.Key),
+		"code":                  key.Code,
+		"windowsVirtualKeyCode": vk,
+		"nativeVirtualKeyCode":  vk,
 		"modifiers":             modifiers,
+	}
+	switch key.Location {
+	case gpui.KeyLocationLeft:
+		base["location"] = 1
+	case gpui.KeyLocationRight:
+		base["location"] = 2
+	case gpui.KeyLocationNumpad:
+		base["isKeypad"] = true
 	}
 	down := map[string]any{}
 	for k, v := range base {
@@ -541,30 +560,55 @@ func cdpKeyEvents(key gpui.Keystroke, modifiers int) ([]map[string]any, error) {
 	return []map[string]any{down, up}, nil
 }
 
-// cdpKey is one key's DevTools identity.
-type cdpKey struct {
-	Key  string
-	Code string
-	VK   uint16
-}
+// cdpVKOfCode maps a physical DOM code onto the Windows virtual key
+// code Input.dispatchKeyEvent reports for it (the unshifted US virtual
+// key: BracketRight is VK_OEM_6, Numpad1 is VK_NUMPAD1). The recorder
+// derives everything else from the keystroke; this table is the one
+// piece the keystroke spelling cannot carry.
+var cdpVKOfCode = map[string]uint16{}
 
-// cdpKeys maps the pinned keystroke names onto DevTools keys
-// (key, code, Windows virtual key code).
-var cdpKeys = map[string]cdpKey{
-	"enter":      {Key: "Enter", Code: "Enter", VK: 13},
-	"escape":     {Key: "Escape", Code: "Escape", VK: 27},
-	"tab":        {Key: "Tab", Code: "Tab", VK: 9},
-	"backspace":  {Key: "Backspace", Code: "Backspace", VK: 8},
-	"delete":     {Key: "Delete", Code: "Delete", VK: 46},
-	"space":      {Key: " ", Code: "Space", VK: 32},
-	"arrowup":    {Key: "ArrowUp", Code: "ArrowUp", VK: 38},
-	"arrowdown":  {Key: "ArrowDown", Code: "ArrowDown", VK: 40},
-	"arrowleft":  {Key: "ArrowLeft", Code: "ArrowLeft", VK: 37},
-	"arrowright": {Key: "ArrowRight", Code: "ArrowRight", VK: 39},
-	"home":       {Key: "Home", Code: "Home", VK: 36},
-	"end":        {Key: "End", Code: "End", VK: 35},
-	"pageup":     {Key: "PageUp", Code: "PageUp", VK: 33},
-	"pagedown":   {Key: "PageDown", Code: "PageDown", VK: 34},
+func init() {
+	// The letter, digit and numpad-digit runs (KeyA..KeyZ, Digit0..9,
+	// Numpad0..9).
+	for i := 0; i < 26; i++ {
+		cdpVKOfCode["Key"+string(rune('A'+i))] = uint16('A' + i)
+	}
+	for i := 0; i < 10; i++ {
+		cdpVKOfCode["Digit"+string(rune('0'+i))] = uint16('0' + i)
+		cdpVKOfCode["Numpad"+string(rune('0'+i))] = uint16(0x60 + i)
+	}
+	// The US punctuation keys (VK_OEM_*).
+	for _, pair := range [][2]any{
+		{"Backquote", uint16(0xC0)}, {"Minus", uint16(0xBD)}, {"Equal", uint16(0xBB)},
+		{"BracketLeft", uint16(0xDB)}, {"BracketRight", uint16(0xDD)}, {"Backslash", uint16(0xDC)},
+		{"Semicolon", uint16(0xBA)}, {"Quote", uint16(0xDE)}, {"Comma", uint16(0xBC)},
+		{"Period", uint16(0xBE)}, {"Slash", uint16(0xBF)},
+	} {
+		cdpVKOfCode[pair[0].(string)] = pair[1].(uint16)
+	}
+	// The remaining numpad keys.
+	for _, pair := range [][2]any{
+		{"NumpadDivide", uint16(0x6F)}, {"NumpadMultiply", uint16(0x6A)},
+		{"NumpadSubtract", uint16(0x6D)}, {"NumpadAdd", uint16(0x6B)},
+		{"NumpadDecimal", uint16(0x6E)}, {"NumpadEnter", uint16(0x0D)},
+	} {
+		cdpVKOfCode[pair[0].(string)] = pair[1].(uint16)
+	}
+	// The immutable names the keystroke grammar spells.
+	for _, pair := range [][2]any{
+		{"Enter", uint16(0x0D)}, {"Escape", uint16(0x1B)}, {"Tab", uint16(0x09)},
+		{"Backspace", uint16(0x08)}, {"Delete", uint16(0x2E)}, {"Space", uint16(0x20)},
+		{"ArrowUp", uint16(0x26)}, {"ArrowDown", uint16(0x28)},
+		{"ArrowLeft", uint16(0x25)}, {"ArrowRight", uint16(0x27)},
+		{"Home", uint16(0x24)}, {"End", uint16(0x23)},
+		{"PageUp", uint16(0x21)}, {"PageDown", uint16(0x22)},
+		{"Insert", uint16(0x2D)},
+	} {
+		cdpVKOfCode[pair[0].(string)] = pair[1].(uint16)
+	}
+	for i := 0; i < 24; i++ {
+		cdpVKOfCode[fmt.Sprintf("F%d", i+1)] = uint16(0x70 + i)
+	}
 }
 
 // screenshot captures the viewport at device resolution as PNG bytes.

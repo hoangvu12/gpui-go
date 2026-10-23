@@ -1,7 +1,7 @@
 {
   "name": "keyorder-scroll",
   "chrome": "Chrome/155.0.8059.85",
-  "recordedAt": "2026-10-23T21:28:45Z",
+  "recordedAt": "2026-10-23T22:56:56Z",
   "viewport": {
     "width": 480,
     "height": 360
@@ -59,112 +59,128 @@
       "target": "target",
       "defaultPrevented": false,
       "key": "ArrowDown",
-      "focus": "target"
+      "focus": "target",
+      "code": "ArrowDown"
     },
     {
       "kind": "keydown",
       "target": "content",
       "defaultPrevented": false,
       "key": "ArrowDown",
-      "focus": "target"
+      "focus": "target",
+      "code": "ArrowDown"
     },
     {
       "kind": "keydown",
       "target": "scroller",
       "defaultPrevented": false,
       "key": "ArrowDown",
-      "focus": "target"
+      "focus": "target",
+      "code": "ArrowDown"
     },
     {
       "kind": "keydown",
       "target": "root",
       "defaultPrevented": false,
       "key": "ArrowDown",
-      "focus": "target"
+      "focus": "target",
+      "code": "ArrowDown"
     },
     {
       "kind": "keyup",
       "target": "target",
       "defaultPrevented": false,
       "key": "ArrowDown",
-      "focus": "target"
+      "focus": "target",
+      "code": "ArrowDown"
     },
     {
       "kind": "keyup",
       "target": "content",
       "defaultPrevented": false,
       "key": "ArrowDown",
-      "focus": "target"
+      "focus": "target",
+      "code": "ArrowDown"
     },
     {
       "kind": "keyup",
       "target": "scroller",
       "defaultPrevented": false,
       "key": "ArrowDown",
-      "focus": "target"
+      "focus": "target",
+      "code": "ArrowDown"
     },
     {
       "kind": "keyup",
       "target": "root",
       "defaultPrevented": false,
       "key": "ArrowDown",
-      "focus": "target"
+      "focus": "target",
+      "code": "ArrowDown"
     },
     {
       "kind": "keydown",
       "target": "target",
       "defaultPrevented": false,
       "key": "ArrowDown",
-      "focus": "target"
+      "focus": "target",
+      "code": "ArrowDown"
     },
     {
       "kind": "keydown",
       "target": "content",
       "defaultPrevented": false,
       "key": "ArrowDown",
-      "focus": "target"
+      "focus": "target",
+      "code": "ArrowDown"
     },
     {
       "kind": "keydown",
       "target": "scroller",
       "defaultPrevented": false,
       "key": "ArrowDown",
-      "focus": "target"
+      "focus": "target",
+      "code": "ArrowDown"
     },
     {
       "kind": "keydown",
       "target": "root",
       "defaultPrevented": false,
       "key": "ArrowDown",
-      "focus": "target"
+      "focus": "target",
+      "code": "ArrowDown"
     },
     {
       "kind": "keyup",
       "target": "target",
       "defaultPrevented": false,
       "key": "ArrowDown",
-      "focus": "target"
+      "focus": "target",
+      "code": "ArrowDown"
     },
     {
       "kind": "keyup",
       "target": "content",
       "defaultPrevented": false,
       "key": "ArrowDown",
-      "focus": "target"
+      "focus": "target",
+      "code": "ArrowDown"
     },
     {
       "kind": "keyup",
       "target": "scroller",
       "defaultPrevented": false,
       "key": "ArrowDown",
-      "focus": "target"
+      "focus": "target",
+      "code": "ArrowDown"
     },
     {
       "kind": "keyup",
       "target": "root",
       "defaultPrevented": false,
       "key": "ArrowDown",
-      "focus": "target"
+      "focus": "target",
+      "code": "ArrowDown"
     }
   ],
   "screenshot": "chrome.png"

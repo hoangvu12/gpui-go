@@ -34,12 +34,13 @@ new fixtures. The implementation lives in `internal/parity`:
   "the pointer left the window" (it fires the leave on the whole hovered chain); the
   WM_MOUSELEAVE half is covered by gpui's own window tests.
   The key kinds are `keydown` and `keyup` (browser-core ticket 09): key entries also carry the
-  event's key (`e.key`, DOM key names — `Tab`, ` `, `ArrowDown`) and the focused
-  element's id at listener time (`document.activeElement`, body normalized to `""`),
-  which is the order probe for the default-action fixtures — a listener that still sees
-  the old focus ran before the default action changed it. The replay's key step is one
-  full press — key down then key up, like the recorder's CDP `keyDown`+`keyUp` pair —
-  and both halves' default-prevented states are recorded.
+  event's key (`e.key`, DOM key names — `Tab`, ` `, `ArrowDown`), the physical code and
+  location (`e.code`/`e.location`, browser-core ticket 13 — `BracketRight`, `Numpad1`
+  at 3), and the focused element's id at listener time (`document.activeElement`, body
+  normalized to `""`), which is the order probe for the default-action fixtures — a
+  listener that still sees the old focus ran before the default action changed it. The
+  replay's key step is one full press — key down then key up, like the recorder's CDP
+  `keyDown`+`keyUp` pair — and both halves' default-prevented states are recorded.
 - **Tier C — pixels, approximately.** The replay's final frame is rendered offscreen at
   device resolution and compared with the recorded Chrome screenshot under the fixture's
   provisional `PixelTolerance` (mean channel diff and hot-pixel fraction, image-wide and
@@ -110,7 +111,8 @@ new fixtures. The implementation lives in `internal/parity`:
    enter/leave across frames keys on them.
    the view logs (`log.MouseDown("box")`, `log.Click("box")`, `log.KeyDown("box")`,
    `log.KeyUp("box")`, `log.KeyDownPreventDefault("box")` — one helper per kind; the key
-   helpers record the event's key and the focus field, and the preventing one also calls
+   helpers record the event's key, physical code and location and the focus field, and
+   the preventing one also calls
    `Window.PreventDefault`). An element may narrow its bound kinds with a
    `data-events="keydown,keyup"` attribute (a comma-separated subset of `EventKinds` —
    the instrumentation honours it on the page side, and the view simply registers only
@@ -126,6 +128,16 @@ new fixtures. The implementation lives in `internal/parity`:
    platform dispatch — bindings, key listeners and the core default actions
    (browser-core ticket 09) all run, and a default action between the halves is visible
    in the keyup entries' focus field.
+
+   A key step produces the keystroke the platform reports (browser-core ticket 13): the
+   replay parses the keystroke and normalizes it with
+   `gpui.Keystroke.WithSimulatedCode()` — the physical code from the US layout table
+   (or an explicit one), the location the code implies, and the shifted-key fold with
+   Shift kept (`shift-]` carries `Key "}"`, `Code "BracketRight"`) — and the recorder
+   sends the same set to Chrome (see the recorder details below).
+   `parity.KeyCode("1", "Numpad1")` spells a physical key the keystroke syntax
+   cannot: the key and modifiers parse as usual, both sides carry the code, and the
+   location follows it (`Numpad1` at 3, the numpad).
 
 5. **The view function re-runs every frame** (like any `Render`): build the tree fresh on
    each call, keep mutable state outside (the `EventLog` is passed in; anything else goes
@@ -273,7 +285,10 @@ until the owning spec tickets land, and each should get a fixture the day it is 
 Divergences fixed by browser-core tickets get their fixture when they land: ticket 10
 (hover) removed two pin behaviours — hover clearing on key presses (D12) and hover
 sticking at the window edge — and added `OnPointerEnter`/`OnPointerLeave` plus the
-`pointerenter`/`pointerleave` transcript kinds (`fixtures/hover` is the fixture).
+`pointerenter`/`pointerleave` transcript kinds (`fixtures/hover` is the fixture);
+ticket 13 (key code and location, with Shift kept) made the port's key events carry
+the DOM's key/code/location pair, so the keyorder fixtures were re-recorded with the
+code field and the keycode fixtures landed (`fixtures/keycode`).
 
 ## Recorder details worth knowing
 
@@ -288,3 +303,22 @@ sticking at the window edge — and added `OnPointerEnter`/`OnPointerLeave` plus
   2.0 device scale: 40 CSS px per arrow — Chromium's kPixelsPerLineStep — the page step
   max(0.875xlength, length-40), Home/End to the axis ends): the keyorder scroll
   fixtures pin those numbers against the port's keyboard-scroll default action.
+- **Key events are synthesized with the whole DOM identity** (ticket 13,
+  `cdpKeyEvents` in internal/parity/recorder.go): `Input.dispatchKeyEvent` builds the
+  DOM event from what it is given, so the recorder must send every piece — verified
+  against `content/browser/devtools/protocol/input_handler.cc` and the recorded
+  fixtures (Chrome 155). The `key` param becomes `e.key` verbatim (the recorder sends
+  the platform-folded DOM key, so `shift-]` reports `"}"`); the `code` param becomes
+  `e.code` (`CodeStringToDomCode`); the `location` param (1 left, 2 right) and the
+  `isKeypad` flag become `e.location` through the modifier bits (`GetEventModifiers`
+  maps them to `kIsLeft`/`kIsRight`/`kIsKeyPad`); the `modifiers` bits are Alt=1,
+  Ctrl=2, Meta=4, Shift=8 (translated onto the WebInputEvent flags); and
+  `nativeVirtualKeyCode` must be set, or the event is marked skip-if-unhandled. The
+  US virtual key codes come from the recorder's own `cdpVKOfCode` table (the one piece
+  the keystroke spelling cannot carry).
+- **A shifted letter still reports the pin's lowercase key** on both sides: the
+  platform reports `Key "a"` for Shift+A (the pin's shape; the DOM key would be
+  `"A"`), and `WithSimulatedCode` folds only the shiftable OEM and digit keys to
+  match the platform — so a key fixture must not press Shift with a letter and expect
+  the DOM `key` name (the `keycode` fixtures use shifted punctuation instead; the
+  shift-folding of letters would be a separate ticket).

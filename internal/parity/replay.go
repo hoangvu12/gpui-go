@@ -209,11 +209,20 @@ func applyStep(cx *gpui.VisualTestContext, log *EventLog, step Step) error {
 		// keyDown+keyUp pair — through the platform dispatch (bindings,
 		// listeners and the core default actions of browser-core 09).
 		// The default-prevented state is marked per half, matching the
-		// recorder's per-event final state.
+		// recorder's per-event final state. The keystroke takes the
+		// platform's spelling first (browser-core 13): the explicit code
+		// of a Step.Code step (the numpad) or the US-derived one, the
+		// location it implies, and the shifted-key fold with Shift kept —
+		// the exact keystroke the Windows translation reports, and the
+		// one the recorder's CDP events spell on the Chrome side.
 		key, err := gpui.ParseKeystroke(step.Key)
 		if err != nil {
 			return err
 		}
+		if step.Code != "" {
+			key.Code = step.Code
+		}
+		key = key.WithSimulatedCode()
 		before := len(log.entries)
 		result := cx.SimulateEvent(&gpui.KeyDownEvent{Keystroke: key})
 		log.markDefaultPrevented(before, result.DefaultPrevented)
