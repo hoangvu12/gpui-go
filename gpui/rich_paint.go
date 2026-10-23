@@ -48,14 +48,19 @@ package gpui
 //   - the decoration offsets are derived, not native: the pin reads
 //     Parley's per-run underline/strikethrough offsets
 //     (gpui_ce_parley text_system.rs:1250-1265), which do not cross the
-//     ABI; the port uses the pin's own fallbacks for an absent offset —
-//     underline at baseline + descent * 0.618 (line.rs:437) and
-//     strikethrough at baseline - ascent * 0.5 (line.rs:448, the same
-//     half-ascent HarfBuzz default Parley applies without an OS/2
-//     strikeout record, parley-0.11.1 layout/data.rs:426-432).
+//     ABI; the port uses Chrome's geometry for the underline (ticket
+//     06's browser rule, a recorded divergence toward CSS: the auto
+//     thickness max(1, size/10) and the offset max(1,
+//     ceil(thickness/2)) below the baseline, core/style/
+//     text_decoration_thickness.cc:29-31 and core/layout/
+//     text_decoration_offset.cc:16-35) and the pin's own fallback for
+//     the strikethrough at baseline - ascent * 0.5 (line.rs:448, the
+//     same half-ascent HarfBuzz default Parley applies without an
+//     OS/2 strikeout record, parley-0.11.1 layout/data.rs:426-432).
 
 import (
 	"fmt"
+	"math"
 	"sort"
 )
 
@@ -157,7 +162,7 @@ func paintStyledVisualLine(w *Window, doc shapedText, line int, runs []TextRun, 
 	}
 	ascent, descent := doc.ascent(), doc.descent()
 	for _, segment := range segments {
-		paintRunDecorations(w, segment, lineOrigin.X, baseline, ascent, descent)
+		paintRunDecorations(w, segment, lineOrigin.X, baseline, ascent, descent, doc.fontSize())
 	}
 	return paintRowGlyphs(w, doc, line, segments, lineOrigin, baseline)
 }
@@ -236,9 +241,15 @@ func rowSegments(doc shapedText, runs []TextRun, row int, lineHeight float32) []
 
 // paintRunDecorations paints one run rectangle's underline and
 // strikethrough (R:text_system/line.rs:431-454): the decoration color
-// defaults to the run color; the offsets are the pin's fallbacks (file
-// header).
-func paintRunDecorations(w *Window, segment runSegment, lineOriginX, baseline, ascent, descent float32) {
+// defaults to the run color. The underline geometry is Chrome's
+// (ticket 06's browser rule, a recorded divergence from the pin's
+// baseline + descent*0.618 at a fixed 1px): the auto thickness is
+// max(1, font size / 10) and the underline top sits
+// max(1, ceil(thickness / 2)) below the alphabetic baseline — see
+// resolvedDecorationThickness and chromeUnderlineOffset. The
+// strikethrough keeps the pin's fallback offset (baseline -
+// ascent/2, the same half-ascent default Parley applies).
+func paintRunDecorations(w *Window, segment runSegment, lineOriginX, baseline, ascent, descent, fontSize float32) {
 	x := lineOriginX + segment.left
 	if segment.run.Underline != nil {
 		underline := *segment.run.Underline
@@ -246,7 +257,8 @@ func paintRunDecorations(w *Window, segment runSegment, lineOriginX, baseline, a
 			color := segment.run.Color
 			underline.Color = &color
 		}
-		w.PaintUnderline(Point{X: x, Y: baseline + descent*0.618}, segment.w, underline)
+		underline.Thickness = resolvedDecorationThickness(underline, fontSize)
+		w.PaintUnderline(Point{X: x, Y: baseline + chromeUnderlineOffset(underline.Thickness)}, segment.w, underline)
 	}
 	if segment.run.Strikethrough != nil {
 		strike := *segment.run.Strikethrough
@@ -256,6 +268,33 @@ func paintRunDecorations(w *Window, segment runSegment, lineOriginX, baseline, a
 		}
 		w.PaintStrikethrough(Point{X: x, Y: baseline + -ascent*0.5}, segment.w, strike)
 	}
+}
+
+// resolvedDecorationThickness resolves one underline style's paint
+// thickness at the font size (Chrome's TextDecorationThickness::Resolve
+// — auto = font size / 10, core/style/text_decoration_thickness.cc:
+// 29-31 — floored at 1 CSS px by ComputeThickness, core/paint/
+// text_decoration_info.cc:715-719). An explicit style thickness passes
+// through unchanged (the pin's snap-stroke path snaps it).
+func resolvedDecorationThickness(style UnderlineStyle, fontSize float32) float32 {
+	if !style.AutoThickness {
+		return style.Thickness
+	}
+	return max32(1, fontSize/10)
+}
+
+// chromeUnderlineOffset is the gap between the alphabetic baseline and
+// the underline's top edge (Chrome's ComputeUnderlineOffsetAuto, core/
+// layout/text_decoration_offset.cc:16-35: gap = max(1,
+// ceil(thickness / 2)) whole pixels below the baseline for the auto
+// `text-underline-offset`; the decoration rect's top sits there with
+// height = thickness, core/paint/text_decoration_info.cc:496-503).
+func chromeUnderlineOffset(thickness float32) float32 {
+	gap := int(math.Ceil(float64(thickness / 2)))
+	if gap < 1 {
+		gap = 1
+	}
+	return float32(gap)
 }
 
 // paintRowGlyphs paints one visual row's glyphs once per color span

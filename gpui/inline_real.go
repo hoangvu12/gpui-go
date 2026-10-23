@@ -78,6 +78,22 @@ func (r *realWindowTextSystem) inlineMetrics(font FontDescriptor, fontSize float
 	}
 }
 
+// glyphForChar implements windowTextSystem: resolve the descriptor,
+// then map the character through the resolved font (the public
+// TextSystem::GlyphForChar). An unresolvable descriptor answers no
+// glyph (the caller falls back to "...").
+func (r *realWindowTextSystem) glyphForChar(font FontDescriptor, ch rune) (uint32, bool) {
+	identity, err := r.system.ResolveFont(font)
+	if err != nil {
+		return 0, false
+	}
+	id, ok, err := r.system.GlyphForChar(identity.FontID, ch)
+	if err != nil || !ok {
+		return 0, false
+	}
+	return id, true
+}
+
 // paintLine implements shapedText: paint one visual line of the shaped
 // document at the given origin and baseline (the inline piece paint
 // path; the piece's native line supplies the fragments and glyphs). The

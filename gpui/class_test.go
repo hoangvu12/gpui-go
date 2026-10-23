@@ -533,7 +533,6 @@ func TestCheckClassesReasons(t *testing.T) {
 		{"-w-[4px]", "margins and insets only"},
 		{"p-auto", "auto is not a valid value here"},
 		{"tracking-tight", "em-based"},
-		{"font-sans", "FontFamily"},
 		{"text-justify", "justified text"},
 		{"bg-slate-850", "unknown shade"},
 		{"bg-brand", "palette color"},
@@ -1052,5 +1051,52 @@ func TestClassBlurComposesWithColourFilters(t *testing.T) {
 	d := Div().Class("grayscale blur-md blur-none")
 	if filters, ok := d.StyleMut().Filter.Get(); !ok || len(filters) != 0 {
 		t.Errorf("blur-none = %v, %v; want the reset empty chain", filters, ok)
+	}
+}
+
+// TestClassTextStyleQuickFixes pins ticket 06's text-style classes: the
+// generic-family utilities (font-sans / font-serif / font-mono, mapped
+// to the families Chrome's Windows defaults resolve Tailwind's stacks
+// to) and the font-variant-numeric utilities (their OpenType features,
+// Chromium's FromFontDescription, platform/fonts/shaping/
+// font_features.cc:157-196). Each numeric class sets the whole feature
+// list and normal-nums clears it.
+func TestClassTextStyleQuickFixes(t *testing.T) {
+	classTestNoErrors(t)
+	classTestCheck(t, []classTestCase{
+		{"font-sans", func(d *DivElement) *DivElement { return d.FontFamily(".SystemUIFont") }},
+		{"font-serif", func(d *DivElement) *DivElement { return d.FontFamily("Georgia") }},
+		{"font-mono", func(d *DivElement) *DivElement { return d.FontFamily("Consolas") }},
+		{"tabular-nums", func(d *DivElement) *DivElement {
+			return d.FontFeatures([]FontFeature{{Tag: "tnum", Value: 1}})
+		}},
+		{"proportional-nums", func(d *DivElement) *DivElement {
+			return d.FontFeatures([]FontFeature{{Tag: "pnum", Value: 1}})
+		}},
+		{"lining-nums", func(d *DivElement) *DivElement {
+			return d.FontFeatures([]FontFeature{{Tag: "lnum", Value: 1}})
+		}},
+		{"oldstyle-nums", func(d *DivElement) *DivElement {
+			return d.FontFeatures([]FontFeature{{Tag: "onum", Value: 1}})
+		}},
+		{"slashed-zero", func(d *DivElement) *DivElement {
+			return d.FontFeatures([]FontFeature{{Tag: "zero", Value: 1}})
+		}},
+		{"ordinal", func(d *DivElement) *DivElement {
+			return d.FontFeatures([]FontFeature{{Tag: "ordn", Value: 1}})
+		}},
+		{"diagonal-fractions", func(d *DivElement) *DivElement {
+			return d.FontFeatures([]FontFeature{{Tag: "frac", Value: 1}})
+		}},
+		{"stacked-fractions", func(d *DivElement) *DivElement {
+			return d.FontFeatures([]FontFeature{{Tag: "afrc", Value: 1}})
+		}},
+	})
+	// normal-nums resets the features to none (Tailwind's
+	// font-feature-settings: normal): the refinement sets an empty
+	// list, overriding whatever was set before it.
+	d := Div().Class("tabular-nums normal-nums")
+	if features, ok := d.StyleMut().Text.FontFeatures.Get(); !ok || len(features) != 0 {
+		t.Errorf("normal-nums = (%v, %v), want an empty feature list", features, ok)
 	}
 }

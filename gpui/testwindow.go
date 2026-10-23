@@ -160,7 +160,7 @@ func (t *testTextSystem) shape(text string, fontSize float32, font FontDescripto
 	tracking := float32(0)
 	return &testShapedText{
 		text:     text,
-		fontSize: fontSize,
+		textSize: fontSize,
 		advance:  position + tracking,
 		wrap:     wrapWidth,
 		glyphs:   glyphs,
@@ -238,7 +238,7 @@ func (t *testTextSystem) layoutInline(request inlineLayoutRequest) (inlineLayout
 	}
 	inline := &testInlineDocument{
 		text:     request.text,
-		fontSize: request.fontSize,
+		textSize: request.fontSize,
 		glyphs:   glyphs,
 		advance:  document.advance + totalBoxWidth,
 		wrap:     request.wrapWidth,
@@ -290,6 +290,14 @@ func (t *testTextSystem) inlineMetrics(font FontDescriptor, fontSize float32) In
 	}
 }
 
+// glyphForChar implements windowTextSystem: the stub's modeled font
+// maps every character (glyph id 1), like the reference TestTextSystem
+// answering from its single modeled face. A test stub that needs the
+// no-glyph path overrides this.
+func (t *testTextSystem) glyphForChar(font FontDescriptor, ch rune) (uint32, bool) {
+	return 1, true
+}
+
 // finishFrame implements windowTextSystem: the deterministic test
 // system shapes no native handles, so the frame's line-usage rotation
 // is a no-op (the cache exists to keep native shaping handles alive
@@ -310,7 +318,7 @@ const testTextXHeight = 516.0
 // line plus the un-shifted caret stops (the platform layout).
 type testInlineDocument struct {
 	text     string
-	fontSize float32
+	textSize float32
 	// glyphs are the box-shifted positioned glyphs.
 	glyphs []ShapedGlyph
 	// advance is the document width including box advances.
@@ -326,12 +334,12 @@ func (t *testInlineDocument) width() float32 { return t.advance }
 
 // ascent implements shapedText.
 func (t *testInlineDocument) ascent() float32 {
-	return t.fontSize * (testTextAscent / testTextUnitsPerEm)
+	return t.textSize * (testTextAscent / testTextUnitsPerEm)
 }
 
 // descent implements shapedText.
 func (t *testInlineDocument) descent() float32 {
-	return t.fontSize * (testTextDescent / testTextUnitsPerEm)
+	return t.textSize * (testTextDescent / testTextUnitsPerEm)
 }
 
 // lineCount implements shapedText: one line.
@@ -430,11 +438,15 @@ func testInlineGeometry(document *testInlineDocument, fontSize float32) func(sta
 	}
 }
 
+// fontSize implements shapedText: the document's font size (the
+// shaping request's).
+func (t *testInlineDocument) fontSize() float32 { return t.textSize }
+
 // testShapedText is the stub's shaped document (the reference
 // TestPlatformTextLayout/LineLayout facts).
 type testShapedText struct {
 	text     string
-	fontSize float32
+	textSize float32
 	// advance is the accumulated glyph advance (LineLayout::width).
 	advance float32
 	// wrap is the wrap constraint the document was shaped under.
@@ -448,13 +460,17 @@ func (t *testShapedText) width() float32 { return t.advance }
 
 // ascent implements shapedText: font_size * (ascent / units_per_em).
 func (t *testShapedText) ascent() float32 {
-	return t.fontSize * (testTextAscent / testTextUnitsPerEm)
+	return t.textSize * (testTextAscent / testTextUnitsPerEm)
 }
 
 // descent implements shapedText: font_size * (descent / units_per_em).
 func (t *testShapedText) descent() float32 {
-	return t.fontSize * (testTextDescent / testTextUnitsPerEm)
+	return t.textSize * (testTextDescent / testTextUnitsPerEm)
 }
+
+// fontSize implements shapedText: the stub's font size (the shaping
+// request's).
+func (t *testShapedText) fontSize() float32 { return t.textSize }
 
 // lineCount implements shapedText: the stub always reports its single
 // visual line.
@@ -522,7 +538,7 @@ func (t *testShapedText) selectionRects(start, end int, lineHeight float32) []Te
 	if start >= end {
 		return nil
 	}
-	emWidth := t.fontSize * testTextAdvanceWidth / testTextUnitsPerEm
+	emWidth := t.textSize * testTextAdvanceWidth / testTextUnitsPerEm
 	from := testPenAt(t.text, emWidth, start)
 	to := testPenAt(t.text, emWidth, end)
 	low, high := min32(from, to), max32(from, to)

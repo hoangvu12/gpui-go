@@ -1,0 +1,32 @@
+{
+  "name": "textstyle-underline",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T21:51:07Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "row-underline-16": {
+      "x": 16,
+      "y": 16,
+      "width": 380,
+      "height": 44
+    },
+    "row-underline-40": {
+      "x": 16,
+      "y": 72,
+      "width": 380,
+      "height": 84
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

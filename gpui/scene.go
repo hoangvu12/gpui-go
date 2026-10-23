@@ -532,10 +532,11 @@ func (s *Scene) Meta() (SceneMeta, error) { return s.kernel.Meta() }
 
 // PaintContext carries the state the paint methods need beyond their
 // explicit parameters: the window scale factor, the current content
-// mask and the current element opacity (the pinned Window's
+// mask, the current element opacity (the pinned Window's
 // element_opacity, multiplied by nested BeginLayer/with_element_opacity
-// scopes). The zero value paints at scale 1 with an unbounded mask and
-// full opacity.
+// scopes) and the window's background appearance (the text paint
+// mode's first input, ticket 06). The zero value paints at scale 1 with
+// an unbounded mask, full opacity and an OPAQUE background.
 type PaintContext struct {
 	// ScaleFactor converts logical to device pixels.
 	ScaleFactor float32
@@ -543,6 +544,12 @@ type PaintContext struct {
 	Mask Bounds
 	// ElementOpacity is the accumulated element opacity.
 	ElementOpacity float32
+	// Background is the window's background appearance: text painted
+	// under a non-opaque background renders grayscale (the pin's
+	// should_use_subpixel_rendering first check; PaintTextOptions.
+	// Background). Zero (WindowBackgroundOpaque) keeps the platform
+	// recommendation.
+	Background WindowBackgroundAppearance
 }
 
 // NewPaintContext builds a paint context (scale, logical mask, element

@@ -892,13 +892,80 @@ func typographyClass(b *StyleBuilder, u string) (bool, string) {
 		if !ok || n == 0 || n > math.MaxInt32 {
 			return true, "line-clamp-… takes a line count"
 		}
+		// Ticket 06: the clamp itself now ends the last line with the
+		// CSS ellipsis (text_truncate.go's EvaluateTextOverflow
+		// synthesis), so the class needs only the clamp.
 		b.LineClamp(int(n))
 	case u == "font-sans" || u == "font-serif" || u == "font-mono":
-		return true, `font families are not classes; call .FontFamily("…") with an installed or embedded family`
+		// Ticket 06: the Tailwind default theme stacks, resolved the way
+		// Chrome on Windows resolves them (see genericFontFamilyAliases'
+		// doc and the font fixture): font-sans heads with ui-sans-serif,
+		// system-ui (the system UI font, Segoe UI); font-serif's first
+		// installed family is Georgia; font-mono's is Consolas.
+		switch u {
+		case "font-sans":
+			b.FontFamily(".SystemUIFont")
+		case "font-serif":
+			b.FontFamily("Georgia")
+		default:
+			b.FontFamily("Consolas")
+		}
+	case isNumericVariantClass(u):
+		// Ticket 06: the font-variant-numeric utilities map to their
+		// OpenType features (Chromium's FromFontDescription, platform/
+		// fonts/shaping/font_features.cc:157-196). Each class sets the
+		// whole feature list, like Tailwind's single
+		// font-feature-settings declaration.
+		b.FontFeatures(numericVariantFeatures(u))
 	default:
 		return false, ""
 	}
 	return true, ""
+}
+
+// isNumericVariantClass reports whether u is one of Tailwind's
+// font-variant-numeric utilities (including normal-nums, the reset).
+func isNumericVariantClass(u string) bool {
+	return numericVariantClass(u) != "" || u == "normal-nums"
+}
+
+// numericVariantClass returns the OpenType feature tag a Tailwind
+// font-variant-numeric utility stands for, or "" when u is not one
+// (the tags and their font-variant-numeric origins: Chromium's
+// FromFontDescription, platform/fonts/shaping/font_features.cc:157-196;
+// Tailwind's utilities are the same one-tag settings).
+func numericVariantClass(u string) string {
+	switch u {
+	case "tabular-nums":
+		return "tnum"
+	case "proportional-nums":
+		return "pnum"
+	case "lining-nums":
+		return "lnum"
+	case "oldstyle-nums":
+		return "onum"
+	case "slashed-zero":
+		return "zero"
+	case "ordinal":
+		return "ordn"
+	case "diagonal-fractions":
+		return "frac"
+	case "stacked-fractions":
+		return "afrc"
+	default:
+		return ""
+	}
+}
+
+// numericVariantFeatures returns the feature list a numeric-variant
+// class sets: normal-nums clears the features (Tailwind's
+// font-feature-settings: normal); every other utility sets its single
+// tag to 1.
+func numericVariantFeatures(u string) []FontFeature {
+	if u == "normal-nums" {
+		return nil
+	}
+	return []FontFeature{{Tag: numericVariantClass(u), Value: 1}}
 }
 
 // borderClass applies border widths, radii and ring widths beyond the
@@ -1538,7 +1605,6 @@ var unsupportedClasses = []struct {
 	{[]string{"whitespace-pre", "whitespace-break-spaces"}, "only whitespace-normal and whitespace-nowrap are supported"},
 	{[]string{"break-words", "break-all", "break-keep", "break-normal", "hyphens", "text-balance", "text-pretty"}, "text wrapping modes other than whitespace-normal / whitespace-nowrap are not supported"},
 	{[]string{"antialiased", "subpixel-antialiased"}, "GPUI chooses text antialiasing itself; drop it"},
-	{[]string{"tabular-nums", "proportional-nums", "lining-nums", "oldstyle-nums", "slashed-zero", "ordinal", "diagonal-fractions", "stacked-fractions", "normal-nums"}, "numeric variants are font features; call .FontFeatures(…)"},
 	{[]string{"list"}, "list styles are not supported"},
 	{[]string{"appearance", "resize", "accent", "caret"}, "form-control styling is not supported; GPUI has no native form controls"},
 	{[]string{"scroll", "snap", "touch", "overscroll", "will-change", "isolation", "isolate"}, "this scrolling or compositing utility is not supported"},

@@ -1,0 +1,26 @@
+{
+  "name": "textstyle-line-clamp",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T22:20:33Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "row-clamp": {
+      "x": 16,
+      "y": 16,
+      "width": 260,
+      "height": 68
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

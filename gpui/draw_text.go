@@ -39,11 +39,15 @@ package gpui
 //   metadata-consistency check for the rasterizations that do run.
 // * The pin's should_use_subpixel_rendering consults the platform
 //   window's background transparency, is_subpixel_rendering_supported
-//   and the per-window TextRenderingMode override. The port's host
-//   window does not expose background appearance yet; the mode falls
-//   back to the platform recommendation (recommended_rendering_mode),
-//   and the caller can pass an explicit override through
-//   PaintTextOptions.
+//   and the per-window TextRenderingMode override. Ticket 06 ported the
+//   background-transparency check (PaintTextOptions.Background, fed
+//   from the frame's PaintContext by the window draw): a non-opaque
+//   window renders grayscale text. is_subpixel_rendering_supported is
+//   not ported — the Windows platform always supports subpixel (the
+//   pin's gpui_windows window answers true) — so the mode falls back to
+//   the per-window override or the platform recommendation
+//   (recommended_rendering_mode), and the caller can pass an explicit
+//   override through PaintTextOptions.
 
 import (
 	"fmt"
@@ -571,17 +575,30 @@ func whiteRgba() Rgba {
 
 // PaintTextOptions parameterizes the text paint path's mode selection
 // (the pinned should_use_subpixel_rendering inputs the port's host
-// window does not expose yet).
+// window exposes).
 type PaintTextOptions struct {
 	// RenderingMode overrides the platform recommendation when not
 	// PlatformDefault (the pinned per-window text_rendering_mode).
 	RenderingMode TextRenderingMode
+	// Background is the window's background appearance (the pin's
+	// first should_use_subpixel_rendering input, platform_window.
+	// background_appearance): text on a non-opaque window — plain
+	// transparent, blurred, or a Mica backdrop — renders GRAYSCALE, no
+	// matter the platform recommendation or the per-window override
+	// (window.rs:4926-4931 returns false before consulting them). The
+	// zero value is the Opaque default.
+	Background WindowBackgroundAppearance
 }
 
 // shouldUseSubpixelRendering resolves the requested mode for ordinary
 // text (the bounded port of the pinned should_use_subpixel_rendering;
-// see the module docs for the recorded deviation).
+// see the module docs for the recorded deviation): a transparent
+// window background forces grayscale first, then the per-window
+// override or the platform recommendation decides.
 func shouldUseSubpixelRendering(ts *TextSystem, opts PaintTextOptions) (bool, error) {
+	if opts.Background.IsTransparent() {
+		return false, nil
+	}
 	mode := opts.RenderingMode
 	if mode == TextRenderingPlatformDefault {
 		recommended, err := ts.RecommendedRenderingMode()
@@ -907,7 +924,9 @@ func (s *Scene) PaintShapedTextLine(
 					return err
 				}
 			} else {
-				if err := s.PaintGlyph(glyphOrigin, fragment.FontID, glyph.ID, fragment.FontSize, color, ts, atlas, ctx, PaintTextOptions{}); err != nil {
+				// The piece paint path derives its text paint mode from the
+				// frame's background appearance (ticket 06).
+				if err := s.PaintGlyph(glyphOrigin, fragment.FontID, glyph.ID, fragment.FontSize, color, ts, atlas, ctx, PaintTextOptions{Background: ctx.Background}); err != nil {
 					return err
 				}
 			}

@@ -1,0 +1,32 @@
+{
+  "name": "textstyle-tracking-ligatures",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T22:49:37Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "row-liga": {
+      "x": 16,
+      "y": 16,
+      "width": 380,
+      "height": 44
+    },
+    "row-spacing": {
+      "x": 16,
+      "y": 72,
+      "width": 380,
+      "height": 44
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

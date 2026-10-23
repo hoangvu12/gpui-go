@@ -382,6 +382,14 @@ func Outline(bounds Bounds, borderColor Background, borderStyle BorderStyle) Pai
 type UnderlineStyle struct {
 	// Thickness of the underline.
 	Thickness float32
+	// AutoThickness resolves the thickness at paint time from the font
+	// size, Chrome's `text-decoration-thickness: auto` (the default):
+	// max(1, font size / 10) logical px, core/style/
+	// text_decoration_thickness.cc:29-31 plus the floor in
+	// core/paint/text_decoration_info.cc:715-719. A divergence toward
+	// CSS over the pin's fixed thickness (the ticket-06 browser rule:
+	// the browser wins, each divergence recorded).
+	AutoThickness bool
 	// Color of the underline; nil is the reference default
 	// (transparent black).
 	Color *Hsla

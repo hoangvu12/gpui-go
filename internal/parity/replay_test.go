@@ -14,6 +14,7 @@ import (
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/keyorder"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/shadow"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/textpaint"
+	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/textstyle"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/tracer"
 )
 
@@ -60,3 +61,12 @@ func TestFixtures(t *testing.T) {
 // keyorder fixtures' discriminators are in keyorder_test.go.
 var _ = tracer.Fixture.Name
 var _ = keyorder.Fixture.Name
+
+// The fixture packages register through the imports above (tracer is
+// ticket 01's, textstyle is ticket 06's); the wrong-view discrimination
+// tests live beside them (fixtures/tracer/tracer_test.go,
+// fixtures/textstyle/textstyle_test.go).
+var (
+	_ = tracer.Fixture.Name
+	_ = textstyle.TransformFixture.Name
+)
