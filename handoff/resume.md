@@ -6,7 +6,9 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 ## ACTIVE EFFORT (2026-10-23): recreate zgui's terminal app ("zterm") on gpui-go
 
-**HANDOFF 2026-10-23 (orchestrator 3 → orchestrator 4). CURRENT AND AUTHORITATIVE; everything below it is history.** The predecessor is the Roboco chat this was launched from (orchestrator 3).
+**ORCHESTRATOR 4 STATUS (2026-10-23, newest):** the user scoped it as UI only ("only the UI, skip logic"), Windows only, placeholder panes. Map and tickets 01-09: [.scratch/zterm/map.md](../.scratch/zterm/map.md). zterm's Luau source is copied, read-only, to `C:\Users\ADMIN\Desktop\nguyenvu\zgui-zterm-src\`. Running, as background Agent workers: 01 capability audit (worktree `gpui-go-wt-zterm-audit`, branch `zterm/audit`), 02 zgui-on-Windows check (`gpui-go-wt-zterm-ref`, `zterm/ref`, no cargo), and 03 app skeleton (`gpui-go-wt-zterm-app`, `zterm/app`). Next: 04, 05, 07 and 08 after 03, then 06, then 09.
+
+**HANDOFF 2026-10-23 (orchestrator 3 → orchestrator 4). History now.** The predecessor is the Roboco chat this was launched from (orchestrator 3).
 
 **State: all done and pushed, on `main` at e25da53.**
 - The Base port is complete. v0.2.0 is tagged on 7a1b25b.
