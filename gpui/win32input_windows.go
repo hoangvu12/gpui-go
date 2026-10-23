@@ -24,8 +24,8 @@ package gpui
 //
 // The button messages are desktop_input_windows.go's handleMouseButtonMsg
 // (events.rs:138-149, 489-559). Non-client button messages
-// (events.rs:119-137) are not routed: the port's windows keep the system
-// title bar and the non-client hit testing is not ported.
+// (events.rs:119-137) are routed by titlebar_windows.go, only for a
+// window whose system titlebar is hidden.
 
 import "unsafe"
 

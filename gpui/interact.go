@@ -1027,11 +1027,11 @@ func (d *DivElement) requiresElementState() bool {
 }
 
 // shouldInsertHitbox is div.rs:2887-2911 should_insert_hitbox, bounded
-// to the features the port has (window control areas, scroll offsets,
-// pressure / exit listeners, drag-over styles and tooltips are not
-// ported).
+// to the features the port has (scroll offsets, pressure / exit
+// listeners, drag-over styles and tooltips are not ported).
 func (d *DivElement) shouldInsertHitbox(style *Style, w *Window) bool {
 	return d.hitboxBehavior != HitboxNormal ||
+		d.windowControl != nil ||
 		style.MouseCursor != nil ||
 		d.group != nil ||
 		d.focusHandle != nil ||

@@ -166,6 +166,9 @@ func (wh WindowHandle) Minimize() {}
 // Zoom is a no-op.
 func (wh WindowHandle) Zoom() {}
 
+// StartWindowMove is a no-op.
+func (wh WindowHandle) StartWindowMove() {}
+
 // IsMaximized reports the unsupported platform.
 func (wh WindowHandle) IsMaximized() (bool, error) { return false, ErrHostUnsupportedPlatform }
 

@@ -123,6 +123,9 @@ type renderedFrame struct {
 	tabStops       *TabStopMap
 	mouseListeners []mouseListener
 	hitboxes       []*hitboxRecord
+	// windowControlHitboxes are the frame's window control areas in
+	// insertion order (window.rs:1109 Frame::window_control_hitboxes).
+	windowControlHitboxes []windowControlHitbox
 	// focus is the focus identity the frame was finished with, or 0
 	// (window.rs:1101 Frame.focus; the focus path compares through it).
 	focus uint64
