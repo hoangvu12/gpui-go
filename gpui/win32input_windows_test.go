@@ -532,11 +532,19 @@ func TestWin32InputRealWindowWheelScrolls(t *testing.T) {
 	f.waitIdle()
 	// The line delta became whole line heights (ScrollDelta::pixel_delta
 	// with the window's line height, div.rs:3827).
+	// A Shift held anywhere on the machine (GetAsyncKeyState) turns the
+	// notch into horizontal lines, which the vertical-only scroller still
+	// applies to Y; the per-line check divides by whichever axis carries
+	// the lines.
 	wantY := readOffset().Y
-	if wantY > -200 {
-		perLine := -wantY / -event.Delta.Lines.Y
+	lines := event.Delta.Lines.Y
+	if lines == 0 {
+		lines = event.Delta.Lines.X
+	}
+	if wantY > -200 && lines != 0 {
+		perLine := -wantY / -lines
 		if perLine < 8 || perLine > 64 || perLine != float32(int(perLine)) {
-			t.Errorf("one notch scrolled %v for %v lines: %v px per line is not a whole line height", -wantY, -event.Delta.Lines.Y, perLine)
+			t.Errorf("one notch scrolled %v for %v lines: %v px per line is not a whole line height", -wantY, -lines, perLine)
 		}
 	}
 
