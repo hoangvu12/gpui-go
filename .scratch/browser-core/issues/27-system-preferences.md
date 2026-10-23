@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 6 (Claude Code)
+Status: resolved
+Assignee: orchestrator 6 (Claude Code); worker chat 30725570
 Blocked by: 01
 Triage: ready-for-agent
 
@@ -22,6 +22,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 6: verified after merging onto main (rev 15). Re-ran vet, `go build ./...`, and `go test ./gpui/... ./base ./internal/parity/...` (ok). The preference tests passed 5 runs in a row with none skipped. The local Chromium citations (os_settings_provider.cc PreferredContrast 7:1 / 2.5:1, animation_win.cc SPI_GETCLIENTAREAANIMATION) match. Some ui/color citations were fetched from googlesource main, outside the pinned sparse checkout. Base is unchanged; ticket 74 swaps its reduced-motion read for this record.
 
 ## Answer
 

@@ -24,7 +24,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
   - 09: chat 6a03afb2, worktree `gpui-go-wt-core-09`, branch `core/09-default-actions`. It also extends the harness with key events.
   - 27: chat 30725570, worktree `gpui-go-wt-core-27`, branch `core/27-system-prefs`
   - 62: chat a1fbc74c, worktree `gpui-go-wt-core-62`, branch `core/62-tsx-host`
-- RUNNING NOW: 06, 08, 09, 27, 40, 62.
+- 27: verified, merged and RESOLVED.
+- RUNNING NOW: 06, 08, 09, 40, 62.
 
 Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
 
