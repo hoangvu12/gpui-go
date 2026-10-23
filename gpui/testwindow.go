@@ -59,7 +59,7 @@ func NewTestWindow(app *App, size Size) *Window {
 			// (platform/test/window.rs:377-385); frames are delivered by
 			// SimulateFrameRequest and the test-support flush, which
 			// draws dirty test windows (app.rs:1800-1812).
-			frames: newWindowFrameState(nil),
+			frames: newWindowFrameState(nil, 0),
 		}
 		app.windows[window.id] = window
 	})

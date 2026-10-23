@@ -1,6 +1,9 @@
 package gpui
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 // frameLoopView is a root view for the frame-loop tests: it counts
 // renders and requests animation frames while animate > 0.
@@ -47,6 +50,37 @@ func frameLoopRenders(app *App, e Entity[frameLoopView]) int {
 // source, idle windows do not wake on clean frames or non-notifying
 // updates, notifying a rendered view wakes it, serving the demand
 // returns to idle, and a next-frame callback wakes an idle window.
+// TestWindowPreferredFrameIntervalSetAndGet covers the live half of the
+// preferred-frame-interval API (browser-core ticket 47): the default is
+// zero (the display rate), SetPreferredFrameInterval changes it, zero
+// restores it, and a negative interval is rejected. The pacing itself
+// is the Windows frame source's job
+// (TestFrameLoopPreferredFrameIntervalDrawsEveryOtherVblank); a test
+// window records the interval even though its frames arrive through
+// SimulateFrameRequest.
+func TestWindowPreferredFrameIntervalSetAndGet(t *testing.T) {
+	ta := NewTestApp()
+	w, _ := openFrameLoopTestWindow(t, ta)
+
+	if got := w.PreferredFrameInterval(); got != 0 {
+		t.Fatalf("a fresh window's preferred interval = %v, want 0 (the display rate)", got)
+	}
+	w.SetPreferredFrameInterval(40 * time.Millisecond)
+	if got := w.PreferredFrameInterval(); got != 40*time.Millisecond {
+		t.Fatalf("after SetPreferredFrameInterval(40ms) = %v, want 40ms", got)
+	}
+	w.SetPreferredFrameInterval(0)
+	if got := w.PreferredFrameInterval(); got != 0 {
+		t.Fatalf("after SetPreferredFrameInterval(0) = %v, want 0", got)
+	}
+	defer func() {
+		if recover() == nil {
+			t.Fatal("SetPreferredFrameInterval(-1ms) must panic")
+		}
+	}()
+	w.SetPreferredFrameInterval(-time.Millisecond)
+}
+
 func TestFrameWakerFiresOnFrameDemand(t *testing.T) {
 	ta := NewTestApp()
 	app := ta.App()

@@ -3,6 +3,7 @@ package gpui
 import (
 	"errors"
 	"fmt"
+	"time"
 )
 
 // This file owns the window slice of the runtime (ticket05): the logical
@@ -122,6 +123,22 @@ type WindowOptions struct {
 	Show bool
 	// Activate brings the window to the foreground when shown.
 	Activate bool
+	// PreferredFrameInterval asks the frame source for a lower frame rate
+	// for this window (browser-core ticket 47; the port of viz's
+	// ExternalBeginFrameSourceWin::SetPreferredInterval,
+	// components/viz/service/frame_sinks/external_begin_frame_source_win.cc:
+	// 96-110). Zero (the default) is the display rate — every vblank.
+	// A value greater than twice the observed vblank interval minus half
+	// a millisecond (about 33 ms on a 60 Hz display) selects HALF RATE:
+	// the frame source skips every other vblank for this window
+	// (external_begin_frame_source_win.cc:53-62), vsync-aligned, so its
+	// animations draw every other vblank. Values in between keep the
+	// full rate — like Chromium, only full and half rate exist, and the
+	// effective interval is always a whole number of vblanks. Change it
+	// live with Window.SetPreferredFrameInterval. A negative value is
+	// rejected at open. Test windows ignore it (their frames arrive
+	// through SimulateFrameRequest).
+	PreferredFrameInterval time.Duration
 
 	// ShouldClose is the close veto: it is called synchronously when a
 	// close is requested (WM_CLOSE); returning false vetoes the close
@@ -718,6 +735,9 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 	if h == nil {
 		return nil, ErrNoHost
 	}
+	if opts.PreferredFrameInterval < 0 {
+		return nil, fmt.Errorf("gpui: WindowOptions.PreferredFrameInterval must be non-negative, got %v", opts.PreferredFrameInterval)
+	}
 
 	type openResult struct {
 		window *Window
@@ -932,7 +952,7 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 				title:  opts.Title,
 				// The frame loop drives every window; OnRedraw is its present
 				// step. The window starts dirty (window.rs:178).
-				frames: newWindowFrameState(opts.OnRedraw),
+				frames: newWindowFrameState(opts.OnRedraw, opts.PreferredFrameInterval),
 			}
 			a.windows[window.id] = window
 			res <- openResult{window: window}

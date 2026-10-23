@@ -4,6 +4,7 @@ package gpui
 
 import (
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -258,6 +259,284 @@ func TestFrameLoopMinimizedWindowSkipsFramesUntilVisible(t *testing.T) {
 	}
 	if final.renders < base.renders+4 {
 		t.Fatalf("the animation completed only %d of 4 frames after the restore", final.renders-base.renders)
+	}
+}
+
+// TestFrameLoopPreferredFrameIntervalDrawsEveryOtherVblank is
+// browser-core ticket 47's per-window preferred frame interval (research
+// browser-parity 02 §8, the port of viz's half-rate preferred interval,
+// components/viz/service/frame_sinks/external_begin_frame_source_win.cc:
+// SetPreferredInterval :96-110 deciding half rate from the requested
+// interval, OnVSyncOnSequence :53-62 skipping every other vsync while
+// it runs): a window that asks for a lower rate draws every OTHER
+// vblank during an animation, while a full-rate window on the same
+// pacer keeps drawing every vblank — both windows are real but parked
+// far offscreen (no visible window on any monitor), the animations are
+// driven purely by frame requests, and the full-rate window doubles as
+// the pacer's vblank clock (its draw gaps measure the interval the
+// half-rate gaps are compared against, so the assertion holds at any
+// display refresh rate). No real input.
+func TestFrameLoopPreferredFrameIntervalDrawsEveryOtherVblank(t *testing.T) {
+	h := desktopNewHost(t)
+	app := NewApp()
+	if err := app.Attach(h); err != nil {
+		t.Fatalf("app attach: %v", err)
+	}
+
+	// drawTimes records when a window's present hook ran.
+	type drawTimes struct {
+		mu    sync.Mutex
+		times []time.Time
+	}
+	hook := func(l *drawTimes) func() {
+		return func() {
+			l.mu.Lock()
+			l.times = append(l.times, time.Now())
+			l.mu.Unlock()
+		}
+	}
+	times := func(l *drawTimes) []time.Time {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		return append([]time.Time(nil), l.times...)
+	}
+	gaps := func(l *drawTimes, since time.Time) []time.Duration {
+		var ts []time.Time
+		for _, at := range times(l) {
+			if !at.Before(since) {
+				ts = append(ts, at)
+			}
+		}
+		var out []time.Duration
+		for i := 1; i < len(ts); i++ {
+			out = append(out, ts[i].Sub(ts[i-1]))
+		}
+		return out
+	}
+	median := func(ds []time.Duration) time.Duration {
+		sorted := append([]time.Duration(nil), ds...)
+		sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+		return sorted[len(sorted)/2]
+	}
+
+	controlLog, halfLog := &drawTimes{}, &drawTimes{}
+	var controlEntity, halfEntity Entity[frameLoopView]
+	open := func(title string, originX, originY float32, preferred time.Duration, log *drawTimes, entity *Entity[frameLoopView]) *Window {
+		window, err := app.OpenWindowView(WindowOptions{
+			Title:  title,
+			Bounds: Bounds{Origin: Point{X: originX, Y: originY}, Size: Size{Width: 240, Height: 160}},
+			Show:   true,
+			// A preferred interval above twice the observed vblank interval
+			// minus half a millisecond (about 33 ms on a 60 Hz display)
+			// selects half rate (external_begin_frame_source_win.cc:97-101).
+			Activate:               false,
+			PreferredFrameInterval: preferred,
+			OnRedraw:               hook(log),
+		}, func(w *Window, app *App) View {
+			*entity = NewEntity(app, w.Scope(), func(*frameLoopView, *Context[frameLoopView]) {})
+			return ViewOf(*entity)
+		})
+		if err != nil {
+			t.Fatalf("OpenWindowView failed: %v — this session is expected to create real windows", err)
+		}
+		return window
+	}
+	control := open("gpui frame loop full rate", 20000, 20000, 0, controlLog, &controlEntity)
+	half := open("gpui frame loop half rate", 20060, 20060, 40*time.Millisecond, halfLog, &halfEntity)
+	t.Cleanup(func() {
+		for _, window := range []*Window{control, half} {
+			if window.Alive() {
+				window.Close()
+				desktopWaitFor(t, "the window to be destroyed", func() bool { return !window.Alive() })
+			}
+		}
+	})
+
+	type facts struct {
+		controlDraws, halfDraws uint64
+		demand                  bool
+	}
+	read := func() facts {
+		var f facts
+		if !h.runForegroundSync(func() {
+			f.controlDraws = WindowDrawCount(control)
+			f.halfDraws = WindowDrawCount(half)
+			f.demand = control.hasFrameDemand() || half.hasFrameDemand()
+		}) {
+			t.Fatal("the host stopped")
+		}
+		return f
+	}
+
+	// Both opening frames are presented; both windows go idle.
+	desktopWaitFor(t, "both opening frames to be presented", func() bool {
+		return len(times(controlLog)) >= 1 && len(times(halfLog)) >= 1
+	})
+	desktopWaitFor(t, "both windows to go idle after opening", func() bool { return !read().demand })
+	base := read()
+
+	// Both windows animate: 40 animation steps make 41 drawn frames.
+	const animationFrames = 41
+	animStart := time.Now()
+	h.runForegroundSync(func() {
+		controlEntity.Update(app, func(v *frameLoopView, cx *Context[frameLoopView]) {
+			v.animate = 40
+			cx.Notify()
+		})
+		halfEntity.Update(app, func(v *frameLoopView, cx *Context[frameLoopView]) {
+			v.animate = 40
+			cx.Notify()
+		})
+	})
+
+	// The full-rate window finishing is the observation point: by then a
+	// half-rate window has drawn about half as many frames.
+	desktopWaitFor(t, "the full-rate animation to finish", func() bool {
+		return read().controlDraws >= base.controlDraws+animationFrames
+	})
+	halfAtFullRateEnd := read().halfDraws - base.halfDraws
+
+	// The half-rate animation completes too — the skipped slots keep its
+	// demand pending, so no frame is lost — and both windows go idle.
+	desktopWaitFor(t, "the half-rate animation to finish", func() bool {
+		return read().halfDraws >= base.halfDraws+animationFrames
+	})
+	desktopWaitFor(t, "both windows to go idle after the animations", func() bool { return !read().demand })
+
+	controlGaps := gaps(controlLog, animStart)
+	halfGaps := gaps(halfLog, animStart)
+	if len(controlGaps) < animationFrames-1 || len(halfGaps) < animationFrames-1 {
+		t.Fatalf("not enough animation frames recorded: %d full-rate and %d half-rate gaps (want %d each)",
+			len(controlGaps), len(halfGaps), animationFrames-1)
+	}
+	controlMedian := median(controlGaps)
+	halfMedian := median(halfGaps)
+
+	// The full-rate window is the pacer's vblank clock: its frames are
+	// paced (an unpaced loop measured 0.23 ms/frame) but not throttled.
+	if controlMedian < time.Millisecond || controlMedian > 50*time.Millisecond {
+		t.Errorf("full-rate median frame gap = %v, want between 1ms and 50ms (paced by the vblank source)", controlMedian)
+	}
+	// Half rate: the median gap doubles, and no two half-rate draws ever
+	// land on consecutive vblanks.
+	ratio := float64(halfMedian) / float64(controlMedian)
+	if ratio < 1.6 || ratio > 2.6 {
+		t.Errorf("half-rate median gap = %v, full-rate median gap = %v (ratio %.2f, want about 2)", halfMedian, controlMedian, ratio)
+	}
+	// No two half-rate draws land on consecutive vblanks: a gap at or
+	// under about one vblank (the control's median, with room for a fast
+	// slot pair) can only be measurement noise, so at most a couple may
+	// appear — a window actually drawing at full rate would show about
+	// half of its gaps there. The structural every-other-slot rule is
+	// pinned exactly by TestFramePacerGrantFrameSlotAlternates.
+	closeGaps := 0
+	for _, g := range halfGaps {
+		if g < controlMedian*5/4 {
+			closeGaps++
+		}
+	}
+	if closeGaps > 2 {
+		t.Errorf("%d of %d half-rate gaps are under 1.25x the vblank interval (%v): the window drew on consecutive vblanks", closeGaps, len(halfGaps), controlMedian)
+	}
+	// Over the full-rate window's animation the half-rate window drew
+	// about half as many frames.
+	if halfAtFullRateEnd < 12 || halfAtFullRateEnd > 28 {
+		t.Errorf("the half-rate window drew %d frames while the full-rate one drew %d, want about half", halfAtFullRateEnd, animationFrames)
+	}
+}
+
+// TestWindowOpenRejectsNegativePreferredFrameInterval pins the open-time
+// guard of WindowOptions.PreferredFrameInterval (browser-core ticket
+// 47): a negative interval is rejected before any window is created —
+// the call fails without ever touching the screen.
+func TestWindowOpenRejectsNegativePreferredFrameInterval(t *testing.T) {
+	h := desktopNewHost(t)
+	app := NewApp()
+	if err := app.Attach(h); err != nil {
+		t.Fatalf("app attach: %v", err)
+	}
+	if _, err := app.OpenWindow(WindowOptions{PreferredFrameInterval: -time.Millisecond}); err == nil {
+		t.Fatal("OpenWindow must reject a negative PreferredFrameInterval")
+	}
+}
+
+// TestFramePacerGrantFrameSlotAlternates is the unit half of ticket 47's
+// frame rule (the real-window half is
+// TestFrameLoopPreferredFrameIntervalDrawsEveryOtherVblank): with a
+// measured vblank interval, a preferred interval above twice it minus
+// half a millisecond engages half rate (external_begin_frame_source_
+// win.cc:97-101) and grants alternate SLOTS — skip, grant, skip — while
+// the first frame of a session and a window that missed a slot are
+// served at once. Full-rate windows are never held back.
+func TestFramePacerGrantFrameSlotAlternates(t *testing.T) {
+	ta := NewTestApp()
+	half, _ := openFrameLoopTestWindow(t, ta)
+	full, _ := openFrameLoopTestWindow(t, ta)
+	half.SetPreferredFrameInterval(40 * time.Millisecond)
+
+	p := &framePacer{}
+	p.vsyncEstimate.Store(int64(4 * time.Millisecond))
+
+	type step struct {
+		slot     int64
+		halfWant bool
+		fullWant bool
+	}
+	// Slots 1..6: the half-rate window is granted at 1, skipped at 2,
+	// granted at 3, and so on; the full-rate window every slot.
+	steps := []step{
+		{1, true, true}, {2, false, true}, {3, true, true},
+		{4, false, true}, {5, true, true}, {6, false, true},
+	}
+	for _, s := range steps {
+		if got := p.grantFrameSlot(half, s.slot); got != s.halfWant {
+			t.Errorf("half-rate grant at slot %d = %v, want %v", s.slot, got, s.halfWant)
+		}
+		if got := p.grantFrameSlot(full, s.slot); got != s.fullWant {
+			t.Errorf("full-rate grant at slot %d = %v, want %v", s.slot, got, s.fullWant)
+		}
+	}
+
+	// A window that missed a slot mid-flight (slot 7, not pending) does
+	// not fall a slot behind: the next slot it asks for is granted.
+	if got := p.grantFrameSlot(half, 9); !got {
+		t.Error("a half-rate window that missed one slot must be granted the next one")
+	}
+	// A session restarting long after idle (slot 40): granted at once,
+	// like the source's missed begin frame.
+	if got := p.grantFrameSlot(half, 40); !got {
+		t.Error("the first slot of a new session must be granted")
+	}
+	if got := p.grantFrameSlot(half, 41); got {
+		t.Error("the slot right after a grant must be skipped")
+	}
+
+	// A preferred interval under the half-rate threshold keeps the full
+	// rate (only full and half rate exist,
+	// external_begin_frame_source_win.cc:96-110).
+	under := &framePacer{}
+	under.vsyncEstimate.Store(int64(4 * time.Millisecond))
+	slow, _ := openFrameLoopTestWindow(t, ta)
+	slow.SetPreferredFrameInterval(5 * time.Millisecond)
+	for slot := int64(1); slot <= 4; slot++ {
+		if got := under.grantFrameSlot(slow, slot); !got {
+			t.Errorf("a below-threshold interval was skipped at slot %d", slot)
+		}
+	}
+
+	// Without a measured interval the reference default (16.666 ms)
+	// decides: 40 ms is above 2x16.666 ms - 0.5 ms, still half rate.
+	fresh := &framePacer{}
+	if got := fresh.vsyncInterval(); got != frameDefaultVsyncInterval {
+		t.Fatalf("an unmeasured pacer's interval = %v, want the reference default", got)
+	}
+	def, _ := openFrameLoopTestWindow(t, ta)
+	def.SetPreferredFrameInterval(40 * time.Millisecond)
+	if got := fresh.grantFrameSlot(def, 1); !got {
+		t.Error("the first slot must be granted before any skipping")
+	}
+	if got := fresh.grantFrameSlot(def, 2); got {
+		t.Error("the default-interval threshold must engage half rate too")
 	}
 }
 
