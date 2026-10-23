@@ -29,11 +29,17 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
   | W2 | 92ed3c05 | perf-viewcache | 04 view caching |
   | W3 | 4e9dc0d8 | perf-native | 05 native rebuild: weight 500, bulk insert, waitable swapchain, optional Present1 |
 
-  Next steps:
-  1. Verify each branch on a snapshot.
-  2. Merge into base-port-2 in this order: W1, then W2, then W3.
-  3. Run the full suite.
-  4. Merge to main and push. The user handed this effort over.
+  **DONE 2026-10-23.** All of tickets 01-07 are resolved and merged into base-port-2 at 8444628. The native DLL is now rev 13, SHA 0b6e9265…. The full suite passed 51 packages, headlessspec included, with ce-source copied in (gitignored). The orchestrator checked the merged tree on a snapshot: the bit-exact specs ran with 0 skips and no fixture changed.
+
+  Combined results against the ticket 01 baseline, per frame (`evidence/perf/combined-final.json`):
+  - text page: 200 → 27.6 ms, 129k → 2.8k native calls
+  - 1,000 divs: 11.3 → 7.5 ms, 16.5k → 5.5k allocs
+
+  Ticket 07 fixed a native-scene leak of one scene per frame, which predated this effort.
+
+  Still open:
+  - Ticket 08: an inset-shadow real-GPU test flakes about 1 in 60.
+  - Present1 dirty rects: deferred. A damage source now exists in the bounds of view-cache-reused views.
 
 **Open (history)**
 1. The user said bold text looks different from a browser. A worker started by orchestrator 2 is investigating: Base's requested weight, real Segoe UI Bold vs synthetic bold, whether the weight reaches the rasterizer, and a side-by-side against plain DirectWrite, rendered offscreen. Orchestrator 2 forwards its result to you by Roboco message. If it's a Go-side fix, verify it (headless, with the bit-exact textspec/glyphspec fixtures unchanged), commit it, and merge it to main. If it needs native work, tell the user, because the DLL is frozen at rev 11.
