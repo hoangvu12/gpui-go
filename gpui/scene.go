@@ -527,7 +527,8 @@ func (s *Scene) PaintQuad(pq PaintQuad, cornerSmoothing float32, ctx *PaintConte
 	if isEmptyBounds(inner) {
 		return s.InsertQuad(record)
 	}
-	for _, strip := range paintQuadStrips(record) {
+	strips, n := paintQuadStrips(record)
+	for _, strip := range strips[:n] {
 		if err := s.InsertQuad(strip); err != nil {
 			return err
 		}

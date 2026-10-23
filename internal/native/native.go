@@ -36,7 +36,10 @@
 //     PATH search ever happens;
 //   - the DLL stays loaded for process lifetime: there is no FreeLibrary and
 //     no hot unload;
-//   - no network fetch, no compiler fallback, no shared temp dir.
+//   - no network fetch, no compiler fallback, no shared temp dir;
+//   - a source is verified and loaded once while any handle to it is open:
+//     later Loads of the same bundle directory or cache root share the
+//     loaded module and the retained verified handle (gpui-perf ticket 03).
 //
 // All failures are typed (see errors.go): wrong hash, wrong architecture, ABI
 // mismatch, missing capability, missing export, OS load failure, cache
@@ -48,6 +51,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"unsafe"
 )
@@ -124,8 +128,56 @@ type Library struct {
 	module    uintptr
 	table     abiTable
 	probeAddr uintptr
-	verified  *verifiedFile
+	shared    *sharedLoad
 	released  atomic.Bool
+}
+
+// sharedLoad is one verified load of the artifact, shared by every open
+// Library handle that Load returned for the same source (gpui-perf ticket
+// 03). The first Load of a source verifies and loads it; later Loads of
+// that source reuse the loaded module, table and the retained verified
+// file handle while at least one handle is open. When the last handle
+// closes, the verified handle is released and the next Load of that
+// source verifies from scratch. Failed loads are never shared: each
+// failing call runs the full load and reports its error.
+type sharedLoad struct {
+	key      loadKey
+	identity Identity
+	verified *verifiedFile
+	// first is the handle the verifying load returned; later handles copy
+	// its module, table and probe address.
+	first *Library
+	refs  int
+}
+
+// loadKey names a load source: a bundle directory, or the embedded
+// artifact under a cache root ("" is the default root).
+type loadKey struct {
+	bundleDir string
+	cacheRoot string
+}
+
+var (
+	// loadMu guards loads and the shared-load registry. A load holds it
+	// for its whole duration, so concurrent first loads of one source
+	// verify once.
+	loadMu      sync.Mutex
+	sharedLoads = map[loadKey]*sharedLoad{}
+)
+
+// newHandle returns a fresh handle to a shared load: its own release
+// state and generation token, the shared module and verified handle.
+func (s *sharedLoad) newHandle() *Library {
+	s.refs++
+	lib := &Library{
+		identity:  s.identity,
+		module:    s.first.module,
+		table:     s.first.table,
+		probeAddr: s.first.probeAddr,
+		shared:    s,
+	}
+	lib.identity.Generation = generationCounter.Add(1)
+	return lib
 }
 
 // Load loads and verifies the native artifact according to opt.
@@ -143,10 +195,33 @@ func Load(opt Options) (*Library, error) {
 	if bundleDir == "" {
 		bundleDir = os.Getenv("GPUI_GO_NATIVE_BUNDLE")
 	}
-	if bundleDir != "" {
-		return loadFromBundle(bundleDir)
+	key := loadKey{bundleDir: bundleDir}
+	if bundleDir == "" {
+		key.cacheRoot = opt.CacheRoot
 	}
-	return loadEmbedded(opt.CacheRoot)
+
+	loadMu.Lock()
+	defer loadMu.Unlock()
+	// A source with an open handle is already verified and loaded, and its
+	// retained verified handle keeps the file from being written or
+	// deleted: reuse it (gpui-perf ticket 03).
+	if s := sharedLoads[key]; s != nil {
+		return s.newHandle(), nil
+	}
+
+	var lib *Library
+	var err error
+	if bundleDir != "" {
+		lib, err = loadFromBundle(bundleDir)
+	} else {
+		lib, err = loadEmbedded(opt.CacheRoot)
+	}
+	if err != nil {
+		return nil, err
+	}
+	lib.shared.key = key
+	sharedLoads[key] = lib.shared
+	return lib, nil
 }
 
 // loadFromBundle implements the verified absolute bundle override.
@@ -282,9 +357,8 @@ func newLibrary(auth, display *Manifest, path, source string, vf *verifiedFile) 
 	}
 
 	lib := &Library{
-		module:   module,
-		table:    *table,
-		verified: vf,
+		module: module,
+		table:  *table,
 		identity: Identity{
 			Name:            display.Name,
 			SHA256:          auth.SHA256,
@@ -311,6 +385,7 @@ func newLibrary(auth, display *Manifest, path, source string, vf *verifiedFile) 
 	if addr, err := getProcAddr(module, "gpui_go_panic_probe"); err == nil {
 		lib.probeAddr = addr
 	}
+	lib.shared = &sharedLoad{identity: lib.identity, verified: vf, first: lib, refs: 1}
 	return lib, nil
 }
 
@@ -401,12 +476,23 @@ func (l *Library) PanicProbe() error {
 // lifetime; a long-lived application simply keeps the Library open until
 // exit). The OS module stays loaded for the process lifetime by design (no
 // FreeLibrary, no hot unload). A second Close reports ErrDoubleRelease;
-// calls after Close report ErrClosed.
+// calls after Close report ErrClosed. Handles that Load returned for the
+// same source share one verified file handle; it is released when the
+// last of them closes.
 func (l *Library) Close() error {
 	if !l.released.CompareAndSwap(false, true) {
 		return ErrDoubleRelease
 	}
-	l.verified.close()
+	loadMu.Lock()
+	defer loadMu.Unlock()
+	s := l.shared
+	s.refs--
+	if s.refs == 0 {
+		if sharedLoads[s.key] == s {
+			delete(sharedLoads, s.key)
+		}
+		s.verified.close()
+	}
 	return nil
 }
 

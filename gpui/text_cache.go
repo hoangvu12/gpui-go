@@ -86,6 +86,7 @@ import (
 	"encoding/binary"
 	"math"
 	"sync"
+	"unsafe"
 )
 
 // shapedLineCache is the reference LineLayoutCache (see the file
@@ -155,7 +156,8 @@ func shapedLineKeyOf(request TextLayoutRequest) shapedLineKey {
 func encodeShapeRuns(runs []TextRun) string {
 	size := 4
 	for _, run := range runs {
-		size += 4 + 4 + len(run.Font.Family) + 4 + 4
+		// len, family, weight, style, feature count, fallback count.
+		size += 4 + 4 + len(run.Font.Family) + 4 + 4 + 4 + 4
 		for _, feature := range run.Font.Features {
 			size += 4 + len(feature.Tag) + 4
 		}
@@ -187,7 +189,9 @@ func encodeShapeRuns(runs []TextRun) string {
 			buf = append(buf, 0)
 		}
 	}
-	return string(buf)
+	// buf is never written again: the key aliases it instead of copying
+	// (gpui-perf ticket 06).
+	return unsafe.String(unsafe.SliceData(buf), len(buf))
 }
 
 // appendStringKey appends one length-prefixed string to the key buffer.

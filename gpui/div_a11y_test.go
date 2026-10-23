@@ -13,10 +13,8 @@ package gpui
 // fixtures. Node ids derive from element id paths only.
 
 import (
-	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hoangvu12/gpui-go/internal/native"
 )
@@ -166,30 +164,21 @@ func TestA11yDivRoleAndAdvertisedActions(t *testing.T) {
 	Div().AriaLevel(-1)
 }
 
-// TestA11yDivSideTableReleasesCollectedDivs pins the STORAGE deviation's
-// lifetime: a collected DivElement's authoring entry is removed.
-func TestA11yDivSideTableReleasesCollectedDivs(t *testing.T) {
-	count := func() int {
-		divA11yStatesMu.Lock()
-		defer divA11yStatesMu.Unlock()
-		return len(divA11yStates)
+// TestA11yDivStateLivesOnTheDiv pins the STORAGE note: the authoring
+// state is the div's own field, absent until a builder runs and shared
+// by every builder call on that div.
+func TestA11yDivStateLivesOnTheDiv(t *testing.T) {
+	plain := Div()
+	if plain.hasA11yAuthoring() {
+		t.Fatal("a div with no a11y builder reports authoring state")
 	}
-	before := count()
-	func() {
-		for i := 0; i < 64; i++ {
-			Div().Role(RoleButton).AriaLabel("transient")
-		}
-	}()
-	if count() < before+64 {
-		t.Fatalf("side table grew by %d, want 64", count()-before)
+	d := Div().Role(RoleButton)
+	st := d.a11yStateIfAny()
+	if st == nil || d.AriaLabel("x").a11yStateIfAny() != st {
+		t.Fatal("builders on one div do not share its authoring state")
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for count() > before && time.Now().Before(deadline) {
-		runtime.GC()
-		time.Sleep(10 * time.Millisecond)
-	}
-	if got := count(); got > before {
-		t.Fatalf("side table still holds %d entries after collection (baseline %d)", got, before)
+	if Div().Role(RoleButton).a11yStateIfAny() == st {
+		t.Fatal("two divs share authoring state")
 	}
 }
 
