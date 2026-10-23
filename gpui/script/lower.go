@@ -1,0 +1,109 @@
+package script
+
+import (
+	"strings"
+
+	"github.com/hoangvu12/gpui-go/gpui"
+)
+
+// Element renders the described tree: the whole point of the host's
+// model is that this walks a Go-side tree once per frame and never runs
+// the script. While an error is held (a failed load or a handler that
+// threw) the last good tree is kept and an error banner is mounted
+// over the bottom of the window (without an error there is no wrapper
+// and no banner: no extra nodes, no per-frame work).
+func (h *Host) Element() gpui.AnyElement {
+	root := h.root
+	if root == nil {
+		root = &Node{}
+	}
+	if h.err == nil || !h.banner {
+		return h.lower(root).IntoElement()
+	}
+	return gpui.Div().
+		SizeFull().
+		Child(h.lower(root).IntoElement()).
+		Child(h.errorBanner()).
+		IntoElement()
+}
+
+// lower builds one element of the tree (fresh each frame, like any
+// Render; the tree itself is only replaced by a load or re-describe).
+func (h *Host) lower(n *Node) *gpui.DivElement {
+	d := gpui.Div()
+	if n.ID != "" {
+		d = d.ID(n.ID)
+	}
+	if n.selector != "" {
+		d = d.DebugSelector(n.selector)
+	}
+	if n.Class != "" {
+		d = d.Class(n.Class)
+	}
+	d = n.Style.apply(d)
+	if n.OnClick != nil {
+		fn := n.OnClick
+		d = d.OnClick(func(e *gpui.ClickEvent, _ *gpui.Window, _ *gpui.App) {
+			up := e.Mouse.Up
+			h.dispatch(fn, h.eventObject(domButton(up.Button), up.Position.X, up.Position.Y, up.Modifiers))
+		})
+	}
+	if n.OnMouseDown != nil {
+		fn := n.OnMouseDown
+		d = d.OnMouseDown(gpui.MouseButtonLeft, func(e *gpui.MouseDownEvent, _ *gpui.Window, _ *gpui.App) {
+			h.dispatch(fn, h.eventObject(domButton(e.Button), e.Position.X, e.Position.Y, e.Modifiers))
+		})
+	}
+	h.appendChildren(d, n.Children)
+	return d
+}
+
+// appendChildren lowers children into d; a fragment's children lower
+// as their parent's direct children (spliced, no wrapper).
+func (h *Host) appendChildren(d *gpui.DivElement, nodes []*Node) {
+	for _, c := range nodes {
+		switch c.kind {
+		case nodeText:
+			d = d.Child(c.Text)
+		case nodeFragment:
+			h.appendChildren(d, c.Children)
+		default:
+			d = d.Child(h.lower(c))
+		}
+	}
+}
+
+// errorBanner mounts the load/handler error over the bottom of the
+// window: the message with its .tsx file and line, monospace, one
+// text line per line of the error (zgui's banner model).
+func (h *Host) errorBanner() *gpui.DivElement {
+	b := gpui.Div().
+		DebugSelector(ErrorBannerSelector).
+		Absolute().
+		Left(gpui.Px(0)).
+		Right(gpui.Px(0)).
+		Bottom(gpui.Px(0)).
+		Bg(gpui.Rgb(0x7f1d1d)).
+		TextColor(gpui.Rgb(0xfecaca)).
+		TextSize(gpui.Px(12)).
+		FontFamily("Consolas").
+		P(gpui.Px(8))
+	for _, line := range strings.Split(h.err.Error(), "\n") {
+		b = b.Child(line)
+	}
+	return b
+}
+
+// domButton maps gpui's MouseButton onto the DOM's button numbers
+// (0 left, 1 middle, 2 right).
+func domButton(b gpui.MouseButton) int {
+	switch b {
+	case gpui.MouseButtonLeft:
+		return 0
+	case gpui.MouseButtonMiddle:
+		return 1
+	case gpui.MouseButtonRight:
+		return 2
+	}
+	return 0
+}
