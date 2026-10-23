@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 6 (Claude Code)
+Status: resolved
+Assignee: orchestrator 6 (Claude Code); worker chat a1fbc74c
 Blocked by: 01
 Triage: ready-for-agent
 
@@ -23,6 +23,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 6: verified after merging onto main (rev 15). goja and esbuild match the probe's pins. `go list -deps` shows `gpui/script` has no esbuild and `gpui` has neither library. No test opens a real window. `go test ./gpui/... ./internal/parity/... ./base` is ok, and the TSX twin passes all three tiers against the existing tracer record. Timing over 3 runs, with 4 other workers loading the PC: reload 3.7-5.4 ms (limit 300), bound update 0.0016-0.0027 ms (limit 2), frame overhead 0.06-0.66 ms (limit 1). That last margin is thin on a busy machine; watch it for flakiness.
 
 ## Answer
 
