@@ -18,6 +18,7 @@ The goal is to cut gpui-go's per-frame CPU, native-call, allocation and startup 
 ## Decisions so far
 
 - [Frame-cost benchmark](issues/01-frame-cost-benchmark.md): `gpui/perf_bench_test.go` + `native.CallCount`. Baseline: 1,000 divs take 16.5k allocs and 8k native calls per frame; the 300-line text page takes 82k allocs, 129k native calls and about 200 ms per frame; an unchanged refresh costs the same as a rebuild.
+- [Native load once](issues/03-native-load-once.md): `native.Load` shares one verified load per source while a handle is open, and re-verifies after the last close. The first frame dropped from 391 to 248 ms (median).
 
 ## Not yet specified
 
