@@ -152,6 +152,13 @@ screen. `GPUI_REAL_INPUT_TESTS` is never set by anything here.
   `defaultPrevented`; the replay marks the entries a dispatched event produced with the
   dispatch result's `DefaultPrevented` (`Window.PreventDefault`). Both sides report the
   post-dispatch state.
+- **TSX twin fixtures (seam 3).** `fixtures/tsxtracer` is the tracer's page written as a
+  `.tsx` view run through the script host (`gpui/script`, ticket 62): it reuses the
+  tracer's page, steps, ids, kinds and tolerance, and is **not** registered — it has no
+  record of its own, because it is compared against the tracer's existing record
+  (`tsxtracer_test.go` runs the three comparisons). This is the shape for script-side
+  fixtures: the same Chrome page, one more implementation of the view. A wrong `.tsx`
+  view must fail the comparison (the package carries that discrimination test too).
 
 ## Known divergences the harness works around today
 
