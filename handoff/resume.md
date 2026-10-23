@@ -21,6 +21,19 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - **v0.2.0:** tagged on 7a1b25b and pushed.
 - **zgui / GPUI Fast research:** done, in `research/zgui-vs-gpui-fast/README.md`. Proposals await the user.
 - **Corrections to the items above:** the shaping cap is 256 and evicts LRU since ticket 40. The 60k allocs/frame figure is unmeasured.
+- **NEW EFFORT `.scratch/gpui-perf/`:** the user accepted every proposal, including ONE native rebuild for this effort ("try to fix all of them, im not using pc so its all urs"). Real windows are OK while the user is away. Three Roboco side-chat workers, each on its own branch and worktree, all branched from 9bec2ec:
+
+  | Worker | Chat | Branch | Tickets |
+  |---|---|---|---|
+  | W1 | 33a2450b | perf-go-a | 01 benchmark, 03 load-once, 02 glyph cache, 06 allocations |
+  | W2 | 92ed3c05 | perf-viewcache | 04 view caching |
+  | W3 | 4e9dc0d8 | perf-native | 05 native rebuild: weight 500, bulk insert, waitable swapchain, optional Present1 |
+
+  Next steps:
+  1. Verify each branch on a snapshot.
+  2. Merge into base-port-2 in this order: W1, then W2, then W3.
+  3. Run the full suite.
+  4. Merge to main and push. The user handed this effort over.
 
 **Open (history)**
 1. The user said bold text looks different from a browser. A worker started by orchestrator 2 is investigating: Base's requested weight, real Segoe UI Bold vs synthetic bold, whether the weight reaches the rasterizer, and a side-by-side against plain DirectWrite, rendered offscreen. Orchestrator 2 forwards its result to you by Roboco message. If it's a Go-side fix, verify it (headless, with the bit-exact textspec/glyphspec fixtures unchanged), commit it, and merge it to main. If it needs native work, tell the user, because the DLL is frozen at rev 11.
