@@ -27,12 +27,20 @@ new fixtures. The implementation lives in `internal/parity`:
   fixture's `EventKinds`; the view's handlers append to an `EventLog`. Kinds, targets,
   order (including bubble order: target first, then ancestors) and the final
   `defaultPrevented` state must match exactly. The vocabulary is `mousedown`, `mouseup`,
-  `click` and the pointer boundary events `pointerenter`/`pointerleave` (browser-core
-  ticket 10): the boundary kinds arrive in Chromium's order — leave events innermost
+  `click`, the pointer boundary events `pointerenter`/`pointerleave` (browser-core
+  ticket 10) and the pointer events `pointerdown`, `pointermove`, `pointerup`,
+  `gotpointercapture` and `lostpointercapture` (browser-core ticket 11); the boundary kinds arrive
+  in Chromium's order — leave events innermost
   (child) first, enter events outermost (parent) first, all before the move that caused
   them — and a `Move` step to a point outside the viewport is the DOM-visible half of
   "the pointer left the window" (it fires the leave on the whole hovered chain); the
-  WM_MOUSELEAVE half is covered by gpui's own window tests.
+  WM_MOUSELEAVE half is covered by gpui's own window tests. While an element holds
+  the pointer capture, the pointer kinds follow Chromium's capture rules
+  (pointer_event_manager.cc): `gotpointercapture` fires when the pending capture
+  processes at the next pointer event (before that event, bubbling from the captured
+  element), the moves target the captured chain alone, and the release fires
+  `lostpointercapture` after the ups with the boundary events settling after it
+  (`fixtures/capture` is the fixture).
 - **Tier C — pixels, approximately.** The replay's final frame is rendered offscreen at
   device resolution and compared with the recorded Chrome screenshot under the fixture's
   provisional `PixelTolerance` (mean channel diff and hot-pixel fraction, image-wide and
@@ -81,7 +89,10 @@ new fixtures. The implementation lives in `internal/parity`:
    handlers need it) and `.DebugSelector("<id>")` (the bounds key) with the same string.
    `BoxIDs` lists the compared ones; `EventKinds` lists the event kinds the page binds and
    the view logs (`log.MouseDown("box")`, `log.Click("box")`,
-   `log.PointerEnter("box")`, `log.PointerLeave("box")` — one helper per kind). The
+   `log.PointerEnter("box")`, `log.PointerLeave("box")`, and the pointer kinds of
+   ticket 11: `log.PointerDown("box")`, `log.PointerMove("box")`,
+   `log.PointerUp("box")`, `log.GotPointerCapture("box")`,
+   `log.LostPointerCapture("box")` — one helper per kind). The
    pointer boundary kinds need the element ids: the retained hover state that diffs
    enter/leave across frames keys on them.
 
@@ -221,4 +232,14 @@ until the owning spec tickets land, and each should get a fixture the day it is 
 Divergences fixed by browser-core tickets get their fixture when they land: ticket 10
 (hover) removed two pin behaviours — hover clearing on key presses (D12) and hover
 sticking at the window edge — and added `OnPointerEnter`/`OnPointerLeave` plus the
-`pointerenter`/`pointerleave` transcript kinds (`fixtures/hover` is the fixture).
+`pointerenter`/`pointerleave` transcript kinds (`fixtures/hover` is the fixture);
+ticket 11 (pointer capture) added the pointer-event and capture transcript kinds
+(`fixtures/capture`), the capture retargeting behind the existing
+`Window.CapturePointer` API (pending capture, got/lost callbacks, a clean cancel on
+WM_CAPTURECHANGED) and the element-local position
+(`MouseDownEvent`/`MouseUpEvent`/`MouseMoveEvent.LocalPosition`). The capture fixture
+still avoids instrumenting `click`: the pin fires its click inside the up's listener
+traversal (click before mouseup) where the browser delivers pointerup,
+lostpointercapture, click — the same input-bundle (D12) divergence as the tracer's
+un-instrumented `mouseup`, and the capture ticket's own order (lost after the ups,
+boundary settling last) is covered by the transcript's other kinds.

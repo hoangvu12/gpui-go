@@ -142,9 +142,11 @@ type Fixture struct {
 	// vocabulary for this fixture. A kind here that the view does not
 	// log (or the reverse) is a transcript difference the comparison
 	// reports. The vocabulary is "mousedown", "mouseup", "click",
-	// "pointerenter" and "pointerleave" (the pointer boundary events
-	// of browser-core ticket 10); a fixture avoids the kinds whose
-	// delivery order the pin currently gets wrong (see
+	// the pointer boundary events "pointerenter"/"pointerleave"
+	// (browser-core ticket 10) and the pointer events "pointerdown",
+	// "pointermove", "pointerup", "gotpointercapture" and
+	// "lostpointercapture" (browser-core ticket 11); a fixture avoids
+	// the kinds whose delivery order the pin currently gets wrong (see
 	// docs/browser-parity-harness.md, known divergences).
 	EventKinds []string
 	// BoxIDs are the page's data-id values (the gpui elements' ids)
@@ -233,6 +235,41 @@ func (l *EventLog) PointerLeave(target string) func(*gpui.PointerLeaveEvent, *gp
 	return func(*gpui.PointerLeaveEvent, *gpui.Window, *gpui.App) { l.Append("pointerleave", target) }
 }
 
+// PointerDown returns an OnMouseDown handler that records a
+// "pointerdown" on target (browser-core ticket 11: the DOM's pointer
+// event names for the press).
+func (l *EventLog) PointerDown(target string) func(*gpui.MouseDownEvent, *gpui.Window, *gpui.App) {
+	return func(*gpui.MouseDownEvent, *gpui.Window, *gpui.App) { l.Append("pointerdown", target) }
+}
+
+// PointerMove returns an OnMouseMove handler that records a
+// "pointermove" on target (the move events the pointer-capture fixture
+// compares: while an element holds the capture, the moves target the
+// captured chain — the transcript's retargeting check).
+func (l *EventLog) PointerMove(target string) func(*gpui.MouseMoveEvent, *gpui.Window, *gpui.App) {
+	return func(*gpui.MouseMoveEvent, *gpui.Window, *gpui.App) { l.Append("pointermove", target) }
+}
+
+// PointerUp returns an OnMouseUp handler that records a "pointerup" on
+// target.
+func (l *EventLog) PointerUp(target string) func(*gpui.MouseUpEvent, *gpui.Window, *gpui.App) {
+	return func(*gpui.MouseUpEvent, *gpui.Window, *gpui.App) { l.Append("pointerup", target) }
+}
+
+// GotPointerCapture returns an OnGotPointerCapture handler that
+// records a "gotpointercapture" on target (browser-core ticket 11:
+// the DOM capture events; both bubble, so ancestors record the
+// bubbled deliveries too).
+func (l *EventLog) GotPointerCapture(target string) func(*gpui.GotPointerCaptureEvent, *gpui.Window, *gpui.App) {
+	return func(*gpui.GotPointerCaptureEvent, *gpui.Window, *gpui.App) { l.Append("gotpointercapture", target) }
+}
+
+// LostPointerCapture returns an OnLostPointerCapture handler that
+// records a "lostpointercapture" on target.
+func (l *EventLog) LostPointerCapture(target string) func(*gpui.LostPointerCaptureEvent, *gpui.Window, *gpui.App) {
+	return func(*gpui.LostPointerCaptureEvent, *gpui.Window, *gpui.App) { l.Append("lostpointercapture", target) }
+}
+
 // ---------------------------------------------------------------------------
 // The fixture registry
 // ---------------------------------------------------------------------------
@@ -249,11 +286,16 @@ var registry struct {
 // this set together; a kind outside it fails validation with this
 // message.
 var eventKindVocabulary = map[string]bool{
-	"mousedown":    true,
-	"mouseup":      true,
-	"click":        true,
-	"pointerenter": true,
-	"pointerleave": true,
+	"mousedown":          true,
+	"mouseup":            true,
+	"click":              true,
+	"pointerenter":       true,
+	"pointerleave":       true,
+	"pointerdown":        true,
+	"pointermove":        true,
+	"pointerup":          true,
+	"gotpointercapture":  true,
+	"lostpointercapture": true,
 }
 
 // validate checks a fixture's invariants at record and replay time,
@@ -264,7 +306,7 @@ func validate(f Fixture) error {
 	}
 	for _, kind := range f.EventKinds {
 		if !eventKindVocabulary[kind] {
-			return fmt.Errorf("parity: fixture %q: event kind %q is outside the harness's vocabulary (the EventLog helpers bind mousedown, mouseup, click, pointerenter and pointerleave today; extend them together with the recorder)",
+			return fmt.Errorf("parity: fixture %q: event kind %q is outside the harness's vocabulary (the EventLog helpers bind mousedown, mouseup, click, pointerenter, pointerleave, pointerdown, pointermove, pointerup, gotpointercapture and lostpointercapture today; extend them together with the recorder)",
 				f.Name, kind)
 		}
 	}

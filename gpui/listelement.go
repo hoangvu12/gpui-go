@@ -1004,8 +1004,12 @@ func (l *ListElement) Prepaint(global *GlobalElementID, inspector *InspectorElem
 	st := l.state.inner
 	st.reset = false
 
-	// The list's hitbox (R:list.rs:1551).
-	box := w.InsertHitbox(bounds, HitboxNormal)
+	// The list's hitbox (R:list.rs:1551). Browser-core ticket 11: the
+	// items prepaint inside the hitbox's subtree so their hitboxes
+	// record it as their parent (the capture chain's ancestry,
+	// pointercapture.go).
+	listRecord := w.insertHitboxRecord(bounds, HitboxNormal)
+	box := listRecord.box
 
 	// A width change invalidates every cached item height and hint
 	// (R:list.rs:1553-1568).
@@ -1020,12 +1024,17 @@ func (l *ListElement) Prepaint(global *GlobalElementID, inspector *InspectorElem
 	mask := intersectMask(currentFrame(w).contentMask, bounds)
 	// An item asking to be scrolled into view moves the scroll top, and
 	// the items are prepainted again there without honoring a second
-	// request (R:list.rs:1571-1597).
-	state, request := st.prepaintItems(bounds, padding, mask, true, l.renderItem, w, app)
-	if request != nil {
-		st.logicalScrollTop = request
-		state, _ = st.prepaintItems(bounds, padding, mask, false, l.renderItem, w, app)
-	}
+	// request (R:list.rs:1571-1597) — both passes inside the hitbox's
+	// subtree (browser-core ticket 11).
+	var state listPrepaintState
+	var request *ListOffset
+	w.withHitboxSubtree(listRecord, func() {
+		state, request = st.prepaintItems(bounds, padding, mask, true, l.renderItem, w, app)
+		if request != nil {
+			st.logicalScrollTop = request
+			state, _ = st.prepaintItems(bounds, padding, mask, false, l.renderItem, w, app)
+		}
+	})
 	state.hitbox = &box
 	return state
 }

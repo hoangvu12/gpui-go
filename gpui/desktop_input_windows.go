@@ -303,6 +303,37 @@ func (w *hostWindow) handleMouseButtonMsg(message uint32, wparam, lp uintptr, in
 	return 0, false
 }
 
+// handleCaptureChangedMsg is WM_CAPTURECHANGED (browser-core ticket
+// 11, spec D12): another window took the mouse capture (lParam names
+// it) while this window held it mid-press. The pin never observes the
+// message (no handler in the CE reference; research browser-parity 03
+// §5 documents the result — the pending press, the active style and
+// the drag stay stuck until some later mouse up), and the browser
+// cancels the pointer stream instead: the pointercancel releases the
+// element's pointer capture (lostpointercapture), drops every pending
+// press so no button stays stuck, and cancels an active drag
+// (pointer_event_manager.cc:1316-1321 sends no boundary events for the
+// cancel; :1244-1246 releases the capture). The port dispatches a
+// PointerCancelEvent through the mouse input callback and clears the
+// held-button tracking so the host's own capture release (the
+// ticket-02 rule: release only once no button remains held) runs on
+// the next release instead of sticking.
+//
+// lParam naming no window (0) or this window itself is the expected
+// echo of our own ReleaseCapture (handleMouseUpMsg) — a window
+// receives WM_CAPTURECHANGED even when it releases the capture
+// itself — and is not a cancel.
+func (w *hostWindow) handleCaptureChangedMsg(lp uintptr) uintptr {
+	if lp == 0 || lp == w.hwnd {
+		return 0
+	}
+	w.mouseButtonsHeld = 0
+	if input := w.onMouseInput; input != nil {
+		input(&PointerCancelEvent{Modifiers: win32CurrentModifiers()})
+	}
+	return 0
+}
+
 // Input constants (winuser.h).
 const (
 	inputKeyboard     = 1 // INPUT_KEYBOARD

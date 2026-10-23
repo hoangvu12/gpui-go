@@ -889,6 +889,13 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 		// shared cursor flag (ticket26, events.rs handle_mouse_leave_msg).
 		return w.handleMouseLeaveMsg()
 
+	case wmCaptureChanged:
+		// WM_CAPTURECHANGED (browser-core ticket 11): a foreign window
+		// took the mouse capture mid-press — the pointercancel path
+		// (desktop_input_windows.go handleCaptureChangedMsg); our own
+		// ReleaseCapture echoes arrive here too and are ignored there.
+		return w.handleCaptureChangedMsg(lp)
+
 	case wmGPUICursorStyle:
 		// WM_GPUI_CURSOR_STYLE_CHANGED: adopt the platform's new cursor
 		// (ticket26, events.rs handle_cursor_changed).

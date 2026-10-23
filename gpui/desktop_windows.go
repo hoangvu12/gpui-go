@@ -114,6 +114,7 @@ const (
 	wmMouseMove       = 0x0200
 	wmMouseLeave      = 0x02A3
 	wmNcMouseLeave    = 0x02A2
+	wmCaptureChanged  = 0x0215 // WM_CAPTURECHANGED
 	wmPowerBroadcast  = 0x0218
 	wmGPUICursorStyle = wmUser + 1 // reference WM_GPUI_CURSOR_STYLE_CHANGED
 	wmGPUIDockAction  = wmUser + 4 // reference WM_GPUI_DOCK_MENU_ACTION

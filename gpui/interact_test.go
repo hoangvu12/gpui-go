@@ -844,6 +844,13 @@ func (p *previewHostElement) IntoElement() AnyElement {
 
 // TestInteractPointerCapture checks that a captured hitbox reports
 // hovered outside its bounds until the mouse up releases the capture.
+// Browser-core ticket 11 changed the timing to the browser's pending
+// model: CapturePointer during the down only requests the capture —
+// it becomes active (and gotpointercapture fires) at the next pointer
+// event, like Chromium's ProcessPendingPointerCapture — so the active
+// capture is asserted after the move, not after the press. The capture
+// target here is an id-less element, so the capture is id-only (pin
+// compat) and lives within this frame.
 func TestInteractPointerCapture(t *testing.T) {
 	rec := &transcript{}
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
@@ -862,10 +869,12 @@ func TestInteractPointerCapture(t *testing.T) {
 	f.move(200, 200)
 	wantTranscript(t, "uncaptured", rec.take(), []string{"move({200 200},false)"})
 	f.down(MouseButtonLeft, 10, 10)
-	if _, ok := f.window.CapturedHitbox(); !ok {
-		t.Fatal("the press did not capture the pointer")
-	}
+	// The capture request is pending until the next pointer event —
+	// gotpointercapture timing (pointer_event_manager.cc:1353-1365).
 	f.dragMove(200, 200)
+	if _, ok := f.window.CapturedHitbox(); !ok {
+		t.Fatal("the capture did not become active at the next pointer event")
+	}
 	wantTranscript(t, "captured", rec.take(), []string{"move({200 200},true)"})
 	f.up(MouseButtonLeft, 200, 200)
 	if _, ok := f.window.CapturedHitbox(); ok {

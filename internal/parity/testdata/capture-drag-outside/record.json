@@ -1,0 +1,174 @@
+{
+  "name": "capture-drag-outside",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T23:11:24Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "cap": {
+      "x": 210,
+      "y": 160,
+      "width": 100,
+      "height": 80
+    },
+    "other": {
+      "x": 310,
+      "y": 160,
+      "width": 100,
+      "height": 80
+    },
+    "p": {
+      "x": 190,
+      "y": 140,
+      "width": 260,
+      "height": 120
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    }
+  },
+  "events": [
+    {
+      "kind": "pointerenter",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointermove",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerenter",
+      "target": "p",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerenter",
+      "target": "cap",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointermove",
+      "target": "cap",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointermove",
+      "target": "p",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointermove",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerdown",
+      "target": "cap",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerdown",
+      "target": "p",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerdown",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "gotpointercapture",
+      "target": "cap",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "gotpointercapture",
+      "target": "p",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "gotpointercapture",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointermove",
+      "target": "cap",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointermove",
+      "target": "p",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointermove",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointermove",
+      "target": "cap",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointermove",
+      "target": "p",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointermove",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerup",
+      "target": "cap",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerup",
+      "target": "p",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerup",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "lostpointercapture",
+      "target": "cap",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "lostpointercapture",
+      "target": "p",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "lostpointercapture",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerleave",
+      "target": "cap",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerenter",
+      "target": "other",
+      "defaultPrevented": false
+    }
+  ],
+  "screenshot": "chrome.png"
+}

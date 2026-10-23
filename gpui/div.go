@@ -777,6 +777,13 @@ type DivElement struct {
 	// pointerLeaveListeners observe the DOM pointerleave boundary event
 	// (browser-core ticket 10; fired innermost-first).
 	pointerLeaveListeners []func(*PointerLeaveEvent, *Window, *App)
+	// gotPointerCaptureListeners observe the DOM gotpointercapture event
+	// (browser-core ticket 11; fired target-first from the pointer
+	// capture sweeps, pointercapture.go).
+	gotPointerCaptureListeners []func(*GotPointerCaptureEvent, *Window, *App)
+	// lostPointerCaptureListeners observe the DOM lostpointercapture
+	// event (browser-core ticket 11; fired target-first).
+	lostPointerCaptureListeners []func(*LostPointerCaptureEvent, *Window, *App)
 	// group names this element's hitbox for group styles (div.rs:2586).
 	group *string
 	// hoverStyle, activeStyle, focusStyle, inFocusStyle and
@@ -1442,6 +1449,10 @@ func (d *DivElement) IntoElement() AnyElement {
 type divPrepaintState struct {
 	// hitbox is this frame's hitbox, or nil.
 	hitbox *Hitbox
+	// hitboxRecord is this frame's hitbox record (browser-core ticket
+	// 11): the children prepaint inside withHitboxSubtree on it, so their
+	// hitboxes record it as their parent (the capture chain's ancestry).
+	hitboxRecord *hitboxRecord
 	// debugBounds records whether the debug selector was recorded.
 	debugBounds bool
 	// scrollOffset is the clamped scroll offset the children prepainted
@@ -1594,7 +1605,8 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 				// should_insert_hitbox's scroll_offset.is_some() arm
 				// (div.rs:2892) joins interact.go's predicate here.
 				if d.shouldInsertHitbox(&style, w) || d.scroll != nil {
-					box := w.InsertHitbox(bounds, d.hitboxBehavior)
+					state.hitboxRecord = w.insertHitboxRecord(bounds, d.hitboxBehavior)
+					box := state.hitboxRecord.box
 					state.hitbox = &box
 					// insert_inspector_hitbox (div.rs:3100-3111, the
 					// ticket27 integration): while the window's inspector
@@ -1619,15 +1631,20 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 				}
 				withHiddenPrepaint(w, hidden, func() {
 					// The children prepaint under the scroll offset
-					// (div.rs:2460; inline.rs:454 for the inline path).
+					// (div.rs:2460; inline.rs:454 for the inline path), inside
+					// this element's hitbox subtree (browser-core ticket 11:
+					// their hitboxes record this hitbox as their parent, the
+					// capture chain's ancestry).
 					withElementOffsetVoid(w, scrollOffset, func(w *Window) {
-						if standalone := layout.standaloneInline(); standalone != nil {
-							standalone.prepaintChildren(d.children, w, app)
-							return
-						}
-						for i := range d.children {
-							d.children[i].Prepaint(w, app)
-						}
+						w.withHitboxSubtree(state.hitboxRecord, func() {
+							if standalone := layout.standaloneInline(); standalone != nil {
+								standalone.prepaintChildren(d.children, w, app)
+								return
+							}
+							for i := range d.children {
+								d.children[i].Prepaint(w, app)
+							}
+						})
 					})
 				})
 			})
