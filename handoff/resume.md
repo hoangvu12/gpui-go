@@ -8,6 +8,13 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 **HANDOFF 2026-10-24 (orchestrator 5 → orchestrator 6). CURRENT.** The user asked for a new orchestrator chat to implement `.scratch/browser-core/` (76 tickets, none started; frontier: 01, 02, 03, 30, 31, 39, 47, 49, 68). The handoff doc is in the user's temp folder (`%TEMP%\gpui-go-handoff-orchestrator6.md`). Model precedent: pi + `iroha/dashscope/glm-5.3` implemented the core backlog. The predecessor is Roboco chat 43f0a1a1.
 
+**ORCHESTRATOR 6 STATUS (2026-10-24; CURRENT).** Claude Code (Opus 5.5) is orchestrating; Roboco chat 3d6efd46. Claimed 01, 02, 03 and 39. Workers are pi + `iroha/dashscope/glm-5.3` side chats:
+- 01 harness: chat 4f488bc4, worktree `gpui-go-wt-core-harness`, branch `core/01-harness`
+- 39 R15: chat 9044df02, worktree `gpui-go-wt-core-r15`, branch `core/39-r15`
+- 02+03: chat ef20e162, worktree `gpui-go-wt-core-small`, branch `core/02-03-small`
+
+Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
+
 **DECISIONS IN (2026-10-23):** D0-D14 accepted as recommended. D16: `gpui-go-base`, a public repo; zterm and the gallery are for testing only and never pushed. Rev 15 is approved, to be built as the spec's R15 group. D15 is TSX (ADR 0003). The spec is written: `.scratch/browser-parity/spec.md` (ready-for-agent). The user confirmed the test seams (a browser-parity harness against headless Chrome fixtures, the native spec packages, the TSX host through the harness, and Base against the public API). Tickets are DONE: 76 in `.scratch/browser-core/` (map + issues/01-76, the user approved the breakdown). Frontier: 01 (the browser-parity harness, which most tickets need), 02, 03, 30, 31, 39 (R15, approved), 47, 49 (R16 design, for the user to review), 68. Next: claim and delegate the frontier, at most 3 workers.
 
 **NEW DIRECTION (2026-10-23, the user; see PROJECT.md "Direction change under research"):**
