@@ -6,6 +6,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 ## ACTIVE EFFORT (2026-10-23): recreate zgui's terminal app ("zterm") on gpui-go
 
+**ORCHESTRATOR 5 STATUS (2026-10-23; current, read with the handoff below).** This is Roboco chat 43f0a1a1. 06 is resolved and merged (6d61f35). 13 is claimed: a worker (chat f2d44f37) is running in `gpui-go-wt-zterm-bold` (branch `zterm/bold`) and was mid-rebuild at the last check. 09 is claimed: a worker is running in `gpui-go-wt-zterm-parity` (branch `zterm/parity`). Its live zgui side-by-side, which opens visible windows, waits for the user's OK. `gpui-go-wt-zterm-dnd` can be removed. Its branch is merged.
+
 **HANDOFF 2026-10-23 (orchestrator 4 → orchestrator 5). CURRENT AND AUTHORITATIVE; everything below it is history.** The user asked for this handoff. The predecessor is the Roboco chat "gpui-go zterm recreation (orchestrator 4)", id 6351756b.
 
 State: `main` in this worktree is 40+ commits ahead of `origin/main`. Nothing has been pushed; push or tag only with the user. The map is [.scratch/zterm/map.md](../.scratch/zterm/map.md). Scope (the user's words): UI only, Windows only, placeholder panes.
