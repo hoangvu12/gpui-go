@@ -18,7 +18,11 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - 49 R16 design: APPROVED by the user 2026-10-24 ("do rec", Q1 = warning) and RESOLVED. 50-53 updated and now blocked by 39. Rev 16 (54) still needs approval.
 - 31+47: chat 8cdf9fd8. Verified, merged (7f007ef) and RESOLVED.
 - 06 text style: chat c1c2b31c, worktree `gpui-go-wt-core-06`, branch `core/06-text-style`. Go side only; it stops and reports if a native change is needed.
-- RUNNING NOW: 39 (R15), 05, 06.
+- 2026-10-24: the user asked to speed up ("try to do more ... if no blocked"), so the cap is now 6 workers. New workers:
+  - 09: chat 6a03afb2, worktree `gpui-go-wt-core-09`, branch `core/09-default-actions`. It also extends the harness with key events.
+  - 27: chat 30725570, worktree `gpui-go-wt-core-27`, branch `core/27-system-prefs`
+  - 62: chat a1fbc74c, worktree `gpui-go-wt-core-62`, branch `core/62-tsx-host`
+- RUNNING NOW: 39 (R15), 05, 06, 09, 27, 62.
 
 Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
 

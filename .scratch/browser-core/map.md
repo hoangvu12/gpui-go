@@ -20,7 +20,7 @@ The user approved the 76-ticket breakdown on 2026-10-23 ("looks good").
 - The main test seam is the browser-parity harness (01): HTML fixtures recorded once in headless Chrome, replayed against the gpui-go view in a headless window. The native spec packages, the TSX host through the same harness, and Base against the public API are the other seams.
 - R16 (50-53) works on one integration branch. Green is promised only at 54, which needs the user's approval for the rebuild.
 - Rules:
-  - At most 3 workers, each in its own worktree.
+  - At most 6 workers (raised from 3 by the user on 2026-10-24), each in its own worktree.
   - Verify worker claims.
   - No push, tag or GitHub repo creation without the user.
   - Headless and offscreen by default.
