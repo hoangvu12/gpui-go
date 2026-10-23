@@ -67,6 +67,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -206,12 +207,64 @@ func (d FontDescriptor) toNative() native.FontDescriptor {
 		features[i] = native.FontFeature{Tag: feature.Tag, Value: feature.Value}
 	}
 	return native.FontDescriptor{
-		Family:    d.Family,
+		// The CSS generic family keywords resolve to Chrome's Windows
+		// defaults (resolveGenericFontFamily): the native stack resolves
+		// named families only, so "sans-serif" etc. never reach it raw.
+		Family:    resolveGenericFontFamily(d.Family),
 		Weight:    d.Weight,
 		Style:     native.TextFontStyle(d.Style),
 		Features:  features,
-		Fallbacks: d.Fallbacks,
+		Fallbacks: resolveGenericFontFamilies(d.Fallbacks),
 	}
+}
+
+// genericFontFamilyAliases maps the CSS generic family keywords to
+// the concrete Windows families Chrome's settings resolve them to:
+// sans-serif → Arial, serif → Times New Roman, monospace → Consolas
+// (Blink keeps the keyword through FontDescription and resolves it in
+// FontSelector::FamilyNameFromSettings, platform/fonts/font_selector.cc
+// :74-83; Chrome's Windows default settings match Fontique's Windows
+// generic table, fontique-0.11.1/src/backend/dwrite.rs:31-39). The
+// keywords are ASCII case-insensitive like every CSS family name.
+// The keywords Chrome does not pin in that table (cursive, fantasy,
+// math) stay named and fall through the service fallback chain, as
+// before.
+var genericFontFamilyAliases = [][2]string{
+	{"sans-serif", "Arial"},
+	{"serif", "Times New Roman"},
+	{"monospace", "Consolas"},
+}
+
+// resolveGenericFontFamily maps one family name through the generic
+// aliases, case-insensitively; every other name passes through.
+func resolveGenericFontFamily(family string) string {
+	for _, alias := range genericFontFamilyAliases {
+		if strings.EqualFold(family, alias[0]) {
+			return alias[1]
+		}
+	}
+	return family
+}
+
+// resolveGenericFontFamilies maps a fallback list through the generic
+// aliases (every entry of a CSS font-family list resolves the same
+// way).
+func resolveGenericFontFamilies(families []string) []string {
+	mapped := false
+	for _, family := range families {
+		if resolveGenericFontFamily(family) != family {
+			mapped = true
+			break
+		}
+	}
+	if !mapped {
+		return families
+	}
+	out := make([]string, len(families))
+	for i, family := range families {
+		out[i] = resolveGenericFontFamily(family)
+	}
+	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -664,12 +717,14 @@ func (ts *TextSystem) ShapeText(request TextLayoutRequest) (*WrappedLine, error)
 			letterSpacing = &spacing
 		}
 		specs[i] = native.TextRunSpec{
-			Len:           run.Len,
-			Family:        run.Font.Family,
+			Len: run.Len,
+			// The CSS generic family keywords resolve to Chrome's Windows
+			// defaults (resolveGenericFontFamily's table).
+			Family:        resolveGenericFontFamily(run.Font.Family),
 			Weight:        run.Font.Weight,
 			Style:         native.TextFontStyle(run.Font.Style),
-			Features:      featuresToNative(run.Font.Features),
-			Fallbacks:     slices.Clone(run.Font.Fallbacks),
+			Features:      featuresToNative(letterSpacingLigatureFeatures(run.Font.Features, run.LetterSpacing)),
+			Fallbacks:     resolveGenericFontFamilies(run.Font.Fallbacks),
 			LetterSpacing: letterSpacing,
 		}
 	}
@@ -716,6 +771,35 @@ func featuresToNative(features []FontFeature) []native.FontFeature {
 		records[i] = native.FontFeature{Tag: feature.Tag, Value: feature.Value}
 	}
 	return records
+}
+
+// letterSpacingLigatureFeatures returns the feature list of a run whose
+// letter spacing is non-zero, with the optional-ligature features the
+// spacing turns off appended: liga, clig and calt = 0 (Chromium's
+// FontFeatureRange::FromFontDescription, platform/fonts/shaping/
+// font_features.cc:59-86: `letter_spacing` pushes no_liga, no_clig and
+// no_calt, and keeps dlig/hlig from being enabled). A tag the caller
+// set explicitly is left alone: Chrome appends the font-feature-settings
+// values after the letter-spacing-derived ones, and the later feature
+// wins in HarfBuzz, so an explicit setting overrides the spacing rule.
+// A zero or absent spacing returns the features unchanged.
+func letterSpacingLigatureFeatures(features []FontFeature, spacing *float32) []FontFeature {
+	if spacing == nil || *spacing == 0 {
+		return features
+	}
+	present := make(map[string]bool, len(features)+3)
+	for _, feature := range features {
+		present[feature.Tag] = true
+	}
+	// A copy: never write into the caller's feature slice's spare
+	// capacity (the descriptor is shared across frames).
+	out := slices.Clone(features)
+	for _, tag := range [...]string{"liga", "clig", "calt"} {
+		if !present[tag] {
+			out = append(out, FontFeature{Tag: tag, Value: 0})
+		}
+	}
+	return out
 }
 
 // nativeWrapWidth is the wrap width the native text service is handed: a

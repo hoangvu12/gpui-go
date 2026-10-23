@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 24px;
+	}
+	.row {
+		display: flex;
+		gap: 24px;
+	}
+	.frame img {
+		display: block;
+		box-sizing: border-box;
+		width: 128px;
+		height: 108px;
+		border: 4px solid #334155;
+		padding: 12px;
+		background: #e2e8f0;
+	}
+	.contain img { object-fit: contain; }
+	.none img { object-fit: none; }
+	.cover img { object-fit: cover; }
+	.scale-down img { object-fit: scale-down; }
+	.fill img { object-fit: fill; }
+	.pos-left-top img { object-position: left top; }
+	.pos-right-bottom img { object-position: right bottom; }
+	.pos-percent img { object-position: 25% 75%; }
+	.pos-px img { object-position: 12px 8px; }
+</style>
+</head>
+<body>
+	<div class="row">
+		<div class="frame contain pos-left-top" data-id="contain-left-top"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAATElEQVR42uzXwQkAMQhFQV28b//NpDVThRBhXgEyePvVMVWeqctfLAwaGhoaGhoaGhoaGvr9KmNqJfafPg0NDQ0NDQ0NDQ0NDb2pOwC1/AQiltoOAAAAAABJRU5ErkJggg=="></div>
+		<div class="frame contain pos-right-bottom" data-id="contain-right-bottom"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAATElEQVR42uzXwQkAMQhFQV28b//NpDVThRBhXgEyePvVMVWeqctfLAwaGhoaGhoaGhoaGvr9KmNqJfafPg0NDQ0NDQ0NDQ0NDb2pOwC1/AQiltoOAAAAAABJRU5ErkJggg=="></div>
+		<div class="frame contain pos-percent" data-id="contain-percent"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAATElEQVR42uzXwQkAMQhFQV28b//NpDVThRBhXgEyePvVMVWeqctfLAwaGhoaGhoaGhoaGvr9KmNqJfafPg0NDQ0NDQ0NDQ0NDb2pOwC1/AQiltoOAAAAAABJRU5ErkJggg=="></div>
+		<div class="frame contain pos-px" data-id="contain-px"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAATElEQVR42uzXwQkAMQhFQV28b//NpDVThRBhXgEyePvVMVWeqctfLAwaGhoaGhoaGhoaGvr9KmNqJfafPg0NDQ0NDQ0NDQ0NDb2pOwC1/AQiltoOAAAAAABJRU5ErkJggg=="></div>
+	</div>
+	<div class="row">
+		<div class="frame none pos-left-top" data-id="none-left-top"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAATElEQVR42uzXwQkAMQhFQV28b//NpDVThRBhXgEyePvVMVWeqctfLAwaGhoaGhoaGhoaGvr9KmNqJfafPg0NDQ0NDQ0NDQ0NDb2pOwC1/AQiltoOAAAAAABJRU5ErkJggg=="></div>
+		<div class="frame none pos-right-bottom" data-id="none-right-bottom"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAATElEQVR42uzXwQkAMQhFQV28b//NpDVThRBhXgEyePvVMVWeqctfLAwaGhoaGhoaGhoaGvr9KmNqJfafPg0NDQ0NDQ0NDQ0NDb2pOwC1/AQiltoOAAAAAABJRU5ErkJggg=="></div>
+		<div class="frame none pos-percent" data-id="none-percent"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAATElEQVR42uzXwQkAMQhFQV28b//NpDVThRBhXgEyePvVMVWeqctfLAwaGhoaGhoaGhoaGvr9KmNqJfafPg0NDQ0NDQ0NDQ0NDb2pOwC1/AQiltoOAAAAAABJRU5ErkJggg=="></div>
+		<div class="frame none pos-px" data-id="none-px"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAATElEQVR42uzXwQkAMQhFQV28b//NpDVThRBhXgEyePvVMVWeqctfLAwaGhoaGhoaGhoaGvr9KmNqJfafPg0NDQ0NDQ0NDQ0NDb2pOwC1/AQiltoOAAAAAABJRU5ErkJggg=="></div>
+	</div>
+	<div class="row">
+		<div class="frame cover pos-left-top" data-id="cover-left-top"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAATElEQVR42uzXwQkAMQhFQV28b//NpDVThRBhXgEyePvVMVWeqctfLAwaGhoaGhoaGhoaGvr9KmNqJfafPg0NDQ0NDQ0NDQ0NDb2pOwC1/AQiltoOAAAAAABJRU5ErkJggg=="></div>
+		<div class="frame cover pos-percent" data-id="cover-percent"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAATElEQVR42uzXwQkAMQhFQV28b//NpDVThRBhXgEyePvVMVWeqctfLAwaGhoaGhoaGhoaGvr9KmNqJfafPg0NDQ0NDQ0NDQ0NDb2pOwC1/AQiltoOAAAAAABJRU5ErkJggg=="></div>
+		<div class="frame scale-down pos-right-bottom" data-id="scaledown-right-bottom"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAATElEQVR42uzXwQkAMQhFQV28b//NpDVThRBhXgEyePvVMVWeqctfLAwaGhoaGhoaGhoaGvr9KmNqJfafPg0NDQ0NDQ0NDQ0NDb2pOwC1/AQiltoOAAAAAABJRU5ErkJggg=="></div>
+		<div class="frame fill pos-px" data-id="fill-px"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAAATElEQVR42uzXwQkAMQhFQV28b//NpDVThRBhXgEyePvVMVWeqctfLAwaGhoaGhoaGhoaGvr9KmNqJfafPg0NDQ0NDQ0NDQ0NDb2pOwC1/AQiltoOAAAAAABJRU5ErkJggg=="></div>
+	</div>
+</body>
+</html>

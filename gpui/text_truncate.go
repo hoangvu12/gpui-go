@@ -49,9 +49,18 @@ type TextLayoutTruncation struct {
 // EvaluateTextOverflow is the pinned TextLayout::evaluate_overflow
 // (R:elements/text.rs:829-860): with a text overflow set, the width is
 // the known width, else the definite available width (times the line
-// clamp when set); content-based sizing does not truncate.
+// clamp when set); content-based sizing does not truncate. Ticket 06's
+// browser rule (a recorded divergence toward CSS): a line clamp alone
+// also truncates — CSS line-clamp ends the last visible line with an
+// ellipsis (css-overflow-4 §line-clamp; Chrome's LineTruncator,
+// core/layout/inline/line_truncator.cc:89-107, draws U+2026 when the
+// primary font has the glyph, else "...") — so a nil text overflow
+// with a set line clamp evaluates like an end ellipsis overflow, and
+// the caller resolves the ellipsis marker from the primary font
+// (cssEllipsisAffix).
 func EvaluateTextOverflow(textStyle TextStyle, req MeasureRequest) TextLayoutTruncation {
-	if textStyle.TextOverflow == nil {
+	overflow := textStyle.TextOverflow
+	if overflow == nil && textStyle.LineClamp == nil {
 		return TextLayoutTruncation{Source: TruncateFromEnd}
 	}
 	var width *float32
@@ -65,7 +74,11 @@ func EvaluateTextOverflow(textStyle TextStyle, req MeasureRequest) TextLayoutTru
 		}
 		width = &available
 	}
-	overflow := *textStyle.TextOverflow
+	if overflow == nil {
+		// The line-clamp synthesis: end truncation with the CSS ellipsis
+		// marker (resolved from the font by the layout caller).
+		return TextLayoutTruncation{Width: width, Affix: Ellipsis, Source: TruncateFromEnd}
+	}
 	truncation := TextLayoutTruncation{Width: width, Affix: overflow.Ellipsis}
 	switch overflow.Kind {
 	case TextOverflowTruncateStart:
@@ -86,6 +99,35 @@ func textLineClamp(textStyle TextStyle) *uint32 {
 	}
 	clamp := uint32(*textStyle.LineClamp)
 	return &clamp
+}
+
+// cssEllipsisAffix resolves the truncation marker for a clamped or
+// ellipsized line (Chrome's LineTruncator::ComputeEllipsisText, core/
+// layout/inline/line_truncator.cc:89-107): U+2026 when the primary
+// font carries its glyph, else "...". The primary font is the line
+// style's font (the ellipsis is styled with the line style,
+// css-text-decor-3 §ellipsing-details, and Chrome resolves it through
+// the style's font). Called only on the truncating path, once per
+// measure.
+func cssEllipsisAffix(seam windowTextSystem, font FontDescriptor) string {
+	if id, ok := seam.glyphForChar(font, '\u2026'); ok && id != 0 {
+		return Ellipsis
+	}
+	return "..."
+}
+
+// resolveTruncationAffix resolves a truncation's CSS ellipsis marker
+// through the primary font: the marker "…" (the Ellipsis constant, the
+// CSS `text-overflow: ellipsis` and line-clamp keyword) becomes "..."
+// when the font lacks U+2026. A custom marker string passes through
+// (Chrome ignores custom strings under line-clamp and keeps them for
+// text-overflow strings; the port's TextOverflow.Ellipsis is the
+// marker, and only the CSS keyword spelling resolves from the font).
+func resolveTruncationAffix(seam windowTextSystem, font FontDescriptor, truncation TextLayoutTruncation) TextLayoutTruncation {
+	if truncation.Width != nil && truncation.Affix == Ellipsis {
+		truncation.Affix = cssEllipsisAffix(seam, font)
+	}
+	return truncation
 }
 
 // applyTextTruncation is the pinned TextLayout::apply_truncation

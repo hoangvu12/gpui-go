@@ -307,6 +307,13 @@ type windowTextSystem interface {
 	// font size for an inline container's base font (the reference
 	// WindowTextSystem::ascent / descent / x_height).
 	inlineMetrics(font FontDescriptor, fontSize float32) InlineTextMetrics
+	// glyphForChar maps one character to its nominal glyph id in the
+	// font a descriptor resolves to (the public TextSystem::GlyphForChar
+	// over ResolveFont): the CSS ellipsis fallback ("…" → "...") reads
+	// it, Chrome's SimpleFontData::GlyphForCharacter equivalent. ok is
+	// false when the character maps to no glyph (the modeled test font
+	// maps every character).
+	glyphForChar(font FontDescriptor, ch rune) (glyphID uint32, ok bool)
 }
 
 // shapedText is one shaped document handle (the reference WrappedLine
@@ -318,6 +325,10 @@ type shapedText interface {
 	ascent() float32
 	// descent is the line descent in pixels.
 	descent() float32
+	// fontSize is the document's font size (the shaping request's), the
+	// auto decoration geometry derives from (Chrome's used font size in
+	// text_decoration_thickness.cc:29-31).
+	fontSize() float32
 	// lineCount is the visual line count.
 	lineCount() int
 	// textLen is the shaped text's UTF-8 length.
@@ -441,6 +452,13 @@ func (s *realShapedText) descent() float32 {
 	return summary.Descent
 }
 
+// fontSize implements shapedText: the shaping request's font size
+// (Chrome's decoration thickness derives from the used font size,
+// text_decoration_thickness.cc:29-31).
+func (s *realShapedText) fontSize() float32 {
+	return s.line.request.FontSize
+}
+
 // lineCount implements shapedText.
 func (s *realShapedText) lineCount() int {
 	summary, err := s.line.Summary()
@@ -477,7 +495,8 @@ func (s *realShapedText) size(lineHeight float32) Size {
 // paint path with the current window paint state).
 func (s *realShapedText) paint(w *Window, origin Point, lineHeight float32, color Hsla) error {
 	frame := currentFrame(w)
-	return frame.scene.PaintShapedText(s.line, origin, lineHeight, color, s.system, s.atlas, frame.paint, PaintTextOptions{})
+	return frame.scene.PaintShapedText(s.line, origin, lineHeight, color, s.system, s.atlas, frame.paint,
+		PaintTextOptions{Background: frame.paint.Background})
 }
 
 // frameTextSystem returns the window's text system seam.
@@ -515,7 +534,12 @@ type shapedCell struct {
 	// truncateWidth is the truncation width the document was shaped
 	// under (nil: not truncated).
 	truncateWidth *float32
-	size          Size
+	// runs are the style runs covering the SHAPED text (the ambient
+	// style's run, cut by truncation): the paint fields (color,
+	// background, underline, strikethrough) the element paints with,
+	// like the pin's document-carried runs.
+	runs []TextRun
+	size Size
 }
 
 // textElement is the Text element: a string displayed as one shaped,
@@ -571,6 +595,11 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 
 	cell := &shapedCell{}
 	state := stringLayoutState{lineHeight: lineHeight, fontSize: fontSize, cell: cell}
+	// The pinned TextLayout::layout applies the style's text-transform
+	// before shaping (elements/text.rs:895): the shaped document and the
+	// published inline content carry the transformed text (byte length
+	// preserved, so the covering runs stay valid).
+	text := applyTextTransformPreservingByteLen(t.text, textStyle.TextTransform)
 	measure := func(req MeasureRequest) Size {
 		// The pinned measure closure: wrap at the known width or the
 		// definite available width (WhiteSpace::Normal); min/max-content
@@ -585,6 +614,9 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 			wrap, hasWrap = req.AvailWidth.Definite, true
 		}
 		truncation := EvaluateTextOverflow(textStyle, req)
+		// The CSS ellipsis marker resolves from the primary font ("…" or
+		// "...", text_truncate.go).
+		truncation = resolveTruncationAffix(frameTextSystem(w), textStyle.FontDescriptorOf(), truncation)
 		// Cached-layout reuse (R:elements/text.rs:931-946): a shaped
 		// layout with a size answers when the wrap is unconstrained or
 		// matches the cached wrap, and neither this request nor the
@@ -601,21 +633,28 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 			wrapWidth = &boxed
 		}
 		seam := frameTextSystem(w)
-		font := textStyle.FontDescriptorOf()
-		text := t.text
+		// The pinned TextLayout::layout shapes the ambient style's run
+		// (elements/text.rs:902-915: vec![text_style.to_run(text.len())])
+		// so the document paints with its runs — the decorations of a
+		// plain text child live here, not only in StyledText.
+		runs := []TextRun{textStyle.ToRun(len(text))}
+		// A per-invocation copy: the truncation below rewrites it, and
+		// the measure closure may run more than once.
+		effective := text
 		if truncation.Width != nil {
-			text, _ = applyTextTruncation(text, []TextRun{{Len: len(text), Font: font}}, wrapWidth, textStyle.LineClamp, truncation,
-				func(candidate string, _ []TextRun, wrapWidth *float32) (shapedText, error) {
-					return seam.shape(candidate, fontSize, font, wrapWidth, nil)
+			effective, runs = applyTextTruncation(effective, runs, wrapWidth, textStyle.LineClamp, truncation,
+				func(candidate string, candidateRuns []TextRun, wrapWidth *float32) (shapedText, error) {
+					return shapeStyledRuns(seam, candidate, fontSize, candidateRuns, wrapWidth, nil)
 				})
 		}
-		shaped, err := seam.shape(text, fontSize, font, wrapWidth, textLineClamp(textStyle))
+		shaped, err := shapeStyledRuns(seam, effective, fontSize, runs, wrapWidth, textLineClamp(textStyle))
 		if err != nil {
 			panic(fmt.Sprintf("gpui: text element shaping failed: %v", err))
 		}
 		cell.shaped = shaped
 		cell.wrapWidth = wrapWidth
 		cell.truncateWidth = truncation.Width
+		cell.runs = runs
 		cell.size = shaped.size(lineHeight)
 		return cell.size
 	}
@@ -629,8 +668,8 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 	// included (TextStyle::to_run, elements/text.rs:903-915), so a nested
 	// inline span's own color and decorations survive the paragraph.
 	publishInlineContent(w, layoutID, &inlineTextContent{
-		text:        t.text,
-		runs:        []TextRun{textStyle.ToRun(len(t.text))},
+		text:        text,
+		runs:        []TextRun{textStyle.ToRun(len(text))},
 		fontSize:    fontSize,
 		lineHeight:  lineHeight,
 		paintStyled: true,
@@ -657,8 +696,9 @@ func (t *textElement) Prepaint(global *GlobalElementID, inspector *InspectorElem
 
 // Paint implements Element: draw the shaped line at the committed
 // bounds origin (the reference TextLayout::paint with the ambient text
-// style). Inside a parent paragraph the paragraph paints the text, so
-// the element's paint is a no-op.
+// style, elements/text.rs:1021-1060: paint_background then paint, each
+// aligned within the element bounds). Inside a parent paragraph the
+// paragraph paints the text, so the element's paint is a no-op.
 func (t *textElement) Paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *stringLayoutState, prepaint *struct{}, w *Window, app *App) {
 	if currentFrame(w).currentInlineFragments != nil {
 		return
@@ -667,7 +707,22 @@ func (t *textElement) Paint(global *GlobalElementID, inspector *InspectorElement
 		panic(fmt.Sprintf("gpui: measurement or prepaint has not been performed on %q", t.text))
 	}
 	textStyle := WindowTextStyle(w)
-	if err := layout.cell.shaped.paint(w, layout.bounds.Origin, layout.lineHeight, textStyle.Color); err != nil {
+	// The runs the document was shaped with (the ambient style's run,
+	// cut by truncation): the paint fields — color, background,
+	// underline, strikethrough — paint from them, like the pin's
+	// document-carried runs. A cell shaped before this field existed
+	// (the same frame) falls back to the ambient run over the shaped
+	// text.
+	runs := layout.cell.runs
+	if len(runs) == 0 {
+		runs = []TextRun{textStyle.ToRun(layout.cell.shaped.textLen())}
+	}
+	align := textStyle.TextAlign
+	alignWidth := layout.bounds.Size.Width
+	if err := paintStyledDocument(w, layout.cell.shaped, runs, layout.bounds.Origin, layout.lineHeight, align, &alignWidth, textPaintBackground); err != nil {
+		panic(fmt.Sprintf("gpui: text element paint background: %v", err))
+	}
+	if err := paintStyledDocument(w, layout.cell.shaped, runs, layout.bounds.Origin, layout.lineHeight, align, &alignWidth, textPaintForeground); err != nil {
 		panic(fmt.Sprintf("gpui: text element paint: %v", err))
 	}
 }
@@ -1897,8 +1952,10 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 	}
 
 	// paint_backdrop_filter_with_corner_smoothing (window.rs:4487): the
-	// identity filters are dropped; the port's backdrop record carries
-	// one blur, so a chain paints one record per filter in order. The
+	// identity filters drop; rev 15's record carries a whole composed
+	// chain (the blurs composed by quadrature, the colour functions as
+	// one 4x5 matrix), so a chain paints one record (browser-core
+	// ticket 41; the port once painted one record per filter). The
 	// backdrop-filter node paints before the element's own filter group,
 	// as in Chromium ("the backdrop-filter node comes first",
 	// core/paint/paint_layer.cc:2629-2635 @ 0d4dcd4f).
@@ -1917,10 +1974,8 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 	// Chrome fixture measured the pin value at 0.42 mean channel diff
 	// vs 9.73 for the doubled radius.) No divergence: the pin's value
 	// passes through.
-	for _, filter := range s.BackdropFilter {
-		if !filter.IsIdentity() {
-			mustPaint(frame.scene.PaintBackdropFilterCornerSmoothing(bounds, filter.BlurRadius, radii, smoothing, frame.paint), "backdrop filter")
-		}
+	if chain := composeFilterChain(s.BackdropFilter); !chain.IsEmpty() {
+		mustPaint(frame.scene.PaintBackdropFilterChain(bounds, chain, radii, smoothing, frame.paint), "backdrop filter")
 	}
 
 	paintUnit := func(w *Window) {
@@ -2039,10 +2094,18 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 		paintUnit(w)
 		return
 	}
-	// with_filter_layer_with_corner_smoothing (window.rs:4537): the port's
-	// filter group carries one blur, so a chain nests one group per
-	// filter (outermost last, applying the filters in order); identity
-	// filters run inline inside WithFilterLayerCornerSmoothing.
+	chain := composeFilterChain(s.Filter)
+	if chain.IsEmpty() {
+		paintUnit(w)
+		return
+	}
+	// with_filter_layer_with_corner_smoothing (window.rs:4537), rev 15:
+	// one group per chain carrying the whole composed payload — the
+	// blurs as one quadrature-composed radius and the colour functions
+	// as one 4x5 matrix in CSS chain order (browser-core ticket 41; the
+	// port once nested one group per filter, which the depth cap of 2
+	// silently degraded for chains of three or more). An identity chain
+	// runs inline with no group.
 	//
 	// Recorded divergence toward CSS (D8) at this Style paint path, and
 	// one verified non-divergence:
@@ -2089,29 +2152,11 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 		Origin: Point{X: bounds.Origin.X - ink.Left, Y: bounds.Origin.Y - ink.Top},
 		Size:   Size{Width: bounds.Size.Width + ink.Left + ink.Right, Height: bounds.Size.Height + ink.Top + ink.Bottom},
 	}
-	s.withFilterChain(s.Filter, groupBounds, radii, smoothing, w, paintUnit)
-}
-
-// withFilterChain runs f inside one content-filter group per filter,
-// the first filter innermost. The bounds are the group's (ink-dilated
-// by the caller); the radii stay the element's (a content filter's
-// composite is not clipped to the rounded rect).
-func (s *Style) withFilterChain(filters []Filter, bounds Bounds, radii Corners, smoothing float32, w *Window, f func(*Window)) {
-	if len(filters) == 0 {
-		f(w)
-		return
-	}
-	last := filters[len(filters)-1]
-	frame := currentFrame(w)
-	// σ = the CSS blur length: the pin's kernel takes σ = 0.5 × the
-	// record radius in half-resolution texels, so the effective
-	// device-pixel σ is the record radius itself (see paintBox's note)
-	// — the CSS radius × scale passes through unchanged.
-	err := frame.scene.WithFilterLayerCornerSmoothing(bounds, last.BlurRadius, radii, smoothing, frame.paint, func() error {
-		s.withFilterChain(filters[:len(filters)-1], bounds, radii, smoothing, w, f)
+	frame2 := currentFrame(w)
+	if err := frame2.scene.WithFilterLayerChain(groupBounds, chain, radii, smoothing, frame2.paint, func() error {
+		paintUnit(w)
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		panic(fmt.Sprintf("gpui: DivElement filter paint: %v", err))
 	}
 }

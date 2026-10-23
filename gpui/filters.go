@@ -33,20 +33,35 @@ func (s *Scene) WithFilterLayer(bounds Bounds, blurRadius float32, radii Corners
 // clipped to smoothed corners (the pinned
 // with_filter_layer_with_corner_smoothing).
 func (s *Scene) WithFilterLayerCornerSmoothing(bounds Bounds, blurRadius float32, radii Corners, cornerSmoothing float32, ctx *PaintContext, f func() error) error {
+	return s.WithFilterLayerChain(bounds, FilterChain{BlurRadius: blurRadius}, radii, cornerSmoothing, ctx, f)
+}
+
+// WithFilterLayerChain runs f in one content-filter group carrying a
+// whole composed chain (browser-core ticket 41): the renderer renders
+// everything f paints into an offscreen target, applies the composed
+// gaussian blur and the composed 4x5 colour matrix, and composites the
+// result back into the rounded rectangle — the CSS filter effect for
+// grayscale(…), sepia(…), brightness(…) and the rest of the shorthand
+// colour functions, in one group per chain (the CSS chain order; a
+// per-pixel linear map commutes with the uniform-per-channel gaussian,
+// so the native draw order is the CSS result for any interleaving —
+// see FilterChain). An empty chain runs f inline with no offscreen
+// indirection (every filter identity).
+func (s *Scene) WithFilterLayerChain(bounds Bounds, chain FilterChain, radii Corners, cornerSmoothing float32, ctx *PaintContext, f func() error) error {
 	if ctx == nil {
-		return fmt.Errorf("gpui: WithFilterLayer: nil paint context")
+		return fmt.Errorf("gpui: WithFilterLayerChain: nil paint context")
 	}
 	if f == nil {
-		return fmt.Errorf("gpui: WithFilterLayer: nil closure")
+		return fmt.Errorf("gpui: WithFilterLayerChain: nil closure")
 	}
-	if err := s.BeginFilterGroup(bounds, blurRadius, radii, cornerSmoothing, ctx); err != nil {
+	if err := s.BeginFilterGroupChain(bounds, chain, radii, cornerSmoothing, ctx); err != nil {
 		return err
 	}
 	// The pinned code snapshots the boundary once and re-uses it for the
 	// end marker; the record-level seam takes the same parameters, so an
 	// early error path still closes the group before returning.
 	err := f()
-	if closeErr := s.EndFilterGroup(bounds, blurRadius, radii, cornerSmoothing, ctx); closeErr != nil && err == nil {
+	if closeErr := s.EndFilterGroupChain(bounds, chain, radii, cornerSmoothing, ctx); closeErr != nil && err == nil {
 		err = closeErr
 	}
 	return err

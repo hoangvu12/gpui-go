@@ -594,80 +594,15 @@ const (
 	// ObjectFitScaleDown scales the content down to fit (never up),
 	// centered.
 	ObjectFitScaleDown
-	// ObjectFitNone keeps the content's original size at the element
-	// origin.
+	// ObjectFitNone keeps the content's original size, positioned by
+	// the object position (centered by default).
 	ObjectFitNone
 )
 
-// GetBounds returns the bounds of the content within the given bounds
-// (the pinned ObjectFit::get_bounds): the content size is the capture
-// frame's content size (the crop), treated as logical pixels exactly
-// like the pin's Pixels::from(DevicePixels). Fill, contain, cover and
-// scale-down match the pin's (and CSS's) math; none is centred instead
-// of sitting at the origin (CSS object-position 50% 50%; see the
-// default case). Degenerate inputs (non-positive content or bounds
-// size) collapse to a zero-size bounds at the element origin instead
-// of the pin's NaN propagation — a recorded guard, the pinned math is
-// otherwise unchanged.
-func (f ObjectFit) GetBounds(bounds Bounds, contentWidth, contentHeight int32) Bounds {
-	if contentWidth <= 0 || contentHeight <= 0 || bounds.Size.Width <= 0 || bounds.Size.Height <= 0 {
-		return Bounds{Origin: bounds.Origin}
-	}
-	imageWidth := float32(contentWidth)
-	imageHeight := float32(contentHeight)
-	imageRatio := imageWidth / imageHeight
-	boundsRatio := bounds.Size.Width / bounds.Size.Height
-
-	containSize := func() (float32, float32) {
-		if boundsRatio > imageRatio {
-			return imageWidth * (bounds.Size.Height / imageHeight), bounds.Size.Height
-		}
-		return bounds.Size.Width, imageHeight * (bounds.Size.Width / imageWidth)
-	}
-	center := func(width, height float32) Bounds {
-		return Bounds{
-			Origin: Point{
-				X: bounds.Origin.X + (bounds.Size.Width-width)/2.0,
-				Y: bounds.Origin.Y + (bounds.Size.Height-height)/2.0,
-			},
-			Size: Size{Width: width, Height: height},
-		}
-	}
-
-	switch f {
-	case ObjectFitFill:
-		return bounds
-	case ObjectFitContain:
-		width, height := containSize()
-		return center(width, height)
-	case ObjectFitScaleDown:
-		// Scale down only: an image already fitting keeps its original
-		// size, centered.
-		if imageWidth > bounds.Size.Width || imageHeight > bounds.Size.Height {
-			width, height := containSize()
-			return center(width, height)
-		}
-		return center(imageWidth, imageHeight)
-	case ObjectFitCover:
-		var width, height float32
-		if boundsRatio > imageRatio {
-			width = bounds.Size.Width
-			height = imageHeight * (bounds.Size.Width / imageWidth)
-		} else {
-			width = imageWidth * (bounds.Size.Height / imageHeight)
-			height = bounds.Size.Height
-		}
-		return center(width, height)
-	default: // ObjectFitNone
-		// CSS centres object-fit: none: object-position defaults to 50%
-		// 50%, and the none mode places the content at its intrinsic size
-		// at that position (Chromium's ComputeObjectFitAndPositionRect
-		// resolves the position against base - object_size for every
-		// mode, layout_replaced.cc:453-471). Recorded divergence toward
-		// CSS: the pin pins it at the bounds' origin (style.rs:134-137).
-		return center(imageWidth, imageHeight)
-	}
-}
+// GetBounds/GetPositionedBounds (the content placement under an
+// object fit, with the default centered position or a general
+// ObjectPosition) live in object_position.go with the CSS
+// object-position types (browser-core ticket 41).
 
 // ---------------------------------------------------------------------------
 // The Surface element (elements/surface.rs 74-141)

@@ -548,6 +548,7 @@ var classStages = []classStage{
 	aspectClass,
 	blurClass,
 	gradientClass,
+	filterClass,
 	unsupportedClass,
 	colorClass,
 }
@@ -891,13 +892,80 @@ func typographyClass(b *StyleBuilder, u string) (bool, string) {
 		if !ok || n == 0 || n > math.MaxInt32 {
 			return true, "line-clamp-… takes a line count"
 		}
+		// Ticket 06: the clamp itself now ends the last line with the
+		// CSS ellipsis (text_truncate.go's EvaluateTextOverflow
+		// synthesis), so the class needs only the clamp.
 		b.LineClamp(int(n))
 	case u == "font-sans" || u == "font-serif" || u == "font-mono":
-		return true, `font families are not classes; call .FontFamily("…") with an installed or embedded family`
+		// Ticket 06: the Tailwind default theme stacks, resolved the way
+		// Chrome on Windows resolves them (see genericFontFamilyAliases'
+		// doc and the font fixture): font-sans heads with ui-sans-serif,
+		// system-ui (the system UI font, Segoe UI); font-serif's first
+		// installed family is Georgia; font-mono's is Consolas.
+		switch u {
+		case "font-sans":
+			b.FontFamily(".SystemUIFont")
+		case "font-serif":
+			b.FontFamily("Georgia")
+		default:
+			b.FontFamily("Consolas")
+		}
+	case isNumericVariantClass(u):
+		// Ticket 06: the font-variant-numeric utilities map to their
+		// OpenType features (Chromium's FromFontDescription, platform/
+		// fonts/shaping/font_features.cc:157-196). Each class sets the
+		// whole feature list, like Tailwind's single
+		// font-feature-settings declaration.
+		b.FontFeatures(numericVariantFeatures(u))
 	default:
 		return false, ""
 	}
 	return true, ""
+}
+
+// isNumericVariantClass reports whether u is one of Tailwind's
+// font-variant-numeric utilities (including normal-nums, the reset).
+func isNumericVariantClass(u string) bool {
+	return numericVariantClass(u) != "" || u == "normal-nums"
+}
+
+// numericVariantClass returns the OpenType feature tag a Tailwind
+// font-variant-numeric utility stands for, or "" when u is not one
+// (the tags and their font-variant-numeric origins: Chromium's
+// FromFontDescription, platform/fonts/shaping/font_features.cc:157-196;
+// Tailwind's utilities are the same one-tag settings).
+func numericVariantClass(u string) string {
+	switch u {
+	case "tabular-nums":
+		return "tnum"
+	case "proportional-nums":
+		return "pnum"
+	case "lining-nums":
+		return "lnum"
+	case "oldstyle-nums":
+		return "onum"
+	case "slashed-zero":
+		return "zero"
+	case "ordinal":
+		return "ordn"
+	case "diagonal-fractions":
+		return "frac"
+	case "stacked-fractions":
+		return "afrc"
+	default:
+		return ""
+	}
+}
+
+// numericVariantFeatures returns the feature list a numeric-variant
+// class sets: normal-nums clears the features (Tailwind's
+// font-feature-settings: normal); every other utility sets its single
+// tag to 1.
+func numericVariantFeatures(u string) []FontFeature {
+	if u == "normal-nums" {
+		return nil
+	}
+	return []FontFeature{{Tag: numericVariantClass(u), Value: 1}}
 }
 
 // borderClass applies border widths, radii and ring widths beyond the
@@ -1084,8 +1152,13 @@ func aspectClass(b *StyleBuilder, u string) (bool, string) {
 // blurScale is Tailwind v3's blur scale in px (blur-xs is v4's 4px).
 var blurScale = map[string]float32{"xs": 4, "sm": 4, "": 8, "md": 12, "lg": 16, "xl": 24, "2xl": 40, "3xl": 64}
 
-// blurClass applies blur-* and backdrop-blur-*. Like CSS, a class
-// replaces the element's filter rather than appending to it.
+// blurClass applies blur-* and backdrop-blur-*. Filter classes
+// compose in class order like the fluent methods (ticket 41: blur-sm
+// grayscale is the CSS filter: blur(4px) grayscale(100%) — Tailwind
+// composes its filter utilities through CSS variables in a fixed
+// order, and the class order here is the CSS spelling, a superset for
+// the single-function cases); blur-none resets the whole filter
+// chain (Tailwind's variable reset).
 func blurClass(b *StyleBuilder, u string) (bool, string) {
 	rest, backdrop := strings.CutPrefix(u, "backdrop-")
 	if rest != "blur" && !strings.HasPrefix(rest, "blur-") {
@@ -1095,22 +1168,31 @@ func blurClass(b *StyleBuilder, u string) (bool, string) {
 		return false, ""
 	}
 	size := strings.TrimPrefix(strings.TrimPrefix(rest, "blur"), "-")
-	chain := []Filter{}
+	if size == "none" {
+		// Tailwind's reset: no blur clears the chain.
+		if backdrop {
+			b.StyleMut().BackdropFilter = Some([]Filter(nil))
+		} else {
+			b.StyleMut().Filter = Some([]Filter(nil))
+		}
+		return true, ""
+	}
+	var blur Filter
 	if r, ok := blurScale[size]; ok {
-		chain = append(chain, Blur(r))
+		blur = Blur(r)
 	} else if inner, ok := arbitrary(size); ok {
 		px, ok := pixels(inner)
 		if !ok || px < 0 {
 			return true, "blur-[…] takes pixels, like [6px]"
 		}
-		chain = append(chain, Blur(px))
-	} else if size != "none" {
+		blur = Blur(px)
+	} else {
 		return true, "blur-… takes none, sm, md, lg, xl, 2xl, 3xl, or [6px]"
 	}
 	if backdrop {
-		b.StyleMut().BackdropFilter = Some(chain)
+		b.BackdropBlur(blur.BlurRadius)
 	} else {
-		b.StyleMut().Filter = Some(chain)
+		b.Blur(blur.BlurRadius)
 	}
 	return true, ""
 }
@@ -1346,6 +1428,147 @@ func parseAngle(s string) (float32, bool) {
 	return 0, false
 }
 
+// filterPercentScale is Tailwind v3's percentage scale for
+// brightness, contrast and saturate as fractions (v3 has no
+// brightness-105/110 for contrast; those are brightness's).
+var filterPercentScale = map[string]float32{
+	"0": 0, "50": 0.5, "75": 0.75, "90": 0.9, "95": 0.95, "100": 1,
+	"105": 1.05, "110": 1.1, "125": 1.25, "150": 1.5, "200": 2,
+}
+
+// hueRotateScale is Tailwind v3's hue-rotate scale in degrees.
+var hueRotateScale = map[string]float32{"0": 0, "15": 15, "30": 30, "60": 60, "90": 90, "180": 180}
+
+// filterClass applies the CSS colour filter utilities: grayscale,
+// sepia and invert (bare = the full amount, -0 none), the scaled
+// brightness-*, contrast-* and saturate-*, hue-rotate-*, and their
+// arbitrary forms (grayscale-[.5], brightness-[1.75],
+// hue-rotate-[90deg]). Each appends to the element's filter chain in
+// class order — the CSS spelling of the chain, like the fluent methods
+// (.Grayscale(1).Blur(4)); Tailwind itself composes its filter
+// utilities through CSS variables in a fixed order, which the class
+// order here is a superset of for the single-function cases. The blur
+// family is blurClass's; the backdrop- prefix never reaches this stage
+// (blurClass explains it). An unresolvable suffix reports why.
+func filterClass(b *StyleBuilder, u string) (bool, string) {
+	body := strings.TrimPrefix(u, "-")
+	var name, suffix string
+	for _, family := range []string{"grayscale", "sepia", "invert", "saturate", "brightness", "contrast", "hue-rotate"} {
+		if body == family {
+			name = family
+			break
+		}
+		if rest, ok := strings.CutPrefix(body, family+"-"); ok {
+			name, suffix = family, rest
+			break
+		}
+	}
+	if name == "" {
+		return false, ""
+	}
+	negative := strings.HasPrefix(u, "-")
+	switch name {
+	case "grayscale", "sepia", "invert":
+		// The bare class is the full amount (Tailwind's DEFAULT);
+		// -0 turns it off; the arbitrary form takes a number or
+		// percentage.
+		amount := float32(1)
+		switch {
+		case suffix == "":
+		case suffix == "0":
+			amount = 0
+		case suffix == "none":
+			amount = 0
+		default:
+			value, ok := filterArbitraryAmount(suffix)
+			if !ok {
+				return true, name + "-… takes 0, none, or an arbitrary value, like [0.5] or [50%]"
+			}
+			amount = value
+		}
+		switch name {
+		case "grayscale":
+			b.Grayscale(amount)
+		case "sepia":
+			b.Sepia(amount)
+		default:
+			b.Invert(amount)
+		}
+		return true, ""
+	case "saturate", "brightness", "contrast":
+		if suffix == "" {
+			return true, name + " needs a scale value, like " + name + "-150 (or an arbitrary [1.75])"
+		}
+		amount, ok := float32(1), false
+		if value, scaled := filterPercentScale[suffix]; scaled {
+			amount, ok = value, true
+		} else {
+			amount, ok = filterArbitraryAmount(suffix)
+			if !ok {
+				return true, name + "-… takes 0, 50, 75, 90, 95, 100, 105, 110, 125, 150, 200, or an arbitrary value, like [1.75]"
+			}
+		}
+		switch name {
+		case "saturate":
+			b.Saturate(amount)
+		case "brightness":
+			b.Brightness(amount)
+		default:
+			b.Contrast(amount)
+		}
+		return true, ""
+	default: // hue-rotate
+		if suffix == "" {
+			return true, "hue-rotate needs a scale value, like hue-rotate-90 (or an arbitrary [90deg])"
+		}
+		degrees, ok := float32(0), false
+		if value, scaled := hueRotateScale[suffix]; scaled {
+			degrees, ok = value, true
+		} else if inner, arbitraryOK := arbitrary(suffix); arbitraryOK {
+			if value, numberOK := filterDegrees(inner); numberOK {
+				degrees, ok = value, true
+			}
+		}
+		if !ok {
+			return true, "hue-rotate-… takes 0, 15, 30, 60, 90, 180, or an arbitrary value, like [90deg]"
+		}
+		if negative {
+			degrees = -degrees
+		}
+		b.HueRotate(degrees)
+		return true, ""
+	}
+}
+
+// filterArbitraryAmount parses an arbitrary filter amount: a bare
+// number (grayscale-[.5], brightness-[1.75]) or a percentage
+// (grayscale-[50%]).
+func filterArbitraryAmount(suffix string) (float32, bool) {
+	inner, ok := arbitrary(suffix)
+	if !ok {
+		return 0, false
+	}
+	percent := strings.HasSuffix(inner, "%")
+	value, ok := parseNumber(strings.TrimSuffix(inner, "%"))
+	if !ok {
+		return 0, false
+	}
+	if percent {
+		value /= 100
+	}
+	return float32(value), true
+}
+
+// filterDegrees parses an arbitrary hue-rotate value: a bare number
+// (degrees) or one with a deg suffix ([90deg]).
+func filterDegrees(inner string) (float32, bool) {
+	value, ok := parseNumber(strings.TrimSuffix(inner, "deg"))
+	if !ok {
+		return 0, false
+	}
+	return float32(value), true
+}
+
 // unsupportedClasses are the Tailwind utilities GPUI cannot express. A
 // prefix matches the class itself and the class followed by "-",
 // ignoring a leading minus.
@@ -1372,9 +1595,9 @@ var unsupportedClasses = []struct {
 	{[]string{"bg-gradient"}, "Tailwind v4 renamed bg-gradient-* to bg-linear-*; write bg-linear-to-r from-… to-…"},
 	{[]string{"bg-radial", "bg-conic"}, "radial and conic gradients are not supported yet (ticket 52, the R16 gradient redesign); only two-stop linear gradients are"},
 	{[]string{"bg-cover", "bg-contain", "bg-center", "bg-no-repeat", "bg-repeat", "bg-fixed", "bg-clip", "bg-origin", "bg-blend", "bg-none"}, "background images are not supported; put an img element behind the content"},
-	{[]string{"drop-shadow", "grayscale", "invert", "sepia", "brightness", "contrast", "saturate", "hue-rotate", "filter", "mix-blend"}, "only blur filters are supported (blur-*, backdrop-blur-*)"},
+	{[]string{"drop-shadow", "filter", "mix-blend"}, "only blur and the colour filters are supported (blur-*, grayscale, sepia, invert, brightness-*, contrast-*, saturate-*, hue-rotate-*); drop-shadow() and mix-blend-mode are not, and the bare filter class is not needed — each filter utility applies itself"},
 	{[]string{"float", "clear"}, "floats are not supported; use flex or grid"},
-	{[]string{"object"}, "object-fit is an image option: call the img element's ObjectFit"},
+	{[]string{"object"}, "known object-fit and object-position keywords are supported (object-contain, object-cover, object-fill, object-none, object-scale-down, object-left-top, …); arbitrary positions call .ObjectPosition(…) on the img"},
 	{[]string{"order"}, "order-* is not supported; reorder the children"},
 	{[]string{"columns", "break-after", "break-before", "break-inside"}, "multi-column layout is not supported; use grid"},
 	{[]string{"place-content", "place-items", "place-self", "justify-items", "justify-self"}, "use items-*, justify-*, content-* and self-* instead"},
@@ -1382,7 +1605,6 @@ var unsupportedClasses = []struct {
 	{[]string{"whitespace-pre", "whitespace-break-spaces"}, "only whitespace-normal and whitespace-nowrap are supported"},
 	{[]string{"break-words", "break-all", "break-keep", "break-normal", "hyphens", "text-balance", "text-pretty"}, "text wrapping modes other than whitespace-normal / whitespace-nowrap are not supported"},
 	{[]string{"antialiased", "subpixel-antialiased"}, "GPUI chooses text antialiasing itself; drop it"},
-	{[]string{"tabular-nums", "proportional-nums", "lining-nums", "oldstyle-nums", "slashed-zero", "ordinal", "diagonal-fractions", "stacked-fractions", "normal-nums"}, "numeric variants are font features; call .FontFeatures(…)"},
 	{[]string{"list"}, "list styles are not supported"},
 	{[]string{"appearance", "resize", "accent", "caret"}, "form-control styling is not supported; GPUI has no native form controls"},
 	{[]string{"scroll", "snap", "touch", "overscroll", "will-change", "isolation", "isolate"}, "this scrolling or compositing utility is not supported"},
