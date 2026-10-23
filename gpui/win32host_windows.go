@@ -696,8 +696,15 @@ func windowWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe.P
 			// Apply the system's suggested rectangle; WM_SIZE and
 			// WM_MOVE follow synchronously and update the state.
 			suggested := (*rect)(lparam)
+			left, top := suggested.left, suggested.top
+			if offscreenTestWindows() {
+				// Test binaries keep windows off the desktop, also when a
+				// test sends a synthetic suggested rectangle
+				// (testwindows_windows.go).
+				left, top = offscreenTestPosition(left, top)
+			}
 			procSetWindowPos.Call(hwnd, 0,
-				uintptr(int64(suggested.left)), uintptr(int64(suggested.top)),
+				uintptr(int64(left)), uintptr(int64(top)),
 				uintptr(int64(suggested.right-suggested.left)), uintptr(int64(suggested.bottom-suggested.top)),
 				uintptr(swpNoZOrder|swpNoActivate))
 		}
