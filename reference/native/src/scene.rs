@@ -93,7 +93,10 @@ use lyon::math::Transform as LyonTransform;
 /// `abi_version`; bumped only on scene-record/table layout changes).
 /// Version 3 (ticket16) added the path primitive class, the path dump
 /// and the pinned-PathBuilder tessellation entry.
-pub const GPUI_GO_SCENE_SERVICE_VERSION: u32 = 3;
+/// Version 4 (gpui-perf ticket 05) appended the `insert_batch` entry
+/// (one packed op stream per call); the table grew to 27 pointers, size
+/// 288.
+pub const GPUI_GO_SCENE_SERVICE_VERSION: u32 = 4;
 
 /// Scene service status codes. 0 is success, negative values are
 /// caller/argument errors, 100+ are internal failures.
@@ -909,7 +912,7 @@ const _: () = assert!(core::mem::size_of::<GpuiGoScenePathVertexRecord>() == 16)
 const _: () = assert!(core::mem::align_of::<GpuiGoScenePathVertexRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoPathCommandRecord>() == 56);
 const _: () = assert!(core::mem::align_of::<GpuiGoPathCommandRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneTable>() == 280);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneTable>() == 288);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneTable>() == 8);
 
 // ---------------------------------------------------------------------------
@@ -2906,6 +2909,156 @@ fn scene_insert_polychrome_sprite_body(
     }
 }
 
+/// Op kinds of the packed batch stream (`scene_insert_batch`, gpui-perf
+/// ticket 05). Each op is a two-word header `[kind, payload_words]`
+/// followed by `payload_words` u32 words: the exact `#[repr(C)]` record
+/// of the matching single-op entry (all records are 4-byte aligned and a
+/// whole number of words), plus one trailing opacity word for surfaces;
+/// the four bounds words for a layer push; nothing for a pop or floor.
+pub mod batch_op {
+    /// A quad record.
+    pub const QUAD: u32 = 0;
+    /// A shadow record.
+    pub const SHADOW: u32 = 1;
+    /// An underline record.
+    pub const UNDERLINE: u32 = 2;
+    /// A backdrop-filter record.
+    pub const BACKDROP: u32 = 3;
+    /// A filter-boundary record.
+    pub const BOUNDARY: u32 = 4;
+    /// A surface record followed by its opacity bits.
+    pub const SURFACE: u32 = 5;
+    /// A monochrome sprite record.
+    pub const MONOCHROME_SPRITE: u32 = 6;
+    /// A subpixel sprite record.
+    pub const SUBPIXEL_SPRITE: u32 = 7;
+    /// A polychrome sprite record.
+    pub const POLYCHROME_SPRITE: u32 = 8;
+    /// A layer push (bounds record).
+    pub const PUSH_LAYER: u32 = 9;
+    /// A layer pop (no payload).
+    pub const POP_LAYER: u32 = 10;
+    /// An order-floor raise (no payload).
+    pub const RAISE_ORDER_FLOOR: u32 = 11;
+}
+
+/// Reads one record of type `T` from a word payload that must be exactly
+/// `size_of::<T>()` bytes long.
+fn batch_record<T: Copy>(payload: &[u32]) -> Result<T, i32> {
+    if payload.len() * 4 != core::mem::size_of::<T>() {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    Ok(unsafe { core::ptr::read_unaligned(payload.as_ptr().cast::<T>()) })
+}
+
+/// Applies one batch op with exactly the validation and state transition
+/// of the matching single-op entry.
+fn apply_batch_op(state: &mut SceneState, kind: u32, payload: &[u32]) -> Result<(), i32> {
+    match kind {
+        batch_op::QUAD => {
+            let rec: GpuiGoSceneQuadRecord = batch_record(payload)?;
+            check_quad(&rec)?;
+            state.insert_quad(rec)
+        }
+        batch_op::SHADOW => {
+            let rec: GpuiGoSceneShadowRecord = batch_record(payload)?;
+            check_shadow(&rec)?;
+            state.insert_shadow(rec)
+        }
+        batch_op::UNDERLINE => {
+            let rec: GpuiGoSceneUnderlineRecord = batch_record(payload)?;
+            check_underline(&rec)?;
+            state.insert_underline(rec)
+        }
+        batch_op::BACKDROP => {
+            let rec: GpuiGoSceneFilterRecord = batch_record(payload)?;
+            check_filter(&rec)?;
+            state.insert_backdrop(rec)
+        }
+        batch_op::BOUNDARY => {
+            let rec: GpuiGoSceneFilterRecord = batch_record(payload)?;
+            check_filter(&rec)?;
+            state.insert_boundary(rec)
+        }
+        batch_op::SURFACE => {
+            let Some((&opacity_bits, record)) = payload.split_last() else {
+                return Err(scene_status::ERR_BAD_VALUE);
+            };
+            let rec: GpuiGoSceneSurfaceRecord = batch_record(record)?;
+            check_surface(&rec)?;
+            state.insert_surface(rec, f32::from_bits(opacity_bits))
+        }
+        batch_op::MONOCHROME_SPRITE => {
+            let rec: GpuiGoSceneSpriteRecord = batch_record(payload)?;
+            check_mask_sprite(&rec, SpriteClass::Monochrome)?;
+            state.insert_mask_sprite(rec, SpriteClass::Monochrome)
+        }
+        batch_op::SUBPIXEL_SPRITE => {
+            let rec: GpuiGoSceneSpriteRecord = batch_record(payload)?;
+            check_mask_sprite(&rec, SpriteClass::Subpixel)?;
+            state.insert_mask_sprite(rec, SpriteClass::Subpixel)
+        }
+        batch_op::POLYCHROME_SPRITE => {
+            let rec: GpuiGoScenePolychromeSpriteRecord = batch_record(payload)?;
+            check_polychrome_sprite(&rec)?;
+            state.insert_polychrome_sprite(rec)
+        }
+        batch_op::PUSH_LAYER => {
+            let bounds: GpuiGoSceneBounds = batch_record(payload)?;
+            state.push_layer(bounds.to_f32())
+        }
+        batch_op::POP_LAYER if payload.is_empty() => state.pop_layer(),
+        batch_op::RAISE_ORDER_FLOOR if payload.is_empty() => state.raise_order_floor(),
+        _ => Err(scene_status::ERR_BAD_VALUE),
+    }
+}
+
+/// The batch body (gpui-perf ticket 05): applies a packed op stream in
+/// order under one scene lock — the same sequence of state transitions
+/// as one single-op call per op, so orders, the op log and the plan are
+/// identical. Stops at the first failing op; `out_applied` receives the
+/// number of ops applied before it (all of them on success). A malformed
+/// header (truncated payload) fails with ERR_BAD_VALUE at that op.
+fn scene_insert_batch_body(
+    handle: u64,
+    words: *const u32,
+    word_count: u32,
+    out_applied: *mut u32,
+) -> i32 {
+    if out_applied.is_null() || (word_count > 0 && words.is_null()) {
+        return scene_status::ERR_NULL_ARG;
+    }
+    unsafe { *out_applied = 0 };
+    let stream: &[u32] = if word_count == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(words, word_count as usize) }
+    };
+    let mut applied = 0u32;
+    let result = with_scene(handle, |state| {
+        let mut rest = stream;
+        while !rest.is_empty() {
+            if rest.len() < 2 {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+            let kind = rest[0];
+            let len = rest[1] as usize;
+            if rest.len() - 2 < len {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+            apply_batch_op(state, kind, &rest[2..2 + len])?;
+            applied += 1;
+            rest = &rest[2 + len..];
+        }
+        Ok(())
+    });
+    unsafe { *out_applied = applied };
+    match result {
+        Ok(()) => scene_status::OK,
+        Err(code) => code,
+    }
+}
+
 fn scene_replay_body(handle: u64, start: u32, end: u32, prev: u64) -> i32 {
     if prev == handle {
         // The pinned signature borrows the source immutably and the
@@ -4030,9 +4183,11 @@ pub(crate) fn scene_render_snapshot(handle: u64) -> Result<SceneRenderSnapshot, 
 
 
 /// The scene service table installed in reserved slot 3 of
-/// `GpuiGoAbiTable`. All 26 function pointers come first (208 bytes),
-/// then 17 self-check scalars (68 bytes). Offsets (x86-64): pointers
-/// @0..208, `service_version` @208, `size_of_table` @212,
+/// `GpuiGoAbiTable`. All 27 function pointers come first (216 bytes;
+/// version 4 appended `insert_batch` @208, shifting every scalar below
+/// by 8), then 17 self-check scalars (68 bytes); total size 288 (284
+/// rounded up), alignment 8. Version-3 offsets for reference (x86-64):
+/// pointers @0..208, `service_version` @208, `size_of_table` @212,
 /// `align_of_table` @216, `size_of_quad_record` @220,
 /// `size_of_shadow_record` @224, `size_of_underline_record` @228,
 /// `size_of_filter_record` @232, `size_of_surface_record` @236,
@@ -4115,6 +4270,9 @@ pub struct GpuiGoSceneTable {
     pub path_script: Option<
         unsafe extern "system" fn(*const GpuiGoPathCommandRecord, u32, *const u32, u32, *mut GpuiGoScenePathVertexRecord, u32, *mut u32, *mut GpuiGoSceneBounds) -> i32,
     >,
+    /// `scene_insert_batch` (service version 4, gpui-perf ticket 05):
+    /// a packed op stream (see [`batch_op`]) applied in order in one call.
+    pub insert_batch: Option<unsafe extern "system" fn(u64, *const u32, u32, *mut u32) -> i32>,
     /// Scene ABI version (see [`GPUI_GO_SCENE_SERVICE_VERSION`]).
     pub service_version: u32,
     /// `size_of::<GpuiGoSceneTable>()` self-check.
@@ -4179,6 +4337,7 @@ pub(crate) static SCENE_TABLE: GpuiGoSceneTable = GpuiGoSceneTable {
     insert_path: Some(scene_insert_path),
     path_dump: Some(scene_path_dump),
     path_script: Some(scene_path_script),
+    insert_batch: Some(scene_insert_batch),
     service_version: GPUI_GO_SCENE_SERVICE_VERSION,
     size_of_table: core::mem::size_of::<GpuiGoSceneTable>() as u32,
     align_of_table: core::mem::align_of::<GpuiGoSceneTable>() as u32,
@@ -4264,6 +4423,25 @@ unsafe extern "system" fn scene_pop_layer(handle: u64) -> i32 {
 
 unsafe extern "system" fn scene_raise_order_floor(handle: u64) -> i32 {
     let outcome = catch_unwind(AssertUnwindSafe(|| scene_raise_order_floor_body(handle)));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            mark_scene_failed(handle);
+            scene_status::ERR_PANIC
+        }
+    }
+}
+
+unsafe extern "system" fn scene_insert_batch(
+    handle: u64,
+    words: *const u32,
+    word_count: u32,
+    out_applied: *mut u32,
+) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        scene_insert_batch_body(handle, words, word_count, out_applied)
+    }));
     match outcome {
         Ok(code) => code,
         Err(payload) => {

@@ -8,6 +8,16 @@ package native
 // build break; the package still compiles everywhere for module tooling
 // (mirrors layout_other.go).
 
+import "time"
+
+func callRendererSurfaceLatencyHandle(fn uintptr, surface uint64) (uint64, int32, error) {
+	return 0, 0, hostSupported()
+}
+
+func waitAndCloseHandle(handle uint64, timeout time.Duration) (bool, error) {
+	return false, hostSupported()
+}
+
 func callRendererSurfaceCreate(
 	fn uintptr,
 	hwnd uint64,

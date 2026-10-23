@@ -7,6 +7,23 @@ reserved slot 3 of the bootstrap `GpuiGoAbiTable` (see
 path/draw extension). The Go mirror lives in
 `internal/native/scene.go`.
 
+**Scene service version 4 (gpui-perf ticket 05, native revision 13):**
+the table gained slot 26, `insert_batch`
+`(u64, *const u32 words, u32 word_count, *mut u32 out_applied) -> i32`,
+which applies a packed op stream in order under one scene lock. Each op
+is a two-word header `[kind, payload_words]` followed by the payload:
+the exact record of the single-op entry (kinds 0 quad, 1 shadow,
+2 underline, 3 backdrop filter, 4 filter boundary, 6 monochrome sprite,
+7 subpixel sprite, 8 polychrome sprite), a surface record plus its
+opacity bits (5), the four bounds words of a layer push (9), or nothing
+for a layer pop (10) and an order-floor raise (11). Every op runs the
+same validation and state transition as its single-op entry, so the
+scene, its orders and its plan are identical; the call stops at the
+first failing op and reports how many ops were applied. The Go wrapper
+(`internal/native/scene_batch.go`) buffers every insert, layer push/pop
+and floor raise and flushes before any read, finish, replay or path
+insert. The table grew to 27 pointers, 17 scalars, size 288.
+
 **Scene service version 3 (ticket16):** the `Path` primitive class is
 supported: `scene_insert_path` (a path record plus its bulk vertex
 array), the `path_dump` bulk dump, the `path_script` tessellation entry
@@ -151,8 +168,9 @@ returning an i32 status):
 | 23 | `insert_path` | `(u64, *const GpuiGoScenePathRecord, *const GpuiGoScenePathVertexRecord, u32 vertex_count) -> i32` (ticket16) |
 | 24 | `path_dump` | `(u64, *mut GpuiGoScenePathRecord, *mut GpuiGoScenePathVertexRecord, u32 record_capacity, u32 vertex_capacity, *mut u32 out_record_count, *mut u32 out_vertex_count) -> i32` (ticket16) |
 | 25 | `path_script` | `(*const GpuiGoPathCommandRecord, u32 command_count, *const u32 points, u32 word_count, *mut GpuiGoScenePathVertexRecord, u32 vertex_capacity, *mut u32 out_vertex_count, *mut GpuiGoSceneBounds out_bounds) -> i32` (ticket16) |
+| 26 | `insert_batch` | `(u64, *const u32 words, u32 word_count, *mut u32 out_applied) -> i32` (version 4, gpui-perf ticket 05; see above) |
 
-Self-check scalars: `service_version` (3), `size_of_table` (280),
+Self-check scalars: `service_version` (4), `size_of_table` (288),
 `align_of_table` (8), `size_of_quad_record` (132),
 `size_of_shadow_record` (120), `size_of_underline_record` (72),
 `size_of_filter_record` (88), `size_of_surface_record` (56),

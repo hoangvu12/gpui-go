@@ -54,8 +54,9 @@ const (
 // sceneServiceVersion mirrors GPUI_GO_SCENE_SERVICE_VERSION.
 // Version 2 added the three sprite primitive classes (ticket10);
 // version 3 (ticket16) added the path primitive class, the path dump
-// and the pinned-PathBuilder tessellation entry.
-const sceneServiceVersion uint32 = 3
+// and the pinned-PathBuilder tessellation entry; version 4 (gpui-perf
+// ticket 05) appended the insert_batch entry (scene_batch.go).
+const sceneServiceVersion uint32 = 4
 
 func sceneStatusName(code int32) string {
 	switch code {
@@ -581,9 +582,10 @@ const (
 // Service table mirror and validation
 // ---------------------------------------------------------------------------
 
-// sceneTable mirrors the native GpuiGoSceneTable: 26 function pointers
-// then 17 self-check scalars; 280 bytes, alignment 8 (ticket16 added
-// the three path entries and the three path record sizes).
+// sceneTable mirrors the native GpuiGoSceneTable: 27 function pointers
+// then 17 self-check scalars; 288 bytes, alignment 8 (ticket16 added
+// the three path entries and the three path record sizes; version 4
+// appended insert_batch).
 type sceneTable struct {
 	create                   uintptr
 	clear                    uintptr
@@ -611,6 +613,7 @@ type sceneTable struct {
 	insertPath               uintptr
 	pathDump                 uintptr
 	pathScript               uintptr
+	insertBatch              uintptr
 	serviceVersion           uint32
 	sizeOfTable              uint32
 	alignOfTable             uint32
@@ -692,7 +695,7 @@ func validateSceneTable(t *sceneTable, path string) error {
 		t.insertBoundary, t.insertSurface, t.insertMonochromeSprite,
 		t.insertSubpixelSprite, t.insertPolychromeSprite, t.replay, t.finish,
 		t.length, t.meta, t.dump, t.planDump, t.requirements, t.panicProbe,
-		t.insertPath, t.pathDump, t.pathScript,
+		t.insertPath, t.pathDump, t.pathScript, t.insertBatch,
 	}
 	names := [...]string{
 		"scene_create", "scene_clear", "scene_dispose", "scene_push_layer",
@@ -704,6 +707,7 @@ func validateSceneTable(t *sceneTable, path string) error {
 		"scene_len", "scene_meta", "scene_dump", "scene_plan_dump",
 		"scene_requirements", "scene_panic_probe",
 		"scene_insert_path", "scene_path_dump", "scene_path_script",
+		"scene_insert_batch",
 	}
 	for i, slot := range slots {
 		if slot == 0 {
@@ -736,10 +740,16 @@ type SceneHandle uint64
 // same scene is rejected with ErrSceneBadValue before native entry (the
 // service pattern's re-entry guard; scene calls have no callbacks, so
 // the guard is defense in depth plus serialization).
+//
+// Inserts, layer pushes/pops and order-floor raises are buffered and sent
+// in one native call (scene_batch.go); every other operation flushes
+// them first.
 type Scene struct {
 	svc    *SceneService
 	handle SceneHandle
 	busy   atomic.Bool
+	// batch is the pending op stream (nil while nothing is pending).
+	batch *[]uint32
 }
 
 // Scene returns the scene kernel service of the loaded artifact. The
@@ -803,6 +813,7 @@ func (sc *Scene) withScene(op string, f func() (int32, error)) (int32, error) {
 // Scene::clear): every primitive array, the bounds tree, the layer
 // stack, the plan and the failed flag.
 func (sc *Scene) Clear() error {
+	sc.releaseBatch()
 	code, err := sc.withScene("scene_clear", func() (int32, error) {
 		return callSceneOp(sc.svc.table.clear, uint64(sc.handle))
 	})
@@ -819,6 +830,7 @@ func (sc *Scene) Clear() error {
 // calls hold their own references, so actual destruction is deferred
 // until they return (deferred native destruction).
 func (sc *Scene) Dispose() error {
+	sc.releaseBatch()
 	code, err := sc.withScene("scene_dispose", func() (int32, error) {
 		return callSceneOp(sc.svc.table.dispose, uint64(sc.handle))
 	})
@@ -835,181 +847,127 @@ func (sc *Scene) Dispose() error {
 // (the pinned Scene::push_layer: the layer's order comes from the bounds
 // tree and is shared by every primitive painted inside the layer).
 func (sc *Scene) PushLayer(bounds SceneBounds) error {
-	code, err := sc.withScene("scene_push_layer", func() (int32, error) {
-		return callScenePushLayer(sc.svc.table.pushLayer, uint64(sc.handle), &bounds)
-	})
-	if err != nil {
-		return err
-	}
-	if code != sceneStatusOK {
-		return sceneStatusError(code, "scene_push_layer")
-	}
-	return nil
+	return enqueueBatch(sc, "scene_push_layer", sceneBatchPushLayer, &bounds)
 }
 
 // PopLayer pops the innermost layer (the pinned Scene::pop_layer).
 func (sc *Scene) PopLayer() error {
-	code, err := sc.withScene("scene_pop_layer", func() (int32, error) {
-		return callSceneOp(sc.svc.table.popLayer, uint64(sc.handle))
-	})
-	if err != nil {
-		return err
-	}
-	if code != sceneStatusOK {
-		return sceneStatusError(code, "scene_pop_layer")
-	}
-	return nil
+	return enqueueBatch[uint32](sc, "scene_pop_layer", sceneBatchPopLayer, nil)
 }
 
 // RaiseOrderFloor raises the deferred-draw order floor so every
 // primitive inserted afterwards sorts above everything inserted before
 // (the pinned Scene::raise_order_floor).
 func (sc *Scene) RaiseOrderFloor() error {
-	code, err := sc.withScene("scene_raise_order_floor", func() (int32, error) {
-		return callSceneOp(sc.svc.table.raiseOrderFloor, uint64(sc.handle))
-	})
-	if err != nil {
-		return err
-	}
-	if code != sceneStatusOK {
-		return sceneStatusError(code, "scene_raise_order_floor")
-	}
-	return nil
+	return enqueueBatch[uint32](sc, "scene_raise_order_floor", sceneBatchRaiseOrderFloor, nil)
 }
 
 // InsertQuad inserts a quad record (order must be 0; the kernel assigns
 // the draw order).
 func (sc *Scene) InsertQuad(rec *SceneQuadRecord) error {
-	code, err := sc.withScene("scene_insert_quad", func() (int32, error) {
-		return callSceneInsertQuad(sc.svc.table.insertQuad, uint64(sc.handle), rec)
-	})
-	if err != nil {
+	if rec == nil {
+		return sceneStatusError(sceneErrNullArg, "scene_insert_quad")
+	}
+	if err := checkQuadRecord(rec); err != nil {
 		return err
 	}
-	if code != sceneStatusOK {
-		return sceneStatusError(code, "scene_insert_quad")
-	}
-	return nil
+	return enqueueBatch(sc, "scene_insert_quad", sceneBatchQuad, rec)
 }
 
 // InsertShadow inserts a shadow record.
 func (sc *Scene) InsertShadow(rec *SceneShadowRecord) error {
-	code, err := sc.withScene("scene_insert_shadow", func() (int32, error) {
-		return callSceneInsertShadow(sc.svc.table.insertShadow, uint64(sc.handle), rec)
-	})
-	if err != nil {
+	if rec == nil {
+		return sceneStatusError(sceneErrNullArg, "scene_insert_shadow")
+	}
+	if err := checkShadowRecord(rec); err != nil {
 		return err
 	}
-	if code != sceneStatusOK {
-		return sceneStatusError(code, "scene_insert_shadow")
-	}
-	return nil
+	return enqueueBatch(sc, "scene_insert_shadow", sceneBatchShadow, rec)
 }
 
 // InsertUnderline inserts an underline record.
 func (sc *Scene) InsertUnderline(rec *SceneUnderlineRecord) error {
-	code, err := sc.withScene("scene_insert_underline", func() (int32, error) {
-		return callSceneInsertUnderline(sc.svc.table.insertUnderline, uint64(sc.handle), rec)
-	})
-	if err != nil {
+	if rec == nil {
+		return sceneStatusError(sceneErrNullArg, "scene_insert_underline")
+	}
+	if err := checkUnderlineRecord(rec); err != nil {
 		return err
 	}
-	if code != sceneStatusOK {
-		return sceneStatusError(code, "scene_insert_underline")
-	}
-	return nil
+	return enqueueBatch(sc, "scene_insert_underline", sceneBatchUnderline, rec)
 }
 
 // InsertBackdropFilter inserts a backdrop-filter record.
 func (sc *Scene) InsertBackdropFilter(rec *SceneFilterRecord) error {
-	code, err := sc.withScene("scene_insert_backdrop_filter", func() (int32, error) {
-		return callSceneInsertFilter(sc.svc.table.insertBackdrop, uint64(sc.handle), rec)
-	})
-	if err != nil {
+	if rec == nil {
+		return sceneStatusError(sceneErrNullArg, "scene_insert_backdrop_filter")
+	}
+	if err := checkFilterRecord("scene_insert_backdrop_filter", rec, sc.svc.table.maxFilters); err != nil {
 		return err
 	}
-	if code != sceneStatusOK {
-		return sceneStatusError(code, "scene_insert_backdrop_filter")
-	}
-	return nil
+	return enqueueBatch(sc, "scene_insert_backdrop_filter", sceneBatchBackdrop, rec)
 }
 
 // InsertFilterBoundary inserts a content-filter boundary marker (start
 // or end). A scene cannot close an unopened group; unmatched markers are
 // handled by the plan (an unmatched start renders inline).
 func (sc *Scene) InsertFilterBoundary(rec *SceneFilterRecord) error {
-	code, err := sc.withScene("scene_insert_filter_boundary", func() (int32, error) {
-		return callSceneInsertFilter(sc.svc.table.insertBoundary, uint64(sc.handle), rec)
-	})
-	if err != nil {
+	if rec == nil {
+		return sceneStatusError(sceneErrNullArg, "scene_insert_filter_boundary")
+	}
+	if err := checkFilterRecord("scene_insert_filter_boundary", rec, sc.svc.table.maxFilters); err != nil {
 		return err
 	}
-	if code != sceneStatusOK {
-		return sceneStatusError(code, "scene_insert_filter_boundary")
-	}
-	return nil
+	return enqueueBatch(sc, "scene_insert_filter_boundary", sceneBatchBoundary, rec)
 }
 
 // InsertSurface inserts a surface record with its paired opacity (the
 // pinned insert_surface path: the opacity stays paired with the surface
 // through the finish sort and replay).
 func (sc *Scene) InsertSurface(rec *SceneSurfaceRecord, opacity float32) error {
-	code, err := sc.withScene("scene_insert_surface", func() (int32, error) {
-		return callSceneInsertSurface(sc.svc.table.insertSurface, uint64(sc.handle), rec, math.Float32bits(opacity))
-	})
-	if err != nil {
+	if rec == nil {
+		return sceneStatusError(sceneErrNullArg, "scene_insert_surface")
+	}
+	if err := checkSurfaceRecord(rec); err != nil {
 		return err
 	}
-	if code != sceneStatusOK {
-		return sceneStatusError(code, "scene_insert_surface")
-	}
-	return nil
+	return enqueueBatch(sc, "scene_insert_surface", sceneBatchSurface, rec, math.Float32bits(opacity))
 }
 
 // InsertMonochromeSprite inserts a monochrome sprite record (an R8 atlas
 // tile drawn with the mask color). The tile's texture kind must be the
 // monochrome pool.
 func (sc *Scene) InsertMonochromeSprite(rec *SceneSpriteRecord) error {
-	code, err := sc.withScene("scene_insert_monochrome_sprite", func() (int32, error) {
-		return callSceneInsertSprite(sc.svc.table.insertMonochromeSprite, uint64(sc.handle), rec)
-	})
-	if err != nil {
+	if rec == nil {
+		return sceneStatusError(sceneErrNullArg, "scene_insert_monochrome_sprite")
+	}
+	if err := checkMaskSpriteRecord("scene_insert_monochrome_sprite", rec, SceneSpriteTextureMonochrome); err != nil {
 		return err
 	}
-	if code != sceneStatusOK {
-		return sceneStatusError(code, "scene_insert_monochrome_sprite")
-	}
-	return nil
+	return enqueueBatch(sc, "scene_insert_monochrome_sprite", sceneBatchMonochromeSprite, rec)
 }
 
 // InsertSubpixelSprite inserts a subpixel sprite record (a BGRA LCD
 // atlas tile blended with the mask color).
 func (sc *Scene) InsertSubpixelSprite(rec *SceneSpriteRecord) error {
-	code, err := sc.withScene("scene_insert_subpixel_sprite", func() (int32, error) {
-		return callSceneInsertSprite(sc.svc.table.insertSubpixelSprite, uint64(sc.handle), rec)
-	})
-	if err != nil {
+	if rec == nil {
+		return sceneStatusError(sceneErrNullArg, "scene_insert_subpixel_sprite")
+	}
+	if err := checkMaskSpriteRecord("scene_insert_subpixel_sprite", rec, SceneSpriteTextureSubpixel); err != nil {
 		return err
 	}
-	if code != sceneStatusOK {
-		return sceneStatusError(code, "scene_insert_subpixel_sprite")
-	}
-	return nil
+	return enqueueBatch(sc, "scene_insert_subpixel_sprite", sceneBatchSubpixelSprite, rec)
 }
 
 // InsertPolychromeSprite inserts a polychrome sprite record (a BGRA
 // color atlas tile drawn with its own opacity and corner smoothing).
 func (sc *Scene) InsertPolychromeSprite(rec *ScenePolychromeSpriteRecord) error {
-	code, err := sc.withScene("scene_insert_polychrome_sprite", func() (int32, error) {
-		return callSceneInsertPolySprite(sc.svc.table.insertPolychromeSprite, uint64(sc.handle), rec)
-	})
-	if err != nil {
+	if rec == nil {
+		return sceneStatusError(sceneErrNullArg, "scene_insert_polychrome_sprite")
+	}
+	if err := checkPolychromeSpriteRecord(rec); err != nil {
 		return err
 	}
-	if code != sceneStatusOK {
-		return sceneStatusError(code, "scene_insert_polychrome_sprite")
-	}
-	return nil
+	return enqueueBatch(sc, "scene_insert_polychrome_sprite", sceneBatchPolychromeSprite, rec)
 }
 
 // Replay re-inserts the range [start, end) of prev's paint operations
@@ -1023,6 +981,12 @@ func (sc *Scene) Replay(start, end uint32, prev *Scene) error {
 	}
 	if prev.handle == sc.handle {
 		return sceneStatusError(sceneErrBadValue, "scene_replay: a scene cannot replay itself")
+	}
+	if err := prev.flushBatch(); err != nil {
+		return err
+	}
+	if err := sc.flushBatch(); err != nil {
+		return err
 	}
 	code, err := sc.withScene("scene_replay", func() (int32, error) {
 		return callSceneReplay(sc.svc.table.replay, uint64(sc.handle), start, end, uint64(prev.handle))
@@ -1040,6 +1004,9 @@ func (sc *Scene) Replay(start, end uint32, prev *Scene) error {
 // (the pinned Scene::insert_primitive(Primitive::Path)); order must be
 // 0 — the kernel assigns it.
 func (sc *Scene) InsertPath(rec *ScenePathRecord, vertices []ScenePathVertexRecord) error {
+	if err := sc.flushBatch(); err != nil {
+		return err
+	}
 	if rec.VertexCount != uint32(len(vertices)) {
 		return sceneStatusError(sceneErrBadValue, "scene_insert_path: record vertex_count disagrees with the vertex array")
 	}
@@ -1064,6 +1031,9 @@ func (sc *Scene) InsertPath(rec *ScenePathRecord, vertices []ScenePathVertexReco
 // vertex array. Requires Finish; a too-small capacity retries with the
 // required counts.
 func (sc *Scene) PathDump() ([]ScenePathRecord, []ScenePathVertexRecord, error) {
+	if err := sc.flushBatch(); err != nil {
+		return nil, nil, err
+	}
 	var outRecords uint32
 	var outVertices uint32
 	// First call: report the required counts (record capacity 0).
@@ -1139,6 +1109,9 @@ func (s *SceneService) TessellatePath(commands []PathCommandRecord, words []uint
 // Finish sorts the primitive arrays and compiles the render plan (the
 // pinned Scene::finish). Plan/requirements/dump reads require it.
 func (sc *Scene) Finish() error {
+	if err := sc.flushBatch(); err != nil {
+		return err
+	}
 	code, err := sc.withScene("scene_finish", func() (int32, error) {
 		return callSceneOp(sc.svc.table.finish, uint64(sc.handle))
 	})
@@ -1154,6 +1127,9 @@ func (sc *Scene) Finish() error {
 // Len returns the scene's paint-operation count (the pinned Scene::len;
 // the replay address space).
 func (sc *Scene) Len() (uint32, error) {
+	if err := sc.flushBatch(); err != nil {
+		return 0, err
+	}
 	var length uint32
 	code, err := sc.withScene("scene_len", func() (int32, error) {
 		return callSceneLen(sc.svc.table.length, uint64(sc.handle), &length)
@@ -1170,6 +1146,9 @@ func (sc *Scene) Len() (uint32, error) {
 // Meta returns the scene's totals (op count, layer pushes, per-class
 // primitive counts, finished flag).
 func (sc *Scene) Meta() (SceneMetaRecord, error) {
+	if err := sc.flushBatch(); err != nil {
+		return SceneMetaRecord{}, err
+	}
 	var meta SceneMetaRecord
 	code, err := sc.withScene("scene_meta", func() (int32, error) {
 		return callSceneMeta(sc.svc.table.meta, uint64(sc.handle), &meta)
@@ -1192,6 +1171,9 @@ func (sc *Scene) Meta() (SceneMetaRecord, error) {
 
 // Requirements returns the compiled plan's requirements. Requires Finish.
 func (sc *Scene) Requirements() (SceneRequirementsRecord, error) {
+	if err := sc.flushBatch(); err != nil {
+		return SceneRequirementsRecord{}, err
+	}
 	var requirements SceneRequirementsRecord
 	code, err := sc.withScene("scene_requirements", func() (int32, error) {
 		return callSceneRequirements(sc.svc.table.requirements, uint64(sc.handle), &requirements)
@@ -1217,6 +1199,9 @@ func (sc *Scene) Requirements() (SceneRequirementsRecord, error) {
 // filter begin/end commands with their isolation targets). Requires
 // Finish. A too-small capacity is retried once with the reported count.
 func (sc *Scene) PlanCommands() ([]SceneCommandRecord, error) {
+	if err := sc.flushBatch(); err != nil {
+		return nil, err
+	}
 	want := uint32(16)
 	for attempt := 0; attempt < 2; attempt++ {
 		commands := make([]SceneCommandRecord, want)
@@ -1247,6 +1232,9 @@ func (sc *Scene) PlanCommands() ([]SceneCommandRecord, error) {
 // order). Requires Finish. A too-small capacity is retried once with the
 // reported count.
 func (sc *Scene) DumpQuads() ([]SceneQuadRecord, error) {
+	if err := sc.flushBatch(); err != nil {
+		return nil, err
+	}
 	want := uint32(16)
 	for attempt := 0; attempt < 2; attempt++ {
 		out := make([]SceneQuadRecord, want)
@@ -1277,6 +1265,9 @@ func (sc *Scene) DumpQuads() ([]SceneQuadRecord, error) {
 // order). Requires Finish. A too-small capacity is retried once with the
 // reported count.
 func (sc *Scene) DumpShadows() ([]SceneShadowRecord, error) {
+	if err := sc.flushBatch(); err != nil {
+		return nil, err
+	}
 	want := uint32(16)
 	for attempt := 0; attempt < 2; attempt++ {
 		out := make([]SceneShadowRecord, want)
@@ -1307,6 +1298,9 @@ func (sc *Scene) DumpShadows() ([]SceneShadowRecord, error) {
 // order). Requires Finish. A too-small capacity is retried once with the
 // reported count.
 func (sc *Scene) DumpUnderlines() ([]SceneUnderlineRecord, error) {
+	if err := sc.flushBatch(); err != nil {
+		return nil, err
+	}
 	want := uint32(16)
 	for attempt := 0; attempt < 2; attempt++ {
 		out := make([]SceneUnderlineRecord, want)
@@ -1337,6 +1331,9 @@ func (sc *Scene) DumpUnderlines() ([]SceneUnderlineRecord, error) {
 // order). Requires Finish. A too-small capacity is retried once with the
 // reported count.
 func (sc *Scene) DumpBackdrops() ([]SceneFilterRecord, error) {
+	if err := sc.flushBatch(); err != nil {
+		return nil, err
+	}
 	want := uint32(16)
 	for attempt := 0; attempt < 2; attempt++ {
 		out := make([]SceneFilterRecord, want)
@@ -1367,6 +1364,9 @@ func (sc *Scene) DumpBackdrops() ([]SceneFilterRecord, error) {
 // order). Requires Finish. A too-small capacity is retried once with the
 // reported count.
 func (sc *Scene) DumpBoundaries() ([]SceneFilterRecord, error) {
+	if err := sc.flushBatch(); err != nil {
+		return nil, err
+	}
 	want := uint32(16)
 	for attempt := 0; attempt < 2; attempt++ {
 		out := make([]SceneFilterRecord, want)
@@ -1398,6 +1398,9 @@ func (sc *Scene) DumpBoundaries() ([]SceneFilterRecord, error) {
 // replay). Requires Finish. A too-small capacity is retried once with
 // the reported count.
 func (sc *Scene) DumpSurfaces() ([]SceneSurfaceRecord, []float32, error) {
+	if err := sc.flushBatch(); err != nil {
+		return nil, nil, err
+	}
 	want := uint32(16)
 	for attempt := 0; attempt < 2; attempt++ {
 		out := make([]SceneSurfaceRecord, want)
@@ -1439,6 +1442,9 @@ func (sc *Scene) DumpSubpixelSprites() ([]SceneSpriteRecord, error) {
 
 // dumpSprites implements the sprite dump capacity-retry protocol.
 func dumpSprites[T any](sc *Scene, kind uint32, class string) ([]T, error) {
+	if err := sc.flushBatch(); err != nil {
+		return nil, err
+	}
 	want := uint32(16)
 	for attempt := 0; attempt < 2; attempt++ {
 		out := make([]T, want)
