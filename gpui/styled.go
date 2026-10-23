@@ -358,7 +358,11 @@ func (s *Styled[Self]) TextTransform[_ lazy](transform TextTransform) Self {
 }
 
 // Truncate hides overflow, prevents wrapping and truncates with an
-// ellipsis (styled.rs:283).
+// ellipsis (styled.rs:283). Text truncates to the width its layout node
+// is given (text_truncate.go): a FlexCol box stretches its text child to
+// the box width, while in a flex row a text child's automatic minimum
+// width is its whole unwrapped width (Taffy's min-size: auto), so it
+// overflows and clips instead.
 func (s *Styled[Self]) Truncate[_ lazy]() Self {
 	s.OverflowHidden()
 	s.WhitespaceNowrap()

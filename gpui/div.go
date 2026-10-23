@@ -512,7 +512,10 @@ type stringLayoutState struct {
 type shapedCell struct {
 	shaped    shapedText
 	wrapWidth *float32
-	size      Size
+	// truncateWidth is the truncation width the document was shaped
+	// under (nil: not truncated).
+	truncateWidth *float32
+	size          Size
 }
 
 // textElement is the Text element: a string displayed as one shaped,
@@ -581,10 +584,13 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		} else if req.AvailWidth.Kind == AvailDefinite {
 			wrap, hasWrap = req.AvailWidth.Definite, true
 		}
-		// Cached-layout reuse: a shaped layout with a size answers when
-		// the wrap is unconstrained or matches the cached wrap (the
-		// reference's four-condition cache check, truncation aside).
-		if cell.shaped != nil && (!hasWrap || (cell.wrapWidth != nil && wrap == *cell.wrapWidth)) {
+		truncation := EvaluateTextOverflow(textStyle, req)
+		// Cached-layout reuse (R:elements/text.rs:931-946): a shaped
+		// layout with a size answers when the wrap is unconstrained or
+		// matches the cached wrap, and neither this request nor the
+		// cached layout truncates.
+		if cell.shaped != nil && (!hasWrap || (cell.wrapWidth != nil && wrap == *cell.wrapWidth)) &&
+			truncation.Width == nil && cell.truncateWidth == nil {
 			return cell.size
 		}
 		// The wrap width is boxed only when the text shapes (gpui-perf
@@ -594,12 +600,22 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 			boxed := wrap
 			wrapWidth = &boxed
 		}
-		shaped, err := frameTextSystem(w).shape(t.text, fontSize, textStyle.FontDescriptorOf(), wrapWidth, nil)
+		seam := frameTextSystem(w)
+		font := textStyle.FontDescriptorOf()
+		text := t.text
+		if truncation.Width != nil {
+			text, _ = applyTextTruncation(text, []TextRun{{Len: len(text), Font: font}}, wrapWidth, textStyle.LineClamp, truncation,
+				func(candidate string, _ []TextRun, wrapWidth *float32) (shapedText, error) {
+					return seam.shape(candidate, fontSize, font, wrapWidth, nil)
+				})
+		}
+		shaped, err := seam.shape(text, fontSize, font, wrapWidth, textLineClamp(textStyle))
 		if err != nil {
 			panic(fmt.Sprintf("gpui: text element shaping failed: %v", err))
 		}
 		cell.shaped = shaped
 		cell.wrapWidth = wrapWidth
+		cell.truncateWidth = truncation.Width
 		cell.size = shaped.size(lineHeight)
 		return cell.size
 	}
@@ -794,6 +810,15 @@ type DivElement struct {
 	// dropListeners are the type-keyed drop listeners (div.rs
 	// drop_listeners: (TypeId, DropListener<dyn Any>)).
 	dropListeners []typedDropListener
+	// canDropPredicate is the element-level drop predicate (div.rs
+	// can_drop_predicate; CanDrop): hovered and the predicate.
+	canDropPredicate func(value any, hitbox *Hitbox, w *Window, app *App) bool
+	// dragOverStyle is the type-agnostic drag-over style (div.rs
+	// drag_over_style; OnDragOverAny).
+	dragOverStyle func(value any, w *Window, app *App) StyleRefinement
+	// groupDragOverStyles are the type-keyed group drag-over styles
+	// (div.rs group_drag_over_styles; GroupDragOver).
+	groupDragOverStyles []typedGroupStyle
 	// hitboxBehavior is this element's hitbox occlusion behavior (div.rs
 	// Interactivity hitbox behavior; Normal by default).
 	hitboxBehavior HitboxBehavior
@@ -1086,15 +1111,28 @@ type typedMouseListener[E any] struct {
 
 // typedDropListener is one type-keyed drop listener (div.rs
 // (TypeId, DropListener<dyn Any>)): the payload type plus the
-// on-drop callback (canDrop predicates arrive with the fuller drag
-// surface; the hover gate is the pin's default).
+// untyped can-drop predicate, drag-over style and on-drop callback,
+// each optional (dragdrop.go DropListener).
 type typedDropListener struct {
 	// payloadType is the drag value type the listener receives
 	// (reflect.TypeOf of the payload type).
 	payloadType reflect.Type
+	// canDrop, when set, decides whether a drag of the matching type
+	// may drop here (replacing the default hovered gate).
+	canDrop func(value any, hitbox *Hitbox, w *Window, app *App) bool
+	// onDragOver, when set, refines the element's style while a drag
+	// of the matching type that can drop hovers it.
+	onDragOver func(value any, w *Window, app *App) StyleRefinement
 	// onDrop receives the drag value and the mouse-up event when a
 	// drag of the matching type lands on this element.
 	onDrop func(value any, event *MouseUpEvent, w *Window, app *App)
+}
+
+// typedGroupStyle is a group style keyed by the drag payload type
+// (div.rs (TypeId, GroupStyle)).
+type typedGroupStyle struct {
+	payloadType reflect.Type
+	GroupStyle
 }
 
 // OnMouseMove binds a listener to the mouse moves over this element, in

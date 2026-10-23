@@ -1028,8 +1028,7 @@ func (d *DivElement) requiresElementState() bool {
 
 // shouldInsertHitbox is div.rs:2887-2911 should_insert_hitbox, bounded
 // to the features the port has (window control areas, scroll offsets,
-// pressure / exit listeners, drag-over styles and tooltips are not
-// ported).
+// pressure / exit listeners and tooltips are not ported).
 func (d *DivElement) shouldInsertHitbox(style *Style, w *Window) bool {
 	return d.hitboxBehavior != HitboxNormal ||
 		style.MouseCursor != nil ||
@@ -1047,6 +1046,7 @@ func (d *DivElement) shouldInsertHitbox(style *Style, w *Window) bool {
 		len(d.pinchListeners) > 0 ||
 		d.dragListener != nil ||
 		len(d.dropListeners) > 0 ||
+		d.dragOverStyle != nil ||
 		w.IsInspectorPicking()
 }
 
@@ -1058,8 +1058,8 @@ func (d *DivElement) shouldInsertHitbox(style *Style, w *Window) bool {
 // base style, then the focus styles, the group-hover and hover styles
 // (not during a drag), the drag cursor, and the group-active and active
 // styles. hitbox is nil before paint (hover then comes from the retained
-// hover state); es is nil for an id-less element. Drag-over styles and
-// style transitions are not ported.
+// hover state); es is nil for an id-less element. The drag-over styles
+// are drop_listener.go refineDragOver; style transitions are not ported.
 func (d *DivElement) computeStyleInternal(hitbox *Hitbox, es *InteractiveElementState, w *Window, app *App) Style {
 	style := DefaultStyle()
 	style.refineBoxed(d.Styled.storage(), &d.styleBoxes)
@@ -1104,6 +1104,7 @@ func (d *DivElement) computeStyleInternal(hitbox *Hitbox, es *InteractiveElement
 
 	if hitbox != nil {
 		if drag := app.ActiveDrag(); drag != nil {
+			d.refineDragOver(&style, hitbox, drag, w, app)
 			// style.mouse_cursor = drag.cursor_style (div.rs:4020).
 			if drag.CursorStyle != nil {
 				cursor := *drag.CursorStyle
@@ -1222,9 +1223,9 @@ func registerDivKeyboardClick(w *Window, d *DivElement, hitbox Hitbox, es *Inter
 }
 
 // paintMouseListeners is div.rs:3253-3764 paint_mouse_listeners, bounded
-// to the port's features (mouse pressure / exit listeners, drop
-// predicates and drag-over styles, and tooltips are not ported; the
-// keyboard click registers at prepaint, registerDivKeyboardClick).
+// to the port's features (mouse pressure / exit listeners and tooltips
+// are not ported; the keyboard click registers at prepaint,
+// registerDivKeyboardClick).
 func (d *DivElement) paintMouseListeners(hitbox Hitbox, es *InteractiveElementState, w *Window, app *App) {
 	// A focusable element transfers focus on a hovered mouse down unless
 	// the default action was prevented (div.rs:3266-3282).
@@ -1318,12 +1319,14 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, es *InteractiveElementSt
 	auxClickListeners := slices.Clone(d.auxClickListeners)
 
 	// The drop listeners (div.rs:3391-3445): on a bubbled mouse up with an
-	// active drag whose value matches a listener's payload type and this
-	// element hovered (the default eligibility without can_drop
-	// predicates), stop the drag, deliver the value, refresh and stop
-	// propagation.
+	// active drag the element's CanDrop predicate accepts, the first
+	// listener of the drag value's type whose own can-drop predicate
+	// passes (or, without one, with this element hovered) stops the drag,
+	// receives the value, refreshes and stops propagation. A refusal
+	// leaves the drop to the enclosing targets.
 	if len(d.dropListeners) > 0 {
 		listeners := append([]typedDropListener(nil), d.dropListeners...)
+		canDropPredicate := d.canDropPredicate
 		box := hitbox
 		w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
 			up, isUp := event.(*MouseUpEvent)
@@ -1334,15 +1337,24 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, es *InteractiveElementSt
 			if drag == nil {
 				return
 			}
+			if canDropPredicate != nil && !canDropPredicate(drag.Value, &box, w, app) {
+				return
+			}
 			for _, listener := range listeners {
 				if !dropListenerPayloadMatches(drag.Value, listener.payloadType) {
 					continue
 				}
-				if !box.IsHovered(w) {
+				if listener.canDrop != nil {
+					if !listener.canDrop(drag.Value, &box, w, app) {
+						continue
+					}
+				} else if !box.IsHovered(w) {
 					continue
 				}
 				value, _ := app.StopDrag(w)
-				listener.onDrop(value, up, w, app)
+				if listener.onDrop != nil {
+					listener.onDrop(value, up, w, app)
+				}
 				w.requestRefresh()
 				app.StopPropagation()
 				break
