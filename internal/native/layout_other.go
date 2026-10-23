@@ -25,6 +25,16 @@ func callLayoutNodeCreate(
 	return 0, hostSupported()
 }
 
+func callLayoutNodeSetGridTracks(
+	fn uintptr,
+	engine, node uint64,
+	axis uint32,
+	tracks *LayoutTrackRecord,
+	trackCount uint32,
+) (int32, error) {
+	return 0, hostSupported()
+}
+
 func callLayoutNodeSetStyle(fn uintptr, engine, node uint64, style *LayoutStyleRecord) (int32, error) {
 	return 0, hostSupported()
 }

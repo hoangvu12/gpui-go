@@ -253,7 +253,8 @@ type TextFeatureRecord struct {
 	Value uint32
 }
 
-// TextRunRecord mirrors GpuiGoTextRunRecord (48 bytes, alignment 4).
+// TextRunRecord mirrors GpuiGoTextRunRecord (92 bytes, alignment 4;
+// rev 15 grew it with the browser text fields).
 type TextRunRecord struct {
 	Len                  uint32
 	FamilyOffset         uint32
@@ -266,8 +267,79 @@ type TextRunRecord struct {
 	FeatureCount         uint32
 	LetterSpacingPresent uint32
 	LetterSpacingBits    uint32
-	Reserved             uint32
+	// WordBreak is the CSS word-break tag (rev 15): 0 normal,
+	// 1 break-all, 2 keep-all.
+	WordBreak uint32
+	// OverflowWrap is the CSS overflow-wrap tag (rev 15): 0 normal,
+	// 1 anywhere, 2 break-word.
+	OverflowWrap uint32
+	// TextWrap is the CSS text-wrap tag (rev 15): 0 wrap, 1 nowrap,
+	// 2 balance, 3 pretty, 4 stable.
+	TextWrap uint32
+	// LocaleOffset/LocaleLen address the run's BCP 47 locale inside the
+	// strings buffer (rev 15; 0 length = none).
+	LocaleOffset uint32
+	LocaleLen    uint32
+	// FontWidthPresent/FontWidthBits carry the CSS font-width ratio
+	// (rev 15; 1.0 = normal).
+	FontWidthPresent uint32
+	FontWidthBits    uint32
+	// VariationOffset/VariationCount address the run's variation
+	// records (rev 15).
+	VariationOffset uint32
+	VariationCount  uint32
+	// OpSZPresent/OpSZBits carry the optical size override in pixels
+	// (rev 15; absent = CSS `auto`).
+	OpSZPresent uint32
+	OpSZBits    uint32
+	// Justify is 0 (none) or 1 (CSS text-align: justify) (rev 15).
+	Justify uint32
 }
+
+// TextVariationRecord mirrors GpuiGoTextVariation (rev 15): one OpenType
+// variation axis tag with a float value. 8 bytes, alignment 4.
+type TextVariationRecord struct {
+	// Tag is the axis tag, 4 printable ASCII characters big-endian.
+	Tag uint32
+	// Value is the variation value (f32 bits).
+	Value uint32
+}
+
+// FontVariation is one font variation setting (CSS
+// font-variation-settings): an OpenType axis tag with a value.
+type FontVariation struct {
+	// Tag is the 4-character OpenType axis tag (for example "wght").
+	Tag string
+	// Value is the axis value.
+	Value float32
+}
+
+// Text wrap/break tags (rev 15; CSS keyword order, parley's enumeration
+// where it defines one).
+const (
+	// TextWordBreakNormal is CSS word-break: normal.
+	TextWordBreakNormal uint32 = 0
+	// TextWordBreakBreakAll is CSS word-break: break-all.
+	TextWordBreakBreakAll uint32 = 1
+	// TextWordBreakKeepAll is CSS word-break: keep-all.
+	TextWordBreakKeepAll uint32 = 2
+	// TextOverflowWrapNormal is CSS overflow-wrap: normal.
+	TextOverflowWrapNormal uint32 = 0
+	// TextOverflowWrapAnywhere is CSS overflow-wrap: anywhere.
+	TextOverflowWrapAnywhere uint32 = 1
+	// TextOverflowWrapBreakWord is CSS overflow-wrap: break-word.
+	TextOverflowWrapBreakWord uint32 = 2
+	// TextTextWrapWrap is CSS text-wrap: wrap (the default).
+	TextTextWrapWrap uint32 = 0
+	// TextTextWrapNoWrap is CSS text-wrap: nowrap.
+	TextTextWrapNoWrap uint32 = 1
+	// TextTextWrapBalance is CSS text-wrap: balance.
+	TextTextWrapBalance uint32 = 2
+	// TextTextWrapPretty is CSS text-wrap: pretty.
+	TextTextWrapPretty uint32 = 3
+	// TextTextWrapStable is CSS text-wrap: stable.
+	TextTextWrapStable uint32 = 4
+)
 
 // TextLayoutRecord mirrors GpuiGoTextLayoutRecord (56 bytes, alignment 4).
 type TextLayoutRecord struct {
@@ -447,6 +519,23 @@ type TextRunSpec struct {
 	Fallbacks []string
 	// LetterSpacing, when non-nil, applies between glyphs (pixels).
 	LetterSpacing *float32
+	// WordBreak is the CSS word-break (rev 15; default normal).
+	WordBreak uint32
+	// OverflowWrap is the CSS overflow-wrap (rev 15; default normal).
+	OverflowWrap uint32
+	// TextWrap is the CSS text-wrap (rev 15; default wrap).
+	TextWrap uint32
+	// Locale is the run's BCP 47 locale (rev 15; empty = none).
+	Locale string
+	// FontWidth is the CSS font-width ratio (rev 15; nil = normal).
+	FontWidth *float32
+	// Variations are the run's OpenType variation settings (rev 15).
+	Variations []FontVariation
+	// OpticalSize overrides the optical size in pixels (rev 15; nil =
+	// CSS font-optical-sizing auto).
+	OpticalSize *float32
+	// Justify selects CSS text-align: justify for the run (rev 15).
+	Justify bool
 }
 
 // ShapeRequest is one shaping document.
@@ -461,6 +550,29 @@ type ShapeRequest struct {
 	WrapWidth *float32
 	// LineClamp, when non-nil, caps the visual row count (>= 1).
 	LineClamp *uint32
+}
+
+// RunInfo echoes one stored run record (rev 15): the browser text
+// fields — word-break, overflow-wrap, text-wrap, locale, font width,
+// variations, optical size, justify — exactly as they crossed the ABI
+// (the shaping behavior itself is unchanged until the pinned Parley
+// adapter can carry them).
+func (s *TextService) RunInfo(handle ShapingID, runIndex int) (TextRunRecord, error) {
+	if s.lib.released.Load() {
+		return TextRunRecord{}, ErrClosed
+	}
+	if runIndex < 0 {
+		return TextRunRecord{}, fmt.Errorf("%w: run index %d is negative", ErrTextBadValue, runIndex)
+	}
+	var record TextRunRecord
+	code, err := callTextRunInfo(s.table.runInfo, uint64(handle), uint32(runIndex), &record)
+	if err != nil {
+		return TextRunRecord{}, err
+	}
+	if code != textStatusOK {
+		return TextRunRecord{}, textStatusError(code, "text_run_info")
+	}
+	return record, nil
 }
 
 // TextLayout is the decoded shaping summary.
@@ -555,14 +667,16 @@ type TextGlyph struct {
 // Service table mirror and validation
 // ---------------------------------------------------------------------------
 
-// textTable mirrors the native GpuiGoTextTable: 16 function pointers
-// then 21 self-check/capacity scalars; 216 bytes, alignment 8. Service
-// v2 added the fontAdd slot and the maxFontBytes scalar.
+// textTable mirrors the native GpuiGoTextTable: 17 function pointers
+// then 21 self-check/capacity scalars; 224 bytes, alignment 8. Service
+// v2 added the fontAdd slot and the maxFontBytes scalar; rev 15 added
+// the runInfo slot (the browser text fields' echo).
 type textTable struct {
 	fontNames       uintptr
 	fontResolve     uintptr
 	fontMetrics     uintptr
 	shape           uintptr
+	runInfo         uintptr
 	layout          uintptr
 	dispose         uintptr
 	layoutInfo      uintptr
@@ -1001,7 +1115,7 @@ func (s *TextService) Shape(request ShapeRequest) (ShapingID, error) {
 	if request.LineClamp != nil && *request.LineClamp < 1 {
 		return 0, fmt.Errorf("%w: line clamp must be >= 1", ErrTextBadValue)
 	}
-	runs, features, strings, err := packShapeRequest(&request)
+	runs, features, variations, strings, err := packShapeRequest(&request)
 	if err != nil {
 		return 0, err
 	}
@@ -1013,6 +1127,7 @@ func (s *TextService) Shape(request ShapeRequest) (ShapingID, error) {
 		[]byte(request.Text),
 		runs,
 		features,
+		variations,
 		strings,
 		math.Float32bits(request.FontSize),
 		wrapBits, wrapPresent,
@@ -1052,66 +1167,143 @@ func optionU32(value *uint32) (uint32, uint32) {
 
 // packShapeRequest packs the run table, feature array and string buffer
 // the ABI expects, validating coverage and boundaries.
-func packShapeRequest(request *ShapeRequest) ([]TextRunRecord, []TextFeatureRecord, []byte, error) {
+func packShapeRequest(request *ShapeRequest) ([]TextRunRecord, []TextFeatureRecord, []TextVariationRecord, []byte, error) {
 	text := request.Text
 	if len(text) > maxTextLen {
-		return nil, nil, nil, fmt.Errorf("%w: text length %d exceeds %d", ErrTextBadValue, len(text), maxTextLen)
+		return nil, nil, nil, nil, fmt.Errorf("%w: text length %d exceeds %d", ErrTextBadValue, len(text), maxTextLen)
 	}
 	runs := make([]TextRunRecord, len(request.Runs))
 	var features []TextFeatureRecord
+	var variations []TextVariationRecord
 	strings := make([]byte, 0, 64)
 	covered := 0
 	for i, spec := range request.Runs {
 		if spec.Len < 0 {
-			return nil, nil, nil, fmt.Errorf("%w: run %d length is negative", ErrTextBadValue, i)
+			return nil, nil, nil, nil, fmt.Errorf("%w: run %d length is negative", ErrTextBadValue, i)
 		}
 		covered += spec.Len
 		if covered > len(text) {
-			return nil, nil, nil, fmt.Errorf("%w: runs overcover the text at run %d", ErrTextBadValue, i)
+			return nil, nil, nil, nil, fmt.Errorf("%w: runs overcover the text at run %d", ErrTextBadValue, i)
 		}
 		if !isCharBoundary(text, covered) {
-			return nil, nil, nil, fmt.Errorf("%w: run %d ends inside a UTF-8 sequence", ErrTextBadValue, i)
+			return nil, nil, nil, nil, fmt.Errorf("%w: run %d ends inside a UTF-8 sequence", ErrTextBadValue, i)
 		}
 		if spec.Family == "" {
-			return nil, nil, nil, fmt.Errorf("%w: run %d has an empty family", ErrTextBadValue, i)
+			return nil, nil, nil, nil, fmt.Errorf("%w: run %d has an empty family", ErrTextBadValue, i)
 		}
 		runFeatures, err := packFeatures(spec.Features)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		featureOffset := len(features)
 		features = append(features, runFeatures...)
+
+		runVariations, err := packVariations(spec.Variations)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		variationOffset := len(variations)
+		variations = append(variations, runVariations...)
 
 		familyOffset := len(strings)
 		strings = append(strings, spec.Family...)
 		fallbacksOffset := len(strings)
 		strings = append(strings, packFallbacks(spec.Fallbacks)...)
-
+		localeOffset := len(strings)
+		strings = append(strings, spec.Locale...)
 		letterPresent, letterBits := uint32(0), uint32(0)
 		if spec.LetterSpacing != nil {
 			if !isFiniteFloat(float64(*spec.LetterSpacing)) {
-				return nil, nil, nil, fmt.Errorf("%w: letter spacing must be finite", ErrTextBadValue)
+				return nil, nil, nil, nil, fmt.Errorf("%w: letter spacing must be finite", ErrTextBadValue)
 			}
 			letterPresent, letterBits = 1, math.Float32bits(*spec.LetterSpacing)
+		}
+		// rev 15: the browser text fields, bounds-checked here (the
+		// native side re-validates).
+		if spec.WordBreak > 2 {
+			return nil, nil, nil, nil, fmt.Errorf("%w: run %d word-break %d is unknown", ErrTextBadValue, i, spec.WordBreak)
+		}
+		if spec.OverflowWrap > 2 {
+			return nil, nil, nil, nil, fmt.Errorf("%w: run %d overflow-wrap %d is unknown", ErrTextBadValue, i, spec.OverflowWrap)
+		}
+		if spec.TextWrap > 4 {
+			return nil, nil, nil, nil, fmt.Errorf("%w: run %d text-wrap %d is unknown", ErrTextBadValue, i, spec.TextWrap)
+		}
+		widthPresent, widthBits := uint32(0), uint32(0)
+		if spec.FontWidth != nil {
+			if !isFiniteFloat(float64(*spec.FontWidth)) || *spec.FontWidth < 0 {
+				return nil, nil, nil, nil, fmt.Errorf("%w: run %d font width must be finite and >= 0", ErrTextBadValue, i)
+			}
+			widthPresent, widthBits = 1, math.Float32bits(*spec.FontWidth)
+		}
+		opszPresent, opszBits := uint32(0), uint32(0)
+		if spec.OpticalSize != nil {
+			if !isFiniteFloat(float64(*spec.OpticalSize)) || *spec.OpticalSize < 0 {
+				return nil, nil, nil, nil, fmt.Errorf("%w: run %d optical size must be finite and >= 0", ErrTextBadValue, i)
+			}
+			opszPresent, opszBits = 1, math.Float32bits(*spec.OpticalSize)
+		}
+		justify := uint32(0)
+		if spec.Justify {
+			justify = 1
 		}
 		runs[i] = TextRunRecord{
 			Len:                  uint32(spec.Len),
 			FamilyOffset:         uint32(familyOffset),
 			FamilyLen:            uint32(len(spec.Family)),
 			FallbacksOffset:      uint32(fallbacksOffset),
-			FallbacksLen:         uint32(len(strings) - fallbacksOffset),
+			FallbacksLen:         uint32(localeOffset - fallbacksOffset),
 			WeightBits:           math.Float32bits(spec.Weight),
 			Style:                uint32(spec.Style),
 			FeatureOffset:        uint32(featureOffset),
 			FeatureCount:         uint32(len(runFeatures)),
 			LetterSpacingPresent: letterPresent,
 			LetterSpacingBits:    letterBits,
+			WordBreak:            spec.WordBreak,
+			OverflowWrap:         spec.OverflowWrap,
+			TextWrap:             spec.TextWrap,
+			LocaleOffset:         uint32(localeOffset),
+			LocaleLen:            uint32(len(spec.Locale)),
+			FontWidthPresent:     widthPresent,
+			FontWidthBits:        widthBits,
+			VariationOffset:      uint32(variationOffset),
+			VariationCount:       uint32(len(runVariations)),
+			OpSZPresent:          opszPresent,
+			OpSZBits:             opszBits,
+			Justify:              justify,
 		}
 	}
 	if covered != len(text) {
-		return nil, nil, nil, fmt.Errorf("%w: runs cover %d bytes of a %d-byte text", ErrTextBadValue, covered, len(text))
+		return nil, nil, nil, nil, fmt.Errorf("%w: runs cover %d bytes of a %d-byte text", ErrTextBadValue, covered, len(text))
 	}
-	return runs, features, strings, nil
+	return runs, features, variations, strings, nil
+}
+
+// packVariations encodes the variation settings as ABI records (the
+// feature tags' printable-ASCII rule).
+func packVariations(settings []FontVariation) ([]TextVariationRecord, error) {
+	if len(settings) == 0 {
+		return nil, nil
+	}
+	records := make([]TextVariationRecord, len(settings))
+	for i, setting := range settings {
+		if len(setting.Tag) != 4 {
+			return nil, fmt.Errorf("%w: variation tag %q is not 4 characters", ErrTextBadValue, setting.Tag)
+		}
+		for _, c := range []byte(setting.Tag) {
+			if c < 0x20 || c > 0x7E {
+				return nil, fmt.Errorf("%w: variation tag %q is not printable ASCII", ErrTextBadValue, setting.Tag)
+			}
+		}
+		if !isFiniteFloat(float64(setting.Value)) {
+			return nil, fmt.Errorf("%w: variation tag %q value must be finite", ErrTextBadValue, setting.Tag)
+		}
+		records[i] = TextVariationRecord{
+			Tag:   binary.BigEndian.Uint32([]byte(setting.Tag)),
+			Value: math.Float32bits(setting.Value),
+		}
+	}
+	return records, nil
 }
 
 // isCharBoundary reports whether offset is a UTF-8 character boundary of

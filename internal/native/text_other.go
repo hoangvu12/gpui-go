@@ -42,12 +42,17 @@ func callTextShape(
 	text []byte,
 	runs []TextRunRecord,
 	features []TextFeatureRecord,
+	variations []TextVariationRecord,
 	strings []byte,
 	fontSizeBits uint32,
 	wrapBits, wrapPresent uint32,
 	lineClamp, clampPresent uint32,
 	outHandle *uint64,
 ) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callTextRunInfo(fn uintptr, handle uint64, runIndex uint32, out *TextRunRecord) (int32, error) {
 	return 0, hostSupported()
 }
 

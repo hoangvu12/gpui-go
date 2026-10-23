@@ -203,6 +203,48 @@ func checkColor(op string, c SceneColor) error {
 	return nil
 }
 
+// checkBackground mirrors the native check_background (rev 15): a known
+// tag and color space, finite gradient scalars, distinct stop
+// positions, and a zeroed unused arm.
+func checkBackground(op string, b SceneBackground) error {
+	if b.Reserved != 0 {
+		return badRecord(op, "background reserved word must be zero")
+	}
+	switch b.Tag {
+	case 0:
+		if b.ColorSpace > 1 {
+			return badRecord(op, "unsupported background color space")
+		}
+		if b.Angle != 0 || b.Stop0H != 0 || b.Stop0S != 0 || b.Stop0L != 0 || b.Stop0A != 0 ||
+			b.Stop0Percentage != 0 || b.Stop1H != 0 || b.Stop1S != 0 || b.Stop1L != 0 ||
+			b.Stop1A != 0 || b.Stop1Percentage != 0 {
+			return badRecord(op, "solid background carries gradient payload")
+		}
+		return nil
+	case 1:
+		if b.ColorSpace > 1 {
+			return badRecord(op, "unsupported background color space")
+		}
+		for _, bits := range [11]uint32{
+			b.Angle, b.Stop0H, b.Stop0S, b.Stop0L, b.Stop0A, b.Stop0Percentage,
+			b.Stop1H, b.Stop1S, b.Stop1L, b.Stop1A, b.Stop1Percentage,
+		} {
+			if !finiteBits(bits) {
+				return badRecord(op, "non-finite gradient scalar")
+			}
+		}
+		if math.Float32frombits(b.Stop0Percentage) == math.Float32frombits(b.Stop1Percentage) {
+			return badRecord(op, "gradient stop positions must differ")
+		}
+		if b.H != 0 || b.S != 0 || b.L != 0 || b.A != 0 {
+			return badRecord(op, "gradient background carries solid payload")
+		}
+		return nil
+	default:
+		return badRecord(op, "unsupported background tag")
+	}
+}
+
 func checkBool01(op string, v uint32) error {
 	if v > 1 {
 		return badRecord(op, "boolean field out of range")
@@ -223,10 +265,10 @@ func checkQuadRecord(rec *SceneQuadRecord) error {
 	if rec.BorderStyle > 1 {
 		return badRecord(op, "border style out of range")
 	}
-	if err := checkColor(op, rec.Background); err != nil {
+	if err := checkBackground(op, rec.Background); err != nil {
 		return err
 	}
-	return checkColor(op, rec.BorderColor)
+	return checkBackground(op, rec.BorderColor)
 }
 
 func checkShadowRecord(rec *SceneShadowRecord) error {
@@ -237,7 +279,7 @@ func checkShadowRecord(rec *SceneShadowRecord) error {
 	if err := checkBool01(op, rec.Inset); err != nil {
 		return err
 	}
-	return checkColor(op, rec.Color)
+	return checkBackground(op, rec.Color)
 }
 
 func checkUnderlineRecord(rec *SceneUnderlineRecord) error {
@@ -260,6 +302,42 @@ func checkFilterRecord(op string, rec *SceneFilterRecord, maxFilters uint32) err
 	}
 	if rec.FilterCount > maxFilters {
 		return badRecord(op, "filter count over the maximum")
+	}
+	// rev 15: the per-filter tags and the composed colour matrix.
+	matrixEntries := uint32(0)
+	for index, tag := range rec.FilterTags {
+		if uint32(index) < rec.FilterCount {
+			switch tag {
+			case 0:
+				radius := math.Float32frombits(rec.BlurRadii[index])
+				if math.IsInf(float64(radius), 0) || math.IsNaN(float64(radius)) || radius < 0 {
+					return badRecord(op, "blur radius out of range")
+				}
+			case 1:
+				matrixEntries++
+				if rec.BlurRadii[index] != 0 {
+					return badRecord(op, "matrix filter carries a blur radius")
+				}
+			default:
+				return badRecord(op, "unknown filter kind tag")
+			}
+		} else if tag != 0 {
+			return badRecord(op, "unused filter kind tag must be zero")
+		}
+	}
+	if rec.ColorMatrixCount != matrixEntries {
+		return badRecord(op, "matrix count does not match the tag-1 entries")
+	}
+	if rec.ColorMatrixCount == 0 {
+		if rec.ColorMatrix != [20]uint32{} {
+			return badRecord(op, "unused matrix payload must be zero")
+		}
+	} else {
+		for _, bits := range rec.ColorMatrix {
+			if !finiteBits(bits) {
+				return badRecord(op, "non-finite matrix entry")
+			}
+		}
 	}
 	return nil
 }
@@ -305,6 +383,9 @@ func checkMaskSpriteRecord(op string, rec *SceneSpriteRecord, expectedKind uint3
 		return err
 	}
 	if err := checkColor(op, rec.Color); err != nil {
+		return err
+	}
+	if err := checkBool01(op, rec.Pixelated); err != nil {
 		return err
 	}
 	for _, bits := range rec.Transformation {

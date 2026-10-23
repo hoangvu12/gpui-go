@@ -122,6 +122,7 @@ func callTextShape(
 	text []byte,
 	runs []TextRunRecord,
 	features []TextFeatureRecord,
+	variations []TextVariationRecord,
 	strings []byte,
 	fontSizeBits uint32,
 	wrapBits, wrapPresent uint32,
@@ -143,6 +144,10 @@ func callTextShape(
 	if len(features) > 0 {
 		featurePtr = uintptr(unsafe.Pointer(&features[0]))
 	}
+	var variationPtr uintptr
+	if len(variations) > 0 {
+		variationPtr = uintptr(unsafe.Pointer(&variations[0]))
+	}
 	var stringsPtr uintptr
 	if len(strings) > 0 {
 		stringsPtr = uintptr(unsafe.Pointer(&strings[0]))
@@ -155,6 +160,8 @@ func callTextShape(
 		uintptr(len(runs)),
 		featurePtr,
 		uintptr(len(features)),
+		variationPtr,
+		uintptr(len(variations)),
 		stringsPtr,
 		uintptr(len(strings)),
 		uintptr(fontSizeBits),
@@ -207,6 +214,20 @@ func callTextLayoutInfo(fn uintptr, handle uint64, out *TextLayoutRecord) (int32
 	r1, _, _ := syscall.SyscallN(
 		fn,
 		uintptr(handle),
+		uintptr(unsafe.Pointer(out)),
+	)
+	runtime.KeepAlive(out)
+	return callStatus(r1), nil
+}
+
+func callTextRunInfo(fn uintptr, handle uint64, runIndex uint32, out *TextRunRecord) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("text_run_info")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(handle),
+		uintptr(runIndex),
 		uintptr(unsafe.Pointer(out)),
 	)
 	runtime.KeepAlive(out)

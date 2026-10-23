@@ -190,16 +190,132 @@ impl Default for GpuiGoSceneColor {
     }
 }
 
+/// Scene background record (browser-core ticket 39, rev 15): the full
+/// mirror of the pinned `Background` (`crates/gpui/src/color.rs`,
+/// `BackgroundTag::Solid` and `BackgroundTag::LinearGradient` with a
+/// two-stop gradient and the interpolation color space). The quad's
+/// `background`/`border_color`, the shadow's `color` and the path's
+/// `color` carry it (the pinned structs hold a `Background` there);
+/// the underline and sprite colors stay plain HSLA records
+/// (`GpuiGoSceneColor`).
+///
+/// Tag 1 (linear gradient) is evaluated with CSS semantics by the
+/// vendored shader: the gradient-line length is `|W·sin θ| +
+/// |H·cos θ|` (the corners receive the end colors) and the stops
+/// interpolate premultiplied in sRGB (the default, tag 0 of the color
+/// space) — the two recorded rev-15 divergences from the pinned
+/// shader. The angle follows the pinned convention (CSS degrees, 0
+/// pointing up, growing clockwise; 90 is to the right).
+///
+/// Layout (x86-64, `#[repr(C)]`): `tag` @0, `color_space` @4, `h` @8,
+/// `s` @12, `l` @16, `a` @20, `angle` @24, `stop0_h` @28, `stop0_s`
+/// @32, `stop0_l` @36, `stop0_a` @40, `stop0_percentage` @44,
+/// `stop1_h` @48, `stop1_s` @52, `stop1_l` @56, `stop1_a` @60,
+/// `stop1_percentage` @64, `reserved` @68; size 72, alignment 4.
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct GpuiGoSceneBackground {
+    /// 0 = solid, 1 = linear gradient (the pinned `BackgroundTag`).
+    pub tag: u32,
+    /// 0 = sRGB (the ABI default, CSS's legacy interpolation space),
+    /// 1 = Oklab (the pinned `ColorSpace`).
+    pub color_space: u32,
+    /// Solid hue in `[0, 1]` (degrees / 360), f32 bits (tag 0).
+    pub h: u32,
+    /// Solid saturation in `[0, 1]`, f32 bits (tag 0).
+    pub s: u32,
+    /// Solid lightness in `[0, 1]`, f32 bits (tag 0).
+    pub l: u32,
+    /// Solid alpha in `[0, 1]`, f32 bits (tag 0).
+    pub a: u32,
+    /// Gradient angle in CSS degrees (f32 bits; 0 = up, clockwise,
+    /// 90 = to the right; any finite value, taken modulo 360).
+    pub angle: u32,
+    /// Stop 0 hue in `[0, 1]`, f32 bits (tag 1).
+    pub stop0_h: u32,
+    /// Stop 0 saturation in `[0, 1]`, f32 bits (tag 1).
+    pub stop0_s: u32,
+    /// Stop 0 lightness in `[0, 1]`, f32 bits (tag 1).
+    pub stop0_l: u32,
+    /// Stop 0 alpha in `[0, 1]`, f32 bits (tag 1).
+    pub stop0_a: u32,
+    /// Stop 0 position along the gradient line (f32 bits; the CSS
+    /// percentage / 100 — any finite value, 0 = the line's start, 1 =
+    /// its end; a descending pair reverses the gradient).
+    pub stop0_percentage: u32,
+    /// Stop 1 hue in `[0, 1]`, f32 bits (tag 1).
+    pub stop1_h: u32,
+    /// Stop 1 saturation in `[0, 1]`, f32 bits (tag 1).
+    pub stop1_s: u32,
+    /// Stop 1 lightness in `[0, 1]`, f32 bits (tag 1).
+    pub stop1_l: u32,
+    /// Stop 1 alpha in `[0, 1]`, f32 bits (tag 1).
+    pub stop1_a: u32,
+    /// Stop 1 position along the gradient line (f32 bits; must differ
+    /// from stop 0's — the shader divides by the delta, and CSS's
+    /// equal-position hard stop needs the n-stop form).
+    pub stop1_percentage: u32,
+    /// Must be zero (forward compatibility; the pinned struct's
+    /// padding word).
+    pub reserved: u32,
+}
+
+impl Default for GpuiGoSceneBackground {
+    fn default() -> Self {
+        // The pinned Background::default(): the solid transparent black.
+        GpuiGoSceneBackground {
+            tag: 0,
+            color_space: 0,
+            h: 0,
+            s: 0,
+            l: 0,
+            a: 0,
+            angle: 0,
+            stop0_h: 0,
+            stop0_s: 0,
+            stop0_l: 0,
+            stop0_a: 0,
+            stop0_percentage: 0,
+            stop1_h: 0,
+            stop1_s: 0,
+            stop1_l: 0,
+            stop1_a: 0,
+            stop1_percentage: 0,
+            reserved: 0,
+        }
+    }
+}
+
+impl GpuiGoSceneBackground {
+    /// The solid HSLA arm (tag 0) as a color record.
+    pub fn solid(color: GpuiGoSceneColor) -> Self {
+        GpuiGoSceneBackground {
+            tag: 0,
+            color_space: 0,
+            h: color.h,
+            s: color.s,
+            l: color.l,
+            a: color.a,
+            ..Default::default()
+        }
+    }
+}
+
 /// Quad record. Layout (x86-64, `#[repr(C)]`): `order` @0, `bounds` @4,
-/// `content_mask` @20, `background` @36, `border_color` @56,
-/// `corner_radii` @76, `border_widths` @92, `border_style` @108,
-/// `border_dashed_length` @112, `border_dashed_gap` @116,
-/// `corner_smoothing` @120, `padding` @124, `record_size` @128;
-/// size 132, alignment 4.
+/// `content_mask` @20, `background` @36, `border_color` @108,
+/// `corner_radii` @180, `border_widths` @196, `border_style` @212,
+/// `border_dashed_length` @216, `border_dashed_gap` @220,
+/// `corner_smoothing` @224, `padding` @228, `record_size` @232;
+/// size 236, alignment 4.
 ///
 /// `order` mirrors the pinned `Quad::order`: it must be 0 on insert (the
 /// kernel assigns the draw order) and carries the assigned order in
 /// dumps.
+///
+/// rev 15 (browser-core ticket 39): `background` and `border_color` are
+/// full background records (solid or a two-stop linear gradient with CSS
+/// semantics; the pinned shader's gradient support, previously dropped
+/// by the ABI).
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct GpuiGoSceneQuadRecord {
@@ -209,10 +325,10 @@ pub struct GpuiGoSceneQuadRecord {
     pub bounds: GpuiGoSceneBounds,
     /// Content mask bounds in device pixels (the clip).
     pub content_mask: GpuiGoSceneBounds,
-    /// Background color.
-    pub background: GpuiGoSceneColor,
-    /// Border color.
-    pub border_color: GpuiGoSceneColor,
+    /// Background (solid or a two-stop linear gradient).
+    pub background: GpuiGoSceneBackground,
+    /// Border (solid or a two-stop linear gradient).
+    pub border_color: GpuiGoSceneBackground,
     /// Corner radii (top-left, top-right, bottom-right, bottom-left), f32
     /// bits, device pixels.
     pub corner_radii: [u32; 4],
@@ -238,8 +354,8 @@ impl Default for GpuiGoSceneQuadRecord {
             order: 0,
             bounds: GpuiGoSceneBounds::default(),
             content_mask: GpuiGoSceneBounds::default(),
-            background: GpuiGoSceneColor::default(),
-            border_color: GpuiGoSceneColor::default(),
+            background: GpuiGoSceneBackground::default(),
+            border_color: GpuiGoSceneBackground::default(),
             corner_radii: [0; 4],
             border_widths: [0; 4],
             border_style: 0,
@@ -254,8 +370,13 @@ impl Default for GpuiGoSceneQuadRecord {
 
 /// Shadow record. Layout: `order` @0, `blur_radius` @4, `bounds` @8,
 /// `corner_radii` @24, `content_mask` @40, `color` @56, `element_bounds`
-/// @76, `element_corner_radii` @92, `inset` @108, `corner_smoothing`
-/// @112, `record_size` @116; size 120, alignment 4.
+/// @128, `element_corner_radii` @144, `inset` @160, `corner_smoothing`
+/// @164, `record_size` @168; size 172, alignment 4.
+///
+/// rev 15 (browser-core ticket 39): `color` is a full background record
+/// (solid or a two-stop gradient), and drop shadows are clipped out of
+/// the rounded `element_bounds` (CSS css-backgrounds-3 §box-shadow; a
+/// recorded divergence from the pinned shader — see `shaders.rs`).
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct GpuiGoSceneShadowRecord {
@@ -269,9 +390,10 @@ pub struct GpuiGoSceneShadowRecord {
     pub corner_radii: [u32; 4],
     /// Content mask bounds.
     pub content_mask: GpuiGoSceneBounds,
-    /// Shadow color.
-    pub color: GpuiGoSceneColor,
-    /// The element's bounds (the shadow's un-dilated frame).
+    /// Shadow color (solid or a two-stop linear gradient).
+    pub color: GpuiGoSceneBackground,
+    /// The element's bounds (the shadow's un-dilated frame — the
+    /// border box a drop shadow is clipped out of).
     pub element_bounds: GpuiGoSceneBounds,
     /// The element's corner radii, f32 bits.
     pub element_corner_radii: [u32; 4],
@@ -291,7 +413,7 @@ impl Default for GpuiGoSceneShadowRecord {
             bounds: GpuiGoSceneBounds::default(),
             corner_radii: [0; 4],
             content_mask: GpuiGoSceneBounds::default(),
-            color: GpuiGoSceneColor::default(),
+            color: GpuiGoSceneBackground::default(),
             element_bounds: GpuiGoSceneBounds::default(),
             element_corner_radii: [0; 4],
             inset: 0,
@@ -345,11 +467,23 @@ impl Default for GpuiGoSceneUnderlineRecord {
 /// boundary adds `is_start`). Layout: `order` @0, `bounds` @4,
 /// `content_mask` @20, `corner_radii` @36, `corner_smoothing` @52,
 /// `blur_radii` @56, `filter_count` @72, `opacity` @76, `is_start` @80,
-/// `record_size` @84; size 88, alignment 4.
+/// `filter_tags` @84, `color_matrix` @100, `color_matrix_count` @180,
+/// `record_size` @184; size 188, alignment 4.
 ///
 /// Filters are gaussian blurs with radii in device pixels (the pinned
-/// `ScaledFilter::Blur`); up to [`MAX_SCENE_FILTERS`] entries with unused
-/// entries zero.
+/// `ScaledFilter::Blur`) or colour-matrix filters (rev 15, browser-core
+/// ticket 39: CSS filter-effects' colour functions are 4x5 matrices -
+/// grayscale, sepia, brightness, contrast, invert, saturate,
+/// hue-rotate, opacity); up to [`MAX_SCENE_FILTERS`] entries with unused
+/// entries zero. The per-filter tags say which; blur entries read their
+/// radius from `blur_radii` in chain order, and all matrix entries share
+/// one composed payload: `color_matrix` holds the row-major 4x5 matrix
+/// (4 rows of 5 f32 bits, the fifth column being the additive offset)
+/// of the chain's matrix filters composed in order. A per-pixel linear
+/// map commutes with the uniform-per-channel gaussian, so
+/// blur-then-matrix (the draw path's order) is the CSS result for any
+/// interleaving; the composition itself is the caller's arithmetic (the
+/// Go styling layer composes consecutive matrices).
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct GpuiGoSceneFilterRecord {
@@ -372,8 +506,33 @@ pub struct GpuiGoSceneFilterRecord {
     /// Boundary marker: 1 = start (opens the group), 0 = end. Backdrop
     /// inserts pass 0.
     pub is_start: u32,
+    /// Per-filter kind tags, first `filter_count` entries: 0 = blur, 1 =
+    /// colour matrix (rev 15). Entries at and beyond `filter_count`
+    /// must be zero.
+    pub filter_tags: [u32; 4],
+    /// The composed row-major 4x5 colour matrix, 20 f32 bits: row 0 is
+    /// `color_matrix[0..5]` (r' = m00*r + m01*g + m02*b + m03*a + m04),
+    /// and so on. All zeros with `color_matrix_count` 0.
+    pub color_matrix: [u32; 20],
+    /// How many of the chain's filters are colour matrices (must equal
+    /// the number of tag-1 entries; 0 demands an all-zero matrix).
+    pub color_matrix_count: u32,
     /// `size_of::<GpuiGoSceneFilterRecord>()` self-check.
     pub record_size: u32,
+}
+
+impl GpuiGoSceneFilterRecord {
+    /// The chain's maximum blur radius over its blur-tagged entries (the
+    /// pinned `max_blur_radius`; colour-matrix entries contribute none).
+    pub fn max_blur_radius(&self) -> f32 {
+        let mut radius: f32 = 0.0;
+        for index in 0..self.filter_count.min(MAX_SCENE_FILTERS) as usize {
+            if self.filter_tags[index] == 0 {
+                radius = radius.max(f32::from_bits(self.blur_radii[index]));
+            }
+        }
+        radius
+    }
 }
 
 impl Default for GpuiGoSceneFilterRecord {
@@ -388,6 +547,9 @@ impl Default for GpuiGoSceneFilterRecord {
             filter_count: 0,
             opacity: 0,
             is_start: 0,
+            filter_tags: [0; 4],
+            color_matrix: [0; 20],
+            color_matrix_count: 0,
             record_size: core::mem::size_of::<GpuiGoSceneFilterRecord>() as u32,
         }
     }
@@ -517,7 +679,11 @@ enum SpriteClass {
 /// `crates/gpui/src/scene.rs:1069-1104`). Layout: `order` @0, `padding`
 /// @4, `bounds` @8, `content_mask` @24, `color` @40, `tile` @60,
 /// `transformation` @92 (rotation-scale 2x2 then translation xy, f32
-/// bits), `record_size` @116; size 120, alignment 4.
+/// bits), `pixelated` @116, `record_size` @120; size 124, alignment 4.
+///
+/// rev 15 (browser-core ticket 39): `pixelated` selects nearest-neighbour
+/// sampling for this sprite (CSS `image-rendering: pixelated`); the plan
+/// splits sprite batches on it so a batch draws through one sampler.
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct GpuiGoSceneSpriteRecord {
@@ -537,6 +703,9 @@ pub struct GpuiGoSceneSpriteRecord {
     /// rotation_scale[0][0], [0][1], [1][0], [1][1], translation[0],
     /// translation[1].
     pub transformation: [u32; 6],
+    /// 0 = bilinear sampling (the pinned default), 1 = point sampling
+    /// (CSS `image-rendering: pixelated`; rev 15).
+    pub pixelated: u32,
     /// `size_of::<GpuiGoSceneSpriteRecord>()` self-check.
     pub record_size: u32,
 }
@@ -559,6 +728,7 @@ impl Default for GpuiGoSceneSpriteRecord {
                 0.0f32.to_bits(),
                 0.0f32.to_bits(),
             ],
+            pixelated: 0,
             record_size: core::mem::size_of::<GpuiGoSceneSpriteRecord>() as u32,
         }
     }
@@ -569,7 +739,11 @@ impl Default for GpuiGoSceneSpriteRecord {
 /// grayscale flag, opacity, corner radii and smoothing instead).
 /// Layout: `order` @0, `grayscale` @4, `opacity` @8, `corner_smoothing`
 /// @12, `bounds` @16, `content_mask` @32, `corner_radii` @48, `tile`
-/// @64, `record_size` @96; size 100, alignment 4.
+/// @64, `pixelated` @96, `record_size` @100; size 104, alignment 4.
+///
+/// rev 15 (browser-core ticket 39): `pixelated` selects nearest-neighbour
+/// sampling for this sprite (CSS `image-rendering: pixelated`); the plan
+/// splits sprite batches on it so a batch draws through one sampler.
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct GpuiGoScenePolychromeSpriteRecord {
@@ -589,6 +763,9 @@ pub struct GpuiGoScenePolychromeSpriteRecord {
     pub corner_radii: [u32; 4],
     /// The atlas tile this sprite samples.
     pub tile: GpuiGoSceneTileRecord,
+    /// 0 = bilinear sampling (the pinned default), 1 = point sampling
+    /// (CSS `image-rendering: pixelated`; rev 15).
+    pub pixelated: u32,
     /// `size_of::<GpuiGoScenePolychromeSpriteRecord>()` self-check.
     pub record_size: u32,
 }
@@ -604,6 +781,7 @@ impl Default for GpuiGoScenePolychromeSpriteRecord {
             content_mask: GpuiGoSceneBounds::default(),
             corner_radii: [0; 4],
             tile: GpuiGoSceneTileRecord::default(),
+            pixelated: 0,
             record_size: core::mem::size_of::<GpuiGoScenePolychromeSpriteRecord>() as u32,
         }
     }
@@ -731,8 +909,12 @@ pub struct GpuiGoScenePathVertexRecord {
 /// Path primitive record (the pinned `Path<ScaledPixels>` scene
 /// primitive: the tessellated triangle list plus the record fields the
 /// kernel and renderer consume). Layout: `order` @0, `bounds` @4,
-/// `content_mask` @20, `color` @36, `vertex_count` @56,
-/// `record_size` @60; size 64, alignment 4.
+/// `content_mask` @20, `color` @36, `vertex_count` @108,
+/// `record_size` @112; size 116, alignment 4.
+///
+/// rev 15 (browser-core ticket 39): `color` is a full background record
+/// (the pinned `Path` holds a `Background`); gradients ride the same
+/// CSS-semantics evaluation as quads and shadows.
 ///
 /// The vertices travel as a parallel bulk array (`insert_path` input,
 /// `path_dump` output) in `GpuiGoScenePathVertexRecord` form. The
@@ -749,8 +931,8 @@ pub struct GpuiGoScenePathRecord {
     pub bounds: GpuiGoSceneBounds,
     /// Content mask bounds.
     pub content_mask: GpuiGoSceneBounds,
-    /// Path fill color.
-    pub color: GpuiGoSceneColor,
+    /// Path fill (solid or a two-stop linear gradient).
+    pub color: GpuiGoSceneBackground,
     /// The vertex count of the parallel vertex array.
     pub vertex_count: u32,
     /// `size_of::<GpuiGoScenePathRecord>()` self-check.
@@ -763,7 +945,7 @@ impl Default for GpuiGoScenePathRecord {
             order: 0,
             bounds: GpuiGoSceneBounds::default(),
             content_mask: GpuiGoSceneBounds::default(),
-            color: GpuiGoSceneColor::default(),
+            color: GpuiGoSceneBackground::default(),
             vertex_count: 0,
             record_size: core::mem::size_of::<GpuiGoScenePathRecord>() as u32,
         }
@@ -772,10 +954,10 @@ impl Default for GpuiGoScenePathRecord {
 
 /// One compiled render-plan command. Layout: `command_kind` @0,
 /// `primitive_kind` @4, `range_start` @8, `range_end` @12, `smoothed` @16,
-/// `texture_index` @20, `rasterization_vertex_count` @24,
-/// `sprite_count` @28, `boundary_index` @32, `closing_boundary_index`
-/// @36, `filter_target` @40, `target_index` @44, `record_size` @48;
-/// size 52, alignment 4.
+/// `pixelated` @20, `texture_index` @24, `rasterization_vertex_count`
+/// @28, `sprite_count` @32, `boundary_index` @36,
+/// `closing_boundary_index` @40, `filter_target` @44, `target_index`
+/// @48, `record_size` @52; size 56, alignment 4.
 ///
 /// `command_kind`: 0 = batch, 1 = begin filter group, 2 = end filter
 /// group. `primitive_kind` (batch commands): 0 shadows, 1 quads, 2 paths
@@ -793,6 +975,9 @@ pub struct GpuiGoSceneCommandRecord {
     pub range_end: u32,
     /// 0/1, quads and shadows only (corner smoothing split).
     pub smoothed: u32,
+    /// 0/1, sprite batches only (rev 15): every sprite in the batch has
+    /// `pixelated` set, so the batch draws through the point sampler.
+    pub pixelated: u32,
     /// Sprite texture index; 0 when not applicable (reserved kinds).
     pub texture_index: u32,
     /// Path rasterization vertex count; 0 when not applicable.
@@ -821,6 +1006,7 @@ impl Default for GpuiGoSceneCommandRecord {
             range_start: 0,
             range_end: 0,
             smoothed: 0,
+            pixelated: 0,
             texture_index: 0,
             rasterization_vertex_count: 0,
             sprite_count: 0,
@@ -884,29 +1070,31 @@ const _: () = assert!(core::mem::size_of::<GpuiGoSceneBounds>() == 16);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneBounds>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneColor>() == 20);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneColor>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneQuadRecord>() == 132);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneBackground>() == 72);
+const _: () = assert!(core::mem::align_of::<GpuiGoSceneBackground>() == 4);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneQuadRecord>() == 236);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneQuadRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneShadowRecord>() == 120);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneShadowRecord>() == 172);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneShadowRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneUnderlineRecord>() == 72);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneUnderlineRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneFilterRecord>() == 88);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneFilterRecord>() == 188);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneFilterRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneSurfaceRecord>() == 56);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneSurfaceRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneTileRecord>() == 32);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneTileRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneSpriteRecord>() == 120);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneSpriteRecord>() == 124);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneSpriteRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoScenePolychromeSpriteRecord>() == 100);
+const _: () = assert!(core::mem::size_of::<GpuiGoScenePolychromeSpriteRecord>() == 104);
 const _: () = assert!(core::mem::align_of::<GpuiGoScenePolychromeSpriteRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneCommandRecord>() == 52);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneCommandRecord>() == 56);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneCommandRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneRequirementsRecord>() == 44);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneRequirementsRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneMetaRecord>() == 56);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneMetaRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoScenePathRecord>() == 64);
+const _: () = assert!(core::mem::size_of::<GpuiGoScenePathRecord>() == 116);
 const _: () = assert!(core::mem::align_of::<GpuiGoScenePathRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoScenePathVertexRecord>() == 16);
 const _: () = assert!(core::mem::align_of::<GpuiGoScenePathVertexRecord>() == 4);
@@ -1890,9 +2078,9 @@ enum PrimitiveBatch {
     Quads { range: std::ops::Range<usize>, smoothed: bool },
     Paths { range: std::ops::Range<usize>, rasterization_vertex_count: usize, sprite_count: usize },
     Underlines(std::ops::Range<usize>),
-    MonochromeSprites { texture_index: u32, range: std::ops::Range<usize> },
-    SubpixelSprites { texture_index: u32, range: std::ops::Range<usize> },
-    PolychromeSprites { texture_index: u32, range: std::ops::Range<usize>, smoothed: bool },
+    MonochromeSprites { texture_index: u32, range: std::ops::Range<usize>, pixelated: bool },
+    SubpixelSprites { texture_index: u32, range: std::ops::Range<usize>, pixelated: bool },
+    PolychromeSprites { texture_index: u32, range: std::ops::Range<usize>, smoothed: bool, pixelated: bool },
     Surfaces(std::ops::Range<usize>),
     BackdropFilters(std::ops::Range<usize>),
     FilterBoundary(usize),
@@ -1961,6 +2149,7 @@ fn command_record(
         range_start: 0,
         range_end: 0,
         smoothed: 0,
+        pixelated: 0,
         texture_index: 0,
         rasterization_vertex_count: 0,
         sprite_count: 0,
@@ -2003,27 +2192,30 @@ fn batch_command_record(batch: &PrimitiveBatch) -> GpuiGoSceneCommandRecord {
             rec.range_start = range.start as u32;
             rec.range_end = range.end as u32;
         }
-        PrimitiveBatch::MonochromeSprites { texture_index, range } => {
+        PrimitiveBatch::MonochromeSprites { texture_index, range, pixelated } => {
             rec.primitive_kind = batch_primitive_kind::MONOCHROME_SPRITES;
             rec.range_start = range.start as u32;
             rec.range_end = range.end as u32;
+            rec.pixelated = u32::from(*pixelated);
             // The batch's atlas texture (the pinned
             // `PrimitiveBatch::MonochromeSprites { texture_id, range }`;
             // the kind pool is implied by the primitive kind).
             rec.texture_index = *texture_index;
         }
-        PrimitiveBatch::SubpixelSprites { texture_index, range } => {
+        PrimitiveBatch::SubpixelSprites { texture_index, range, pixelated } => {
             rec.primitive_kind = batch_primitive_kind::SUBPIXEL_SPRITES;
             rec.range_start = range.start as u32;
             rec.range_end = range.end as u32;
+            rec.pixelated = u32::from(*pixelated);
             rec.texture_index = *texture_index;
         }
-        PrimitiveBatch::PolychromeSprites { texture_index, range, smoothed } => {
+        PrimitiveBatch::PolychromeSprites { texture_index, range, smoothed, pixelated } => {
             rec.primitive_kind = batch_primitive_kind::POLYCHROME_SPRITES;
             rec.range_start = range.start as u32;
             rec.range_end = range.end as u32;
             rec.texture_index = *texture_index;
             rec.smoothed = u32::from(*smoothed);
+            rec.pixelated = u32::from(*pixelated);
         }
         PrimitiveBatch::Surfaces(range) => {
             rec.primitive_kind = batch_primitive_kind::SURFACES;
@@ -2258,15 +2450,20 @@ impl<'a> Iterator for BatchIterator<'a> {
             }
             // Monochrome sprites merge while they stay under the next
             // order/kind limit AND share the batch's atlas texture
-            // (the pinned `next_if` condition).
+            // (the pinned `next_if` condition) and its sampling mode
+            // (rev 15: the pixelated split, so one batch draws through
+            // one sampler).
             PrimitiveKind::MonochromeSprite => {
-                let texture_index = self.scene.monochrome_sprites[self.monochrome_sprites_cursor].tile.texture_index;
+                let first = &self.scene.monochrome_sprites[self.monochrome_sprites_cursor];
+                let texture_index = first.tile.texture_index;
+                let pixelated = first.pixelated != 0;
                 let start = self.monochrome_sprites_start;
                 let mut end = start + 1;
                 self.monochrome_sprites_cursor += 1;
                 while let Some(sprite) = self.scene.monochrome_sprites.get(self.monochrome_sprites_cursor) {
                     if precedes_limit(sprite.order, batch_kind, max_order_and_kind)
                         && sprite.tile.texture_index == texture_index
+                        && (sprite.pixelated != 0) == pixelated
                     {
                         self.monochrome_sprites_cursor += 1;
                         end += 1;
@@ -2275,16 +2472,19 @@ impl<'a> Iterator for BatchIterator<'a> {
                     }
                 }
                 self.monochrome_sprites_start = end;
-                Some(PrimitiveBatch::MonochromeSprites { texture_index, range: start..end })
+                Some(PrimitiveBatch::MonochromeSprites { texture_index, range: start..end, pixelated })
             }
             PrimitiveKind::SubpixelSprite => {
-                let texture_index = self.scene.subpixel_sprites[self.subpixel_sprites_cursor].tile.texture_index;
+                let first = &self.scene.subpixel_sprites[self.subpixel_sprites_cursor];
+                let texture_index = first.tile.texture_index;
+                let pixelated = first.pixelated != 0;
                 let start = self.subpixel_sprites_start;
                 let mut end = start + 1;
                 self.subpixel_sprites_cursor += 1;
                 while let Some(sprite) = self.scene.subpixel_sprites.get(self.subpixel_sprites_cursor) {
                     if precedes_limit(sprite.order, batch_kind, max_order_and_kind)
                         && sprite.tile.texture_index == texture_index
+                        && (sprite.pixelated != 0) == pixelated
                     {
                         self.subpixel_sprites_cursor += 1;
                         end += 1;
@@ -2293,12 +2493,13 @@ impl<'a> Iterator for BatchIterator<'a> {
                     }
                 }
                 self.subpixel_sprites_start = end;
-                Some(PrimitiveBatch::SubpixelSprites { texture_index, range: start..end })
+                Some(PrimitiveBatch::SubpixelSprites { texture_index, range: start..end, pixelated })
             }
             PrimitiveKind::PolychromeSprite => {
                 let first = &self.scene.polychrome_sprites[self.polychrome_sprites_cursor];
                 let texture_index = first.tile.texture_index;
                 let smoothed = has_corner_smoothing(first.corner_smoothing);
+                let pixelated = first.pixelated != 0;
                 let start = self.polychrome_sprites_start;
                 let mut end = start + 1;
                 self.polychrome_sprites_cursor += 1;
@@ -2306,6 +2507,7 @@ impl<'a> Iterator for BatchIterator<'a> {
                     if precedes_limit(sprite.order, batch_kind, max_order_and_kind)
                         && sprite.tile.texture_index == texture_index
                         && has_corner_smoothing(sprite.corner_smoothing) == smoothed
+                        && (sprite.pixelated != 0) == pixelated
                     {
                         self.polychrome_sprites_cursor += 1;
                         end += 1;
@@ -2314,7 +2516,7 @@ impl<'a> Iterator for BatchIterator<'a> {
                     }
                 }
                 self.polychrome_sprites_start = end;
-                Some(PrimitiveBatch::PolychromeSprites { texture_index, range: start..end, smoothed })
+                Some(PrimitiveBatch::PolychromeSprites { texture_index, range: start..end, smoothed, pixelated })
             }
             PrimitiveKind::Surface => {
                 let start = self.surfaces_start;
@@ -2513,6 +2715,72 @@ fn check_color(color: &GpuiGoSceneColor) -> Result<(), i32> {
     Ok(())
 }
 
+/// Validates a background record (rev 15): a known tag and color space,
+/// finite gradient scalars, non-degenerate stop positions, and a
+/// zeroed unused arm (the surface record's strict-payload pattern).
+fn check_background(bg: &GpuiGoSceneBackground) -> Result<(), i32> {
+    if bg.reserved != 0 {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    match (bg.tag, bg.color_space) {
+        (0, _) => {
+            let gradient_words = [
+                bg.angle,
+                bg.stop0_h,
+                bg.stop0_s,
+                bg.stop0_l,
+                bg.stop0_a,
+                bg.stop0_percentage,
+                bg.stop1_h,
+                bg.stop1_s,
+                bg.stop1_l,
+                bg.stop1_a,
+                bg.stop1_percentage,
+            ];
+            if gradient_words != [0u32; 11] {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+            if bg.color_space > 1 {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+            Ok(())
+        }
+        (1, space) if space <= 1 => {
+            let angle = f32::from_bits(bg.angle);
+            if !angle.is_finite() {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+            for bits in [
+                bg.stop0_h,
+                bg.stop0_s,
+                bg.stop0_l,
+                bg.stop0_a,
+                bg.stop0_percentage,
+                bg.stop1_h,
+                bg.stop1_s,
+                bg.stop1_l,
+                bg.stop1_a,
+                bg.stop1_percentage,
+            ] {
+                if !f32::from_bits(bits).is_finite() {
+                    return Err(scene_status::ERR_BAD_VALUE);
+                }
+            }
+            // The shader divides by the stop delta; CSS's
+            // equal-position hard stop needs the n-stop form (R16).
+            if f32::from_bits(bg.stop0_percentage) == f32::from_bits(bg.stop1_percentage) {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+            let solid_words = [bg.h, bg.s, bg.l, bg.a];
+            if solid_words != [0u32; 4] {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+            Ok(())
+        }
+        _ => Err(scene_status::ERR_BAD_VALUE),
+    }
+}
+
 fn check_bool01(value: u32) -> Result<(), i32> {
     if value > 1 {
         return Err(scene_status::ERR_BAD_VALUE);
@@ -2528,8 +2796,8 @@ fn check_quad(rec: &GpuiGoSceneQuadRecord) -> Result<(), i32> {
     if rec.border_style > 1 {
         return Err(scene_status::ERR_BAD_VALUE);
     }
-    check_color(&rec.background)?;
-    check_color(&rec.border_color)?;
+    check_background(&rec.background)?;
+    check_background(&rec.border_color)?;
     Ok(())
 }
 
@@ -2539,7 +2807,7 @@ fn check_shadow(rec: &GpuiGoSceneShadowRecord) -> Result<(), i32> {
         return Err(scene_status::ERR_BAD_VALUE);
     }
     check_bool01(rec.inset)?;
-    check_color(&rec.color)?;
+    check_background(&rec.color)?;
     Ok(())
 }
 
@@ -2564,6 +2832,46 @@ fn check_filter(rec: &GpuiGoSceneFilterRecord) -> Result<(), i32> {
     check_bool01(rec.is_start)?;
     if rec.filter_count > MAX_SCENE_FILTERS {
         return Err(scene_status::ERR_BAD_VALUE);
+    }
+    // rev 15: the per-filter tags and the composed colour matrix. Every
+    // used tag must be a known kind; the tag-1 entries must match the
+    // composed matrix count; the matrix payload must be finite; an
+    // unused tag or a zero matrix count demands zeroed payload words.
+    let mut matrix_entries = 0u32;
+    for (index, tag) in rec.filter_tags.iter().enumerate() {
+        if (index as u32) < rec.filter_count {
+            match *tag {
+                0 => {
+                    let radius = f32::from_bits(rec.blur_radii[index]);
+                    if !radius.is_finite() || radius < 0.0 {
+                        return Err(scene_status::ERR_BAD_VALUE);
+                    }
+                }
+                1 => {
+                    matrix_entries += 1;
+                    if rec.blur_radii[index] != 0 {
+                        return Err(scene_status::ERR_BAD_VALUE);
+                    }
+                }
+                _ => return Err(scene_status::ERR_BAD_VALUE),
+            }
+        } else if *tag != 0 {
+            return Err(scene_status::ERR_BAD_VALUE);
+        }
+    }
+    if rec.color_matrix_count != matrix_entries {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    if rec.color_matrix_count == 0 {
+        if rec.color_matrix != [0u32; 20] {
+            return Err(scene_status::ERR_BAD_VALUE);
+        }
+    } else {
+        for bits in rec.color_matrix {
+            if !f32::from_bits(bits).is_finite() {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+        }
     }
     Ok(())
 }
@@ -3381,7 +3689,7 @@ fn check_path(rec: &GpuiGoScenePathRecord, vertex_count: u32) -> Result<(), i32>
     if rec.order != 0 {
         return Err(scene_status::ERR_BAD_VALUE);
     }
-    check_color(&rec.color)?;
+    check_background(&rec.color)?;
     if rec.vertex_count != vertex_count {
         return Err(scene_status::ERR_BAD_VALUE);
     }
@@ -3853,13 +4161,18 @@ pub(crate) struct SceneRenderSnapshot {
     /// The paired surface opacities (the pin's parallel
     /// `surface_opacities` array, carried through the finish sort).
     pub surface_opacities: Vec<f32>,
-    pub backdrops: Vec<gpui::BackdropFilter>,
-    pub boundaries: Vec<gpui::FilterBoundary>,
+    /// The ABI backdrop-filter records (rev 15: they carry the
+    /// colour-matrix payloads the pinned `BackdropFilter` cannot; the
+    /// draw path reads bounds, radii, opacity, the blur radii and the
+    /// matrix from them directly).
+    pub backdrops: Vec<GpuiGoSceneFilterRecord>,
+    /// The ABI filter-boundary records (same shape as the backdrops).
+    pub boundaries: Vec<GpuiGoSceneFilterRecord>,
     pub commands: Vec<GpuiGoSceneCommandRecord>,
     pub requirements: GpuiGoSceneRequirementsRecord,
 }
 
-fn snapshot_bounds(bounds: &GpuiGoSceneBounds) -> gpui::Bounds<gpui::ScaledPixels> {
+pub(crate) fn snapshot_bounds(bounds: &GpuiGoSceneBounds) -> gpui::Bounds<gpui::ScaledPixels> {
     gpui::Bounds {
         origin: point(gpui::ScaledPixels(f32::from_bits(bounds.x)), gpui::ScaledPixels(f32::from_bits(bounds.y))),
         size: gpui::Size {
@@ -3876,7 +4189,7 @@ fn snapshot_mask(mask: &GpuiGoSceneBounds) -> gpui::ContentMask<gpui::ScaledPixe
     }
 }
 
-fn snapshot_radii(bits: &[u32]) -> gpui::Corners<gpui::ScaledPixels> {
+pub(crate) fn snapshot_radii(bits: &[u32]) -> gpui::Corners<gpui::ScaledPixels> {
     gpui::Corners {
         top_left: gpui::ScaledPixels(f32::from_bits(bits[0])),
         top_right: gpui::ScaledPixels(f32::from_bits(bits[1])),
@@ -3894,16 +4207,59 @@ fn snapshot_edges(bits: &[u32]) -> gpui::Edges<gpui::ScaledPixels> {
     }
 }
 
-fn snapshot_color(color: &GpuiGoSceneColor) -> gpui::Background {
-    // The ABI carries the stored solid HSLA record; the public
-    // conversion is `Background::from(Hsla)` (the pin's paint path).
-    let hsla: gpui::Hsla = gpui::Hsla::new(
-        f32::from_bits(color.h) * 360.0,
-        f32::from_bits(color.s),
-        f32::from_bits(color.l),
-        f32::from_bits(color.a),
-    );
-    gpui::Background::from(hsla)
+fn snapshot_color(color: &GpuiGoSceneBackground) -> gpui::Background {
+    // The ABI carries the stored solid HSLA record or the two-stop
+    // gradient record; both build through the pinned public
+    // constructors (`Background::from(Hsla)` for the solid arm, the
+    // pin's paint path, and `linear_gradient` + `color_space` for the
+    // gradient arm, rev 15). The gradient's CSS geometry and
+    // premultiplied sRGB mixing are evaluated by the vendored shader
+    // (the recorded divergences in `shaders/mod.rs`); the kernel maps
+    // the record field for field.
+    match color.tag {
+        0 => {
+            let hsla: gpui::Hsla = gpui::Hsla::new(
+                f32::from_bits(color.h) * 360.0,
+                f32::from_bits(color.s),
+                f32::from_bits(color.l),
+                f32::from_bits(color.a),
+            );
+            gpui::Background::from(hsla)
+        }
+        _ => {
+            let stop =
+                |h: u32, s: u32, l: u32, a: u32, percentage: u32| -> gpui::LinearColorStop {
+                    let hsla: gpui::Hsla = gpui::Hsla::new(
+                        f32::from_bits(h) * 360.0,
+                        f32::from_bits(s),
+                        f32::from_bits(l),
+                        f32::from_bits(a),
+                    );
+                    gpui::linear_color_stop(hsla, f32::from_bits(percentage))
+                };
+            gpui::linear_gradient(
+                f32::from_bits(color.angle),
+                stop(
+                    color.stop0_h,
+                    color.stop0_s,
+                    color.stop0_l,
+                    color.stop0_a,
+                    color.stop0_percentage,
+                ),
+                stop(
+                    color.stop1_h,
+                    color.stop1_s,
+                    color.stop1_l,
+                    color.stop1_a,
+                    color.stop1_percentage,
+                ),
+            )
+            .color_space(match color.color_space {
+                1 => gpui::ColorSpace::Oklab,
+                _ => gpui::ColorSpace::Srgb,
+            })
+        }
+    }
 }
 
 fn snapshot_scene_hsla(color: &GpuiGoSceneColor) -> gpui::Hsla {
@@ -3949,12 +4305,6 @@ fn snapshot_transformation(bits: &[u32]) -> gpui::TransformationMatrix {
         ],
         translation: [f32::from_bits(bits[4]), f32::from_bits(bits[5])],
     }
-}
-
-fn snapshot_filters(rec: &GpuiGoSceneFilterRecord) -> impl Iterator<Item = gpui::ScaledFilter> + '_ {
-    (0..rec.filter_count as usize).map(|index| {
-        gpui::ScaledFilter::Blur(gpui::ScaledPixels(f32::from_bits(rec.blur_radii[index])))
-    })
 }
 
 fn snapshot_quad(rec: &GpuiGoSceneQuadRecord) -> gpui::Quad {
@@ -4113,31 +4463,6 @@ fn snapshot_surface(rec: &GpuiGoSceneSurfaceRecord) -> GpuiGoSceneSurfaceRecord 
     *rec
 }
 
-fn snapshot_backdrop(rec: &GpuiGoSceneFilterRecord) -> gpui::BackdropFilter {
-    gpui::BackdropFilter {
-        order: rec.order,
-        bounds: snapshot_bounds(&rec.bounds),
-        corner_radii: snapshot_radii(&rec.corner_radii),
-        content_mask: snapshot_mask(&rec.content_mask),
-        corner_smoothing: f32::from_bits(rec.corner_smoothing),
-        filters: snapshot_filters(rec).collect(),
-        opacity: f32::from_bits(rec.opacity),
-    }
-}
-
-fn snapshot_boundary(rec: &GpuiGoSceneFilterRecord) -> gpui::FilterBoundary {
-    gpui::FilterBoundary {
-        order: rec.order,
-        bounds: snapshot_bounds(&rec.bounds),
-        content_mask: snapshot_mask(&rec.content_mask),
-        corner_radii: snapshot_radii(&rec.corner_radii),
-        corner_smoothing: f32::from_bits(rec.corner_smoothing),
-        filters: snapshot_filters(rec).collect(),
-        opacity: f32::from_bits(rec.opacity),
-        is_start: rec.is_start != 0,
-    }
-}
-
 /// Resolves a scene handle and copies its finished draw data in the
 /// pinned primitive layouts (the renderer service's draw entry calls
 /// this; the snapshot owns every byte, so the scene lock is released
@@ -4173,8 +4498,8 @@ pub(crate) fn scene_render_snapshot(handle: u64) -> Result<SceneRenderSnapshot, 
         paths: state.paths.iter().map(snapshot_path).collect(),
         surfaces: state.surfaces.iter().map(snapshot_surface).collect(),
         surface_opacities: state.surface_opacities.clone(),
-        backdrops: state.backdrops.iter().map(snapshot_backdrop).collect(),
-        boundaries: state.boundaries.iter().map(snapshot_boundary).collect(),
+        backdrops: state.backdrops.clone(),
+        boundaries: state.boundaries.clone(),
         commands: state.plan.commands.clone(),
         requirements: state.plan.requirements,
     };
@@ -5702,12 +6027,13 @@ mod tests {
         GpuiGoScenePathRecord {
             bounds: *bounds,
             content_mask: mask(),
-            color: GpuiGoSceneColor {
+            color: GpuiGoSceneBackground {
                 tag: 0,
                 h: 0.5f32.to_bits(),
                 s: 0.5f32.to_bits(),
                 l: 0.5f32.to_bits(),
                 a: 1.0f32.to_bits(),
+                ..Default::default()
             },
             vertex_count: vertices as u32,
             ..Default::default()

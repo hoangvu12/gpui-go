@@ -1,11 +1,18 @@
 //go:build windows
 
 // The browser-like bold synthesis gate (zterm ticket 13, native revision
-// 14). Fontique 0.11.1 synthesizes bold whenever a request lands on a
-// lighter static face; the native text service keeps the synthesis only
-// where a browser draws it: the request must be at least 600 (CSS) and
-// more than 200 above the matched face's OS/2 weight (Blink
-// font_cache_skia.cc @ d139f187, lines 347-353). Otherwise it requests the
+// 14; browser-core ticket 39, revision 15). Fontique 0.11.1 synthesizes
+// bold whenever a request lands on a lighter static face; the native
+// text service keeps the synthesis only where Chrome on Windows draws
+// it: the request must be at least 600 (kBoldThreshold,
+// platform/fonts/font_selection_types.h:183) and the matched face must
+// be below 600 (SkTypeface::isBold(), skia src/core/SkTypeface.cpp:
+// 491-493) — font_cache_skia_win.cc:484-486, which is the rule compiled
+// on Windows (platform/BUILD.gn:1810-1813). The ">200 above the face"
+// rule revision 14 followed is font_cache_skia.cc:347-353, which sits
+// inside #if !BUILDFLAG(IS_WIN) (font_cache_skia.cc:312) and never runs
+// on Windows, so revision 15 synthesizes 600 over 400 and 700 over 500
+// and no longer synthesizes 900 over 600. Otherwise it requests the
 // face's own weight, on both the resolve and the per-run shaping paths.
 //
 // The fixtures are four static Geist faces (testdata/weights, the copies
@@ -17,8 +24,8 @@ package fontspec
 
 import (
 	"bytes"
-	"encoding/binary"
 	"embed"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -140,13 +147,14 @@ func cssMatch(faces []int, desired int) int {
 	}
 }
 
-// TestBoldSynthesisFollowsBrowserRule is the ticket 13 gate: weights
-// 400-900 against families with 400 only, 400/600, 400/500/600 and
-// 400/700. Where a browser would not synthesize, the run and the resolve
-// carry the matched face's own FontId and exactly its ink; where it would
-// (more than 200 over the face, from 600 up), they carry a distinct,
-// heavier synthesized instance. FONTSPEC_WEIGHTS_OUT names a JSON file
-// for the measured matrix.
+// TestBoldSynthesisFollowsBrowserRule is the ticket 13/39 gate: weights
+// 400-900 against families with 400 only, 400/500, 400/600, 400/500/600
+// and 400/700. Where Chrome on Windows would not synthesize, the run and
+// the resolve carry the matched face's own FontId and exactly its ink;
+// where it would (request at least 600 over a face below 600), they carry
+// a distinct, heavier synthesized instance. The 600/400, 700/500 and
+// 900/600 cells are the ones revision 15 changed. FONTSPEC_WEIGHTS_OUT
+// names a JSON file for the measured matrix.
 func TestBoldSynthesisFollowsBrowserRule(t *testing.T) {
 	ts, err := gpui.DefaultTextSystem()
 	if err != nil {
@@ -200,6 +208,7 @@ func TestBoldSynthesisFollowsBrowserRule(t *testing.T) {
 		faces []int
 	}{
 		{"Wt400", []int{400}},
+		{"Wt450", []int{400, 500}},
 		{"Wt460", []int{400, 600}},
 		{"Wt456", []int{400, 500, 600}},
 		{"Wt470", []int{400, 700}},
@@ -217,7 +226,10 @@ func TestBoldSynthesisFollowsBrowserRule(t *testing.T) {
 		}
 		for weight := 400; weight <= 900; weight += 100 {
 			matched := cssMatch(family.faces, weight)
-			synth := weight >= 600 && weight > matched+200
+			// Chrome on Windows: synthesize only when the request is at
+			// least 600 (kBoldThreshold) and the matched face is not bold
+			// (SkTypeface::isBold, weight >= 600).
+			synth := weight >= 600 && matched < 600
 
 			id, width, ink := shape(family.name, weight)
 			faceID, _, faceInk := shape(family.name, matched)
@@ -240,7 +252,7 @@ func TestBoldSynthesisFollowsBrowserRule(t *testing.T) {
 				}
 			} else {
 				if id != faceID {
-					t.Errorf("%s %d over the %d face: FontId %#x, want the face's own %#x (no synthesis within 200)", family.name, weight, matched, uint64(id), uint64(faceID))
+					t.Errorf("%s %d over the %d face: FontId %#x, want the face's own %#x (no synthesis over a 600+ face)", family.name, weight, matched, uint64(id), uint64(faceID))
 				}
 				if ink != faceInk {
 					t.Errorf("%s %d over the %d face: ink %.1f, want the face's %.1f", family.name, weight, matched, ink, faceInk)

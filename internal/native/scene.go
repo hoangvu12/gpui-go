@@ -203,6 +203,91 @@ func (c SceneColor) HSLA() (h, s, l, a float32) {
 	return math.Float32frombits(c.H), math.Float32frombits(c.S), math.Float32frombits(c.L), math.Float32frombits(c.A)
 }
 
+// SceneBackground mirrors GpuiGoSceneBackground (browser-core ticket
+// 39, rev 15): the full pinned Background shape — a solid color or a
+// two-stop linear gradient with its interpolation color space. The
+// quad's background and border, the shadow's color and the path's color
+// carry it; gradient records evaluate with CSS semantics in the
+// renderer (the gradient-line length reaches the corners, the stops mix
+// premultiplied in sRGB, the default). 72 bytes, alignment 4.
+type SceneBackground struct {
+	// Tag is 0 (solid) or 1 (linear gradient), the pinned
+	// BackgroundTag.
+	Tag uint32
+	// ColorSpace is 0 (sRGB, the ABI default and CSS's legacy
+	// interpolation space) or 1 (Oklab), the pinned ColorSpace.
+	ColorSpace uint32
+	// H is the solid hue in [0, 1] (degrees / 360), f32 bits.
+	H uint32
+	// S is the solid saturation in [0, 1], f32 bits.
+	S uint32
+	// L is the solid lightness in [0, 1], f32 bits.
+	L uint32
+	// A is the solid alpha in [0, 1], f32 bits.
+	A uint32
+	// Angle is the gradient angle in CSS degrees (f32 bits; 0 points
+	// up, growing clockwise, 90 is to the right; any finite value,
+	// taken modulo 360).
+	Angle uint32
+	// Stop0H..Stop0A are stop 0's HSLA (f32 bits).
+	Stop0H uint32
+	Stop0S uint32
+	Stop0L uint32
+	Stop0A uint32
+	// Stop0Percentage is stop 0's position along the gradient line (f32
+	// bits; 0 = the line's start, 1 = its end; a descending pair
+	// reverses the gradient).
+	Stop0Percentage uint32
+	// Stop1H..Stop1A are stop 1's HSLA (f32 bits).
+	Stop1H uint32
+	Stop1S uint32
+	Stop1L uint32
+	Stop1A uint32
+	// Stop1Percentage is stop 1's position; must differ from stop 0's.
+	Stop1Percentage uint32
+	// Reserved must be zero.
+	Reserved uint32
+}
+
+// SceneBackgroundOf packs a solid HSLA color (h in degrees/360) into the
+// background record.
+func SceneBackgroundOf(h, s, l, a float32) SceneBackground {
+	return SceneBackground{H: math.Float32bits(h), S: math.Float32bits(s), L: math.Float32bits(l), A: math.Float32bits(a)}
+}
+
+// HslaF is one HSLA color with the hue as a [0, 1] fraction of the
+// circle (the ABI's storage form).
+type HslaF struct {
+	H, S, L, A float32
+}
+
+// SceneGradientBackground packs a two-stop linear gradient: the CSS
+// angle in degrees (0 = up, clockwise) and both stops (the hue as a
+// [0, 1] fraction with the position along the gradient line; the
+// positions must differ). The color space defaults to sRGB (CSS's
+// legacy interpolation).
+func SceneGradientBackground(angle float32, from HslaF, fromPos float32, to HslaF, toPos float32) SceneBackground {
+	return SceneBackground{
+		Tag:             1,
+		Angle:           math.Float32bits(angle),
+		Stop0H:          math.Float32bits(from.H),
+		Stop0S:          math.Float32bits(from.S),
+		Stop0L:          math.Float32bits(from.L),
+		Stop0A:          math.Float32bits(from.A),
+		Stop0Percentage: math.Float32bits(fromPos),
+		Stop1H:          math.Float32bits(to.H),
+		Stop1S:          math.Float32bits(to.S),
+		Stop1L:          math.Float32bits(to.L),
+		Stop1A:          math.Float32bits(to.A),
+		Stop1Percentage: math.Float32bits(toPos),
+	}
+}
+
+// Solid unpacks the solid arm (valid for tag 0).
+func (b SceneBackground) Solid() (h, s, l, a float32) {
+	return math.Float32frombits(b.H), math.Float32frombits(b.S), math.Float32frombits(b.L), math.Float32frombits(b.A)
+}
+
 // Path command kind tags of the tessellation entry (the pinned
 // PathBuilder public API surface; ticket16).
 const (
@@ -296,14 +381,14 @@ func ScenePathVertexOf(x, y, s, t float32) ScenePathVertexRecord {
 }
 
 // ScenePathRecord mirrors GpuiGoScenePathRecord: the path primitive
-// record (order must be 0 on insert). 64 bytes, alignment 4. The
-// vertices travel as the parallel bulk array of InsertPath and
-// PathDump.
+// record (order must be 0 on insert). 116 bytes, alignment 4 (rev 15:
+// the color is a full background record). The vertices travel as the
+// parallel bulk array of InsertPath and PathDump.
 type ScenePathRecord struct {
 	Order       uint32
 	Bounds      SceneBounds
 	ContentMask SceneBounds
-	Color       SceneColor
+	Color       SceneBackground
 	VertexCount uint32
 	RecordSize  uint32
 }
@@ -316,14 +401,15 @@ func NewScenePathRecord() ScenePathRecord {
 	}
 }
 
-// SceneQuadRecord mirrors GpuiGoSceneQuadRecord: 132 bytes, alignment 4.
+// SceneQuadRecord mirrors GpuiGoSceneQuadRecord: 236 bytes, alignment 4
+// (rev 15: the background and border are full background records).
 // Order must be 0 on insert; the kernel assigns it (mirrored in dumps).
 type SceneQuadRecord struct {
 	Order              uint32
 	Bounds             SceneBounds
 	ContentMask        SceneBounds
-	Background         SceneColor
-	BorderColor        SceneColor
+	Background         SceneBackground
+	BorderColor        SceneBackground
 	CornerRadii        [4]uint32 // top-left, top-right, bottom-right, bottom-left
 	BorderWidths       [4]uint32 // top, right, bottom, left
 	BorderStyle        uint32    // 0 solid, 1 dashed
@@ -340,15 +426,16 @@ func NewSceneQuadRecord() SceneQuadRecord {
 	return SceneQuadRecord{RecordSize: uint32(unsafe.Sizeof(SceneQuadRecord{}))}
 }
 
-// SceneShadowRecord mirrors GpuiGoSceneShadowRecord: 120 bytes,
-// alignment 4.
+// SceneShadowRecord mirrors GpuiGoSceneShadowRecord: 172 bytes,
+// alignment 4 (rev 15: the color is a full background record and drop
+// shadows clip out of the element's rounded bounds).
 type SceneShadowRecord struct {
 	Order              uint32
 	BlurRadius         uint32
 	Bounds             SceneBounds
 	CornerRadii        [4]uint32
 	ContentMask        SceneBounds
-	Color              SceneColor
+	Color              SceneBackground
 	ElementBounds      SceneBounds
 	ElementCornerRadii [4]uint32
 	Inset              uint32 // 0 drop, 1 inset
@@ -380,7 +467,8 @@ func NewSceneUnderlineRecord() SceneUnderlineRecord {
 }
 
 // SceneFilterRecord mirrors GpuiGoSceneFilterRecord (backdrop filters and
-// filter boundaries): 88 bytes, alignment 4.
+// filter boundaries): 188 bytes, alignment 4 (rev 15: per-filter kind
+// tags and one composed colour-matrix payload).
 type SceneFilterRecord struct {
 	Order           uint32
 	Bounds          SceneBounds
@@ -391,7 +479,32 @@ type SceneFilterRecord struct {
 	FilterCount     uint32
 	Opacity         uint32
 	IsStart         uint32 // boundary: 1 start, 0 end; backdrops pass 0
-	RecordSize      uint32
+	// FilterTags carries the per-filter kind for the first FilterCount
+	// entries: 0 = blur, 1 = colour matrix. Entries at and beyond
+	// FilterCount must be zero.
+	FilterTags [4]uint32
+	// ColorMatrix is the composed row-major 4x5 colour matrix, 20 f32
+	// bits (row 0 in [0..5], the fifth column the additive offset); the
+	// composition of the chain's matrix filters in order. All zeros
+	// with ColorMatrixCount 0.
+	ColorMatrix [20]uint32
+	// ColorMatrixCount is how many of the chain's filters are colour
+	// matrices (must equal the tag-1 entry count).
+	ColorMatrixCount uint32
+	RecordSize       uint32
+}
+
+// ColorMatrixRows returns the composed matrix as four rows of five
+// floats — row i is ColorMatrix[5*i : 5*i+5] with the last entry the
+// additive offset.
+func (r SceneFilterRecord) ColorMatrixRows() [4][5]float32 {
+	var rows [4][5]float32
+	for row := 0; row < 4; row++ {
+		for col := 0; col < 5; col++ {
+			rows[row][col] = math.Float32frombits(r.ColorMatrix[5*row+col])
+		}
+	}
+	return rows
 }
 
 // NewSceneFilterRecord returns a validated empty filter record.
@@ -437,7 +550,8 @@ const (
 )
 
 // SceneSpriteRecord mirrors GpuiGoSceneSpriteRecord (the pinned
-// MonochromeSprite/SubpixelSprite field set): 120 bytes, alignment 4.
+// MonochromeSprite/SubpixelSprite field set): 124 bytes, alignment 4
+// (rev 15: the pixelated sampling flag).
 type SceneSpriteRecord struct {
 	Order          uint32
 	Padding        uint32
@@ -446,7 +560,10 @@ type SceneSpriteRecord struct {
 	Color          SceneColor
 	Tile           SceneTileRecord
 	Transformation [6]uint32 // rotation-scale 2x2 then translation xy, f32 bits
-	RecordSize     uint32
+	// Pixelated is 0 (bilinear, the pinned default) or 1 (point
+	// sampling, CSS image-rendering: pixelated).
+	Pixelated  uint32
+	RecordSize uint32
 }
 
 // NewSceneSpriteRecord returns a validated empty sprite record with the
@@ -461,17 +578,21 @@ func NewSceneSpriteRecord() SceneSpriteRecord {
 }
 
 // ScenePolychromeSpriteRecord mirrors GpuiGoScenePolychromeSpriteRecord
-// (the pinned PolychromeSprite): 100 bytes, alignment 4.
+// (the pinned PolychromeSprite): 104 bytes, alignment 4 (rev 15: the
+// pixelated sampling flag).
 type ScenePolychromeSpriteRecord struct {
 	Order           uint32
-	Grayscale       uint32 // 0 color sampling, 1 grayscale
-	Opacity         uint32 // f32 bits
-	CornerSmoothing uint32 // f32 bits
+	Grayscale       uint32
+	Opacity         uint32
+	CornerSmoothing uint32
 	Bounds          SceneBounds
 	ContentMask     SceneBounds
 	CornerRadii     [4]uint32
 	Tile            SceneTileRecord
-	RecordSize      uint32
+	// Pixelated is 0 (bilinear, the pinned default) or 1 (point
+	// sampling, CSS image-rendering: pixelated).
+	Pixelated  uint32
+	RecordSize uint32
 }
 
 // NewScenePolychromeSpriteRecord returns a validated empty polychrome
@@ -511,14 +632,15 @@ const (
 	SceneBatchFilterBoundary  uint32 = 9
 )
 
-// SceneCommandRecord mirrors GpuiGoSceneCommandRecord: 52 bytes,
-// alignment 4.
+// SceneCommandRecord mirrors GpuiGoSceneCommandRecord: 56 bytes,
+// alignment 4 (rev 15: the sprite batches' pixelated flag).
 type SceneCommandRecord struct {
 	CommandKind              uint32
 	PrimitiveKind            uint32
 	RangeStart               uint32
 	RangeEnd                 uint32
 	Smoothed                 uint32
+	Pixelated                uint32 // rev 15: sprite batches' point-sampler flag
 	TextureIndex             uint32
 	RasterizationVertexCount uint32
 	SpriteCount              uint32

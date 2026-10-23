@@ -181,6 +181,9 @@ pub const MAX_TEXT_BYTES: u32 = 1 << 20;
 
 /// Maximum style runs in one shape request.
 pub const MAX_RUNS: u32 = 1024;
+/// Maximum variation records in one shape request (rev 15; one array
+/// shared by all runs, like the features).
+pub const MAX_VARIATIONS: u32 = 4096;
 
 /// Maximum OpenType feature records in one shape/resolve request.
 pub const MAX_FEATURES: u32 = 4096;
@@ -348,11 +351,25 @@ pub struct GpuiGoTextFontMetricsRecord {
 /// One style run of a shape request (caller-owned, borrowed for the call).
 /// The family name and fallback names are substrings of the shape entry's
 /// packed `strings` buffer (fallbacks NUL-separated within their range);
-/// the run's features are a slice of the entry's feature-record array.
+/// the run's features are a slice of the entry's feature-record array and
+/// its variations a slice of the entry's variation-record array (rev 15).
 ///
-/// Layout (x86-64): 12 u32 fields; size 48, alignment 4.
-#[derive(Clone, Copy)]
+/// rev 15 (browser-core ticket 39) grew the record with the browser text
+/// fields: the CSS line-breaking controls (word-break, overflow-wrap,
+/// text-wrap), the run's locale (a BCP 47 tag substring of the strings
+/// buffer, used for locale-sensitive fallback and rendering once the
+/// pinned adapter can carry it), the font width ratio and variation
+/// settings (CSS font-width / font-variation-settings), the optical size
+/// override (CSS font-optical-sizing; absent = auto), and justify
+/// (CSS text-align: justify). The pinned `TextLayoutRequest` has no
+/// slots for these, so the service validates them, stores them with the
+/// shaping handle and echoes them through `text_run_info`; the shaping
+/// behavior is unchanged until the fields can be pushed into Parley
+/// (recorded honestly in TEXT_ABI.md).
+///
+/// Layout (x86-64): 23 u32 fields; size 92, alignment 4.
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct GpuiGoTextRunRecord {
     /// UTF-8 byte length of this run. Runs must exactly cover the text.
     pub len: u32,
@@ -376,8 +393,52 @@ pub struct GpuiGoTextRunRecord {
     pub letter_spacing_present: u32,
     /// Letter spacing in pixels (f32 bits) when present.
     pub letter_spacing_bits: u32,
-    /// Must be zero (forward compatibility).
-    pub reserved: u32,
+    /// CSS word-break (parley's WordBreak): 0 normal, 1 break-all,
+    /// 2 keep-all.
+    pub word_break: u32,
+    /// CSS overflow-wrap (parley's OverflowWrap): 0 normal, 1 anywhere,
+    /// 2 break-word.
+    pub overflow_wrap: u32,
+    /// CSS text-wrap: 0 wrap, 1 nowrap, 2 balance, 3 pretty, 4 stable.
+    /// `balance`/`pretty`/`stable` are Go-side algorithms (bisection);
+    /// the tag crosses the ABI for the styling layer.
+    pub text_wrap: u32,
+    /// Byte offset of the locale (a BCP 47 language tag) in the strings
+    /// buffer; with `locale_len` 0 the run has no locale.
+    pub locale_offset: u32,
+    /// Byte length of the locale (0 = none).
+    pub locale_len: u32,
+    /// 0/1: whether a font width is present for this run.
+    pub font_width_present: u32,
+    /// Font width ratio (f32 bits; 1.0 = normal, CSS font-width) when
+    /// present.
+    pub font_width_bits: u32,
+    /// Index of this run's first variation record in the variations
+    /// array.
+    pub variation_offset: u32,
+    /// Number of this run's variation records.
+    pub variation_count: u32,
+    /// 0/1: whether an optical size override is present (absent = the
+    /// CSS `auto` behavior).
+    pub opsz_present: u32,
+    /// Optical size in pixels (f32 bits) when present.
+    pub opsz_bits: u32,
+    /// 0 = no justification, 1 = justify (CSS text-align: justify).
+    pub justify: u32,
+}
+
+/// One font variation setting (rev 15; parley's `FontVariation`):
+/// an OpenType axis tag with a float value.
+///
+/// Layout (x86-64): `tag` @0, `value` @4; size 8, alignment 4.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GpuiGoTextVariation {
+    /// Variation axis tag, 4 printable ASCII characters, big-endian
+    /// (the same rule as the feature tags).
+    pub tag: u32,
+    /// The variation value (f32 bits; finite).
+    pub value: u32,
 }
 
 /// Shaped layout summary (service-written).
@@ -591,8 +652,10 @@ const _: () = assert!(std::mem::size_of::<GpuiGoTextFontRecord>() == 40);
 const _: () = assert!(std::mem::align_of::<GpuiGoTextFontRecord>() == 8);
 const _: () = assert!(std::mem::size_of::<GpuiGoTextFontMetricsRecord>() == 52);
 const _: () = assert!(std::mem::align_of::<GpuiGoTextFontMetricsRecord>() == 4);
-const _: () = assert!(std::mem::size_of::<GpuiGoTextRunRecord>() == 48);
+const _: () = assert!(std::mem::size_of::<GpuiGoTextRunRecord>() == 92);
 const _: () = assert!(std::mem::align_of::<GpuiGoTextRunRecord>() == 4);
+const _: () = assert!(std::mem::size_of::<GpuiGoTextVariation>() == 8);
+const _: () = assert!(std::mem::align_of::<GpuiGoTextVariation>() == 4);
 const _: () = assert!(std::mem::size_of::<GpuiGoTextLayoutRecord>() == 56);
 const _: () = assert!(std::mem::align_of::<GpuiGoTextLayoutRecord>() == 4);
 const _: () = assert!(std::mem::size_of::<GpuiGoTextLineRecord>() == 36);
@@ -641,7 +704,8 @@ pub struct GpuiGoTextTable {
     /// `text_font_metrics`.
     pub font_metrics:
         Option<unsafe extern "system" fn(u64, *mut GpuiGoTextFontMetricsRecord) -> i32>,
-    /// `text_shape`.
+    /// `text_shape` (rev 15: the variation array joins the feature
+    /// array).
     pub shape: Option<
         unsafe extern "system" fn(
             *const u8,
@@ -649,6 +713,8 @@ pub struct GpuiGoTextTable {
             *const GpuiGoTextRunRecord,
             u32,
             *const GpuiGoTextFeature,
+            u32,
+            *const GpuiGoTextVariation,
             u32,
             *const u8,
             u32,
@@ -659,6 +725,11 @@ pub struct GpuiGoTextTable {
             u32,
             *mut u64,
         ) -> i32,
+    >,
+    /// `text_run_info` (rev 15): echoes one stored run record (the
+    /// browser text fields the pinned `TextRun` cannot carry).
+    pub run_info: Option<
+        unsafe extern "system" fn(u64, u32, *mut GpuiGoTextRunRecord) -> i32,
     >,
     /// `text_layout` (re-layout under a new wrap/clamp constraint).
     pub layout:
@@ -753,7 +824,7 @@ pub struct GpuiGoTextTable {
     pub max_font_bytes: u32,
 }
 
-const _: () = assert!(std::mem::size_of::<GpuiGoTextTable>() == 216);
+const _: () = assert!(std::mem::size_of::<GpuiGoTextTable>() == 224);
 const _: () = assert!(std::mem::align_of::<GpuiGoTextTable>() == 8);
 
 /// The one static text service table. Its address is stable for the process
@@ -763,6 +834,7 @@ pub(crate) static TEXT_TABLE: GpuiGoTextTable = GpuiGoTextTable {
     font_resolve: Some(text_font_resolve),
     font_metrics: Some(text_font_metrics),
     shape: Some(text_shape),
+    run_info: Some(text_run_info),
     layout: Some(text_layout),
     dispose: Some(text_dispose),
     layout_info: Some(text_layout_info),
@@ -831,6 +903,13 @@ struct ShapingState {
     text: String,
     /// The run list in the pinned descriptor form (service-owned copy).
     runs: Vec<TextRun>,
+    /// The run records as they crossed the ABI (service-owned copy; the
+    /// rev-15 browser text fields — word-break, overflow-wrap,
+    /// text-wrap, locale, font width, variations, optical size, justify
+    /// — have no pinned `TextRun` slots, so they are stored here and
+    /// echoed through `text_run_info` until the pinned adapter can
+    /// carry them).
+    run_records: Vec<GpuiGoTextRunRecord>,
     /// The document's font size.
     font_size: Pixels,
     /// The active wrap constraint.
@@ -1050,6 +1129,22 @@ fn check_feature(feature: &GpuiGoTextFeature) -> Result<(), i32> {
     Ok(())
 }
 
+/// Validates one variation record (rev 15): a printable-ASCII axis tag
+/// (the feature tags' rule) with a finite value.
+fn check_variation(variation: &GpuiGoTextVariation) -> Result<(), i32> {
+    let tag = variation.tag;
+    for shift in [24u32, 16, 8, 0] {
+        let byte = (tag >> shift) & 0xFF;
+        if !(0x20..=0x7E).contains(&byte) {
+            return Err(text_status::ERR_BAD_VALUE);
+        }
+    }
+    if !f32::from_bits(variation.value).is_finite() {
+        return Err(text_status::ERR_BAD_VALUE);
+    }
+    Ok(())
+}
+
 /// Decodes a feature record into the pinned `(String, u32)` pair form.
 fn feature_pair(feature: &GpuiGoTextFeature) -> (String, u32) {
     let bytes = feature.tag.to_be_bytes();
@@ -1104,6 +1199,7 @@ fn build_runs(
     text: &str,
     run_records: &[GpuiGoTextRunRecord],
     features: &[GpuiGoTextFeature],
+    variations: &[GpuiGoTextVariation],
     strings: &[u8],
 ) -> Result<Vec<TextRun>, i32> {
     let mut runs = Vec::with_capacity(run_records.len());
@@ -1164,6 +1260,63 @@ fn build_runs(
         let run_features = &features[feature_offset..feature_offset + feature_count];
         for feature in run_features {
             check_feature(feature)?;
+        }
+
+        // rev 15: the browser text fields. The tags use the pinned
+        // Parley enumerations where Parley defines them (word-break,
+        // overflow-wrap) and the CSS keywords otherwise (text-wrap);
+        // the values are bounds-checked here and stored with the
+        // shaping handle.
+        if record.word_break > 2 || record.overflow_wrap > 2 || record.text_wrap > 4 {
+            return Err(text_status::ERR_BAD_VALUE);
+        }
+        if record.justify > 1 {
+            return Err(text_status::ERR_BAD_VALUE);
+        }
+        let locale_len = record.locale_len as usize;
+        let locale_offset = record.locale_offset as usize;
+        if locale_len > 0
+            && locale_offset
+                .checked_add(locale_len)
+                .map_or(true, |end| end > strings.len())
+        {
+            return Err(text_status::ERR_BAD_VALUE);
+        }
+        if locale_len > 0 {
+            std::str::from_utf8(&strings[locale_offset..locale_offset + locale_len])
+                .map_err(|_| text_status::ERR_BAD_VALUE)?;
+        }
+        match record.font_width_present {
+            0 => {}
+            1 => {
+                let width = finite_f32(record.font_width_bits)?;
+                if width < 0.0 {
+                    return Err(text_status::ERR_BAD_VALUE);
+                }
+            }
+            _ => return Err(text_status::ERR_BAD_VALUE),
+        }
+        match record.opsz_present {
+            0 => {}
+            1 => {
+                let opsz = finite_f32(record.opsz_bits)?;
+                if opsz < 0.0 {
+                    return Err(text_status::ERR_BAD_VALUE);
+                }
+            }
+            _ => return Err(text_status::ERR_BAD_VALUE),
+        }
+        let variation_offset = record.variation_offset as usize;
+        let variation_count = record.variation_count as usize;
+        if variation_count > 0
+            && variation_offset
+                .checked_add(variation_count)
+                .map_or(true, |end| end > variations.len())
+        {
+            return Err(text_status::ERR_BAD_VALUE);
+        }
+        for variation in &variations[variation_offset..variation_offset + variation_count] {
+            check_variation(variation)?;
         }
 
         let len = record.len as usize;
@@ -1289,25 +1442,34 @@ fn text_font_names_body(
     text_status::OK
 }
 
-/// The weight the pinned resolution should see (gpui-perf ticket 05 and
-/// zterm ticket 13, recorded deviations from the pin). Fontique 0.11.1
-/// (font.rs:97-103) asks for bold synthesis whenever the requested weight
-/// is above the selected face's weight and the face has no `wght` axis,
-/// so 500 on a family whose closest face is the static Regular (400)
-/// rendered Regular through DirectWrite's bold simulation, and 700 on a
-/// family with SemiBold (600) as its heaviest face rendered SemiBold plus
-/// the simulation (a smear browsers never draw). Browsers synthesize only
-/// when the request is more than 200 above the matched face's weight
-/// (Blink font_cache_skia.cc @ d139f187, lines 347-353) and CSS never
-/// synthesizes below 600. When Fontique would synthesize and either rule
-/// says no, the request is replaced by the selected face's own OS/2
-/// weight, which selects the same face with no synthesis; the replacement
-/// is verified (same face bytes, no embolden) and otherwise dropped.
-/// Requests that pass both rules (700 over 400, 900 over 600) and faces
-/// with a `wght` axis (where Fontique sets the axis instead of
-/// emboldening) are unchanged. The oracle `ce-source` stays unmodified;
-/// this runs in the native service before every resolve and every
-/// shaping run.
+/// The weight the pinned resolution should see (gpui-perf ticket 05,
+/// zterm ticket 13 and browser-core ticket 39, recorded deviations from
+/// the pin). Fontique 0.11.1 (font.rs:97-103) asks for bold synthesis
+/// whenever the requested weight is above the selected face's weight and
+/// the face has no `wght` axis, so 500 on a family whose closest face is
+/// the static Regular (400) rendered Regular through DirectWrite's bold
+/// simulation, and 700 on a family with SemiBold (600) as its heaviest
+/// face rendered SemiBold plus the simulation (a smear browsers never
+/// draw). Chrome on Windows synthesizes bold only when the request is
+/// at least 600 AND the matched face is not already 600 or heavier
+/// (Chromium 0d4dcd4f, third_party/blink/renderer/platform/fonts/win/
+/// font_cache_skia_win.cc:484-486 — compiled on Windows per
+/// platform/BUILD.gn:1810-1813 — with kBoldThreshold = 600 from
+/// platform/fonts/font_selection_types.h:183 and SkTypeface::isBold()
+/// meaning weight >= 600, skia src/core/SkTypeface.cpp:491-493). The
+/// ">200 above the face" rule this service previously followed
+/// (skia/font_cache_skia.cc:347-353) is the non-Windows path: it sits
+/// inside `#if !BUILDFLAG(IS_WIN)` (font_cache_skia.cc:312) and is
+/// compiled out on Windows, so 600 over 400 and 700 over 500 must
+/// synthesize and 900 over 600 must not. When Fontique would synthesize
+/// and Chrome would not, the request is replaced by the selected face's
+/// own OS/2 weight, which selects the same face with no synthesis; the
+/// replacement is verified (same face bytes, no embolden) and otherwise
+/// dropped. Requests below 600 (CSS never synthesizes there), requests
+/// whose matched face is already 600 or heavier, and faces with a `wght`
+/// axis (where Fontique sets the axis instead of emboldening) are
+/// unchanged. The oracle `ce-source` stays unmodified; this runs in the
+/// native service before every resolve and every shaping run.
 fn effective_weight(
     state: &mut TextServiceState,
     stack: &TextStack,
@@ -1343,8 +1505,10 @@ fn effective_weight(
         if !(face_weight < weight.0) {
             return None;
         }
-        // Synthesis stays only where a browser would draw it too.
-        if weight.0 >= 600.0 && weight.0 > face_weight + 200.0 {
+        // Synthesis stays only where Chrome on Windows would draw it
+        // too: the request is at least 600 (kBoldThreshold) and the
+        // matched face is below 600 (SkTypeface::isBold()).
+        if weight.0 >= 600.0 && face_weight < 600.0 {
             return None;
         }
         let candidate = FontWeight(face_weight);
@@ -1601,6 +1765,8 @@ fn text_shape_body(
     run_count: u32,
     features: *const GpuiGoTextFeature,
     feature_count: u32,
+    variations: *const GpuiGoTextVariation,
+    variation_count: u32,
     strings: *const u8,
     strings_len: u32,
     font_size_bits: u32,
@@ -1614,6 +1780,9 @@ fn text_shape_body(
         return text_status::ERR_NULL_ARG;
     }
     if text_len > MAX_TEXT_BYTES || run_count > MAX_RUNS || feature_count > MAX_FEATURES {
+        return text_status::ERR_BAD_VALUE;
+    }
+    if variation_count > MAX_VARIATIONS {
         return text_status::ERR_BAD_VALUE;
     }
     if strings_len > MAX_STRINGS_BYTES {
@@ -1654,13 +1823,18 @@ fn text_shape_body(
             Ok(records) => records,
             Err(code) => return code,
         };
+        let variations = match borrowed_records(variations, variation_count) {
+            Ok(records) => records,
+            Err(code) => return code,
+        };
         let strings = match borrowed_slice(strings, strings_len) {
             Ok(bytes) => bytes,
             Err(code) => return code,
         };
         // Build the pinned run list (validates coverage, boundaries,
-        // features and fallback packing).
-        let runs = match build_runs(text, run_records, features, strings) {
+        // features, the rev-15 browser text fields and fallback
+        // packing).
+        let runs = match build_runs(text, run_records, features, variations, strings) {
             Ok(runs) => runs,
             Err(code) => return code,
         };
@@ -1700,6 +1874,7 @@ fn text_shape_body(
             shaping: Some(ShapingState {
                 text: text.to_owned(),
                 runs,
+                run_records: run_records.to_vec(),
                 font_size,
                 wrap_width,
                 line_clamp,
@@ -1789,6 +1964,30 @@ fn text_dispose_body(handle: u64) -> i32 {
     slot.occupied = false;
     slot.shaping = None;
     text_status::OK
+}
+
+/// The `text_run_info` body (rev 15): echoes one stored run record.
+fn text_run_info_body(handle: u64, run_index: u32, out: *mut GpuiGoTextRunRecord) -> i32 {
+    if out.is_null() {
+        return text_status::ERR_NULL_ARG;
+    }
+    let state = lock_global();
+    let result = with_shaping(&state, handle, |shaping| {
+        let record = shaping
+            .run_records
+            .get(run_index as usize)
+            .copied()
+            .ok_or(text_status::ERR_BAD_VALUE)?;
+        Ok(record)
+    });
+    match result {
+        Ok(record) => {
+            // SAFETY: the caller owns the out record.
+            unsafe { *out = record };
+            text_status::OK
+        }
+        Err(code) => code,
+    }
 }
 
 fn text_layout_info_body(handle: u64, out: *mut GpuiGoTextLayoutRecord) -> i32 {
@@ -2322,6 +2521,8 @@ unsafe extern "system" fn text_shape(
     run_count: u32,
     features: *const GpuiGoTextFeature,
     feature_count: u32,
+    variations: *const GpuiGoTextVariation,
+    variation_count: u32,
     strings: *const u8,
     strings_len: u32,
     font_size_bits: u32,
@@ -2340,6 +2541,8 @@ unsafe extern "system" fn text_shape(
             run_count,
             features,
             feature_count,
+            variations,
+            variation_count,
             strings,
             strings_len,
             font_size_bits,
@@ -2363,6 +2566,14 @@ unsafe extern "system" fn text_layout(
         "text_layout",
         text_layout_body(handle, wrap_width, wrap_present, line_clamp, clamp_present)
     )
+}
+
+unsafe extern "system" fn text_run_info(
+    handle: u64,
+    run_index: u32,
+    out: *mut GpuiGoTextRunRecord,
+) -> i32 {
+    text_entry!("text_run_info", text_run_info_body(handle, run_index, out))
 }
 
 unsafe extern "system" fn text_dispose(handle: u64) -> i32 {
@@ -2523,7 +2734,18 @@ pub(crate) mod tests {
             feature_count: 0,
             letter_spacing_present: 0,
             letter_spacing_bits: 0,
-            reserved: 0,
+            word_break: 0,
+            overflow_wrap: 0,
+            text_wrap: 0,
+            locale_offset: 0,
+            locale_len: 0,
+            font_width_present: 0,
+            font_width_bits: 0,
+            variation_offset: 0,
+            variation_count: 0,
+            opsz_present: 0,
+            opsz_bits: 0,
+            justify: 0,
         };
         let strings = b"Segoe UI";
         for _ in 0..200 {
@@ -2534,6 +2756,8 @@ pub(crate) mod tests {
                     text.len() as u32,
                     &run,
                     1,
+                    std::ptr::null(),
+                    0,
                     std::ptr::null(),
                     0,
                     strings.as_ptr(),
@@ -3047,7 +3271,18 @@ pub(crate) mod tests {
                 feature_count: 0,
                 letter_spacing_present: 0,
                 letter_spacing_bits: 0,
-                reserved: 0,
+                word_break: 0,
+                overflow_wrap: 0,
+                text_wrap: 0,
+                locale_offset: 0,
+                locale_len: 0,
+                font_width_present: 0,
+                font_width_bits: 0,
+                variation_offset: 0,
+                variation_count: 0,
+                opsz_present: 0,
+                opsz_bits: 0,
+                justify: 0,
             };
             let strings = family.as_bytes().to_vec();
             let mut handle = 0u64;
@@ -3057,6 +3292,8 @@ pub(crate) mod tests {
                     TEXT.len() as u32,
                     &run,
                     1,
+                    std::ptr::null(),
+                    0,
                     std::ptr::null(),
                     0,
                     strings.as_ptr(),
@@ -3409,7 +3646,18 @@ pub(crate) mod tests {
                 feature_count: 0,
                 letter_spacing_present: 0,
                 letter_spacing_bits: 0,
-                reserved: 0,
+                word_break: 0,
+                overflow_wrap: 0,
+                text_wrap: 0,
+                locale_offset: 0,
+                locale_len: 0,
+                font_width_present: 0,
+                font_width_bits: 0,
+                variation_offset: 0,
+                variation_count: 0,
+                opsz_present: 0,
+                opsz_bits: 0,
+                justify: 0,
             },
             GpuiGoTextRunRecord {
                 len: 9,
@@ -3423,7 +3671,18 @@ pub(crate) mod tests {
                 feature_count: 0,
                 letter_spacing_present: 0,
                 letter_spacing_bits: 0,
-                reserved: 0,
+                word_break: 0,
+                overflow_wrap: 0,
+                text_wrap: 0,
+                locale_offset: 0,
+                locale_len: 0,
+                font_width_present: 0,
+                font_width_bits: 0,
+                variation_offset: 0,
+                variation_count: 0,
+                opsz_present: 0,
+                opsz_bits: 0,
+                justify: 0,
             },
         ];
         let mut handle = 0;
@@ -3433,6 +3692,8 @@ pub(crate) mod tests {
                 text.len() as u32,
                 runs.as_ptr(),
                 2,
+                std::ptr::null(),
+                0,
                 std::ptr::null(),
                 0,
                 strings.as_ptr(),
@@ -3479,7 +3740,18 @@ pub(crate) mod tests {
             feature_count: 0,
             letter_spacing_present: 0,
             letter_spacing_bits: 0,
-            reserved: 0,
+            word_break: 0,
+            overflow_wrap: 0,
+            text_wrap: 0,
+            locale_offset: 0,
+            locale_len: 0,
+            font_width_present: 0,
+            font_width_bits: 0,
+            variation_offset: 0,
+            variation_count: 0,
+            opsz_present: 0,
+            opsz_bits: 0,
+            justify: 0,
         };
         let strings = b"Segoe UI";
         let mut handle = 0;
@@ -3489,6 +3761,8 @@ pub(crate) mod tests {
                 5,
                 &run,
                 1,
+                std::ptr::null(),
+                0,
                 std::ptr::null(),
                 0,
                 strings.as_ptr(),
@@ -3510,6 +3784,8 @@ pub(crate) mod tests {
                 2,
                 &GpuiGoTextRunRecord { len: 2, ..run },
                 1,
+                std::ptr::null(),
+                0,
                 std::ptr::null(),
                 0,
                 strings.as_ptr(),
@@ -3537,6 +3813,8 @@ pub(crate) mod tests {
                 1,
                 std::ptr::null(),
                 0,
+                std::ptr::null(),
+                0,
                 bad_strings.as_ptr(),
                 bad_strings.len() as u32,
                 FONT_SIZE.to_bits(),
@@ -3560,6 +3838,8 @@ pub(crate) mod tests {
                 1,
                 &feature,
                 1,
+                std::ptr::null(),
+                0,
                 strings.as_ptr(),
                 strings.len() as u32,
                 FONT_SIZE.to_bits(),
@@ -3582,6 +3862,8 @@ pub(crate) mod tests {
                 1,
                 &feature,
                 1,
+                std::ptr::null(),
+                0,
                 strings.as_ptr(),
                 strings.len() as u32,
                 FONT_SIZE.to_bits(),
@@ -3601,6 +3883,8 @@ pub(crate) mod tests {
                 2,
                 &run,
                 1,
+                std::ptr::null(),
+                0,
                 std::ptr::null(),
                 0,
                 strings.as_ptr(),
@@ -3756,7 +4040,18 @@ pub(crate) mod tests {
             feature_count: 0,
             letter_spacing_present: 0,
             letter_spacing_bits: 0,
-            reserved: 0,
+            word_break: 0,
+            overflow_wrap: 0,
+            text_wrap: 0,
+            locale_offset: 0,
+            locale_len: 0,
+            font_width_present: 0,
+            font_width_bits: 0,
+            variation_offset: 0,
+            variation_count: 0,
+            opsz_present: 0,
+            opsz_bits: 0,
+            justify: 0,
         };
         let strings = b"Segoe UI";
         loop {
@@ -3767,6 +4062,8 @@ pub(crate) mod tests {
                     1,
                     &fill_run,
                     1,
+                    std::ptr::null(),
+                    0,
                     std::ptr::null(),
                     0,
                     strings.as_ptr(),
@@ -3802,7 +4099,18 @@ pub(crate) mod tests {
             feature_count: 0,
             letter_spacing_present: 0,
             letter_spacing_bits: 0,
-            reserved: 0,
+            word_break: 0,
+            overflow_wrap: 0,
+            text_wrap: 0,
+            locale_offset: 0,
+            locale_len: 0,
+            font_width_present: 0,
+            font_width_bits: 0,
+            variation_offset: 0,
+            variation_count: 0,
+            opsz_present: 0,
+            opsz_bits: 0,
+            justify: 0,
         };
         let strings = b"Segoe UI";
         let code = unsafe {
@@ -3811,6 +4119,8 @@ pub(crate) mod tests {
                 1,
                 &run,
                 1,
+                std::ptr::null(),
+                0,
                 std::ptr::null(),
                 0,
                 strings.as_ptr(),
@@ -3834,6 +4144,8 @@ pub(crate) mod tests {
                 1,
                 &GpuiGoTextRunRecord { len: 1, ..run },
                 1,
+                std::ptr::null(),
+                0,
                 std::ptr::null(),
                 0,
                 strings.as_ptr(),
@@ -3876,7 +4188,18 @@ pub(crate) mod tests {
             feature_count: 0,
             letter_spacing_present: 0,
             letter_spacing_bits: 0,
-            reserved: 0,
+            word_break: 0,
+            overflow_wrap: 0,
+            text_wrap: 0,
+            locale_offset: 0,
+            locale_len: 0,
+            font_width_present: 0,
+            font_width_bits: 0,
+            variation_offset: 0,
+            variation_count: 0,
+            opsz_present: 0,
+            opsz_bits: 0,
+            justify: 0,
         };
         let mut times_handle = 0;
         let code = unsafe {
@@ -3885,6 +4208,8 @@ pub(crate) mod tests {
                 text.len() as u32,
                 &times_run,
                 1,
+                std::ptr::null(),
+                0,
                 std::ptr::null(),
                 0,
                 times.as_ptr(),
@@ -3916,7 +4241,18 @@ pub(crate) mod tests {
             feature_count: 1,
             letter_spacing_present: 0,
             letter_spacing_bits: 0,
-            reserved: 0,
+            word_break: 0,
+            overflow_wrap: 0,
+            text_wrap: 0,
+            locale_offset: 0,
+            locale_len: 0,
+            font_width_present: 0,
+            font_width_bits: 0,
+            variation_offset: 0,
+            variation_count: 0,
+            opsz_present: 0,
+            opsz_bits: 0,
+            justify: 0,
         };
         let strings = times;
         // 'liga' on vs off: Cambria's liga table substitutes a different
@@ -3936,6 +4272,8 @@ pub(crate) mod tests {
                     1,
                     &feature,
                     1,
+                    std::ptr::null(),
+                    0,
                     strings.as_ptr(),
                     strings.len() as u32,
                     FONT_SIZE.to_bits(),
@@ -3971,7 +4309,18 @@ pub(crate) mod tests {
             feature_count: 0,
             letter_spacing_present: 1,
             letter_spacing_bits: 2.0f32.to_bits(),
-            reserved: 0,
+            word_break: 0,
+            overflow_wrap: 0,
+            text_wrap: 0,
+            locale_offset: 0,
+            locale_len: 0,
+            font_width_present: 0,
+            font_width_bits: 0,
+            variation_offset: 0,
+            variation_count: 0,
+            opsz_present: 0,
+            opsz_bits: 0,
+            justify: 0,
         };
         let mut handle = 0;
         let code = unsafe {
@@ -3980,6 +4329,8 @@ pub(crate) mod tests {
                 text.len() as u32,
                 &run,
                 1,
+                std::ptr::null(),
+                0,
                 std::ptr::null(),
                 0,
                 strings.as_ptr(),

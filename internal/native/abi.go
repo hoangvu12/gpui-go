@@ -41,8 +41,13 @@ const (
 	// (frame-latency waitable swap chains, surface_frame_latency_handle)
 	// and no synthesized bold below weight 600; the zterm ticket 13 rebuild
 	// bumped it to 14: bold is synthesized only more than 200 above the
-	// matched static face's weight.
-	nativeRevision uint32 = 14
+	// matched static face's weight; the browser-core ticket 39 rebuild
+	// bumped it to 15: Chrome's actual Windows bold rule (synthesis only
+	// from weight 600 over a face below 600), gradient scene backgrounds,
+	// colour-matrix filters, the drop-shadow border-box clip-out, the
+	// backdrop mirror crop, a point sampler, browser text run fields and
+	// the layout flow-root/justify/track-list/baseline fields.
+	nativeRevision uint32 = 15
 	// maxBufferLen mirrors GPUI_GO_MAX_BUFFER_LEN.
 	maxBufferLen = 4096
 	// maxTextLen mirrors the text service's MAX_TEXT_BYTES (1 MiB text

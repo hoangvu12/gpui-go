@@ -7,6 +7,25 @@ reserved slot 3 of the bootstrap `GpuiGoAbiTable` (see
 path/draw extension). The Go mirror lives in
 `internal/native/scene.go`.
 
+**Scene service version 5 (browser-core ticket 39, native revision
+15):** the records grew the browser-parity surface: `background` and
+`border_color` (quads), `color` (shadows, paths) are full
+`GpuiGoSceneBackground` records — a solid or a two-stop linear gradient
+with CSS semantics (the gradient-line length `|W·sin θ| + |H·cos θ|`
+reaches the corners, the stops mix premultiplied in the sRGB default;
+both are recorded divergences from the pinned shader, compiled from the
+vendored copy in `native/shaders/` by the crate's `build.rs`); drop
+shadows clip out of the rounded `element_bounds` (CSS
+css-backgrounds-3 §box-shadow, another recorded divergence); filter
+records carry per-filter kind tags and one composed 4x5 colour matrix
+(CSS filter-effects' colour functions), applied in the composite pass;
+sprite records carry a `pixelated` sampling flag (CSS
+`image-rendering: pixelated`) that splits batches so one draws through
+the point sampler; and the backdrop blur's input is cropped to the
+element's pixel-covered bounds with mirrored margins (CSS
+filter-effects-2, Chromium `SkTileMode::kMirror`) instead of blurring
+the whole target.
+
 **Scene service version 4 (gpui-perf ticket 05, native revision 13):**
 the table gained slot 26, `insert_batch`
 `(u64, *const u32 words, u32 word_count, *mut u32 out_applied) -> i32`,
@@ -105,18 +124,19 @@ service table's self-check fields before any call.
 |---|---|---|
 | `GpuiGoSceneBounds` | 16 | x @0, y @4, w @8, h @12 (f32 bits) |
 | `GpuiGoSceneColor` | 20 | tag @0 (0 = solid), h @4, s @8, l @12, a @16 (f32 bits; h is degrees/360 in `[0,1]`) |
-| `GpuiGoSceneQuadRecord` | 132 | order @0, bounds @4, content_mask @20, background @36, border_color @56, corner_radii[4] @76, border_widths[4] @92, border_style @108, border_dashed_length @112, border_dashed_gap @116, corner_smoothing @120, padding @124, record_size @128 |
-| `GpuiGoSceneShadowRecord` | 120 | order @0, blur_radius @4, bounds @8, corner_radii[4] @24, content_mask @40, color @56, element_bounds @76, element_corner_radii[4] @92, inset @108, corner_smoothing @112, record_size @116 |
+| `GpuiGoSceneBackground` | 72 | tag @0 (0 = solid, 1 = linear gradient), color_space @4 (0 = sRGB, 1 = Oklab), h @8, s @12, l @16, a @20, angle @24, stop0_h @28, stop0_s @32, stop0_l @36, stop0_a @40, stop0_percentage @44, stop1_h @48, stop1_s @52, stop1_l @56, stop1_a @60, stop1_percentage @64, reserved @68 (all f32 bits; the stops' percentages are the CSS positions along the gradient line and must differ) |
+| `GpuiGoSceneQuadRecord` | 236 | order @0, bounds @4, content_mask @20, background @36, border_color @108, corner_radii[4] @180, border_widths[4] @196, border_style @212, border_dashed_length @216, border_dashed_gap @220, corner_smoothing @224, padding @228, record_size @232 |
+| `GpuiGoSceneShadowRecord` | 172 | order @0, blur_radius @4, bounds @8, corner_radii[4] @24, content_mask @40, color @56, element_bounds @128, element_corner_radii[4] @144, inset @160, corner_smoothing @164, record_size @168 |
 | `GpuiGoSceneUnderlineRecord` | 72 | order @0, padding @4, bounds @8, content_mask @24, color @40, thickness @60, wavy @64, record_size @68 |
-| `GpuiGoSceneFilterRecord` | 88 | order @0, bounds @4, content_mask @20, corner_radii[4] @36, corner_smoothing @52, blur_radii[4] @56, filter_count @72, opacity @76, is_start @80, record_size @84 |
+| `GpuiGoSceneFilterRecord` | 188 | order @0, bounds @4, content_mask @20, corner_radii[4] @36, corner_smoothing @52, blur_radii[4] @56, filter_count @72, opacity @76, is_start @80, filter_tags[4] @84 (per-filter: 0 = blur, 1 = colour matrix; unused entries zero), color_matrix[20] @100 (the composed row-major 4x5 matrix, f32 bits), color_matrix_count @180, record_size @184 |
 | `GpuiGoSceneSurfaceRecord` | 56 | order @0, bounds @4, content_mask @20, source_tag @36, source_reserved[3] @40, record_size @56 |
 | `GpuiGoSceneTileRecord` | 32 | texture_index @0, texture_kind @4, tile_id @8, padding @12, bounds x/y/w/h @16..32 (the pinned `AtlasTile` sub-record of the sprite records) |
-| `GpuiGoSceneSpriteRecord` | 120 | order @0, padding @4, bounds @8, content_mask @24, color @40, tile @60, transformation[6] @92 (rotation-scale 2x2 then translation, f32 bits), record_size @116 (the pinned `MonochromeSprite`/`SubpixelSprite` field set) |
-| `GpuiGoScenePolychromeSpriteRecord` | 100 | order @0, grayscale @4, opacity @8, corner_smoothing @12, bounds @16, content_mask @32, corner_radii[4] @48, tile @64, record_size @96 |
-| `GpuiGoSceneCommandRecord` | 52 | command_kind @0, primitive_kind @4, range_start @8, range_end @12, smoothed @16, texture_index @20, rasterization_vertex_count @24, sprite_count @28, boundary_index @32, closing_boundary_index @36, filter_target @40, target_index @44, record_size @48 |
+| `GpuiGoSceneSpriteRecord` | 124 | order @0, padding @4, bounds @8, content_mask @24, color @40, tile @60, transformation[6] @92 (rotation-scale 2x2 then translation, f32 bits), pixelated @116 (0 = bilinear, 1 = point sampling), record_size @120 (the pinned `MonochromeSprite`/`SubpixelSprite` field set) |
+| `GpuiGoScenePolychromeSpriteRecord` | 104 | order @0, grayscale @4, opacity @8, corner_smoothing @12, bounds @16, content_mask @32, corner_radii[4] @48, tile @64, pixelated @96, record_size @100 |
+| `GpuiGoSceneCommandRecord` | 56 | command_kind @0, primitive_kind @4, range_start @8, range_end @12, smoothed @16, pixelated @20, texture_index @24, rasterization_vertex_count @28, sprite_count @32, boundary_index @36, closing_boundary_index @40, filter_target @44, target_index @48, record_size @52 |
 | `GpuiGoSceneRequirementsRecord` | 44 | command_count @0, instance_batch_count @4, path_rasterization_vertex_count @8, path_sprite_count @12, surface_count @16, backdrop_filter_count @20, isolated_filter_count @24, isolated_target_count @28, uses_path_target @32, uses_offscreen_target @36, record_size @40 |
 | `GpuiGoSceneMetaRecord` | 56 | op_count @0, layer_push_count @4, quad_count @8, shadow_count @12, underline_count @16, backdrop_count @20, boundary_count @24, surface_count @28, monochrome_sprite_count @32, subpixel_sprite_count @36, polychrome_sprite_count @40, path_count @44, is_finished @48, record_size @52 |
-| `GpuiGoScenePathRecord` | 64 | order @0, bounds @4, content_mask @20, color @36, vertex_count @56, record_size @60 |
+| `GpuiGoScenePathRecord` | 116 | order @0, bounds @4, content_mask @20, color @36, vertex_count @108, record_size @112 |
 | `GpuiGoScenePathVertexRecord` | 16 | xy_x @0, xy_y @4, st_u @8, st_v @12 (f32 bits) |
 | `GpuiGoPathCommandRecord` | 56 | kind @0, data[12] @4, record_size @52 |
 

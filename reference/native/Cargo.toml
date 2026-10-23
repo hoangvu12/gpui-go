@@ -160,6 +160,30 @@ windows = { version = "0.62.2", features = [
     "Graphics_DirectX_Direct3D11",
 ] }
 
+# The rev-15 vendored shader pipeline (browser-core ticket 39): the
+# build script lowers the patched shader copies in `shaders/` to HLSL
+# sm_5.0 and compiles DXBC, the same chain the pinned `gpui_render`
+# build.rs runs — Naga 24 (the pinned crate aliases it `naga-old`) for
+# validation and the HLSL backend, wgsl-rs for WGSL generation from the
+# Rust-authored modules, and the windows crate's Fxc bindings for
+# D3DCompile. All three resolve to the same versions the pinned
+# `gpui-render` dependency already builds with, so no new crate version
+# enters the graph; none of this reaches the artifact's runtime imports
+# (the build script is host-only).
+[build-dependencies]
+naga = { version = "24.0.0", features = [
+  "hlsl-out",
+  "wgsl-in",
+] }
+wgsl-rs = { git = "https://github.com/schell/wgsl-rs", rev = "b2de16a1b81e67d76bc265c296184f882864badb", default-features = false, features = ["validation"] }
+
+[target.'cfg(windows)'.build-dependencies]
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D_Fxc",
+] }
+
 [lib]
 # One cdylib: the exact native artifact loaded by the Go-only consumer.
 crate-type = ["cdylib"]
