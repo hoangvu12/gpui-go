@@ -27,7 +27,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - 27: verified, merged and RESOLVED.
 - 41 filters: chat b48fe0e3, worktree `gpui-go-wt-core-41`, branch `core/41-filters`
 - 62 TSX host: verified, merged and RESOLVED (gpui/script). Its frame-overhead timing test reached 0.66 ms of its 1 ms limit under load; watch it for flakiness.
-- RUNNING NOW: 06, 08, 09, 40, 41.
+- 10 hover: chat 9fc1818d, worktree `gpui-go-wt-core-10`, branch `core/10-hover`
+- RUNNING NOW: 06, 08, 09, 10, 40, 41.
 
 Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
 
