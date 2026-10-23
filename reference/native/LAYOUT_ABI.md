@@ -46,7 +46,11 @@ typedef struct { GpuiLen width, height; } GpuiSizeL;
 
 `GpuiGoLayoutStyleRecord` carries exactly the GPUI-forwarded style set (see
 `crates/gpui/src/taffy.rs::into_taffy_style`). It is a flat record of u32
-fields (336 bytes, alignment 4, trailing `record_size` self-check); no
+fields (352 bytes, alignment 4, trailing `record_size` self-check; rev
+15 appended `justify_items_present`/`justify_items` and
+`justify_self_present`/`justify_self` — CSS justify-items/self, the
+align-items value mapping — and the display tag 4 is CSS `flow-root`,
+Taffy's `Display::FlowRoot`); no
 pointers. Field groups, in order:
 
 - display (u32: 0 flex, 1 block, 2 grid, 3 none — `Inline`→block, `InlineFlex`→flex mapped by the Go adapter before the record);
@@ -86,14 +90,17 @@ typedef struct {
 typedef struct {
     i32 status;            // 0 ok; 1 callback failed (panic recovered, latched); 2 invalid token
     u32 width_bits, height_bits;  // device pixels
-} GpuiMeasureResponse;  // size 12, align 4
+} GpuiMeasureResponse;  // size 20, align 4 (rev 15: + baseline
+                         // u32 baseline_present, u32 baseline_bits —
+                         // the measured content's first baseline in
+                         // device pixels from the measured box's top)
 ```
 
 ## Service table
 
 `CLARIFIED` (structure; the function list was already authoritative): slot 1
 of `GpuiGoAbiTable` holds the address of a static
-`#[repr(C)] GpuiGoLayoutTable` (160 bytes, alignment 8): 14 function
+`#[repr(C)] GpuiGoLayoutTable` (168 bytes, alignment 8): 15 function
 pointers (all `extern "system"`, each returning `i32`), then 11 self-check
 scalars — `service_version` (1), `size_of_table`, `align_of_table`,
 `size_of_style_record`, `size_of_layout_record`, `size_of_avail`,
@@ -113,6 +120,15 @@ i32 layout_engine_dispose(u64 engine);                // frees; pending callback
 i32 layout_node_create(u64 engine, const GpuiGoLayoutStyleRecord* style,
                        const u64* children, u32 child_count, u64* out_node);
 i32 layout_node_set_style(u64 engine, u64 node, const GpuiGoLayoutStyleRecord* style);
+// rev 15: a variable-length grid track list for one axis (0 rows,
+// 1 columns; count 0 clears the axis). GpuiGoTrackRecord is
+// { u32 min_tag, u32 min_bits, u32 max_tag, u32 max_bits } (16 bytes):
+// min 0 length/1 min-content/2 max-content/3 auto; max 0 length/1
+// min-content/2 max-content/3 auto/4 fr (the factor in max_bits, > 0).
+// Each track is a minmax pair; `240px 1fr` is one length track plus one
+// auto/fr track.
+i32 layout_node_set_grid_tracks(u64 engine, u64 node, u32 axis,
+                                const GpuiGoTrackRecord* tracks, u32 count);
 i32 layout_node_set_measure(u64 engine, u64 node, u64 callback_token); // measured leaf
 i32 layout_node_remove_subtree(u64 engine, u64 node);
 
@@ -141,11 +157,25 @@ i32 layout_set_trampoline(Trampoline trampoline);
 ```
 
 `GpuiGoLayoutRecord` mirrors taffy's `Layout` for the fields the GPUI adapter
-consumes (72 bytes, alignment 4): order (i32), location x/y, size w/h,
+consumes (80 bytes, alignment 4; rev 15 added the `first_baseline`
+echo): order (i32), location x/y, size w/h,
 content_size w/h, scrollbar_size w/h, border top/right/bottom/left, padding
 top/right/bottom/left (all f32, unrounded device pixels — Taffy rounding is
 disabled; the pinned Go-side snapping consumes them), plus a trailing
 `u32 record_size`.
+
+## The rev-15 measured baseline (recorded limit)
+
+The measure response carries the measured content's first baseline, and
+the layout record echoes it for measured nodes. Taffy 0.13's public
+surface cannot feed a measured leaf's baseline into the algorithms: the
+leaf compute hardcodes `first_baselines: Point::NONE`
+(`compute/leaf.rs:157`), the stored `Layout` drops the field entirely,
+and the `TaffyView` the compute drives is `pub(crate)` — so baseline
+alignment still falls back to the item's height exactly as the pin does.
+The echo is what the later Go styling tickets (L8) consume; wiring it
+into the algorithms needs a Taffy change or a vendored tree trait
+(revisit with the R17 retained-layout ABI).
 
 ## Status codes
 

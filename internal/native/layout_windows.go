@@ -90,6 +90,28 @@ func callLayoutNodeSetStyle(fn uintptr, engine, node uint64, style *LayoutStyleR
 	return callStatus(r1), nil
 }
 
+func callLayoutNodeSetGridTracks(
+	fn uintptr,
+	engine, node uint64,
+	axis uint32,
+	tracks *LayoutTrackRecord,
+	trackCount uint32,
+) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("node_set_grid_tracks")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(engine),
+		uintptr(node),
+		uintptr(axis),
+		uintptr(unsafe.Pointer(tracks)),
+		uintptr(trackCount),
+	)
+	runtime.KeepAlive(tracks)
+	return callStatus(r1), nil
+}
+
 func callLayoutNodeSetMeasure(fn uintptr, engine, node, token uint64) (int32, error) {
 	if fn == 0 {
 		return 0, nullSlot("node_set_measure")
@@ -313,6 +335,14 @@ func layoutTrampolineFn(req, resp uintptr) uintptr {
 		status:     0,
 		widthBits:  math.Float32bits(measured.Width),
 		heightBits: math.Float32bits(measured.Height),
+	}
+	// rev 15: the measured content's first baseline, when reported.
+	if measured.FirstBaseline != nil {
+		baseline := *measured.FirstBaseline
+		if isFinite32(baseline) && baseline >= 0 {
+			record.baselinePresent = 1
+			record.baselineBits = math.Float32bits(baseline)
+		}
 	}
 	*(*measureResponseRec)(*(*unsafe.Pointer)(unsafe.Pointer(&resp))) = record
 	return 0

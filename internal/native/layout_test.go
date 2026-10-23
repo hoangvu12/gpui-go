@@ -144,8 +144,8 @@ func TestLayoutServiceTableValidation(t *testing.T) {
 // record_size fields are already checked at service fetch; these pin the
 // field offsets).
 func TestLayoutRecordBinaryLayout(t *testing.T) {
-	if got := unsafe.Sizeof(LayoutStyleRecord{}); got != 336 {
-		t.Errorf("sizeof(LayoutStyleRecord) = %d, want 336", got)
+	if got := unsafe.Sizeof(LayoutStyleRecord{}); got != 352 {
+		t.Errorf("sizeof(LayoutStyleRecord) = %d, want 352", got)
 	}
 	if got := unsafe.Alignof(LayoutStyleRecord{}); got != 4 {
 		t.Errorf("alignof(LayoutStyleRecord) = %d, want 4", got)
@@ -165,7 +165,9 @@ func TestLayoutRecordBinaryLayout(t *testing.T) {
 		{"Gap", unsafe.Offsetof(LayoutStyleRecord{}.Gap), 224},
 		{"FlexBasis", unsafe.Offsetof(LayoutStyleRecord{}.FlexBasis), 248},
 		{"GridPlacementPresent", unsafe.Offsetof(LayoutStyleRecord{}.GridPlacementPresent), 296},
-		{"RecordSize", unsafe.Offsetof(LayoutStyleRecord{}.RecordSize), 332},
+		{"JustifyItemsPresent", unsafe.Offsetof(LayoutStyleRecord{}.JustifyItemsPresent), 332},
+		{"JustifySelfPresent", unsafe.Offsetof(LayoutStyleRecord{}.JustifySelfPresent), 340},
+		{"RecordSize", unsafe.Offsetof(LayoutStyleRecord{}.RecordSize), 348},
 	}
 	for _, o := range offsets {
 		if o.got != o.wanted {
@@ -173,11 +175,14 @@ func TestLayoutRecordBinaryLayout(t *testing.T) {
 		}
 	}
 
-	if got := unsafe.Sizeof(LayoutRecord{}); got != 72 {
-		t.Errorf("sizeof(LayoutRecord) = %d, want 72", got)
+	if got := unsafe.Sizeof(LayoutRecord{}); got != 80 {
+		t.Errorf("sizeof(LayoutRecord) = %d, want 80", got)
 	}
-	if got := unsafe.Offsetof(LayoutRecord{}.RecordSize); got != 68 {
-		t.Errorf("offsetof(LayoutRecord.RecordSize) = %d, want 68", got)
+	if got := unsafe.Offsetof(LayoutRecord{}.FirstBaselinePresent); got != 68 {
+		t.Errorf("offsetof(LayoutRecord.FirstBaselinePresent) = %d, want 68", got)
+	}
+	if got := unsafe.Offsetof(LayoutRecord{}.RecordSize); got != 76 {
+		t.Errorf("offsetof(LayoutRecord.RecordSize) = %d, want 76", got)
 	}
 	if got := unsafe.Sizeof(measureRequestRec{}); got != 72 {
 		t.Errorf("sizeof(measureRequestRec) = %d, want 72", got)
@@ -188,11 +193,14 @@ func TestLayoutRecordBinaryLayout(t *testing.T) {
 	if got := unsafe.Offsetof(measureRequestRec{}.availWidthBits); got != 56 {
 		t.Errorf("offsetof(availWidthBits) = %d, want 56", got)
 	}
-	if got := unsafe.Sizeof(measureResponseRec{}); got != 12 {
-		t.Errorf("sizeof(measureResponseRec) = %d, want 12", got)
+	if got := unsafe.Sizeof(measureResponseRec{}); got != 20 {
+		t.Errorf("sizeof(measureResponseRec) = %d, want 20", got)
 	}
-	if got := unsafe.Sizeof(layoutTable{}); got != 160 {
-		t.Errorf("sizeof(layoutTable) = %d, want 160", got)
+	if got := unsafe.Offsetof(measureResponseRec{}.baselinePresent); got != 12 {
+		t.Errorf("offsetof(measureResponseRec.baselinePresent) = %d, want 12", got)
+	}
+	if got := unsafe.Sizeof(layoutTable{}); got != 168 {
+		t.Errorf("sizeof(layoutTable) = %d, want 168", got)
 	}
 }
 

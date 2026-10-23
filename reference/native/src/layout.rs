@@ -207,16 +207,34 @@ pub struct GpuiMeasureRequest {
 
 /// Measurement response written in place by the Go trampoline.
 ///
-/// Layout: `status` @0, `width_bits` @4, `height_bits` @8; size 12, align 4.
+/// Layout: `status` @0, `width_bits` @4, `height_bits` @8,
+/// `baseline_present` @12, `baseline_bits` @16; size 20, align 4.
 /// `status`: 0 ok, 1 callback failed (panic recovered), 2 invalid token.
 /// `width_bits`/`height_bits` are device pixels (Taffy's units; the Go
 /// adapter applied the pinned measurement snapping before writing them).
+///
+/// rev 15 (browser-core ticket 39): `baseline_present`/`baseline_bits`
+/// carry the measured content's first baseline in device pixels from
+/// the top of the measured box (CSS flexbox §8.3: baseline alignment
+/// uses each item's first baseline). Taffy 0.13's public surface cannot
+/// feed a measured leaf's baseline into the algorithms (the leaf
+/// compute hardcodes `Point::NONE`, `compute/leaf.rs:157`, and the tree
+/// view over `TaffyTree` is `pub(crate)`), so the service stashes it
+/// per measured node and reports it through the layout record's
+/// `first_baseline` echo; the algorithms keep their pinned
+/// bottom-edge-until-baseline fallback until Taffy grows the hook
+/// (recorded in LAYOUT_ABI.md).
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct GpuiMeasureResponse {
     pub status: i32,
     pub width_bits: u32,
     pub height_bits: u32,
+    /// 0/1: whether the measured content reported a first baseline.
+    pub baseline_present: u32,
+    /// The first baseline in device pixels from the measured box's top
+    /// (f32 bits) when present.
+    pub baseline_bits: u32,
 }
 
 /// Computed layout for one node, mirroring the Taffy `Layout` fields the
@@ -227,8 +245,13 @@ pub struct GpuiMeasureResponse {
 /// `size_h` @16, `content_w` @20, `content_h` @24, `scrollbar_w` @28,
 /// `scrollbar_h` @32, `border_top` @36, `border_right` @40, `border_bottom`
 /// @44, `border_left` @48, `padding_top` @52, `padding_right` @56,
-/// `padding_bottom` @60, `padding_left` @64, `record_size` @68;
-/// size 72, align 4.
+/// `padding_bottom` @60, `padding_left` @64, `first_baseline_present`
+/// @68, `first_baseline_bits` @72, `record_size` @76; size 80, align 4.
+///
+/// rev 15 (browser-core ticket 39): the `first_baseline` echo reports
+/// the baseline the node's last measure response carried (Taffy's
+/// stored Layout drops baselines; its compute-internal leaf output
+/// hardcodes `Point::NONE`, `compute/leaf.rs:157`).
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct GpuiGoLayoutRecord {
@@ -256,6 +279,11 @@ pub struct GpuiGoLayoutRecord {
     pub padding_right: f32,
     pub padding_bottom: f32,
     pub padding_left: f32,
+    /// 0/1: whether a first baseline is reported for this node.
+    pub first_baseline_present: u32,
+    /// The first baseline in device pixels from the node's top (f32
+    /// bits) when present.
+    pub first_baseline_bits: u32,
     /// `size_of::<GpuiGoLayoutRecord>()` self-check.
     pub record_size: u32,
 }
@@ -386,10 +414,46 @@ pub struct GpuiGoLayoutStyleRecord {
     /// Column end value.
     pub grid_column_end_value: u32,
 
+    /// rev 15 (browser-core ticket 39): CSS justify-items presence
+    /// (0/1). The value space is `align_items`'s (Taffy's
+    /// `justify_items: Option<AlignItems>`).
+    pub justify_items_present: u32,
+    /// CSS justify-items (the `align_items` value mapping).
+    pub justify_items: u32,
+    /// rev 15: CSS justify-self presence (0/1; the `align_self` value
+    /// mapping — Taffy's `justify_self: Option<AlignSelf>`).
+    pub justify_self_present: u32,
+    /// CSS justify-self.
+    pub justify_self: u32,
+
     /// `size_of::<GpuiGoLayoutStyleRecord>()` self-check; a mismatch is a
     /// caller error before anything else is read.
     pub record_size: u32,
 }
+
+/// One grid track sizing component (rev 15, browser-core ticket 39):
+/// a `minmax(min, max)` pair — CSS track lists are built from these
+/// (a bare length/keyword track is the minmax with the same min and
+/// max). Layout: `min_tag` @0, `min_bits` @4, `max_tag` @8,
+/// `max_bits` @12; size 16, align 4.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GpuiGoTrackRecord {
+    /// Minimum sizing: 0 = length (`min_bits`), 1 = min-content,
+    /// 2 = max-content, 3 = auto.
+    pub min_tag: u32,
+    /// The minimum length (f32 bits) when the tag is 0.
+    pub min_bits: u32,
+    /// Maximum sizing: 0 = length (`max_bits`), 1 = min-content,
+    /// 2 = max-content, 3 = auto, 4 = fr (`max_bits`).
+    pub max_tag: u32,
+    /// The maximum length or fr factor (f32 bits) when the tag is 0
+    /// or 4.
+    pub max_bits: u32,
+}
+
+/// Maximum track components in one axis (rev 15).
+pub const MAX_GRID_TRACKS: u32 = 256;
 
 // Compile-time layout pins; the Go loader mirrors these exactly.
 const _: () = assert!(std::mem::size_of::<GpuiLen>() == 8);
@@ -400,14 +464,16 @@ const _: () = assert!(std::mem::size_of::<GpuiAvail>() == 8);
 const _: () = assert!(std::mem::size_of::<GpuiAvailSize>() == 16);
 const _: () = assert!(std::mem::size_of::<GpuiMeasureRequest>() == 72);
 const _: () = assert!(std::mem::align_of::<GpuiMeasureRequest>() == 8);
-const _: () = assert!(std::mem::size_of::<GpuiMeasureResponse>() == 12);
+const _: () = assert!(std::mem::size_of::<GpuiMeasureResponse>() == 20);
 const _: () = assert!(std::mem::align_of::<GpuiMeasureResponse>() == 4);
-const _: () = assert!(std::mem::size_of::<GpuiGoLayoutRecord>() == 72);
+const _: () = assert!(std::mem::size_of::<GpuiGoLayoutRecord>() == 80);
 const _: () = assert!(std::mem::align_of::<GpuiGoLayoutRecord>() == 4);
-const _: () = assert!(std::mem::size_of::<GpuiGoLayoutStyleRecord>() == 336);
+const _: () = assert!(std::mem::size_of::<GpuiGoLayoutStyleRecord>() == 352);
 const _: () = assert!(std::mem::align_of::<GpuiGoLayoutStyleRecord>() == 4);
-const _: () = assert!(std::mem::size_of::<GpuiGoLayoutTable>() == 160);
+const _: () = assert!(std::mem::size_of::<GpuiGoLayoutTable>() == 168);
 const _: () = assert!(std::mem::align_of::<GpuiGoLayoutTable>() == 8);
+const _: () = assert!(std::mem::size_of::<GpuiGoTrackRecord>() == 16);
+const _: () = assert!(std::mem::align_of::<GpuiGoTrackRecord>() == 4);
 
 // ---------------------------------------------------------------------------
 // Handle packing
@@ -493,6 +559,9 @@ fn display_from(value: u32) -> Result<Display, i32> {
         1 => Ok(Display::Block),
         2 => Ok(Display::Grid),
         3 => Ok(Display::None),
+        // rev 15: CSS display: flow-root (Taffy 0.13 has FlowRoot; the
+        // pinned gpui Style does not).
+        4 => Ok(Display::FlowRoot),
         _ => Err(layout_status::ERR_BAD_VALUE),
     }
 }
@@ -725,6 +794,13 @@ pub(crate) fn into_taffy_style(rec: &GpuiGoLayoutStyleRecord) -> Result<TaffySty
     if present_flag(rec.justify_content_present)? {
         style.justify_content = Some(align_content_from(rec.justify_content)?);
     }
+    // rev 15: CSS justify-items / justify-self (grid alignment).
+    if present_flag(rec.justify_items_present)? {
+        style.justify_items = Some(align_items_from(rec.justify_items)?);
+    }
+    if present_flag(rec.justify_self_present)? {
+        style.justify_self = Some(align_items_from(rec.justify_self)?);
+    }
 
     if let Some(v) = len_to_lp(rec.gap.width)? {
         style.gap.width = v;
@@ -817,6 +893,12 @@ struct EngineState {
     /// Failed flag: set by contained panics and latched callback failures;
     /// cleared only by reset.
     failed: bool,
+    /// rev 15: the first baseline each measured node's last measure
+    /// response reported (device pixels from the measured box's top).
+    /// Taffy 0.13 cannot feed it into the algorithms, so it is stashed
+    /// here and reported through the layout record's `first_baseline`
+    /// echo for measured leaves.
+    measured_baselines: HashMap<NodeId, f32>,
 }
 
 // SAFETY: `TaffyTree` is `!Send` only because `Style`'s compact length can
@@ -841,6 +923,7 @@ impl EngineState {
             reverse: HashMap::new(),
             next_node_seq: 0,
             failed: false,
+            measured_baselines: HashMap::new(),
         }
     }
 
@@ -993,6 +1076,18 @@ pub struct GpuiGoLayoutTable {
     pub node_set_style: Option<unsafe extern "system" fn(u64, u64, *const GpuiGoLayoutStyleRecord) -> i32>,
     /// `layout_node_set_measure`.
     pub node_set_measure: Option<unsafe extern "system" fn(u64, u64, u64) -> i32>,
+    /// `layout_node_set_grid_tracks` (rev 15): sets the node's grid
+    /// template for one axis from a variable-length track list (0 =
+    /// rows, 1 = columns; count 0 clears the axis).
+    pub node_set_grid_tracks: Option<
+        unsafe extern "system" fn(
+            u64,
+            u64,
+            u32,
+            *const GpuiGoTrackRecord,
+            u32,
+        ) -> i32,
+    >,
     /// `layout_node_remove_subtree`.
     pub node_remove_subtree: Option<unsafe extern "system" fn(u64, u64) -> i32>,
     /// `layout_compute`.
@@ -1042,6 +1137,7 @@ pub(crate) static LAYOUT_TABLE: GpuiGoLayoutTable = GpuiGoLayoutTable {
     node_create: Some(layout_node_create),
     node_set_style: Some(layout_node_set_style),
     node_set_measure: Some(layout_node_set_measure),
+    node_set_grid_tracks: Some(layout_node_set_grid_tracks),
     node_remove_subtree: Some(layout_node_remove_subtree),
     compute: Some(layout_compute),
     node_layout: Some(layout_node_layout),
@@ -1248,6 +1344,111 @@ fn node_set_style_body(
     layout_status::OK
 }
 
+/// The `layout_node_set_grid_tracks` body (rev 15): replaces the
+/// node's grid template for one axis with the validated track list
+/// (each component a minmax pair; Taffy's `GridTemplateComponent::
+/// Single`).
+fn node_set_grid_tracks_body(
+    engine: u64,
+    node: u64,
+    axis: u32,
+    tracks: *const GpuiGoTrackRecord,
+    track_count: u32,
+) -> i32 {
+    if track_count > MAX_GRID_TRACKS {
+        return layout_status::ERR_BAD_VALUE;
+    }
+    let track_slice = if track_count == 0 {
+        if tracks.is_null() {
+            &[][..]
+        } else {
+            return layout_status::ERR_BAD_VALUE;
+        }
+    } else {
+        if tracks.is_null() {
+            return layout_status::ERR_NULL_ARG;
+        }
+        // SAFETY: the caller owns the track array for the call's
+        // duration; the count is bounds-checked above.
+        unsafe { std::slice::from_raw_parts(tracks, track_count as usize) }
+    };
+    let mut components: Vec<taffy::style::GridTemplateComponent<String>> =
+        Vec::with_capacity(track_slice.len());
+    for track in track_slice {
+        let sizing = match track_sizing_from(track) {
+            Ok(sizing) => sizing,
+            Err(code) => return code,
+        };
+        components.push(taffy::style::GridTemplateComponent::Single(sizing));
+    }
+    let shared = match resolve_engine(engine) {
+        Ok(shared) => shared,
+        Err(code) => return code,
+    };
+    if shared.busy.load(Ordering::SeqCst) {
+        return layout_status::ERR_ENGINE_BUSY;
+    }
+    let mut state = lock_state(&shared);
+    if state.failed {
+        return layout_status::ERR_ENGINE_FAILED;
+    }
+    let node_id = match state.resolve_node(node) {
+        Ok(node_id) => node_id,
+        Err(code) => return code,
+    };
+    let mut style = state
+        .taffy
+        .style(node_id)
+        .expect("gpui-go: taffy style lookup failed")
+        .clone();
+    match axis {
+        0 => style.grid_template_rows = components,
+        1 => style.grid_template_columns = components,
+        _ => return layout_status::ERR_BAD_VALUE,
+    }
+    state
+        .taffy
+        .set_style(node_id, style)
+        .expect("gpui-go: taffy set_style failed");
+    layout_status::OK
+}
+
+/// Decodes one track record into Taffy's `TrackSizingFunction` (a
+/// minmax pair; the tags are the CSS keywords).
+fn track_sizing_from(
+    track: &GpuiGoTrackRecord,
+) -> Result<taffy::style::TrackSizingFunction, i32> {
+    use taffy::style::{MaxTrackSizingFunction, MinTrackSizingFunction};
+    use taffy::style_helpers::{TaffyAuto, TaffyMaxContent, TaffyMinContent};
+    for bits in [track.min_bits, track.max_bits] {
+        if !f32::from_bits(bits).is_finite() {
+            return Err(layout_status::ERR_BAD_VALUE);
+        }
+    }
+    let min = match track.min_tag {
+        0 => MinTrackSizingFunction::length(definite_bits(track.min_bits)),
+        1 => MinTrackSizingFunction::MIN_CONTENT,
+        2 => MinTrackSizingFunction::MAX_CONTENT,
+        3 => MinTrackSizingFunction::AUTO,
+        _ => return Err(layout_status::ERR_BAD_VALUE),
+    };
+    let max = match track.max_tag {
+        0 => MaxTrackSizingFunction::length(definite_bits(track.max_bits)),
+        1 => MaxTrackSizingFunction::MIN_CONTENT,
+        2 => MaxTrackSizingFunction::MAX_CONTENT,
+        3 => MaxTrackSizingFunction::AUTO,
+        4 => {
+            let factor = definite_bits(track.max_bits);
+            if factor <= 0.0 {
+                return Err(layout_status::ERR_BAD_VALUE);
+            }
+            MaxTrackSizingFunction::fr(factor)
+        }
+        _ => return Err(layout_status::ERR_BAD_VALUE),
+    };
+    Ok(minmax(min, max))
+}
+
 fn node_set_measure_body(engine: u64, node: u64, callback_token: u64) -> i32 {
     let shared = match resolve_engine(engine) {
         Ok(shared) => shared,
@@ -1371,6 +1572,11 @@ fn compute_body(
     let mut callbacks_invoked = false;
     let mut failure: Option<ComputeFailure> = None;
     let trampoline = TRAMPOLINE.load(Ordering::Acquire);
+    // rev 15: the measure closure fills this map (taken out of the
+    // engine state so the taffy borrow stays exclusive), and it is
+    // restored below.
+    let mut baselines = std::mem::take(&mut state.measured_baselines);
+    baselines.clear();
 
     state
         .taffy
@@ -1416,8 +1622,13 @@ fn compute_body(
                     avail_height_bits,
                     reserved: [0; 2],
                 };
-                let mut response =
-                    GpuiMeasureResponse { status: -1, width_bits: 0, height_bits: 0 };
+                let mut response = GpuiMeasureResponse {
+                    status: -1,
+                    width_bits: 0,
+                    height_bits: 0,
+                    baseline_present: 0,
+                    baseline_bits: 0,
+                };
                 let call_code = unsafe { trampoline_fn(&mut request, &mut response) };
                 callbacks_invoked = true;
                 if call_code != 0 || response.status != 0 {
@@ -1432,11 +1643,23 @@ fn compute_body(
                     failure = Some(ComputeFailure::CallbackFailed);
                     return TaffySize::zero();
                 }
+                // rev 15: stash the reported first baseline (validated
+                // finite; a non-finite one is a callback failure like a
+                // non-finite size).
+                if response.baseline_present != 0 {
+                    let baseline = f32::from_bits(response.baseline_bits);
+                    if !baseline.is_finite() || baseline < 0.0 {
+                        failure = Some(ComputeFailure::CallbackFailed);
+                        return TaffySize::zero();
+                    }
+                    baselines.insert(_node_id, baseline);
+                }
                 TaffySize { width, height }
             },
         )
         .expect("gpui-go: taffy compute_layout failed");
 
+    state.measured_baselines = baselines;
     unsafe { *out_flags = u32::from(callbacks_invoked) };
     match failure {
         Some(ComputeFailure::CallbackFailed) => {
@@ -1453,7 +1676,13 @@ fn layout_record_from(node: NodeId, state: &EngineState) -> GpuiGoLayoutRecord {
         .taffy
         .layout(node)
         .expect("gpui-go: taffy layout lookup failed");
+    // rev 15: Taffy's stored Layout drops baselines entirely (only the
+    // compute-internal LayoutOutput carries them), so the measured
+    // leaves' stashed measure-response baselines are the report.
+    let first_baseline = state.measured_baselines.get(&node).copied();
     GpuiGoLayoutRecord {
+        first_baseline_present: u32::from(first_baseline.is_some()),
+        first_baseline_bits: first_baseline.unwrap_or(0.0).to_bits(),
         order: layout.order as i32,
         location_x: layout.location.x,
         location_y: layout.location.y,
@@ -1732,6 +1961,26 @@ unsafe extern "system" fn layout_node_set_style(
     style: *const GpuiGoLayoutStyleRecord,
 ) -> i32 {
     let outcome = catch_unwind(AssertUnwindSafe(|| node_set_style_body(engine, node, style)));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            mark_engine_failed(engine);
+            layout_status::ERR_PANIC
+        }
+    }
+}
+
+unsafe extern "system" fn layout_node_set_grid_tracks(
+    engine: u64,
+    node: u64,
+    axis: u32,
+    tracks: *const GpuiGoTrackRecord,
+    track_count: u32,
+) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        node_set_grid_tracks_body(engine, node, axis, tracks, track_count)
+    }));
     match outcome {
         Ok(code) => code,
         Err(payload) => {

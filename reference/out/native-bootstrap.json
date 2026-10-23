@@ -1,6 +1,6 @@
 {
   "schema": "gpui-go/native-bootstrap@2",
-  "built_at": "2026-10-23T19:40:03Z",
+  "built_at": "2026-10-23T20:01:00Z",
   "rustc": "rustc 1.97.0 (2d8144b78 2026-07-07)",
   "cargo": "cargo 1.97.0 (c980f4866 2026-06-30)",
   "target": "x86_64-pc-windows-msvc",
@@ -9,10 +9,10 @@
   "rustflags": "-C target-feature=+crt-static",
   "dll": {
     "path": "reference/target/x86_64-pc-windows-msvc/release/gpui_go_native.dll",
-    "bytes": 19100160,
-    "sha256": "62f04a6619b50642a0053c2d1914f539da1b8d70c43817858380577c1fcf5382",
-    "gzip_bytes": 7589852,
-    "gzip_sha256": "a6596ff00ebb3638d9907750202f9aef1be1d044d29594ec749aa609ea2e03be",
+    "bytes": 19104256,
+    "sha256": "4dee699ad034211bb095a2a3967e4a9974b9d03a80982323452eaadf589b81d9",
+    "gzip_bytes": 7590626,
+    "gzip_sha256": "668cece0da50d026d26529755b92c401b0c2469df10882bf6d480f655ed357b0",
     "gzip_method": "Go stdlib compress/gzip, level 9 (BestCompression)"
   },
   "pe": {

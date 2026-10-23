@@ -273,6 +273,9 @@ const (
 	DisplayBlock uint32 = 1
 	DisplayGrid  uint32 = 2
 	DisplayNone  uint32 = 3
+	// DisplayFlowRoot is CSS display: flow-root (rev 15; Taffy 0.13 has
+	// FlowRoot — the pinned gpui Style does not).
+	DisplayFlowRoot uint32 = 4
 )
 
 // Position values (LayoutStyleRecord.Position).
@@ -411,8 +414,16 @@ type LayoutStyleRecord struct {
 	GridColumnStartValue       uint32
 	GridColumnEndKind          uint32
 	GridColumnEndValue         uint32
+	// JustifyItemsPresent/JustifyItems: CSS justify-items (rev 15; the
+	// align-items value mapping — Taffy's justify_items).
+	JustifyItemsPresent uint32
+	JustifyItems        uint32
+	// JustifySelfPresent/JustifySelf: CSS justify-self (rev 15; the
+	// align-self value mapping — Taffy's justify_self).
+	JustifySelfPresent uint32
+	JustifySelf        uint32
 
-	// Record-size self-check; must stay 336.
+	// Record-size self-check; must stay 352.
 	RecordSize uint32
 }
 
@@ -467,15 +478,21 @@ type LayoutRecord struct {
 	PaddingRight  float32
 	PaddingBottom float32
 	PaddingLeft   float32
-	RecordSize    uint32
+	// FirstBaselinePresent/FirstBaselineBits carry the node's last
+	// measured first baseline (rev 15; device pixels from the node's
+	// top) when the measure response reported one.
+	FirstBaselinePresent uint32
+	FirstBaselineBits    uint32
+	RecordSize           uint32
 }
 
 // ---------------------------------------------------------------------------
 // Service table mirror and validation
 // ---------------------------------------------------------------------------
 
-// layoutTable mirrors the native GpuiGoLayoutTable: 14 function pointers
-// then 11 self-check scalars; 160 bytes, alignment 8.
+// layoutTable mirrors the native GpuiGoLayoutTable: 15 function pointers
+// then 11 self-check scalars; 168 bytes, alignment 8 (rev 15: the
+// grid-tracks slot).
 type layoutTable struct {
 	engineCreate           uintptr
 	engineReset            uintptr
@@ -483,6 +500,7 @@ type layoutTable struct {
 	nodeCreate             uintptr
 	nodeSetStyle           uintptr
 	nodeSetMeasure         uintptr
+	nodeSetGridTracks      uintptr
 	nodeRemoveSubtree      uintptr
 	compute                uintptr
 	nodeLayout             uintptr
@@ -598,11 +616,15 @@ type measureRequestRec struct {
 }
 
 // measureResponseRec mirrors GpuiMeasureResponse: status @0, widthBits @4,
-// heightBits @8; size 12, align 4.
+// heightBits @8, baselinePresent @12, baselineBits @16; size 20, align 4
+// (rev 15: the measured content's first baseline, reported through the
+// layout record's first-baseline echo).
 type measureResponseRec struct {
-	status     int32
-	widthBits  uint32
-	heightBits uint32
+	status          int32
+	widthBits       uint32
+	heightBits      uint32
+	baselinePresent uint32
+	baselineBits    uint32
 }
 
 // ---------------------------------------------------------------------------
@@ -768,6 +790,82 @@ func (e *LayoutEngine) SetStyle(node NodeHandle, style *LayoutStyleRecord) error
 	}
 	if code != layoutStatusOK {
 		return layoutStatusError(code, "layout_node_set_style")
+	}
+	return nil
+}
+
+// LayoutTrackRecord mirrors GpuiGoTrackRecord (rev 15): one grid track
+// sizing component, a minmax pair. 16 bytes, alignment 4.
+type LayoutTrackRecord struct {
+	// MinTag is the minimum sizing: 0 length, 1 min-content,
+	// 2 max-content, 3 auto.
+	MinTag uint32
+	// MinBits is the minimum length (f32 bits) when MinTag is 0.
+	MinBits uint32
+	// MaxTag is the maximum sizing: 0 length, 1 min-content,
+	// 2 max-content, 3 auto, 4 fr.
+	MaxTag uint32
+	// MaxBits is the maximum length or fr factor (f32 bits) when MaxTag
+	// is 0 or 4.
+	MaxBits uint32
+}
+
+// Track-axis tags of SetGridTracks (rev 15).
+const (
+	// LayoutGridAxisRows addresses grid-template-rows.
+	LayoutGridAxisRows uint32 = 0
+	// LayoutGridAxisColumns addresses grid-template-columns.
+	LayoutGridAxisColumns uint32 = 1
+)
+
+// Track sizing tags (rev 15; the CSS keywords).
+const (
+	// TrackMinLength is a definite minimum length.
+	TrackMinLength uint32 = 0
+	// TrackMinContent is min-content.
+	TrackMinContent uint32 = 1
+	// TrackMaxContent is max-content.
+	TrackMaxContent uint32 = 2
+	// TrackAuto is auto.
+	TrackAuto uint32 = 3
+	// TrackFr is a flexible fraction (maximum only).
+	TrackFr uint32 = 4
+)
+
+// MaxGridTracks is the maximum track components in one axis (rev 15).
+const MaxGridTracks = 256
+
+// SetGridTracks replaces the node's grid template for one axis with a
+// variable-length track list (rev 15; CSS grid-template-rows/columns —
+// `240px 1fr` becomes two tracks, a fixed minmax and an fr minmax). An
+// empty list clears the axis.
+func (e *LayoutEngine) SetGridTracks(node NodeHandle, axis uint32, tracks []LayoutTrackRecord) error {
+	if err := e.checkIdle("layout_node_set_grid_tracks"); err != nil {
+		return err
+	}
+	if axis > 1 {
+		return layoutStatusError(layoutErrBadValue, "layout_node_set_grid_tracks: unknown axis")
+	}
+	if len(tracks) > MaxGridTracks {
+		return layoutStatusError(layoutErrBadValue, "layout_node_set_grid_tracks: too many tracks")
+	}
+	var trackPtr *LayoutTrackRecord
+	if len(tracks) > 0 {
+		trackPtr = &tracks[0]
+	}
+	code, err := callLayoutNodeSetGridTracks(
+		e.svc.table.nodeSetGridTracks,
+		uint64(e.handle),
+		uint64(node),
+		axis,
+		trackPtr,
+		uint32(len(tracks)),
+	)
+	if err != nil {
+		return err
+	}
+	if code != layoutStatusOK {
+		return layoutStatusError(code, "layout_node_set_grid_tracks")
 	}
 	return nil
 }
@@ -1012,6 +1110,12 @@ type GoMeasureRequest struct {
 type GoMeasureResponse struct {
 	Width  float32
 	Height float32
+	// FirstBaseline, when non-nil, is the measured content's first
+	// baseline in device pixels from the measured box's top (rev 15;
+	// CSS flexbox §8.3 baseline alignment). The pinned measurement
+	// adapter has no baseline, so it stays nil from the gpui layer
+	// until the browser-core styling tickets measure one.
+	FirstBaseline *float32
 }
 
 // MeasureFunc is the Go measurement function invoked synchronously, on the
