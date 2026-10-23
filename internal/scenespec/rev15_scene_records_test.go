@@ -424,7 +424,10 @@ func TestDropShadowClippedOutOfBorderBoxOnRealGPU(t *testing.T) {
 			Title:     "scenespec drop shadow clip-out",
 			Show:      true, // shown WITHOUT activating: no focus is taken
 			Resizable: true,
-			Bounds:    gpui.Bounds{Size: gpui.Size{Width: 240, Height: 160}},
+			// Parked far off-screen so no window appears on the user's
+			// desktop (the headless/offscreen rule; ticket 03's
+			// real-window tests use the same origin).
+			Bounds: gpui.Bounds{Origin: gpui.Point{X: 20000, Y: 20000}, Size: gpui.Size{Width: 240, Height: 160}},
 		}, func(w *gpui.Window, app *gpui.App) gpui.View {
 			return gpui.ViewOf(gpui.NewEntity(app, w.Scope(), func(v *dropShadowView, cx *gpui.Context[dropShadowView]) {}))
 		})
