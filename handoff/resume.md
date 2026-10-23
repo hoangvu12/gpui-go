@@ -9,7 +9,10 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 **HANDOFF 2026-10-24 (orchestrator 5 → orchestrator 6). CURRENT.** The user asked for a new orchestrator chat to implement `.scratch/browser-core/` (76 tickets, none started; frontier: 01, 02, 03, 30, 31, 39, 47, 49, 68). The handoff doc is in the user's temp folder (`%TEMP%\gpui-go-handoff-orchestrator6.md`). Model precedent: pi + `iroha/dashscope/glm-5.3` implemented the core backlog. The predecessor is Roboco chat 43f0a1a1.
 
 **ORCHESTRATOR 6 STATUS (2026-10-24; CURRENT).** Claude Code (Opus 5.5) is orchestrating; Roboco chat 3d6efd46. Claimed 01, 02, 03 and 39. Workers are pi + `iroha/dashscope/glm-5.3` side chats:
-- 01 harness: chat 4f488bc4, worktree `gpui-go-wt-core-harness`, branch `core/01-harness`
+- 01 harness: chat 4f488bc4. Verified, merged (a30427d) and RESOLVED. Guide: `docs/browser-parity-harness.md`.
+- 05 box painting: chat e1c615c2, worktree `gpui-go-wt-core-05`, branch `core/05-box-painting`
+- Pre-existing on main, not caused by us: `internal/portfixture` TestFx0004 fails because the system font-family count went from 94 to 95; `gofmt -l` flags `internal/fontspec/weight_synthesis_test.go`.
+- The harness only runs at device pixel ratio 2, so 07 (175%/100% scales) needs a harness extension first.
 - 39 R15: chat 9044df02, worktree `gpui-go-wt-core-r15`, branch `core/39-r15`
 - 02+03: chat ef20e162. Verified, merged (ee8b5c5) and RESOLVED. The worktree `gpui-go-wt-core-small` can be removed.
 - 49 R16 design draft: chat e57b14a1. `docs/design/r16-compositor.md` is merged to main (a4bf560). I checked its citations. 49 stays claimed until the user reviews it; it has 6 open questions in §8.
