@@ -128,3 +128,61 @@ func TestFilesRejectsAMissingEntry(t *testing.T) {
 		t.Fatal("a missing entry compiled")
 	}
 }
+
+func TestBuildReportsTheBundleAndItsInputs(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, src string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("label.tsx", `
+export function label(n: number) {
+	return <text id={"row-" + n}>{`+"`row ${n}`"+`}</text>;
+}
+`)
+	write("view.tsx", `
+import { label } from "./label";
+export function App() {
+	return <div id="list">{[0, 1].map((i) => label(i))}</div>;
+}
+`)
+	b, inputs, err := compile.Build(filepath.Join(dir, "view.tsx"))
+	if err != nil {
+		t.Fatalf("compile.Build: %v", err)
+	}
+	// The bundle half is Files' result.
+	if b.Name != "view.js" || !strings.Contains(b.JS, "row ") {
+		t.Fatalf("Build's bundle = %q, want Files' result", b.Name)
+	}
+	// The inputs are the entry and everything it imported, relative to
+	// the entry's directory, sorted: what the bundler hashes into the
+	// staleness guard.
+	want := []string{"label.tsx", "view.tsx"}
+	if len(inputs) != len(want) {
+		t.Fatalf("Build inputs = %q, want %q", inputs, want)
+	}
+	for i, in := range inputs {
+		if in != want[i] {
+			t.Fatalf("Build inputs = %q, want %q", inputs, want)
+		}
+	}
+}
+
+func TestBuildFailsLikeFilesOnASyntaxError(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "view.tsx"), []byte("export function App() {\n\treturn <div id=\"box\">\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, inputs, err := compile.Build(filepath.Join(dir, "view.tsx"))
+	if err == nil {
+		t.Fatal("a syntax error built")
+	}
+	if !strings.Contains(err.Error(), "view.tsx:") {
+		t.Fatalf("the error does not name the file: %v", err)
+	}
+	if inputs != nil {
+		t.Fatalf("a failed build reported inputs %q", inputs)
+	}
+}

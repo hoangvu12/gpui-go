@@ -21,8 +21,9 @@ const ErrorBannerSelector = "script-error"
 
 // Bundle is a compiled script: what esbuild produced and what a host
 // runs. Development compiles it on demand (gpui/script/compile); a
-// release build compiles at build time and embeds it, so the app ships
-// one file and reads no scripts from disk.
+// release build compiles at build time and embeds it — the Embedded-
+// Bundle shape, see doc.go — so the app ships one file and reads no
+// scripts from disk.
 type Bundle struct {
 	// Name is the bundle's file name, used for diagnostics that carry
 	// no position (e.g. "a missing App export").

@@ -78,10 +78,40 @@
 //	// a file watcher (compile.Dir.Watch) calls host.Reload on change
 //
 //	// release: compile at build time, embed, never read from disk
-//	//go:embed app.js
-//	var js string
-//	host := script.New()
-//	host.Load(script.Bundle{Name: "app.js", JS: js})
+//	UI := ... // generated: see Release bundling below
+//	host := script.New(script.WithoutBanner())
+//	host.Load(UI.Bundle())
+//
+// # Release bundling (ticket 65)
+//
+// Go has no build.rs — go build never runs code — so the build-time
+// compile is a go:generate step: cmd/tsxbundle (run through go run,
+// carried by the module, nothing installed) compiles the entry with
+// esbuild through gpui/script/compile and writes, beside the app's
+// main package:
+//
+//	//go:generate go run github.com/hoangvu12/gpui-go/cmd/tsxbundle -var UI -entry ui/app.tsx
+//
+//	ui.tsxbundle.js       the compiled ES2017 bundle (inline source map)
+//	ui.tsxbundle.go       the script.EmbeddedBundle var //go:embed picks up
+//	ui.tsxbundle_test.go  the staleness guard (EmbeddedBundle.CheckFresh)
+//
+// The app embeds the result and loads it — host.Load(UI.Bundle()) —
+// so the shipped binary reads no scripts from disk; and it imports
+// neither the tool nor gpui/script/compile, so esbuild never enters
+// the release import graph (go list -deps proves it). A compile error
+// fails the generate step with the .tsx file and line, so a build
+// that runs it fails there, not at run time. examples/tsx-hello is
+// the sample app in this shape, with a headless -selftest mode (the
+// release check: load the embedded bundle, render one frame in an
+// offscreen test window, exercise one click, exit 0).
+//
+// Staleness is the one gap go:generate leaves: go build does not
+// rerun the generator, so an edited .tsx does not fail the build by
+// itself. The generated test closes it: it hashes the sources the
+// bundle was compiled from and fails when one changed, before a
+// release ships the old UI (EmbeddedBundle.CheckFresh). Regeneration
+// is idempotent, so committing the generated files shows no churn.
 //
 // Reload builds a fresh goja runtime and re-describes the tree; the
 // keyed state map is untouched, so values survive (init matters only

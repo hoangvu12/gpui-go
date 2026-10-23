@@ -6,16 +6,19 @@
 // release build that embeds a prebuilt bundle never links esbuild —
 // only development builds and build-time tooling do.
 //
-// A release app compiles its .tsx ahead of time (a build step or
-// go:generate invoking this package), embeds the output and loads it
-// with script.New().Load; a compile error then fails the build with
-// the .tsx file and line, exactly as a failed dev reload reports it.
+// A release app compiles its .tsx ahead of time — cmd/tsxbundle, the
+// go:generate-driven bundler (ticket 65), calls Build — embeds the
+// output and loads it with script.New().Load; a compile error then
+// fails the build with the .tsx file and line, exactly as a failed
+// dev reload reports it.
 package compile
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/evanw/esbuild/pkg/api"
@@ -64,11 +67,60 @@ func bundleName(entry string) string {
 // into one bundle (the development and build-time path). Diagnostics
 // name files relative to the entry's directory.
 func Files(entry string) (script.Bundle, error) {
-	dir, base := filepath.Split(filepath.Clean(entry))
-	opts := commonOptions()
-	opts.AbsWorkingDir = dir
-	opts.EntryPoints = []string{base}
+	opts, err := filesOptions(entry)
+	if err != nil {
+		return script.Bundle{}, err
+	}
 	return bundle(api.Build(opts), bundleName(entry))
+}
+
+// filesOptions are the entry-on-disk options shared by Files and
+// Build: the entry plus its directory as the working directory (made
+// absolute — esbuild requires it, and go:generate runs with a relative
+// working directory), so diagnostics and metafile paths are relative
+// to it.
+func filesOptions(entry string) (api.BuildOptions, error) {
+	dir, base := filepath.Split(filepath.Clean(entry))
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return api.BuildOptions{}, err
+	}
+	opts := commonOptions()
+	opts.AbsWorkingDir = abs
+	opts.EntryPoints = []string{base}
+	return opts, nil
+}
+
+// Build is the build-time half of release bundling (ADR 0003): it
+// compiles like Files and also reports the files the bundle was built
+// from — the entry and every module it imported, slash-separated,
+// relative to the entry's directory, sorted. The bundling tool
+// (cmd/tsxbundle) hashes them into the generated code, so a source
+// that changed after the bundle was generated is caught before a
+// release ships it.
+func Build(entry string) (script.Bundle, []string, error) {
+	opts, err := filesOptions(entry)
+	if err != nil {
+		return script.Bundle{}, nil, err
+	}
+	opts.Metafile = true
+	result := api.Build(opts)
+	b, err := bundle(result, bundleName(entry))
+	if err != nil {
+		return script.Bundle{}, nil, err
+	}
+	var metafile struct {
+		Inputs map[string]json.RawMessage `json:"inputs"`
+	}
+	if err := json.Unmarshal([]byte(result.Metafile), &metafile); err != nil {
+		return script.Bundle{}, nil, fmt.Errorf("compile: esbuild metafile: %w", err)
+	}
+	inputs := make([]string, 0, len(metafile.Inputs))
+	for path := range metafile.Inputs {
+		inputs = append(inputs, path)
+	}
+	sort.Strings(inputs)
+	return b, inputs, nil
 }
 
 // bundle reads esbuild's result: the code, or the errors joined with
