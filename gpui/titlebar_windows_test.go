@@ -364,10 +364,9 @@ func TestTitlebarRealBackdropShowsThrough(t *testing.T) {
 	if err := app.Attach(h); err != nil {
 		t.Fatalf("app attach: %v", err)
 	}
-	renderer, err := NewRenderer()
-	if err != nil {
-		t.Fatalf("NewRenderer: %v", err)
-	}
+	// Manual: WaitForCompletion polls the submission itself, which the
+	// paced renderer's worker would retire first (stale handle).
+	renderer := newManualRenderer(t)
 	bounds := Bounds{Origin: Point{X: 160, Y: 160}, Size: Size{Width: 360, Height: 240}}
 	open := func(title string, opts WindowOptions) *Window {
 		opts.Title = title
@@ -388,6 +387,9 @@ func TestTitlebarRealBackdropShowsThrough(t *testing.T) {
 		}
 		if _, err := sub.WaitForCompletion(5 * time.Second); err != nil {
 			t.Fatalf("WaitForCompletion: %v", err)
+		}
+		if _, err := sub.Retire(); err != nil {
+			t.Fatalf("Retire: %v", err)
 		}
 	}
 	center := func(w *Window) (int32, int32) {
