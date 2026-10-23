@@ -144,15 +144,29 @@ type MouseUpEvent struct {
 }
 
 // ScrollDelta is the change in scroll position (interactive.rs
-// ScrollDelta): exact pixels or inexact lines.
+// ScrollDelta): exact pixels or inexact lines — plus the port's page
+// granularity (browser-core ticket 02, a deliberate divergence toward
+// the browser under D0): the Windows wheel's WHEEL_PAGESCROLL sentinel
+// carries one page per notch the way Chromium's kScrollByPage events do
+// (ui/events/blink/web_input_event_builders_win.cc:312-318), and the
+// consuming scroller resolves pages against its own visible size
+// (blink ScrollableArea::ResolveScrollDelta → PageStep,
+// scrollable_area.cc:213-229).
 type ScrollDelta struct {
 	// Pixels is the exact pixel delta (the Pixels variant).
 	Pixels Point
 	// Lines is the inexact line-based delta (the Lines variant).
 	Lines Point
+	// Pages is the page-granularity delta (the Pages variant), in pages
+	// per notch like Chromium's kScrollByPage delta.
+	Pages Point
 	// IsPixels reports the active variant (ScrollDelta's default is
 	// Lines; Direct Manipulation always reports Pixels).
 	IsPixels bool
+	// IsPages reports the page-granularity variant (browser-core
+	// ticket 02). At most one of IsPixels and IsPages is set; the
+	// constructors keep the invariant.
+	IsPages bool
 }
 
 // ScrollDeltaPixels builds the Pixels variant.
@@ -165,18 +179,65 @@ func ScrollDeltaLines(dx, dy float32) ScrollDelta {
 	return ScrollDelta{Lines: Point{X: dx, Y: dy}}
 }
 
+// ScrollDeltaPages builds the Pages variant (browser-core ticket 02):
+// the delta is whole pages, one per wheel notch under
+// WHEEL_PAGESCROLL.
+func ScrollDeltaPages(dx, dy float32) ScrollDelta {
+	return ScrollDelta{Pages: Point{X: dx, Y: dy}, IsPages: true}
+}
+
 // Precise reports whether this is an exact pixel delta
 // (interactive.rs:605-611 ScrollDelta::precise).
 func (d ScrollDelta) Precise() bool { return d.IsPixels }
 
 // PixelDelta converts the delta into exact pixels: pixel deltas pass
 // through, line deltas scale by lineHeight (interactive.rs:613-619
-// ScrollDelta::pixel_delta).
+// ScrollDelta::pixel_delta). Page deltas need the scroller's visible
+// size and are NOT converted here — see PixelDeltaFor; a page delta
+// resolves to the zero delta through this method.
 func (d ScrollDelta) PixelDelta(lineHeight float32) Point {
 	if d.IsPixels {
 		return d.Pixels
 	}
+	if d.IsPages {
+		return Point{}
+	}
 	return Point{X: lineHeight * d.Lines.X, Y: lineHeight * d.Lines.Y}
+}
+
+// PixelDeltaFor converts the delta into exact pixels for a scroller
+// with the given line height and visible size (browser-core ticket 02):
+// pixel and line deltas resolve exactly like PixelDelta, while page
+// deltas scale by Chromium's page step over the scroller's own visible
+// length — max(0.875×length, length−40), floored at 1
+// (cc/input/scroll_utils.cc:51-56 CalculatePageStep: 87.5px on a 100px
+// scroller, so consecutive page notches overlap slightly instead of
+// skipping content).
+func (d ScrollDelta) PixelDeltaFor(lineHeight float32, viewport Size) Point {
+	if d.IsPages {
+		return Point{
+			X: d.Pages.X * ScrollPageStep(viewport.Width),
+			Y: d.Pages.Y * ScrollPageStep(viewport.Height),
+		}
+	}
+	return d.PixelDelta(lineHeight)
+}
+
+// ScrollPageStep is Chromium's page step for one page-granularity unit
+// over a scroller whose visible length is length (cc/input/scroll_utils.cc
+// 51-56 CalculatePageStep with kMinFractionToStepWhenPaging 0.875 and
+// kMaxOverlapBetweenPages 40, scroll_utils.h:22-24): the step leaves a
+// small overlap so paging never skips content, and is at least one
+// pixel so a degenerate scroller still moves.
+func ScrollPageStep(length float32) float32 {
+	step := length * 0.875
+	if length-40 > step {
+		step = length - 40
+	}
+	if step < 1 {
+		step = 1
+	}
+	return step
 }
 
 // ScrollWheelEvent reports a scroll (interactive.rs

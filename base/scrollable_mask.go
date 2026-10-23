@@ -218,7 +218,10 @@ func (e scrollableMaskElement) Paint(global *gpui.GlobalElementID, _ *gpui.Inspe
 			}
 
 			offset := scrollHandle.Offset()
-			delta := ev.Delta.PixelDelta(lineHeight)
+			// Pages resolve against the mask's own visible size
+			// (browser-core ticket 02; Chromium resolves page granularity at
+			// the scroller, blink ScrollableArea::ResolveScrollDelta).
+			delta := ev.Delta.PixelDeltaFor(lineHeight, box.Bounds.Size)
 
 			// Lock the gesture to the axis it started on; line deltas
 			// carry no touch phase.

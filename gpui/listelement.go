@@ -1141,9 +1141,10 @@ func (st *listStateInner) autoscrollOffset(requested Bounds, itemIx int, itemOri
 // registration order) the items' wheel listeners run first and can stop
 // the list from scrolling; then paint each visible item at its origin
 // under the content mask. The listener coalesces the frame's deltas
-// (ScrollDelta::coalesce), converts lines at the pinned 20px and applies
-// the accumulated delta to the frame's scroll top through the eagerly
-// clamping scroll body.
+// (ScrollDelta::coalesce), converts lines at the pinned 20px — pages
+// resolve against the list's own visible size (browser-core ticket 02) —
+// and applies the accumulated delta to the frame's scroll top through
+// the eagerly clamping scroll body.
 func (l *ListElement) Paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *struct{}, prepaint *listPrepaintState, w *Window, app *App) {
 	if prepaint.hitbox != nil {
 		notify := currentViewNotifier(w)
@@ -1158,7 +1159,7 @@ func (l *ListElement) Paint(global *GlobalElementID, inspector *InspectorElement
 				return
 			}
 			accumulated = coalesceScrollDelta(accumulated, e.Delta)
-			inner.scroll(scrollTop, height, accumulated.PixelDelta(20), notify, w, app)
+			inner.scroll(scrollTop, height, accumulated.PixelDeltaFor(20, bounds.Size), notify, w, app)
 		})
 	}
 	mask := intersectMask(currentFrame(w).contentMask, bounds)

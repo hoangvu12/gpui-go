@@ -161,6 +161,7 @@ const (
 	mdtEffectiveDPI          = 0
 	deviceNotifyWindowHandle = 0x00000000
 
+	dwmwaCloaked              = 13 // DWMWA_CLOAKED
 	dwmwaUseImmersiveDarkMode = 20 // DWMWA_USE_IMMERSIVE_DARK_MODE
 	dwmwaSystemBackdropType   = 38 // DWMWA_SYSTEMBACKDROP_TYPE
 
@@ -439,7 +440,11 @@ func (h *Host) setDesktopCallback[T any](project func(*desktopCallbacks) *T, cb 
 // (util.rs:99-115 load_cursor's match arms). Styles that the
 // reference's catch-all arm (util.rs:114) maps to the arrow — Arrow
 // itself plus ClosedHand, OpenHand, DragCopy and ContextualMenu — load
-// IDC_ARROW here too.
+// IDC_ARROW here too: Windows has no system cursor for those glyphs.
+// Browser-core ticket 03 (research browser-parity 03 §12) replaces the
+// four styles' fallback in loadCursorHandle with runtime-built
+// cursors; this table — the system-resource mapping — is unchanged
+// (and still pins util.rs's arms).
 func cursorResourceID(style CursorStyle) uintptr {
 	switch style {
 	case CursorIBeam, CursorIBeamVertical:
@@ -463,10 +468,17 @@ func cursorResourceID(style CursorStyle) uintptr {
 	}
 }
 
-// loadCursorHandle loads one shared system cursor (LoadImageW with
-// LR_DEFAULTSIZE|LR_SHARED; the reference caches per style and shares
-// cursors, which the LR_SHARED flag provides).
+// loadCursorHandle loads one cursor for a style: the shared system
+// cursor of the mapped resource (util.rs load_cursor caches per style;
+// LR_SHARED provides the sharing), or — for the four styles the
+// reference maps to the arrow (util.rs:114) — the runtime-built cursor
+// of desktop_cursors_windows.go (browser-core ticket 03): grab,
+// grabbing, copy and context-menu load real, distinct Windows cursors
+// instead of falling back to the arrow (zterm #23).
 func loadCursorHandle(style CursorStyle) uintptr {
+	if builtCursorSpec(style) != nil {
+		return builtCursorHandle(style)
+	}
 	handle, _, _ := procLoadImageW.Call(
 		0, cursorResourceID(style), imageCursor, 0, 0,
 		uintptr(lrDefaultSize|lrShared))
@@ -614,6 +626,34 @@ func (wh WindowHandle) IsMinimized() (bool, error) {
 		iconic, _, _ := procIsIconic.Call(wh.hwnd)
 		return iconic != 0, nil
 	})
+}
+
+// frameVisible reports whether a real window can present frames
+// (browser-core ticket 03; research browser-parity 02 §8 gap 1: the
+// reference's vsync thread invalidates every window on every vblank,
+// while Chromium's display scheduler draws only for visible windows,
+// display_scheduler.cc:602-607). Hidden means minimized — the WM_SIZE
+// SIZE_MINIMIZED tracking plus IsIconic as ground truth (a window can
+// be created iconic before any WM_SIZE arrives) — or DWM-cloaked
+// (DWMWA_CLOAKED, the occlusion Windows reports to an app: another
+// virtual desktop or a shell-hidden window). Host thread only: the
+// frame source's pacer checks it before invalidating.
+func (w *hostWindow) frameVisible() bool {
+	if w == nil {
+		return false
+	}
+	if w.minimized {
+		return false
+	}
+	if iconic, _, _ := procIsIconic.Call(w.hwnd); iconic != 0 {
+		return false
+	}
+	var cloaked uint32
+	r, _, _ := procDwmGetWindowAttribute.Call(
+		w.hwnd, uintptr(dwmwaCloaked), uintptr(unsafe.Pointer(&cloaked)), unsafe.Sizeof(cloaked))
+	// A failed cloak query fails open (a compositor-less session has
+	// no cloak state to read).
+	return r != 0 || cloaked == 0
 }
 
 // IsActive reports whether this window is the thread's active window

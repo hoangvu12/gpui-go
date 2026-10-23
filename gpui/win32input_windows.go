@@ -40,6 +40,17 @@ const (
 
 	wheelDelta = 120 // WHEEL_DELTA
 
+	// wheelPageScroll is WHEEL_PAGESCROLL (winuser.h): the
+	// SPI_GETWHEELSCROLLLINES sentinel meaning "scroll one screen per
+	// notch" instead of a line count. The pin multiplies it into the
+	// line distance (events.rs:589-595, ~4×10⁹ lines per notch); the
+	// port special-cases it into a page-granularity delta (browser-core
+	// ticket 02, a deliberate divergence toward the browser under D0:
+	// Chromium keeps the delta at the notch count and marks the event
+	// kScrollByPage, ui/events/blink/web_input_event_builders_win.cc:
+	// 312-318).
+	wheelPageScroll = 0xFFFFFFFF
+
 	wmMouseWheel  = 0x020A // WM_MOUSEWHEEL
 	wmMouseHWheel = 0x020E // WM_MOUSEHWHEEL
 )
@@ -77,7 +88,10 @@ func win32MouseMoveEvent(wparam, lp uintptr, scale float32, modifiers Modifiers)
 
 // win32WheelEvent is the translation half of events.rs:562-613 (vertical)
 // and :615-651 (horizontal): clientX/clientY are the ScreenToClient
-// converted device-pixel position.
+// converted device-pixel position. The vertical arm special-cases the
+// WHEEL_PAGESCROLL sentinel (browser-core ticket 02): one page per
+// notch as a Pages delta, instead of the sentinel multiplied into the
+// line distance.
 func win32WheelEvent(horizontal bool, wparam uintptr, clientX, clientY int32, scale float32, modifiers Modifiers, settings MouseWheelSettings) *ScrollWheelEvent {
 	notches := float32(signedHiword(wparam)) / wheelDelta
 	var delta ScrollDelta
@@ -86,6 +100,12 @@ func win32WheelEvent(horizontal bool, wparam uintptr, clientX, clientY int32, sc
 		delta = ScrollDeltaLines(-notches*float32(settings.WheelScrollChars), 0)
 	case modifiers.Shift:
 		delta = ScrollDeltaLines(notches*float32(settings.WheelScrollChars), 0)
+	case settings.WheelScrollLines == wheelPageScroll:
+		// WHEEL_PAGESCROLL: one page per notch, page granularity
+		// (browser-core ticket 02; Chromium web_input_event_builders_win.cc
+		// 312-318). Shift and horizontal scrolls use the chars count,
+		// which has no page sentinel.
+		delta = ScrollDeltaPages(0, notches)
 	default:
 		delta = ScrollDeltaLines(0, notches*float32(settings.WheelScrollLines))
 	}

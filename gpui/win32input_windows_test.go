@@ -65,6 +65,51 @@ func TestWin32InputTranslation(t *testing.T) {
 	}
 }
 
+// TestWin32WheelPageScrollTranslation pins the WHEEL_PAGESCROLL arm of
+// the wheel translation (browser-core ticket 02; research
+// browser-parity 03 §6 gap 2): when SPI_GETWHEELSCROLLLINES reports the
+// 0xFFFFFFFF sentinel — "scroll one screen per notch" — the vertical
+// delta is page granularity, one page per notch, not the sentinel
+// multiplied into ~4×10⁹ lines. Chromium keeps the delta at the notch
+// count and marks the event page-granular
+// (ui/events/blink/web_input_event_builders_win.cc:312-318); the pin
+// multiplies the sentinel (events.rs:589-595), a deliberate divergence
+// toward the browser (D0). Shift and horizontal scrolls use the wheel
+// chars, which have no page sentinel.
+func TestWin32WheelPageScrollTranslation(t *testing.T) {
+	pageScroll := MouseWheelSettings{WheelScrollLines: wheelPageScroll, WheelScrollChars: 3}
+	notches := func(n int16) uintptr { return uintptr(uint16(n*wheelDelta)) << 16 }
+
+	down := win32WheelEvent(false, notches(-1), 20, 40, 1, Modifiers{}, pageScroll)
+	if down.Delta != ScrollDeltaPages(0, -1) {
+		t.Errorf("page-scroll wheel = %+v, want one page down", down.Delta)
+	}
+	up := win32WheelEvent(false, notches(2), 20, 40, 1, Modifiers{}, pageScroll)
+	if up.Delta != ScrollDeltaPages(0, 2) {
+		t.Errorf("two-notch page-scroll wheel = %+v, want two pages up", up.Delta)
+	}
+	// The position, modifiers and phase follow the shared translation.
+	if up.Position != (Point{X: 20, Y: 40}) || up.Modifiers.Shift || up.TouchPhase != TouchPhaseMoved {
+		t.Errorf("page-scroll wheel = %+v", up)
+	}
+	// Shift still scrolls horizontally by chars, without a page arm.
+	shifted := win32WheelEvent(false, notches(-1), 0, 0, 1, Modifiers{Shift: true}, pageScroll)
+	if shifted.Delta != ScrollDeltaLines(-3, 0) {
+		t.Errorf("shifted page-scroll wheel = %+v, want 3 chars on x", shifted.Delta)
+	}
+	// The horizontal message uses chars too.
+	horizontal := win32WheelEvent(true, notches(1), 0, 0, 1, Modifiers{}, pageScroll)
+	if horizontal.Delta != ScrollDeltaLines(-3, 0) {
+		t.Errorf("horizontal page-scroll wheel = %+v, want 3 negated chars on x", horizontal.Delta)
+	}
+	// A plain line count is unaffected (regression of the default arm).
+	lineScroll := MouseWheelSettings{WheelScrollLines: 3, WheelScrollChars: 3}
+	lines := win32WheelEvent(false, notches(-1), 0, 0, 1, Modifiers{}, lineScroll)
+	if lines.Delta != ScrollDeltaLines(0, -3) {
+		t.Errorf("line-scroll wheel = %+v, want 3 lines down", lines.Delta)
+	}
+}
+
 func ptrTo[T any](v T) *T { return &v }
 
 func inputAbs(v float32) float32 {
@@ -467,8 +512,10 @@ func TestWin32InputRealWindowDragWithPreview(t *testing.T) {
 // TestWin32InputRealWindowWheelScrolls proves WM_MOUSEWHEEL on a real
 // window scrolls an OverflowYScroll().TrackScroll div (events.rs:562-613
 // into div.rs:3816-3879): the screen position goes through
-// ScreenToClient, the line delta is the system's wheel lines, and a
-// flood of notches clamps at the max offset.
+// ScreenToClient, the line delta is the system's wheel lines — or one
+// page per notch when the system is set to scroll a screen per notch
+// (WHEEL_PAGESCROLL, browser-core ticket 02) — and a flood of notches
+// clamps at the max offset.
 func TestWin32InputRealWindowWheelScrolls(t *testing.T) {
 	handle := NewScrollHandle()
 	f := openWin32InputWindow(t, "gpui input wheel", func(f *win32InputWindow) func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
@@ -480,8 +527,8 @@ func TestWin32InputRealWindowWheelScrolls(t *testing.T) {
 		}
 	})
 	settings := f.h.MouseWheelSettings()
-	if settings.WheelScrollLines == 0 || settings.WheelScrollLines > 100 {
-		t.Fatalf("system wheel scroll lines = %d: the gate needs a line-scrolling wheel setting", settings.WheelScrollLines)
+	if settings.WheelScrollLines == 0 || (settings.WheelScrollLines > 100 && settings.WheelScrollLines != wheelPageScroll) {
+		t.Fatalf("system wheel scroll lines = %d: the gate needs a line- or page-scrolling wheel setting", settings.WheelScrollLines)
 	}
 	var max Point
 	f.onHost(func() { max = handle.MaxOffset() })
@@ -522,7 +569,13 @@ func TestWin32InputRealWindowWheelScrolls(t *testing.T) {
 		t.Errorf("wheel position = %v, want about (90,90) (ScreenToClient then logical)", event.Position)
 	}
 	if !event.Modifiers.Shift {
-		if event.Delta != ScrollDeltaLines(0, -float32(settings.WheelScrollLines)) {
+		if settings.WheelScrollLines == wheelPageScroll {
+			// One screen per notch (browser-core ticket 02): the delta is
+			// page granularity, one page per notch.
+			if event.Delta != ScrollDeltaPages(0, -1) {
+				t.Errorf("page-scroll wheel delta = %+v, want one page down", event.Delta)
+			}
+		} else if event.Delta != ScrollDeltaLines(0, -float32(settings.WheelScrollLines)) {
 			t.Errorf("wheel delta = %+v, want %d lines down", event.Delta, settings.WheelScrollLines)
 		}
 	}

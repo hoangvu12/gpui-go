@@ -12,6 +12,8 @@ package gpui
 // is never moved; a window-creation failure FAILS the test.
 
 import (
+	"fmt"
+	"slices"
 	"testing"
 	"time"
 )
@@ -131,6 +133,96 @@ func TestInteractWin32MouseCaptureOnRealWindow(t *testing.T) {
 	}
 }
 
+// TestInteractWin32MouseCaptureKeptWhileButtonHeld pins the capture
+// release policy of browser-core ticket 02 (research browser-parity 03
+// §5 gap 4; Chromium keeps capturing while any button is down): with
+// two buttons pressed, releasing one KEEPS the capture — so a second
+// held button no longer loses the drag — and releasing the last button
+// releases it. A release with no tracked press still releases (the
+// pin's unconditional behavior for unpaired messages, events.rs:519-
+// 544). The window sits offscreen; no real input is injected.
+func TestInteractWin32MouseCaptureKeptWhileButtonHeld(t *testing.T) {
+	h := desktopNewHost(t)
+	// Far offscreen: a real window, but nothing appears on any monitor.
+	handle, err := h.OpenWindow(WindowOptions{
+		Title:  "interact capture multi-button",
+		Bounds: Bounds{Origin: Point{X: 20000, Y: 20000}, Size: Size{Width: 120, Height: 80}},
+		Show:   true,
+	})
+	if err != nil {
+		t.Fatalf("OpenWindow failed (offscreen window expected): %v", err)
+	}
+	desktopWaitFor(t, "the window to be visible", handle.Visible)
+
+	type step struct {
+		message  uint32
+		wparam   uintptr
+		captured uintptr
+	}
+	var (
+		steps  []step
+		events []MouseButton
+		hwnd   uintptr
+	)
+	ran := h.runForegroundSync(func() {
+		w := handle.record()
+		if w == nil {
+			return
+		}
+		hwnd = w.hwnd
+		consume := func(event any) bool {
+			if e, ok := event.(*MouseDownEvent); ok {
+				events = append(events, e.Button)
+			}
+			if e, ok := event.(*MouseUpEvent); ok {
+				events = append(events, e.Button)
+			}
+			return true
+		}
+		drive := func(message uint32, wparam uintptr) {
+			w.handleMouseButtonMsg(message, wparam, buttonLParam(20, 30), consume)
+			captured, _, _ := procGetCapture.Call()
+			steps = append(steps, step{message: message, wparam: wparam, captured: captured})
+		}
+		// Two buttons held: left then right.
+		drive(wmLButtonDown, 0)
+		drive(wmRButtonDown, 0)
+		// Releasing one of the two keeps the capture.
+		drive(wmLButtonUp, 0)
+		// Releasing the last held button releases it.
+		drive(wmRButtonUp, 0)
+		// A release with nothing tracked still releases (unpaired path).
+		drive(wmMButtonDown, 0)
+		drive(wmMButtonUp, 0)
+		drive(wmRButtonUp, 0)
+	})
+	if !ran {
+		t.Fatal("the host stopped before the capture gate ran")
+	}
+	if hwnd == 0 || len(steps) != 7 {
+		t.Fatalf("the gate did not run on a live window record (steps %d)", len(steps))
+	}
+	name := func(i int) string { return fmt.Sprintf("step %d (%#x)", i, steps[i].message) }
+	wantCapture := []uintptr{hwnd, hwnd, hwnd, 0, hwnd, 0, 0}
+	for i, want := range wantCapture {
+		if steps[i].captured != want {
+			t.Errorf("%s: GetCapture = %#x, want %#x", name(i), steps[i].captured, want)
+		}
+	}
+	wantButtons := []MouseButton{
+		MouseButtonLeft, MouseButtonRight, // downs
+		MouseButtonLeft, MouseButtonRight, // ups
+		MouseButtonMiddle, MouseButtonMiddle,
+		MouseButtonRight, // the unpaired release still delivers
+	}
+	if !slices.Equal(events, wantButtons) {
+		t.Errorf("delivered buttons = %v, want %v (the unpaired release delivers no event)", events, wantButtons)
+	}
+	if c, _, _ := procGetCapture.Call(); c != 0 {
+		t.Errorf("capture leaked to the test thread's queue: %#x", c)
+	}
+}
+
 // TestInteractWin32ClickStateSystemUpdate pins ClickState::system_update
 // (window.rs:1392-1408): the double-click settings refresh from the
 // system on the matching SPI codes only.
@@ -153,22 +245,34 @@ func TestInteractWin32ClickStateSystemUpdate(t *testing.T) {
 	}
 }
 
-// TestInteractCursorVariantsWithoutWindowsArm pins the four pinned
+// TestInteractCursorVariantsLoadBuiltCursors pins the four pinned
 // CursorStyle variants moved into desktop.go (platform.rs:3204, 3208,
-// 3268, 3272): the Windows loader has no arm for them, so they load the
-// arrow through load_cursor's catch-all (gpui_windows/src/util.rs:114),
-// and they stay distinct values after OperationNotAllowed.
-func TestInteractCursorVariantsWithoutWindowsArm(t *testing.T) {
+// 3268, 3272): they stay distinct values after OperationNotAllowed,
+// the system-resource table keeps reporting the arrow (the reference's
+// catch-all, gpui_windows/src/util.rs:114 — Windows has no system
+// cursor for these glyphs), and loadCursorHandle replaces the fallback
+// with the runtime-built cursors of browser-core ticket 03
+// (desktop_cursors_windows.go): each style loads a cursor distinct
+// from the arrow.
+func TestInteractCursorVariantsLoadBuiltCursors(t *testing.T) {
 	variants := []CursorStyle{CursorClosedHand, CursorOpenHand, CursorDragCopy, CursorContextualMenu}
+	arrow := loadCursorHandle(CursorArrow)
+	handles := map[uintptr]CursorStyle{}
 	for i, style := range variants {
 		if style != CursorOperationNotAllowed+1+CursorStyle(i) {
 			t.Errorf("variant %d = %d, want %d", i, style, CursorOperationNotAllowed+1+CursorStyle(i))
 		}
 		if got := cursorResourceID(style); got != idcArrow {
-			t.Errorf("cursorResourceID(%d) = %d, want IDC_ARROW", style, got)
+			t.Errorf("cursorResourceID(%d) = %d, want IDC_ARROW (the system-resource table is unchanged)", style, got)
 		}
-		if loadCursorHandle(style) != loadCursorHandle(CursorArrow) {
-			t.Errorf("style %d did not load the shared arrow cursor", style)
+		handle := loadCursorHandle(style)
+		if handle == 0 || handle == arrow {
+			t.Errorf("style %d did not load its built cursor (%#x, arrow %#x)", style, handle, arrow)
+			continue
 		}
+		if other, clash := handles[handle]; clash {
+			t.Errorf("styles %d and %d share one built cursor", other, style)
+		}
+		handles[handle] = style
 	}
 }

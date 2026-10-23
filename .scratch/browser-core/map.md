@@ -29,6 +29,9 @@ The user approved the 76-ticket breakdown on 2026-10-23 ("looks good").
 
 ## Decisions so far
 
+- [02 - Wheel page-scroll setting and capture release](issues/02-wheel-page-scroll-and-capture-release.md): WHEEL_PAGESCROLL becomes a `ScrollDelta` Pages variant, resolved at the scroller with Chromium's page step; mouse capture is released only when no button is held.
+- [03 - Missing cursors and frames for hidden windows](issues/03-cursors-and-hidden-window-frames.md): grab, grabbing, copy and context-menu are runtime-built 32x32 monochrome cursors (Windows has no system ones); minimized or DWM-cloaked windows keep their frame demand pending until visible. Ordinary occlusion is not detected.
+
 ## Not yet specified
 
 - R17+ items (text gamma preblend if probe 08 shows a gap, skip-ink, COLRv1 emoji, per-codepoint fallback), a retained layout interface, scroll layers or scroll-by-copy, View Transitions, the TSF text store and pen/touch pointer events. These are ticketed after measuring.

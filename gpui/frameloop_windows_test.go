@@ -139,6 +139,128 @@ func TestFrameLoopRealWindowNotifyRepaints(t *testing.T) {
 	}
 }
 
+// TestFrameLoopMinimizedWindowSkipsFramesUntilVisible is browser-core
+// ticket 03's hidden-window frame gate (research browser-parity 02
+// §8 gap 1; Chromium's display scheduler draws only for visible
+// windows, display_scheduler.cc:602-607): a minimized window SCHEDULES
+// NO FRAMES while its frame demand is pending, and an animation that
+// started while hidden RESUMES correctly — every remaining frame drawn
+// — once the window is visible again.
+//
+// The window is real but parked far offscreen (no visible window on
+// any monitor), and the minimize/restore pair is driven with synthetic
+// WM_SIZE messages on the host thread — the exact message a real
+// minimize delivers (events.rs handle_size_msg). No real input.
+func TestFrameLoopMinimizedWindowSkipsFramesUntilVisible(t *testing.T) {
+	h := desktopNewHost(t)
+	app := NewApp()
+	if err := app.Attach(h); err != nil {
+		t.Fatalf("app attach: %v", err)
+	}
+	var presents atomic.Int64
+	var entity Entity[frameLoopView]
+	window, err := app.OpenWindowView(WindowOptions{
+		Title:    "gpui frame loop minimized",
+		Bounds:   Bounds{Origin: Point{X: 20000, Y: 20000}, Size: Size{Width: 240, Height: 160}},
+		Show:     true,
+		Activate: false,
+		OnRedraw: func() { presents.Add(1) },
+	}, func(w *Window, app *App) View {
+		entity = NewEntity(app, w.Scope(), func(*frameLoopView, *Context[frameLoopView]) {})
+		return ViewOf(entity)
+	})
+	if err != nil {
+		t.Fatalf("OpenWindowView failed: %v — this session is expected to create real windows", err)
+	}
+	t.Cleanup(func() {
+		if window.Alive() {
+			window.Close()
+			desktopWaitFor(t, "the window to be destroyed", func() bool { return !window.Alive() })
+		}
+	})
+
+	type facts struct {
+		draws    uint64
+		renders  int
+		demand   bool
+		presents int64
+	}
+	read := func() facts {
+		var f facts
+		if !h.runForegroundSync(func() {
+			f.draws = WindowDrawCount(window)
+			f.renders = frameLoopRenders(app, entity)
+			f.demand = window.hasFrameDemand()
+		}) {
+			t.Fatal("the host stopped")
+		}
+		f.presents = presents.Load()
+		return f
+	}
+
+	// The opening frame is drawn and presented; the window goes idle.
+	desktopWaitFor(t, "the opening frame to be presented", func() bool { return presents.Load() >= 1 })
+	desktopWaitFor(t, "the window to go idle after opening", func() bool { return !read().demand })
+	base := read()
+
+	// Minimize: the WM_SIZE a real minimize delivers.
+	h.runForegroundSync(func() {
+		w := window.Handle().record()
+		if w == nil {
+			t.Fatal("no live window record")
+		}
+		procSendMessageW.Call(w.hwnd, uintptr(wmSize), uintptr(sizeMinimized), 0)
+	})
+
+	// An animation starts while the window is minimized.
+	h.runForegroundSync(func() {
+		entity.Update(app, func(v *frameLoopView, cx *Context[frameLoopView]) {
+			v.animate = 4
+			cx.Notify()
+		})
+	})
+
+	// Hidden means no frames: the demand stays pending, nothing draws
+	// or presents.
+	time.Sleep(400 * time.Millisecond)
+	hidden := read()
+	if hidden.draws != base.draws {
+		t.Errorf("a minimized window drew %d frame(s) (draws %d -> %d)", hidden.draws-base.draws, base.draws, hidden.draws)
+	}
+	if hidden.presents != base.presents {
+		t.Errorf("a minimized window presented %d frame(s)", hidden.presents-base.presents)
+	}
+	if !hidden.demand {
+		t.Fatal("the window has no pending frame demand; the animation was lost while minimized")
+	}
+
+	// Restore: the WM_SIZE a real restore delivers, with the client
+	// size the minimize kept.
+	h.runForegroundSync(func() {
+		w := window.Handle().record()
+		if w == nil {
+			t.Fatal("no live window record")
+		}
+		procSendMessageW.Call(w.hwnd, uintptr(wmSize), 0,
+			uintptr(uint16(int16(w.clientW)))|uintptr(uint16(int16(w.clientH)))<<16)
+	})
+
+	// The animation resumes: every remaining frame is drawn, then the
+	// window goes idle again.
+	desktopWaitFor(t, "the animation to resume after the restore", func() bool {
+		f := read()
+		return f.draws >= base.draws+4 && f.renders >= base.renders+4
+	})
+	desktopWaitFor(t, "the window to go idle after resuming", func() bool { return !read().demand })
+	final := read()
+	if final.presents <= base.presents {
+		t.Errorf("the resumed animation never presented (presents %d -> %d)", base.presents, final.presents)
+	}
+	if final.renders < base.renders+4 {
+		t.Fatalf("the animation completed only %d of 4 frames after the restore", final.renders-base.renders)
+	}
+}
+
 // frameWakeLedger attributes a real window's frame-source wakes to their
 // origin by the host-thread call stack (frameloop.go's onWake seam):
 //   - "frame": the frame loop re-arming itself (Window.requestFrame);
