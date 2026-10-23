@@ -192,6 +192,16 @@ font face — the pinned `add_fonts` failure); 101 panic contained.
   NUL-terminated UTF-8 names. Capacity probe: call with a null buffer /
   zero capacity → -7 with `out_count` (families) and `out_needed`
   (bytes) written, nothing copied.
+- **Weight below 600 (gpui-perf ticket 05, native revision 13,
+  recorded deviation):** before `font_resolve` and before shaping each
+  run, a requested weight below 600 is replaced by the selected face's
+  own OS/2 weight when Fontique would otherwise synthesize bold (a
+  static face lighter than the request: weight 500 on Segoe UI selected
+  Regular + DirectWrite bold simulation). The replacement selects the
+  same face with no synthesis (verified per family/weight/style and
+  cached; cleared by `font_add`), matching CSS, which synthesizes bold
+  only from 600. Faces with a `wght` axis and requests from 600 up are
+  unchanged. The resolve record still echoes the requested weight.
 - `font_resolve`: builds the pinned `Font` descriptor (family, weight,
   style, features, fallbacks) and resolves it through
   `PlatformTextSystem::font_id` (`resolve_canonical_font`: family list,

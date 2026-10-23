@@ -64,10 +64,12 @@ const (
 	// consumer-gaps font-registration rebuild bumped it to 12: the text
 	// service v2 (text_font_add in table slot 15 registering font bytes
 	// through the pinned add_fonts path, the font record's family_found
-	// diagnostic, the max_font_bytes scalar).
+	// diagnostic, the max_font_bytes scalar). The gpui-perf rebuild
+	// (ticket 05) bumped it to 13: scene insert_batch, frame-latency
+	// waitable swap chains, no synthesized bold below weight 600.
 	// Keep these in sync with reference/native/src/lib.rs
 	// (GPUI_GO_NATIVE_REVISION and the capabilities module).
-	nativeRevision = 12
+	nativeRevision = 13
 
 	// bit 0 bootstrap, bit 1 layout-taffy-0-13-0, bit 2 renderer-d3d11,
 	// bit 3 scene-kernel-v1, bit 4 text-parley-0-11-1, bit 5

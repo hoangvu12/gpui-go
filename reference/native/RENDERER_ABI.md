@@ -1,5 +1,22 @@
 # gpui-go native renderer service ABI (v2)
 
+**Renderer service version 4 (gpui-perf ticket 05, native revision 13):**
+every swap chain (both modes, and the device-loss rebuild) is created
+with `DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT` (and
+`ResizeBuffers` passes the same flag), `IDXGISwapChain2::
+SetMaximumFrameLatency(1)` is applied, and the surface keeps the
+waitable handle (closed with the surface or on rebuild). The table
+gained `surface_frame_latency_handle(surface: u64, out_handle: *mut u64)
+-> i32` after `device_mark_drawable`: it writes a caller-owned
+`DuplicateHandle` copy of the waitable (0 when the swap chain exposes no
+`IDXGISwapChain2`), so the caller waits outside the renderer lock and
+closes it. Table size 184. Deviation from the pin, which creates its
+swap chains with `Flags: 0` and default latency. Present stays
+`Present(0, 0)`; `Present1` dirty rects are not used (see the ticket 05
+answer: the flip-model back buffer is three frames old and the draw
+path redraws the whole target, so a dirty-rect hint has no damage
+source to be correct against).
+
 Design contract for ticket07, extended by ticket16 (the scene draw
 pipeline). This document is the authoritative
 interface between the Rust native renderer service

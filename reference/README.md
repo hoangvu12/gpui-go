@@ -136,6 +136,26 @@ and refreshes the embedded pair `internal/native/artifacts/
 MSVC linker embeds a timestamp, so identical sources produce different
 SHA-256s (observed during this ticket).
 
+### Recorded measurements (2026-10-23, the gpui-perf ticket 05 rebuild)
+
+- Toolchain: `rustc 1.97.0`, host/target `x86_64-pc-windows-msvc`,
+  `RUSTFLAGS=-C target-feature=+crt-static`. `ce-source/` is a copy of
+  the main checkout's pinned `254b5dbd…` tree (unmodified).
+- DLL: 18,877,952 bytes, SHA-256
+  `0b6e9265e0d519ecaf56aba6f6905efab0bdc7be936d6085ea42cab28e234450`,
+  gzip-9 7,539,285 bytes. Native revision 13 (the embedded artifact
+  before it was revision 12, SHA `88595f13…`), capability mask `0xFFF`.
+  CRT outcome: **static**.
+- Changes: scene service v4 (`insert_batch`: one packed op stream per
+  call), renderer service v4 (frame-latency waitable swap chains with
+  maximum latency 1, `surface_frame_latency_handle`), and the text
+  service replaces a requested weight below 600 with the selected
+  static face's own weight when Fontique would synthesize bold. Evidence:
+  [`evidence/perf/ticket05-native-rebuild.json`](../evidence/perf/ticket05-native-rebuild.json).
+- `cargo test -p gpui-go-native` still does not compile the lib test
+  target (the pre-existing a11y.rs/capture.rs errors recorded below);
+  the changes are verified through the Go gates.
+
 ### Recorded measurements (2026-10-19, the consumer-gaps font-registration rebuild)
 
 - Toolchain: `rustc 1.97.0`, host/target `x86_64-pc-windows-msvc`,

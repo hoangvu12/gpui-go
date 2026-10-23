@@ -49,6 +49,10 @@ func callSceneInsertPolySprite(fn uintptr, scene uint64, rec *ScenePolychromeSpr
 	return 0, hostSupported()
 }
 
+func callSceneInsertBatch(fn uintptr, scene uint64, words []uint32, outApplied *uint32) (int32, error) {
+	return 0, hostSupported()
+}
+
 func callSceneReplay(fn uintptr, scene uint64, start, end uint32, prev uint64) (int32, error) {
 	return 0, hostSupported()
 }

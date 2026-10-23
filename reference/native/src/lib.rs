@@ -95,8 +95,12 @@ pub const GPUI_GO_ABI_VERSION: u32 = 1;
 /// service v2 (its `text_font_add` entry in table slot 15 registers font
 /// bytes through the pinned `PlatformTextSystem::add_fonts`, the font
 /// record's v1 reserved word became the `family_found` diagnostic, the
-/// table gained the `max_font_bytes` scalar).
-pub const GPUI_GO_NATIVE_REVISION: u32 = 12;
+/// table gained the `max_font_bytes` scalar). The gpui-perf rebuild (ticket
+/// 05) bumped it to 13: the scene service v4 `insert_batch` entry, the
+/// renderer service v4 frame-latency waitable swap chains (maximum latency
+/// 1) and `surface_frame_latency_handle`, and the text service no longer
+/// selects synthesized bold for requested weights below 600.
+pub const GPUI_GO_NATIVE_REVISION: u32 = 13;
 
 /// gpui-CE source pin this artifact family is built against (ASCII hex,
 /// zero-padded to 40 bytes in the table).

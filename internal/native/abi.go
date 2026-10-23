@@ -36,8 +36,11 @@ const (
 	// font-registration rebuild bumped it to 12: the text service v2
 	// (text_font_add in table slot 15 registering font bytes through the
 	// pinned add_fonts path, the font record's family_found diagnostic,
-	// the max_font_bytes scalar).
-	nativeRevision uint32 = 12
+	// the max_font_bytes scalar); the gpui-perf rebuild (ticket 05) bumped
+	// it to 13: scene service v4 (insert_batch), renderer service v4
+	// (frame-latency waitable swap chains, surface_frame_latency_handle)
+	// and no synthesized bold below weight 600.
+	nativeRevision uint32 = 13
 	// maxBufferLen mirrors GPUI_GO_MAX_BUFFER_LEN.
 	maxBufferLen = 4096
 	// maxTextLen mirrors the text service's MAX_TEXT_BYTES (1 MiB text
