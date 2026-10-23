@@ -219,6 +219,9 @@ func (w *Window) Refresh() {
 	if w == nil || w.isDrawing() {
 		return
 	}
+	// refreshing = true: the next frame ignores the view caches
+	// (view_cache.go).
+	w.markRefreshing()
 	w.markFrameDirty()
 }
 
@@ -391,6 +394,15 @@ func (a *App) invalidateViewWindows(id EntityID) {
 		if _, tracked := fs.trackedEntities[id]; !tracked {
 			continue
 		}
+		// invalidate_view records the entity as a dirty view even while
+		// the window draws (R:window.rs:192, before the draw-phase guard):
+		// the next draw marks it dirty (view_cache.go invalidateEntities).
+		if ds, ok := windowDrawStates[w]; ok {
+			if ds.invalidatedViews == nil {
+				ds.invalidatedViews = make(map[EntityID]struct{})
+			}
+			ds.invalidatedViews[id] = struct{}{}
+		}
 		if w.isDrawing() {
 			continue
 		}
@@ -402,6 +414,7 @@ func (a *App) invalidateViewWindows(id EntityID) {
 // every window becomes dirty.
 func (a *App) refreshAllWindows() {
 	for _, w := range a.sortedWindows() {
+		w.markRefreshing()
 		w.markFrameDirty()
 	}
 }

@@ -91,6 +91,10 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gpui: DrawWindowFrame: scene: %w", err)
 	}
+	// invalidate_entities (window.rs:3161, 3316-3322): the views notified
+	// since the last draw, and their ancestor views, are dirty for this
+	// frame's cached views (view_cache.go).
+	invalidateEntities(w, ds)
 	// One fresh layout tree per frame: the reference reuses the window's
 	// engine and clears it every frame; the port resets the engine at
 	// frame start (every outstanding LayoutID of the previous frame
@@ -142,6 +146,11 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 		} else {
 			discardDispatchFrame(w)
 			abandonFrameTracking(w)
+			// The abandoned build may have rewritten cached views' ranges
+			// against the discarded frame: the next frame renders every
+			// cached view afresh (view_cache.go).
+			ds.dirtyViews = nil
+			ds.refreshing = true
 		}
 	}()
 
@@ -152,6 +161,8 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 		frame.trackingAccess = true
 		defer func() { frame.trackingAccess = false }()
 		drawErr = drawRoots(w, app, ds, frame)
+		// self.dirty_views.clear() after draw_roots (window.rs:3197).
+		ds.dirtyViews = nil
 	})
 	if drawErr != nil {
 		return nil, drawErr
@@ -198,6 +209,10 @@ func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawSt
 		ds.lastScene = frame.scene
 		ds.lastInlineFacts = frame.inlineFacts
 		ds.lastDeferredPriorities = deferredPrioritiesOf(frame)
+		// The rendered frame's ordered lists a cached view's reused ranges
+		// index into (view_cache.go; the pin keeps them on rendered_frame).
+		ds.lastAccessedElementStateLog = frame.accessedElementStateLog
+		ds.lastDeferredDraws = frame.deferredDraws
 		evicted := retainElementStates(ds, frame.accessedElementStates)
 		// The frame-finish hook (helpers_frame.go): the completed dispatch
 		// frame swaps into the rendered state through endDispatchFrame (the
@@ -219,6 +234,8 @@ func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawSt
 	// frame awaits presentation (window.rs 3276/3287).
 	ds.refreshRequested = false
 	completeFrameTracking(w, ds.root)
+	// self.refreshing = false (window.rs:3278).
+	ds.refreshing = false
 	// reset_cursor_style after recording the accessed entities
 	// (window.rs 3276-3277; Base ticket 06's interact.go helper): the
 	// completed frame's cursor requests resolve the window cursor.
