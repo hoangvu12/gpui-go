@@ -1,11 +1,11 @@
-# Reuse unchanged views across frames (GPUI view caching)
+﻿# Reuse unchanged views across frames (GPUI view caching)
 
 Parent: ../map.md
 Type: task
 Labels: wayfinder:task
 Triage: ready-for-agent
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: gpui-perf W2
 Blocked by: none
 
 ## Question
