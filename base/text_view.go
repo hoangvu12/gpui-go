@@ -13,8 +13,8 @@ package base
 //     textSelectionSelectedText; without it the state's own selection
 //     (select-all, multi-click) is copied.
 //   - The selection adapter's per-frame registration and touch handles
-//     are ticket 29's (text_selection_adapter.go); the reveal handler
-//     (ticket 30) is not carried.
+//     are ticket 29's (text_selection_adapter.go); the reveal handler is
+//     ticket 30's (text_range_highlight_state.go).
 //   - TextViewPlugin: a MarkdownPlugin is applied with Plugin; other
 //     plugins implement TextViewPlugin.
 
@@ -127,6 +127,8 @@ type TextView struct {
 	linkClickHandler     LinkClickHandlerFn
 	imageSource          ImageSourceFn
 	markdownExtensions   *MarkdownExtensions
+	revealHandler        RevealHandlerFn
+	motion               *TextViewMotion
 }
 
 // NewTextView creates a TextView over a managed state
@@ -366,6 +368,9 @@ func (v *TextView) RequestLayout(_ *gpui.GlobalElementID, _ *gpui.InspectorEleme
 		s.linkClickHandler = v.linkClickHandler
 		s.imageSource = v.imageSource
 		s.setMarkdownExtensions(v.markdownExtensions, cx)
+		if v.motion != nil {
+			s.SetMotion(*v.motion)
+		}
 		s.selectable = v.selectable
 		s.selectionFormat = v.selectionFormat
 		s.scrollable = v.scrollable
@@ -489,6 +494,7 @@ func (v *TextView) Paint(_ *gpui.GlobalElementID, _ *gpui.InspectorElementID, bo
 		layout.element.Paint(w, app)
 	}
 	textViewStatePop(app)
+	textViewRevealProgress(layout.state, v.revealHandler, w, app)
 	if v.selectable {
 		// Registration and touch handles (ticket 29,
 		// text_selection_adapter.go).

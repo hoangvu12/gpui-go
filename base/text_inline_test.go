@@ -8,8 +8,8 @@ import (
 	"github.com/hoangvu12/gpui-go/gpui"
 )
 
-// Ports of the U:text/inline.rs tests (1364-2418). Of 21: 15 ported, 6
-// deferred:
+// Ports of the U:text/inline.rs tests (1364-2418). Of 21: 15 ported here,
+// 5 ported by ticket 30, 1 deferred:
 //   - line_bounds_tests::row_walk_matches_the_character_walk and the
 //     range_highlight_tests module (text_rows_extent_matches_the_character
 //     _walk, a_highlight_starting_a_wrapped_row_paints_only_that_row,
@@ -18,8 +18,8 @@ import (
 //     out under the WideMonoTextSystem fake and wrap it. gpui exposes no
 //     platform text-system seam to a test, and the deterministic test text
 //     system lays every document out on one visual line (gpui/testwindow.go),
-//     so they need the real stack; they join ticket 30's range-highlight
-//     paint, whose geometry they pin (deferred to 30).
+//     so ticket 30 runs them on real fonts in a real window:
+//     text_range_highlight_real_windows_test.go.
 //   - retained_layout_tests::shortening_an_inline_flow_releases_obsolete_
 //     fragment_layouts: the Go table is weak-keyed, so a dropped fragment
 //     state leaves an entry only until the next sweep; deferred with 30's

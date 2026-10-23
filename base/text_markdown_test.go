@@ -594,17 +594,10 @@ func TestNestedEmphasisMergesTextMarks(t *testing.T) {
 	t.Fatal("expected emphasized text")
 }
 
-// mdRequireHTMLParser: inline raw HTML goes through U:text/format/html.rs,
-// ticket 30's; these tests run once it installs textHTMLParse.
-func mdRequireHTMLParser(t *testing.T) {
-	t.Helper()
-	if textHTMLParse == nil {
-		t.Skip("needs U:text/format/html.rs::parse (ticket 30)")
-	}
-}
+// The inline raw HTML tests below go through U:text/format/html.rs
+// (text_html.go, ticket 30).
 
 func TestInlineHTMLImageStaysInMarkdownParagraph(t *testing.T) {
-	mdRequireHTMLParser(t)
 	doc := mdParse(t, `Before <img src="https://example.com/avatar.png" alt="Avatar" width="32" height="32" /> after.`, &nodeContext{})
 	p := mdOnlyParagraph(t, doc)
 	if len(p.children) != 3 || p.children[0].text != "Before " || p.children[2].text != " after." {
@@ -621,7 +614,6 @@ func TestInlineHTMLImageStaysInMarkdownParagraph(t *testing.T) {
 }
 
 func TestInlineHTMLImageWithoutSizeStaysInMarkdownParagraph(t *testing.T) {
-	mdRequireHTMLParser(t)
 	doc := mdParse(t, `Before <img src="https://avatars.githubusercontent.com/u/5518"> after.`, &nodeContext{})
 	p := mdOnlyParagraph(t, doc)
 	if len(p.children) != 3 || p.children[0].text != "Before " || p.children[2].text != " after." {
@@ -874,7 +866,6 @@ func TestClaimedInlineMathSurvivesProseFlattening(t *testing.T) {
 }
 
 func TestInlineHTMLFormattingTagsPairAcrossSiblings(t *testing.T) {
-	mdRequireHTMLParser(t)
 	source := "a <strong>b *c* <em>d</em></strong> e <b>f</b> <i>g</i> <del>h</del> <br> <strong>unclosed"
 	doc := mdParse(t, source, &nodeContext{})
 	if doc.text() != "a b c d e f g h \n unclosed\n" {

@@ -74,9 +74,11 @@ type nodeRenderContext struct {
 	imageSource          ImageSourceFn
 	linkClickHandler     LinkClickHandlerFn
 	markdownExtensions   *MarkdownExtensions
-	// streamFades and rangeBackgrounds are ticket 30's frames.
+	// streamFades and rangeBackgrounds are ticket 30's frames; reveal is
+	// its pending reveal (text_range_highlight_state.go).
 	streamFades      func(key textLeafKey) []textFadeRange
 	rangeBackgrounds func(key textLeafKey) []textColorRange
+	reveal           *revealRequest
 }
 
 func defaultNodeRenderContext() *nodeRenderContext {
@@ -341,7 +343,8 @@ func (p *paragraph) render(leafKey *textLeafKey, cx *nodeRenderContext, w *gpui.
 		highlights = fadeHighlights(highlights, sliceFadeRanges(fades, 0, len(text)))
 		p.state.setText(text)
 		return newInlineText(p.state, links, highlights, cx.linkClickHandler).
-			withRangeBackgrounds(sliceColorRanges(backgrounds, 0, len(text))).IntoElement()
+			withRangeBackgrounds(sliceColorRanges(backgrounds, 0, len(text))).
+			withReveal(cx.revealAt(leafKey, 0, len(text))).IntoElement()
 	}
 
 	var children []any
@@ -358,7 +361,8 @@ func (p *paragraph) render(leafKey *textLeafKey, cx *nodeRenderContext, w *gpui.
 				node.state.setText(t)
 				children = append(children, newInlineText(node.state, links,
 					fadeHighlights(highlights, sliceFadeRanges(fades, consumed, consumed+len(t))), cx.linkClickHandler).
-					withRangeBackgrounds(sliceColorRanges(backgrounds, consumed, consumed+len(t))).IntoElement())
+					withRangeBackgrounds(sliceColorRanges(backgrounds, consumed, consumed+len(t))).
+					withReveal(cx.revealAt(leafKey, consumed, consumed+len(t))).IntoElement())
 			}
 			image := gpui.Img(cx.imageSourceOf(node.image)).ID(gpui.IntegerElementID(uint64(ix))).
 				ObjectFit(gpui.ObjectFitContain).MaxW(gpui.Fraction(1))
@@ -394,7 +398,8 @@ func (p *paragraph) render(leafKey *textLeafKey, cx *nodeRenderContext, w *gpui.
 		end := consumed + len(t)
 		p.state.setText(t)
 		children = append(children, newInlineText(p.state, links, fadeHighlights(highlights, sliceFadeRanges(fades, consumed, end)), cx.linkClickHandler).
-			withRangeBackgrounds(sliceColorRanges(backgrounds, consumed, end)).IntoElement())
+			withRangeBackgrounds(sliceColorRanges(backgrounds, consumed, end)).
+			withReveal(cx.revealAt(leafKey, consumed, end)).IntoElement())
 	}
 	// Images keep an identified box: an image's element state is its
 	// animation, and the box scopes that state per paragraph.
@@ -439,6 +444,7 @@ func (p *paragraph) inlineFlowItems(leafKey *textLeafKey, fades []textFadeRange,
 			kind: inlineFlowText, state: state, text: t, links: links,
 			highlights:  fadeHighlights(highlights, sliceFadeRanges(fades, consumed, consumed+len(t))),
 			backgrounds: sliceColorRanges(backgrounds, consumed, consumed+len(t)),
+			reveal:      cx.revealAt(leafKey, consumed, consumed+len(t)),
 		})
 	}
 	for i := range p.children {
@@ -549,7 +555,8 @@ func (c *CodeBlock) render(options nodeRenderOptions, cx *nodeRenderContext, w *
 		FontFamily(theme.Tokens.Typography.Mono).TextSize(gpui.Px(theme.Tokens.Typography.MonoMd.Size)).Relative()).
 		RefineStyle(&codeBlock).
 		Child(newInlineText(c.state, nil, fadeHighlights(highlights, cx.fades(leafKey)), cx.linkClickHandler).
-			withRangeBackgrounds(cx.backgrounds(leafKey)))
+			withRangeBackgrounds(cx.backgrounds(leafKey)).
+			withReveal(cx.revealAt(leafKey, 0, len(c.Code()))))
 	var el gpui.AnyElement
 	if cx.codeBlockActions != nil {
 		el = block.ID(blockElementID("codeblock", c.Span, options.ix)).

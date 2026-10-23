@@ -22,8 +22,9 @@ package base
 //     multi-click and preserved selections paint. Word ranges for a double
 //     click come from U:text/selection.rs::word_range_at, also 29's
 //     (textWordRangeAt).
-//   - Reveal (U:text/range_highlight.rs RevealAt) is ticket 30's and not
-//     carried; range backgrounds are carried and painted.
+//   - Reveal (U:text/range_highlight.rs RevealAt) is ticket 30's
+//     (withReveal/requestReveal in text_range_highlight_state.go); range
+//     backgrounds are carried and painted.
 
 import (
 	"reflect"
@@ -325,6 +326,9 @@ type inlineText struct {
 	selectionBounds  *gpui.Bounds
 	selectionSource  *inlineSelectionSource
 	rangeBackgrounds []textColorRange
+	// reveal is the start of a pending reveal in this text (ticket 30,
+	// text_range_highlight_state.go).
+	reveal           *revealAt
 	linkClickHandler LinkClickHandlerFn
 	retainedRuns     []gpui.TextRun
 	retainedStyle    *gpui.TextStyle
@@ -608,7 +612,10 @@ func inlineTextLineBounds(text string, layout *gpui.TextLayout, lineHeight float
 	var out []gpui.Bounds
 	for i, r := range rows {
 		width := r.right - origin.X
-		if i+1 < len(rows) {
+		// A trailing newline ends the last row before an empty one, which
+		// lays out no character (ticket 30, found by row_walk_matches_the_
+		// character_walk: U:text/inline.rs:698-711 walks that line too).
+		if i+1 < len(rows) || (i == len(rows)-1 && text != "" && text[len(text)-1] == '\n') {
 			width += lineHeight / 2
 		}
 		b := textBoundsIntersect(gpui.Bounds{Origin: gpui.Point{X: origin.X, Y: r.y}, Size: gpui.Size{Width: width, Height: lineHeight}}, mask)
@@ -714,6 +721,7 @@ func (e *inlineText) Prepaint(global *gpui.GlobalElementID, inspector *gpui.Insp
 	}
 	e.styledText.Prepaint(global, inspector, bounds, &struct{}{}, w, app)
 	textViewReportLineSpan(app, textLineSpan{top: bounds.Top(), bottom: bounds.Bottom(), lineHeight: w.LineHeight()})
+	e.requestReveal(w)
 	hitbox := w.InsertHitbox(bounds, gpui.HitboxNormal)
 	e.retainStyledText()
 	return hitbox

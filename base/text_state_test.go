@@ -8,19 +8,17 @@ import (
 	"github.com/hoangvu12/gpui-go/gpui"
 )
 
-// Ports of the U:text/state.rs tests (1283-3187). Of 82: 21 ported, 2
-// deviated, 59 deferred:
-//   - deferred to ticket 30: the stream_fade module (12), the
-//     range_highlights module (25) and the reveal module (19) test
-//     U:text/stream_fade.rs and U:text/range_highlight.rs; html_push_str
-//     keeps_earlier_blocks, set_text_extending_html_parses_it_again and
-//     the HTML half of large_markdown_and_html_full_replacements need
-//     U:text/format/html.rs.
-//   - deviated: large_markdown_and_html_full_replacements_wait_for_
-//     background_executor (Markdown half only, HTML is ticket 30's) and
-//     update_future_yields_before_coalescing_all_queued_updates (the Go
-//     drain delivers one update per 64-update batch instead of yielding a
-//     poll).
+// Ports of the U:text/state.rs tests (1283-3187), 83 in all. This file
+// holds the 23 outside the stream_fade, range_highlights and reveal_range
+// modules: 22 ported, 1 deviated. The modules are ticket 30's, in
+// text_stream_fade_state_test.go (12), text_range_highlight_state_test.go
+// (26) and text_range_highlight_reveal_test.go (22).
+//   - deviated: update_future_yields_before_coalescing_all_queued_updates
+//     (the Go drain delivers one update per 64-update batch instead of
+//     yielding a poll).
+//   - large_markdown_and_html_full_replacements_wait_for_background_
+//     executor, html_push_str_keeps_earlier_blocks and set_text_extending_
+//     html_parses_it_again run on U:text/format/html.rs (ticket 30).
 
 func newTextViewStateEntityHTML(ta *gpui.TestApp, text string) gpui.Entity[TextViewState] {
 	var state gpui.Entity[TextViewState]
@@ -52,25 +50,32 @@ func TestSmallFullReplaceParsesBeforeBackgroundExecutorRuns(t *testing.T) {
 	})
 }
 
-// U:text/state.rs:1548-1586 (deviated: the Markdown half; HTML parsing is
-// ticket 30's).
-func TestLargeMarkdownFullReplacementsWaitForBackgroundExecutor(t *testing.T) {
+// U:text/state.rs:1548-1586
+func TestLargeMarkdownAndHTMLFullReplacementsWaitForBackgroundExecutor(t *testing.T) {
 	ta := textTestApp(t)
 	markdown := strings.Repeat("# x\n\n", maxSyncFullReplaceBytes/5+1)
-	state := newTextViewStateEntity(ta, markdown)
-	readState(ta, state, func(s *TextViewState) struct{} {
-		if s.text != markdown || s.source() != "" || len(s.parsedContent.document.blocks) != 0 {
-			t.Fatal("a large replacement parsed synchronously")
-		}
-		return struct{}{}
-	})
+	html := "<p>" + strings.Repeat("x", maxSyncFullReplaceBytes+1) + "</p>"
+	states := map[string]gpui.Entity[TextViewState]{
+		markdown: newTextViewStateEntity(ta, markdown),
+		html:     newTextViewStateEntityHTML(ta, html),
+	}
+	for text, state := range states {
+		readState(ta, state, func(s *TextViewState) struct{} {
+			if s.text != text || s.source() != "" || len(s.parsedContent.document.blocks) != 0 {
+				t.Fatal("a large replacement parsed synchronously")
+			}
+			return struct{}{}
+		})
+	}
 	ta.RunUntilParked()
-	readState(ta, state, func(s *TextViewState) struct{} {
-		if s.source() != markdown || len(s.parsedContent.document.blocks) == 0 {
-			t.Fatalf("the background parse did not land: %d blocks", len(s.parsedContent.document.blocks))
-		}
-		return struct{}{}
-	})
+	for text, state := range states {
+		readState(ta, state, func(s *TextViewState) struct{} {
+			if s.source() != text || len(s.parsedContent.document.blocks) == 0 {
+				t.Fatalf("the background parse did not land: %d blocks", len(s.parsedContent.document.blocks))
+			}
+			return struct{}{}
+		})
+	}
 }
 
 // U:text/state.rs:1588-1631
@@ -135,6 +140,28 @@ func TestAsyncFullReplaceThenPushStrPreservesCompleteSource(t *testing.T) {
 	readState(ta, state, func(s *TextViewState) struct{} {
 		if want := replacement + " tail"; s.text != want || s.source() != want {
 			t.Fatalf("text/source mismatch: %d/%d", len(s.text), len(s.source()))
+		}
+		return struct{}{}
+	})
+}
+
+// U:text/state.rs:1653-1676
+func TestHTMLPushStrKeepsEarlierBlocks(t *testing.T) {
+	ta := textTestApp(t)
+	state := newTextViewStateEntityHTML(ta, "<p>first</p>")
+	ta.RunUntilParked()
+	updateState(ta, state, func(s *TextViewState, cx *gpui.Context[TextViewState]) { s.PushStr("<p>second</p>", cx) })
+	ta.RunUntilParked()
+	readState(ta, state, func(s *TextViewState) struct{} {
+		if s.source() != "<p>first</p><p>second</p>" {
+			t.Fatalf("source = %q", s.source())
+		}
+		var text strings.Builder
+		for _, b := range s.parsedContent.document.blocks {
+			text.WriteString(blockNodeText(b))
+		}
+		if !strings.Contains(text.String(), "first") || !strings.Contains(text.String(), "second") {
+			t.Fatalf("lost a block: %q", text.String())
 		}
 		return struct{}{}
 	})
@@ -269,6 +296,24 @@ func TestSetTextStreamingMarkdownMatchesAFullParse(t *testing.T) {
 	if readState(ta, streamed, func(s *TextViewState) string { return s.source() }) != readState(ta, parsed, func(s *TextViewState) string { return s.source() }) {
 		t.Fatal("sources differ")
 	}
+	if a, b := parsedBlocks(ta, streamed), parsedBlocks(ta, parsed); !slices.Equal(a, b) {
+		t.Fatalf("blocks differ:\n%v\n%v", a, b)
+	}
+}
+
+// U:text/state.rs:1834-1851
+func TestSetTextExtendingHTMLParsesItAgain(t *testing.T) {
+	ta := textTestApp(t)
+	streamed := newTextViewStateEntityHTML(ta, "<ul><li>a</li>")
+	ta.RunUntilParked()
+	const text = "<ul><li>a</li><li>b</li></ul>"
+	updateState(ta, streamed, func(s *TextViewState, cx *gpui.Context[TextViewState]) { s.SetText(text, cx) })
+	ta.RunUntilParked()
+	if readState(ta, streamed, func(s *TextViewState) int { return s.fullUpdateRevision }) == 0 {
+		t.Fatal("extending HTML appended instead of parsing again")
+	}
+	parsed := newTextViewStateEntityHTML(ta, text)
+	ta.RunUntilParked()
 	if a, b := parsedBlocks(ta, streamed), parsedBlocks(ta, parsed); !slices.Equal(a, b) {
 		t.Fatalf("blocks differ:\n%v\n%v", a, b)
 	}

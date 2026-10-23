@@ -28,8 +28,8 @@ import (
 //     selection_band_beyond_clip_copies_offscreen_text,
 //     double_click_selects_word, triple_click_selects_paragraph,
 //     outer_list_content_total_stable_while_scrolling.
-//   - deferred to ticket 30: inline_html_image_after_newline_does_not_panic
-//     (inline HTML, U:text/format/html.rs).
+//   - ported by ticket 30: inline_html_image_after_newline_does_not_panic
+//     (inline HTML, U:text/format/html.rs), at the end of this file.
 //   - deferred (gaps outside this ticket): list_item_renders_fenced_code_
 //     block_at_document_width needs h_resizable/resizable_panel (not
 //     ported); clipped_markdown_link_does_not_open and right_click_does_not
@@ -324,5 +324,16 @@ func TestLinkHandlerReceivesButtonAndModifiers(t *testing.T) {
 	cx.SimulateMouseUp(tpt(10, 10), gpui.MouseButtonMiddle, gpui.Modifiers{Control: true})
 	if len(clicks) != 1 || clicks[0].Kind != gpui.ClickEventMouse || clicks[0].Mouse.Up.Button != gpui.MouseButtonMiddle || !clicks[0].Mouse.Up.Modifiers.Control {
 		t.Fatalf("clicks %+v", clicks)
+	}
+}
+
+// U:text/text_view.rs:1609-1624 (ticket 30: inline HTML through
+// U:text/format/html.rs).
+func TestInlineHTMLImageAfterNewlineDoesNotPanic(t *testing.T) {
+	ta := textTestApp(t)
+	_, cx := textViewTestRoot(t, ta, "Hi\n[<img src=\"https://example.com/image.svg\">](https://google.com/)")
+	cx.RunUntilParked()
+	if _, err := gpui.DrawWindowFrame(cx.Window()); err != nil {
+		t.Fatal(err)
 	}
 }

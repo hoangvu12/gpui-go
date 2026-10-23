@@ -14,8 +14,9 @@ package base
 //     coalesced batch delivers one parsedUpdate, applied on the entity
 //     like the Rust receive loop.
 //   - Ticket 30's state (range highlights, reveal, stream fade, rendered
-//     text, U:text/state.rs:586-700,959-1001) is not carried; only the
-//     committed revision the range-highlight reconcile records is.
+//     text, U:text/state.rs:586-700,959-1001) lives in
+//     text_range_highlight_state.go; the calls into it are here, where
+//     upstream makes them.
 //   - Ticket 29's selection adapter (U:text/selection_adapter.rs) and the
 //     window TextSelection layer join through the hooks below; without
 //     them a TextView has no window drag selection, as before 29.
@@ -25,6 +26,7 @@ package base
 import (
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/hoangvu12/gpui-go/base/segment"
 	"github.com/hoangvu12/gpui-go/gpui"
@@ -251,14 +253,23 @@ type TextViewState struct {
 	selectionAdapter        textViewSelectionAdapter
 
 	parsedContent parsedContent
-	format        textViewFormat
-	text          string
+	// streamFade and fadeTick are ticket 30's streamed fade-in
+	// (U:text/state.rs:132-133).
+	streamFade streamFadeTracker
+	fadeTick   bool
+	format     textViewFormat
+	text       string
 	// elementText is the text a TextView element last handed over.
 	elementText *string
 
-	revision               int
-	committedRevision      int
-	fullUpdateRevision     int
+	revision           int
+	committedRevision  int
+	fullUpdateRevision int
+	// renderedIndex, rangeHighlights and pendingReveal are ticket 30's
+	// (U:text/state.rs:147-150).
+	renderedIndex          *renderedIndexCell
+	rangeHighlights        *rangeHighlightFrame
+	pendingReveal          *pendingReveal
 	selectionRevision      int
 	compatibleLayoutUpdate bool
 	layoutTypography       *textLayoutTypography
@@ -288,8 +299,7 @@ func TextViewStateMarkdown(text string, cx *gpui.Context[TextViewState]) TextVie
 }
 
 // TextViewStateHTML creates an HTML TextViewState (U:text/state.rs:166-169).
-// HTML parsing is ticket 30's (U:text/format/html.rs); until it lands the
-// state reports a parse error.
+// HTML parses through U:text/format/html.rs (text_html.go, ticket 30).
 func TextViewStateHTML(text string, cx *gpui.Context[TextViewState]) TextViewState {
 	return newTextViewState(textViewFormatHTML, text, cx)
 }
@@ -306,6 +316,8 @@ func newTextViewState(format textViewFormat, text string, cx *gpui.Context[TextV
 		textViewStyle:      &style,
 		markdownExtensions: &MarkdownExtensions{},
 		parsedContent:      emptyParsedContent(),
+		streamFade:         newStreamFadeTracker(),
+		renderedIndex:      &renderedIndexCell{},
 		format:             format,
 		text:               text,
 		parser:             &textViewParser{format: format, content: emptyParsedContent()},
@@ -373,6 +385,7 @@ func (s *TextViewState) SetText(text string, cx *gpui.Context[TextViewState]) {
 		s.PushStr(text[len(s.text):], cx)
 		return
 	}
+	s.streamFade.noteReplace()
 	s.text = text
 	s.parsedError = nil
 	s.incrementUpdate(text, false, cx)
@@ -396,6 +409,7 @@ func (s *TextViewState) PushStr(newText string, cx *gpui.Context[TextViewState])
 	if newText == "" {
 		return
 	}
+	s.streamFade.noteExtend(len(s.text))
 	s.text += newText
 	s.incrementUpdate(newText, true, cx)
 }
@@ -499,7 +513,8 @@ func (s *TextViewState) incrementUpdate(text string, appendText bool, cx *gpui.C
 	if sync {
 		content, err := parseTextContent(s.format, emptyParsedContent(), options)
 		if err == nil {
-			s.committedRevision = s.revision
+			s.reconcileRangeHighlights(content.document, s.revision, false)
+			s.streamFade.record(s.parsedContent.document, content.document, time.Now())
 			s.parsedContent = content
 			s.parsedError = nil
 			s.invalidateMeasuredHeights()
@@ -507,6 +522,7 @@ func (s *TextViewState) incrementUpdate(text string, appendText bool, cx *gpui.C
 				s.resetSelectionAndAdapter(cx.App())
 			}
 		} else {
+			s.streamFade.discardPending()
 			msg := err.Error()
 			s.parsedError = &msg
 		}
@@ -529,7 +545,8 @@ func (s *TextViewState) applyParsedUpdate(update textParsedUpdate, cx *gpui.Cont
 		if appendText && s.fullUpdateRevision <= s.committedRevision {
 			s.spliceAppendedBlocks(update.content.document)
 		}
-		s.committedRevision = update.revision
+		s.reconcileRangeHighlights(update.content.document, update.revision, appendText)
+		s.streamFade.record(s.parsedContent.document, update.content.document, time.Now())
 		s.parsedContent = update.content
 		s.parsedError = nil
 		s.compatibleLayoutUpdate = update.selectionCompatible
@@ -537,6 +554,7 @@ func (s *TextViewState) applyParsedUpdate(update textParsedUpdate, cx *gpui.Cont
 			s.invalidateMeasuredHeights()
 		}
 	} else {
+		s.streamFade.discardPending()
 		msg := update.err.Error()
 		s.parsedError = &msg
 	}
@@ -722,6 +740,8 @@ func (s *TextViewState) Render(w *gpui.Window, cx *gpui.Context[TextViewState]) 
 	}
 	s.layoutTypography = &typography
 	state := cx.Entity().Downgrade()
+	streamFade := s.renderStreamFade(cx)
+	reveal, revealBlock, scrollToBlock := s.revealFrame(cx.App().Now(), w)
 	nodeCx := &nodeRenderContext{
 		offset:               s.parsedContent.nodeCx.offset,
 		linkRefs:             s.parsedContent.nodeCx.linkRefs,
@@ -733,6 +753,7 @@ func (s *TextViewState) Render(w *gpui.Window, cx *gpui.Context[TextViewState]) 
 		imageSource:          s.imageSource,
 		markdownExtensions:   s.markdownExtensions,
 	}
+	nodeCx.installTextLeafFrames(streamFade, s.rangeHighlights, reveal)
 
 	content := VFlex().WFull()
 	if s.maxLines == nil {
@@ -749,9 +770,16 @@ func (s *TextViewState) Render(w *gpui.Window, cx *gpui.Context[TextViewState]) 
 	}
 	// The bounds, and the window selection clear when the layout changed
 	// under it (U:text/state.rs:1066-1101; ticket 29, text_selection_adapter.go).
-	return ElementExtOf(content).OnPrepaint(func(bounds gpui.Bounds, w *gpui.Window, app *gpui.App) {
+	el := ElementExtOf(content).OnPrepaint(func(bounds gpui.Bounds, w *gpui.Window, app *gpui.App) {
 		textViewSelectionPrepaint(state, bounds, w, app)
 	}).IntoElement()
+	// After renderRoot, which resets the list when the block count changed
+	// other than by an append, and with it the scroll position
+	// (U:text/state.rs:1102-1106).
+	if scrollToBlock {
+		s.listState.ScrollToRevealItem(revealBlock)
+	}
+	return el
 }
 
 func textLayoutTypographyEqual(a, b textLayoutTypography) bool {

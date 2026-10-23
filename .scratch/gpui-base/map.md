@@ -112,6 +112,7 @@ Blocking edges live in each ticket's `Blocked by:`; the frontier is computed fro
 - [Selection wiring + paint bounds](issues/36-selection-wiring-paint-bounds.md) — Root mounts the selection layer and copies; ElementExt.TextSelectionScope; core: paint uses the prepaint bounds (R:element.rs:537-600).
 - [Dock](issues/26-dock.md) — layout tree/edit/normalize, state + JSON persistence over the frozen fixtures, placement, drag, panels, TabGroup, DockArea; 152/152 upstream tests.
 - [Diagnostics + LSP](issues/24-diagnostics-lsp.md) — DiagnosticSet, completions/inline completion, code actions, hover, definitions, document colors, semantic tokens, overlay; hand-written lsp types; all upstream tests in scope.
+- [Text extras](issues/30-text-extras.md) — stream fade, range highlights + reveal, HTML (x/net/html) + minifier; all in-scope tests except 11 reveal tests (multi-row layout / request_autoscroll → 37).
 - Package layout (orchestrator, routine): one `base` package mirroring the single crate; dependency-free data structures (rope, sum tree, segmentation) in subpackages under `base/`.
 
 ## Not yet specified

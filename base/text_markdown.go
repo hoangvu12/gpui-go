@@ -10,11 +10,12 @@ package base
 // push_merged, merge_children_with_mark, parse_table_row/cell) that will
 // share this package.
 //
-// Raw HTML goes through U:text/format/html.rs::parse, which is ticket
-// 30's. Until it lands, textHTMLParse is nil and both HTML arms take
-// Base's own error path: a block becomes a plain paragraph of its source
-// (U:text/format/markdown.rs:985-990) and an inline tag contributes its
-// source to the returned text only (U:text/format/markdown.rs:826-832).
+// Raw HTML goes through U:text/format/html.rs::parse, which ticket 30
+// installs as textHTMLParse (text_html.go). On a parse error both HTML
+// arms take Base's own error path: a block becomes a plain paragraph of
+// its source (U:text/format/markdown.rs:985-990) and an inline tag
+// contributes its source to the returned text only
+// (U:text/format/markdown.rs:826-832).
 
 import (
 	"errors"
@@ -28,7 +29,8 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
-// textHTMLParse is U:text/format/html.rs::parse, installed by ticket 30.
+// textHTMLParse is U:text/format/html.rs::parse, installed by ticket 30
+// (text_html.go init).
 var textHTMLParse func(source string, cx *nodeContext) (*parsedDocument, error)
 
 var errMarkdownNoHTMLParser = errors.New("html: parser not available (U:text/format/html.rs is ticket 30)")

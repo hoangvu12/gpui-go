@@ -73,6 +73,8 @@ type inlineFlowItem struct {
 	links       []textLinkRange
 	highlights  []inlineHighlightRange
 	backgrounds []textColorRange
+	// reveal is the start of a pending reveal in this item (ticket 30).
+	reveal *revealAt
 	// Image
 	source gpui.ImageSource
 	title  string
@@ -319,6 +321,7 @@ func (f *inlineFlow) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElementI
 	}
 	textStyle := state.typography.textStyle
 	elements := make([]inlineFlowPrepaint, 0, len(layout.fragments))
+	revealIx := f.revealFragment(layout.fragments)
 	textFragmentCount := 0
 	for fragmentIx := range layout.fragments {
 		fragment := &layout.fragments[fragmentIx]
@@ -374,6 +377,7 @@ func (f *inlineFlow) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElementI
 			el := newInlineText(fragState, fragment.links, fragment.highlights, f.linkClickHandler).
 				withSelectionSource(item.state, fragment.sourceRange).
 				withRangeBackgrounds(sliceColorRanges(item.backgrounds, fragment.sourceRange.Start, fragment.sourceRange.End)).
+				withReveal(f.fragmentReveal(item, fragment, fragmentIx, revealIx)).
 				withTextStyle(fragmentStyle).
 				withSelectionBounds(gpui.Bounds{Origin: gpui.Point{X: bounds.Left(), Y: bounds.Top() + sel.Top()}, Size: gpui.Size{Width: bounds.Size.Width, Height: sel.Size.Height}}).
 				withPaintOrigin(origin).
