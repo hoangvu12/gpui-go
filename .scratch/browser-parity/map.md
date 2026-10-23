@@ -12,10 +12,8 @@ The destination for this map is a research-backed proposal. It covers which brow
 
 - Sources:
   - The W3C/WHATWG specs.
-  - Chromium, at the commit recorded in each report, a sparse checkout in `%TEMP%
-esearch-src\chromium`: blink renderer and public, cc, components/viz, ui/events, ui/base/ime, ui/gfx, ui/native_theme.
-  - Skia, in `%TEMP%
-esearch-src\skia`.
+  - Chromium, at the commit recorded in each report, a sparse checkout in `%TEMP%\research-src\chromium`: blink renderer and public, cc, components/viz, ui/events, ui/base/ime, ui/gfx, ui/native_theme.
+  - Skia, in `%TEMP%\research-src\skia`.
   - Firefox where useful, via its GitHub mirror.
   - All of these are read only, never built.
 - Earlier, related research: [research/app-gaps/](../../research/app-gaps/README.md) (zgui and gpui-fast) and [research/zgui-terminal/parity-report.md](../../research/zgui-terminal/parity-report.md).
