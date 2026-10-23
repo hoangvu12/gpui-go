@@ -79,6 +79,8 @@ package gpui
 import (
 	"log"
 	"sort"
+	"sync/atomic"
+	"time"
 )
 
 // windowFrameState is the per-window frame-loop state (the reference
@@ -120,19 +122,38 @@ type windowFrameState struct {
 	// tests attribute the frames they did not cause (OS activation,
 	// resize, mouse input) to the wakes' origins. nil in production.
 	onWake func()
+	// preferredFrameInterval is the window's requested minimum frame
+	// slot interval in nanoseconds (browser-core ticket 47; zero, the
+	// default, draws at the display rate). Set at open through
+	// WindowOptions.PreferredFrameInterval and live through
+	// Window.SetPreferredFrameInterval; read by the Windows pacer's
+	// posted invalidation (host thread), so it is atomic.
+	preferredFrameInterval atomic.Int64
+	// lastGrantedSlot is the pacer slot index of this window's last
+	// HALF-RATE grant (browser-core ticket 47; zero means never).
+	// Touched only by the pacer's posted closure on the host thread.
+	// Full-rate grants do not record: a window switching to half rate
+	// is served at the next slot, like Chromium resetting skip_next_vsync_
+	// on a SetPreferredInterval change
+	// (external_begin_frame_source_win.cc:107).
+	lastGrantedSlot int64
 }
 
 // newWindowFrameState builds a window's frame state. The window starts
-// dirty, like the reference invalidator (R:window.rs:178).
-func newWindowFrameState(present func()) *windowFrameState {
-	return &windowFrameState{dirty: true, present: present}
+// dirty, like the reference invalidator (R:window.rs:178), and carries
+// the window's preferred frame interval (browser-core ticket 47; a
+// negative value never reaches here — OpenWindow rejects it).
+func newWindowFrameState(present func(), preferredFrameInterval time.Duration) *windowFrameState {
+	fs := &windowFrameState{dirty: true, present: present}
+	fs.preferredFrameInterval.Store(int64(preferredFrameInterval))
+	return fs
 }
 
 // frameStateOf returns the window's frame state, creating a test-window
 // style state for windows registered before the frame loop existed.
 func frameStateOf(w *Window) *windowFrameState {
 	if w.frames == nil {
-		w.frames = newWindowFrameState(nil)
+		w.frames = newWindowFrameState(nil, 0)
 	}
 	return w.frames
 }
@@ -293,6 +314,34 @@ func (w *Window) FrameWakeCount() uint64 {
 		return 0
 	}
 	return frameStateOf(w).wakeCount
+}
+
+// PreferredFrameInterval returns the window's preferred frame interval
+// (WindowOptions.PreferredFrameInterval at open, or the last
+// Window.SetPreferredFrameInterval). Zero means the display rate —
+// every vblank. See WindowOptions.PreferredFrameInterval for how a
+// value selects half rate.
+func (w *Window) PreferredFrameInterval() time.Duration {
+	if w == nil {
+		return 0
+	}
+	return time.Duration(frameStateOf(w).preferredFrameInterval.Load())
+}
+
+// SetPreferredFrameInterval changes the window's preferred frame
+// interval live (browser-core ticket 47): zero restores the display
+// rate, a value above twice the observed vblank interval minus half a
+// millisecond (about 33 ms on a 60 Hz display) halves the rate. The
+// change applies from the window's next frame slot on. It panics on a
+// negative interval.
+//
+// A test window's frames are delivered by SimulateFrameRequest and
+// ignore the interval; only real windows are paced by the frame source.
+func (w *Window) SetPreferredFrameInterval(interval time.Duration) {
+	if interval < 0 {
+		panic("gpui: SetPreferredFrameInterval requires a non-negative interval")
+	}
+	frameStateOf(w).preferredFrameInterval.Store(int64(interval))
 }
 
 // requestFrame is the window's request_frame callback
