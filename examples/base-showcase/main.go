@@ -1,15 +1,8 @@
 // Command base-showcase opens one window showing a representative set of
 // GPUI Base components (package github.com/hoangvu12/gpui-go/base):
-// buttons and toggles, a select and a combobox, tabs, a dialog and a
-// popover, a markdown TextView, a plot, a resizable split, a dock area
-// and a tree.
-//
-// Input and Textarea are not shown yet: naming base.InputState,
-// base.TextareaState or base.EditorState from another package deadlocks
-// the go1.27.1 compiler (types2 importer, alias instantiation). Their
-// exported methods take the generic alias inputCx[M] =
-// gpui.Context[InputBaseState[M]] (base/input_state.go); spelling the
-// type out in base removes the crash.
+// buttons and toggles, an input, a textarea and a code editor, a select
+// and a combobox, tabs, a dialog and a popover, a markdown TextView, a
+// plot, a resizable split, a dock area and a tree.
 //
 // Base components are unstyled: they own interaction, focus, keyboard
 // and accessibility, and the application supplies every visual through

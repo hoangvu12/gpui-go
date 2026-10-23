@@ -43,6 +43,27 @@ func TestShowcaseBuildsAndDraws(t *testing.T) {
 		if n := s.tree.Read(app, func(st *base.TreeState, _ *gpui.App) int { return st.EntryCount() }); n != 7 {
 			t.Errorf("tree shows %d entries, want 7 (src and components expanded)", n)
 		}
+		for name, value := range map[string]string{
+			"input":    s.input.Read(app, func(st *base.InputState, _ *gpui.App) string { return st.Value() }),
+			"textarea": s.textarea.Read(app, func(st *base.TextareaState, _ *gpui.App) string { return st.Value() }),
+			"editor":   s.editor.Read(app, func(st *base.EditorState, _ *gpui.App) string { return st.Value() }),
+		} {
+			if value == "" {
+				t.Errorf("%s lost its default value", name)
+			}
+		}
 		return struct{}{}
 	})
+
+	// Type into each input-family state after focusing it, and redraw.
+	editor := content.Read(ta, func(s *showcase, _ *gpui.App) gpui.Entity[base.EditorState] { return s.editor })
+	editor.Update(ta, func(st *base.EditorState, ecx *gpui.Context[base.EditorState]) {
+		st.Focus(cx.Window(), ecx)
+	})
+	draw("editor focused")
+	cx.SimulateInput("x")
+	draw("editor typed")
+	if v := editor.Read(ta, func(st *base.EditorState, _ *gpui.App) string { return st.Value() }); v == editorExample {
+		t.Error("typing into the focused editor changed nothing")
+	}
 }

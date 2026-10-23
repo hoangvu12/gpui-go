@@ -43,6 +43,9 @@ type showcase struct {
 	comboIndex  int
 	dialogOpen  bool
 
+	input    gpui.Entity[base.InputState]
+	textarea gpui.Entity[base.TextareaState]
+	editor   gpui.Entity[base.EditorState]
 	tree     gpui.Entity[base.TreeState]
 	textView gpui.Entity[base.TextViewState]
 	dock     gpui.Entity[base.DockArea]
@@ -51,6 +54,16 @@ type showcase struct {
 func newShowcase(w *gpui.Window, cx *gpui.Context[showcase]) showcase {
 	app := cx.App()
 	s := showcase{}
+	s.input = gpui.NewEntity(app, w.Scope(), func(st *base.InputState, icx *gpui.Context[base.InputState]) {
+		*st = base.NewInputState(w, icx).Placeholder("Type something…").DefaultValue("Hello GPUI")
+	})
+	s.textarea = gpui.NewEntity(app, w.Scope(), func(st *base.TextareaState, tcx *gpui.Context[base.TextareaState]) {
+		*st = base.NewTextareaState(w, tcx).Placeholder("Write a longer note…").
+			DefaultValue("A multi-line textarea.\nIt wraps, scrolls and keeps undo history.")
+	})
+	s.editor = gpui.NewEntity(app, w.Scope(), func(st *base.EditorState, ecx *gpui.Context[base.EditorState]) {
+		*st = base.NewEditorState(w, ecx).Language("go").LineNumber(true).DefaultValue(editorExample)
+	})
 	s.tree = gpui.NewEntity(app, w.Scope(), func(st *base.TreeState, _ *gpui.Context[base.TreeState]) {
 		*st = base.NewTreeState(app).Items([]base.TreeItem{
 			base.NewTreeItem("src", "src").Expanded(true).WithChildren(
@@ -97,6 +110,7 @@ func (s *showcase) Render(w *gpui.Window, cx *gpui.Context[showcase]) gpui.AnyEl
 				Child("Unstyled components from github.com/hoangvu12/gpui-go/base; every visual below is application styling.")).
 			Child(gpui.Div().Flex().FlexWrap().Gap4().
 				Child(card("Button, Toggle, Checkbox, Switch", s.buttons(cx))).
+				Child(card("Input, Textarea and Editor", s.inputs())).
 				Child(card("Select and Combobox", gpui.Div().Flex().Gap4().
 					Child(s.selectExample(false, cx)).
 					Child(s.selectExample(true, cx)))).
@@ -189,6 +203,56 @@ func set(this gpui.WeakEntity[showcase], app *gpui.App, f func(s *showcase)) {
 		f(s)
 		cx.Notify()
 	})
+}
+
+const editorExample = `package main
+
+import "fmt"
+
+func main() {
+	for i := 0; i < 3; i++ {
+		fmt.Println("hello, base", i)
+	}
+}
+`
+
+// inputBox frames an input-family element like the upstream input.rs,
+// textarea.rs and editor.rs examples: Base's InputBase carries the
+// border and focus style, and a mouse down focuses the state.
+func inputBox(id, label string, width float32, size func(*base.InputBase) *base.InputBase, focus func(*gpui.Window, *gpui.App), child any) any {
+	return gpui.Div().W(gpui.Px(width)).Flex().FlexCol().ItemsStart().Gap1().TextXs().
+		Child(gpui.Div().H(gpui.Px(16)).Flex().ItemsCenter().Child(label)).
+		Child(size(base.NewInputBase(id).
+			WFull().Px2().Border1().BorderColor(colBorder).RoundedMd().Bg(colSurface).
+			Styles(func(st base.InputStyles) base.InputStyles {
+				return st.Focused(func(p *base.StateStyle) *base.StateStyle { return p.BorderColor(colForeground) })
+			}).
+			OnMouseDown(gpui.MouseButtonLeft, func(_ *gpui.MouseDownEvent, w *gpui.Window, app *gpui.App) { focus(w, app) })).
+			Child(child))
+}
+
+func (s *showcase) inputs() any {
+	input, textarea, editor := s.input, s.textarea, s.editor
+	return gpui.Div().Flex().FlexCol().Gap3().
+		Child(gpui.Div().Flex().Gap4().
+			Child(inputBox("example-input", "Project name", 224,
+				func(b *base.InputBase) *base.InputBase { return b.H7() },
+				func(w *gpui.Window, app *gpui.App) {
+					input.Update(app, func(st *base.InputState, cx *gpui.Context[base.InputState]) { st.Focus(w, cx) })
+				},
+				base.NewInput(input))).
+			Child(inputBox("example-textarea", "Notes", 224,
+				func(b *base.InputBase) *base.InputBase { return b.H16().Py2().OverflowHidden() },
+				func(w *gpui.Window, app *gpui.App) {
+					textarea.Update(app, func(st *base.TextareaState, cx *gpui.Context[base.TextareaState]) { st.Focus(w, cx) })
+				},
+				gpui.Div().SizeFull().Child(base.NewTextarea(textarea))))).
+		Child(inputBox("example-editor", "Go editor", 464,
+			func(b *base.InputBase) *base.InputBase { return b.H32().Py2().OverflowHidden() },
+			func(w *gpui.Window, app *gpui.App) {
+				editor.Update(app, func(st *base.EditorState, cx *gpui.Context[base.EditorState]) { st.Focus(w, cx) })
+			},
+			gpui.Div().SizeFull().Child(base.NewEditor(editor))))
 }
 
 // selectExample follows the upstream select.rs: the application owns the
