@@ -1,0 +1,56 @@
+{
+  "benchmark": [
+    {
+      "name": "FrameDivs",
+      "n": 150,
+      "ns_per_frame": 7467241.333333333,
+      "ms_per_frame": 7.467241333333333,
+      "allocs_per_frame": 5431,
+      "bytes_per_frame": 4038715,
+      "native_calls_per_frame": 8037,
+      "quads_per_frame": 5000,
+      "sprites_per_frame": 0
+    },
+    {
+      "name": "FrameText",
+      "n": 39,
+      "ns_per_frame": 31110271.794871796,
+      "ms_per_frame": 31.110271794871796,
+      "allocs_per_frame": 8394,
+      "bytes_per_frame": 1886432,
+      "native_calls_per_frame": 21130,
+      "quads_per_frame": 0,
+      "sprites_per_frame": 18252
+    },
+    {
+      "name": "FrameRefreshDivs",
+      "n": 136,
+      "ns_per_frame": 8760039.705882354,
+      "ms_per_frame": 8.760039705882354,
+      "allocs_per_frame": 5373,
+      "bytes_per_frame": 4035427,
+      "native_calls_per_frame": 8037,
+      "quads_per_frame": 5000,
+      "sprites_per_frame": 0
+    },
+    {
+      "name": "FrameRefreshText",
+      "n": 34,
+      "ns_per_frame": 30092858.82352941,
+      "ms_per_frame": 30.09285882352941,
+      "allocs_per_frame": 8389,
+      "bytes_per_frame": 1886318,
+      "native_calls_per_frame": 21130,
+      "quads_per_frame": 0,
+      "sprites_per_frame": 18252
+    }
+  ],
+  "cpus": 16,
+  "date": "2026-10-23T05:57:52Z",
+  "go": "go1.27.1",
+  "goarch": "amd64",
+  "goos": "windows",
+  "label": "ticket 06 (frame allocations) on 6185466",
+  "method": "best of runs by ns/frame; testing.Benchmark over hostless test windows on the real text system; frames via SimulateFrameRequest (gpui/perf_bench_test.go). allocs, bytes and native calls are deterministic; ns/frame is wall time and noisy when other work shares the machine",
+  "runs": 5
+}

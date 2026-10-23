@@ -770,14 +770,13 @@ func (s *Scene) PaintShapedText(
 	if line == nil {
 		return fmt.Errorf("gpui: PaintShapedText: nil line")
 	}
-	fragments, err := line.Fragments()
+	// The layout's shared dumps (read-only here): no native call and no
+	// copy per paint.
+	dumps, err := line.paintDumps("Fragments")
 	if err != nil {
 		return fmt.Errorf("gpui: PaintShapedText: %w", err)
 	}
-	glyphs, err := line.Glyphs()
-	if err != nil {
-		return fmt.Errorf("gpui: PaintShapedText: %w", err)
-	}
+	fragments, glyphs := dumps.fragments, dumps.glyphs
 	summary, err := line.Summary()
 	if err != nil {
 		return fmt.Errorf("gpui: PaintShapedText: %w", err)
@@ -860,14 +859,13 @@ func (s *Scene) PaintShapedTextLine(
 	if err != nil {
 		return fmt.Errorf("gpui: PaintShapedTextLine: %w", err)
 	}
-	fragments, err := line.Fragments()
+	// The layout's shared dumps (read-only here): no native call and no
+	// copy per paint.
+	dumps, err := line.paintDumps("Fragments")
 	if err != nil {
 		return fmt.Errorf("gpui: PaintShapedTextLine: %w", err)
 	}
-	glyphs, err := line.Glyphs()
-	if err != nil {
-		return fmt.Errorf("gpui: PaintShapedTextLine: %w", err)
-	}
+	fragments, glyphs := dumps.fragments, dumps.glyphs
 	if record.FragmentEnd < record.FragmentStart || record.FragmentEnd > len(fragments) {
 		return fmt.Errorf("gpui: PaintShapedTextLine: fragment range %d..%d out of range", record.FragmentStart, record.FragmentEnd)
 	}

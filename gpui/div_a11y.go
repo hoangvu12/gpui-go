@@ -56,14 +56,10 @@ package gpui
 //     (div.rs:2264-2266), never panicking.
 //   - usize builder arguments (level, set position, table indices) are
 //     Go ints; a negative value panics (the usize type invariant).
-//   - STORAGE: the div's authoring state lives in a weak-keyed side
-//     table (divA11yStates below) because DivElement's fields are owned
-//     by div.go; an entry is removed when its DivElement is collected.
-//     The intended end state is one `a11y *divA11yState` field on
-//     DivElement; only a11yStateIfAny/a11yState change then. Until
-//     then a listener or synthetic-children closure that captures its
-//     own DivElement keeps that entry alive (the value references the
-//     key).
+//   - STORAGE: the div's authoring state is the `a11y *divA11yState`
+//     field on DivElement (gpui-perf ticket 06 retired the earlier
+//     weak-keyed side table, whose per-div weak.Make lookup cost one
+//     allocation per div per frame).
 //   - PUBLICATION (ticket 02): the snapshot carries every role and
 //     state exactly; the frozen rev-11 ABI publishes the nearest
 //     supported role and drops the states (a11yprovider.go
@@ -71,9 +67,6 @@ package gpui
 
 import (
 	"fmt"
-	"runtime"
-	"sync"
-	"weak"
 )
 
 // divA11yState is the div's accessibility authoring state (the pin's
@@ -119,39 +112,16 @@ type divA11yState struct {
 	listeners []A11yActionRegistration
 }
 
-// divA11yStates is the weak-keyed side table (see the STORAGE
-// deviation). The mutex guards the map because entry removal runs from
-// the runtime's cleanup goroutine.
-var (
-	divA11yStatesMu sync.Mutex
-	divA11yStates   = map[weak.Pointer[DivElement]]*divA11yState{}
-)
-
 // a11yStateIfAny returns the div's authoring state, or nil when no a11y
 // builder was called.
-func (d *DivElement) a11yStateIfAny() *divA11yState {
-	key := weak.Make(d)
-	divA11yStatesMu.Lock()
-	defer divA11yStatesMu.Unlock()
-	return divA11yStates[key]
-}
+func (d *DivElement) a11yStateIfAny() *divA11yState { return d.a11y }
 
 // a11yState returns the div's authoring state, creating it on first use.
 func (d *DivElement) a11yState() *divA11yState {
-	key := weak.Make(d)
-	divA11yStatesMu.Lock()
-	defer divA11yStatesMu.Unlock()
-	if st, ok := divA11yStates[key]; ok {
-		return st
+	if d.a11y == nil {
+		d.a11y = &divA11yState{}
 	}
-	st := &divA11yState{}
-	divA11yStates[key] = st
-	runtime.AddCleanup(d, func(k weak.Pointer[DivElement]) {
-		divA11yStatesMu.Lock()
-		delete(divA11yStates, k)
-		divA11yStatesMu.Unlock()
-	}, key)
-	return st
+	return d.a11y
 }
 
 // hasA11yAuthoring reports whether any accessibility builder was called
