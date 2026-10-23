@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 6 (Claude Code)
+Status: resolved
+Assignee: orchestrator 6 (Claude Code); worker chat 24793476
 Blocked by: 62
 Triage: ready-for-agent
 
@@ -20,6 +20,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 6: verified after merging onto main. `go test ./gpui/script/... ./gpui ./internal/parity/...` is ok, and `./gpui/script` passed 4 runs in a row (`-count=4`). The tests make no external network calls; fetch goes to httptest or injected fetchers. No race-detector run is possible here (no C toolchain). The design keeps all VM access on the host thread.
 
 ## Answer
 
