@@ -10,7 +10,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - The core should behave like the browser, without shipping components.
 - Base moves to a new repo. Its name, visibility, and whether zterm and the gallery move with it are still open for the user.
 - First, deep research that reads browser source: map [.scratch/browser-parity/map.md](../.scratch/browser-parity/map.md).
-- Chromium 0d4dcd4f (sparse) and Skia e71ecd07 are cloned under `%TEMP%esearch-src\`.
+- Chromium 0d4dcd4f (sparse) and Skia e71ecd07 are cloned under `%TEMP%\research-src\`.
+- XXesearch-src\`.
 - Batch 1 is running in worktree `gpui-go-wt-browser` (branch `research/browser-parity`), where the workers write files but don't commit: 01 visual primitives (chat a44ba398), 02 motion and compositing (fa3bcda3), 03 input and events (e9cd4b8c).
 - Then batch 2 (04 text and fonts, 05 layout, 06 platform features), then 07, the synthesis for the user. Nothing gets implemented before the user accepts 07.
 - The zgui/gpui-fast benchmark is dropped for now. The user said zgui doesn't support Windows; it actually does, with weaker Windows support.
