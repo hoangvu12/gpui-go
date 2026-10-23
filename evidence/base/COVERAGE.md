@@ -8,18 +8,18 @@ Manifest: 268 files, 268 sha256-verified, 0 mismatched.
 
 | | Total | Ported | Deviated | Not applicable | Out of scope | Deferred | GAP |
 |---|---|---|---|---|---|---|---|
-| Upstream tests (all manifest .rs) | 1238 | 1180 | 38 | 7 | 12 | 0 | 1 |
-| Upstream tests (crate: src/ + tests/) | 1226 | 1180 | 38 | 7 | 0 | 0 | 1 |
+| Upstream tests (all manifest .rs) | 1238 | 1180 | 39 | 7 | 12 | 0 | 0 |
+| Upstream tests (crate: src/ + tests/) | 1226 | 1180 | 39 | 7 | 0 | 0 | 0 |
 
 Modules (.rs files): 246 — deviated 17, not_applicable 6, out_of_scope 54, ported 169. Non-Rust manifest files: 22 (see the ledger's `other_files`).
 
-Resolution: 1122 tests by a Go `U:path:line` citation, 18 by the evidence table (`conformance/cmd/basecoverage/overrides.go`), the rest by module disposition (upstream examples).
+Resolution: 1125 tests by a Go `U:path:line` citation, 16 by the evidence table (`conformance/cmd/basecoverage/overrides.go`), the rest by module disposition (upstream examples).
 
 Statuses: *ported* — a Go test ports it; *deviated* — ported with a recorded deviation; *not applicable* — not ported, with the ticket's reason; *out of scope* — upstream example apps (the Go counterpart is `examples/base-showcase`); *deferred* — owned by an open ticket (37, `request_autoscroll`).
 
 ## GAPS
 
-- test text/text_view.rs:2227 linked_image_handler_receives_left_middle_and_right_clicks
+None: every upstream module and test is accounted for.
 
 ## Modules
 
@@ -200,7 +200,7 @@ Statuses: *ported* — a Go test ports it; *deviated* — ported with a recorded
 | `src/text/state.rs` | deviated | 28,30,37 | 5 | 83 | 78 | 5 | 0 | 0 |
 | `src/text/stream_fade.rs` | ported | 30 | 3 | 6 | 6 | 0 | 0 | 0 |
 | `src/text/style.rs` | ported | 28 | 1 | 6 | 6 | 0 | 0 | 0 |
-| `src/text/text_view.rs` | deviated | 28,29,30 | 3 | 36 | 28 | 4 | 3 | 0 |
+| `src/text/text_view.rs` | deviated | 28,29,30 | 3 | 36 | 28 | 5 | 3 | 0 |
 | `src/text/utils.rs` | ported | 28 | 2 | 2 | 2 | 0 | 0 | 0 |
 | `src/text_boundary.rs` | ported | 29,15 | 2 | 0 | 0 | 0 | 0 | 0 |
 | `src/text_selection.rs` | ported | 29 | 5 | 45 | 45 | 0 | 0 | 0 |
@@ -229,16 +229,4 @@ Statuses: *ported* — a Go test ports it; *deviated* — ported with a recorded
 - `src/text/text_view.rs:1792` clipped_markdown_link_does_not_open — not applicable: asserts cx.opened_url(), which gpui-go's TestApp does not record (ticket28 evidence text_view.rs; base/text_view_upstream_test.go header)
 - `src/text/text_view.rs:2070` right_click_does_not_open_url_without_handler — not applicable: asserts cx.opened_url(), which gpui-go's TestApp does not record (ticket28 evidence text_view.rs; base/text_view_upstream_test.go header)
 
-## GAP tests (1)
-
-- `src/text/text_view.rs:2227` linked_image_handler_receives_left_middle_and_right_clicks — no Go test cites it and no ticket evidence accounts for it
-
-## Citation notes
-
-Go citations whose line range runs past the upstream file (stale line numbers; the tests are resolved by the evidence table where needed):
-
-- base/input_blink_cursor_test.go:153 U:input/base/blink_cursor.rs:231-249 (the upstream file has 247 lines)
-- base/text_selection_word_test.go:7 U:text/selection.rs:198-222 (the upstream file has 173 lines)
-- base/text_selection_word_test.go:25 U:text/selection.rs:224-253 (the upstream file has 173 lines)
-
-Deviated tests (38) are listed with their citing Go test in the ledger's `tests`.
+Deviated tests (39) are listed with their citing Go test in the ledger's `tests`.

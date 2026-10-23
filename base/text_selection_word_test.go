@@ -2,9 +2,9 @@ package base
 
 import "testing"
 
-// Ports of the U:text/selection.rs tests (194-254): 2 tests, 2 ported.
+// Ports of the U:text/selection.rs tests (112-172): 2 tests, 2 ported.
 
-// U:text/selection.rs:198-222
+// U:text/selection.rs:116-140
 func TestTextCharTypeFromChar(t *testing.T) {
 	cases := map[rune]textCharType{
 		'a': textCharWord, 'Z': textCharWord, '0': textCharWord, '_': textCharWord,
@@ -22,7 +22,7 @@ func TestTextCharTypeFromChar(t *testing.T) {
 	}
 }
 
-// U:text/selection.rs:224-253
+// U:text/selection.rs:142-171
 func TestTextSelectionWordRangeAt(t *testing.T) {
 	text := "test text\nabcde 中文🎉 test\nhello[()]\ntest_connector ____\nRope\nrök\ngrande île"
 	tests := []struct {
