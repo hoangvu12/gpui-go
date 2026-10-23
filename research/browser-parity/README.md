@@ -287,7 +287,7 @@ Each rebuild costs a user approval, an evidence run and pin updates in about 8 p
 | D12 | Input bundle: hover survives typing, pointer-leave clears hover, Enter activates on key-down, click goes to the common ancestor, capture retargets? | **Yes, as one bundle.** Each is a browser rule, and each needs only a Tier B transcript update. |
 | D13 | Smooth scrolling on by default (off under reduced motion)? | **Yes.** It's the browser default. |
 | D14 | Two compositor rebuilds (R15 now, R16 later) or one? | **Two.** R15 is ready and small; R16 needs design. |
-| D15 | Hot reload and UI scripting. | **DECIDED 2026-10-23** ([ADR 0002](../../docs/adr/0002-luau-ui-scripting.md)): Luau, zgui-style; plugins, shipping and types like zgui; a Go-side dev reload like `tauri dev` that keeps Luau state. |
+| D15 | Hot reload and UI scripting. | **DECIDED 2026-10-23: TSX via esbuild + goja, on zgui's model** ([ADR 0003](../../docs/adr/0003-tsx-ui-scripting.md), which supersedes Luau, [ADR 0002](../../docs/adr/0002-luau-ui-scripting.md); probe [09](09-tsx-goja-probe.md)). Plugins, shipping, types and dev reload follow zgui and `tauri dev`. |
 | D16 | The Base repo: name, public or private, and whether zterm and the gallery move with it ([map](../../.scratch/browser-parity/map.md)). | Your call. Moving zterm keeps it a real Base consumer. Keep one core-only example in this repo. |
 
 ## 6. Performance track
