@@ -1194,15 +1194,23 @@ func (d *DivElement) paintHoverGroupHandler(w *Window, app *App) {
 	})
 }
 
-// registerDivKeyboardClick is div.rs:3512-3577: while the element's
-// tracked focus handle is focused, an unmodified Enter/Space key down
-// records the window's focus generation, and the matching unmodified
-// Enter/Space key up fires a Keyboard click when no other key event
-// intervened and focus never moved; releasing any other key cancels the
-// pending activation. Both listeners run in the bubble phase and honor
-// prevent-default. The pin registers them inside paint_mouse_listeners
-// (stateful, with a hitbox and a click / aux-click / drag listener); the
-// port registers them on the div's dispatch node during prepaint.
+// registerDivKeyboardClick is the keyboard activation (div.rs:3512-
+// 3577): while the element's tracked focus handle is focused, an
+// unmodified Enter/Space key down records the window's focus
+// generation, and the matching unmodified Enter/Space key up fires a
+// Keyboard click when no other key event intervened and focus never
+// moved; releasing any other key cancels the pending activation.
+// browser-core 09: both arms run in the default-action phase, after
+// the key listeners (Chromium runs activation from the focused
+// element's default handler — HTMLElement::HandleKeyboardActivation,
+// html_element.cc:4313-4338, invoked by Node::DefaultEventHandler
+// after the listener dispatch), so an ancestor's listener can
+// preventDefault the activation, and a prevented keydown leaves the
+// pending unset so the keyup never clicks. The pin registered them as
+// the focused element's own key listeners (before ancestor listeners);
+// that ordering is the recorded divergence. The registration is
+// focus-gated exactly as the pin's (a focused element only), and
+// suppressed subtrees register nothing.
 func registerDivKeyboardClick(w *Window, d *DivElement, hitbox Hitbox, es *InteractiveElementState) {
 	if es == nil || (len(d.clickListeners) == 0 && len(d.auxClickListeners) == 0 && d.dragListener == nil) {
 		return
@@ -1214,48 +1222,46 @@ func registerDivKeyboardClick(w *Window, d *DivElement, hitbox Hitbox, es *Inter
 	clickListeners := slices.Clone(d.clickListeners)
 	bounds := hitbox.Bounds
 	tree := currentDispatchTree(w)
-	tree.OnKeyEvent(true, false, func(event *KeyDownEvent, w *Window, app *App) {
-		if w.DefaultPrevented() {
-			return
-		}
-		stroke := event.Keystroke
-		isActivationKey := (stroke.Key == "enter" || stroke.Key == "space") && !stroke.Modifiers.Modified()
-		if isActivationKey {
-			generation := w.FocusGeneration()
-			pending.generation = &generation
-		} else {
-			pending.generation = nil
-		}
-	})
-	tree.OnKeyEvent(false, false, func(event *KeyUpEvent, w *Window, app *App) {
-		if w.DefaultPrevented() {
-			return
-		}
-		stroke := event.Keystroke
-		var button KeyboardButton
-		isActivation := true
-		switch stroke.Key {
-		case "enter":
-			button = KeyboardButtonEnter
-		case "space":
-			button = KeyboardButtonSpace
-		default:
-			isActivation = false
-		}
-		if isActivation && !stroke.Modifiers.Modified() {
-			generation := pending.generation
-			pending.generation = nil
-			if generation == nil || *generation != w.FocusGeneration() {
-				return
+	tree.OnDefaultKeyAction(func(event any, w *Window, app *App) {
+		keyDown, isDown := event.(*KeyDownEvent)
+		keyUp, isUp := event.(*KeyUpEvent)
+		switch {
+		case isDown:
+			stroke := keyDown.Keystroke
+			isActivationKey := (stroke.Key == "enter" || stroke.Key == "space") && !stroke.Modifiers.Modified()
+			if isActivationKey {
+				generation := w.FocusGeneration()
+				pending.generation = &generation
+			} else {
+				pending.generation = nil
 			}
-			click := ClickEvent{Kind: ClickEventKeyboard, Keyboard: KeyboardClickEvent{Button: button, Bounds: bounds}}
-			for _, listener := range clickListeners {
-				listener(&click, w, app)
+		case isUp:
+			stroke := keyUp.Keystroke
+			var button KeyboardButton
+			isActivation := true
+			switch stroke.Key {
+			case "enter":
+				button = KeyboardButtonEnter
+			case "space":
+				button = KeyboardButtonSpace
+			default:
+				isActivation = false
 			}
-		} else {
-			// Releasing any other key mid-press means this isn't a clean
-			// activation, so cancel the pending keydown.
-			pending.generation = nil
+			if isActivation && !stroke.Modifiers.Modified() {
+				generation := pending.generation
+				pending.generation = nil
+				if generation == nil || *generation != w.FocusGeneration() {
+					return
+				}
+				click := ClickEvent{Kind: ClickEventKeyboard, Keyboard: KeyboardClickEvent{Button: button, Bounds: bounds}}
+				for _, listener := range clickListeners {
+					listener(&click, w, app)
+				}
+			} else {
+				// Releasing any other key mid-press means this isn't a clean
+				// activation, so cancel the pending keydown.
+				pending.generation = nil
+			}
 		}
 	})
 }

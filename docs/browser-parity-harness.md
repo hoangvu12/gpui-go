@@ -33,6 +33,13 @@ new fixtures. The implementation lives in `internal/parity`:
   them — and a `Move` step to a point outside the viewport is the DOM-visible half of
   "the pointer left the window" (it fires the leave on the whole hovered chain); the
   WM_MOUSELEAVE half is covered by gpui's own window tests.
+  The key kinds are `keydown` and `keyup` (browser-core ticket 09): key entries also carry the
+  event's key (`e.key`, DOM key names — `Tab`, ` `, `ArrowDown`) and the focused
+  element's id at listener time (`document.activeElement`, body normalized to `""`),
+  which is the order probe for the default-action fixtures — a listener that still sees
+  the old focus ran before the default action changed it. The replay's key step is one
+  full press — key down then key up, like the recorder's CDP `keyDown`+`keyUp` pair —
+  and both halves' default-prevented states are recorded.
 - **Tier C — pixels, approximately.** The replay's final frame is rendered offscreen at
   device resolution and compared with the recorded Chrome screenshot under the fixture's
   provisional `PixelTolerance` (mean channel diff and hot-pixel fraction, image-wide and
@@ -55,12 +62,21 @@ new fixtures. The implementation lives in `internal/parity`:
        HTML:       page,                     // the whole HTML page, doctype on
        Steps:      []parity.Step{parity.Click(400, 230), parity.Key("enter")},
        BoxIDs:     []string{"box", "root"}, // the ids whose boxes are compared
-       EventKinds: []string{"mousedown", "click"},
+       EventKinds: []string{"click", "keydown", "keyup"},
        View:       View,                     // func(*parity.EventLog) gpui.AnyElement
        Tolerance:  parity.PixelTolerance{...},
    }
    func init() { parity.Register(Fixture) }
    ```
+
+   Fixtures that need the test window (focus handles, window flags, key bindings) set
+   `ViewWithWindow func(log *parity.EventLog, w *gpui.Window, app *gpui.App)
+   gpui.AnyElement` instead of `View` (exactly one of the two; the keyorder fixtures
+   are the examples). Mutable per-fixture state — the focus handles — lives in the
+   closure *outside* the returned function, keyed on the window: the view function
+   re-runs every frame (new handles every frame would break the focus identity), and
+   `Replay` can run the same fixture twice in one process (TestFixtures and the
+   tolerance headroom check) with a fresh window whose handles must be fresh too.
 
 2. **The two sides must agree by construction.** Shared numbers as constants; the page's
    CSS uses the same values the view sets (the tracer pins `line-height: 1.618` because
@@ -75,6 +91,14 @@ new fixtures. The implementation lives in `internal/parity`:
    default display is flex where the browser's is block — pin `display: flex` on the
    page's containers (and `flex-shrink: 0` where a child must overflow) so both sides
    place children identically.
+   system UI font in gpui agree on this PC. The keyorder fixtures show the key-event
+   rules: focusable elements need a `tabindex` on the page and
+   `TrackFocus(handle).TabStop(true)` handles in the view (created once, outside the
+   view closure, and reported with `log.TrackFocus(handle, id)` so key entries can carry
+   the focus field); an element whose click the port does not yet deliver (an ancestor
+   of a keyboard activation) narrows its listeners with `data-events="keydown,keyup"`
+   on the page and matching handlers in the view; and the pages pin `outline: none` on
+   focusable elements because the port has no default focus ring yet (ticket 48).
 
 3. **Element ids are the mapping.** Every compared or instrumented HTML element carries
    `data-id="<id>"`; the gpui elements set `.ID("<id>")` (interactive state, click
@@ -84,12 +108,24 @@ new fixtures. The implementation lives in `internal/parity`:
    `log.PointerEnter("box")`, `log.PointerLeave("box")` — one helper per kind). The
    pointer boundary kinds need the element ids: the retained hover state that diffs
    enter/leave across frames keys on them.
+   the view logs (`log.MouseDown("box")`, `log.Click("box")`, `log.KeyDown("box")`,
+   `log.KeyUp("box")`, `log.KeyDownPreventDefault("box")` — one helper per kind; the key
+   helpers record the event's key and the focus field, and the preventing one also calls
+   `Window.PreventDefault`). An element may narrow its bound kinds with a
+   `data-events="keydown,keyup"` attribute (a comma-separated subset of `EventKinds` —
+   the instrumentation honours it on the page side, and the view simply registers only
+   the matching handlers).
 
 4. **The input script is one vocabulary.** Steps are logical (CSS-pixel) positions:
    `parity.Move/Down/Up/Click/Key`. The recorder dispatches them to Chrome as trusted
    input (full hit testing) and the replay simulates them through the visual test context
    — the exact same coordinates, the exact same expansion (`Click` = move + down + up on
-   both sides).
+   both sides). `Key("<keystroke>")` is one full press on both sides: the recorder sends
+   a CDP `keyDown`+`keyUp` pair (with the typed-case `key`, so `"j"` reports `e.key`
+   `"j"`) and the replay dispatches a `KeyDownEvent` then a `KeyUpEvent` through the
+   platform dispatch — bindings, key listeners and the core default actions
+   (browser-core ticket 09) all run, and a default action between the halves is visible
+   in the keyup entries' focus field.
 
 5. **The view function re-runs every frame** (like any `Render`): build the tree fresh on
    each call, keep mutable state outside (the `EventLog` is passed in; anything else goes
@@ -208,6 +244,22 @@ until the owning spec tickets land, and each should get a fixture the day it is 
 - **`OnClick` fires before the `OnMouseUp` listeners** during the up dispatch (the DOM
   delivers `mouseup` before `click`). The tracer instruments `mousedown` and `click`
   only. Owned by the input bundle (spec D12).
+- **A mouse down on a focusable element reports `defaultPrevented`** — the pin's focus
+  transfer always calls `Window.PreventDefault` after focusing (interact.go, the
+  div.rs:3279 rule that a focusable parent must not steal focus), where Chrome leaves
+  the mousedown unprevented. The keyorder fixtures bind no `mousedown` listeners; owned
+  by the input bundle (spec D12).
+- **A keyboard activation click does not bubble** to ancestors (the pin calls only the
+  focused element's own click listeners; Chrome dispatches a full bubbling click). The
+  activation fixture's root binds `data-events="keydown,keyup"` so its click is not
+  instrumented; owned by the click/activation ticket (spec D12).
+- **Enter activates on keyup, not keypress** (the pin; Chrome clicks at keypress, so
+  the recorder's Enter — which sends no CDP `text` — produces no keypress and no click
+  at all). The activation fixture uses Space, whose keyup click both sides deliver;
+  the Enter timing is the activation ticket's (spec D12).
+- **No default focus ring** — Chrome's `:focus-visible` `outline: auto` has no port
+  equivalent yet, so the keyorder pages pin `outline: none` on focusable elements (the
+  outline ticket, spec story 42, owns the port's ring).
 - **Default line height is 1.618** (CSS `normal` comes with D1): the tracer's page pins
   `line-height: 1.618`.
 - Text rasterization differs in mechanism (Skia's sRGB preblend vs DirectWrite
@@ -222,3 +274,17 @@ Divergences fixed by browser-core tickets get their fixture when they land: tick
 (hover) removed two pin behaviours — hover clearing on key presses (D12) and hover
 sticking at the window edge — and added `OnPointerEnter`/`OnPointerLeave` plus the
 `pointerenter`/`pointerleave` transcript kinds (`fixtures/hover` is the fixture).
+
+## Recorder details worth knowing
+
+- **Smooth scrolling is disabled in the recorder's Chrome**
+  (`--disable-smooth-scrolling`): with it on, keyboard scrolls land as
+  compositor-driven animated offsets at nondeterministic times
+  (PaintLayerScrollableArea::ScrollAnimatorEnabled reads the setting), which a
+  recorded fixture cannot compare against the port's instant scrolls. The
+  smooth-scrolling ticket (spec D13) re-records its fixtures when the port scrolls
+  smoothly.
+- **Keyboard scrolls land synchronously** with the flag off (measured at the harness's
+  2.0 device scale: 40 CSS px per arrow — Chromium's kPixelsPerLineStep — the page step
+  max(0.875xlength, length-40), Home/End to the axis ends): the keyorder scroll
+  fixtures pin those numbers against the port's keyboard-scroll default action.

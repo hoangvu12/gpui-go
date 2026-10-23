@@ -9,6 +9,7 @@ import (
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/boxpaint"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/gradient"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/hover"
+	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/keyorder"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/textpaint"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/tracer"
 )
@@ -48,5 +49,7 @@ func TestFixtures(t *testing.T) {
 }
 
 // The tracer's own discriminator: the deliberately-wrong views are in
-// tracer_test.go (package tracer_test), next to the fixture.
+// tracer_test.go (package tracer_test), next to the fixture; the
+// keyorder fixtures' discriminators are in keyorder_test.go.
 var _ = tracer.Fixture.Name
+var _ = keyorder.Fixture.Name

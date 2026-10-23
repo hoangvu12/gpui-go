@@ -1,0 +1,115 @@
+{
+  "name": "keyorder-scroll-prevented",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-23T21:28:46Z",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 1000
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 360
+    },
+    "scroller": {
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 200
+    },
+    "target": {
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 50
+    }
+  },
+  "events": [
+    {
+      "kind": "click",
+      "target": "target",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "content",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "scroller",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keydown",
+      "target": "target",
+      "defaultPrevented": true,
+      "key": "ArrowDown",
+      "focus": "target"
+    },
+    {
+      "kind": "keydown",
+      "target": "content",
+      "defaultPrevented": true,
+      "key": "ArrowDown",
+      "focus": "target"
+    },
+    {
+      "kind": "keydown",
+      "target": "scroller",
+      "defaultPrevented": true,
+      "key": "ArrowDown",
+      "focus": "target"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": true,
+      "key": "ArrowDown",
+      "focus": "target"
+    },
+    {
+      "kind": "keyup",
+      "target": "target",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "target"
+    },
+    {
+      "kind": "keyup",
+      "target": "content",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "target"
+    },
+    {
+      "kind": "keyup",
+      "target": "scroller",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "target"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "target"
+    }
+  ],
+  "screenshot": "chrome.png"
+}

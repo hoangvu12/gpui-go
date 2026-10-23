@@ -139,6 +139,17 @@ type WindowOptions struct {
 	// rejected at open. Test windows ignore it (their frames arrive
 	// through SimulateFrameRequest).
 	PreferredFrameInterval time.Duration
+	// KeyDispatchOrder selects when key bindings dispatch relative to
+	// the element key listeners (browser-core ticket 09, spec D5). The
+	// zero value is BindingsBeforeListeners, the GPUI shape: bindings
+	// dispatch before listeners, and an action that stops propagation
+	// hides the key from every listener; core default actions still run
+	// after the listeners and honour Window.PreventDefault. Setting it
+	// to ListenersBeforeBindings gives the browser order: key listeners
+	// run first, then bindings and the core default actions in the
+	// default-action position, all skipped when a listener prevents the
+	// default. Change it live with Window.SetKeyDispatchOrder.
+	KeyDispatchOrder KeyDispatchOrder
 
 	// ShouldClose is the close veto: it is called synchronously when a
 	// close is requested (WM_CLOSE); returning false vetoes the close
@@ -953,6 +964,11 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 				// The frame loop drives every window; OnRedraw is its present
 				// step. The window starts dirty (window.rs:178).
 				frames: newWindowFrameState(opts.OnRedraw, opts.PreferredFrameInterval),
+			}
+			if opts.KeyDispatchOrder != BindingsBeforeListeners {
+				// browser-core 09: the key dispatch order option, stored in
+				// the focus runtime (SetKeyDispatchOrder validates it).
+				window.SetKeyDispatchOrder(opts.KeyDispatchOrder)
 			}
 			a.windows[window.id] = window
 			res <- openResult{window: window}

@@ -174,8 +174,21 @@ func sortedBoxIDs(record *Record) []string {
 // images over a region: the mean over pixels of the mean absolute
 // per-channel difference (RGB only; both sides are opaque), and the
 // fraction of pixels whose mean channel difference exceeds the hot
-// threshold.
+// threshold. The region clamps into the image (a scrolled-out element
+// can record a box with negative origin).
 func pixelDiff(want, got *image.RGBA, region image.Rectangle) PixelStats {
+	if region.Min.X < 0 {
+		region.Min.X = 0
+	}
+	if region.Min.Y < 0 {
+		region.Min.Y = 0
+	}
+	if region.Max.X > want.Bounds().Dx() {
+		region.Max.X = want.Bounds().Dx()
+	}
+	if region.Max.Y > want.Bounds().Dy() {
+		region.Max.Y = want.Bounds().Dy()
+	}
 	if region.Empty() {
 		return PixelStats{}
 	}

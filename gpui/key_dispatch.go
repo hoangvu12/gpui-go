@@ -102,13 +102,22 @@ type dispatchNode struct {
 	keyListeners              []keyListener
 	actionListeners           []dispatchActionListener
 	modifiersChangedListeners []modifiersChangedListener
-	context                   *KeyContext
-	focusID                   uint64
-	hasFocusID                bool
-	viewID                    EntityID
-	hasViewID                 bool
-	parent                    DispatchNodeID
-	hasParent                 bool
+	// defaultActions are the core default-action callbacks registered on
+	// this node (browser-core 09, key_default_action.go): the focused
+	// node's activation, invoked by the default-action phase after the
+	// key listeners.
+	defaultActions []func(event any, w *Window, app *App)
+	// scrollContainer is the node's scroll container (browser-core 09):
+	// the keyboard-scroll default action walks the focused node's
+	// ancestors and scrolls the first container that can take the delta.
+	scrollContainer *keyScrollContainer
+	context         *KeyContext
+	focusID         uint64
+	hasFocusID      bool
+	viewID          EntityID
+	hasViewID       bool
+	parent          DispatchNodeID
+	hasParent       bool
 }
 
 // DispatchTree is the per-frame interaction tree (DispatchTree).
@@ -303,6 +312,25 @@ func (t *DispatchTree) OnModifiersChanged(callback any) {
 	id := t.activeNodeIDValue()
 	t.nodes[id.Index].modifiersChangedListeners = append(t.nodes[id.Index].modifiersChangedListeners,
 		modifiersChangedListener{callback: callback})
+}
+
+// OnDefaultKeyAction registers a core default-action callback on the
+// active node (browser-core 09, key_default_action.go): the default-
+// action phase invokes the focused node's callbacks after the key
+// listeners, only when the key was not default-prevented. The
+// registration is focus-gated by its caller (the div's keyboard click).
+func (t *DispatchTree) OnDefaultKeyAction(callback func(event any, w *Window, app *App)) {
+	id := t.activeNodeIDValue()
+	t.nodes[id.Index].defaultActions = append(t.nodes[id.Index].defaultActions, callback)
+}
+
+// SetKeyScrollContainer registers the active node's scroll container
+// (browser-core 09, key_default_action.go): the keyboard-scroll
+// default action finds the scroller containing focus through these
+// registrations on the focused node's ancestor path.
+func (t *DispatchTree) SetKeyScrollContainer(container keyScrollContainer) {
+	id := t.activeNodeIDValue()
+	t.nodes[id.Index].scrollContainer = &container
 }
 
 // OnAction registers an action listener on the active node
@@ -801,6 +829,10 @@ func (w *Window) dispatchKeyEventInner(event any, app *App) {
 
 	if keystroke == nil {
 		w.finishDispatchKeyEvent(event, dispatchPath, fs.contextStackOfRendered(), app)
+		// browser-core 09: the default-action phase runs on the key-up
+		// path too (the activation's key-up arm); a modifiers change
+		// carries no default actions.
+		w.runKeyDefaultActions(event, app)
 		return
 	}
 
@@ -866,6 +898,14 @@ func (w *Window) dispatchKeyEventInner(event any, app *App) {
 		}
 	}
 
+	// browser-core 09 (spec D5): the per-window flag gives the full
+	// browser order — listeners, then bindings and the core default
+	// actions in the default-action position.
+	if fs.keyOrder == ListenersBeforeBindings {
+		w.dispatchKeyEventBrowserOrder(event, nodeID, dispatchPath, matchResult, skipBindings, app)
+		return
+	}
+
 	if !skipBindings {
 		for _, binding := range matchResult.bindings {
 			w.dispatchActionOnNode(nodeID, binding.action, app)
@@ -878,7 +918,12 @@ func (w *Window) dispatchKeyEventInner(event any, app *App) {
 	}
 
 	w.finishDispatchKeyEvent(event, dispatchPath, matchResult.contextStack, app)
-	w.dispatchKeystrokeObservers(event, BoxedAction{}, matchResult.contextStack, app)
+	// browser-core 09: the core default actions run after the key
+	// listeners (the DOM's listener-then-default order), skipped when a
+	// listener prevented the default. A binding that stopped propagation
+	// returned above, so the app's bindings still win over the core
+	// defaults in the GPUI shape.
+	w.runKeyDefaultActions(event, app)
 	w.pendingInputChanged(app)
 }
 

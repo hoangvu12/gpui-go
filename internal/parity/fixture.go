@@ -132,8 +132,18 @@ type Fixture struct {
 	// View builds the gpui-go view of the page. It receives the event
 	// log the harness's instrumented handlers append to; the returned
 	// element tree becomes the test window's root. The element ids
-	// (Div().ID(...)) map the page's data-id attributes.
+	// (Div().ID(...)) map the page's data-id attributes. Set either
+	// View or ViewWithWindow, not both (View is enough for fixtures
+	// that only log; ViewWithWindow also hands the view the test
+	// window, which focus handles and window setup need).
 	View func(log *EventLog) gpui.AnyElement
+	// ViewWithWindow is the window-aware form of View: the harness
+	// passes the test window and its application with the event log.
+	// Fixtures that create focus handles (gpui.NewFocusHandle), flip
+	// window flags (the key dispatch order) or bind keys (App.BindKeys)
+	// use it; the handles and bindings are created once in the
+	// fixture's closure and rebuilt views reuse them.
+	ViewWithWindow func(log *EventLog, w *gpui.Window, app *gpui.App) gpui.AnyElement
 	// Steps is the scripted input sequence, dispatched to Chrome at
 	// record time and simulated in the test window at replay time.
 	Steps []Step
@@ -143,8 +153,10 @@ type Fixture struct {
 	// log (or the reverse) is a transcript difference the comparison
 	// reports. The vocabulary is "mousedown", "mouseup", "click",
 	// "pointerenter" and "pointerleave" (the pointer boundary events
-	// of browser-core ticket 10); a fixture avoids the kinds whose
-	// delivery order the pin currently gets wrong (see
+	// of browser-core ticket 10), and "keydown" and "keyup" (ticket 09:
+	// key entries carry the key and the focused element at listener
+	// time); a fixture avoids the kinds whose delivery order the pin
+	// currently gets wrong (see
 	// docs/browser-parity-harness.md, known divergences).
 	EventKinds []string
 	// BoxIDs are the page's data-id values (the gpui elements' ids)
@@ -166,13 +178,23 @@ type Fixture struct {
 
 // EventRecord is one app-visible event of the Tier B transcript.
 type EventRecord struct {
-	// Kind is the canonical event kind ("mousedown", "click", ...).
+	// Kind is the canonical event kind ("mousedown", "keydown", ...).
 	Kind string `json:"kind"`
 	// Target is the element the fixture's listener is bound to: the
 	// page's data-id, the gpui element's id.
 	Target string `json:"target"`
 	// DefaultPrevented is the event's default-prevented state.
 	DefaultPrevented bool `json:"defaultPrevented"`
+	// Key is the event's key for keydown and keyup entries (the DOM
+	// key name: "Tab", " ", "ArrowDown"; "" for the mouse kinds).
+	Key string `json:"key,omitempty"`
+	// Focus is the focused element's id at listener time for keydown
+	// and keyup entries ("" when nothing is focused — the page's
+	// body-normalized document.activeElement; "" for the mouse
+	// kinds). Key entries carrying it prove listener-then-default
+	// order: a listener that still sees the old focus ran before the
+	// default action changed it.
+	Focus string `json:"focus,omitempty"`
 }
 
 // EventLog is the fixture-side event recorder the View's handlers
@@ -184,6 +206,9 @@ type EventRecord struct {
 // recorder's final-state semantics.
 type EventLog struct {
 	entries []EventRecord
+	// focusIDs maps the tracked focus handles to element ids for the
+	// Focus field of key entries (TrackFocus).
+	focusIDs map[uint64]string
 }
 
 // Events returns the recorded transcript.
@@ -233,6 +258,108 @@ func (l *EventLog) PointerLeave(target string) func(*gpui.PointerLeaveEvent, *gp
 	return func(*gpui.PointerLeaveEvent, *gpui.Window, *gpui.App) { l.Append("pointerleave", target) }
 }
 
+// KeyDown returns an OnKeyDown handler that records a "keydown" on
+// target with the event's key and the focused element's id at
+// listener time (the page side's e.key / document.activeElement pair).
+// The focus field is the order probe of the key fixtures: it proves a
+// listener ran before the default action moved focus.
+func (l *EventLog) KeyDown(target string) func(*gpui.KeyDownEvent, *gpui.Window, *gpui.App) {
+	return func(e *gpui.KeyDownEvent, w *gpui.Window, app *gpui.App) {
+		l.appendKey("keydown", target, domKeyOf(e.Keystroke.Key), l.focusTarget(w))
+	}
+}
+
+// KeyUp returns an OnKeyUp handler that records a "keyup" on target
+// with the event's key and the focused element's id at listener time.
+func (l *EventLog) KeyUp(target string) func(*gpui.KeyUpEvent, *gpui.Window, *gpui.App) {
+	return func(e *gpui.KeyUpEvent, w *gpui.Window, app *gpui.App) {
+		l.appendKey("keyup", target, domKeyOf(e.Keystroke.Key), l.focusTarget(w))
+	}
+}
+
+// KeyDownPreventDefault returns an OnKeyDown handler that records the
+// "keydown" on target and prevents the default action (the DOM
+// listener that calls preventDefault).
+func (l *EventLog) KeyDownPreventDefault(target string) func(*gpui.KeyDownEvent, *gpui.Window, *gpui.App) {
+	return func(e *gpui.KeyDownEvent, w *gpui.Window, app *gpui.App) {
+		l.appendKey("keydown", target, domKeyOf(e.Keystroke.Key), l.focusTarget(w))
+		w.PreventDefault()
+	}
+}
+
+// TrackFocus maps a focus handle to the element id reported in the
+// Focus field of key entries. Call it from the view build for every
+// instrumented focusable element; the replay's key listeners resolve
+// Window.Focused through this map (the page side reads
+// document.activeElement's data-id, with body normalized to "").
+func (l *EventLog) TrackFocus(handle gpui.FocusHandle, id string) {
+	if l.focusIDs == nil {
+		l.focusIDs = make(map[uint64]string)
+	}
+	l.focusIDs[handle.ID()] = id
+}
+
+// focusTarget resolves the focused element's id, "" when nothing is
+// focused or the handle is not tracked.
+func (l *EventLog) focusTarget(w *gpui.Window) string {
+	if focused := w.Focused(); focused.Ok {
+		if l.focusIDs != nil {
+			return l.focusIDs[focused.Handle.ID()]
+		}
+	}
+	return ""
+}
+
+// appendKey records one key event entry.
+func (l *EventLog) appendKey(kind, target, key, focus string) {
+	l.entries = append(l.entries, EventRecord{Kind: kind, Target: target, Key: key, Focus: focus})
+}
+
+// domKeyOf maps the pinned keystroke key name onto the DOM key name
+// the recorder reads from e.key ("tab" → "Tab", "space" → " ",
+// "arrowdown" → "ArrowDown"); single characters pass through.
+func domKeyOf(key string) string {
+	switch key {
+	case "tab":
+		return "Tab"
+	case "enter":
+		return "Enter"
+	case "escape":
+		return "Escape"
+	case "space":
+		return " "
+	case "arrowup":
+		return "ArrowUp"
+	case "arrowdown":
+		return "ArrowDown"
+	case "arrowleft":
+		return "ArrowLeft"
+	case "arrowright":
+		return "ArrowRight"
+	case "home":
+		return "Home"
+	case "end":
+		return "End"
+	case "pageup":
+		return "PageUp"
+	case "pagedown":
+		return "PageDown"
+	case "backspace":
+		return "Backspace"
+	case "delete":
+		return "Delete"
+	case "shift":
+		return "Shift"
+	case "control":
+		return "Control"
+	case "alt":
+		return "Alt"
+	case "fn":
+		return "Fn"
+	}
+	return key
+}
+
 // ---------------------------------------------------------------------------
 // The fixture registry
 // ---------------------------------------------------------------------------
@@ -254,6 +381,8 @@ var eventKindVocabulary = map[string]bool{
 	"click":        true,
 	"pointerenter": true,
 	"pointerleave": true,
+	"keydown":      true,
+	"keyup":        true,
 }
 
 // validate checks a fixture's invariants at record and replay time,
@@ -262,9 +391,12 @@ func validate(f Fixture) error {
 	if f.Name == "" {
 		return fmt.Errorf("parity: a fixture must have a name")
 	}
+	if (f.View == nil) == (f.ViewWithWindow == nil) {
+		return fmt.Errorf("parity: fixture %q must set exactly one of View and ViewWithWindow", f.Name)
+	}
 	for _, kind := range f.EventKinds {
 		if !eventKindVocabulary[kind] {
-			return fmt.Errorf("parity: fixture %q: event kind %q is outside the harness's vocabulary (the EventLog helpers bind mousedown, mouseup, click, pointerenter and pointerleave today; extend them together with the recorder)",
+			return fmt.Errorf("parity: fixture %q: event kind %q is outside the harness's vocabulary (the EventLog helpers bind mousedown, mouseup, click, pointerenter, pointerleave, keydown and keyup today; extend them together with the recorder)",
 				f.Name, kind)
 		}
 	}

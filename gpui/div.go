@@ -1617,6 +1617,12 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 					// skip children (div.rs:2428-2430)
 					return
 				}
+				// browser-core 09: the scroller registers on its dispatch node
+				// (still active here) so the keyboard-scroll default action can
+				// find it from the focused node's ancestor path.
+				if d.scroll != nil && !suppressed {
+					registerKeyScrollContainer(w, d.scroll, &style)
+				}
 				withHiddenPrepaint(w, hidden, func() {
 					// The children prepaint under the scroll offset
 					// (div.rs:2460; inline.rs:454 for the inline path).

@@ -35,6 +35,13 @@ type elementScroll struct {
 	ongoing *OngoingScroll
 	// handle is the tracked scroll handle, when one is tracked.
 	handle *ScrollHandle
+	// maxOffset is the scroll maximum per axis of the frame's clamp
+	// (browser-core 09: the keyboard-scroll default action reads it —
+	// the same value clamp writes to the tracked handle).
+	maxOffset Point
+	// visible is the scroller's visible size of the frame's clamp (the
+	// page-step length of the keyboard scroll, browser-core 09).
+	visible Size
 }
 
 // divScrollElementState is the scroll part of the pinned
@@ -117,6 +124,10 @@ func (s *elementScroll) clamp(bounds Bounds, style *Style, contentSize Size, w *
 		X: max32(roundToTwoDecimals(paddedWidth-bounds.Size.Width), 0),
 		Y: max32(roundToTwoDecimals(paddedHeight-bounds.Size.Height), 0),
 	}
+	// browser-core 09: record the frame's clamp for the keyboard-scroll
+	// default action (the handle's state keeps its own copy below).
+	s.maxOffset = scrollMax
+	s.visible = bounds.Size
 
 	offset := s.offset
 	offset.X = clampF32(offset.X, -scrollMax.X, 0)
