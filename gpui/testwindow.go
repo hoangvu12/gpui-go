@@ -88,6 +88,24 @@ func CloseTestWindow(w *Window) {
 	dropDrawState(w)
 }
 
+// UseRealTextSystem switches a test window from the deterministic test
+// text system to the real native text service (the platform's Parley
+// stack, with the window's line-layout cache), for tests whose facts are
+// real font geometry. The window stays hostless: nothing is shown and no
+// platform window exists.
+func UseRealTextSystem(w *Window) error {
+	ds, ok := windowDrawStates[w]
+	if !ok || !ds.testWindow {
+		return fmt.Errorf("gpui: UseRealTextSystem requires a test window")
+	}
+	text, err := windowTextSystemOf()
+	if err != nil {
+		return fmt.Errorf("gpui: UseRealTextSystem: %w", err)
+	}
+	ds.text = text
+	return nil
+}
+
 // TestWindowDrawGeometry returns the test window's deterministic draw
 // geometry (viewport size, scale factor, rem size) for diagnostics.
 func TestWindowDrawGeometry(w *Window) (Size, float32, float32, error) {

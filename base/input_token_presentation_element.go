@@ -300,13 +300,17 @@ func (s *InputBaseState[M]) unwrappedTokenWidth(cache *tokenLayoutCache, fontSiz
 	rows = append(rows, s.displayMap.longestRow())
 	slices.Sort(rows)
 	rows = slices.Compact(rows)
-	shapeWidth := func(part string) float32 {
-		return mustShapeLine(w, part, fontSize, []gpui.TextRun{style.ToRun(len(part))}).Width()
-	}
+	// Hard tabs draw as blank columns from the row's start
+	// (input_tab_map.go).
+	tabs := s.displayTabs(w)
 	var widest float32
 	for _, row := range rows {
 		start := ext.LineStartOffset(row)
 		text := ext.SliceLine(row).String()
+		shapeWidth := func(from, to int) float32 {
+			part := text[from:to]
+			return tabs.shapeLine(w, part, tabs.columnAfter(text[:from], 0), fontSize, []gpui.TextRun{style.ToRun(len(part))}).Width()
+		}
 		offset := 0
 		var width float32
 		first := sort.Search(len(spans), func(i int) bool { return spans[i].rng.End > start })
@@ -315,11 +319,11 @@ func (s *InputBaseState[M]) unwrappedTokenWidth(cache *tokenLayoutCache, fontSiz
 				break
 			}
 			localStart, localEnd := span.rng.Start-start, span.rng.End-start
-			width += shapeWidth(text[offset:localStart])
+			width += shapeWidth(offset, localStart)
 			width += cache.widths[span.token]
 			offset = localEnd
 		}
-		widest = max(widest, width+shapeWidth(text[offset:]))
+		widest = max(widest, width+shapeWidth(offset, len(text)))
 	}
 	return widest
 }
@@ -333,6 +337,7 @@ func layoutTokenLines[M InputModeKind](state *InputBaseState[M], layout *lastLay
 		panic("base: tokens measured before shaping")
 	}
 	ext := state.ext()
+	tabs := state.displayTabs(w)
 	runOffset := 0
 	out := make([]*inputLineLayout, 0, len(layout.visibleBufferLines))
 	for _, row := range layout.visibleBufferLines {
@@ -346,8 +351,10 @@ func layoutTokenLines[M InputModeKind](state *InputBaseState[M], layout *lastLay
 			}
 			ranges = item.wrappedLines
 		}
+		// Hard tabs draw as blank columns from the row's start
+		// (input_tab_map.go).
 		shapePart := func(part InputSelection) *gpui.ShapedLine {
-			return mustShapeLine(w, text[part.Start:part.End], fontSize, runsForRange(runs, runOffset, part))
+			return tabs.shapeLine(w, text[part.Start:part.End], tabs.columnAfter(text[:part.Start], 0), fontSize, runsForRange(runs, runOffset, part))
 		}
 		lines := make([]*inputLine, 0, len(ranges))
 		for _, rng := range ranges {

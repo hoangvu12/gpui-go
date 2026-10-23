@@ -85,6 +85,12 @@ func (m *wrapMap) setFont(font gpui.FontDescriptor, fontSize float32, w *gpui.Wi
 	m.wrapper.setFont(font, fontSize, w)
 }
 
+// setTabSize sets the columns a hard tab expands to (Base ticket 44,
+// input_tab_map.go; no upstream counterpart).
+func (m *wrapMap) setTabSize(tabSize int, w *gpui.Window) bool {
+	return m.wrapper.setTabSize(tabSize, w)
+}
+
 // ensureTextPrepared is U:input/editor/display_map/wrap_map.rs:138-140.
 func (m *wrapMap) ensureTextPrepared(text rope.Rope, w *gpui.Window) bool {
 	return m.wrapper.prepareIfNeed(text, w)
