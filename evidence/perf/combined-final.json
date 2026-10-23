@@ -1,0 +1,273 @@
+{
+  "label": "combined base-port-2 + ticket 07 (ddff695)",
+  "date": "2026-10-23T06:15:21Z",
+  "go": "go1.27.1",
+  "cpus": 16,
+  "runs": 5,
+  "method": "best of runs by ns/frame; testing.Benchmark over hostless test windows on the real text system; frames via SimulateFrameRequest (gpui/perf_bench_test.go). allocs, bytes and native calls are deterministic; ns/frame is wall time and noisy when other work shares the machine; ticket 04 cached scenes from TestPerfViewCacheReport (gpui/perf_viewcache_bench_test.go), same harness",
+  "baseline_file": "evidence/perf/ticket01-baseline.json (45dc7e7)",
+  "comparison_vs_ticket01_baseline": [
+    {
+      "name": "FrameDivs",
+      "baseline": {
+        "ms_per_frame": 11.268465,
+        "allocs_per_frame": 16476,
+        "bytes_per_frame": 5023531,
+        "native_calls_per_frame": 8037
+      },
+      "final": {
+        "ms_per_frame": 7.523803571428572,
+        "allocs_per_frame": 5461,
+        "bytes_per_frame": 4039734,
+        "native_calls_per_frame": 3049
+      }
+    },
+    {
+      "name": "FrameText",
+      "baseline": {
+        "ms_per_frame": 200.1197,
+        "allocs_per_frame": 81583,
+        "bytes_per_frame": 18660814,
+        "native_calls_per_frame": 129292
+      },
+      "final": {
+        "ms_per_frame": 27.587304545454547,
+        "allocs_per_frame": 8398,
+        "bytes_per_frame": 1886667,
+        "native_calls_per_frame": 2753
+      }
+    },
+    {
+      "name": "FrameRefreshDivs",
+      "baseline": {
+        "ms_per_frame": 10.146137,
+        "allocs_per_frame": 16418,
+        "bytes_per_frame": 5020284,
+        "native_calls_per_frame": 8037
+      },
+      "final": {
+        "ms_per_frame": 6.804001226993865,
+        "allocs_per_frame": 5382,
+        "bytes_per_frame": 4036148,
+        "native_calls_per_frame": 3049
+      }
+    },
+    {
+      "name": "FrameRefreshText",
+      "baseline": {
+        "ms_per_frame": 200.8163,
+        "allocs_per_frame": 81574,
+        "bytes_per_frame": 18660110,
+        "native_calls_per_frame": 129292
+      },
+      "final": {
+        "ms_per_frame": 26.4177119047619,
+        "allocs_per_frame": 8390,
+        "bytes_per_frame": 1886153,
+        "native_calls_per_frame": 2753
+      }
+    }
+  ],
+  "frame_benchmarks": [
+    {
+      "name": "FrameDivs",
+      "n": 140,
+      "ns_per_frame": 7523803.571428572,
+      "ms_per_frame": 7.523803571428572,
+      "allocs_per_frame": 5461,
+      "bytes_per_frame": 4039734,
+      "native_calls_per_frame": 3049,
+      "quads_per_frame": 5000,
+      "sprites_per_frame": 0
+    },
+    {
+      "name": "FrameText",
+      "n": 44,
+      "ns_per_frame": 27587304.545454547,
+      "ms_per_frame": 27.587304545454547,
+      "allocs_per_frame": 8398,
+      "bytes_per_frame": 1886667,
+      "native_calls_per_frame": 2753,
+      "quads_per_frame": 0,
+      "sprites_per_frame": 18252
+    },
+    {
+      "name": "FrameRefreshDivs",
+      "n": 163,
+      "ns_per_frame": 6804001.226993865,
+      "ms_per_frame": 6.804001226993865,
+      "allocs_per_frame": 5382,
+      "bytes_per_frame": 4036148,
+      "native_calls_per_frame": 3049,
+      "quads_per_frame": 5000,
+      "sprites_per_frame": 0
+    },
+    {
+      "name": "FrameRefreshText",
+      "n": 42,
+      "ns_per_frame": 26417711.904761903,
+      "ms_per_frame": 26.4177119047619,
+      "allocs_per_frame": 8390,
+      "bytes_per_frame": 1886153,
+      "native_calls_per_frame": 2753,
+      "quads_per_frame": 0,
+      "sprites_per_frame": 18252
+    }
+  ],
+  "view_cache_benchmarks": [
+    {
+      "name": "DivsRootNotify/plain",
+      "n": 146,
+      "ns_per_frame": 7725286.98630137,
+      "ms_per_frame": 7.72528698630137,
+      "allocs_per_frame": 5459,
+      "bytes_per_frame": 4066157,
+      "native_calls_per_frame": 3079,
+      "quads_per_frame": 5000,
+      "sprites_per_frame": 0
+    },
+    {
+      "name": "DivsRootNotify/cached",
+      "n": 308,
+      "ns_per_frame": 3275085.3896103897,
+      "ms_per_frame": 3.2750853896103895,
+      "allocs_per_frame": 556,
+      "bytes_per_frame": 399813,
+      "native_calls_per_frame": 98,
+      "quads_per_frame": 5000,
+      "sprites_per_frame": 0
+    },
+    {
+      "name": "DivsPartial/plain",
+      "n": 159,
+      "ns_per_frame": 7163515.094339622,
+      "ms_per_frame": 7.163515094339622,
+      "allocs_per_frame": 5466,
+      "bytes_per_frame": 4066479,
+      "native_calls_per_frame": 3079,
+      "quads_per_frame": 5000,
+      "sprites_per_frame": 0
+    },
+    {
+      "name": "DivsPartial/cached",
+      "n": 327,
+      "ns_per_frame": 3658686.850152905,
+      "ms_per_frame": 3.6586868501529053,
+      "allocs_per_frame": 1105,
+      "bytes_per_frame": 765662,
+      "native_calls_per_frame": 403,
+      "quads_per_frame": 5000,
+      "sprites_per_frame": 0
+    },
+    {
+      "name": "DivsRefresh/plain",
+      "n": 168,
+      "ns_per_frame": 6940951.785714285,
+      "ms_per_frame": 6.940951785714286,
+      "allocs_per_frame": 5450,
+      "bytes_per_frame": 4065670,
+      "native_calls_per_frame": 3079,
+      "quads_per_frame": 5000,
+      "sprites_per_frame": 0
+    },
+    {
+      "name": "DivsRefresh/cached",
+      "n": 165,
+      "ns_per_frame": 6971893.939393939,
+      "ms_per_frame": 6.971893939393939,
+      "allocs_per_frame": 5782,
+      "bytes_per_frame": 4125435,
+      "native_calls_per_frame": 3148,
+      "quads_per_frame": 5000,
+      "sprites_per_frame": 0
+    },
+    {
+      "name": "TextRootNotify/plain",
+      "n": 38,
+      "ns_per_frame": 28308847.36842105,
+      "ms_per_frame": 28.308847368421052,
+      "allocs_per_frame": 8826,
+      "bytes_per_frame": 2059728,
+      "native_calls_per_frame": 2837,
+      "quads_per_frame": 0,
+      "sprites_per_frame": 19599
+    },
+    {
+      "name": "TextRootNotify/cached",
+      "n": 75,
+      "ns_per_frame": 17241885.333333332,
+      "ms_per_frame": 17.241885333333332,
+      "allocs_per_frame": 802,
+      "bytes_per_frame": 476394,
+      "native_calls_per_frame": 143,
+      "quads_per_frame": 0,
+      "sprites_per_frame": 19599
+    },
+    {
+      "name": "TextPartial/plain",
+      "n": 43,
+      "ns_per_frame": 28321648.837209303,
+      "ms_per_frame": 28.321648837209302,
+      "allocs_per_frame": 8832,
+      "bytes_per_frame": 2059541,
+      "native_calls_per_frame": 2837,
+      "quads_per_frame": 0,
+      "sprites_per_frame": 19599
+    },
+    {
+      "name": "TextPartial/cached",
+      "n": 68,
+      "ns_per_frame": 16760895.588235294,
+      "ms_per_frame": 16.760895588235293,
+      "allocs_per_frame": 1384,
+      "bytes_per_frame": 590256,
+      "native_calls_per_frame": 329,
+      "quads_per_frame": 0,
+      "sprites_per_frame": 19599
+    },
+    {
+      "name": "TextRefresh/plain",
+      "n": 36,
+      "ns_per_frame": 28487263.888888888,
+      "ms_per_frame": 28.487263888888886,
+      "allocs_per_frame": 8817,
+      "bytes_per_frame": 2058943,
+      "native_calls_per_frame": 2837,
+      "quads_per_frame": 0,
+      "sprites_per_frame": 19599
+    },
+    {
+      "name": "TextRefresh/cached",
+      "n": 48,
+      "ns_per_frame": 27135587.5,
+      "ms_per_frame": 27.1355875,
+      "allocs_per_frame": 9305,
+      "bytes_per_frame": 2152771,
+      "native_calls_per_frame": 2933,
+      "quads_per_frame": 0,
+      "sprites_per_frame": 19599
+    },
+    {
+      "name": "FrameRefreshDivs",
+      "n": 176,
+      "ns_per_frame": 6784031.25,
+      "ms_per_frame": 6.78403125,
+      "allocs_per_frame": 5382,
+      "bytes_per_frame": 4036068,
+      "native_calls_per_frame": 3049,
+      "quads_per_frame": 5000,
+      "sprites_per_frame": 0
+    },
+    {
+      "name": "FrameRefreshText",
+      "n": 48,
+      "ns_per_frame": 25726635.416666668,
+      "ms_per_frame": 25.726635416666667,
+      "allocs_per_frame": 8391,
+      "bytes_per_frame": 1886361,
+      "native_calls_per_frame": 2753,
+      "quads_per_frame": 0,
+      "sprites_per_frame": 18252
+    }
+  ]
+}
