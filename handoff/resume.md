@@ -35,7 +35,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - 10 hover: verified, merged and RESOLVED.
 - 11 pointer capture: chat 167a7b32, worktree `gpui-go-wt-core-11`, branch `core/11-pointer-capture`
 - 09: verified, merged and RESOLVED. Watch the native shaping-handle cap: it flakes under a big parity run.
-- RUNNING NOW: 04, 06, 11, 41, 64.
+- 13 key code: chat 119765e8, worktree `gpui-go-wt-core-13`, branch `core/13-key-code`
+- RUNNING NOW: 04, 06, 11, 13, 41, 64.
 
 Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
 
