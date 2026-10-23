@@ -106,17 +106,168 @@
 //
 // script.View renders Host.Element() (the described tree, lowered
 // fresh each frame) and wires Host.Notify to Window.Refresh the first
-// time it renders, so state changes and reloads redraw. Host is not
-// safe for concurrent use: call Load, Reload and handlers from the
-// thread that renders (a watcher must marshal its notification to the
-// app thread, e.g. with app.Foreground().Spawn and AsyncApp.Update).
+// time it renders, so state changes and reloads redraw. It also wires
+// the host's scheduler to the window's application on first render
+// (AppScheduler), so the host APIs below work without explicit setup
+// when the host is mounted; WithScheduler covers windowless hosts and
+// tests. Host is not safe for concurrent use: call Load, Reload and
+// handlers from the thread that renders (a watcher must marshal its
+// notification to the app thread, e.g. with app.Foreground().Spawn and
+// AsyncApp.Update).
+//
+// # The host's browser globals (ticket 64)
+//
+// Scripts get the browser-ish globals goja lacks, because browser- and
+// LLM-trained code assumes them. Provided:
+//
+//	setTimeout / clearTimeout / setInterval / clearInterval   timers
+//	queueMicrotask(fn)                    microtasks (before timers)
+//	requestAnimationFrame / cancelAnimationFrame
+//	                                      runs at the next frame request,
+//	                                      before that frame paints
+//	fetch(url, opts) → Promise<Response>  { method, headers, body };
+//	                                      Response: status, ok, statusText,
+//	                                      headers (lower-cased), url,
+//	                                      text(), json()
+//	console.log/info/debug/warn/error/trace/assert
+//	performance.now()                     the scheduler's clock
+//	atob / btoa                            base64 (whitespace ignored,
+//	                                      padding tolerated)
+//	TextEncoder (UTF-8) / TextDecoder (UTF-8, fatal option)
+//	URL / URLSearchParams                 parsed by net/url
+//
+// Timers, fetch and requestAnimationFrame need the scheduler; without
+// one the host raises a named error that says how to fix it (see
+// WithScheduler). State values are snapshots, like zgui's: get returns
+// a copy, so a change is a new value passed to set (arrays:
+// set(a.concat([x])), not a.push).
+//
+// Divergences from a browser, on purpose or by scope:
+//   - fetch rejects non-http(s) and relative URLs (there is no base
+//     URL: no location); the default transport is the host's plain
+//     net/http client (no cookies or credentials — the app installs
+//     its own with WithFetcher, and ticket 67's plugins get a granted
+//     one); fetch bodies are strings or JSON objects (typed-array
+//     bodies are not provided yet).
+//   - URL has no setters (parse, read, stringify); URL serialization
+//     is net/url's, not WHATWG's (no IDNA, no dot-segment
+//     normalization beyond net/url's, no IPv6 zones).
+//   - URLSearchParams follows WHATWG: '+' is a space, insertion order
+//     is kept in toString, init from a string, pairs or an object.
+//   - TextDecoder supports the UTF-8 labels only; a missing label is
+//     a named error (the WHATWG encoding list needs CLDR-scale data).
+//     The stream option is not provided (the body is already in
+//     memory).
+//   - console formats like a devtools console (depth-2 truncation,
+//     %s/%d/%f/%j/%o directives) and goes to the app's stderr, or the
+//     app's own sink (WithConsoleSink).
+//   - No Intl, crypto, location, navigator, document or window: the
+//     host is not a page. Intl needs CLDR/ICU-scale data for real
+//     locale formatting; nothing in the surface needs it yet (the ADR
+//     named it as an example of a host API, not a requirement — a
+//     ticket can add the pieces that matter).
+//
+// # The Go bridge: actions, shared state, fetch
+//
+// Scripts reach Go through three seams (zgui's model):
+//
+//	// a quick action, runs inline in the script call
+//	host.Action("note.add", func(args []any) (any, error) {
+//		return len(args), nil
+//	})
+//	// a slow one, runs off the host thread; its promise settles from
+//	// the host thread; ctx is cancelled by a reload
+//	host.AsyncAction("fs.read", func(ctx context.Context, args []any) (any, error) {
+//		return os.ReadFile(args[0].(string))
+//	})
+//
+// The script calls them:
+//
+//	const n = invoke("note.add", "one", 2)      // sync: a value, or an exception
+//	const p = call("fs.read", "notes.txt")      // a promise (both kinds)
+//	const text = await call("fs.read", "a.txt")  // goja runs async/await
+//
+// Arguments and return values are plain Go values as goja exported
+// them — nil, bool, string, float64/int64, []any, map[string]any
+// (JSON-shaped). An action's error surfaces as an exception (invoke)
+// or a rejection (call) that names the action. A missing action is a
+// named error at call time. WithActionResolver replaces how names
+// resolve: ticket 67's plugin hosts answer only their granted names,
+// with a named missing-grant error.
+//
+// Shared state is the app's store, keyed like the script's own state:
+//
+//	store := script.NewShared()
+//	host := script.New(script.WithShared(store))
+//	store.Write("note", "hello")     // Go writes: the script's bindings on
+//	                                 // "note" recompute, no re-describe, and
+//	                                 // the window redraws
+//	v, _ := store.Read("note")        // Go reads what the script wrote
+//
+// The script reads and writes the same store through shared(key, init)
+// — the same handle shape state has ({ key, get, set }), so
+// bind(shared("note"), fn) updates only that value when either side
+// writes. Shared values live in the store, so they survive reloads and
+// outlive the host; several hosts can share one store. Shared keys and
+// state keys are distinct namespaces (a state("x") and a shared("x")
+// are two values). The SharedStore interface is the seam ticket 67's
+// plugin gates wrap (a gated view of the app's store, answering a
+// named missing-grant error for keys the plugin was not granted).
+//
+// # The threading model
+//
+// goja is single-threaded: all script runs on the thread that renders
+// (the app's foreground executor). Nothing runs JS from another
+// goroutine:
+//
+//   - Timers ride the app's task machinery (Scheduler.After →
+//     SpawnDelivering + TaskRun.Sleep): the worker parks immediately,
+//     the delivery runs the callback on the host thread. Equal
+//     deadlines fire in registration order (the scheduler's FIFO).
+//   - fetch and async actions run their blocking work on goroutines
+//     the scheduler owns (Scheduler.Run) — never a scheduler task,
+//     whose body the dispatcher drives inline to its first park point
+//     (an HTTP round trip must not park the UI) — and settle their
+//     promise by marshalling back through Scheduler.Post. A goroutine
+//     never touches the VM: it computes and returns.
+//   - Microtasks (queueMicrotask, promise reactions, async/await
+//     continuations) drain when the current Go→JS call returns — goja
+//     does it, exactly the browser's “after the current task”.
+//   - Under TestApp the clock is virtual: AdvanceClock fires timers
+//     and their continuations synchronously, so tests are
+//     deterministic. requestAnimationFrame callbacks run at the
+//     window's next frame request (Window.OnNextFrame) before that
+//     frame paints.
+//
+// AppScheduler adapts a gpui application; the Scheduler interface is
+// the seam for anything else. A host without a scheduler still loads
+// and runs handlers.
+//
+// # Reload: what dies, what stays
+//
+// A successful reload builds a fresh VM, so everything the old VM had
+// pending dies with it, while the values stay:
+//
+//   - timers and intervals are cancelled (no callback into a dead VM
+//     — the browser's navigation analogue);
+//   - in-flight fetches and async actions are aborted (their context
+//     is cancelled, their promises never settle, like a navigation
+//     aborting fetches); a completion that still lands is dropped;
+//   - requestAnimationFrame callbacks pending when the reload landed
+//     are dropped;
+//   - keyed state (the script's own) and the shared store keep their
+//     values — init matters only for keys that did not exist;
+//   - unhandled promise rejections of the old VM are dropped.
+//
+// A failed reload keeps the old VM with its tree, timers and
+// completions running (the last good UI still works).
 //
 // # Later tickets (not built here)
 //
-// Host-provided browser globals (setTimeout, fetch, Intl) beyond the
-// app's own SetGlobal values; a generated .d.ts and check command;
-// the dev command (Go rebuild and restart with state restore);
-// plugin slots, contributions and capability grants (each plugin in
-// its own goja runtime with a time budget). The SetGlobal mechanism
-// and this package's public surface are the seam those build on.
+// The generated .d.ts and check command; the dev command (Go rebuild
+// and restart with state restore); plugin slots, contributions and
+// capability grants (each plugin in its own goja runtime with a time
+// budget) — the ActionResolver and SharedStore seams above are the
+// gates those wrap. The SetGlobal mechanism and this package's public
+// surface are the seam those build on.
 package script

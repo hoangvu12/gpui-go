@@ -37,7 +37,7 @@ export function App() {
 }
 `
 
-// scriptWindow is a headless test window showing a host's view.
+// openScriptWindow is a headless test window showing a host's view.
 type scriptWindow struct {
 	ta     *gpui.TestApp
 	window *gpui.Window
@@ -47,6 +47,13 @@ type scriptWindow struct {
 func openScriptWindow(t *testing.T, host *script.Host) *scriptWindow {
 	t.Helper()
 	ta := gpui.NewTestApp()
+	return openScriptWindowWithApp(t, host, ta)
+}
+
+// openScriptWindowWithApp opens the host's window on a test app the
+// caller owns (the timer tests drive that app's virtual clock).
+func openScriptWindowWithApp(t *testing.T, host *script.Host, ta *gpui.TestApp) *scriptWindow {
+	t.Helper()
 	window := gpui.NewTestWindow(ta.App(), gpui.Size{Width: 400, Height: 300})
 	t.Cleanup(func() {
 		gpui.CloseTestWindow(window)
