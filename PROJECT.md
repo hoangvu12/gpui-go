@@ -6,6 +6,16 @@ Build a Go port with full 1:1 GPUI-CE core behavior, familiar typed/fluent autho
 
 The permanent workspace is `C:\Users\ADMIN\Desktop\nguyenvu\gpui-go`. The module is `github.com/hoangvu12/gpui-go` (package `gpui` under `gpui/`), with Go floor 1.27.0. It is published under the Apache-2.0 license, starting at tag v0.1.0.
 
+## Direction change under research (2026-10-23)
+
+After the zterm test, the user questioned shipping a full component library inside the UI framework: "should we just try to make behaviour to look like the browser, but not actually shipping components? like it feels weird to ship the whole UI library into an UI framework".
+
+The user confirmed two things:
+- **Base moves to a new repository** ("yes, we gonna make a new repo for that"). The repo's name, its visibility, and whether zterm and the gallery move with it are still open.
+- **Deep research, including source code, comes first** ("yeah, we gotta do deep research on this, even look at the source code of them?" → "go ahead"). It covers how the core can behave like the browser (web specs plus Chromium/Skia source) where GPUI doesn't define a behaviour or differs.
+
+The research map is [.scratch/browser-parity/map.md](.scratch/browser-parity/map.md). Until the research is done and the user accepts its proposals, the 1:1 GPUI-CE parity goal below still stands, with this direction pending.
+
 ## Current phase
 
 **Implementation is authorized and in progress.** On 2026-10-05 the user explicitly authorized full implementation of the [33-ticket backlog](.scratch/gpui-core-implementation/plan.md) in a dedicated implementation chat (Roboco, harness `pi`, model `iroha/dashscope/glm-5.3`): "ok now use roboco mcp, create a new chat that use /implement skill to do all those tickets, use iroha dashscope glm 5.3 with pi harness". This supersedes earlier planning-only restrictions in repository documents. Routine engineering decisions are delegated; implementation and verification of the whole local backlog, including the runtime/native work its acceptance criteria require, is authorized. Work proceeds from [ticket01](.scratch/gpui-core-implementation/issues/01-reference-harness.md) through the dependency frontier until the backlog completes or a concrete external blocker stops it. No git repository exists in this workspace; the implement skill's commit step is recorded as blocked, and work continues without commits or publication.
