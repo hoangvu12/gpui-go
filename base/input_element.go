@@ -585,13 +585,15 @@ func layoutLines[M InputModeKind](state *InputBaseState[M], displayText *rope.Ro
 	if state.tokensVisible() {
 		return layoutTokenLines(state, layout, fontSize, runs, w)
 	}
+	// Hard tabs draw as blank columns (input_tab_map.go).
+	tabs := state.displayTabs(w)
 	if state.IsSingleLine() {
 		text := displayText.String()
 		lineRuns := runs
 		if aligned, ok := alignRunsToCharBoundaries(text, runs); ok {
 			lineRuns = aligned
 		}
-		shaped := mustShapeLine(w, text, fontSize, lineRuns)
+		shaped := tabs.shapeLine(w, text, 0, fontSize, lineRuns)
 		return []*inputLineLayout{newInputLineLayout([]*gpui.ShapedLine{shaped}).
 			withBackground(hasBackground(lineRuns)).
 			withWhitespaces(indicators)}
@@ -602,7 +604,7 @@ func layoutLines[M InputModeKind](state *InputBaseState[M], displayText *rope.Ro
 		var lines []*gpui.ShapedLine
 		lineHasBackground := false
 		for _, pl := range placeholderLineRuns(displayText.String(), runs) {
-			lines = append(lines, mustShapeLine(w, pl.line, fontSize, pl.runs))
+			lines = append(lines, tabs.shapeLine(w, pl.line, 0, fontSize, pl.runs))
 			lineHasBackground = lineHasBackground || hasBackground(pl.runs)
 		}
 		return []*inputLineLayout{newInputLineLayout(lines).withBackground(lineHasBackground).withWhitespaces(indicators)}
@@ -624,7 +626,12 @@ func layoutLines[M InputModeKind](state *InputBaseState[M], displayText *rope.Ro
 			if aligned, ok := alignRunsToCharBoundaries(sub, lineRuns); ok {
 				lineRuns = aligned
 			}
-			wrapped = append(wrapped, mustShapeLine(w, sub, fontSize, lineRuns))
+			// Tab columns count from the buffer line's start.
+			col := 0
+			if strings.Contains(sub, "\t") {
+				col = tabs.columnAfter(lineText[:rng.Start], 0)
+			}
+			wrapped = append(wrapped, tabs.shapeLine(w, sub, col, fontSize, lineRuns))
 			lineHasBackground = lineHasBackground || hasBackground(lineRuns)
 		}
 		// Continuation lines take the first visual line's indentation width.
@@ -902,6 +909,7 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 
 	_ = e.state.UpdateIn(app, w, func(s *InputBaseState[M], w *gpui.Window, _ *gpui.Context[InputBaseState[M]]) {
 		s.displayMap.setFont(font, textSize, w)
+		s.displayMap.setTabSize(max(s.mode.tabSize().TabSize, 1), w)
 		s.displayMap.ensureTextPrepared(s.text, w)
 	})
 
@@ -1029,7 +1037,7 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 			longestLineWidth = cached.width
 		} else {
 			lineText := longestLine.String()
-			longestLineWidth = mustShapeLine(w, lineText, textSize, []gpui.TextRun{{
+			longestLineWidth = state.displayTabs(w).shapeLine(w, lineText, 0, textSize, []gpui.TextRun{{
 				Len: len(lineText), Font: font, Color: gpui.Black(),
 			}}).Width()
 		}

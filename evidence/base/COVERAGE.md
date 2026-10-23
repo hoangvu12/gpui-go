@@ -69,7 +69,7 @@ None: every upstream module and test is accounted for.
 | `src/input/base/blink_cursor.rs` | ported | 20 | 1 | 5 | 5 | 0 | 0 | 0 |
 | `src/input/base/change.rs` | ported | 19 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `src/input/base/cursor.rs` | deviated | 19 | 1 | 8 | 7 | 1 | 0 | 0 |
-| `src/input/base/element.rs` | ported | 20,23 | 5 | 33 | 33 | 0 | 0 | 0 |
+| `src/input/base/element.rs` | ported | 20,23 | 6 | 33 | 33 | 0 | 0 | 0 |
 | `src/input/base/inline_tokens.rs` | ported | 21 | 2 | 0 | 0 | 0 | 0 | 0 |
 | `src/input/base/kind.rs` | ported | 20 | 2 | 0 | 0 | 0 | 0 | 0 |
 | `src/input/base/layout.rs` | ported | 20 | 1 | 0 | 0 | 0 | 0 | 0 |
@@ -95,7 +95,7 @@ None: every upstream module and test is accounted for.
 | `src/input/editor/display_map/text_wrapper.rs` | ported | 21 | 1 | 13 | 13 | 0 | 0 | 0 |
 | `src/input/editor/display_map/wrap_map.rs` | ported | 21 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `src/input/editor/highlighting.rs` | ported | 20,23 | 3 | 4 | 4 | 0 | 0 | 0 |
-| `src/input/editor/indent.rs` | ported | 23 | 1 | 2 | 2 | 0 | 0 | 0 |
+| `src/input/editor/indent.rs` | ported | 23 | 2 | 2 | 2 | 0 | 0 | 0 |
 | `src/input/editor/language.rs` | ported | 23 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `src/input/editor/language_config.rs` | ported | 23 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `src/input/editor/lsp/code_actions.rs` | ported | 24 | 1 | 0 | 0 | 0 | 0 | 0 |
