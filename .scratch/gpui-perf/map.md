@@ -18,6 +18,7 @@ The goal is to cut gpui-go's per-frame CPU, native-call, allocation and startup 
 ## Decisions so far
 
 - [Frame-cost benchmark](issues/01-frame-cost-benchmark.md): `gpui/perf_bench_test.go` + `native.CallCount`. Baseline: 1,000 divs take 16.5k allocs and 8k native calls per frame; the 300-line text page takes 82k allocs, 129k native calls and about 200 ms per frame; an unchanged refresh costs the same as a rebuild.
+- [Native rebuild rev 13](issues/05-native-rev-perf-and-weight500.md): DLL `0b6e9265…`. Batched scene inserts cut 1,000-div frames from 8,037 to 3,048 native calls. Waitable swap chains start the first frame after idle immediately (0.5 ms notify-to-present against about 4.5 ms). Weight 500 now uses the real Regular face (no fake bold). Present1 dirty rects are deferred until ticket 04 provides damage information.
 
 ## Not yet specified
 
