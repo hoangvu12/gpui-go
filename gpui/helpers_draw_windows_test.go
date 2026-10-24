@@ -538,23 +538,28 @@ func (h *lineHeightHost) Render(w *Window, cx *Context[lineHeightHost]) AnyEleme
 	return Div().IntoElement()
 }
 
-// TestHelperLineHeightAndModifiers pins Window::line_height (window.rs:
-// 2983-2985 → style.rs:719-721: 16px * golden ratio rounded = 26) and
+// TestHelperLineHeightAndModifiers pins Window::line_height
+// (window.rs:2983-2985 → style.rs:719-721 rounds the result) and
 // Window::modifiers (window.rs:3127-3129, tracked from dispatched
-// input).
+// input). Browser-parity D1: the default text style's line height is
+// CSS `normal`, resolved from the window's text seam — the test
+// window's modeled face (ascent 1025, descent 275, line gap 0 over
+// 1000 upem): round(16.4) + round(4.4) + 0 = 16 + 4 + 0 = 20 at 16px
+// (Chromium's FontMetrics::LineSpacing rule, simple_font_data.cc:
+// 158-165). The golden-ratio 26 was the pre-D1 default.
 func TestHelperLineHeightAndModifiers(t *testing.T) {
 	ta := NewTestApp()
 	app := ta.App()
 	w := NewTestWindow(app, Size{Width: 200, Height: 100})
 	defer CloseTestWindow(w)
-	if got := w.LineHeight(); got != 26 {
-		t.Fatalf("LineHeight outside a frame = %v, want 26", got)
+	if got := w.LineHeight(); got != 20 {
+		t.Fatalf("LineHeight outside a frame = %v, want 20", got)
 	}
 	host := NewEntity(app, w.Scope(), func(*lineHeightHost, *Context[lineHeightHost]) {})
 	w.SetRootView(ViewOf(host))
 	drawHelperFrame(t, w)
-	if got := host.Read(app, func(h *lineHeightHost, _ *App) float32 { return h.inFrame }); got != 26 {
-		t.Fatalf("LineHeight in a frame = %v, want 26", got)
+	if got := host.Read(app, func(h *lineHeightHost, _ *App) float32 { return h.inFrame }); got != 20 {
+		t.Fatalf("LineHeight in a frame = %v, want 20", got)
 	}
 
 	if w.Modifiers().Modified() {

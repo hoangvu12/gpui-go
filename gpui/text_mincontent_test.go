@@ -68,9 +68,10 @@ func (p *measureProbe) SourceLocation() *SourceLocation { return nil }
 // then request this element's own (empty) node.
 func (p *measureProbe) RequestLayout(global *GlobalElementID, inspector *InspectorElementID, w *Window, app *App) (LayoutID, struct{}) {
 	p.ambient = WindowTextStyle(w)
-	rem := RemSize(w)
-	p.fontSize = p.ambient.FontSizePixels(rem)
-	p.lineHeight = PixelSnap(w, p.ambient.LineHeightPixels(p.fontSize, rem))
+	// Browser-parity D1: the default style's CSS `normal` line height
+	// resolves through the window's text seam (the modeled test face).
+	p.lineHeight = ResolveLineHeight(w, p.ambient)
+	p.fontSize = p.ambient.FontSizePixels(RemSize(w))
 	p.scale = currentFrame(w).scale
 	p.minSize = p.child.LayoutAsRoot(AvailableSize{
 		Width:  MinContentAvailableSpace(),

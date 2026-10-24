@@ -513,7 +513,9 @@ func prepareInlineObjects(items []inlineFlowItem, textStyle gpui.TextStyle, w *g
 		style := textStyle.Highlight(item.style)
 		rem := gpui.RemSize(w)
 		fontSize := style.FontSizePixels(rem)
-		context := newInlineRenderContext(style, fontSize, style.LineHeightPixels(fontSize, rem), rem)
+		// Browser-parity D1: the style's CSS `normal` line height (the
+		// default) resolves through the window's text system.
+		context := newInlineRenderContext(style, fontSize, gpui.ResolveLineHeight(w, style), rem)
 		// The id inline objects paint under, so a stateful child sees the
 		// same id path in request_layout as in prepaint.
 		measured := gpui.WithID(w, gpui.NamedIntegerElementID("inline-object", uint64(item.id)), func(w *gpui.Window) measuredInlineObject {
@@ -1100,8 +1102,14 @@ func shapedMetrics(text string, fontSize float32, runs []gpui.TextRun, w *gpui.W
 }
 
 // plainLineHeight is the line height of a plain line in textStyle, snapped
-// like the text layout's (U:text/inline_flow.rs:1608-1617).
+// like the text layout's (U:text/inline_flow.rs:1608-1617). Browser-parity
+// D1: the style's CSS `normal` line height (the default) resolves
+// through the window's text system (gpui.ResolveLineHeight); a definite
+// length keeps the snapped LineHeightPixels derivation.
 func plainLineHeight(textStyle gpui.TextStyle, rem float32, w *gpui.Window) float32 {
+	if textStyle.LineHeight.Kind == gpui.DefiniteLengthNormal {
+		return gpui.ResolveLineHeight(w, textStyle)
+	}
 	fontSize := textStyle.FontSizePixels(rem)
 	return gpui.PixelSnap(w, textStyle.LineHeightPixels(fontSize, rem))
 }

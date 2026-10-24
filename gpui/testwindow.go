@@ -275,14 +275,15 @@ func (t *testTextSystem) layoutInline(request inlineLayoutRequest) (inlineLayout
 		alignmentOffset: 0,
 		size:            size,
 		pieces: []inlinePaintPiece{{
-			row:        0,
-			x:          0,
-			advance:    document.advance + totalBoxWidth,
-			byteStart:  0,
-			byteEnd:    len(request.text),
-			shaped:     inline,
-			lineIndex:  0,
-			lineHeight: request.lineHeight,
+			row:              0,
+			x:                0,
+			advance:          document.advance + totalBoxWidth,
+			byteStart:        0,
+			byteEnd:          len(request.text),
+			shaped:           inline,
+			lineIndex:        0,
+			lineHeight:       request.lineHeight,
+			lineHeightNormal: request.lineHeightNormal,
 		}},
 	}
 	layout.geometry = testInlineGeometry(inline, request.fontSize)
@@ -301,6 +302,19 @@ func (t *testTextSystem) inlineMetrics(font FontDescriptor, fontSize float32) In
 		Descent: fontSize * (testTextDescent / testTextUnitsPerEm),
 		XHeight: fontSize * (testTextXHeight / testTextUnitsPerEm),
 	}
+}
+
+// normalLineHeight implements windowTextSystem (browser-parity D1):
+// the CSS `normal` line height of the stub's modeled face — the same
+// rounded Win32-style rule as the real stack (Chromium
+// simple_font_data.cc:158-165), on the modeled metrics: ascent 1025,
+// descent 275 (the font-table sign, positive down), line gap 0 over
+// 1000 units per em. At 16px: round(16.4) + round(4.4) + round(0) =
+// 16 + 4 + 0 = 20.
+func (t *testTextSystem) normalLineHeight(font FontDescriptor, fontSize float32) float32 {
+	ascent := fontSize * (testTextAscent / testTextUnitsPerEm)
+	descent := -fontSize * (testTextDescent / testTextUnitsPerEm)
+	return roundToNearest(ascent) + roundToNearest(descent)
 }
 
 // glyphForChar implements windowTextSystem: the stub's modeled font

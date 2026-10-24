@@ -50,17 +50,20 @@
 	   text-driven, whose float32-exact width the two text systems shape
 	   0.33px apart ("Tip" at 16px), so the fixture pins the geometry and
 	   lets Tier C carry the look. The CSS box is content-box: the
-	   numbers are the port's border-box size minus the 8px padding. */
+	   numbers are the port's border-box size minus the 8px padding.
+	   Divergence toward CSS (browser-parity D1): the line-height pin
+	   (1.618, the reference default) is dropped — the default line
+	   height is CSS normal on both sides now, so the record carries
+	   Chrome's normal text placement in the pinned box. */
 	#tip {
 		left: 0px;
 		top: 24px;
 		width: 22px;
-		height: 26px;
+		height: 21px;
 		padding: 4px;
 		background: #ffffe1;
 		color: #000000;
 		font: 16px "Segoe UI";
-		line-height: 1.618;
 	}
 </style>
 </head>

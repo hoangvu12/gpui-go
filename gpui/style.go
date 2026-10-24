@@ -93,6 +93,18 @@ const (
 	// DefiniteLengthFraction is a length relative to the parent: the reference
 	// DefiniteLength::Relative(Relative), a fraction where 0.5 is 50%.
 	DefiniteLengthFraction
+	// DefiniteLengthNormal is the CSS `normal` keyword, valid only as a
+	// line height (browser-parity spec D1): not a length at all but the
+	// font-derived value the text system computes (the rounded ascent,
+	// descent and line gap of the resolved font, Chromium's
+	// FontMetrics::LineSpacing). The reference DefiniteLength has no such
+	// variant — the pin's default line height is the golden-ratio
+	// fraction, and the port kept that until D1. It is constructed only
+	// through NormalLineHeight; every length property (width, padding,
+	// gap, …) keeps taking Px/Rem/Fraction values, and resolving a
+	// normal length as a plain length fails loudly (LineHeightPixels
+	// panics, DefiniteLength.Absolute panics).
+	DefiniteLengthNormal
 )
 
 // DefiniteLength is a non-auto length: logical pixels, rems, or a
@@ -107,10 +119,14 @@ type DefiniteLength struct {
 
 // Absolute returns the DefiniteLength as an AbsoluteLength; it panics for
 // a fraction (mirroring the reference enum, where Relative is a distinct
-// variant).
+// variant) and for the CSS `normal` line-height keyword (which is no
+// length).
 func (d DefiniteLength) Absolute() AbsoluteLength {
 	if d.Kind == DefiniteLengthFraction {
 		panic("gpui: DefiniteLength.Absolute on a relative length")
+	}
+	if d.Kind == DefiniteLengthNormal {
+		panic("gpui: DefiniteLength.Absolute on the CSS normal line height")
 	}
 	return AbsoluteLength{Kind: AbsoluteLengthKind(d.Kind), Value: d.Value}
 }
@@ -127,13 +143,15 @@ func Fraction(v float32) DefiniteLength {
 }
 
 // String renders the length like the reference Display impl
-// ("42px", "1.5rem", "50%").
+// ("42px", "1.5rem", "50%", "normal").
 func (d DefiniteLength) String() string {
 	switch d.Kind {
 	case DefiniteLengthFraction:
 		return trimFloat(d.Value*100) + "%"
 	case DefiniteLengthRem:
 		return trimFloat(d.Value) + "rem"
+	case DefiniteLengthNormal:
+		return "normal"
 	default:
 		return trimFloat(d.Value) + "px"
 	}

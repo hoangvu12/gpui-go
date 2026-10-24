@@ -1057,7 +1057,11 @@ func (s *Styled[Self]) Font[_ lazy](font FontDescriptor) Self {
 	return s.self
 }
 
-// LineHeight sets the line height (styled.rs:905).
+// LineHeight sets the line height (styled.rs:905): a definite length
+// or fraction like the pin's, or the CSS `normal` keyword — the default
+// since browser-parity D1 — through NormalLineHeight() (the
+// font-metrics resolution; PhiLineHeight() is the reference default's
+// opt-in).
 func (s *Styled[Self]) LineHeight[L IntoDefiniteLength](lineHeight L) Self {
 	s.TextStyleMut().LineHeight = Some(DefiniteLengthFrom(lineHeight))
 	return s.self

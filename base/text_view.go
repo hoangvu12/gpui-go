@@ -403,8 +403,10 @@ func (v *TextView) RequestLayout(_ *gpui.GlobalElementID, _ *gpui.InspectorEleme
 		textStyle := gpui.WindowTextStyle(w)
 		refinement := v.StyleMut().Text
 		refinement.Refine(&textStyle)
-		rem := gpui.RemSize(w)
-		cap := textStyle.LineHeightPixels(textStyle.FontSizePixels(rem), rem) * float32(*maxLines)
+		// The line-height cap for the clamp (browser-parity D1: the
+		// default style's CSS normal resolves through the window's text
+		// system, ResolveLineHeight).
+		cap := gpui.ResolveLineHeight(w, textStyle) * float32(*maxLines)
 		el = el.MaxH(gpui.Px(cap)).OverflowHidden()
 	}
 	// browser-core 73: the copy keystroke no longer dispatches this

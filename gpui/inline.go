@@ -59,6 +59,7 @@ package gpui
 
 import (
 	"fmt"
+	"math"
 	"sort"
 )
 
@@ -83,6 +84,11 @@ type inlineTextContent struct {
 	runs       []TextRun
 	fontSize   float32
 	lineHeight float32
+	// lineHeightNormal reports that lineHeight is the CSS `normal`
+	// derivation (browser-parity D1): a parent paragraph's row bounds
+	// for this text come from the font's rounded metrics, not the
+	// shaped document's fractional ones.
+	lineHeightNormal bool
 	// whiteSpace is the white-space mode the publishing element
 	// resolved for this text (browser-core 38): the paragraph collapses
 	// each record under its own mode, like Blink's per-item white-space
@@ -224,6 +230,14 @@ type InlineTextStyle struct {
 	FontSize float32
 	// LineHeight is the range's absolute line height.
 	LineHeight float32
+	// LineHeightNormal reports that LineHeight is the CSS `normal`
+	// derivation (browser-parity D1): the range's row bounds come from
+	// its font's rounded metrics (the ROUNDED ascent and descent, with
+	// the line spacing's remainder split as Chrome's CalculateLeading
+	// Space floors the ascent side — core/layout/inline/line_utils.cc:
+	// 34-43), not the shaped document's fractional metrics with the
+	// symmetric half leading.
+	LineHeightNormal bool
 	// WhiteSpace is the range's white-space mode (the zero value is
 	// normal).
 	WhiteSpace WhiteSpace
@@ -291,6 +305,11 @@ type inlineLayoutRequest struct {
 	fontSize float32
 	// lineHeight is the requested height of an ordinary text row.
 	lineHeight float32
+	// lineHeightNormal reports that lineHeight is the CSS `normal`
+	// derivation (browser-parity D1) — the paragraph's own default for
+	// ranges that do not override it; a range's InlineTextStyle carries
+	// its own flag.
+	lineHeightNormal bool
 	// textMetrics are the container base font's metrics.
 	textMetrics InlineTextMetrics
 	// wrapWidth is the optional soft-wrap width.
@@ -311,6 +330,11 @@ type inlinePaintPiece struct {
 	x float32
 	// advance is the piece's shaped advance on the row.
 	advance float32
+	// lineHeightNormal reports that lineHeight is the CSS `normal`
+	// derivation (browser-parity D1): the row-bounds computation rounds
+	// the piece's font metrics to Chrome's integers instead of the
+	// symmetric fractional half leading (inline_real.go).
+	lineHeightNormal bool
 	// byteStart and byteEnd are the piece's document byte range.
 	byteStart, byteEnd int
 	// shaped is the piece's shaped document; its line lineIndex holds
@@ -357,6 +381,25 @@ type inlineLayout struct {
 func baseInlineLineBounds(metrics InlineTextMetrics, lineHeight float32) (top, bottom float32) {
 	halfLeading := maxZero32((lineHeight - metrics.Ascent - metrics.Descent) / 2)
 	return -metrics.Ascent - halfLeading, metrics.Descent + halfLeading
+}
+
+// roundedInlineLineBounds returns the text-bounds pair of one row whose
+// line height is the CSS `normal` derivation (browser-parity D1): the
+// font's ROUNDED ascent and descent with Chrome's leading split — the
+// ascent side floored, the remainder on the descent side
+// (CalculateLeadingSpace, core/layout/inline/line_utils.cc:34-43, fed
+// the rounded FixedAscent/FixedDescent and LineSpacing of
+// inline_box_state.cc:113-158). The pair is (-rounded_ascent -
+// floor(leading/2), rounded_descent + leading - floor(leading/2)) where
+// leading = line_height - rounded_ascent - rounded_descent (zero for a
+// line-gap-less font, so a normal row is exactly the font's rounded
+// ascent and descent: Segoe UI 16px [-17, +4], height 21).
+func roundedInlineLineBounds(metrics InlineTextMetrics, lineHeight float32) (top, bottom float32) {
+	ascent := roundToNearest(metrics.Ascent)
+	descent := roundToNearest(abs32(metrics.Descent))
+	leading := lineHeight - ascent - descent
+	ascentLeading := float32(math.Floor(float64(leading / 2)))
+	return -ascent - ascentLeading, descent + leading - ascentLeading
 }
 
 // expandInlineLineForBox expands one row's vertical extents for a box
@@ -578,10 +621,11 @@ func (c *inlineParagraphCollector) collectElement(layoutID LayoutID) {
 		c.currentDocument.text += record.text
 		c.currentDocument.runs = append(c.currentDocument.runs, c.paintRuns(record)...)
 		c.currentDocument.textStyles = append(c.currentDocument.textStyles, InlineTextStyle{
-			Range:      TextRange{Start: textStart, End: len(c.currentDocument.text)},
-			FontSize:   record.fontSize,
-			LineHeight: record.lineHeight,
-			WhiteSpace: record.whiteSpace,
+			Range:            TextRange{Start: textStart, End: len(c.currentDocument.text)},
+			FontSize:         record.fontSize,
+			LineHeight:       record.lineHeight,
+			LineHeightNormal: record.lineHeightNormal,
+			WhiteSpace:       record.whiteSpace,
 		})
 		c.recordSpanRanges(layoutID, textStart, boxStart)
 		c.recordOpenSpanRanges(textStart, boxStart)
@@ -722,7 +766,7 @@ func (c *inlineParagraphCollector) finishParagraph() {
 	textStyle := c.textStyle
 	rem := RemSize(c.window)
 	fontSize := textStyle.FontSizePixels(rem)
-	lineHeight := PixelSnap(c.window, textStyle.LineHeightPixels(fontSize, rem))
+	lineHeight, lineHeightNormal := resolveStyleLineHeight(c.window, textStyle, fontSize, rem)
 	textMetrics := frameTextSystem(c.window).inlineMetrics(textStyle.FontDescriptorOf(), fontSize)
 
 	measuredDocument := document
@@ -762,16 +806,17 @@ func (c *inlineParagraphCollector) finishParagraph() {
 			return paragraph.measurement.layout.size
 		}
 		layout, err := frameTextSystem(c.window).layoutInline(inlineLayoutRequest{
-			text:        measuredDocument.text,
-			runs:        measuredDocument.runs,
-			textStyles:  measuredDocument.textStyles,
-			boxes:       measuredDocument.boxes,
-			fontSize:    fontSize,
-			lineHeight:  lineHeight,
-			textMetrics: textMetrics,
-			wrapWidth:   wrapWidth,
-			lineClamp:   nil,
-			textAlign:   textStyle.TextAlign,
+			text:             measuredDocument.text,
+			runs:             measuredDocument.runs,
+			textStyles:       measuredDocument.textStyles,
+			boxes:            measuredDocument.boxes,
+			fontSize:         fontSize,
+			lineHeight:       lineHeight,
+			lineHeightNormal: lineHeightNormal,
+			textMetrics:      textMetrics,
+			wrapWidth:        wrapWidth,
+			lineClamp:        nil,
+			textAlign:        textStyle.TextAlign,
 		})
 		if err != nil {
 			panic(fmt.Sprintf("gpui: inline paragraph layout: %v", err))

@@ -664,6 +664,7 @@ type CoreClass =
 	"justify-evenly" |
 	"justify-start" |
 	"leading-[0]" |
+	"leading-[normal]" |
 	"leading-loose" |
 	"leading-none" |
 	"leading-normal" |
@@ -1343,6 +1344,7 @@ type Class =
 	"justify-evenly" |
 	"justify-start" |
 	"leading-[0]" |
+	"leading-[normal]" |
 	"leading-loose" |
 	"leading-none" |
 	"leading-normal" |

@@ -1,7 +1,7 @@
 {
   "name": "tooltip-look",
   "chrome": "Chrome/155.0.8059.85",
-  "recordedAt": "2026-10-24T17:31:06Z",
+  "recordedAt": "2026-10-24T22:14:19Z",
   "viewport": {
     "width": 640,
     "height": 400
@@ -18,7 +18,7 @@
       "x": 0,
       "y": 24,
       "width": 30,
-      "height": 34
+      "height": 29
     }
   },
   "events": [

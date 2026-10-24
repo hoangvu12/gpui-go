@@ -21,9 +21,11 @@ import (
 // of a plain "ab " text followed by the three-run StyledText of
 // TestStyledTextRunDecorationsTranscript, and pins the same per-run
 // records shifted by the plain text's 28.8px advance. Row geometry
-// (scale 2, 16px, test layout_inline): row height 26, baseline 23.4
+// (scale 2, 16px, test layout_inline): browser-parity D1 makes the
+// line height CSS `normal` — round(16.4) + round(4.4) + 0 = 20 of the
+// modeled face — so the row is 20 tall with baseline 20.4
 // (align_inline_boxes over ascent 16.4 / descent -4.4 with half leading
-// 7); the background quad spans the row height, the underline sits 1px
+// 4); the background quad spans the row height, the underline sits 1px
 // below the baseline (Chrome's offset, browser-core 06's recorded
 // divergence from the pin's baseline + descent * 0.618) and the
 // strikethrough at baseline - ascent
@@ -45,8 +47,8 @@ func TestInlineStyledTextRunDecorationsTranscript(t *testing.T) {
 	if len(facts) != 1 || facts[0].Text != "ab aaabbbccc" || len(facts[0].Rows) != 1 {
 		t.Fatalf("inline facts = %+v, want one one-row paragraph %q", facts, "ab aaabbbccc")
 	}
-	if row := facts[0].Rows[0]; row.Size.Height != 26 || row.Baseline != 23.4 {
-		t.Fatalf("row = %+v, want height 26, baseline 23.4", row)
+	if row := facts[0].Rows[0]; row.Size.Height != 20 || row.Baseline != 20.4 {
+		t.Fatalf("row = %+v, want height 20, baseline 20.4", row)
 	}
 
 	checkBounds := func(what string, got gpui.Bounds, x, y, w, h float32) {
@@ -60,8 +62,8 @@ func TestInlineStyledTextRunDecorationsTranscript(t *testing.T) {
 	if len(yellowQuads) != 1 || len(grayQuads) != 1 {
 		t.Fatalf("background quads yellow=%d gray=%d, want 1 each (the paragraph lost its run backgrounds)", len(yellowQuads), len(grayQuads))
 	}
-	checkBounds("run 1 background", yellowQuads[0].Bounds, 28.8, 0, 28.8, 26)
-	checkBounds("run 3 background", grayQuads[0].Bounds, 86.4, 0, 28.8, 26)
+	checkBounds("run 1 background", yellowQuads[0].Bounds, 28.8, 0, 28.8, 20)
+	checkBounds("run 3 background", grayQuads[0].Bounds, 86.4, 0, 28.8, 20)
 
 	underlines, err := scene.Underlines()
 	if err != nil {
@@ -82,7 +84,7 @@ func TestInlineStyledTextRunDecorationsTranscript(t *testing.T) {
 	if under == nil || strike == nil {
 		t.Fatalf("decoration colors = %+v, want the run colors green (underline) and blue (strikethrough)", underlines)
 	}
-	baseline := float32(23.4)
+	baseline := float32(20.4)
 	if !near(under.Bounds.Origin.X, 57.6*scale, 1) || !near(under.Bounds.Size.Width, 28.8*scale, 1) ||
 		!near(under.Bounds.Origin.Y, (baseline+1)*scale, 1) {
 		t.Errorf("underline bounds = %v, want x 57.6, width 28.8, y baseline + 1 (Chrome's offset for a 1px underline; logical, scale 2)", under.Bounds)

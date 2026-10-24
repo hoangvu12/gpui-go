@@ -65,6 +65,83 @@ func TestFontMetricsPixelScaling(t *testing.T) {
 	}
 }
 
+// TestLineSpacingPx pins the CSS `normal` line-height derivation
+// (browser-parity D1): each design-unit metric scales to the font size
+// then rounds half away from zero (Chromium's lroundf terms of
+// FontMetrics::LineSpacing, simple_font_data.cc:158-165 — Windows
+// ascent/descent are the rounded scaled metrics of font_metrics.cc:
+// 113-114), and the sum is the line spacing. Segoe UI 16px (ascent
+// 2210, descent 514, line gap 0 over 2048 upem): round(17.265625) +
+// round(4.015625) + round(0) = 17 + 4 + 0 = 21; Geist 16px (1005, 295,
+// 0 over 1000): round(16.08) + round(4.72) = 16 + 5 = 21; a gap-carrying
+// face (1005, 295, 67 over 1000) rounds the gap in too.
+func TestLineSpacingPx(t *testing.T) {
+	segoe := FontMetrics{UnitsPerEm: 2048, Ascent: 2210, Descent: 514, LineGap: 0}
+	for _, c := range []struct {
+		size float32
+		want float32
+	}{
+		{12, 16}, // round(12.949219) + round(3.011719) = 13 + 3
+		{13, 17}, // round(14.02832) + round(3.262695) = 14 + 3
+		{16, 21}, // 17 + 4
+		{24, 32}, // round(25.898438) + round(6.0234375) = 26 + 6
+		{48, 64}, // round(51.796875) + round(12.046875) = 52 + 12
+	} {
+		if got := segoe.LineSpacingPx(c.size); got != c.want {
+			t.Errorf("Segoe UI LineSpacingPx(%v) = %v, want %v", c.size, got, c.want)
+		}
+	}
+	geist := FontMetrics{UnitsPerEm: 1000, Ascent: 1005, Descent: 295, LineGap: 0}
+	if got, want := geist.LineSpacingPx(16), float32(21); got != want {
+		t.Errorf("Geist LineSpacingPx(16) = %v, want %v", got, want)
+	}
+	if got, want := geist.LineSpacingPx(24), float32(31); got != want {
+		t.Errorf("Geist LineSpacingPx(24) = %v, want %v", got, want)
+	}
+	withGap := FontMetrics{UnitsPerEm: 1000, Ascent: 1005, Descent: 295, LineGap: 67}
+	if got, want := withGap.LineSpacingPx(16), float32(22); got != want { // 16 + 5 + round(1.072)
+		t.Errorf("gap-carrying LineSpacingPx(16) = %v, want %v", got, want)
+	}
+	if got := (FontMetrics{}).LineSpacingPx(16); got != 0 {
+		t.Errorf("LineSpacingPx over zero upem = %v, want 0", got)
+	}
+}
+
+// TestNormalAndPhiLineHeightValues pins the style-level helpers of D1:
+// the DEFAULT text style's line height is the CSS `normal` keyword
+// (DefiniteLengthNormal — the pin's golden-ratio fraction was the
+// port's pre-D1 default), NormalLineHeight constructs it,
+// PhiLineHeight constructs the reference's opt-in (the same f32 bits
+// DefaultLineHeight derives), and String renders the CSS spellings.
+func TestNormalAndPhiLineHeightValues(t *testing.T) {
+	if got := DefaultTextStyle().LineHeight; got.Kind != DefiniteLengthNormal {
+		t.Errorf("DefaultTextStyle().LineHeight = %+v, want the DefiniteLengthNormal kind (CSS normal, D1)", got)
+	}
+	normal := NormalLineHeight()
+	if normal.Kind != DefiniteLengthNormal || normal.Value != 0 {
+		t.Errorf("NormalLineHeight() = %+v, want the normal keyword with no value", normal)
+	}
+	if got, want := normal.String(), "normal"; got != want {
+		t.Errorf("NormalLineHeight().String() = %q, want %q", got, want)
+	}
+	phi := PhiLineHeight()
+	if phi.Kind != DefiniteLengthFraction || math.Float32bits(phi.Value) != math.Float32bits(goldenRatio) {
+		t.Errorf("PhiLineHeight() = %+v, want the golden-ratio fraction (bits %08X)", phi, math.Float32bits(goldenRatio))
+	}
+	if got, want := DefaultTextStyle().LineHeight, NormalLineHeight(); got != want {
+		t.Errorf("the default style's line height = %+v, want %+v", got, want)
+	}
+	// A normal line height does not resolve as a plain length: the
+	// font-aware resolution (ResolveLineHeight / Window.LineHeight)
+	// owns it.
+	defer func() {
+		if recover() == nil {
+			t.Error("LineHeightPixels on the normal kind must panic (it cannot resolve without the font's metrics)")
+		}
+	}()
+	_ = DefaultTextStyle().LineHeightPixels(16, 16)
+}
+
 // TestDefaultFontDescriptor pins the pinned Font::default() shape: the
 // system UI alias, normal weight and style, no features, no fallbacks.
 func TestDefaultFontDescriptor(t *testing.T) {
@@ -256,5 +333,39 @@ func TestAddFontSeamValidation(t *testing.T) {
 	}
 	if !identity.FamilyFound {
 		t.Errorf("the default descriptor reports FamilyFound = false, want true")
+	}
+}
+
+// TestTextSystemNormalLineHeight pins the real font-metrics line
+// height on the Windows host (browser-parity D1): the resolved Segoe
+// UI face's line spacing, the value Chrome uses for `line-height:
+// normal` — Segoe UI 16px is 17 + 4 + 0 = 21 (the hhea metrics 2210 /
+// 514 / 0 over 2048 upem, each scaled and rounded; the parity fixture
+// lh-normal-segoe records the same number against Chrome's boxes).
+func TestTextSystemNormalLineHeight(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skipf("the native text artifact is Windows AMD64; the text system cannot run on %s", runtime.GOOS)
+	}
+	system, err := DefaultTextSystem()
+	if err != nil {
+		t.Fatalf("DefaultTextSystem: %v", err)
+	}
+	for _, c := range []struct {
+		size float32
+		want float32
+	}{
+		{12, 16},
+		{13, 17},
+		{16, 21},
+		{24, 32},
+		{48, 64},
+	} {
+		got, err := system.NormalLineHeight(DefaultFontDescriptor(), c.size)
+		if err != nil {
+			t.Fatalf("NormalLineHeight(%v): %v", c.size, err)
+		}
+		if got != c.want {
+			t.Errorf("NormalLineHeight(Segoe UI, %v) = %v, want %v", c.size, got, c.want)
+		}
 	}
 }

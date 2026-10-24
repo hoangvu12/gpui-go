@@ -280,7 +280,12 @@ func DndView(shape dndShape) func(log *parity.EventLog, w *gpui.Window, app *gpu
 			SizeFull().
 			Flex().
 			FlexCol().
-			Bg(gpui.Rgb(pageBackground))
+			Bg(gpui.Rgb(pageBackground)).
+			// The page pins the reference's 1.618 line height (body
+			// font 16px/1.618); the port's default is CSS normal since
+			// browser-parity D1, so the golden-ratio opt-in keeps the
+			// recorded text placement.
+			LineHeight(gpui.PhiLineHeight())
 		source := logDragEvents(gpui.Div().ID("source").DebugSelector("source"), "source").
 			Size(gpui.Px(windowWidth), gpui.Px(sourceHeight)).
 			Bg(gpui.Rgb(sourceColor)).

@@ -278,6 +278,9 @@ func TestClassArbitraryValues(t *testing.T) {
 		{"leading-[1.4]", func(d *DivElement) *DivElement { return d.LineHeight(Fraction(1.4)) }},
 		{"leading-[20px]", func(d *DivElement) *DivElement { return d.LineHeight(Px(20)) }},
 		{"leading-6", func(d *DivElement) *DivElement { return d.LineHeight(DefiniteRem(1.5)) }},
+		// CSS's own keyword (browser-parity D1): the font-metrics line
+		// height, distinct from Tailwind's named leading-normal (1.5).
+		{"leading-[normal]", func(d *DivElement) *DivElement { return d.LineHeight(NormalLineHeight()) }},
 		{"tracking-[0.5px]", func(d *DivElement) *DivElement { return d.LetterSpacing(0.5) }},
 		{"tracking-tighter", func(d *DivElement) *DivElement { return d.LetterSpacingEm(-0.05) }},
 		{"tracking-tight", func(d *DivElement) *DivElement { return d.LetterSpacingEm(-0.025) }},

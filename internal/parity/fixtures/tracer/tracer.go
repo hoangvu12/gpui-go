@@ -151,6 +151,12 @@ func boxElement(log *parity.EventLog, width, height, pad float32, withClick bool
 		BorderColor(gpui.Rgb(borderColor)).
 		TextColor(gpui.Rgb(textColor)).
 		TextSize(gpui.Px(textSize)).
+		// The page pins the reference's 1.618 line height (the body's
+		// `font: 16px/1.618`); the view mirrors it with the golden-ratio
+		// opt-in — the port's default is CSS `normal` since browser-parity
+		// D1, so the pin must be explicit to draw the page's text
+		// placement.
+		LineHeight(gpui.PhiLineHeight()).
 		OnMouseDown(gpui.MouseButtonLeft, log.MouseDown("box"))
 	if withClick {
 		box = box.OnClick(log.Click("box"))

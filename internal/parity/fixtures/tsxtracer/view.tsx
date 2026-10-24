@@ -22,7 +22,12 @@ export function App() {
 		>
 			<div
 				id="box"
-				className="w-[200px] h-[80px] p-[8px] border"
+				// leading-[1.618]: the page pins the reference's 1.618 line
+				// height (body font 16px/1.618); the port's default is CSS
+				// normal since browser-parity D1, so the class opts into the
+				// golden ratio to draw the page's text placement (the Go twin
+				// uses LineHeight(PhiLineHeight())).
+				className="w-[200px] h-[80px] p-[8px] border leading-[1.618]"
 				style={{ borderColor: "#334155", background: "#e2e8f0", color: "#0f172a", fontSize: 16 }}
 				onMouseDown={() => logEvent("mousedown", "box")}
 				onClick={() => logEvent("click", "box")}

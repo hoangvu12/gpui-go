@@ -60,7 +60,7 @@ func measureInlineObject(text string, presentation *InlineElement, style gpui.Te
 	if line, err := w.TextSystem().ShapeLine(text, fontSize, []gpui.TextRun{style.ToRun(len(text))}, nil); err == nil {
 		width, ascent, descent = line.Width(), line.Ascent(), positiveDescent(line.Descent())
 	}
-	height := max(style.LineHeightPixels(fontSize, rem), ascent+descent)
+	height := max(gpui.ResolveLineHeight(w, style), ascent+descent)
 	fallback := inlineMetrics{
 		size:     gpui.Size{Width: max(width, 1), Height: height},
 		baseline: (height-ascent-descent)/2 + ascent,

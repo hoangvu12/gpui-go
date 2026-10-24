@@ -1,0 +1,116 @@
+{
+  "name": "lh-normal-segoe",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T22:36:21Z",
+  "viewport": {
+    "width": 640,
+    "height": 520
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 520
+    },
+    "row-12": {
+      "x": 16,
+      "y": 16,
+      "width": 380,
+      "height": 34
+    },
+    "row-13": {
+      "x": 16,
+      "y": 62,
+      "width": 380,
+      "height": 35
+    },
+    "row-16": {
+      "x": 16,
+      "y": 109,
+      "width": 380,
+      "height": 39
+    },
+    "row-24": {
+      "x": 16,
+      "y": 160,
+      "width": 380,
+      "height": 50
+    },
+    "row-48": {
+      "x": 16,
+      "y": 222,
+      "width": 380,
+      "height": 82
+    },
+    "row-mixed": {
+      "x": 16,
+      "y": 388,
+      "width": 380,
+      "height": 50
+    },
+    "row-ratio": {
+      "x": 16,
+      "y": 450,
+      "width": 380,
+      "height": 42
+    },
+    "row-wrap": {
+      "x": 16,
+      "y": 316,
+      "width": 380,
+      "height": 60
+    },
+    "span-12": {
+      "x": 25,
+      "y": 25,
+      "width": 362,
+      "height": 16
+    },
+    "span-13": {
+      "x": 25,
+      "y": 71,
+      "width": 362,
+      "height": 17
+    },
+    "span-16": {
+      "x": 25,
+      "y": 118,
+      "width": 362,
+      "height": 21
+    },
+    "span-24": {
+      "x": 25,
+      "y": 169,
+      "width": 362,
+      "height": 32
+    },
+    "span-48": {
+      "x": 25,
+      "y": 231,
+      "width": 362,
+      "height": 64
+    },
+    "span-mixed": {
+      "x": 25,
+      "y": 397,
+      "width": 362,
+      "height": 32
+    },
+    "span-ratio": {
+      "x": 25,
+      "y": 459,
+      "width": 362,
+      "height": 24
+    },
+    "span-wrap": {
+      "x": 25,
+      "y": 325,
+      "width": 362,
+      "height": 42
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

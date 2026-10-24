@@ -403,9 +403,16 @@ func captureCounterWindow(app *gpui.App, fw *fixtureWindow, model gpui.Entity[co
 // counterTextFacts derives the ambient text style of the label text and
 // its resolved font size and line height (the reference derivation:
 // font_size = text_style.font_size.to_pixels(rem); line_height =
-// pixel_snap(text_style.line_height.to_pixels(font_size, rem))).
+// pixel_snap(text_style.line_height.to_pixels(font_size, rem))). The
+// style mirrors the REFERENCE's default text style, whose line height
+// is the golden-ratio fraction — the pin's own default. The port's
+// default is CSS `normal` since browser-parity D1 (which no pure style
+// value can resolve), so this fixture pins the reference's phi
+// explicitly (PhiLineHeight, the D1 opt-in) and keeps deriving the
+// pin's exact line height.
 func counterTextFacts(style resolvedCounterStyle) (textStyle gpui.TextStyle, fontSize, lineHeight float32) {
 	textStyle = gpui.DefaultTextStyle()
+	textStyle.LineHeight = gpui.PhiLineHeight()
 	textStyle.FontSize = style.fontSize
 	rem := gpui.DefaultRemSize
 	fontSize = textStyle.FontSizePixels(rem)

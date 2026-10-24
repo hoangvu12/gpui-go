@@ -274,6 +274,11 @@ func menuViewOf(firstID string, boxCount int, focusable, prevent, mouseKinds boo
 			Flex().
 			FlexCol().
 			Bg(gpui.Rgb(pageBackground)).
+			// The page pins the reference's 1.618 line height (body font
+			// 16px/1.618); the port's default is CSS normal since
+			// browser-parity D1, so the golden-ratio opt-in keeps the
+			// recorded text placement.
+			LineHeight(gpui.PhiLineHeight()).
 			OnContextMenu(log.ContextMenu("root"))
 		if mouseKinds {
 			root = root.

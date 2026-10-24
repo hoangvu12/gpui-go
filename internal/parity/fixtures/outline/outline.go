@@ -427,7 +427,12 @@ func OffsetView(log *parity.EventLog) gpui.AnyElement {
 		FlexRow().
 		P(gpui.Px(24)).
 		Gap(gpui.Px(16)).
-		Bg(gpui.Rgb(pageBackground))
+		Bg(gpui.Rgb(pageBackground)).
+		// The page pins the reference's 1.618 line height (body font
+		// 16px/1.618); the port's default is CSS normal since
+		// browser-parity D1, so the golden-ratio opt-in keeps the
+		// recorded text placement.
+		LineHeight(gpui.PhiLineHeight())
 	box := func(b outlineBox) *gpui.DivElement {
 		d := gpui.Div().
 			ID(b.id).
@@ -469,6 +474,9 @@ func DashedView(log *parity.EventLog) gpui.AnyElement {
 		FlexCol().
 		P(gpui.Px(24)).
 		Bg(gpui.Rgb(pageBackground)).
+		// The page's 1.618 line-height pin, mirrored (D1: the port's
+		// default is CSS normal; PhiLineHeight is the opt-in).
+		LineHeight(gpui.PhiLineHeight()).
 		Child(gpui.Div().
 			ID("dashed").
 			DebugSelector("dashed").
@@ -521,6 +529,9 @@ func FocusView(outlineNone bool) func(log *parity.EventLog, w *gpui.Window, app 
 			FlexCol().
 			P(gpui.Px(24)).
 			Bg(gpui.Rgb(pageBackground)).
+			// The page's 1.618 line-height pin, mirrored (D1: the port's
+			// default is CSS normal; PhiLineHeight is the opt-in).
+			LineHeight(gpui.PhiLineHeight()).
 			OnKeyDown(log.KeyDown("root")).
 			OnKeyUp(log.KeyUp("root")).
 			OnClick(log.Click("root")).

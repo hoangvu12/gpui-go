@@ -327,6 +327,10 @@ func sampleCellAt(col sampleColumn, baseSize, renderSize float32) *gpui.DivEleme
 		Bg(gpui.Rgb(col.background)).
 		TextColor(gpui.Rgb(col.textHex)).
 		TextSize(gpui.Px(renderSize)).
+		// The page pins the reference's 1.618 line height (.cell's CSS);
+		// the port's default is CSS normal since browser-parity D1, so
+		// the golden-ratio opt-in keeps the recorded placement.
+		LineHeight(gpui.PhiLineHeight()).
 		Child(sampleText)
 }
 
@@ -446,5 +450,9 @@ func italicRowText(id, family string, style gpui.FontStyle, text string) *gpui.D
 		H(gpui.Px(italicRowHeight)).
 		Font(gpui.FontDescriptor{Family: family, Weight: 400, Style: style}).
 		TextSize(gpui.Px(italicSize)).
+		// The page pins the reference's 1.618 line height (its rows' CSS);
+		// the golden-ratio opt-in (browser-parity D1) keeps the recorded
+		// placement.
+		LineHeight(gpui.PhiLineHeight()).
 		Child(text)
 }

@@ -66,7 +66,10 @@ func (s *Styled[Self]) LeadingTight[_ lazy]() Self { return s.LineHeight(Fractio
 func (s *Styled[Self]) LeadingSnug[_ lazy]() Self { return s.LineHeight(Fraction(1.375)) }
 
 // LeadingNormal sets the line height to 1.5× the font size
-// (leading-normal).
+// (leading-normal) — TAILWIND's leading-normal, which is 1.5, NOT the
+// CSS `normal` keyword (browser-parity D1: the CSS keyword is the
+// port's default text style; the Tailwind arbitrary class
+// leading-[normal] and NormalLineHeight opt into it).
 func (s *Styled[Self]) LeadingNormal[_ lazy]() Self { return s.LineHeight(Fraction(1.5)) }
 
 // LeadingRelaxed sets the line height to 1.625× the font size

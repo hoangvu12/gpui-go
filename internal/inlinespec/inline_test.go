@@ -273,12 +273,17 @@ func TestInlineTopAndBottomAlignmentGrowsBothExtents(t *testing.T) {
 	if len(facts) != 1 {
 		t.Fatalf("inline paragraphs = %d, want 1", len(facts))
 	}
-	// The middle-aligned 18px box grows the row to 28.272 with baseline
-	// 23.4 (as the flow test derives); the top box keeps the row's top,
-	// the bottom box the row's bottom.
+	// The middle-aligned 18px box grows the row to 25.272 with baseline
+	// 20.4: browser-parity D1 makes the default line height CSS `normal`
+	// — the modeled face's rounded metrics 16 + 4 (line gap 0), so the
+	// base row is [-20.4, -0.4] (height 20, baseline 20.4: ascent 16.4,
+	// descent -4.4, half leading (20 - 12)/2 = 4) — and the middle box
+	// (middle = -x_height/2 = -4.128) extends the bottom to 4.872:
+	// height 20.4 + 4.872 = 25.272. (The pre-D1 golden-ratio row was
+	// baseline 23.4, height 28.272.)
 	row := facts[0].Rows[0]
-	if row.Baseline != 23.4 || row.Size.Height != 28.272 {
-		t.Fatalf("row = %+v, want baseline 23.4 height 28.272", row)
+	if row.Baseline != 20.4 || row.Size.Height != 25.272 {
+		t.Fatalf("row = %+v, want baseline 20.4 height 25.272", row)
 	}
 
 	// Now the aligned corpus: top and bottom boxes against the same
@@ -294,16 +299,16 @@ func TestInlineTopAndBottomAlignmentGrowsBothExtents(t *testing.T) {
 		t.Fatalf("inline paragraphs = %d, want 1", len(facts2))
 	}
 	p := facts2[0]
-	// Derived: ascent 16.4, descent -4.4, line height 26 → base top
-	// -23.4, bottom 2.6. Top box (40px): top_box_height 40 → bottom
-	// settles to max(2.6, -23.4+40)=16.6. Bottom box (36px):
-	// bottom_box_height 36 → top settles to min(-23.4, 16.6-36)=-23.4.
-	// Height 40; baseline 23.4.
+	// Derived (D1 normal, L = 20): ascent 16.4, descent -4.4, half
+	// leading 4 → base top -20.4, bottom -0.4. Top box (40px):
+	// top_box_height 40 → bottom settles to max(-0.4, -20.4+40) = 19.6.
+	// Bottom box (36px): bottom_box_height 36 → top settles to
+	// min(-20.4, 19.6-36) = -20.4. Height 40; baseline 20.4.
 	if p.Rows[0].Size.Height != 40 {
 		t.Fatalf("row height = %v, want 40 (the settled extents)", p.Rows[0].Size.Height)
 	}
-	if p.Rows[0].Baseline != 23.4 {
-		t.Fatalf("row baseline = %v, want 23.4", p.Rows[0].Baseline)
+	if p.Rows[0].Baseline != 20.4 {
+		t.Fatalf("row baseline = %v, want 20.4", p.Rows[0].Baseline)
 	}
 	// The top box pins the row top (y 0, full height 40).
 	if box := p.Boxes[0]; box.Bounds.Origin.Y != 0 || box.Bounds.Size.Height != 40 {

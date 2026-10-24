@@ -262,7 +262,10 @@ func stageArms(blur, percents, hues []string) []TSType {
 		"diagonal-fractions", "stacked-fractions"))
 	// Leading and tracking with arbitrary values; line clamps. The
 	// leading scale is the plain number scale (leading-13): the px and
-	// full keywords and the fractions are not leading values.
+	// full keywords and the fractions are not leading values. A
+	// bracketed `normal` is CSS's own keyword (browser-parity D1 — the
+	// font-metrics line height), distinct from Tailwind's named
+	// leading-normal (1.5).
 	arms = append(arms,
 		Template([]string{"leading-", ""}, numType),
 		Template([]string{"leading-[", "]"}, numType),
@@ -270,6 +273,7 @@ func stageArms(blur, percents, hues []string) []TSType {
 		Template([]string{"leading-[", "rem]"}, numType),
 		Template([]string{"leading-[", "%]"}, numType),
 		Lit("leading-[0]"),
+		Lit("leading-[normal]"),
 		Template([]string{"tracking-[", "px]"}, numType),
 		Lit("tracking-[0]"),
 		// The named tracking scale is em-based (browser-core 38) and

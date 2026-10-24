@@ -533,6 +533,11 @@ func instrumentedRoot(log *parity.EventLog) *gpui.DivElement {
 		Flex().
 		FlexCol().
 		Bg(gpui.Rgb(pageBackground)).
+		// The pages pin the reference's 1.618 line height (body font
+		// 16px/1.618); the port's default is CSS normal since
+		// browser-parity D1, so the golden-ratio opt-in keeps the
+		// recorded text placement.
+		LineHeight(gpui.PhiLineHeight()).
 		OnMouseDown(gpui.MouseButtonLeft, log.MouseDown("root")).
 		OnMouseUp(gpui.MouseButtonLeft, log.MouseUp("root")).
 		OnClick(log.Click("root")).

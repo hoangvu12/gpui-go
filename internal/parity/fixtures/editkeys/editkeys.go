@@ -304,6 +304,11 @@ func View() func(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.AnyEl
 			Flex().
 			FlexCol().
 			Bg(gpui.Rgb(pageBackground)).
+			// The page pins the reference's 1.618 line height (body font
+			// 16px/1.618); the port's default is CSS normal since
+			// browser-parity D1, so the golden-ratio opt-in keeps the
+			// recorded text placement.
+			LineHeight(gpui.PhiLineHeight()).
 			OnKeyDown(log.KeyDown("root")).
 			OnKeyUp(log.KeyUp("root"))
 		field := gpui.Div().
@@ -351,6 +356,9 @@ func PlainView() func(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.
 			Flex().
 			FlexCol().
 			Bg(gpui.Rgb(pageBackground)).
+			// The page's 1.618 line-height pin, mirrored (D1: the port's
+			// default is CSS normal; PhiLineHeight is the opt-in).
+			LineHeight(gpui.PhiLineHeight()).
 			OnKeyDown(log.KeyDown("root")).
 			OnKeyUp(log.KeyUp("root"))
 		field := gpui.Div().

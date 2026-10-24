@@ -1,0 +1,68 @@
+{
+  "name": "lh-normal-geist",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T22:42:38Z",
+  "viewport": {
+    "width": 640,
+    "height": 300
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 300
+    },
+    "row-g16": {
+      "x": 16,
+      "y": 16,
+      "width": 380,
+      "height": 39
+    },
+    "row-g24": {
+      "x": 16,
+      "y": 67,
+      "width": 380,
+      "height": 49
+    },
+    "row-g48": {
+      "x": 16,
+      "y": 128,
+      "width": 380,
+      "height": 80
+    },
+    "row-gmix": {
+      "x": 16,
+      "y": 220,
+      "width": 380,
+      "height": 49
+    },
+    "span-g16": {
+      "x": 25,
+      "y": 25,
+      "width": 362,
+      "height": 21
+    },
+    "span-g24": {
+      "x": 25,
+      "y": 76,
+      "width": 362,
+      "height": 31
+    },
+    "span-g48": {
+      "x": 25,
+      "y": 137,
+      "width": 362,
+      "height": 62
+    },
+    "span-gmix": {
+      "x": 25,
+      "y": 229,
+      "width": 362,
+      "height": 31
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

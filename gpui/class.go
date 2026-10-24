@@ -883,17 +883,21 @@ func typographyClass(b *StyleBuilder, u string) (bool, string) {
 	case strings.HasPrefix(u, "leading-"):
 		v := u[len("leading-"):]
 		if inner, ok := arbitrary(v); ok {
-			if n, ok := parseNumber(inner); ok {
+			if inner == "normal" {
+				// CSS's own keyword (browser-parity D1): the font-metrics
+				// line height, not Tailwind's named leading-normal (1.5).
+				b.LineHeight(NormalLineHeight())
+			} else if n, ok := parseNumber(inner); ok {
 				b.LineHeight(Fraction(n))
 			} else if d, ok := arbitraryLength(inner); ok {
 				b.LineHeight(d)
 			} else {
-				return true, "leading-[…] takes a multiple of the font size like [1.4], or a length like [20px]"
+				return true, "leading-[…] takes a multiple of the font size like [1.4], a length like [20px], or [normal]"
 			}
 		} else if n, ok := spacingScale(v); ok {
 			b.LineHeight(DefiniteRem(n / 4))
 		} else {
-			return true, "leading-… takes none, tight, snug, normal, relaxed, loose, a number on the 0.25rem scale, or [1.4] / [20px]"
+			return true, "leading-… takes none, tight, snug, normal, relaxed, loose, a number on the 0.25rem scale, or [1.4] / [20px] / [normal]"
 		}
 	case strings.HasPrefix(u, "tracking-"):
 		// Ticket 38: the named values are em-based and resolve against

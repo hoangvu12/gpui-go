@@ -20,6 +20,7 @@ package gpui
 // descent*0.618 (rich_paint.go's recorded note).
 
 import (
+	"math"
 	"strconv"
 	"testing"
 )
@@ -110,11 +111,22 @@ func TestTextElementUnderlineRecordFollowsChrome(t *testing.T) {
 			}
 			record := records[0]
 
-			// The element sits at the origin, so the baseline is the
-			// painter's: (lineHeight - ascent - descent)/2 + ascent.
-			lineHeight := PixelSnapValue(fontSize*goldenRatio, TestScaleFactor)
-			paddingTop := (lineHeight - summary.Ascent - summary.Descent) / 2
-			baseline := paddingTop + summary.Ascent
+			// The element sits at the origin, so the baseline is the row's.
+			// Browser-parity D1: the default line height is CSS `normal` —
+			// the font's line spacing (rounded ascent + rounded descent +
+			// rounded line gap) — and the row's baseline is the ROUNDED
+			// ascent with the floored half leading below it (Chrome's
+			// CalculateLeadingSpace, core/layout/inline/line_utils.cc:34-43;
+			// Segoe UI has line gap 0, so the leading is 0 and the
+			// baseline is the rounded ascent: 17 at 16px, 43 at 40px).
+			lineHeight, err := ts.NormalLineHeight(DefaultFontDescriptor(), fontSize)
+			if err != nil {
+				t.Fatalf("normal line height: %v", err)
+			}
+			roundedAscent := roundToNearest(summary.Ascent)
+			roundedDescent := roundToNearest(summary.Descent)
+			ascentLeading := float32(math.Floor(float64((lineHeight - roundedAscent - roundedDescent) / 2)))
+			baseline := roundedAscent + ascentLeading
 
 			wantThickness := snapStroke(max32(1, fontSize/10), TestScaleFactor)
 			if record.Thickness != wantThickness || record.Bounds.Size.Height != wantThickness {

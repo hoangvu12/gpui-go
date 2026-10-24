@@ -169,7 +169,11 @@ type EditorOptions struct {
 	FontSize float32
 	// LineHeight parameterizes caret/selection geometry (the reference
 	// reads it from the element's layout data; DefaultLineHeight(
-	// FontSize) by default).
+	// FontSize) — the pin's golden-ratio derivation — by default. The
+	// port's text-style default is CSS `normal` since browser-parity D1,
+	// but the editor's own default keeps the pin's derivation so the
+	// document model stays reference-shaped outside an element; a caller
+	// that wants the ambient rule passes w.LineHeight()).
 	LineHeight float32
 	// WrapWidth enables soft wrapping when non-nil.
 	WrapWidth *float32
