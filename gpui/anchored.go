@@ -453,11 +453,18 @@ func (d *anchoredDrawable) RequestLayout(global *GlobalElementID, inspector *Ins
 	if d.anchored.anchorName != "" {
 		requestAnchorTracking(w)
 	}
+	// Ticket 21 (the ticket-33 note): the anchored node is an
+	// absolutely positioned container, so it requests through
+	// RequestContainerLayout — a participating containing block for
+	// absolutely positioned descendants of Static() divs inside it
+	// (browser-core 33, spec D3), like any positioned element.
 	ids := make([]LayoutID, 0, len(d.anchored.children))
-	for i := range d.anchored.children {
-		ids = append(ids, d.anchored.children[i].RequestLayout(w, app))
-	}
-	id, err := requestLayoutOf(w, anchoredNodeStyle(), ids...)
+	id, err := RequestContainerLayout(w, anchoredNodeStyle(), func(w *Window) []LayoutID {
+		for i := range d.anchored.children {
+			ids = append(ids, d.anchored.children[i].RequestLayout(w, app))
+		}
+		return ids
+	})
 	if err != nil {
 		panic(fmt.Sprintf("gpui: Anchored request_layout: %v", err))
 	}

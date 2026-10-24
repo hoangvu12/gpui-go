@@ -310,6 +310,12 @@ type Window struct {
 	// thread.
 	input *windowInputState
 
+	// overlays is the window's top layer (browser-core ticket 21,
+	// toplayer.go's windowOverlayState: the overlay handle registry,
+	// the ordered layer and the queued toggle notifications). Created
+	// on first use; touched only on the foreground thread.
+	overlays *windowOverlayState
+
 	// frames is the window's frame-loop state (Base ticket 03,
 	// frameloop.go: the invalidator's dirty flag, next-frame callbacks,
 	// needs-present and the tracked rendered views). Touched only on the

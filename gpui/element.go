@@ -1048,6 +1048,16 @@ type windowDrawState struct {
 	// requests before any prepaint) and stays on once set, so a
 	// window's plain frames pay no recording cost until it anchors.
 	trackAnchors bool
+	// lastInvokerPaths holds the last COMPLETED frame's invoker
+	// registry (browser-core ticket 21): the name -> element-path-key
+	// map the TopLayer elements' Invoker lookups read when the invoker
+	// has not yet prepainted in the in-flight frame.
+	lastInvokerPaths map[string]string
+	// trackInvokers records that this window's overlays name their
+	// invokers (ticket 21): the div prepaint then records named
+	// elements' paths into the frame's invoker registry. Set during
+	// request layout, like trackAnchors.
+	trackInvokers bool
 	// lastScene holds the last completed frame's finished scene (the
 	// reference rendered_frame.scene).
 	lastScene *Scene
@@ -1197,6 +1207,12 @@ type frameDrawState struct {
 	// prepaint of named elements, read by the Anchored element's
 	// AnchorTo at its (usually deferred) prepaint.
 	anchorBounds map[string]anchorRecord
+	// invokerPaths is this frame's invoker registry (browser-core
+	// ticket 21): the name -> element-path-key map filled by the div
+	// prepaint of named elements, read at the frame-end overlay
+	// reconciliation (toplayer.go finishOverlayFrame) to resolve a
+	// TopLayer element's Invoker name onto the invoker's path.
+	invokerPaths map[string]string
 	// inlineFacts is this frame's inline paragraph facts (the
 	// test-support observable; swapped into the window state when the
 	// frame completes).
@@ -1417,6 +1433,54 @@ func requestAnchorTracking(w *Window) {
 func windowTracksAnchors(w *Window) bool {
 	ds, ok := windowDrawStates[w]
 	return ok && ds.trackAnchors
+}
+
+// recordInvokerPath records one named element's global id path into
+// this frame's invoker registry (browser-core ticket 21): the TopLayer
+// element's Invoker names the overlay's invoker by element id, and the
+// light-dismiss walk resolves that name onto the invoker's element
+// path — the identity the hit-test chains carry. Like the anchor
+// registry, a later same-named element wins.
+func recordInvokerPath(w *Window, name, path string) {
+	f := currentFrame(w)
+	if f.invokerPaths == nil {
+		f.invokerPaths = make(map[string]string)
+	}
+	f.invokerPaths[name] = path
+}
+
+// lookupInvokerPath resolves one invoker name onto its element path
+// (ticket 21): the in-flight frame's registry, then the last completed
+// frame's (the invoker prepaints in the main tree before the deferred
+// overlay content, so the in-flight registry is the usual hit).
+func lookupInvokerPath(w *Window, name string) (string, bool) {
+	if ds, ok := windowDrawStates[w]; ok {
+		if ds.frame != nil {
+			if path, ok := ds.frame.invokerPaths[name]; ok {
+				return path, true
+			}
+		}
+		if path, ok := ds.lastInvokerPaths[name]; ok {
+			return path, true
+		}
+	}
+	return "", false
+}
+
+// requestInvokerTracking turns this window's invoker recording on (the
+// TopLayer element's request layout calls it; see
+// windowDrawState.trackInvokers).
+func requestInvokerTracking(w *Window) {
+	if ds, ok := windowDrawStates[w]; ok {
+		ds.trackInvokers = true
+	}
+}
+
+// windowTracksInvokers reports whether the window records named
+// elements' paths into the invoker registry (the div prepaint's gate).
+func windowTracksInvokers(w *Window) bool {
+	ds, ok := windowDrawStates[w]
+	return ok && ds.trackInvokers
 }
 
 // pushElementID pushes an element id onto the window's id stack

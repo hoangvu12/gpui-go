@@ -79,6 +79,9 @@ func formatEvent(e EventRecord) string {
 	if e.DefaultPrevented {
 		prevented = " (defaultPrevented)"
 	}
+	if e.Kind == "toggle" && e.State != "" {
+		return fmt.Sprintf("%s:%s %s%s", e.Kind, e.Target, e.State, prevented)
+	}
 	return fmt.Sprintf("%s:%s%s", e.Kind, e.Target, prevented)
 }
 

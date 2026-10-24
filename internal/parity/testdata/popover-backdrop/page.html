@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		position: relative;
+	}
+	button {
+		appearance: none;
+		border: 0;
+		margin: 0;
+		padding: 0;
+		display: block;
+		position: absolute;
+		width: 40px;
+		height: 20px;
+		background: #2563eb;
+	}
+	#b1 {
+		left: 0px;
+		top: 0px;
+	}
+	/* The shared page's popover UA reset, plus the parent's ::backdrop
+	   scrim: the UA makes a popover's ::backdrop pointer-events: none
+	   and transparent (html.css:2012-2015), so the styled background
+	   shows while clicks fall through to the page — the port's plain
+	   backdrop div does exactly that. */
+	.popover {
+		position: fixed;
+		inset: auto;
+		margin: 0;
+		border: 0;
+		padding: 0;
+		overflow: visible;
+	}
+	#p1 {
+		left: 20px;
+		top: 60px;
+		width: 150px;
+		height: 120px;
+		background: #fde68a;
+	}
+	#p1::backdrop {
+		background: rgba(0, 0, 0, 0.4);
+	}
+	#b2 {
+		left: 10px;
+		top: 10px;
+	}
+	#p2 {
+		left: 200px;
+		top: 60px;
+		width: 100px;
+		height: 80px;
+		background: #86efac;
+	}
+</style>
+</head>
+<body>
+	<button id="b1" popovertarget="p1" data-id="b1"></button>
+	<div id="p1" class="popover" popover data-id="p1">
+		<button id="b2" popovertarget="p2" data-id="b2"></button>
+	</div>
+	<div id="p2" class="popover" popover data-id="p2"></div>
+</body>
+</html>

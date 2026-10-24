@@ -69,8 +69,17 @@ func finishFrame(w *Window, evicted []elementStateReleaser) (focusMoved bool) {
 		for _, r := range evicted {
 			r.releaseElementState()
 		}
+		// The top layer reconciles against the completed frame and
+		// drains its queued toggle notifications (browser-core ticket
+		// 21, toplayer.go finishOverlayFrame) before the focus phase, so
+		// the focus listeners see the settled overlay state — an overlay
+		// closed by the show rules or by an app-driven state change
+		// drops here and its listeners run before the frame is
+		// published. Like a focus move, a delivered toggle may have
+		// dirtied state; the refresh after publication catches it.
+		overlayChanged := w.finishOverlayFrame(a)
 		focusMoved = dispatchFocusPhase(w, a, previous, previousActive, current, currentActive)
-		focusMoved = focusFixed || focusMoved
+		focusMoved = focusFixed || focusMoved || overlayChanged
 	})
 	return focusMoved
 }

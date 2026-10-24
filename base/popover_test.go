@@ -16,6 +16,65 @@ func ovInit(app *gpui.App) {
 	Init(app)
 }
 
+// browser-core 21 (spec risk, research/browser-parity 06 §1: "Base
+// popover dismissal faults"): HTML popovers keep the parent open when
+// the user clicks inside a nested child popover — the child is a DOM
+// descendant of the parent, so light dismiss treats it as inside. Base
+// dismissed every popover independently on a mousedown outside its own
+// hitbox, so a press inside the child (rendered deferred, outside the
+// parent's box) closed the parent. This test pins the fixed behaviour:
+// a click inside the child keeps BOTH popovers open.
+func TestPopoverClickInsideNestedChildKeepsTheParentOpen(t *testing.T) {
+	ta := gpui.NewTestApp()
+	ta.Update(ovInit)
+	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
+		return gpui.OwnRecipe(NewPopover("parent-popover").
+			TriggerWith(func(bool, *gpui.Window, *gpui.App) gpui.AnyElement {
+				return gpui.Div().DebugSelector("parent-trigger").Size(gpui.Px(40)).IntoElement()
+			}).
+			Content(func(*PopoverState, *gpui.Window, *gpui.Context[PopoverState]) any {
+				return gpui.Div().DebugSelector("parent-content").Size(gpui.Px(40)).
+					Child(gpui.OwnRecipe(NewPopover("child-popover").
+						TriggerWith(func(bool, *gpui.Window, *gpui.App) gpui.AnyElement {
+							return gpui.Div().DebugSelector("child-trigger").Size(gpui.Px(40)).IntoElement()
+						}).
+						Content(func(*PopoverState, *gpui.Window, *gpui.Context[PopoverState]) any {
+							return gpui.Div().DebugSelector("child-content").Size(gpui.Px(40))
+						})))
+			}))
+	})
+	ovDraw(t, cx)
+
+	// Open the parent, then the child: the child's trigger renders inside
+	// the parent's content, and the child's content renders deferred below
+	// it — outside the parent's 40x40 box at (0,40).
+	cx.SimulateClick(ovPoint(20, 10), gpui.NoModifiers())
+	ovDraw(t, cx)
+	ovDraw(t, cx)
+	if !ovHasBounds(cx, "parent-content") {
+		t.Fatal("a click on the parent trigger did not open the popover")
+	}
+	cx.SimulateClick(ovPoint(20, 60), gpui.NoModifiers())
+	ovDraw(t, cx)
+	ovDraw(t, cx)
+	if !ovHasBounds(cx, "child-content") {
+		t.Fatal("a click on the child trigger inside the parent did not open the child popover")
+	}
+
+	// The fault: a click inside the child's content box — outside the
+	// parent's box — must not dismiss the parent (HTML popover light
+	// dismiss: the child popover is inside the parent).
+	cx.SimulateClick(ovPoint(20, 100), gpui.NoModifiers())
+	ovDraw(t, cx)
+
+	if !ovHasBounds(cx, "child-content") {
+		t.Fatal("a click inside the child popover closed the child")
+	}
+	if !ovHasBounds(cx, "parent-content") {
+		t.Fatal("a click inside the nested child popover dismissed the parent (HTML popovers keep it open)")
+	}
+}
+
 // U:popover.rs:384-400: a state collected while open closes the deferred
 // interaction context.
 func TestPopoverAStateDroppedWhileOpenClosesTheDeferredContext(t *testing.T) {

@@ -68,6 +68,9 @@ func instrumentScript(kinds []string) string {
 					entry.location = e.location;
 					entry.focus = focusOf();
 				}
+				if (kind === "toggle") {
+					entry.state = e.newState;
+				}
 				window.__events.push(entry);
 			});
 		}
@@ -82,7 +85,7 @@ func instrumentScript(kinds []string) string {
 // markDefaultPrevented) and the key, code, location and focus fields
 // of key entries (listener-time snapshots; the location is a number
 // only key entries carry, 0 otherwise).
-const eventsScript = `JSON.stringify(window.__events.map(r => ({kind: r.kind, target: r.target, defaultPrevented: r.event.defaultPrevented, key: r.key || "", code: r.code || "", location: (r.kind === "keydown" || r.kind === "keyup") ? r.location : 0, focus: r.focus || ""})))`
+const eventsScript = `JSON.stringify(window.__events.map(r => ({kind: r.kind, target: r.target, defaultPrevented: r.event.defaultPrevented, key: r.key || "", code: r.code || "", location: (r.kind === "keydown" || r.kind === "keyup") ? r.location : 0, focus: r.focus || "", state: r.state || ""})))`
 
 // RecordFixture records one fixture in headless Chrome and writes its
 // files (record.json, chrome.png, page.html) into

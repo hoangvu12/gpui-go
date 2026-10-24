@@ -307,6 +307,11 @@ type EventRecord struct {
 	// entries (KeyboardEvent.location: 0 standard, 1 left, 2 right,
 	// 3 numpad; 0 for the mouse kinds).
 	Location int `json:"location,omitempty"`
+	// State is the toggle event's new state for toggle entries (the
+	// DOM ToggleEvent's newState: "open" or "closed"; browser-core
+	// ticket 21 — popover opens and light-dismiss closes land in the
+	// transcript as toggle entries; "" for the other kinds).
+	State string `json:"state,omitempty"`
 }
 
 // EventLog is the fixture-side event recorder the View's handlers
@@ -372,6 +377,21 @@ func (l *EventLog) ContextMenuPreventDefault(target string) func(*gpui.ContextMe
 	return func(e *gpui.ContextMenuEvent, w *gpui.Window, app *gpui.App) {
 		l.Append("contextmenu", target)
 		w.PreventDefault()
+	}
+}
+
+// Toggle returns the overlay toggle listener that records a "toggle"
+// on target with the transition's new state (browser-core ticket 21:
+// the DOM's popover toggle event — oldState/newState — which the
+// layer's Show, Hide and light dismiss each fire; pass it to
+// OverlayHandle.OnToggle or TopLayer.OnToggle).
+func (l *EventLog) Toggle(target string) func(open bool, w *gpui.Window, app *gpui.App) {
+	return func(open bool, _ *gpui.Window, _ *gpui.App) {
+		state := "closed"
+		if open {
+			state = "open"
+		}
+		l.entries = append(l.entries, EventRecord{Kind: "toggle", Target: target, State: state})
 	}
 }
 
@@ -575,6 +595,7 @@ var eventKindVocabulary = map[string]bool{
 	"pointerup":          true,
 	"gotpointercapture":  true,
 	"lostpointercapture": true,
+	"toggle":             true,
 }
 
 // validate checks a fixture's invariants at record and replay time,

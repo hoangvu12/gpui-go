@@ -1,0 +1,120 @@
+{
+  "name": "popover-dismiss",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T10:01:39Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "b1": {
+      "x": 0,
+      "y": 0,
+      "width": 40,
+      "height": 20
+    }
+  },
+  "events": [
+    {
+      "kind": "mousedown",
+      "target": "b1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "b1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "b1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "toggle",
+      "target": "p1",
+      "defaultPrevented": false,
+      "state": "open"
+    },
+    {
+      "kind": "mousedown",
+      "target": "b2",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "p1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "b2",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "p1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "b2",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "p1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "toggle",
+      "target": "p2",
+      "defaultPrevented": false,
+      "state": "open"
+    },
+    {
+      "kind": "mousedown",
+      "target": "p1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "p1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "p1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "toggle",
+      "target": "p2",
+      "defaultPrevented": false,
+      "state": "closed"
+    },
+    {
+      "kind": "mousedown",
+      "target": "b1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "b1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "b1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "toggle",
+      "target": "p1",
+      "defaultPrevented": false,
+      "state": "closed"
+    }
+  ],
+  "screenshot": "chrome.png"
+}

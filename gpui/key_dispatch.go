@@ -827,6 +827,11 @@ func (w *Window) dispatchKeyEvent(event any, app *App) (propagate bool) {
 	// prevent-default flag clears.
 	w.beginPlatformInputDispatch(event, app)
 	w.dispatchKeyEventInner(event, app)
+	// The overlay toggle notifications drain at the input task's end
+	// (browser-core ticket 21): a key-driven Show (an invoker's Enter
+	// activation) queues a toggle that lands after the key's listeners,
+	// like the DOM's toggle task (toplayer.go drainOverlayToggles).
+	w.drainOverlayToggles(app)
 	return app.propagateEvent
 }
 
