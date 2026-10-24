@@ -57,7 +57,9 @@ func (t *SelectableText) TextStyle(style gpui.TextStyleRefinement) *SelectableTe
 }
 
 // SelectionColor overrides the selection background, which defaults to the
-// theme's Colors.Selection token (U:selectable_text.rs:68-73).
+// system's selection wash (browser-core 28, system_selection.go — the
+// ::selection UA default) (U:selectable_text.rs:68-73, diverged toward
+// the browser).
 func (t *SelectableText) SelectionColor(color gpui.Hsla) *SelectableText {
 	t.selectionColor = &color
 	return t
@@ -153,7 +155,10 @@ func (t *SelectableText) Paint(global *gpui.GlobalElementID, inspector *gpui.Ins
 	if selectedBefore != TextSelectionSelectedText(w, app) {
 		w.Refresh()
 	}
-	color := ThemeGlobal(app).Tokens.Colors.Selection
+	// The selection wash comes from the system by default (browser-core
+	// 28, system_selection.go) — the ::selection UA default — with
+	// SelectionColor as the app's explicit ::selection styling.
+	color := systemSelectionColors(app).Background
 	if t.selectionColor != nil {
 		color = *t.selectionColor
 	}

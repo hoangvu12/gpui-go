@@ -276,6 +276,22 @@ func (h *Host) refreshSystemPreferencesOnHostThread(forceInForcedColors bool) {
 			},
 			func(cb func(SystemPreferences, SystemColors)) { cb(prefs, colors) })
 	}
+	if changed {
+		// A changed record also repaints (browser-core 28): the text
+		// scale drives the frame's rem (text_scale.go), so the redraw
+		// reflows the layout trees at the new size, and the selection
+		// colours repaint with the new palette. Chromium repaints on the
+		// settings message itself (LayoutTheme::PlatformColorsDidChange
+		// → Page::PlatformColorsChanged, layout_theme.cc:615-618); the
+		// port runs the same refresh an app would get from its own
+		// OnSystemPreferencesChanged observer, so an app with no observer
+		// still reflows. The Update runs inline on the host thread (the
+		// foreground thread), and the RefreshWindows effect coalesces
+		// with any refresh the observer queued.
+		if a := h.attachedApp(); a != nil {
+			a.Update(func(a *App) { a.RefreshWindows() })
+		}
+	}
 }
 
 // SystemPreferences returns the host's cached system-preference record

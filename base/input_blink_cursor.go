@@ -17,7 +17,10 @@ import (
 )
 
 const (
-	// blinkInterval is INTERVAL (U:input/base/blink_cursor.rs:4).
+	// blinkInterval is INTERVAL (U:input/base/blink_cursor.rs:4) — and
+	// the rate a hostless test application reports, because the default
+	// system-preference record carries 500 ms (system_prefs.go). The
+	// live rate comes from the record instead (blinkIntervalFor).
 	blinkInterval = 500 * time.Millisecond
 	// blinkPauseDelay is PAUSE_DELAY (U:input/base/blink_cursor.rs:5).
 	blinkPauseDelay = 300 * time.Millisecond
@@ -25,6 +28,20 @@ const (
 	// blurry caret on Windows and Linux (U:input/base/blink_cursor.rs:7-11).
 	cursorWidth float32 = 2
 )
+
+// systemCaretBlinkInterval reads the caret blink rate the platform
+// reports: the system-preference record's CaretBlinkInterval — the
+// GetCaretBlinkTime mapping, where 0 is the 500 ms default, INFINITE a
+// steady caret and anything else the period in milliseconds
+// (ui/native_theme/os_settings_provider_win.cc:147-160; the default at
+// os_settings_provider.h:57). The var is the test seam: the rate is
+// injected without a host (a hostless app always answers the default).
+var systemCaretBlinkInterval = func(app *gpui.App) time.Duration {
+	if app == nil {
+		return blinkInterval
+	}
+	return app.SystemPreferences().CaretBlinkInterval
+}
 
 // blinkCursor manages the input caret blinking
 // (U:input/base/blink_cursor.rs:13-25): every blink notifies the entity,
@@ -63,7 +80,14 @@ func (b *blinkCursor) nextEpoch() int {
 }
 
 // blink toggles the caret and schedules the next blink
-// (U:input/base/blink_cursor.rs:57-79).
+// (U:input/base/blink_cursor.rs:57-79). The blink interval is the
+// system's caret blink rate (browser-core 28): Chromium reads the rate
+// when it (re)starts the blink timer (frame_caret.cc StartBlinkCaret:
+// 176-193) and Windows exposes no change notification for it
+// (os_settings_provider_win.cc:148-153, "Given how rarely users change
+// this"), so the port re-reads it on every tick — a rate change takes
+// effect on the next blink, and a caret stopped by 'never' restarts on
+// the next focus or caret move, like Chromium's timer restart.
 func (b *blinkCursor) blink(epoch int, cx *gpui.Context[blinkCursor]) {
 	// A task from an earlier blink lifecycle must not mutate the current
 	// state.
@@ -75,12 +99,23 @@ func (b *blinkCursor) blink(epoch int, cx *gpui.Context[blinkCursor]) {
 		return
 	}
 
+	if systemCaretBlinkInterval(cx.App()) <= 0 {
+		// The system asks for a steady caret ("never blink"): the caret
+		// stays visible and no timer is armed (frame_caret.cc:190-192 — a
+		// zero blink interval starts no repeating timer).
+		if !b.visible {
+			b.visible = true
+			cx.Notify()
+		}
+		return
+	}
+
 	b.visible = !b.visible
 	cx.Notify()
 
-	// Schedule the next blink.
+	// Schedule the next blink at the system's rate.
 	epoch = b.nextEpoch()
-	b.replaceTask(cx, blinkInterval, func(c *blinkCursor, ccx *gpui.Context[blinkCursor]) {
+	b.replaceTask(cx, systemCaretBlinkInterval(cx.App()), func(c *blinkCursor, ccx *gpui.Context[blinkCursor]) {
 		c.blink(epoch, ccx)
 	})
 }
