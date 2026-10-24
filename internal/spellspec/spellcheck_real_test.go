@@ -4,6 +4,7 @@ package spellspec
 
 import (
 	"errors"
+	"runtime"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -117,6 +118,21 @@ func TestSpellcheckServiceDeliversThroughHostMessageLoop(t *testing.T) {
 // must differ from the UI thread's and stay the same across calls:
 // COM objects are thread-affine.
 func TestSpellcheckWorkerRunsPinnedToItsOwnThread(t *testing.T) {
+	// Pin this goroutine's OS thread for the test's duration: the
+	// production UI thread is a LockOSThread-pinned, message-pumping
+	// thread (win32host_windows.go:1604), and a locked thread can never
+	// run the worker. Without the pin the test's premise is unsound in
+	// Go's scheduler: a freshly spawned goroutine lands in the current
+	// P's runnext slot, so when this goroutine blocks (flushUntil's
+	// waits) the worker runs on this very OS thread, locks it, and the
+	// unpinned test goroutine migrates elsewhere — the "UI thread's
+	// OS thread" it sampled before spawning then IS the worker's
+	// thread, a scheduling artifact that flips with the binary's code
+	// layout (observed both before and after the ticket-16 merge), not
+	// a threading regression. Pinned, the sampling is deterministic and
+	// the assertion means what it says.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	ta := gpui.NewTestApp()
 	defer ta.App().Shutdown()
 	fake := &fakeSpellChecker{
