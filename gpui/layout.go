@@ -353,6 +353,13 @@ func positionToRecord(p Position) uint32 {
 	switch p {
 	case PositionAbsolute:
 		return native.PositionAbsolute
+	// browser-core 35 (spec L10): fixed maps onto Taffy's Absolute —
+	// out of flow with the insets kept (they are the window
+	// coordinates); the containing block is decided Go-side
+	// (gpui/containingblock.go defers the node into the root scope,
+	// the fixed split), never by the engine.
+	case PositionFixed:
+		return native.PositionAbsolute
 	case PositionStatic, PositionRelative, PositionSticky:
 		return native.PositionRelative
 	default:
@@ -1245,9 +1252,12 @@ func (e *LayoutEngine) scrollTrailingMargins(id LayoutID, contentWidth float32, 
 		}
 		child := LayoutID{engine: e, node: childHandle, generation: id.generation}
 		// Out-of-flow children never move the inflow bounds; hidden
-		// children have no layout at all.
+		// children have no layout at all. browser-core 35: a fixed child
+		// is out of flow exactly like an absolute one — and once the
+		// containing-block walk defers it into the root scope it is not a
+		// native child of the scroller at all.
 		if record, ok := e.displayPositions[child]; ok {
-			if record.display == DisplayNone || record.position == PositionAbsolute {
+			if record.display == DisplayNone || record.position == PositionAbsolute || record.position == PositionFixed {
 				continue
 			}
 		}

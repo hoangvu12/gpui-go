@@ -1,0 +1,160 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: flex-start;
+		gap: 40px;
+	}
+	#scroller {
+		box-sizing: border-box;
+		width: 200px;
+		height: 200px;
+		margin: 20px 0 0 20px;
+		overflow-y: scroll;
+		scrollbar-width: none;
+		background: #f1f5f9;
+	}
+	#content {
+		box-sizing: border-box;
+		width: 200px;
+		height: 600px;
+		display: flex;
+		flex-direction: column;
+	}
+	#row1 {
+		box-sizing: border-box;
+		width: 200px;
+		height: 40px;
+		background: #fca5a5;
+		outline: none;
+	}
+	.row {
+		box-sizing: border-box;
+		width: 200px;
+		height: 40px;
+		background: #e2e8f0;
+	}
+	/* The fixed box inside the scroller's content: placed at the
+	   viewport's coordinates, un-clipped by the scroller and
+	   un-scrolled by its offset (no transformed ancestor exists to
+	   contain it, layout_object.cc:2009-2067). */
+	#fixed-a {
+		position: fixed;
+		left: 140px;
+		top: 60px;
+		width: 90px;
+		height: 50px;
+		background: #dc2626;
+	}
+	#ancestor {
+		box-sizing: border-box;
+		width: 150px;
+		height: 110px;
+		position: relative;
+		background: #f8fafc;
+	}
+	#static-parent {
+		box-sizing: border-box;
+		width: 100px;
+		height: 80px;
+		position: static;
+		display: flex;
+		background: #e2e8f0;
+	}
+	#fixed-b {
+		position: fixed;
+		left: 300px;
+		top: 300px;
+		width: 60px;
+		height: 40px;
+		background: #2563eb;
+	}
+	#stack {
+		box-sizing: border-box;
+		width: 180px;
+		height: 300px;
+		display: flex;
+		flex-direction: column;
+	}
+	#row-a {
+		box-sizing: border-box;
+		width: 180px;
+		height: 50px;
+		background: #94a3b8;
+	}
+	#row-b {
+		box-sizing: border-box;
+		width: 180px;
+		height: 100px;
+		background: #86efac;
+	}
+	/* The fixed box among the flow column's children, BEFORE the later
+	   row-c it must paint above (Appendix E step 8: the root stacking
+	   context's positioned layer rides over all in-flow boxes). */
+	#fixed-c {
+		position: fixed;
+		left: 470px;
+		top: 150px;
+		width: 60px;
+		height: 40px;
+		background: #7c3aed;
+	}
+	#row-c {
+		box-sizing: border-box;
+		width: 180px;
+		height: 50px;
+		background: #fca5a5;
+	}
+	#row-d {
+		box-sizing: border-box;
+		width: 180px;
+		height: 100px;
+		background: #cbd5e1;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div id="scroller" data-id="scroller">
+		<div id="content" data-id="content">
+			<div id="row1" data-id="row1" tabindex="0"></div>
+			<div class="row"></div>
+			<div class="row"></div>
+			<div id="fixed-a" data-id="fixed-a"></div>
+			<div class="row"></div>
+			<div class="row"></div>
+			<div class="row"></div>
+			<div class="row"></div>
+			<div class="row"></div>
+			<div class="row"></div>
+			<div class="row"></div>
+			<div class="row"></div>
+			<div class="row"></div>
+			<div class="row"></div>
+			<div class="row"></div>
+			<div class="row"></div>
+		</div>
+	</div>
+	<div id="ancestor" data-id="ancestor">
+		<div id="static-parent" data-id="static-parent">
+			<div id="fixed-b" data-id="fixed-b"></div>
+		</div>
+	</div>
+	<div id="stack" data-id="stack">
+		<div id="row-a" data-id="row-a"></div>
+		<div id="row-b" data-id="row-b"></div>
+		<div id="fixed-c" data-id="fixed-c"></div>
+		<div id="row-c" data-id="row-c"></div>
+		<div id="row-d" data-id="row-d"></div>
+	</div>
+</body>
+</html>

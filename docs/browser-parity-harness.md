@@ -653,3 +653,24 @@ chain at the popover** (`Occlude()` ends the hit-test walk, so an ancestor's
 still sees the bubbled mouse events — the closewatcher pages narrow the root to
 `data-events="keydown"` (the popover fixtures' pages simply bind no root mouse
 listeners); the recorded divergence stays with ticket 12's follow-ups.
+and the anchor's hitbox record for the mouse-focus default's ancestor
+walk). The discrimination view keeps Tier A passing.
+Ticket 35 (position: fixed) added `PositionFixed` and `Fixed()` (the
+Tailwind `fixed` class left the unsupported list), the containing-block
+rule (`gpui/containingblock.go`'s fixed split: every container defers a
+fixed child into the ROOT scope — the window root is the port's
+initial-containing-block stand-in, since nothing but a transform, filter
+or containment makes an ancestor a fixed container,
+`layout_object.cc:2009-2067`, and the port has no transforms), and the
+paint rule (`gpui/fixed.go`: the fixed div's whole draw defers at
+`fixedDrawPriority` under a zeroed element offset, so it paints above
+the whole in-flow scene — Appendix E step 8 — is not scrolled or
+clipped by any ancestor scroller, and keeps its hitbox on top;
+explicitly deferred surfaces and the top layer still paint above it).
+`fixtures/fixed` is the fixture (`fixed-window`): the scroller scrolled
+120 by three keyboard line steps with the fixed box straddling the
+scroller's right edge (the clip escape), the relative+static escape
+chain, and the flow column whose fixed box overlaps a later in-flow
+sibling. The wrong view (the boxes as plain absolute — the pre-ticket
+pin, the old class.go advice) fails Tier A on exactly the three moved
+boxes.

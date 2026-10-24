@@ -337,7 +337,7 @@ func TestOverlayHandleShowCreatesAndHideDestroysTheWatcher(t *testing.T) {
 	if rec.watcher == (CloseWatcher{}) {
 		t.Fatal("Show created no close watcher for the popover entry")
 	}
-	if !rec.watcher.IsClosed() {
+	if rec.watcher.IsClosed() {
 		t.Fatal("the entry's watcher should be live while open")
 	}
 	firstWatcher := rec.watcher

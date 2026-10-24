@@ -282,14 +282,11 @@ func TestPositionStaticValue(t *testing.T) {
 	if got := PositionStatic.String(); got != "Static" {
 		t.Fatalf("PositionStatic.String() = %q, want %q", got, "Static")
 	}
-	for _, s := range []string{"Relative", "Absolute", "Static"} {
+	for _, s := range []string{"Relative", "Absolute", "Static", "Sticky", "Fixed"} {
 		p, err := ParsePosition(s)
 		if err != nil || p.String() != s {
 			t.Fatalf("ParsePosition(%q) = %v, %v", s, p, err)
 		}
-	}
-	if _, err := ParsePosition("Fixed"); err == nil {
-		t.Fatal("ParsePosition accepts Fixed (ticket 35 owns it)")
 	}
 	// The Tailwind class: "static" applies Static() (the generated
 	// method-class switch; "relative" keeps applying Relative()).
