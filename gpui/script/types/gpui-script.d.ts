@@ -567,6 +567,7 @@ type CoreClass =
 	"content-normal" |
 	"content-start" |
 	"content-stretch" |
+	"contents" |
 	"cursor-alias" |
 	"cursor-col-resize" |
 	"cursor-context-menu" |
@@ -611,6 +612,7 @@ type CoreClass =
 	"flex-shrink-1" |
 	"flex-wrap" |
 	"flex-wrap-reverse" |
+	"flow-root" |
 	"font-black" |
 	"font-bold" |
 	"font-extrabold" |
@@ -630,7 +632,9 @@ type CoreClass =
 	"grow-0" |
 	"hidden" |
 	"inline" |
+	"inline-block" |
 	"inline-flex" |
+	"inline-grid" |
 	"inset-ring" |
 	"inset-ring-0" |
 	"inset-ring-1" |
@@ -854,6 +858,7 @@ type CoreClass =
 	"row-end-auto" |
 	"row-span-full" |
 	"row-start-auto" |
+	"scrollbar-gutter-stable" |
 	"self-baseline" |
 	"self-center" |
 	"self-end" |
@@ -1210,6 +1215,7 @@ type Class =
 	"content-normal" |
 	"content-start" |
 	"content-stretch" |
+	"contents" |
 	"cursor-alias" |
 	"cursor-col-resize" |
 	"cursor-context-menu" |
@@ -1254,6 +1260,7 @@ type Class =
 	"flex-shrink-1" |
 	"flex-wrap" |
 	"flex-wrap-reverse" |
+	"flow-root" |
 	"font-black" |
 	"font-bold" |
 	"font-extrabold" |
@@ -1273,7 +1280,9 @@ type Class =
 	"grow-0" |
 	"hidden" |
 	"inline" |
+	"inline-block" |
 	"inline-flex" |
+	"inline-grid" |
 	"inset-ring" |
 	"inset-ring-0" |
 	"inset-ring-1" |
@@ -1497,6 +1506,7 @@ type Class =
 	"row-end-auto" |
 	"row-span-full" |
 	"row-start-auto" |
+	"scrollbar-gutter-stable" |
 	"self-baseline" |
 	"self-center" |
 	"self-end" |
