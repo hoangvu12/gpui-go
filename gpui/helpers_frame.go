@@ -49,6 +49,18 @@ func finishFrame(w *Window, evicted []elementStateReleaser) (focusMoved bool) {
 	}
 	fs.next.focus = fs.focused
 	fs.next.windowActive = !fs.inactive
+	// The end-of-frame focus fixup (browser-core ticket 14): a focused
+	// element that left the completed frame — removed, hidden or inert —
+	// blurs to the body equivalent before the frame swaps in, and the
+	// sequential focus navigation starting point records where it sat
+	// (the next Tab continues from there). The fixup runs pre-swap so
+	// the old frame's tab stops are still reachable; the frame's
+	// recorded focus follows the blur, so the focus phase's diff
+	// delivers the blur listeners and the follow-up refresh
+	// (focusMoved) repaints the focus styles (Chromium: the node-remove
+	// focus fixup, document.cc:5809-5866, and the deferred
+	// ClearFocusedElementIfNeeded, document.cc:3261-3277).
+	focusFixed := w.fixupFocusedElement()
 	endDispatchFrame(w)
 	current := fs.rendered.focusPathOf()
 	currentActive := fs.rendered.windowActive
@@ -58,6 +70,7 @@ func finishFrame(w *Window, evicted []elementStateReleaser) (focusMoved bool) {
 			r.releaseElementState()
 		}
 		focusMoved = dispatchFocusPhase(w, a, previous, previousActive, current, currentActive)
+		focusMoved = focusFixed || focusMoved
 	})
 	return focusMoved
 }

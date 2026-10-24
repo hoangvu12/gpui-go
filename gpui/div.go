@@ -901,6 +901,11 @@ type DivElement struct {
 	// tabStop records an interactivity tab-stop request (div.rs
 	// tab_stop; explicit track_focus handles carry their own).
 	tabStop bool
+	// inert marks this element and its subtree inert (browser-core
+	// ticket 14, spec D4's Inert style — Chromium's [inert] attribute /
+	// interactivity: inert, html.css:2143-2145): unfocusable, unclickable
+	// (pointer-events: none) and hidden from accessibility.
+	inert bool
 	// trackedScrollHandle is the tracked scroll handle (div.rs:2582
 	// tracked_scroll_handle; Base ticket 07, scroll_element.go).
 	trackedScrollHandle *ScrollHandle
@@ -1337,6 +1342,23 @@ func (d *DivElement) TabGroup() *DivElement {
 	return d
 }
 
+// Inert makes this element and its whole subtree inert (browser-core
+// ticket 14, spec D4's Inert style; Chromium's HTML inert attribute —
+// the UA rule [inert] { interactivity: inert !important },
+// html.css:2143-2145, and CSS interactivity's inherited inertness,
+// computed_style.h:2047-2049 IsInert). An inert subtree is
+// unfocusable (computed_style.h:1894-1896 IsFocusable excludes inert),
+// invisible to hit testing (UsedPointerEvents reports none,
+// computed_style.h:1862-1867, so VisibleToHitTesting fails —
+// computed_style.h:2052-2056) and hidden from the accessibility tree
+// (ax_node_object.cc:1368 ShouldIgnoreForHiddenOrInert), while it
+// still paints: inertness is an interaction property, not a visibility
+// one.
+func (d *DivElement) Inert() *DivElement {
+	d.inert = true
+	return d
+}
+
 // Child adds one child element, converting it with the selected
 // precedence and panicking on invalid input (DivElement::child).
 func (d *DivElement) Child(value any) *DivElement {
@@ -1672,13 +1694,40 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 			es.hoverState = &ElementHoverState{}
 		}
 		hidden := style.Visibility == VisibilityHidden
-		suppressed := hidden || hiddenPrepaintDepth(w) > 0
+		// Inertness (browser-core ticket 14): this element's own Inert()
+		// or an inert ancestor — the subtree-wide interaction
+		// suppression the CSS interactivity property inherits (Chromium's
+		// IsInert, computed_style.h:2047-2049). Inert joins the pin's
+		// hidden suppression for every prepaint registration (tab stops,
+		// the keyboard click, key listeners — an inert element cannot be
+		// focused, so no key dispatch path reaches it), and the hit test
+		// skips the subtree's hitboxes (mouseevent.go hitTestAt —
+		// pointer-events: none); the element still paints.
+		inert := d.inert || inertPrepaintDepth(w) > 0
+		suppressed := hidden || hiddenPrepaintDepth(w) > 0 || inert
 		WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
 			WithContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
 				// should_insert_hitbox's scroll_offset.is_some() arm
 				// (div.rs:2892) joins interact.go's predicate here.
 				if d.shouldInsertHitbox(&style, w) || d.scroll != nil {
-					state.hitboxRecord = w.insertHitboxRecord(bounds, d.hitboxBehavior)
+					// Browser-core ticket 14: an inert element's hitbox carries
+					// the flag — the hit test skips it (pointer-events: none,
+					// mouseevent.go hitTestAt) — and a focus-tracking element's
+					// hitbox carries its handle for the mouse-focus default's
+					// ancestor walk (mouseevent.go defaultMouseFocus).
+					state.hitboxRecord = w.insertInertHitboxRecord(bounds, d.hitboxBehavior, inert)
+					if state.hitboxRecord != nil {
+						// The mouse-focus default's ancestor walk reads the
+						// handle (mouseevent.go defaultMouseFocus); a hidden
+						// element carries none (IsMouseFocusable requires
+						// visibility, computed_style.h:1894-1896) and is marked
+						// hidden for the walk's skip.
+						if hidden || hiddenPrepaintDepth(w) > 0 {
+							state.hitboxRecord.hidden = true
+						} else if d.focusHandle != nil {
+							state.hitboxRecord.focusHandle = d.focusHandle
+						}
+					}
 					box := state.hitboxRecord.box
 					state.hitbox = &box
 					// insert_inspector_hitbox (div.rs:3100-3111, the
@@ -1713,16 +1762,20 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 					// (div.rs:2460; inline.rs:454 for the inline path), inside
 					// this element's hitbox subtree (browser-core ticket 11:
 					// their hitboxes record this hitbox as their parent, the
-					// capture chain's ancestry).
-					withElementOffsetVoid(w, scrollOffset, func(w *Window) {
-						w.withHitboxSubtree(state.hitboxRecord, func() {
-							if standalone := layout.standaloneInline(); standalone != nil {
-								standalone.prepaintChildren(d.children, w, app)
-								return
-							}
-							for i := range d.children {
-								d.children[i].Prepaint(w, app)
-							}
+					// capture chain's ancestry), and inside the inert scope
+					// when this element is inert (browser-core ticket 14: the
+					// subtree inherits the suppression).
+					withInertPrepaint(w, inert, func() {
+						withElementOffsetVoid(w, scrollOffset, func(w *Window) {
+							w.withHitboxSubtree(state.hitboxRecord, func() {
+								if standalone := layout.standaloneInline(); standalone != nil {
+									standalone.prepaintChildren(d.children, w, app)
+									return
+								}
+								for i := range d.children {
+									d.children[i].Prepaint(w, app)
+								}
+							})
 						})
 					})
 				})

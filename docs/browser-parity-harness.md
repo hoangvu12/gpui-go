@@ -438,3 +438,30 @@ in `fixtures/position` pins that, and the fixture's wrong view (every static
 parent left relative) is the pre-ticket pin, so its Tier A failure is the
 regression gate. Custom container elements join the rule through
 `gpui.RequestContainerLayout`; `RequestElementLayout` keeps the plain attach.
+Ticket 14 (core Tab navigation, focus fixup and Inert, D4) gave the Tab default
+the HTML sequential order (`gpui/focus.go` `TabStopMap` — positive tab indexes
+ascending, then the zero bucket in tree order; a negative index is never a stop,
+and a focused excluded element's search runs in tree order, Chromium
+`focus_controller.cc:1347-1443`), the pass-out boundary (Tab past the last stop
+blurs — Chrome hands focus to the browser UI at the document scope's end, which
+headless records as the body — and the sequential focus navigation starting
+point keeps the removed element's position, `gpui/focus.go`
+`fixupFocusedElement`/`focusSearchStart`), the end-of-frame focus fixup
+(removed, hidden or inert focused elements blur, `gpui/helpers_frame.go`
+`finishFrame`), the mouse-focus default with no focusable press target
+(`gpui/mouseevent.go` `defaultMouseFocus` — the flat-tree ancestor walk of
+`HandleMouseFocus`, so an occluding popup does not eat its host's focus, and a
+press on empty space blurs), and the `Inert()` style (`gpui/div.go` — the
+subtree's registrations are suppressed, its hitboxes are skipped by the hit test
+as pointer-events: none, and its accessibility nodes are hidden; the a11y half
+is pinned by `gpui/div_a11y_test.go` `TestA11yDivInertHidesTheSubtree` since the
+harness cannot see the tree). Two pin behaviours closed with it, both recorded
+as divergences toward Chrome: key events with focus on the body now reach the
+root element's listeners (`gpui/key_dispatch.go` `focusDispatchPath`'s
+`bodyNodeID` — the pin dropped them on the tree root alone), and
+`Window.FocusNext`/`FocusPrev` no longer wrap (the pass-out blur above; Base's
+questionnaire tests pass because the fixup only answers removal, never a
+state-only handle). `fixtures/tabnav` is the fixture set, with one recorded
+quirk: a second forward pass-out from the same last element lands
+nondeterministically in headless Chrome, so `tabnav-order` steps each boundary
+exactly once.

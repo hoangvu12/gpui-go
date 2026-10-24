@@ -182,6 +182,35 @@ func TestA11yDivStateLivesOnTheDiv(t *testing.T) {
 	}
 }
 
+// TestA11yDivInertHidesTheSubtree (browser-core ticket 14, spec D4's
+// Inert style): an inert element and everything inside it publish
+// hidden nodes — the port's twin of Chromium ignoring inert subtrees
+// in the accessibility tree (ax_node_object.cc:1368
+// ShouldIgnoreForHiddenOrInert) — while the element still paints (the
+// pixel half is the tabnav-inert parity fixture).
+func TestA11yDivInertHidesTheSubtree(t *testing.T) {
+	f := newA11yDivFixture(t, "inert a11y", func(w *Window, cx *Context[a11yDivView]) AnyElement {
+		return ax(Div().ID("col").AccessibilityID("col").FlexCol().
+			Child(ax(leaf("live").Role(RoleButton))).
+			Child(ax(Div().ID("cover").AccessibilityID("cover").Role(RoleGroup).Inert().
+				Child(ax(leaf("frozen").Role(RoleCheckBox))))).
+			Child(ax(leaf("after").Role(RoleLink))))
+	})
+	snapshot := f.drawAndPublish()
+	if n := f.node(snapshot, "cover"); !n.Hidden {
+		t.Errorf("the inert root is not hidden: %s", snapshot.Trace())
+	}
+	if n := f.node(snapshot, "frozen"); !n.Hidden {
+		t.Errorf("the inert root's child is not hidden: %s", snapshot.Trace())
+	}
+	if n := f.node(snapshot, "live"); n.Hidden {
+		t.Errorf("a sibling outside the inert subtree is hidden: %s", snapshot.Trace())
+	}
+	if n := f.node(snapshot, "after"); n.Hidden {
+		t.Errorf("a sibling after the inert subtree is hidden: %s", snapshot.Trace())
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Ports of the pinned active-descendant tests (R:window/a11y.rs:703-933)
 // ---------------------------------------------------------------------------

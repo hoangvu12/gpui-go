@@ -405,7 +405,9 @@ func (h *Hitbox) ShouldHandleScroll(w *Window) bool {
 // prepaints), and ownerPath is the owning element's GlobalElementID
 // key — both stable identities for the hitbox within the frame, so a
 // pointer capture set in one frame can retarget the hit test in the
-// next.
+// next. Browser-core ticket 14 added the inert flag: the hitbox of an
+// inert element (or an element inside one) is skipped by the hit test
+// — the port's pointer-events: none.
 type hitboxRecord struct {
 	// box is the hitbox value (id, bounds, mask, behavior).
 	box Hitbox
@@ -418,6 +420,39 @@ type hitboxRecord struct {
 	// nearest id'd ancestor's path, so only id'd elements own a
 	// distinguishing path).
 	ownerPath string
+	// inert marks the hitbox of an inert subtree (browser-core ticket
+	// 14): the hit test skips it — no hover, no press, no click, no
+	// cursor — like Chromium's UsedPointerEvents kNone (inert →
+	// pointer-events: none, computed_style.h:1862-1867, so
+	// VisibleToHitTesting fails, computed_style.h:2052-2056).
+	inert bool
+	// focusHandle is the focus handle of the hitbox's owning element
+	// (browser-core ticket 14): the mouse-focus default's ancestor walk
+	// reads it (defaultMouseFocus — the flat-tree walk Chromium's
+	// HandleMouseFocus runs, mouse_event_manager.cc:551-559), which the
+	// hit test's occlusion semantics must not block. Nil for elements
+	// that track no focus or are suppressed (hidden — IsMouseFocusable
+	// requires visibility, computed_style.h:1894-1896).
+	focusHandle *FocusHandle
+	// hidden marks the hitbox of a hidden subtree (own
+	// visibility:hidden or a hidden ancestor): the mouse-focus default's
+	// ancestor walk skips it (browser-core ticket 14 — a hidden element
+	// is not mouse-focusable), while the hit test still answers it (the
+	// pin's shape: hidden hitboxes stay in the hit test).
+	hidden bool
+}
+
+// hitboxOf returns the frame's hitbox record for a hit-test id, or nil.
+func (f *renderedFrame) hitboxOf(id uint64) *hitboxRecord {
+	if f == nil {
+		return nil
+	}
+	for _, record := range f.hitboxes {
+		if record.box.id == id {
+			return record
+		}
+	}
+	return nil
 }
 
 // contains is Hitbox::contains.
@@ -477,13 +512,19 @@ func (t *hitTest) equal(other *hitTest) bool {
 // hitTestAt computes the hit test at a position: iterate the frame's
 // hitboxes reverse (index 0 = closest to the viewer), collect the
 // containing ids until full occlusion, and remember where mouse
-// blocking starts (window.rs HitTest::new).
+// blocking starts (window.rs HitTest::new). Browser-core ticket 14:
+// an inert hitbox is skipped entirely — it neither contains nor
+// occludes (pointer-events: none — the hit passes through to whatever
+// is behind, computed_style.h:1862-1867/2052-2056).
 func (f *renderedFrame) hitTestAt(position Point) hitTest {
 	numUntilMouseBlocked := -1
 	var ids []uint64
 	foundHitOcclusion := false
 	for i := len(f.hitboxes) - 1; i >= 0; i-- {
 		record := f.hitboxes[i]
+		if record.inert {
+			continue
+		}
 		if foundHitOcclusion {
 			continue
 		}
@@ -868,6 +909,19 @@ func (w *Window) insertHitboxRecord(bounds Bounds, behavior HitboxBehavior) *hit
 	return record
 }
 
+// insertHitboxRecord is InsertHitbox's record-returning core: the
+// element prepaints use the record to wrap their subtree
+// (withHitboxSubtree). insertInertHitboxRecord is the inert-marked
+// form (browser-core ticket 14): an inert element or an element under
+// one inserts its hitbox through this entry so the hit test skips it.
+func (w *Window) insertInertHitboxRecord(bounds Bounds, behavior HitboxBehavior, inert bool) *hitboxRecord {
+	record := w.insertHitboxRecord(bounds, behavior)
+	if record != nil && inert {
+		record.inert = true
+	}
+	return record
+}
+
 // withHitboxSubtree runs f with record on the frame's hitbox stack, so
 // the hitboxes f's subtree inserts record record as their parent (the
 // capture chain's ancestry, browser-core ticket 11). A nil record (the
@@ -1058,6 +1112,26 @@ func (w *Window) dispatchMouseEvent(event any, app *App) {
 		}
 	}
 
+	// The mouse-focus default (browser-core ticket 14, spec D4's "a press
+	// on empty space blurs"): Chromium runs HandleMouseFocus after the
+	// mousedown listeners, only when the event was not default-prevented
+	// (event_handler.cc:998-1001: `if (event_result ==
+	// kNotHandled) HandleMouseFocus(...)`), and it moves focus to the
+	// nearest mouse-focusable ancestor of the press target — or to the
+	// document body when the chain has none, blurring the focused
+	// element (mouse_event_manager.cc:551-559's flat-tree walk, :615-621's
+	// SetFocusedElement(nullptr) "even with !element"). The port's focus
+	// transfer is the innermost focusable element's bubble-phase arm
+	// (interact.go, which claims focusTransferClaimed); this tail is the
+	// walk's other half — the focusable ANCESTORS the hit test's
+	// occlusion hides (a popup's BlockMouse eats the host's hover but
+	// not the DOM walk), and the blur when nothing focusable contains
+	// the press. A prevented mousedown suppresses both halves
+	// (kNotHandled's meaning).
+	if down, isDown := event.(*MouseDownEvent); isDown && !w.DefaultPrevented() && !is.focusTransferClaimed {
+		w.defaultMouseFocus(down, app)
+	}
+
 	// The pointerup tail (browser-core ticket 11, re-ordered by
 	// browser-core ticket 12 to Chromium's pointer_event_manager.cc:
 	// 1272-1313): the implicit capture release — "immediately after
@@ -1113,6 +1187,41 @@ func (w *Window) dispatchMouseEvent(event any, app *App) {
 			w.processPendingPointerCapture(event, app)
 		}
 	}
+}
+
+// defaultMouseFocus is the mousedown's focus default when no focusable
+// element claimed the transfer (browser-core ticket 14, spec D4): the
+// flat-tree ancestor walk of Chromium's MouseEventManager::HandleMouseFocus
+// (mouse_event_manager.cc:551-559) — from the press's innermost hitbox up
+// the enclosing-hitbox chain (the DOM's ancestor chain), the first
+// focus-tracking element takes the mouse focus; nothing focusable on the
+// chain blurs the window (the body equivalent, :615-621's
+// SetFocusedElement(nullptr) "even with !element in order to blur current
+// focus element when a link is clicked"). The walk ignores the hit test's
+// occlusion (BlockMouse hides hover, not the DOM ancestor walk) and skips
+// inert elements (an inert ancestor is not mouse-focusable; the walk
+// continues above it — IsMouseFocusable's inert gate, computed_style.h:
+// 1894-1896).
+func (w *Window) defaultMouseFocus(down *MouseDownEvent, app *App) {
+	if w == nil {
+		return
+	}
+	fs := focusState(w)
+	if !fs.focusEnabled {
+		return
+	}
+	is := inputState(w)
+	if fs.rendered != nil && len(is.mouseHitTest.orderedIDs) > 0 {
+		record := fs.rendered.hitboxOf(is.mouseHitTest.orderedIDs[0])
+		for ; record != nil; record = record.parent {
+			if record.inert || record.hidden || record.focusHandle == nil {
+				continue
+			}
+			w.focusWithOrigin(*record.focusHandle, focusOriginMouse)
+			return
+		}
+	}
+	w.blurWithOrigin(focusOriginMouse)
 }
 
 // hitTestForDiagnostics returns the ordered hitbox ids under the

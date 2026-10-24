@@ -30,6 +30,7 @@ import (
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/keyorder"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/position"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/shadow"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/tabnav"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/textpaint"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/textstyle"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/tracer"

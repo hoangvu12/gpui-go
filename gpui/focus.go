@@ -76,6 +76,15 @@ type windowFocusState struct {
 	// (bindings before listeners), ListenersBeforeBindings the browser
 	// order.
 	keyOrder KeyDispatchOrder
+	// focusNavStart is the sequential focus navigation starting point
+	// (browser-core ticket 14): the tree-order position a Tab search
+	// continues from when nothing is focused, recorded by the focus
+	// fixup when the focused element leaves the frame (Chromium's
+	// Document::SequentialFocusNavigationStartingPoint and the removal
+	// path's Range walk, document.cc:6308-6319 and :6382-6395). Any
+	// focus move or blur clears it (the focused element takes
+	// precedence; the pass-out nulls it, focus_controller.cc:2220).
+	focusNavStart focusNavStartingPoint
 
 	// rendered is the last completed frame's dispatch tree and tab
 	// stops (window.rs rendered_frame.dispatch_tree/tab_stops).
@@ -177,6 +186,23 @@ type clickListenerRegistration struct {
 	click []func(*ClickEvent, *Window, *App)
 	// auxClick are the non-primary-button listeners.
 	auxClick []func(*ClickEvent, *Window, *App)
+}
+
+// focusNavStartingPoint is the sequential focus navigation starting
+// point's port (browser-core ticket 14): the stops adjacent to where
+// the focused element sat in tree order when the focus fixup blurred
+// it. A forward search starts AT prev (its successor is the answer);
+// a backward search starts AT next (its predecessor is the answer) —
+// Chromium's walk of the removed position (document.cc:6382-6395: for
+// kForward the PREVIOUS element becomes the start; the mirror for
+// kBackward), so Tab after a removal continues from the removed
+// element's position instead of restarting the cycle.
+type focusNavStartingPoint struct {
+	// prev is the nearest stop before the removed focused element in
+	// tree order (nil at the tree start).
+	prev *uint64
+	// next is the nearest stop after it (nil at the tree end).
+	next *uint64
 }
 
 // focusState returns (creating when absent) the window's focus
@@ -498,6 +524,7 @@ func (w *Window) focusWithOrigin(handle FocusHandle, origin focusOriginKind) {
 	}
 	fs.focused = handle.id
 	fs.focusGeneration++
+	fs.focusNavStart = focusNavStartingPoint{}
 	w.clearPendingKeystrokes()
 
 	// The origin bookkeeping (Chromium's LastFocusType and
@@ -546,6 +573,39 @@ func (w *Window) Blur() {
 	w.requestRefresh()
 }
 
+// blurWithOrigin removes focus from all elements in this window
+// recording the focus origin (browser-core ticket 14, spec D4's "a
+// press on empty space blurs"): Chromium's mouse-focus default moves
+// focus to the document's body when the press chain has no focusable
+// element — MouseEventManager::HandleMouseFocus's SetFocusedElement(
+// nullptr, …FocusType::kMouse) (mouse_event_manager.cc:615-621: "We
+// call setFocusedElement even with !element in order to blur current
+// focus element when a link is clicked") — a mouse-type focus change
+// to nothing, which clears the keyboard-event flag like focusWithOrigin
+// (element.cc:8867-8868). The port's body equivalent is no handle.
+func (w *Window) blurWithOrigin(origin focusOriginKind) {
+	if w == nil {
+		return
+	}
+	fs := focusState(w)
+	if !fs.focusEnabled || fs.focused == 0 {
+		return
+	}
+	w.clearPendingKeystrokes()
+	fs.focused = 0
+	fs.focusGeneration++
+	fs.focusNavStart = focusNavStartingPoint{}
+	is := inputState(w)
+	switch origin {
+	case focusOriginMouse:
+		is.focusOrigin = focusOriginMouse
+		is.hadKeyboardEvent = false
+	case focusOriginKeyboard:
+		is.focusOrigin = focusOriginKeyboard
+	}
+	w.requestRefresh()
+}
+
 // DisableFocus blurs the window and refuses further focus
 // (Window::disable_focus).
 func (w *Window) DisableFocus() {
@@ -556,7 +616,14 @@ func (w *Window) DisableFocus() {
 	focusState(w).focusEnabled = false
 }
 
-// FocusNext moves focus to the next tab stop (Window::focus_next).
+// FocusNext moves focus to the next tab stop (Window::focus_next;
+// browser-core ticket 14 gives it the browser's boundary: past the
+// last stop the sequential search reports nothing and focus passes
+// out of the page — Chromium's CanTakeFocus/TakeFocus arm,
+// focus_controller.cc:2216-2231, where Chrome takes the focus at the
+// document scope's end — so the port blurs, the body equivalent; a
+// later Tab restarts from the first stop, and Shift+Tab returns to
+// the last, both sides' recorded answers).
 func (w *Window) FocusNext() {
 	if w == nil {
 		return
@@ -568,22 +635,43 @@ func (w *Window) FocusNext() {
 	if fs.rendered == nil {
 		return
 	}
-	var focused *uint64
-	if fs.focused != 0 {
-		id := fs.focused
-		focused = &id
-	}
+	focused := w.focusSearchStart(false)
 	if handle, ok := fs.rendered.tabStops.Next(focused, w); ok {
 		// The Tab default action's focus is a keyboard focus
 		// (browser-core ticket 12): the moved-to element shows the
 		// focus-visible styles (Chromium's FocusType::kForward is not
 		// kMouse, so !last_focus_from_mouse holds).
 		w.focusWithOrigin(handle, focusOriginKeyboard)
+	} else {
+		// The pass-out (browser-core ticket 14): past the last stop
+		// (or with no stop after an excluded focused element), focus
+		// moves to the body — no handle.
+		w.blurWithOrigin(focusOriginKeyboard)
 	}
 }
 
-// FocusPrev moves focus to the previous tab stop
-// (Window::focus_prev).
+// focusSearchStart resolves the sequential search's start: the focused
+// handle, or — with nothing focused — the sequential focus navigation
+// starting point the focus fixup recorded (browser-core ticket 14;
+// Chromium's Document::SequentialFocusNavigationStartingPoint,
+// document.cc:6333-6395: the search continues from where the removed
+// focused element sat). Forward searches start at the point's previous
+// stop, backward searches at its next stop (the removal path's walk).
+func (w *Window) focusSearchStart(backward bool) *uint64 {
+	fs := focusState(w)
+	if fs.focused != 0 {
+		id := fs.focused
+		return &id
+	}
+	if backward {
+		return fs.focusNavStart.next
+	}
+	return fs.focusNavStart.prev
+}
+
+// FocusPrev moves focus to the previous tab stop (Window::focus_prev;
+// browser-core ticket 14's boundary like FocusNext: before the first
+// stop, the backward pass-out — the blur, the body equivalent).
 func (w *Window) FocusPrev() {
 	if w == nil {
 		return
@@ -595,14 +683,14 @@ func (w *Window) FocusPrev() {
 	if fs.rendered == nil {
 		return
 	}
-	var focused *uint64
-	if fs.focused != 0 {
-		id := fs.focused
-		focused = &id
-	}
+	focused := w.focusSearchStart(true)
 	if handle, ok := fs.rendered.tabStops.Prev(focused, w); ok {
 		// Shift+Tab is a keyboard focus like Tab (focusOriginKeyboard).
 		w.focusWithOrigin(handle, focusOriginKeyboard)
+	} else {
+		// The backward pass-out (browser-core ticket 14): before the
+		// first stop, focus moves to the body — no handle.
+		w.blurWithOrigin(focusOriginKeyboard)
 	}
 }
 
@@ -613,6 +701,118 @@ func (w *Window) FocusGeneration() uint64 {
 		return 0
 	}
 	return focusState(w).focusGeneration
+}
+
+// fixupFocusedElement is the end-of-frame focus fixup (browser-core
+// ticket 14, spec D4's "focus moves off an element that disappears at
+// the end of the frame"): when the focused handle is no longer in the
+// completed frame's dispatch tree — the element was removed — or its
+// node registered while suppressed (hidden or inert — unfocusable),
+// focus moves to the body equivalent (no handle). It runs after the
+// completed frame swapped in (endDispatchFrame) and before the focus
+// phase, so the phase's path diff delivers the blur listeners and the
+// frame's recorded focus follows the fixup. It reports whether focus
+// moved.
+//
+// The Chromium reference: removal is the synchronous node-remove
+// focus fixup (Document::RemoveFocusedElementOfSubtree, document.cc:
+// 5809-5866 — "node remove focus fixup", https://html.spec.whatwg.org/C/
+// #node-remove-focus-fixup — ClearFocusedElement during the removal);
+// becoming unfocusable (hidden, display:none, inert) is the deferred
+// check Document::ClearFocusedElementIfNeeded (document.cc:3261-3277:
+// a one-shot timer when focused_element_->IsFocusable() turns false,
+// blurring at ClearFocusedElementTimerFired), driven from the layout
+// update (local_frame_view.cc:3694). The port's frame completion is
+// the equivalent moment — the element's disappearance is visible
+// exactly when the frame that dropped it completes — and the next
+// input event sees no focus on both.
+func (w *Window) fixupFocusedElement() bool {
+	if w == nil {
+		return false
+	}
+	fs := focusState(w)
+	if fs.focused == 0 || !fs.focusEnabled || fs.next == nil {
+		return false
+	}
+	// The completed frame's tree (finishFrame calls this before the
+	// swap, so the old frame's tab stops are still reachable for the
+	// starting point below).
+	tree := fs.next.dispatchTree
+	if nodeID, ok := tree.focusableNodeID(fs.focused); ok {
+		if nodeID.Index < len(tree.nodes) && !tree.nodes[nodeID.Index].focusSuppressed {
+			return false
+		}
+	}
+	// The focused element disappeared or became unfocusable: blur to
+	// the body equivalent, and record where it sat — the sequential
+	// focus navigation starting point (the removal path,
+	// document.cc:6308-6319/:6382-6395), so the next Tab continues
+	// from the removed position instead of restarting the cycle.
+	// The fixup answers REMOVAL, not absence: only a handle the
+	// PREVIOUS frame's tree carried — the element was rendered and left
+	// it (or its node turned suppressed) — blurs. A handle no frame ever
+	// carried (the port's state-only handles: app-level and entity-state
+	// targets the questionnaire harness and hidden inputs focus) keeps
+	// the pin's behavior — nothing blurs it — since Chromium's focus
+	// lives on DOM elements and the pin's handles may outlive any
+	// element (document.cc:5809-5866 reacts to the removal of a node
+	// that was in the tree, never to one that was not).
+	if fs.rendered == nil || fs.rendered.dispatchTree == nil {
+		return false
+	}
+	if _, wasRendered := fs.rendered.dispatchTree.focusableNodeID(fs.focused); !wasRendered {
+		return false
+	}
+	fs.recordFocusNavStart()
+	fs.focused = 0
+	fs.focusGeneration++
+	fs.pendingInput = nil
+	fs.next.focus = 0
+	w.clearPendingKeystrokes()
+	return true
+}
+
+// recordFocusNavStart records the sequential focus navigation starting
+// point for the focused element that is about to leave (the removal
+// fixup's half): the stops adjacent to fs.focused in the OLD frame's
+// tree order (browser-core ticket 14; Chromium's Range over the
+// removed position, document.cc:6382-6395 — the forward search starts
+// at the previous element, the backward search at the next one). The
+// neighbors come from the old frame's tab stops: the completed frame
+// no longer contains the element, and its neighbors are exactly the
+// elements around the hole it left.
+func (fs *windowFocusState) recordFocusNavStart() {
+	if fs.rendered == nil || fs.rendered.tabStops == nil {
+		return
+	}
+	stops := fs.rendered.tabStops
+	node, ok := stops.byID[fs.focused]
+	if !ok {
+		// The element was not a stop of the old frame (a suppressed or
+		// foreign handle): its tree position is unknowable here, so no
+		// starting point — the search restarts at the cycle's ends
+		// (Chromium's hidden/inert timer path blurs without one too,
+		// document.cc:3271-3277).
+		return
+	}
+	// Walk the tree-ordered stops around the removed element: the
+	// nearest stop before it (prev) and after it (next).
+	var point focusNavStartingPoint
+	for _, candidate := range stops.inserted {
+		if candidate.id == fs.focused || !candidate.isStop() {
+			continue
+		}
+		id := candidate.id
+		switch {
+		case candidate.seq < node.seq:
+			point.prev = &id
+		case candidate.seq > node.seq:
+			if point.next == nil {
+				point.next = &id
+			}
+		}
+	}
+	fs.focusNavStart = point
 }
 
 // FocusPath returns the focus path of a handle in the rendered frame,
@@ -747,22 +947,49 @@ const (
 
 // tabStopNode is one ordered tab-stop node (tab_stop.rs TabStopNode).
 type tabStopNode struct {
-	path    tabStopPath
-	index   int // insertion order
-	id      uint64
-	tabStop bool
-	window  *Window
-	app     *App
+	path  tabStopPath
+	index int // insertion-history order (group operations included)
+	// seq is the node's position in the insertion (prepaint = tree)
+	// order of the frame's handles (TabStopMap.inserted), the scan
+	// order of the excluded-element arms (browser-core 14).
+	seq      int
+	id       uint64
+	tabIndex int64
+	tabStop  bool
+	window   *Window
+	app      *App
 }
+
+// isStop reports whether the node is a stop of the sequential cycle
+// (browser-core ticket 14, D4): a tab stop whose raw tab index is not
+// negative. Negative indexes are never reached by Tab (an element
+// excluded from the cycle — Chromium's AdjustedTabIndex keeps the
+// attribute value while ShouldVisit's focusability gate decides,
+// focus_controller.cc:1255-1283).
+func (n tabStopNode) isStop() bool { return n.tabStop && n.tabIndex >= 0 }
 
 // TabStopMap is the frame's collection of tab stops (tab_stop.rs
 // TabStopMap, bounded to a sorted slice instead of a SumTree — the
-// observable next/prev order is preserved).
+// observable next/prev order is preserved), with browser-core ticket
+// 14's HTML sequential order (spec D4, Chromium's ScopedFocusNavigation
+// contract, focus_controller.cc:748-752: "elements with tab indexes
+// first (from lowest to highest), and then elements without tab indexes
+// (in document order)"): the ordered slice sorts positive tab indexes
+// ascending (htmlTabRank), then every zero and negative index in
+// insertion (tree) order — tabZeroRank sorts after every positive rank.
+// Negative indexes are never reached by Tab (D4); from such a focused
+// element the next/prev search runs in TREE order (NextFocusableElement's
+// negative arm, focus_controller.cc:1354-1366: "If an element is
+// excluded from the normal tabbing cycle, the next focusable element is
+// determined by tree order"), which the insertion history reproduces.
 type TabStopMap struct {
 	currentPath      tabStopPath
 	insertionHistory []TabStopOperation
 	byID             map[uint64]tabStopNode
 	order            []tabStopNode // kept sorted by (path, index)
+	// inserted is the nodes in insertion (prepaint = tree) order, the
+	// scan order of the excluded-element arms (browser-core 14).
+	inserted []tabStopNode
 }
 
 // newTabStopMap creates an empty tab-stop map.
@@ -770,19 +997,42 @@ func newTabStopMap() *TabStopMap {
 	return &TabStopMap{byID: make(map[uint64]tabStopNode)}
 }
 
+// tabZeroRank is the rank of every zero and negative tab index
+// (browser-core ticket 14, spec D4): it sorts after every positive rank
+// in the ordered slice, so the cycle is [positive ascending, then the
+// rest in tree order] — Chromium's sequential order
+// (focus_controller.cc:748-752).
+const tabZeroRank int64 = 1 << 62
+
+// htmlTabRank maps a raw tab index onto its ordered-slice rank
+// (browser-core ticket 14): positive indexes keep their value (the
+// ascending positive bucket), zero and negative indexes share
+// tabZeroRank (the tree-order bucket — a negative index is never a
+// stop, but its tree position is what a focused excluded element's
+// Tab search walks).
+func htmlTabRank(tabIndex int64) int64 {
+	if tabIndex > 0 {
+		return tabIndex
+	}
+	return tabZeroRank
+}
+
 // Insert inserts a focus handle at the current group path (TabStopMap::insert).
 func (t *TabStopMap) Insert(handle FocusHandle, tabIndex int64, tabStop bool) {
 	t.insertionHistory = append(t.insertionHistory, TabStopOperation{Kind: TabStopInsert, Handle: handle})
-	path := append(append(tabStopPath{}, t.currentPath...), tabIndex)
+	path := append(append(tabStopPath{}, t.currentPath...), htmlTabRank(tabIndex))
 	node := tabStopNode{
-		path:    path,
-		index:   len(t.insertionHistory) - 1,
-		id:      handle.id,
-		tabStop: tabStop,
-		window:  handle.window,
-		app:     handle.app,
+		path:     path,
+		index:    len(t.insertionHistory) - 1,
+		seq:      len(t.inserted),
+		id:       handle.id,
+		tabIndex: tabIndex,
+		tabStop:  tabStop,
+		window:   handle.window,
+		app:      handle.app,
 	}
 	t.byID[handle.id] = node
+	t.inserted = append(t.inserted, node)
 	t.insertOrdered(node)
 }
 
@@ -846,81 +1096,126 @@ func (t *TabStopMap) lookupRef(handle FocusHandle) (*focusRef, bool) {
 	return nil, false
 }
 
-// Next returns the next tab stop after the focused identity, wrapping
-// to the first (TabStopMap::next). Returns ok=false with no stops.
+// Next returns the next tab stop after the focused identity
+// (TabStopMap::next; browser-core ticket 14 gives it Chromium's
+// NextFocusableElement semantics, focus_controller.cc:1347-1409: the
+// successor in the sequential order — positive indexes ascending, then
+// tree order — for a stop of the cycle; for an element excluded from
+// the cycle (a negative tab index or a non-tab-stop), the next stop in
+// TREE order, focus_controller.cc:1354-1366). The search does NOT
+// wrap: past the last stop (or with nothing after an excluded element
+// in tree order) it reports false — Chromium's nullptr answer — and
+// the caller passes focus out of the page (Window.FocusNext's blur;
+// AdvanceFocusInDocumentOrder's CanTakeFocus arm, focus_controller.cc:
+// 2216-2231: Chrome takes the focus at the document scope's end —
+// headless records the body, and the port's body equivalent is no
+// handle). From no focus (the body), the first stop of the cycle:
+// NextElementWithGreaterTabIndex(0) then FindElementWithExactTabIndex(0)
+// (focus_controller.cc:1392-1407).
 func (t *TabStopMap) Next(focusedID *uint64, w *Window) (FocusHandle, bool) {
 	if len(t.order) == 0 {
 		return FocusHandle{}, false
 	}
-	if focusedID == nil {
-		first := t.order[0]
-		if first.tabStop {
-			return t.handleFor(first), true
+	if focusedID != nil {
+		if node, ok := t.byID[*focusedID]; ok {
+			if node.isStop() {
+				// The successor in the ordered slice (the sequential
+				// cycle), no wrap: Chromium's FindElementWithExact-
+				// TabIndex → NextElementWithGreaterTabIndex →
+				// FindElementWithExactTabIndex(0) chain (the last stop's
+				// T=0 arm returns nullptr, focus_controller.cc:1376-1381).
+				start := t.slicePosition(node)
+				for i := start + 1; i < len(t.order); i++ {
+					if t.order[i].isStop() {
+						return t.handleFor(t.order[i]), true
+					}
+				}
+				return FocusHandle{}, false
+			}
+			// An excluded element: the next stop in tree (insertion)
+			// order from its position — focus_controller.cc:1354-1366.
+			// seq is the tree-order position (index counts group
+			// operations too, which would skew the scan).
+			for i := node.seq + 1; i < len(t.inserted); i++ {
+				if t.inserted[i].isStop() {
+					return t.handleFor(t.inserted[i]), true
+				}
+			}
+			// Nothing after it in tree order: nullptr — the pass-out,
+			// not the wrap (focus_controller.cc:1362-1366: "Falling
+			// through would wrap around to the start of the scope
+			// instead").
+			return FocusHandle{}, false
 		}
-		if node, ok := t.nextInner(first); ok {
+	}
+	// No focus (or the focused handle left the frame): the first stop
+	// of the cycle — Tab from the body.
+	return t.firstStop()
+}
+
+// firstStop returns the first stop of the sequential cycle.
+func (t *TabStopMap) firstStop() (FocusHandle, bool) {
+	for _, node := range t.order {
+		if node.isStop() {
 			return t.handleFor(node), true
 		}
-		return FocusHandle{}, false
 	}
-	node, ok := t.byID[*focusedID]
-	if !ok {
-		return t.Next(nil, w)
-	}
-	if next, ok := t.nextInner(node); ok {
-		return t.handleFor(next), true
-	}
-	return t.Next(nil, w)
+	return FocusHandle{}, false
 }
 
-func (t *TabStopMap) nextInner(node tabStopNode) (tabStopNode, bool) {
-	// The reference seeks a cursor over the ordered tree then skips
-	// non-tab-stops forward; the ordered slice reproduces the same
-	// successor sequence.
-	start := t.slicePosition(node)
-	for i := start + 1; i < len(t.order); i++ {
-		if t.order[i].tabStop {
-			return t.order[i], true
+// lastStop returns the last stop of the sequential cycle.
+func (t *TabStopMap) lastStop() (FocusHandle, bool) {
+	for i := len(t.order) - 1; i >= 0; i-- {
+		if t.order[i].isStop() {
+			return t.handleFor(t.order[i]), true
 		}
 	}
-	return tabStopNode{}, false
+	return FocusHandle{}, false
 }
 
-// Prev returns the previous tab stop before the focused identity,
-// wrapping to the last (TabStopMap::prev).
+// Prev returns the previous tab stop before the focused identity
+// (TabStopMap::prev; browser-core ticket 14 gives it Chromium's
+// PreviousFocusableElement semantics, focus_controller.cc:1411-1443:
+// the predecessor in the sequential order for a stop of the cycle; for
+// an excluded element, the previous stop in TREE order (:1417-1430)).
+// Like Next it does not wrap: before the first stop it reports false
+// (the pass-out), and from no focus (the body) it returns the LAST
+// stop — Chromium's MoveToLast + FindElementWithExactTabIndex(0,
+// kBackward), the last zero-index element, which is the cycle's end
+// because the zero bucket is last (focus_controller.cc:1411-1431).
 func (t *TabStopMap) Prev(focusedID *uint64, w *Window) (FocusHandle, bool) {
 	if len(t.order) == 0 {
 		return FocusHandle{}, false
 	}
-	if focusedID == nil {
-		last := t.order[len(t.order)-1]
-		if last.tabStop {
-			return t.handleFor(last), true
-		}
-		if node, ok := t.prevInner(last); ok {
-			return t.handleFor(node), true
-		}
-		return FocusHandle{}, false
-	}
-	node, ok := t.byID[*focusedID]
-	if !ok {
-		return t.Prev(nil, w)
-	}
-	if prev, ok := t.prevInner(node); ok {
-		return t.handleFor(prev), true
-	}
-	return t.Prev(nil, w)
-}
-
-func (t *TabStopMap) prevInner(node tabStopNode) (tabStopNode, bool) {
-	// Mirror of nextInner: scan slice order backwards, skipping
-	// non-tab-stops.
-	start := t.slicePosition(node)
-	for i := start - 1; i >= 0; i-- {
-		if t.order[i].tabStop {
-			return t.order[i], true
+	if focusedID != nil {
+		if node, ok := t.byID[*focusedID]; ok {
+			if node.isStop() {
+				// The predecessor in the ordered slice, no wrap:
+				// Chromium's FindElementWithExactTabIndex(kBackward) →
+				// PreviousElementWithLowerTabIndex chain, nullptr before
+				// the first stop (focus_controller.cc:1411-1443).
+				start := t.slicePosition(node)
+				for i := start - 1; i >= 0; i-- {
+					if t.order[i].isStop() {
+						return t.handleFor(t.order[i]), true
+					}
+				}
+				return FocusHandle{}, false
+			}
+			// An excluded element: the previous stop in tree (insertion)
+			// order — focus_controller.cc:1417-1430 (seq: tree order).
+			for i := node.seq - 1; i >= 0; i-- {
+				if t.inserted[i].isStop() {
+					return t.handleFor(t.inserted[i]), true
+				}
+			}
+			// Nothing before it in tree order: nullptr — the pass-out.
+			return FocusHandle{}, false
 		}
 	}
-	return tabStopNode{}, false
+	// No focus (or the focused handle left the frame): the last stop of
+	// the cycle — Shift+Tab from the body.
+	return t.lastStop()
 }
 
 // slicePosition finds the node's position in the ordered slice.
@@ -938,11 +1233,12 @@ func (t *TabStopMap) handleFor(node tabStopNode) FocusHandle {
 }
 
 // TabStopCount returns the number of tab stops (tab_stop.rs
-// tab_stop_count).
+// tab_stop_count; browser-core 14: a stop of the sequential cycle —
+// negative tab indexes are excluded).
 func (t *TabStopMap) TabStopCount() int {
 	count := 0
 	for _, node := range t.order {
-		if node.tabStop {
+		if node.isStop() {
 			count++
 		}
 	}

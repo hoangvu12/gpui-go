@@ -146,12 +146,18 @@ func (w *Window) runKeyDefaultActions(event any, app *App) bool {
 	// The focused node's registered default actions (activation): the
 	// registration is focus-gated (registerDivKeyboardClick), so the
 	// focused node carries exactly the pin's focused-element activation.
-	if node := tree.Node(nodeID); node != nil {
-		for _, action := range node.defaultActions {
-			if w.DefaultPrevented() {
-				return true
+	// Browser-core ticket 14: the body state (no focused handle) runs
+	// none — Chromium's default handlers are the focused element's, and
+	// the body has no activation (the pre-ticket root fallback made this
+	// moot; the body node's own registrations must not fire).
+	if fs.focused != 0 {
+		if node := tree.Node(nodeID); node != nil {
+			for _, action := range node.defaultActions {
+				if w.DefaultPrevented() {
+					return true
+				}
+				action(event, w, app)
 			}
-			action(event, w, app)
 		}
 	}
 	if w.DefaultPrevented() {
@@ -222,6 +228,15 @@ func (w *Window) defaultKeyboardActivation(event any, app *App) bool {
 	path, nodeID := w.focusDispatchPath()
 	node := tree.Node(nodeID)
 	activation := node.clickActivation
+	if fs.focused == 0 {
+		// The body state (browser-core ticket 14): no element holds
+		// focus, so no activation — the body node's registrations (a
+		// clickable root, for instance) never fire from Enter or Space
+		// (Chromium's HandleKeyboardActivation is the FOCUSED element's
+		// default handler, html_element.cc:4314-4338; the body is not an
+		// activation-behavior element).
+		activation = nil
+	}
 
 	switch e := event.(type) {
 	case *KeyDownEvent:

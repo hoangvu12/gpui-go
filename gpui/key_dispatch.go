@@ -117,6 +117,15 @@ type dispatchNode struct {
 	// activation gate) and fires the listeners of every node on the
 	// focused path — the DOM's bubbling simulated click.
 	clickActivation *nodeClickActivation
+	// focusSuppressed marks a node whose focus identity registered while
+	// the element was suppressed (browser-core ticket 14): a hidden or
+	// inert element keeps its dispatch-node focus identity (the pin's
+	// set_focus_handle runs before the hidden early return, div.rs:
+	// 2799/3021), but it is not focusable — the end-of-frame focus fixup
+	// (focus.go fixupFocusedElement) blurs a focused element whose node
+	// carries this flag, like Chromium's ClearFocusedElementIfNeeded
+	// (document.cc:3261-3277, the IsFocusable check at :3263).
+	focusSuppressed bool
 	context         *KeyContext
 	focusID         uint64
 	hasFocusID      bool
@@ -256,6 +265,16 @@ func (t *DispatchTree) SetFocusID(focusID uint64) {
 	t.nodes[id.Index].focusID = focusID
 	t.nodes[id.Index].hasFocusID = true
 	t.focusableNodeIDs[focusID] = id
+}
+
+// SetFocusSuppressed marks the active node's focus identity as
+// registered while suppressed (browser-core ticket 14): the element is
+// hidden or inert — present in the tree but not focusable — and the
+// end-of-frame focus fixup reads the flag (Chromium's IsFocusable gate,
+// document.cc:3263: visibility, display and inertness all unfocus).
+func (t *DispatchTree) SetFocusSuppressed() {
+	id := t.activeNodeIDValue()
+	t.nodes[id.Index].focusSuppressed = true
 }
 
 // SetViewID marks the active node with the view identity
@@ -950,7 +969,17 @@ func (w *Window) dispatchKeyEventInner(event any, app *App) {
 
 // focusDispatchPath resolves the focused node and its dispatch path in
 // the rendered frame (focus_node_id_in_rendered_frame +
-// dispatch_path).
+// dispatch_path). Browser-core ticket 14 (spec D4): with NO focused
+// handle — the port's body state — the path runs through the root
+// view's element node (the body equivalent), not the pin's synthetic
+// tree root alone: Chromium delivers body-focused key events to the
+// body and its ancestors (EventTargetNodeForDocument resolves the
+// focused element, the body when nothing else is), so the root
+// element's key listeners see every key while the body holds focus —
+// the pre-ticket pin silently dropped them (the tree root carries no
+// element listeners). A focused handle that left the tree keeps the
+// pin's root fallback (the focus fixup blurs it at the frame's end,
+// so the state is transient).
 func (w *Window) focusDispatchPath() (path []DispatchNodeID, nodeID DispatchNodeID) {
 	fs := focusState(w)
 	tree := fs.renderedDispatchTree()
@@ -959,8 +988,26 @@ func (w *Window) focusDispatchPath() (path []DispatchNodeID, nodeID DispatchNode
 		if id, ok := tree.focusableNodeID(fs.focused); ok {
 			nodeID = id
 		}
+	} else {
+		nodeID = tree.bodyNodeID()
 	}
 	return tree.DispatchPath(nodeID), nodeID
+}
+
+// bodyNodeID returns the dispatch node of the window's root view's
+// element — the port's body equivalent (browser-core ticket 14): the
+// first node prepainted under the tree's root (the root view's element
+// pushes it; the pin's window root node carries no element
+// registrations). It falls back to the tree root when no element node
+// exists (an empty window).
+func (t *DispatchTree) bodyNodeID() DispatchNodeID {
+	root := t.RootNodeID()
+	for i := root.Index + 1; i < len(t.nodes); i++ {
+		if t.nodes[i].hasParent && t.nodes[i].parent == root {
+			return DispatchNodeID{Index: i}
+		}
+	}
+	return root
 }
 
 // renderedDispatchTree returns the rendered frame's tree, creating an

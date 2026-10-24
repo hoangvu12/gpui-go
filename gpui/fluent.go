@@ -358,6 +358,14 @@ func (i *Interactive[Self]) TabGroup[_ lazy]() Self {
 	return i.self
 }
 
+// Inert makes the inner div and its subtree inert (DivElement.Inert;
+// browser-core ticket 14: unfocusable, unclickable, hidden from
+// accessibility, still painted).
+func (i *Interactive[Self]) Inert[_ lazy]() Self {
+	i.Interactivity().Inert()
+	return i.self
+}
+
 // DebugSelector sets the inner div's test bounds key
 // (DivElement.DebugSelector).
 func (i *Interactive[Self]) DebugSelector[_ lazy](selector string) Self {

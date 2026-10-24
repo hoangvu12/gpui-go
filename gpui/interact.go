@@ -418,6 +418,9 @@ type interactWindowState struct {
 	cursorFrames      []frameCursorRequests
 	paintHitTestFrame *renderedFrame
 	hiddenDepth       int
+	// inertDepth is the inert-subtree prepaint depth (browser-core
+	// ticket 14; inertPrepaintDepth).
+	inertDepth        int
 	resolvedCursor    CursorStyle
 	resolvedCursorSet bool
 	// boundarySweepPending deduplicates the deferred hover-boundary
@@ -531,6 +534,17 @@ func hiddenPrepaintDepth(w *Window) int {
 	return 0
 }
 
+// inertPrepaintDepth reports how many inert divs enclose the element
+// being prepainted (browser-core ticket 14, spec D4's Inert style: the
+// suppression inherits down the subtree like Chromium's interactivity
+// property, computed_style.h:2047-2049 IsInert).
+func inertPrepaintDepth(w *Window) int {
+	if st, ok := interactWindowStates[w]; ok {
+		return st.inertDepth
+	}
+	return 0
+}
+
 // withHiddenPrepaint runs f (a hidden div's children prepaint) inside
 // the hidden-subtree scope: the pinned paint never reaches a hidden
 // div's children (div.rs:3021-3023), so their prepaint-registered
@@ -543,6 +557,24 @@ func withHiddenPrepaint(w *Window, hidden bool, f func()) {
 	st := interactStateOf(w)
 	st.hiddenDepth++
 	defer func() { st.hiddenDepth-- }()
+	f()
+}
+
+// withInertPrepaint runs f (an inert div's children prepaint) inside
+// the inert-subtree scope (browser-core ticket 14): the children's
+// prepaint-registered dispatch state is suppressed (no tab stops, no
+// keyboard clicks, no key listeners, suppressed focus) and their
+// hitboxes carry the inert flag the hit test skips (mouseevent.go
+// hitTestAt) — pointer-events: none, computed_style.h:1862-1867. The
+// children still paint (inertness is not visibility).
+func withInertPrepaint(w *Window, inert bool, f func()) {
+	if !inert {
+		f()
+		return
+	}
+	st := interactStateOf(w)
+	st.inertDepth++
+	defer func() { st.inertDepth-- }()
 	f()
 }
 
