@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 09
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged 976cd25+0b21604 into main. Conflicts with 34/36 (fixture import lists, the harness guide, and gpui/div.go's child prepaint) were resolved: div.go keeps 14's inert scope wrapping 34's `stickyChildrenLast` order. With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./gpui/, ./internal/parity/... (tabnav, contextmenu and every existing fixture), ./base, authorspec, inspectorspec, dropspec, winhostspec, richtextspec, spellspec, tsxgen and ./examples/...; build, vet and gofmt are clean. Citation spot-checked: web_frame_widget_impl.cc:1112-1124 (on Windows the Menu key triggers on key-up). The recorder now sends rawKeyDown for text-less keys; the existing key transcripts are unchanged.
 
 ## Answer
 
