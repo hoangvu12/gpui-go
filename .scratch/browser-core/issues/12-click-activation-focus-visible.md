@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 01
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged c37d844 into main with no conflicts. Build, vet and gofmt are clean. With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./gpui/, ./internal/parity/... (the 8 activation/focus-visible fixtures), ./base, authorspec, inspectorspec, dropspec, winhostspec, richtextspec, spellspec and examples/zterm. Existing fixtures (keyorder, tracer): only comments changed, and their records are unchanged. Pin-era test expectations in gpui were updated with divergence notes. Citations spot-checked: mouse_event_manager.cc:358-367 (click target = CommonAncestor with ParentForClickEvent) and selector_checker.cc:3888-3901 (focus-visible from last focus type and had_keyboard_event). This also closes the harness gap "click fires before mouseup".
 
 ## Answer
 
