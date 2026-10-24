@@ -348,3 +348,13 @@ traversal (click before mouseup) where the browser delivers pointerup,
 lostpointercapture, click — the same input-bundle (D12) divergence as the tracer's
 un-instrumented `mouseup`, and the capture ticket's own order (lost after the ups,
 boundary settling last) is covered by the transcript's other kinds.
+Ticket 33 (position: static, the opt-in) added `PositionStatic` and the
+containing-block scope walk (`gpui/containingblock.go`): an absolute child of a
+static parent defers to the nearest positioned ancestor and Taffy then places it
+against that ancestor's padding box, a static chain defers up to the window root
+(the port's initial-containing-block stand-in), and the pin's direct-parent rule
+survives untouched for everything that never says `Static()` — the control case
+in `fixtures/position` pins that, and the fixture's wrong view (every static
+parent left relative) is the pre-ticket pin, so its Tier A failure is the
+regression gate. Custom container elements join the rule through
+`gpui.RequestContainerLayout`; `RequestElementLayout` keeps the plain attach.

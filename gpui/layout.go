@@ -268,6 +268,25 @@ func displayToRecord(d Display) uint32 {
 	}
 }
 
+// positionToRecord maps the gpui Position onto the ABI position value
+// (browser-core ticket 33, spec D3). Taffy has only Relative and
+// Absolute, and the native position_from (reference/native/src/layout.rs
+// position_from) rejects any other value, so the new PositionStatic maps
+// onto Relative — CSS static lays out in flow exactly like relative —
+// while the element's containing-block semantics (static is not a
+// container for absolute children) are decided Go-side by the scope
+// walk in containingblock.go, not by the Taffy record.
+func positionToRecord(p Position) uint32 {
+	switch p {
+	case PositionAbsolute:
+		return native.PositionAbsolute
+	case PositionStatic, PositionRelative:
+		return native.PositionRelative
+	default:
+		return native.PositionRelative
+	}
+}
+
 // styleToRecord translates a Style into the ABI style record under the
 // given layout context, mirroring the pinned into_taffy_style field for
 // field: definite absolute lengths become device pixels (rounded with the
@@ -283,15 +302,24 @@ func styleToRecord(s *Style, ctx *LayoutContext) native.LayoutStyleRecord {
 
 	rec := native.NewLayoutStyleRecord()
 	rec.Display = displayToRecord(s.Display)
-	rec.Position = uint32(s.Position)
+	rec.Position = positionToRecord(s.Position)
 	rec.OverflowX = uint32(s.OverflowX)
 	rec.OverflowY = uint32(s.OverflowY)
+	// CSS static ignores the insets (css-position-3: they only apply to
+	// positioned boxes), and the record's Relative mapping would apply
+	// them as Taffy relative offsets — zero them for static nodes
+	// (browser-core 33; deliberate CSS rule, no pin behaviour existed for
+	// the value).
+	if s.Position == PositionStatic {
+		rec.Inset = native.LayoutEdges{}
+	} else {
+		rec.Inset = lengthEdgesToRecord(s.Inset, remSize, scaleFactor)
+	}
 	// Scrollbar width is an AbsoluteLength forwarded as f32 device pixels
 	// (pinned ToTaffy<f32> for AbsoluteLength).
 	rec.ScrollbarWidth = native.DefiniteLen(
 		roundToDevicePixel(s.ScrollbarWidth.ToPixels(remSize), scaleFactor))
 
-	rec.Inset = lengthEdgesToRecord(s.Inset, remSize, scaleFactor)
 	rec.Size = lengthSizeToRecord(s.Size, remSize, scaleFactor)
 	rec.MinSize = lengthSizeToRecord(s.MinSize, remSize, scaleFactor)
 	rec.MaxSize = lengthSizeToRecord(s.MaxSize, remSize, scaleFactor)

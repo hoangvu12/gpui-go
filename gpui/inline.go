@@ -747,8 +747,13 @@ func wrapWidthsEqual(a, b *float32) bool {
 
 // requestInlineDivFrame is InlineDivFrameState::request_layout: collect
 // the children into paragraphs, then request this element's layout node
-// over the flow children.
-func requestInlineDivFrame(w *Window, style Style, children []LayoutID, app *App) (LayoutID, *inlineDivFrameState) {
+// over the flow children. scope is the containing-block scope the div
+// opened around its child walk (browser-core 33, spec D3): the node
+// request runs through requestLayoutNode, so a static Block/Inline div
+// defers its absolute flow children to the nearest positioned ancestor
+// and a positioned one absorbs the absolutes its static descendants
+// deferred (containingblock.go).
+func requestInlineDivFrame(w *Window, style Style, scope *containingBlockScope, children []LayoutID, app *App) (LayoutID, *inlineDivFrameState) {
 	collector := &inlineParagraphCollector{
 		frameState:      &inlineDivFrameState{},
 		currentDocument: &inlineDocument{},
@@ -760,7 +765,7 @@ func requestInlineDivFrame(w *Window, style Style, children []LayoutID, app *App
 	}
 	collector.finishParagraph()
 
-	layoutID, err := requestLayoutOf(w, style, collector.frameState.flowChildLayoutIDs...)
+	layoutID, err := requestLayoutNode(w, scope, style, collector.frameState.flowChildLayoutIDs)
 	if err != nil {
 		panic(fmt.Sprintf("gpui: inline div request_layout: %v", err))
 	}

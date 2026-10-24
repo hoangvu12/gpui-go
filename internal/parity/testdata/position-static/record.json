@@ -1,0 +1,86 @@
+{
+  "name": "position-static",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T00:52:50Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "abs-br": {
+      "x": 128,
+      "y": 108,
+      "width": 50,
+      "height": 36
+    },
+    "abs-ctl": {
+      "x": 255,
+      "y": 11,
+      "width": 60,
+      "height": 40
+    },
+    "abs-pct": {
+      "x": 53,
+      "y": 80,
+      "width": 30,
+      "height": 20
+    },
+    "abs-tl": {
+      "x": 18,
+      "y": 14,
+      "width": 40,
+      "height": 30
+    },
+    "ancestor": {
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 160
+    },
+    "chain-s1": {
+      "x": 430,
+      "y": 0,
+      "width": 60,
+      "height": 50
+    },
+    "chain-s2": {
+      "x": 430,
+      "y": 0,
+      "width": 40,
+      "height": 30
+    },
+    "control": {
+      "x": 240,
+      "y": 0,
+      "width": 150,
+      "height": 110
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "root-abs-bl": {
+      "x": 30,
+      "y": 354,
+      "width": 36,
+      "height": 22
+    },
+    "root-abs-br": {
+      "x": 576,
+      "y": 356,
+      "width": 44,
+      "height": 28
+    },
+    "static-parent": {
+      "x": 20,
+      "y": 20,
+      "width": 120,
+      "height": 90
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}
