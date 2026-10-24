@@ -346,9 +346,22 @@ func drawRoots(w *Window, app *App, ds *windowDrawState, frame *frameDrawState) 
 	// element out in the panel region after the root's prepaint.
 	inspectorElement := prepaintInspectorElement(w, app, frame.viewport)
 
+	// browser-core ticket 24: the window's open tooltips prepaint as
+	// roots here too (the inspector element's pattern) — after the app
+	// tree, so their anchor bounds cells are current, and before the
+	// deferred round, so the entries' deferred composites join it and
+	// paint at their layer priorities in paintDeferredDraws
+	// (tooltip.go prepaintTooltipElements).
+	tooltipLayers := prepaintTooltipElements(w, app, frame.viewport)
+
 	// prepaint_deferred_draws (window.rs 3436; Base ticket 08,
 	// deferred.go).
 	prepaintDeferredDraws(w, app)
+	// browser-core ticket 24: the deferred round's hitboxes (the
+	// window-rendered tooltips' surfaces, and every deferred overlay's
+	// content) join the paint-time hit test now, before their paints
+	// read it (interact.go refreshPaintHitTestAfterDeferred).
+	refreshPaintHitTestAfterDeferred(w)
 
 	// The active drag's preview prepaints as a root at
 	// mouse_position - cursor_offset (window.rs 3451-3456; the port has no
@@ -366,8 +379,11 @@ func drawRoots(w *Window, app *App, ds *windowDrawState, frame *frameDrawState) 
 
 	// paint_inspector (window.rs 3467-3468), paint_deferred_draws (3470),
 	// the drag preview (3474-3475), then the hovered pick highlight
-	// (paint_inspector_hitbox, 3480-3482).
+	// (paint_inspector_hitbox, 3480-3482). The tooltips' registrations
+	// paint with the inspector's (their composites paint in the
+	// deferred round below, tooltip.go paintTooltipElements).
 	paintInspectorElement(w, app, inspectorElement)
+	paintTooltipElements(w, app, tooltipLayers)
 	paintDeferredDraws(w, app)
 	if hasDragElement {
 		WithAbsoluteElementOffsetVoid(w, dragOffset, func(w *Window) {

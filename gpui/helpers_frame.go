@@ -78,8 +78,12 @@ func finishFrame(w *Window, evicted []elementStateReleaser) (focusMoved bool) {
 		// published. Like a focus move, a delivered toggle may have
 		// dirtied state; the refresh after publication catches it.
 		overlayChanged := w.finishOverlayFrame(a)
+		// browser-core ticket 24: the tooltip records reconcile after
+		// the overlay layer — a tooltip whose element stopped drawing
+		// hides here (the frame's seen marks).
+		tooltipChanged := w.finishTooltipFrame(a)
 		focusMoved = dispatchFocusPhase(w, a, previous, previousActive, current, currentActive)
-		focusMoved = focusFixed || focusMoved || overlayChanged
+		focusMoved = focusFixed || focusMoved || overlayChanged || tooltipChanged
 	})
 	return focusMoved
 }

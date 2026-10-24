@@ -612,6 +612,25 @@ func ensurePaintHitTest(w *Window) {
 	is.mouseHitTest = w.currentHitTest(fs.next)
 }
 
+// refreshPaintHitTestAfterDeferred recomputes the paint-time hit test
+// once the DEFERRED round has inserted its hitboxes (browser-core
+// ticket 24): the first-div-paint computation runs before the deferred
+// round, so a deferred overlay's boundary listeners — a tooltip's own
+// surface, the grace period's upstream arm — would read a hit test
+// that lacks their hitboxes and report a spurious leave. The guard is
+// released and the test recomputed against the completed hitbox set;
+// the input dispatch recomputes its own answer from the rendered frame
+// per event, so only the paint-time checks observe this value.
+func refreshPaintHitTestAfterDeferred(w *Window) {
+	fs := focusState(w)
+	if fs.next == nil {
+		return
+	}
+	st := interactStateOf(w)
+	st.paintHitTestFrame = nil
+	ensurePaintHitTest(w)
+}
+
 // hasActivePrompt is window.rs:6748 Window::has_active_prompt. The port
 // has no in-window prompt (App::set_prompt_builder is not ported), so
 // no prompt is ever active.
@@ -1399,6 +1418,15 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, path string, es *Interac
 	}
 	for _, listener := range d.pinchListeners {
 		registerMouseListener(w, listener, hitbox)
+	}
+
+	// Ticket 24: the tooltip hook's hover source (tooltip.go
+	// paintTooltipHoverListener — the pointerover/out interest arm,
+	// delivered through the hover boundary sweeps of browser-core
+	// ticket 10). The path key is the click path's — the element's
+	// global id key, the tooltip record's identity.
+	if d.tooltip != nil && path != "" {
+		paintTooltipHoverListener(d, hitbox, path, w, app)
 	}
 
 	// The hover-state tracker (div.rs:3333-3358): a captured mouse move

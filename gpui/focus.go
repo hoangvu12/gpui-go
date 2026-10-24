@@ -166,6 +166,11 @@ type renderedFrame struct {
 	// the modal entry's first registration (the entries outside the
 	// modal's content are inert and never register).
 	modalFocusEntries []modalFocusEntry
+	// tooltipSeen are the id-path keys of the tooltip-carrying elements
+	// that drew this frame (browser-core ticket 24, tooltip.go): the
+	// frame-end reconciliation (finishTooltipFrame) drops the tooltip
+	// records whose element stopped drawing.
+	tooltipSeen []string
 	// hitboxStack is the transient stack of hitboxes whose subtrees are
 	// prepainting (browser-core ticket 11): each hitbox records the top
 	// of this stack as its parent, which is how the capture chain

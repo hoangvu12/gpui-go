@@ -1021,6 +1021,11 @@ type DivElement struct {
 	// (an autofocus element the port cannot focus is skipped, like
 	// Chromium's IsFocusable gate).
 	autoFocus bool
+	// tooltip is the element's tooltip authoring state (browser-core
+	// ticket 24, tooltip.go): the plain default look's text or the
+	// custom content builder, plus the toggle listener. Nil until a
+	// Tooltip/TooltipView builder runs.
+	tooltip *tooltipSpec
 	// contextMenuListeners are the element's OnContextMenu handlers
 	// (browser-core ticket 17, contextmenu.go).
 	contextMenuListeners []func(*ContextMenuEvent, *Window, *App)
@@ -1992,6 +1997,13 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 	// wins, matching prepaint order.
 	if d.elementID != nil && d.elementID.Kind == ElementIDName && windowTracksAnchors(w) {
 		recordAnchorBounds(w, d.elementID.Name, bounds, ContentMask(w))
+	}
+	// Ticket 24: the tooltip hook's prepaint half — the record refresh
+	// (the spec, the invoker name, the focus identity, the anchor
+	// bounds cell), the focus diff (the focusin/focusout source) and
+	// the frame's seen mark (tooltip.go prepaintTooltipHook).
+	if d.tooltip != nil && global != nil {
+		prepaintTooltipHook(d, global, bounds, w, app)
 	}
 	// Ticket 21: a named element records its global id path into the
 	// frame's invoker registry for TopLayer().Invoker() lookups — the

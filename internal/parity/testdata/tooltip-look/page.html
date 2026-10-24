@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		position: relative;
+	}
+	button {
+		appearance: none;
+		border: 0;
+		margin: 0;
+		padding: 0;
+		display: block;
+		position: absolute;
+		width: 40px;
+		height: 20px;
+		background: #2563eb;
+		outline: none;
+	}
+	#b1 {
+		left: 0px;
+		top: 0px;
+	}
+	/* The UA stylesheet centers popovers (position: fixed; inset: 0;
+	   margin: auto; border; padding), so the pages reset all of it back
+	   to plain fixed boxes (html.css:1966-1977). */
+	.hint {
+		position: fixed;
+		inset: auto;
+		margin: 0;
+		border: 0;
+		padding: 0;
+		overflow: visible;
+	}
+	/* The box is pinned to the port's measured size (the port defines
+	   the look, the page copies it): the default look's box is
+	   text-driven, whose float32-exact width the two text systems shape
+	   0.33px apart ("Tip" at 16px), so the fixture pins the geometry and
+	   lets Tier C carry the look. */
+	/* The box is pinned to the port's measured size (the port defines
+	   the look, the page copies it): the default look's box is
+	   text-driven, whose float32-exact width the two text systems shape
+	   0.33px apart ("Tip" at 16px), so the fixture pins the geometry and
+	   lets Tier C carry the look. The CSS box is content-box: the
+	   numbers are the port's border-box size minus the 8px padding. */
+	#tip {
+		left: 0px;
+		top: 24px;
+		width: 22px;
+		height: 26px;
+		padding: 4px;
+		background: #ffffe1;
+		color: #000000;
+		font: 16px "Segoe UI";
+		line-height: 1.618;
+	}
+</style>
+</head>
+<body data-id="root">
+	<button id="b1" interestfor="tip" data-id="b1"></button>
+	<div id="tip" class="hint" popover="hint" data-id="tooltip">Tip</div>
+</body>
+</html>

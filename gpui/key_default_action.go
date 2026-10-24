@@ -206,6 +206,16 @@ func (w *Window) runKeyDefaultActions(event any, app *App) bool {
 		// where focus is. The arm never consumes the key (nothing in
 		// Chromium's Escape path calls SetDefaultHandled), so it reports
 		// nothing and the dispatch proceeds to the contextmenu check.
+		// browser-core ticket 24: the interest loss first, still inside
+		// the Escape arm (LoseInterestInAllElements,
+		// keyboard_event_manager.cc:628 — before the close-watcher
+		// signal at :629): every open tooltip closes immediately, and
+		// the watcher stack then serves whatever sits below them. Other
+		// keys drop nothing — only Escape reaches the handler
+		// (DefaultEscapeEventHandler runs for VKEY_ESCAPE alone, :619).
+		if e.Keystroke.Key == "escape" {
+			w.dropAllTooltipInterest(app)
+		}
 		w.defaultEscapeCloseWatchers(e, app)
 		// The contextmenu keyboard trigger (browser-core ticket 17,
 		// contextmenu.go dispatchContextMenuFromKey): Shift+F10 fires

@@ -1,0 +1,95 @@
+{
+  "name": "tooltip-hover",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T17:08:34Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "b1": {
+      "x": 0,
+      "y": 0,
+      "width": 40,
+      "height": 20
+    }
+  },
+  "events": [
+    {
+      "kind": "pointerenter",
+      "target": "b1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "x",
+      "code": "KeyX"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "x",
+      "code": "KeyX"
+    },
+    {
+      "kind": "toggle",
+      "target": "tip",
+      "defaultPrevented": false,
+      "state": "open"
+    },
+    {
+      "kind": "pointerleave",
+      "target": "b1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerenter",
+      "target": "tip",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "y",
+      "code": "KeyY"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "y",
+      "code": "KeyY"
+    },
+    {
+      "kind": "pointerleave",
+      "target": "tip",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "z",
+      "code": "KeyZ"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "z",
+      "code": "KeyZ"
+    },
+    {
+      "kind": "toggle",
+      "target": "tip",
+      "defaultPrevented": false,
+      "state": "closed"
+    }
+  ],
+  "screenshot": "chrome.png"
+}

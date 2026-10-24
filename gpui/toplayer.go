@@ -883,6 +883,12 @@ type TopLayerElement struct {
 	// (an overlay the app already defers, like Base's popup surfaces):
 	// the element only registers the entry.
 	passThrough bool
+	// tooltipRec marks a WINDOW-RENDERED tooltip entry (browser-core
+	// ticket 24, tooltip.go): the top layer's content registers the
+	// tooltip's own surface listener — the grace period's upstream arm
+	// (hovering the tooltip cancels the invoker's pending interest
+	// loss). Set only by buildTooltipLayer; never by app code.
+	tooltipRec *tooltipRecord
 }
 
 // TopLayer returns an element that renders handle's overlay in the
@@ -1183,7 +1189,15 @@ func (c *topLayerContent) Prepaint(global *GlobalElementID, inspector *Inspector
 	}
 	c.topLayer.child.Prepaint(w, app)
 	if union, ok := unionOfHitboxesFrom(fs.next, hitboxStart); ok {
-		w.insertHitboxRecord(union, HitboxNormal)
+		record := w.insertHitboxRecord(union, HitboxNormal)
+		// browser-core ticket 24: a WINDOW-RENDERED tooltip entry's own
+		// surface listener — the grace period's upstream arm (hovering
+		// the invoker's target cancels the invoker's pending interest
+		// loss, element.cc:13481-13490's AllSourceInterestInvokers
+		// loop; leaving the target schedules it back).
+		if c.topLayer.tooltipRec != nil && record != nil {
+			paintTooltipSurfaceListener(c.topLayer.tooltipRec, record.box, w, app)
+		}
 	}
 	return struct{}{}
 }
