@@ -12,9 +12,12 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - **Open follow-up from 33+25:** Anchored, Deferred and custom containers don't call `RequestContainerLayout`, so a `Static()` div inside them defers its absolute children past the overlay (opt-in only; for 76).
 - 29 forced colours, 30 spellcheck and 77 (rev 15.1) are merged and resolved. 77 left open: the partial-region backdrop crop zoom (fold into R16), and the 42/43 text fields, which are blocked behind the pinned Parley/Taffy seams (per-field plans in TEXT_ABI.md/LAYOUT_ABI.md). Watch authorspec TestRealTwoWindowCounterSharedModel (a rare reentrancy panic, seen once; then 19/19).
 - **Running (they report to this chat, 08b88b23):**
+  - 28 text scale/caret/highlight: chat d3c30c9b, worktree `gpui-go-wt-core-28`, branch `core/28-text-scale-caret`
+  - 44 transitions and the core motion engine: chat 8d035ea9, worktree `gpui-go-wt-core-44`, branch `core/44-transitions`
+  - 63 TSX surface, .d.ts and check: chat 8d3ffb7a, worktree `gpui-go-wt-core-63`, branch `core/63-tsx-surface`
   - 12 click/activation/focus-visible: chat 10746939, worktree `gpui-go-wt-core-12`, branch `core/12-click-focus-visible`
   - 34 position: sticky: chat 4fed7233, worktree `gpui-go-wt-core-34`, branch `core/34-sticky`
-- The user said the PC can take more workers ("yea go ahead"). Ramp up gradually.
+- The user asked for more speed (2026-10-24, "speed things uppppp"). 5 workers are running, with GOFLAGS=-p=4 and targeted tests.
 - **Rules:** as in orchestrator 7's block below and the handoff doc, with these changes from the user (2026-10-24):
   - KEEP the Go build cache. Clear it only when it passes about 40 GB (`go env GOCACHE`), because a cold cache makes every worker recompile gpui, which freezes the PC.
   - Workers run go commands with `GOFLAGS=-p=4` and cargo with `-j 4`.
