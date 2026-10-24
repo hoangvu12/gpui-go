@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 7 (Claude Code)
 Blocked by: 01
 Triage: ready-for-agent
@@ -23,6 +23,7 @@ Every behaviour check is a browser-parity harness fixture (an HTML page recorded
 ## Comments
 
 - 2026-10-24, worker (core/33-position-static): implemented, test-first. The Chrome record was captured before the mechanism ran (the wrong view — every static parent left relative, which IS the pre-ticket pin — fails Tier A on exactly the five moved absolute boxes, so the record is a real gate), and the unit tests were written against the computed CSS geometry. The default does not flip: with no `Static()` anywhere the native tree is built exactly as before (empty deferred lists, identical child handles to CreateNode); `TestAbsoluteUnderDefaultParentKeepsPinBehaviour` and the fixture's control case pin it. One transient environmental failure during validation: `TestWin32TranslateKeyDownCarriesCodeAndLocation` read the physical Shift state while the user was typing (passes 3/3 isolated; passes at the base commit — keyboard state, not the diff).
+- 2026-10-24, orchestrator 8 (verification): merged c4cf11c into main with no conflicts. On the merged tree, `go build ./...`, `go vet` and `gofmt -l` are clean. `go test -p 1 -count=1` passes for ./gpui/, ./internal/parity/... (position fixture included), ./internal/layoutspec/, ./base, richtextspec, dropspec, authorspec, inspectorspec and examples/zterm. I read the diff: the default path is unchanged (a non-static style attaches its children directly, and with no `Static()` every deferred list stays empty). The shared-file changes are scoped to position (div.go, inline.go, element.go, layout.go, style.go, styled.go, and the `static` class moving from unsupported to generated). Chromium citations checked: layout_object.cc:1877-1883 (ContainerForAbsolutePosition), :2069-2081 (ComputeIsAbsoluteContainer, position != kStatic), out_of_flow_layout_part.cc:2574-2576 (inset relative to the padding box). Follow-ups: Anchored, Deferred and custom containers don't call RequestContainerLayout yet (25/76). openContainingBlock allocates one scope per positioned div per frame, a small addition to the per-frame allocation count.
 
 ## Answer
 
