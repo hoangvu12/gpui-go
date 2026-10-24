@@ -7,8 +7,17 @@ reserved slot 3 of the bootstrap `GpuiGoAbiTable` (see
 path/draw extension). The Go mirror lives in
 `internal/native/scene.go`.
 
-**Scene service version 5 (browser-core ticket 39, native revision
-15):** the records grew the browser-parity surface: `background` and
+**Scene service version 5 (rev 15.1, browser-core ticket 77, native
+revision 151):** the filter record grew from 188 to 780 bytes
+(`MAX_SCENE_FILTERS` 4 to 8; `color_matrix` 20 to 160 words, one
+20-word slot per colour function with the [0,1] clamp between — the
+record section and `shaders/mod.rs` divergence 3 carry the full note).
+No table slots changed; the scene table's `service_version` and
+`size_of_filter_record` self-checks move with it.
+
+**Scene records, rev 15 (browser-core ticket 39, native revision
+15 — the service version stayed 4 through this growth):** the records
+grew the browser-parity surface: `background` and
 `border_color` (quads), `color` (shadows, paths) are full
 `GpuiGoSceneBackground` records — a solid or a two-stop linear gradient
 with CSS semantics (the gradient-line length `|W·sin θ| + |H·cos θ|`
@@ -17,8 +26,14 @@ both are recorded divergences from the pinned shader, compiled from the
 vendored copy in `native/shaders/` by the crate's `build.rs`); drop
 shadows clip out of the rounded `element_bounds` (CSS
 css-backgrounds-3 §box-shadow, another recorded divergence); filter
-records carry per-filter kind tags and one composed 4x5 colour matrix
-(CSS filter-effects' colour functions), applied in the composite pass;
+records carry per-filter kind tags and the chain's 4x5 colour matrices
+ONE PER COLOUR FUNCTION (CSS filter-effects' colour functions), applied
+in chain order in the composite pass with the [0,1] clamp between
+functions — rev 15.1 (browser-core ticket 77): Chrome clamps each
+function's output before the next applies (every intermediate is
+rasterized 8-bit), which one composed matrix cannot express (the
+filters-chain fixture measured a 15.47 mean channel diff against
+Chrome under the rev-15 composed payload);
 sprite records carry a `pixelated` sampling flag (CSS
 `image-rendering: pixelated`) that splits batches so one draws through
 the point sampler; and the backdrop blur's input is cropped to the
@@ -128,7 +143,7 @@ service table's self-check fields before any call.
 | `GpuiGoSceneQuadRecord` | 236 | order @0, bounds @4, content_mask @20, background @36, border_color @108, corner_radii[4] @180, border_widths[4] @196, border_style @212, border_dashed_length @216, border_dashed_gap @220, corner_smoothing @224, padding @228, record_size @232 |
 | `GpuiGoSceneShadowRecord` | 172 | order @0, blur_radius @4, bounds @8, corner_radii[4] @24, content_mask @40, color @56, element_bounds @128, element_corner_radii[4] @144, inset @160, corner_smoothing @164, record_size @168 |
 | `GpuiGoSceneUnderlineRecord` | 72 | order @0, padding @4, bounds @8, content_mask @24, color @40, thickness @60, wavy @64, record_size @68 |
-| `GpuiGoSceneFilterRecord` | 188 | order @0, bounds @4, content_mask @20, corner_radii[4] @36, corner_smoothing @52, blur_radii[4] @56, filter_count @72, opacity @76, is_start @80, filter_tags[4] @84 (per-filter: 0 = blur, 1 = colour matrix; unused entries zero), color_matrix[20] @100 (the composed row-major 4x5 matrix, f32 bits), color_matrix_count @180, record_size @184 |
+| `GpuiGoSceneFilterRecord` | 780 | order @0, bounds @4, content_mask @20, corner_radii[4] @36, corner_smoothing @52, blur_radii[8] @56, filter_count @88, opacity @92, is_start @96, filter_tags[8] @100 (per-filter: 0 = blur, 1 = colour matrix; unused entries zero), color_matrix[160] @132 (rev 15.1: one row-major 4x5 matrix slot PER matrix filter in chain order — slot i is words 20i..20i+20, f32 bits; slots at and beyond color_matrix_count zero), color_matrix_count @772 (the tag-1 entry count), record_size @776 |
 | `GpuiGoSceneSurfaceRecord` | 56 | order @0, bounds @4, content_mask @20, source_tag @36, source_reserved[3] @40, record_size @56 |
 | `GpuiGoSceneTileRecord` | 32 | texture_index @0, texture_kind @4, tile_id @8, padding @12, bounds x/y/w/h @16..32 (the pinned `AtlasTile` sub-record of the sprite records) |
 | `GpuiGoSceneSpriteRecord` | 124 | order @0, padding @4, bounds @8, content_mask @24, color @40, tile @60, transformation[6] @92 (rotation-scale 2x2 then translation, f32 bits), pixelated @116 (0 = bilinear, 1 = point sampling), record_size @120 (the pinned `MonochromeSprite`/`SubpixelSprite` field set) |
@@ -193,13 +208,13 @@ returning an i32 status):
 Self-check scalars: `service_version` (4), `size_of_table` (288),
 `align_of_table` (8), `size_of_quad_record` (132),
 `size_of_shadow_record` (120), `size_of_underline_record` (72),
-`size_of_filter_record` (88), `size_of_surface_record` (56),
+`size_of_filter_record` (780), `size_of_surface_record` (56),
 `size_of_monochrome_sprite_record` (120),
 `size_of_polychrome_sprite_record` (100),
 `size_of_command_record` (52), `size_of_requirements_record` (44),
 `size_of_meta_record` (56), `size_of_path_record` (64),
 `size_of_path_vertex_record` (16), `size_of_path_command_record` (56),
-`max_filters` (4).
+`max_filters` (8).
 
 ## Handles
 
@@ -224,8 +239,11 @@ panic contained.
 
 - 262,144 paint operations per scene (the replay address space),
 - 65,536 primitives per class per scene,
-- 4 filters per chain (the pinned `SmallVec<[ScaledFilter; 4]>`
-  capacity),
+- 8 filters per chain (rev 15.1 grew the pinned `SmallVec
+  <[ScaledFilter; 4]>` capacity 4 to 8 so a chain carries the
+  per-function colour matrices beside the composed blur; a longer
+  chain composes its excess into the last matrix slot — the
+  documented approximation),
 - 262,144 plan commands per scene.
 
 ## Validation order

@@ -136,6 +136,46 @@ and refreshes the embedded pair `internal/native/artifacts/
 MSVC linker embeds a timestamp, so identical sources produce different
 SHA-256s (observed during this ticket).
 
+### Recorded measurements (2026-10-24, the browser-core ticket 77 rebuild — rev 15.1)
+
+- Toolchain: `rustc 1.97.0`, host/target `x86_64-pc-windows-msvc`,
+  `RUSTFLAGS=-C target-feature=+crt-static`, `cargo -j 4` (the
+  full-graph build predates the PC-health note and ran `-j 6`).
+  `ce-source/` is a copy of the main checkout's pinned `254b5dbd…`
+  tree (unmodified).
+- DLL: 19,107,328 bytes, SHA-256
+  `ef337ad3051a382b7c9d98e5c10c9926f72df6e7d3c0d4d2a1012ec7cb322f4b`,
+  gzip-9 7,591,778 bytes. Native revision **151** (the integer
+  ENCODING of the point release “15.1” — the field is a u32
+  equality-compared by the ABI table, the manifest and the Go
+  constants, and 16 stays reserved for ticket 54's R16 “rebuilt as
+  native rev 16”; the choice is documented at every pin site), the
+  embedded artifact before it was revision 15, SHA `8b944eae…`.
+  Capability mask `0xFFF`. CRT outcome: **static**.
+- Changes: the rev-15 extension-cbuffer upload actually copies its
+  struct (ticket 41's `&[*uniforms]` reference bug — colour filters
+  and the backdrop crop were GPU no-ops); the filter record carries
+  one 4×5 matrix PER colour function (188 → 780 bytes,
+  `MAX_SCENE_FILTERS` 4 → 8, scene service v5) and the vendored
+  composite shader applies them in chain order with the **[0,1]
+  clamp between functions** (Chrome clamps each function's output
+  8-bit — the filters-chain fixture measured a 15.47 mean channel
+  diff against Chrome under the composed payload, and is now
+  pixel-exact); the synthetic italic shears by Chrome's exact **−0.25**
+  in the raster transform instead of DirectWrite's oblique simulation
+  (measured −0.34 — the 08 probe now reads −0.2500 on both sides);
+  and CSS `text-wrap: nowrap` drives the wrap policy (the one
+  wireable rev-15 text-run field — the rest stay recorded behind the
+  pinned adapter/Taffy seams in TEXT_ABI.md / LAYOUT_ABI.md).
+  Evidence:
+  [`evidence/browser-core/ticket77-native-rebuild.json`](../evidence/browser-core/ticket77-native-rebuild.json).
+- `cargo test -p gpui-go-native` still fails to compile the lib test
+  target with the same 5 pre-existing a11y.rs/capture.rs errors; the
+  changes are verified through the Go gates
+  (`internal/parity`'s filters/shadow/textpaint fixtures, the 08
+  probes, `internal/textspec`, `internal/scenespec`, and the rest of
+  the headless suite).
+
 ### Recorded measurements (2026-10-24, the browser-core ticket 39 rebuild)
 
 - Toolchain: `rustc 1.97.0`, host/target `x86_64-pc-windows-msvc`,

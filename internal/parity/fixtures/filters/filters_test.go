@@ -55,37 +55,31 @@ func failPixelComparison(t *testing.T, fixture parity.Fixture, view func(*parity
 // TestColorsUnfilteredFailsOnlyThePixelComparison checks the colour
 // fixture's discrimination: with no filter applied, every filtered
 // swatch differs (grayscale, sepia, invert and the rest), while the
-// swatches' boxes are unchanged. SKIPPED while the native colour-matrix
-// blocker stands (see nativeMatrixBlocked): with the matrix a GPU
-// no-op, the correct and the wrong view render identically, so the
-// discrimination cannot run; unskipping is part of the native fix.
+// swatches' boxes are unchanged. Active since the rev-15.1 native
+// rebuild (the extension-cbuffer upload fix); under rev 15 the matrix
+// was a GPU no-op and the correct and wrong views rendered
+// identically, so the test skipped behind SkipPixels.
 func TestColorsUnfilteredFailsOnlyThePixelComparison(t *testing.T) {
-	if filters.ColorsFixture.SkipPixels != "" {
-		t.Skipf("the wrong view cannot be discriminated while the colour matrix is a GPU no-op: %s", filters.ColorsFixture.SkipPixels)
-	}
 	failPixelComparison(t, filters.ColorsFixture, filters.ColorsUnfiltered, "grayscale")
 }
 
 // TestChainSwappedFailsOnlyThePixelComparison checks the chain
 // fixture's discrimination: composing the two functions in the wrong
 // order fails Tier C, so a regression of the CSS chain order (first
-// function applied first) is caught. SKIPPED while the native blocker
-// stands (see nativeMatrixBlocked).
+// function applied first) is caught. Active since the rev-15.1 native
+// rebuild (the per-function matrix payload — the clamp between the
+// functions is what makes the two orders differ on the record's
+// stripes; a composed single matrix would still discriminate, but the
+// correct view would not match Chrome).
 func TestChainSwappedFailsOnlyThePixelComparison(t *testing.T) {
-	if filters.ChainFixture.SkipPixels != "" {
-		t.Skipf("the wrong order cannot be discriminated while the colour matrix is a GPU no-op: %s", filters.ChainFixture.SkipPixels)
-	}
 	failPixelComparison(t, filters.ChainFixture, filters.ChainSwapped, "sepia-hue")
 }
 
 // TestImageUnfilteredFailsOnlyThePixelComparison checks the image
 // fixture's discrimination: the img elements without their filters
-// differ from the filtered record. SKIPPED while the native blocker
-// stands (see nativeMatrixBlocked).
+// differ from the filtered record. Active since the rev-15.1 native
+// rebuild.
 func TestImageUnfilteredFailsOnlyThePixelComparison(t *testing.T) {
-	if filters.ImageFixture.SkipPixels != "" {
-		t.Skipf("the wrong view cannot be discriminated while the colour matrix is a GPU no-op: %s", filters.ImageFixture.SkipPixels)
-	}
 	failPixelComparison(t, filters.ImageFixture, filters.ImageUnfiltered, "img-grayscale")
 }
 

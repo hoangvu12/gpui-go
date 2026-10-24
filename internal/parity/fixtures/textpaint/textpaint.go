@@ -141,14 +141,18 @@ var ItalicFixture = parity.Fixture{
 	View:   ItalicView,
 	BoxIDs: []string{"tahoma-upright", "tahoma-italic", "segoe-italic"},
 	Tolerance: parity.PixelTolerance{
-		// Set from the measured statistics by the probe: whole mean
-		// 0.3460 / hot 0.00494, worst ROI tahoma-italic mean 1.7671 /
-		// hot 0.02340 — the gates sit at 2x those. The deliberately-wrong
-		// M-stems view measures whole 1.5690 / worst ROI 6.5492 / hot
-		// 0.08277, past every gate, verified by textpaint_test.go.
-		MaxMeanChannelDiff:    0.75,
-		MaxROIMeanChannelDiff: 3.7,
-		MaxHotPixelFraction:   0.05,
+		// Re-recorded after the rev-15.1 synthetic-italic fix (the
+		// exact -0.25 shear, Chrome's setSkewX(-1/4)): whole mean
+		// 0.2165 / hot 0.00328, worst ROI tahoma-italic mean 0.6882 /
+		// hot 0.00964 — the gates sit at 2x those (before the fix, with
+		// DirectWrite's -0.34 oblique: whole 0.3460 / hot 0.00494,
+		// worst ROI 1.7671 / 0.02340 — the fix moved the fixture
+		// toward Chrome). The deliberately-wrong M-stems view measures
+		// whole 1.573 / worst ROI 5.918, past every gate, verified by
+		// textpaint_test.go.
+		MaxMeanChannelDiff:    0.45,
+		MaxROIMeanChannelDiff: 1.4,
+		MaxHotPixelFraction:   0.02,
 	},
 }
 

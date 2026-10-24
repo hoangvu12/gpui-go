@@ -114,28 +114,42 @@ pub mod blur {
     texture!(group(1), binding(1), BLUR_TEXTURE: Texture2D<f32>);
     sampler!(group(1), binding(2), BLUR_SAMPLER: Sampler);
 
-    // rev-15 addition (browser-core ticket 39): the composed colour
-    // matrix of the filter chain's colour-matrix filters, delivered in
+    // rev-15 addition (browser-core ticket 39), reshaped in rev 15.1
+    // (browser-core ticket 77): the filter chain's colour matrices in
     // its own constant buffer so the pinned `BlurUniforms` layout is
-    // untouched. The rows are the first four columns of the 4x5 CSS
-    // matrix; the offset vector is the fifth column: out =
-    // row_i · (r, g, b, a) + offset_i. `enabled` is 0 for blur-only
-    // chains (the composite then reproduces the pinned pass exactly).
+    // untouched. Each entry is one colour function's row-major 4x5
+    // matrix: the first four columns of row_i are `row_i`, the fifth
+    // column is `offset`: out_i = row_i · (r, g, b, a) + offset_i.
+    //
+    // rev 15.1 carries one entry PER colour function (applied in chain
+    // order, each followed by the [0,1] clamp) instead of rev 15's one
+    // composed matrix: Chrome does NOT compose the chain into one map —
+    // each function's output is rasterized 8-bit before the next
+    // applies, which clamps every channel to [0,1] (measured against
+    // the filters-chain record: hue-rotate(90deg) sepia(1) on pure red
+    // reads (70, 62, 48) = sepia·clamp(hue·red) — the composed matrix
+    // would give (42, 38, 29), and the fixture's whole-image mean
+    // channel diff against Chrome was 15.4667). The entries' number is
+    // `count`; unused entries are ignored (the ABI record zero-pads
+    // them). `sample_offset` is the composite's region-relative
+    // sampling offset (0,0) — the pinned formula — for content filters.
     #[repr(C)]
     #[derive(Clone, Copy, Wgsl)]
-    pub struct ColorMatrixUniforms {
+    pub struct ColorMatrixEntry {
         pub row0: Vec4f,
         pub row1: Vec4f,
         pub row2: Vec4f,
         pub row3: Vec4f,
         pub offset: Vec4f,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Wgsl)]
+    pub struct ColorMatrixUniforms {
+        pub entries: [ColorMatrixEntry; 8],
         pub sample_offset: Vec2f,
-        pub enabled: u32,
+        pub count: u32,
         pub padding0: u32,
-        pub padding1: u32,
-        pub padding2: u32,
-        pub padding3: u32,
-        pub padding4: u32,
     }
     uniform!(group(1), binding(3), COLOR_MATRIX_LOCALS: ColorMatrixUniforms);
 
@@ -230,32 +244,44 @@ pub mod blur {
         let uv = (position - get!(COLOR_MATRIX_LOCALS).sample_offset)
             / get!(BLUR_LOCALS).target_size;
         let mut blurred = texture_sample_level(BLUR_TEXTURE, BLUR_SAMPLER, uv, 0.0);
-        // rev-15 addition (browser-core ticket 39): apply the composed
-        // colour-matrix filters. The blurred texture holds premultiplied
+        // rev-15 addition (browser-core ticket 39), reshaped in rev 15.1
+        // (browser-core ticket 77): apply the chain's colour-matrix
+        // filters, one entry per function in chain order, each followed
+        // by the CSS [0,1] clamp (Chrome rasterizes every function's
+        // output 8-bit before the next applies — the filters-chain
+        // fixture measured a composed matrix diverging by a 15.47 mean
+        // channel diff). The blurred texture holds premultiplied
         // content (every scene fragment emits premultiplied colors), so
-        // the color is un-premultiplied, mapped through the 4x5 matrix
-        // (filter-effects-1 §FilterProperty operates on non-premultiplied
-        // RGBA; CSS's colour functions are all 4x5 matrices), clamped to
-        // the filter region's [0, 1], and re-premultiplied.
+        // the color is un-premultiplied, mapped through the entries,
+        // and re-premultiplied.
         let matrix = get!(COLOR_MATRIX_LOCALS);
-        if matrix.enabled != 0u32 {
+        if matrix.count > 0u32 {
             let alpha = blurred.w;
-            let straight = select(
+            let mut mapped = select(
                 transparent(),
                 blurred / vec4f(alpha, alpha, alpha, 1.0),
                 alpha > 0.0,
             );
-            let mapped = vec4f(
-                dot(matrix.row0, straight) + matrix.offset.x,
-                dot(matrix.row1, straight) + matrix.offset.y,
-                dot(matrix.row2, straight) + matrix.offset.z,
-                dot(matrix.row3, straight) + matrix.offset.w,
-            );
-            let clamped = saturate(mapped);
-            blurred = clamped * vec4f(
-                clamped.w,
-                clamped.w,
-                clamped.w,
+            let mut entry = 0u32;
+            while entry < matrix.count {
+                let m = matrix.entries[entry as usize];
+                mapped = vec4f(
+                    dot(m.row0, mapped) + m.offset.x,
+                    dot(m.row1, mapped) + m.offset.y,
+                    dot(m.row2, mapped) + m.offset.z,
+                    dot(m.row3, mapped) + m.offset.w,
+                );
+                // The per-function clamp (a negative channel after
+                // hue-rotate, an over-1 channel after sepia or
+                // saturate — the values the next function must NOT
+                // see).
+                mapped = saturate(mapped);
+                entry += 1u32;
+            }
+            blurred = mapped * vec4f(
+                mapped.w,
+                mapped.w,
+                mapped.w,
                 1.0,
             );
         }

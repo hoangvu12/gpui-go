@@ -875,8 +875,8 @@ func TestScenePanicContainment(t *testing.T) {
 	// fix-up to 11, the consumer-gaps font-registration rebuild (the text
 	// service v2) to 12; the cumulative capability mask is 0xFFF (the
 	// additive pattern: every landed service raises both).
-	if identity.NativeRevision != 15 {
-		t.Errorf("native revision = %d, want 15 (browser-core ticket 39 rebuild)", identity.NativeRevision)
+	if identity.NativeRevision != 151 {
+		t.Errorf("native revision = %d, want 151 (rev 15.1, the browser-core ticket 77 rebuild — the u32 encoding of the point release; 16 stays reserved for the R16 rebuild)", identity.NativeRevision)
 	}
 	if identity.Capabilities&0xFFF != 0xFFF {
 		t.Errorf("capabilities mask = %#x, want the ten assigned bits set", identity.Capabilities)

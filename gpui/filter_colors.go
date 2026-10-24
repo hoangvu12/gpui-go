@@ -276,32 +276,49 @@ func composeColorMatrix(first, second [20]float32) [20]float32 {
 	return out
 }
 
-// FilterChain is a filter chain's composed scene payload: the chain's
-// gaussian blurs composed into one radius and its colour-matrix filters
-// composed into one 4x5 matrix — the native rev-15 filter record's
-// payload (SCENE_ABI.md, GpuiGoSceneFilterRecord: one composed matrix,
-// blur entries read their radius in chain order).
+// FilterChain is a filter chain's scene payload: the chain's gaussian
+// blurs composed into one radius and its colour-matrix filters carried
+// ONE PER FUNCTION in chain order — the native rev-15.1 filter record's
+// payload (SCENE_ABI.md, GpuiGoSceneFilterRecord: one matrix slot per
+// colour function, blur entries read their radius in chain order).
 //
 // The blur composition is exact: sequential gaussian blurs equal one
 // gaussian whose standard deviation is the quadrature sum of theirs
 // (a convolution of gaussians), so the radii compose the same way —
-// sqrt(r1² + r2²) — under any linear radius/sigma convention. The
-// matrix composition is exact in chain order (composeColorMatrix); a
-// per-pixel linear map commutes with the uniform-per-channel gaussian,
-// so the native draw order (blur, then the matrix in the composite) is
-// the CSS result for any interleaving.
+// sqrt(r1² + r2²) — under any linear radius/sigma convention.
+//
+// rev 15.1 (browser-core ticket 77) carries the matrices per function
+// instead of composing them: Chrome clamps each filter function's
+// output to [0,1] before the next applies (every intermediate
+// rasterizes 8-bit), which one composed linear map cannot express —
+// the filters-chain fixture measured a 15.47 mean channel diff against
+// Chrome under the composed payload (hue-rotate(90deg) sepia(1) on
+// pure red: Chrome (70,62,48) = sepia·clamp(hue·red), the composed
+// matrix (42,38,29)). A per-pixel linear map still commutes with the
+// uniform-per-channel gaussian, so the native draw order (blur, then
+// the matrices with per-function clamps) is the CSS result for any
+// interleaving up to a clamp sitting between a blur and a matrix (the
+// recorded approximation).
 type FilterChain struct {
 	// BlurRadius is the composed blur radius, logical pixels at paint
 	// time (scaled to device pixels on the way into the record, like
 	// FilterBoundary.BlurRadius).
 	BlurRadius float32
-	// ColorMatrix is the composed row-major 4x5 colour matrix, valid
-	// when ColorMatrixCount > 0.
-	ColorMatrix [20]float32
-	// ColorMatrixCount is 0 (no colour-matrix filters in the chain) or
-	// 1 (the composed payload of any number of them).
+	// ColorMatrix carries the chain's matrices, one 20-word slot per
+	// colour function in chain order (slot i is
+	// ColorMatrix[20*i : 20*i+20]); a chain longer than the record's
+	// capacity composes its excess into the LAST slot (the documented
+	// approximation, see the record).
+	ColorMatrix [160]float32
+	// ColorMatrixCount is the number of carried colour functions
+	// (0..8).
 	ColorMatrixCount int
 }
+
+// filterChainMatrixSlots is the scene filter record's per-function
+// matrix capacity (MAX_SCENE_FILTERS at the native side; one slot may
+// be taken by the composed blur).
+const filterChainMatrixSlots = 8
 
 // IsEmpty reports a chain with no visible filter (every entry
 // identity), which paints inline with no isolation group.
@@ -311,25 +328,44 @@ func (c FilterChain) IsEmpty() bool {
 
 // composeFilterChain composes a style filter chain into its scene
 // payload: identity filters drop out (CSS no-ops), blurs compose by
-// quadrature and the colour-matrix filters compose in chain order
-// (FilterChain).
+// quadrature and the colour-matrix filters are carried one per
+// function in chain order with their per-function clamp semantics
+// (FilterChain; rev 15.1 — rev 15 composed them into one matrix, which
+// diverged from Chrome wherever an intermediate left [0,1]).
 func composeFilterChain(filters []Filter) FilterChain {
 	var chain FilterChain
+	var matrices [filterChainMatrixSlots][20]float32
+	count := 0
 	for _, f := range filters {
 		if f.IsIdentity() {
 			continue
 		}
 		if matrix, ok := f.colorMatrix(); ok {
-			if chain.ColorMatrixCount == 0 {
-				chain.ColorMatrix = matrix
+			if count < filterChainMatrixSlots {
+				matrices[count] = matrix
+				count++
 			} else {
-				chain.ColorMatrix = composeColorMatrix(chain.ColorMatrix, matrix)
+				// A chain longer than the slot capacity: compose the excess
+				// into the last slot (the approximation the record
+				// documents; pathological chains only).
+				matrices[filterChainMatrixSlots-1] = composeColorMatrix(matrices[filterChainMatrixSlots-1], matrix)
 			}
-			chain.ColorMatrixCount = 1
 			continue
 		}
 		chain.BlurRadius = filterComposeRadius(chain.BlurRadius, f.BlurRadius)
 	}
+	// The record's chain entries are one composed blur plus the
+	// matrices, at most MAX_SCENE_FILTERS (8) total — a chain with a
+	// blur carries at most 7 matrix slots, so the 8th folds into the
+	// 7th when a blur is present.
+	if chain.BlurRadius > 0 && count == filterChainMatrixSlots {
+		matrices[filterChainMatrixSlots-2] = composeColorMatrix(matrices[filterChainMatrixSlots-2], matrices[filterChainMatrixSlots-1])
+		count = filterChainMatrixSlots - 1
+	}
+	for slot := 0; slot < count; slot++ {
+		copy(chain.ColorMatrix[20*slot:20*(slot+1)], matrices[slot][:])
+	}
+	chain.ColorMatrixCount = count
 	return chain
 }
 

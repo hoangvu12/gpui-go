@@ -96,7 +96,12 @@ use lyon::math::Transform as LyonTransform;
 /// Version 4 (gpui-perf ticket 05) appended the `insert_batch` entry
 /// (one packed op stream per call); the table grew to 27 pointers, size
 /// 288.
-pub const GPUI_GO_SCENE_SERVICE_VERSION: u32 = 4;
+/// Version 5 (rev 15.1, browser-core ticket 77) grew the filter
+/// record from 188 to 780 bytes (`MAX_SCENE_FILTERS` 4 → 8;
+/// `color_matrix` 20 → 160 words, one slot per colour function with
+/// the [0,1] clamp between — the rev-15 composed payload could not
+/// express Chrome's per-function clamping); no table slots changed.
+pub const GPUI_GO_SCENE_SERVICE_VERSION: u32 = 5;
 
 /// Scene service status codes. 0 is success, negative values are
 /// caller/argument errors, 100+ are internal failures.
@@ -134,9 +139,12 @@ pub mod scene_status {
 pub const MAX_SCENE_OPERATIONS: u32 = 262_144;
 /// Maximum primitives of one class in one scene.
 pub const MAX_SCENE_PRIMITIVES: u32 = 65_536;
-/// Maximum filters in one filter chain (the pinned `SmallVec<[ScaledFilter; 4]>`
-/// inline capacity).
-pub const MAX_SCENE_FILTERS: u32 = 4;
+/// Maximum filters in one filter chain (rev 15.1 grew it from the pin's
+/// `SmallVec<[ScaledFilter; 4]>` inline capacity 4 to 8 so a chain can
+/// carry the per-function colour matrices — one entry each — beside
+/// the composed blur; a longer chain composes its excess, see
+/// `GpuiGoSceneFilterRecord`).
+pub const MAX_SCENE_FILTERS: u32 = 8;
 /// Maximum compiled plan commands in one scene.
 pub const MAX_SCENE_PLAN_COMMANDS: u32 = 262_144;
 
@@ -466,9 +474,9 @@ impl Default for GpuiGoSceneUnderlineRecord {
 /// boundaries (the pinned `BackdropFilter`/`FilterBoundary` shapes; the
 /// boundary adds `is_start`). Layout: `order` @0, `bounds` @4,
 /// `content_mask` @20, `corner_radii` @36, `corner_smoothing` @52,
-/// `blur_radii` @56, `filter_count` @72, `opacity` @76, `is_start` @80,
-/// `filter_tags` @84, `color_matrix` @100, `color_matrix_count` @180,
-/// `record_size` @184; size 188, alignment 4.
+/// `blur_radii` @56, `filter_count` @88, `opacity` @92, `is_start` @96,
+/// `filter_tags` @100, `color_matrix` @132, `color_matrix_count` @772,
+/// `record_size` @776; size 780, alignment 4.
 ///
 /// Filters are gaussian blurs with radii in device pixels (the pinned
 /// `ScaledFilter::Blur`) or colour-matrix filters (rev 15, browser-core
@@ -476,14 +484,18 @@ impl Default for GpuiGoSceneUnderlineRecord {
 /// grayscale, sepia, brightness, contrast, invert, saturate,
 /// hue-rotate, opacity); up to [`MAX_SCENE_FILTERS`] entries with unused
 /// entries zero. The per-filter tags say which; blur entries read their
-/// radius from `blur_radii` in chain order, and all matrix entries share
-/// one composed payload: `color_matrix` holds the row-major 4x5 matrix
-/// (4 rows of 5 f32 bits, the fifth column being the additive offset)
-/// of the chain's matrix filters composed in order. A per-pixel linear
-/// map commutes with the uniform-per-channel gaussian, so
-/// blur-then-matrix (the draw path's order) is the CSS result for any
-/// interleaving; the composition itself is the caller's arithmetic (the
-/// Go styling layer composes consecutive matrices).
+/// radius from `blur_radii` in chain order, and each tag-1 entry maps to
+/// one 20-word slot of `color_matrix` (rev 15.1, browser-core ticket 77:
+/// `color_matrix` holds the chain's matrices ONE PER COLOUR FUNCTION in
+/// chain order — slot i, words `20*i..20*i+20`, is the row-major 4x5
+/// matrix of the i-th matrix filter — NOT a composed product, because
+/// Chrome clamps each function's output to [0,1] before the next
+/// applies, which one linear map cannot express; a chain longer than
+/// the record's capacity composes its excess into the last slot, the
+/// documented approximation). A per-pixel linear map commutes with the
+/// uniform-per-channel gaussian, so blur-then-matrices (the draw path's
+/// order) preserves the CSS chain order up to the clamps between a
+/// blur and a matrix (the recorded approximation above).
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct GpuiGoSceneFilterRecord {
@@ -498,8 +510,8 @@ pub struct GpuiGoSceneFilterRecord {
     /// Corner smoothing, f32 bits.
     pub corner_smoothing: u32,
     /// Blur radii (device pixels, f32 bits), first `filter_count` entries.
-    pub blur_radii: [u32; 4],
-    /// Number of filters in the chain, 0..=4.
+    pub blur_radii: [u32; 8],
+    /// Number of filters in the chain, 0..=8.
     pub filter_count: u32,
     /// Group opacity, f32 bits (element opacity captured at paint time).
     pub opacity: u32,
@@ -509,13 +521,16 @@ pub struct GpuiGoSceneFilterRecord {
     /// Per-filter kind tags, first `filter_count` entries: 0 = blur, 1 =
     /// colour matrix (rev 15). Entries at and beyond `filter_count`
     /// must be zero.
-    pub filter_tags: [u32; 4],
-    /// The composed row-major 4x5 colour matrix, 20 f32 bits: row 0 is
-    /// `color_matrix[0..5]` (r' = m00*r + m01*g + m02*b + m03*a + m04),
-    /// and so on. All zeros with `color_matrix_count` 0.
-    pub color_matrix: [u32; 20],
+    pub filter_tags: [u32; 8],
+    /// The chain's colour matrices, one 20-word slot per matrix filter
+    /// in chain order (rev 15.1): slot i is words `20*i..20*i+20`, the
+    /// row-major 4x5 matrix of the i-th colour function — row 0 is
+    /// `color_matrix[20*i..20*i+5]` (r' = m00*r + m01*g + m02*b +
+    /// m03*a + m04), and so on. Slots at and beyond
+    /// `color_matrix_count` must be zero.
+    pub color_matrix: [u32; 160],
     /// How many of the chain's filters are colour matrices (must equal
-    /// the number of tag-1 entries; 0 demands an all-zero matrix).
+    /// the number of tag-1 entries; 0 demands zeroed matrix words).
     pub color_matrix_count: u32,
     /// `size_of::<GpuiGoSceneFilterRecord>()` self-check.
     pub record_size: u32,
@@ -543,12 +558,12 @@ impl Default for GpuiGoSceneFilterRecord {
             content_mask: GpuiGoSceneBounds::default(),
             corner_radii: [0; 4],
             corner_smoothing: 0,
-            blur_radii: [0; 4],
+            blur_radii: [0; 8],
             filter_count: 0,
             opacity: 0,
             is_start: 0,
-            filter_tags: [0; 4],
-            color_matrix: [0; 20],
+            filter_tags: [0; 8],
+            color_matrix: [0; 160],
             color_matrix_count: 0,
             record_size: core::mem::size_of::<GpuiGoSceneFilterRecord>() as u32,
         }
@@ -1078,7 +1093,7 @@ const _: () = assert!(core::mem::size_of::<GpuiGoSceneShadowRecord>() == 172);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneShadowRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneUnderlineRecord>() == 72);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneUnderlineRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneFilterRecord>() == 188);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneFilterRecord>() == 780);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneFilterRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneSurfaceRecord>() == 56);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneSurfaceRecord>() == 4);
@@ -2833,10 +2848,11 @@ fn check_filter(rec: &GpuiGoSceneFilterRecord) -> Result<(), i32> {
     if rec.filter_count > MAX_SCENE_FILTERS {
         return Err(scene_status::ERR_BAD_VALUE);
     }
-    // rev 15: the per-filter tags and the composed colour matrix. Every
-    // used tag must be a known kind; the tag-1 entries must match the
-    // composed matrix count; the matrix payload must be finite; an
-    // unused tag or a zero matrix count demands zeroed payload words.
+    // rev 15 / rev 15.1: the per-filter tags and the per-function
+    // colour matrices. Every used tag must be a known kind; the tag-1
+    // entries must match the matrix count; the matrix payload must be
+    // finite (the carried slots); an unused tag or a zero matrix count
+    // demands zeroed payload words.
     let mut matrix_entries = 0u32;
     for (index, tag) in rec.filter_tags.iter().enumerate() {
         if (index as u32) < rec.filter_count {
@@ -2862,15 +2878,20 @@ fn check_filter(rec: &GpuiGoSceneFilterRecord) -> Result<(), i32> {
     if rec.color_matrix_count != matrix_entries {
         return Err(scene_status::ERR_BAD_VALUE);
     }
+    let carried = (rec.color_matrix_count as usize) * 20;
     if rec.color_matrix_count == 0 {
-        if rec.color_matrix != [0u32; 20] {
+        if rec.color_matrix != [0u32; 160] {
             return Err(scene_status::ERR_BAD_VALUE);
         }
     } else {
-        for bits in rec.color_matrix {
-            if !f32::from_bits(bits).is_finite() {
+        for bits in &rec.color_matrix[..carried] {
+            if !f32::from_bits(*bits).is_finite() {
                 return Err(scene_status::ERR_BAD_VALUE);
             }
+        }
+        // Slots at and beyond the count must be zeroed.
+        if rec.color_matrix[carried..].iter().any(|&bits| bits != 0) {
+            return Err(scene_status::ERR_BAD_VALUE);
         }
     }
     Ok(())
@@ -5204,7 +5225,7 @@ mod tests {
         GpuiGoSceneFilterRecord {
             bounds: full_bounds(),
             content_mask: mask(),
-            blur_radii: [8.0f32.to_bits(), 0, 0, 0],
+            blur_radii: [8.0f32.to_bits(), 0, 0, 0, 0, 0, 0, 0],
             filter_count: 1,
             opacity: 1.0f32.to_bits(),
             is_start: u32::from(is_start),
@@ -5216,7 +5237,7 @@ mod tests {
         GpuiGoSceneFilterRecord {
             bounds: full_bounds(),
             content_mask: mask(),
-            blur_radii: [20.0f32.to_bits(), 0, 0, 0],
+            blur_radii: [20.0f32.to_bits(), 0, 0, 0, 0, 0, 0, 0],
             filter_count: 1,
             opacity: 1.0f32.to_bits(),
             ..Default::default()
@@ -5707,7 +5728,7 @@ mod tests {
         scene.insert_backdrop(GpuiGoSceneFilterRecord {
             bounds: at(80.0),
             content_mask: wide_mask,
-            blur_radii: [4.0f32.to_bits(), 0, 0, 0],
+            blur_radii: [4.0f32.to_bits(), 0, 0, 0, 0, 0, 0, 0],
             filter_count: 1,
             opacity: 1.0f32.to_bits(),
             ..Default::default()

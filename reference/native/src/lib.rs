@@ -112,8 +112,19 @@ pub const GPUI_GO_ABI_VERSION: u32 = 1;
 /// through a point sampler, the text run record grows browser text
 /// fields, and the layout style record grows flow-root, justify items
 /// and variable grid track lists while the measure response carries a
-/// first baseline.
-pub const GPUI_GO_NATIVE_REVISION: u32 = 15;
+/// first baseline. The browser-core ticket 77 rebuild (rev 15.1) bumps
+/// it to 151 — the integer ENCODING of the point release "15.1" (the
+/// field is a u32 equality-compared by the ABI table, the manifest and
+/// the Go constants, so a fractional value is unrepresentable; taking
+/// 16 would consume the number the R16 plan reserves — ticket 54
+/// "rebuilt as native rev 16" — so 15.1 encodes as 151). The rebuild:
+/// the rev-15 extension-cbuffer upload actually copies the struct (the
+/// ticket-41 `&[*uniforms]` reference bug — colour filters and the
+/// backdrop crop were GPU no-ops), the synthetic italic shears by
+/// Chrome's exact −0.25 instead of DirectWrite's oblique angle
+/// (measured −0.34), and CSS text-wrap: nowrap drives the wrap policy
+/// through the pinned layout request.
+pub const GPUI_GO_NATIVE_REVISION: u32 = 151;
 
 /// gpui-CE source pin this artifact family is built against (ASCII hex,
 /// zero-padded to 40 bytes in the table).

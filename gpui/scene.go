@@ -126,12 +126,15 @@ type BackdropFilter struct {
 	// Opacity is the element opacity captured at paint time, multiplied
 	// into the composited result.
 	Opacity float32
-	// ColorMatrix is the chain's composed row-major 4x5 colour-matrix
-	// payload, valid when ColorMatrixCount is 1 (CSS filter colour
-	// functions; browser-core ticket 41).
-	ColorMatrix [20]float32
-	// ColorMatrixCount is 0 (no colour functions) or 1 (one composed
-	// payload).
+	// ColorMatrix carries the chain's colour matrices, one 20-word slot
+	// per colour function in chain order (rev 15.1, browser-core ticket
+	// 77): slot i is ColorMatrix[20*i : 20*i+20], the row-major 4x5
+	// matrix of the i-th function itself — NOT a composed product,
+	// because Chrome clamps each function's output to [0,1] before the
+	// next applies. Valid for the first ColorMatrixCount slots.
+	ColorMatrix [160]float32
+	// ColorMatrixCount is the number of carried colour functions
+	// (0..8; slots at and beyond it are zero).
 	ColorMatrixCount uint32
 }
 
@@ -155,12 +158,15 @@ type FilterBoundary struct {
 	BlurRadius float32
 	// Opacity of the group (the pinned snapshot uses 1.0).
 	Opacity float32
-	// ColorMatrix is the chain's composed row-major 4x5 colour-matrix
-	// payload, valid when ColorMatrixCount is 1 (CSS filter colour
-	// functions; browser-core ticket 41).
-	ColorMatrix [20]float32
-	// ColorMatrixCount is 0 (no colour functions) or 1 (one composed
-	// payload).
+	// ColorMatrix carries the chain's colour matrices, one 20-word slot
+	// per colour function in chain order (rev 15.1, browser-core ticket
+	// 77): slot i is ColorMatrix[20*i : 20*i+20], the row-major 4x5
+	// matrix of the i-th function itself — NOT a composed product,
+	// because Chrome clamps each function's output to [0,1] before the
+	// next applies. Valid for the first ColorMatrixCount slots.
+	ColorMatrix [160]float32
+	// ColorMatrixCount is the number of carried colour functions
+	// (0..8; slots at and beyond it are zero).
 	ColorMatrixCount uint32
 	// IsStart opens the group; false closes it.
 	IsStart bool

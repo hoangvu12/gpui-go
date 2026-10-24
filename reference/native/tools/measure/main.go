@@ -73,10 +73,17 @@ const (
 	// bold rule, gradient scene backgrounds, colour-matrix filters, the
 	// drop-shadow clip-out, the backdrop mirror crop, a point sampler,
 	// browser text run fields and layout flow-root/justify/track-list/
-	// baseline fields.
+	// baseline fields. The browser-core ticket 77 rebuild (rev 15.1)
+	// bumped it to 151 — the integer ENCODING of the point release
+	// "15.1" (the u32 cannot hold a fraction, and 16 stays reserved for
+	// ticket 54's "rebuilt as native rev 16"): the extension-cbuffer
+	// upload fix (colour filters and the backdrop crop were GPU
+	// no-ops), the exact -0.25 synthetic-italic shear, the per-function
+	// colour-matrix payload with the [0,1] clamp between functions, and
+	// text-wrap: nowrap driving the wrap policy.
 	// Keep these in sync with reference/native/src/lib.rs
 	// (GPUI_GO_NATIVE_REVISION and the capabilities module).
-	nativeRevision = 15
+	nativeRevision = 151
 
 	// bit 0 bootstrap, bit 1 layout-taffy-0-13-0, bit 2 renderer-d3d11,
 	// bit 3 scene-kernel-v1, bit 4 text-parley-0-11-1, bit 5

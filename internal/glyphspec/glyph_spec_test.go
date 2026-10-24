@@ -1078,8 +1078,8 @@ func TestGlyphAndAtlasCapabilityIdentity(t *testing.T) {
 	// slot 8) raised it to 9 with bit 9 (svg-resvg-0-48); the wave-4
 	// fix-up raised it to 11; the consumer-gaps font-registration rebuild
 	// (the text service v2: text_font_add + family_found) raised it to 12.
-	if identity.NativeRevision != 15 {
-		t.Errorf("native revision = %d, want 15 (browser-core ticket 39 rebuild)", identity.NativeRevision)
+	if identity.NativeRevision != 151 {
+		t.Errorf("native revision = %d, want 151 (rev 15.1, the browser-core ticket 77 rebuild — the u32 encoding of the point release; 16 stays reserved for the R16 rebuild)", identity.NativeRevision)
 	}
 	if identity.Capabilities&0xFFF != 0xFFF {
 		t.Errorf("capabilities mask = %#x, want the ten assigned bits set", identity.Capabilities)

@@ -393,32 +393,52 @@ impl GlobalElements {
 // ---------------------------------------------------------------------------
 
 /// The composite pass's extension payload, mirroring the vendored
-/// shader's `ColorMatrixUniforms` (the composed colour-matrix filter and
-/// the composite's region-relative sampling offset). 112 bytes.
+/// The composite extension cbuffer's matrix capacity (rev 15.1): one
+/// entry per colour function, mirroring the vendored shader's
+/// `ColorMatrixUniforms.entries` array.
+const COLOR_MATRIX_CAPACITY: u32 = 8;
+
+/// shader's `ColorMatrixUniforms` (the filter chain's per-function
+/// colour matrices and the composite's region-relative sampling
+/// offset). 656 bytes — 8 entries of 80 (each a row-major 4x5 matrix:
+/// four `row_i` vectors plus the `offset` fifth column), the sampling
+/// offset, the entry count and padding. Rev 15.1 (browser-core ticket
+/// 77) replaced rev 15's single 112-byte composed matrix with the
+/// per-function entries: Chrome clamps each filter function's output
+/// to [0,1] before the next applies (each function's result is
+/// rasterized 8-bit), which one composed linear map cannot express.
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct CompositeExtensionsUniforms {
+struct ColorMatrixEntry {
     row0: [f32; 4],
     row1: [f32; 4],
     row2: [f32; 4],
     row3: [f32; 4],
     offset: [f32; 4],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CompositeExtensionsUniforms {
+    entries: [ColorMatrixEntry; 8],
     sample_offset: [f32; 2],
-    enabled: u32,
-    padding: [u32; 5],
+    count: u32,
+    padding0: u32,
 }
 
 impl Default for CompositeExtensionsUniforms {
     fn default() -> Self {
         Self {
-            row0: [1.0, 0.0, 0.0, 0.0],
-            row1: [0.0, 1.0, 0.0, 0.0],
-            row2: [0.0, 0.0, 1.0, 0.0],
-            row3: [0.0, 0.0, 0.0, 1.0],
-            offset: [0.0; 4],
+            entries: [ColorMatrixEntry {
+                row0: [1.0, 0.0, 0.0, 0.0],
+                row1: [0.0, 1.0, 0.0, 0.0],
+                row2: [0.0, 0.0, 1.0, 0.0],
+                row3: [0.0, 0.0, 0.0, 1.0],
+                offset: [0.0; 4],
+            }; 8],
             sample_offset: [0.0; 2],
-            enabled: 0,
-            padding: [0; 5],
+            count: 0,
+            padding0: 0,
         }
     }
 }
@@ -2324,10 +2344,19 @@ fn dx_blur_pass(
     match &extras {
         BlurPassExtras::None => {}
         BlurPassExtras::Composite(uniforms) => {
-            update_buffer(ctx, &draw.pipelines.composite_extensions_buffer, &[*uniforms])?;
+            // rev 15.1 (browser-core ticket 77, the ticket-41 fix):
+            // `match &extras` binds `uniforms: &&CompositeExtensionsUniforms`,
+            // so the element type of the literal must be `**uniforms` —
+            // `&[*uniforms]` is a one-element slice of REFERENCES (8 bytes),
+            // and update_buffer copies data.len() * size_of::<&T>() into the
+            // 112-byte cbuffer (the shader then reads a zero `enabled` and
+            // every colour function was a GPU no-op in rev 15).
+            update_buffer(ctx, &draw.pipelines.composite_extensions_buffer, &[**uniforms])?;
         }
         BlurPassExtras::Crop(uniforms) => {
-            update_buffer(ctx, &draw.pipelines.backdrop_crop_buffer, &[*uniforms])?;
+            // The same dereference shape for the 32-byte backdrop-crop
+            // cbuffer (the rev-15 backdrop blur read a zeroed fold).
+            update_buffer(ctx, &draw.pipelines.backdrop_crop_buffer, &[**uniforms])?;
         }
     }
     unsafe {
@@ -2433,30 +2462,38 @@ fn dx_blur_and_composite(
         )
     };
 
-    // The composite extensions: the composed colour matrix (if any) and
-    // the sampling offset (region-relative for the backdrop's crop,
-    // (0, 0) — the pinned formula — otherwise).
+    // The composite extensions: the chain's per-function colour
+    // matrices (rev 15.1 — each applied in chain order with the [0,1]
+    // clamp between, matching Chrome's 8-bit per-function rasterization;
+    // the composed single matrix of rev 15 diverged by a 15.47 mean
+    // channel diff on the filters-chain fixture) and the sampling
+    // offset (region-relative for the backdrop's crop, (0, 0) — the
+    // pinned formula — otherwise).
     let mut extensions = CompositeExtensionsUniforms::default();
-    if rec.color_matrix_count > 0 {
-        let mut row = |index: usize| -> [f32; 4] {
-            [
-                f32::from_bits(rec.color_matrix[index]),
-                f32::from_bits(rec.color_matrix[index + 1]),
-                f32::from_bits(rec.color_matrix[index + 2]),
-                f32::from_bits(rec.color_matrix[index + 3]),
-            ]
-        };
-        extensions.row0 = row(0);
-        extensions.row1 = row(5);
-        extensions.row2 = row(10);
-        extensions.row3 = row(15);
-        extensions.offset = [
-            f32::from_bits(rec.color_matrix[4]),
-            f32::from_bits(rec.color_matrix[9]),
-            f32::from_bits(rec.color_matrix[14]),
-            f32::from_bits(rec.color_matrix[19]),
-        ];
-        extensions.enabled = 1;
+    let matrix_count = rec.color_matrix_count.min(COLOR_MATRIX_CAPACITY);
+    if matrix_count > 0 {
+        for entry in 0..matrix_count as usize {
+            let base = entry * 20;
+            let mut row = |index: usize| -> [f32; 4] {
+                [
+                    f32::from_bits(rec.color_matrix[base + index]),
+                    f32::from_bits(rec.color_matrix[base + index + 1]),
+                    f32::from_bits(rec.color_matrix[base + index + 2]),
+                    f32::from_bits(rec.color_matrix[base + index + 3]),
+                ]
+            };
+            extensions.entries[entry].row0 = row(0);
+            extensions.entries[entry].row1 = row(5);
+            extensions.entries[entry].row2 = row(10);
+            extensions.entries[entry].row3 = row(15);
+            extensions.entries[entry].offset = [
+                f32::from_bits(rec.color_matrix[base + 4]),
+                f32::from_bits(rec.color_matrix[base + 9]),
+                f32::from_bits(rec.color_matrix[base + 14]),
+                f32::from_bits(rec.color_matrix[base + 19]),
+            ];
+        }
+        extensions.count = matrix_count;
     }
 
     // The blurred input and the normalization the composite samples

@@ -303,7 +303,8 @@ func checkFilterRecord(op string, rec *SceneFilterRecord, maxFilters uint32) err
 	if rec.FilterCount > maxFilters {
 		return badRecord(op, "filter count over the maximum")
 	}
-	// rev 15: the per-filter tags and the composed colour matrix.
+	// rev 15 / rev 15.1: the per-filter tags and the per-function colour
+	// matrices (one 20-word slot per matrix filter in chain order).
 	matrixEntries := uint32(0)
 	for index, tag := range rec.FilterTags {
 		if uint32(index) < rec.FilterCount {
@@ -329,13 +330,20 @@ func checkFilterRecord(op string, rec *SceneFilterRecord, maxFilters uint32) err
 		return badRecord(op, "matrix count does not match the tag-1 entries")
 	}
 	if rec.ColorMatrixCount == 0 {
-		if rec.ColorMatrix != [20]uint32{} {
+		if rec.ColorMatrix != [160]uint32{} {
 			return badRecord(op, "unused matrix payload must be zero")
 		}
 	} else {
-		for _, bits := range rec.ColorMatrix {
+		carried := int(rec.ColorMatrixCount) * 20
+		for _, bits := range rec.ColorMatrix[:carried] {
 			if !finiteBits(bits) {
 				return badRecord(op, "non-finite matrix entry")
+			}
+		}
+		// Slots at and beyond the count must be zeroed.
+		for _, bits := range rec.ColorMatrix[carried:] {
+			if bits != 0 {
+				return badRecord(op, "matrix slot beyond the count must be zero")
 			}
 		}
 	}

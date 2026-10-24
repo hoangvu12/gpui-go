@@ -1,0 +1,79 @@
+{
+ "ticket": "browser-core 77: the R15.1 native follow-up rebuild (native rev 151, the integer encoding of rev 15.1)",
+ "date": "2026-10-24",
+ "revision_choice": "the revision is a u32 equality-compared by the ABI table, the manifest and the Go constants (lib.rs GPUI_GO_NATIVE_REVISION, abi.go nativeRevision, manifest native_revision), so a literal 15.1 is unrepresentable. Taking 16 would consume the number the R16 plan reserves (ticket 54: 'rebuilt as native rev 16'), so the point release encodes as 151, documented at every pin site.",
+ "approval": "the user approved rev 15.1 on 2026-10-24 ('ok try that', recorded in the ticket); the scope: the extension-uniform upload fix, the synthetic-italic shear, and the rev-15 text-run fields best-effort",
+ "dll": {
+  "before": {
+   "native_revision": 15,
+   "sha256": "8b944eae962a75e693ce3fdc8c97c274ad5b8e80c5e1487fd2fd038ebc10c40a",
+   "bytes": 19104256
+  },
+  "after": {
+   "native_revision": 151,
+   "sha256": "ef337ad3051a382b7c9d98e5c10c9926f72df6e7d3c0d4d2a1012ec7cb322f4b",
+   "bytes": 19107328,
+   "gzip9_bytes": 7591778,
+   "gzip9_sha256": "e4d8f6d16f0b893886fc99e64fb30f1d16b9e524b65e5cd83666a3c86d0c3232",
+   "capabilities_mask": "0xFFF",
+   "crt_outcome": "static: no VCRUNTIME/MSVCP/UCRT/api-ms-win-crt imports present; only OS system components are imported",
+   "toolchain": "rustc 1.97.0 (2d8144b78 2026-07-07), x86_64-pc-windows-msvc, RUSTFLAGS=-C target-feature=+crt-static, cargo -j 4 (the first full build ran -j 6 before the PC-health note arrived)",
+   "ce_source": "a copy of the main checkout's pinned 254b5dbd47cbb5acbcc5bbdcbb322a339276c88a tree (unmodified; gitignored)",
+   "intermediate_build": "an interim DLL 6d23ccd74115b94885bfcf64d72b48fb21e7c3ff057b8d48376d2983c71cd4ec (19,137,856 bytes, dynamic CRT) was built before the scene-record growth and discarded; the measurements below come from the final ef337ad3 artifact. The interim build's filters-chain measurement (the composed-matrix divergence, change 2 below) was taken with the uniform fix applied and is cited as the before-state of the chain payload",
+   "services": {
+    "scene": "5 (the filter record grew to 780 bytes: MAX_SCENE_FILTERS 4 to 8, color_matrix 20 to 160 words, one slot per colour function; no table slots changed)",
+    "renderer": "the vendored patched blur-composite pipeline now applies up to 8 per-function colour matrices with the [0,1] clamp between; the backdrop-crop and composite extension cbuffers actually receive their structs",
+    "text": "3 (unchanged record layout; text-wrap: nowrap now drives the wrap policy through wrap_width: None)",
+    "layout": "3 (unchanged in this rebuild)"
+   }
+  }
+ },
+ "changes": [
+  {
+   "item": "the extension-uniform upload fix (ticket 41's root cause)",
+   "files": "reference/native/src/renderer/draw.rs dx_blur_pass (the Composite and Crop arms)",
+   "bug": "match &extras on BlurPassExtras::Composite(&'a T) binds uniforms: &&T, so &[*uniforms] was a one-element slice of REFERENCES (8 bytes); update_buffer (draw.rs) copies data.len() * size_of::<&T>() into the cbuffer, so COLOR_MATRIX_LOCALS read a zero enabled (offset 88 of 112) and every colour function was a GPU no-op; the backdrop-crop cbuffer (32 bytes) had the same shape and the mirror fold sampled a constant point",
+   "fix": "&[**uniforms] in both arms (ticket 41's 'two dereferences'), with the bug shape documented at the site; every other update_buffer call in draw.rs passes value types (&[uniforms], &[params], constructed records) and was audited unaffected",
+   "gate": "internal/parity fixtures filters-colors and filters-chain measure 0.0000 mean / 0.00000 hot against Chrome (pixel-exact) once the per-function payload (change 2) also lands; the three SkipPixels flags are removed and the three discriminator tests run"
+  },
+  {
+   "item": "the per-function colour-matrix payload with the [0,1] clamp between functions",
+   "files": "reference/native/shaders/filters.rs (ColorMatrixUniforms: 8 ColorMatrixEntry slots + count; blur_composite_color loops with saturate between), reference/native/src/scene.rs (GpuiGoSceneFilterRecord 188 to 780 bytes; MAX_SCENE_FILTERS 8; check_filter validates the slots), reference/native/src/renderer/draw.rs (CompositeExtensionsUniforms 112 to 656 bytes), gpui/filter_colors.go (FilterChain carries the per-function matrices), gpui/scene.go + gpui/scene_kernel.go + internal/native/scene.go + scene_batch.go (the mirrors)",
+   "rule": "Chrome does NOT compose a filter chain into one linear map: each function's output is rasterized 8-bit before the next applies, clamping every channel to [0,1]. Measured against the filters-chain Chrome record (hue-rotate(90deg) sepia(1)): pure red reads (70,62,48) = sepia*clamp(hue*red) while the composed matrix gives (42,38,29); pure green (216,192,150) = sepia*clamp(hue*green) vs composed (236,211,164); pure blue (107,95,74) vs composed (66,58,45); white and gray are clamp-invariant. All 15 recorded channel values match the clamp-after-each model exactly",
+   "measured": "with the uniform fix alone (the composed rev-15 payload), the filters-chain fixture measured whole 0.3510 / hot 0.00450 and the hue-sepia ROI 15.4667 / 0.20000 (the arithmetic prediction of the clamp difference: (23.8+17.6+35.7)/5 = 15.4 mean over the five stripes). With the per-function payload: whole 0.0000 / hot 0.00000, both chain ROIs 0.0000 - pixel-exact",
+   "recorded_approximations": "a chain longer than the record's capacity (8 entries minus the composed blur) composes its excess into the last slot, and a blur interleaved between colour functions still composes with the other blurs (gaussians commute; the clamp between a blur and a matrix does not) - both documented in the record's doc and shaders/mod.rs divergence 3",
+   "gate": "internal/parity fixtures filters-colors / filters-chain / filters-image (Tier C now active, tolerances at 2x the measured stats), internal/scenespec TestColorMatrixFilterRecordRoundTrips and TestColorMatrixFilterValidationRejectsMalformedRecords (the new beyond-the-count slot rule), gpui TestFilterBoundaryCarriesComposedChain / TestComposeFilterChain (the per-function slots)"
+  },
+  {
+   "item": "the exact -0.25 synthetic-italic shear (the 08 finding)",
+   "files": "reference/native/src/glyph.rs (synthetic_italic_shear / SYNTHETIC_ITALIC_SHEAR / raster_transform(scale, shear); NativeFace::new no longer sets DWRITE_FONT_SIMULATIONS_OBLIQUE; create_glyph_analysis / rasterize_mask / rasterize_colr carry the shear)",
+   "rule": "Chrome shears a family without an italic face by exactly -0.25 (Skia setSkewX(-SK_Scalar1/4), platform/fonts/win/font_platform_data_win.cc:37-38, Chromium 0d4dcd4f) - raster-only (advances come from the upright face). The shear rides the raster transform (m21 = shear * scale, pivoting on the glyph-run baseline), driven by Fontique's synthesis FLAG only: the constant is Chrome's 1/4, not Fontique's 14 degrees (tan 14 = 0.2493). The DWrite oblique simulation (measured -0.3399, 34% steeper) is gone; the bold simulation is untouched (rev 15's measured-good rule)",
+   "invariants": "shaping, advances and the glyph-cache keys are unchanged (the FontId already carries the synthesis; Chrome's faux italic does not move metrics); the subpixel baseline origin is unaffected (the shear pivots on the baseline); all three raster paths (mask, monochrome color, COLRv0) share the transform; real italic faces never hit the synthesis flag (the segoe-italic control measures Chrome-identical before and after)",
+   "measured": "the 08 italic probe: gpui tahoma-italic shear -0.3399 (rev 15) to -0.2500 (rev 15.1) vs Chrome's -0.2500; dx over the stems 16.3 to 12.0 px (Chrome 12.0). The textpaint-italic Tier C: whole 0.3460 to 0.2165, hot 0.00494 to 0.00328, worst ROI (tahoma-italic) 1.7671 to 0.6882 - toward Chrome, exactly as the 08 README predicted; the fixture tolerance re-recorded at 2x the new stats (0.45 / 1.4 / 0.02, the wrong-view M-stem discriminator still fails at whole 1.573 / ROI 5.918)",
+   "gate": "research/browser-parity/08-raster-probes TestItalicSlant (now asserts the shear: the synthetic row -0.25 on both sides, the controls 0 and Chrome-identical), internal/parity TestFixtures/textpaint-italic, the re-measured captures textpaint-italic{,-4x}.png"
+  },
+  {
+   "item": "text-wrap: nowrap drives the wrap policy (the one wireable rev-15 text-run field)",
+   "files": "reference/native/src/text.rs (nowrap_requested; text_shape_body and text_layout_body suppress the wrap constraint; TEXT_WRAP_NOWRAP)",
+   "rule": "CSS text-wrap is a wrap policy and the pinned TextLayoutRequest CAN express 'do not soft-wrap' (wrap_width: None -> the adapter's break_all_lines(None), the pinned hard-break-only path). When any run carries the tag, text_shape and text_layout pass None; the layout summary reports the ACTIVE constraint (no wrap) while text_run_info still echoes the tag; hard breaks and the line clamp are unaffected; document-level by necessity (one wrap constraint per request)",
+   "blocked_fields": "recorded per field in reference/native/TEXT_ABI.md with file:line, the smallest plan and an estimate: word-break and overflow-wrap (Parley 0.11.1 has StyleProperty::WordBreak/OverflowWrap and the builder hook, but both live behind gpui_ce_parley's private parley state and the pinned TextRun has no slot; needs the vendored adapter patch, 6-10 h), locale (no slot; Parley has no language style; upstream change first), font width / variations / optical size (the pinned resolve hardcodes FontWidth::NORMAL at catalog.rs and the store's variation interning is pub(crate); vendored adapter with an extended resolve entry, 6-10 h), justify (the pinned TextAlign is Left/Center/Right only and Parley's Alignment::Justify is unreachable; 4-6 h), balance/pretty/stable (Go-side bisection by the rev-15 record's design), and the layout baseline (Taffy 0.13's leaf compute hardcodes first_baselines: Point::NONE - LAYOUT_ABI.md's recorded limit, revisit with R17)",
+   "gate": "internal/textspec rev15_1_nowrap_test.go (TestTextWrapNoWrapSuppressesSoftWrap: the control wraps to 3 rows, nowrap stays 1 row with no active wrap in the summary, relayout stays 1 row, balance/pretty/stable still wrap; TestTextWrapNoWrapKeepsHardBreaks: newlines survive, the clamp applies)"
+  }
+ ],
+ "vendored_shaders": {
+  "what": "reference/native/shaders holds vendored, patched copies of the pinned gpui_render shader modules, compiled by reference/native/build.rs through the pinned crate's own chain: wgsl-rs -> Naga 24 (HLSL sm_5.0) -> D3DCompile (Fxc). The frozen ce-source stays unmodified. Rev 15.1 reshaped divergence 3 (filters.rs): ColorMatrixUniforms grew to 8 per-function entries (656 bytes) and the composite loop applies each entry followed by saturate - the recorded Chrome clamp semantics",
+  "pipelines": "quads, smoothed_quads, shadows, smoothed_shadows, blur_composite, smoothed_blur_composite, backdrop_crop (unchered set; the blur_composite DXBC changed)",
+  "build_dependencies": "naga 24.0.0 (hlsl-out, wgsl-in), wgsl-rs (the pinned rev), windows (Fxc) - the same versions the pinned gpui-render dependency already resolves; host-only, no runtime imports. The uniform-array + while-loop shape compiles clean through the chain (the dynamic index lowers to a cbuffer array index in sm 5.0)"
+ },
+ "cargo_test": "cargo test -p gpui-go-native still fails to compile the lib test target with the same 5 pre-existing a11y/capture errors (a11y.rs:1361/1367/1385, capture.rs:1510/1531); nothing new - this rebuild's record changes updated their test constructors (scene.rs's boundary/backdrop fixtures and the over-the-bound filter-count case now use the 8-word arrays). The behavior is verified through the Go gates against this artifact.",
+ "fixtures": {
+  "tier_c_now_active": "filters-colors (0.0000/0.00000 whole, every ROI 0.0000/0.00000 - pixel-exact), filters-chain (the same, through the per-function clamp), filters-image (whole 0.0493/0.00096; ROIs img-control 2.1740/0.04094, img-grayscale 1.2747/0.02042, img-hue-rotate 1.8084/0.04083 - the recorded image-resampling class, the colour map itself exact), shadow-backdrop (whole 0.3562/0.00000, both ROIs 0.3562/0.00000 - no pixel over the 32-per-channel hot bar; a uniform sub-threshold sigma-shape residual). The three SkipPixels flags are gone, the filters discriminators are unskipped and fail as they should, shadow-backdrop is re-registered with its half-sigma discriminator (shadow_test.go TestBackdropSigmaIsHalfRadiusFailsOnlyThePixelComparison), and textpaint-italic is re-recorded toward Chrome",
+  "bit_exact": "no bit-exact oracle fixture changed: fx-0001/fx-0002 (layout), fx-0003 (scene painting), fx-0005 (the raster oracle - no italic case), fx-0006/0007/0008 and the glyphspec bit-exact gates pass unchanged on rev 15.1; the only pixel fixture that changed is the browser-parity textpaint-italic (a recorded divergence TOWARD Chrome: the synthetic italic now leans by Chrome's exact -0.25 instead of DirectWrite's -0.34), plus the 08 captures it re-measured",
+  "pre_existing": "internal/portfixture TestFx0004TextGeometryMatchesRecordedReference still fails on the machine's font-count drift (94 recorded vs 95 now) - the same pre-existing failure as rev 15, untouched by this rebuild"
+ },
+ "open_items": [
+  "the partial-region backdrop crop's composite geometry: with the uniforms fixed, a backdrop smaller than the window still renders its blurred input zoomed (dx_blur_and_composite passes the crop total as the composite's target size while the blurred content occupies the top-left of the window-sized half-res ping; the blur passes' viewport equals the region, not the ping). The shadow-backdrop fixture's full-viewport panel sidesteps it (the crop region IS the window, margin 0), so the fixture passes; the clean fix is a dedicated crop-sized half-res ping/pong pair on BackdropCropTarget (Option D in the ticket analysis) - left for the next native change, recorded here with the measured passing case",
+  "the 48-device-px LCD cap and the grayscale window mode (08's two mode-selection divergences) remain open, as recorded",
+  "word-break, overflow-wrap, locale, font width, variations, optical size, justify and the layout baseline stay behind the pinned adapter / Taffy seams (TEXT_ABI.md and LAYOUT_ABI.md record the per-field blockers and plans)"
+ ]
+}
