@@ -465,6 +465,17 @@ type InputBaseState[M InputModeKind] struct {
 	// application renders it (U:input/base/state.rs:434-435).
 	diagnosticPopover *DiagnosticEntry
 
+	// Spellcheck (browser-core ticket 30): opt-in misspelling markers.
+	// spellcheckEnabled is the opt-in (off by default); spellcheckLang is
+	// the BCP-47 tag (empty: the en-US default); spellcheckRanges holds
+	// the delivered misspelled byte ranges; spellcheckRequestedRevision
+	// is the document revision whose check was last queued (the element
+	// re-queues whenever the document moved past it).
+	spellcheckEnabled           bool
+	spellcheckLang              string
+	spellcheckRanges            []gpui.TextRange
+	spellcheckRequestedRevision uint64
+
 	enableContextMenu bool
 	// completionInserting is set while a completion item is inserted
 	// (U:input/base/state.rs:446-447).
@@ -724,6 +735,11 @@ func newInMode[M InputModeKind](w *gpui.Window, cx *gpui.Context[InputBaseState[
 		keystrokeSub:      keystrokeSub,
 		autoScroll:        &auto,
 		numberStep:        &NumberStep{fixed: 1},
+		// The spellcheck request gate starts at "never requested"
+		// (spellcheckNeverRequested): a DefaultValue-set document has
+		// revision 0, which must still queue the first check
+		// (input_spellcheck.go).
+		spellcheckRequestedRevision: spellcheckNeverRequested,
 	}
 }
 

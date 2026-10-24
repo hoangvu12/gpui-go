@@ -657,7 +657,17 @@ func (e *textElement[M]) highlightLines(state *InputBaseState[M], visibleBufferL
 		if state.masked {
 			return nil
 		}
-		return composeDecorationCollections(nil, state.extras.decorationLayers(), visible)
+		// Spellcheck markers (browser-core ticket 30): composed over a
+		// full-cover base so the returned styles partition the visible
+		// text — the run assembly treats the style list as the whole run
+		// list (the diagnostics never hit this path: a code editor has a
+		// highlighter).
+		spellcheckStyles := state.spellcheckHighlightStyles(visible)
+		if len(spellcheckStyles) == 0 {
+			return composeDecorationCollections(nil, state.extras.decorationLayers(), visible)
+		}
+		base := []gpui.HighlightRange{{Range: visible}}
+		return composeDecorationCollections(gpui.CombineHighlights(base, spellcheckStyles), state.extras.decorationLayers(), visible)
 	}
 	resolver := state.editorStyle.HighlightStyles
 	if resolver == nil {
@@ -724,11 +734,18 @@ func (e *textElement[M]) highlightLines(state *InputBaseState[M], visibleBufferL
 	}
 
 	// Compose syntax, semantic, application, then diagnostic styles.
+	// Spellcheck markers (browser-core ticket 30) compose like the
+	// diagnostics (input_spellcheck.go); without them the composition
+	// is byte-for-byte the previous one.
+	spellcheckStyles := state.spellcheckHighlightStyles(visible)
 	styles = gpui.CombineHighlights(customStyles, styles)
 	if !state.masked {
 		styles = composeDecorationCollections(styles, state.extras.decorationLayers(), visible)
 	}
 	styles = gpui.CombineHighlights(diagnosticStyles, styles)
+	if len(spellcheckStyles) > 0 {
+		styles = gpui.CombineHighlights(spellcheckStyles, styles)
+	}
 
 	// Some sources reach outside the flushed groups (a diagnostic
 	// straddling the viewport edge, any range inside a fold); clip the
@@ -935,6 +952,12 @@ func (e *textElement[M]) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElem
 	}
 
 	lineNumberWidth, lineNumberDigits := layoutLineNumbers(state, &text, textSize, textStyle, w)
+
+	// Spellcheck (browser-core ticket 30): queue a background check
+	// when the document changed since the last request — one hook at
+	// prepaint covers typing, programmatic sets and the initial value
+	// (input_spellcheck.go).
+	e.requestSpellcheck(state, app)
 
 	var wrapWidth *float32
 	if multiLine && state.softWrap {

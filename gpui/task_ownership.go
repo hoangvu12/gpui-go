@@ -501,6 +501,13 @@ func (a *App) Shutdown() ShutdownReport {
 		_ = a.imageCodec.Dispose()
 		a.imageCodec = nil
 	}
+	// The spellcheck service's dedicated worker goroutine is not a
+	// scheduler task, so the task drain above does not stop it: retire
+	// it here (browser-core ticket 30), like the image codec above.
+	if a.spellcheck != nil {
+		a.spellcheck.Close()
+		a.spellcheck = nil
+	}
 	return ShutdownReport{
 		Cancelled:    cancelled,
 		Acknowledged: s.acks - before,
