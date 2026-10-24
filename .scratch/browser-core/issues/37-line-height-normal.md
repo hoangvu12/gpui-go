@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: implementer on core/37-line-height (Claude Code)
 Blocked by: 01
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-25, orchestrator 10: verified and merged (8db782e). No conflicts; `go generate ./gpui/script/types` left the d.ts unchanged. The broad batch set plus inlinespec, listspec, textframespec and portfixture on the merged tree: 66 packages ok; the only failures are the four already on main (78) and portfixture TestFx0004 (font count). Spot-check: computed_style.cc:2425-2431 (normal = the primary font's `LineSpacing()`) matches 0d4dcd4f. Captures eyeballed (zterm palette-open, gallery text-markdown and input): rows are slightly tighter, with no clipping or overlap.
 
 ## Answer
 
