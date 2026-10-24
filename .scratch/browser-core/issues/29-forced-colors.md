@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 27
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): first review (3a66d14) sent it back: the style path called SystemPreferences/SystemColors through runForegroundSync for every element in every phase. 8ead025 caches the state per preference-record version, using an atomic stamp bumped on seed/refresh. The inactive gate is 11 ns with 0 allocs, and a test proves 200 styles cause 1 derivation and a WM_SETTINGCHANGE flip causes one re-derive. The app-level opt-out `SetForcedColors(&ForcedColorsState{Active: false})` is documented. Merged into main with no conflicts. Build, vet and gofmt are clean. `go test -p 1 -count=1` passes for ./gpui/, ./internal/parity/... (the forcedcolors fixture), layoutspec, ./base, spellspec, richtextspec, inspectorspec, dropspec, winhostspec, examples/zterm and ./cmd/.... authorspec TestRealTwoWindowCounterSharedModel panicked once in the combined run ("conflicting reentrant access: entity ... is already being updated"). It then passed 19/19 (10 isolated plus 9 full-package runs). Worker 29 saw the same rare real-window flake. Watch it; if it recurs, check whether it predates 29. Citations checked: style_adjuster.cc:1034-1058 (AdjustForForcedColorsMode: box and text shadows reset, background image cleared) and longhands_custom.cc:6138-6157 (forced background keeps the authored alpha).
 
 - 2026-10-26, worker (core/29-forced-colors): the pass, the opt-out, the Tailwind class, the harness's emulated-media + computed-probe + app-configure support and the `forcedcolors` fixture are implemented. Acceptance: `TestFixtures/forcedcolors` (all three tiers) passes; the pass-off discrimination and unit tests pin the off state. Details in the Answer below.
 - 2026-10-27, worker (core/29-forced-colors), review rework: the style-resolution path now reads the pass state through a cached derivation (one host round trip per system-preference record version — `Host.systemPrefsStamp` — instead of per element per frame; the inactive gate measures 11 ns / 0 allocs, `BenchmarkForcedColorsInactiveGate`), and the application-level opt-out (`App.SetForcedColors(&ForcedColorsState{Active: false})`) is now stated in the code docs and here. `TestForcedColorsStylePathDerivesOncePerPreferenceRecord` pins both the no-per-element-host-reads property (the derivation counter) and the live flip.
