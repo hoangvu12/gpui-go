@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 480px;
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		padding: 16px;
+		box-sizing: border-box;
+		/* The pinned 25px line height (the textstyle fixtures' rule:
+		   the two sides' baseline placement agrees at 25px). */
+		font: 16px/25px "Segoe UI", system-ui, sans-serif;
+		color: #0f172a;
+	}
+	.row {
+		box-sizing: border-box;
+		width: 380px;
+		padding: 8px;
+		border: 1px solid #334155;
+		background: #e2e8f0;
+		/* The pin's default display, pinned on the page too. */
+		display: flex;
+	}
+	.fill {
+		box-sizing: border-box;
+		background: #dbeafe;
+	}
+	.fixed {
+		box-sizing: border-box;
+		width: 100px;
+		height: 25px;
+		flex-shrink: 0;
+		background: #fca5a5;
+	}
+
+</style>
+</head>
+<body data-id="root">
+	<div class="row" data-id="row-block"><span class="fill" data-id="wrap-block">consequences determination possibilities extraordinary architecture mathematics</span></div>
+	<div class="row" data-id="row-leaf"><span class="fill" style="display: flex" data-id="wrap-leaf">consequences determination possibilities extraordinary architecture mathematics</span></div>
+	<div class="row" data-id="row-styled"><span class="fill" style="display: flex" data-id="wrap-styled">consequences determination possibilities extraordinary architecture mathematics</span></div>
+	<div class="row" data-id="row-shrink"><div class="fixed" data-id="shrink-fixed"></div><span class="fill" data-id="shrink-text">consequences determination possibilities extraordinary architecture mathematics</span></div>
+	<div class="row" data-id="row-longword"><span class="fill">xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</span></div>
+</body>
+</html>

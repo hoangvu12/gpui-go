@@ -127,10 +127,12 @@ func rowElement(id string, text string, style func(*gpui.DivElement) *gpui.DivEl
 		DebugSelector(id).
 		// A flex COLUMN, like Chrome's block rows: the text child
 		// stretches to the row's content width (align-items stretch is
-		// the default) and so wraps at the row width. A flex ROW would
-		// size the text at its max-content width and never wrap (the
-		// port's text min-content is the unwrapped width — the D2 gap,
-		// not this ticket).
+		// the default) and so wraps at the row width. (Divergence note:
+		// a flex row would also wrap since browser-core ticket 32 — D2
+		// made text min-content the longest word, so a flex row now
+		// shrinks and wraps it — but these fixtures predate it and keep
+		// the column shape they were recorded with; the mincontent
+		// fixture is the flex-row case.)
 		FlexCol().
 		Size(gpui.Px(rowWidth), gpui.Px(rowHeight)).
 		Bg(gpui.Rgb(rowBackground)).

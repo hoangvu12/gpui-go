@@ -450,3 +450,18 @@ in `fixtures/position` pins that, and the fixture's wrong view (every static
 parent left relative) is the pre-ticket pin, so its Tier A failure is the
 regression gate. Custom container elements join the rule through
 `gpui.RequestContainerLayout`; `RequestElementLayout` keeps the plain attach.
+Ticket 32 (text min-content, spec D2) made every measured text path wrap at
+every break opportunity under a min-content available width — the Text element's
+measured leaf (`gpui/div.go`), the inline paragraph of a Block div
+(`gpui/inline.go`) and StyledText (`gpui/styled_text.go`) — so text in a flex
+row shrinks and wraps like Chromium (min-content is the widest unbreakable
+segment, `InlineNode::ComputeMinMaxSizes`' zero-available-size line breaking),
+and it keyed each text measure cache by sizing mode: a min-content entry answers
+min-content queries only, and an unconstrained (max-content) query reuses only
+an unconstrained entry — the pin's rule let a definite-width shape answer a
+max-content query with its wrapped size, which the flex base-size pass then took
+as the item's max-content. `fixtures/mincontent` is the fixture set (all three
+measured paths, the flex-shrink case, the long unbreakable word); its wrong view
+(`WhitespaceNowwrap` everywhere) is the pre-ticket pin. No existing fixture
+changed: they all pin fixed sizes or `flex-shrink: 0` on children that must
+overflow, so no text in them ever shrank.

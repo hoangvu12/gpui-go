@@ -694,7 +694,12 @@ func (c *inlineParagraphCollector) finishParagraph() {
 	layoutID, err := requestMeasuredLayoutOf(c.window, paragraphStyle, func(req MeasureRequest) Size {
 		// The pinned wrap evaluation: Nowrap never wraps; Normal wraps
 		// at the known width, else the definite available width, else
-		// not at all (content-based measurement).
+		// not at all (content-based measurement) — plus the D2
+		// min-content rule (browser-core 32): a min-content available
+		// width wraps at width zero, so every break opportunity breaks
+		// and the paragraph's min-content is its widest unbreakable
+		// segment, like Chromium's InlineNode::ComputeMinMaxSizes
+		// (inline_node.cc:2314-2323).
 		var wrapWidth *float32
 		if textStyle.WhiteSpace == WhiteSpaceNormal {
 			if req.KnownWidthPresent {
@@ -703,8 +708,15 @@ func (c *inlineParagraphCollector) finishParagraph() {
 			} else if req.AvailWidth.Kind == AvailDefinite {
 				width := req.AvailWidth.Definite
 				wrapWidth = &width
+			} else if req.AvailWidth.Kind == AvailMinContent {
+				zero := float32(0)
+				wrapWidth = &zero
 			}
 		}
+		// The per-wrap-width cache is the sizing-mode key: nil
+		// (unwrapped, max-content), zero (min-content) and a definite
+		// width are distinct entries, so the min-content layout never
+		// answers a max-content or definite query.
 		if paragraph.measurement != nil && wrapWidthsEqual(paragraph.measurement.wrapWidth, wrapWidth) {
 			return paragraph.measurement.layout.size
 		}
