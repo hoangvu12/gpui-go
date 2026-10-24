@@ -1568,17 +1568,25 @@ func (d *DivElement) requestLayout(global *GlobalElementID, inspector *Inspector
 	state := divFrameState{}
 	var layoutID LayoutID
 	WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
+		// browser-core 33 (spec D3): open this element's containing-block
+		// scope around the child walk and the node request — a positioned
+		// div absorbs the absolutes deferred by static descendants below
+		// it, and a static div defers its own absolute children into the
+		// enclosing scope instead of attaching them to itself
+		// (containingblock.go).
+		scope := openContainingBlock(w, &style)
+		defer closeContainingBlock(w, scope)
 		childLayoutIDs := make([]LayoutID, 0, len(d.children))
 		for i := range d.children {
 			childLayoutIDs = append(childLayoutIDs, d.children[i].RequestLayout(w, app))
 		}
 		state.childLayoutIDs = childLayoutIDs
 		if style.Display == DisplayBlock || style.Display == DisplayInline {
-			id, inlineState := requestInlineDivFrame(w, style, childLayoutIDs, app)
+			id, inlineState := requestInlineDivFrame(w, style, scope, childLayoutIDs, app)
 			state.inline = inlineState
 			layoutID = id
 		} else {
-			id, err := requestLayoutOf(w, style, childLayoutIDs...)
+			id, err := requestLayoutNode(w, scope, style, childLayoutIDs)
 			if err != nil {
 				panic(fmt.Sprintf("gpui: DivElement request_layout: %v", err))
 			}

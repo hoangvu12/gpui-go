@@ -1,0 +1,131 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: flex-start;
+		gap: 40px;
+	}
+	.ancestor {
+		box-sizing: border-box;
+		width: 200px;
+		height: 160px;
+		position: relative;
+		border: 6px solid #334155;
+		padding: 14px;
+		background: #ffffff;
+	}
+	.static-parent {
+		box-sizing: border-box;
+		width: 120px;
+		height: 90px;
+		/* The opt-in under test: static, so this element is not the
+		   containing block of its absolute children. */
+		position: static;
+		/* The pin's default display, pinned on the page too. */
+		display: flex;
+		background: #e2e8f0;
+	}
+	.abs-tl {
+		position: absolute;
+		left: 12px;
+		top: 8px;
+		width: 40px;
+		height: 30px;
+		background: #dc2626;
+	}
+	.abs-br {
+		position: absolute;
+		right: 16px;
+		bottom: 10px;
+		width: 50px;
+		height: 36px;
+		background: #2563eb;
+	}
+	.abs-pct {
+		position: absolute;
+		left: 25%;
+		top: 50%;
+		width: 30px;
+		height: 20px;
+		background: #16a34a;
+	}
+	.control {
+		box-sizing: border-box;
+		width: 150px;
+		height: 110px;
+		position: relative;
+		border: 5px solid #334155;
+		padding: 10px;
+		background: #ffffff;
+	}
+	.abs-ctl {
+		position: absolute;
+		left: 10px;
+		top: 6px;
+		width: 60px;
+		height: 40px;
+		background: #d97706;
+	}
+	.chain-s1 {
+		box-sizing: border-box;
+		width: 60px;
+		height: 50px;
+		position: static;
+		display: flex;
+		background: #dbeafe;
+	}
+	.chain-s2 {
+		box-sizing: border-box;
+		width: 40px;
+		height: 30px;
+		position: static;
+		display: flex;
+		background: #dbeafe;
+	}
+	.root-abs-br {
+		position: absolute;
+		right: 20px;
+		bottom: 16px;
+		width: 44px;
+		height: 28px;
+		background: #7c3aed;
+	}
+	.root-abs-bl {
+		position: absolute;
+		left: 30px;
+		bottom: 24px;
+		width: 36px;
+		height: 22px;
+		background: #7c3aed;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div class="ancestor" data-id="ancestor">
+		<div class="static-parent" data-id="static-parent">
+			<div class="abs-tl" data-id="abs-tl"></div>
+			<div class="abs-br" data-id="abs-br"></div>
+			<div class="abs-pct" data-id="abs-pct"></div>
+		</div>
+	</div>
+	<div class="control" data-id="control">
+		<div class="abs-ctl" data-id="abs-ctl"></div>
+	</div>
+	<div class="chain-s1" data-id="chain-s1">
+		<div class="chain-s2" data-id="chain-s2">
+			<div class="root-abs-br" data-id="root-abs-br"></div>
+			<div class="root-abs-bl" data-id="root-abs-bl"></div>
+		</div>
+	</div>
+</body>
+</html>

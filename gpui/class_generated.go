@@ -770,6 +770,8 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.Shrink()
 	case "shrink-0":
 		b.Shrink0()
+	case "static":
+		b.Static()
 	case "text-2xl":
 		b.Text2xl()
 	case "text-3xl":
@@ -843,4 +845,4 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 }
 
 // methodClassCount is the number of classes applyMethodClass knows.
-const methodClassCount = 415
+const methodClassCount = 416

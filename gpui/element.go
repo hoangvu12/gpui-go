@@ -1116,6 +1116,13 @@ type frameDrawState struct {
 	// contentMask is the current content mask (window.content_mask_stack
 	// tail; the base mask is the window bounds).
 	contentMask Bounds
+	// containingBlockScopes is the open containing-block scope stack of
+	// the request-layout phase (browser-core ticket 33, spec D3;
+	// containingblock.go): the innermost scope belongs to the nearest
+	// positioned ancestor of the elements whose children are currently
+	// being requested, and static parents defer their absolute children
+	// into it. Balanced per element; empty outside a request walk.
+	containingBlockScopes []*containingBlockScope
 	// elementOffset is the current absolute element offset
 	// (window.element_offset_stack tail).
 	elementOffset Point
@@ -1472,11 +1479,16 @@ func layoutContextOf(w *Window) LayoutContext {
 }
 
 // requestLayoutOf requests one layout node with the given style and
-// children on the window's engine (window.rs request_layout).
+// children on the window's engine (window.rs request_layout). Under the
+// containing-block policy (browser-core 33) a STATIC style defers its
+// absolute children to the nearest open positioned-ancestor scope (or
+// keeps them attached when there is none, the pin's behaviour); every
+// other style attaches its children directly, exactly like the pin.
+// Container elements that walk their own children should use
+// RequestContainerLayout instead, which also absorbs deferred
+// absolutes into the node.
 func requestLayoutOf(w *Window, style Style, children ...LayoutID) (LayoutID, error) {
-	ds := drawState(w)
-	ctx := layoutContextOf(w)
-	return ds.engine.RequestLayout(&ctx, style, children...)
+	return requestLayoutNode(w, nil, style, children)
 }
 
 // requestMeasuredLayoutOf requests one measured leaf node (window.rs
@@ -1748,9 +1760,37 @@ func (g elementStateReentry) exit() {
 // RequestElementLayout requests one layout node with the given style and
 // children on the window's engine — the element-author-facing seam of
 // the phases (the reference Window::request_layout, which custom
-// element authors call from Element.RequestLayout).
+// element authors call from Element.RequestLayout). See requestLayoutOf
+// for the containing-block behaviour of a static style.
 func RequestElementLayout(w *Window, style Style, children ...LayoutID) (LayoutID, error) {
 	return requestLayoutOf(w, style, children...)
+}
+
+// RequestContainerLayout requests one layout node for a CONTAINER
+// element whose children are requested inside walkChildren, resolving
+// absolutely positioned descendants against the nearest positioned
+// ancestor (browser-core ticket 33, spec D3; css-position-3 §2.1).
+// Custom container elements should request their children through
+// this seam so the CSS containing-block rule holds inside them:
+// walkChildren runs inside this element's containing-block scope —
+// opened only when the style is positioned (relative or absolute) —
+// and the node request then attaches, besides walkChildren's own
+// children, every absolute child that a static descendant deferred to
+// this element. A static style opens no scope and defers this element's
+// own absolute children to the enclosing positioned ancestor instead
+// (attaching them to itself only when no positioned scope is open —
+// the pin's behaviour). DivElement uses this path internally
+// (div.go requestLayout); plain RequestElementLayout attaches children
+// directly and never absorbs another element's deferred absolutes, so
+// leaves and non-walking elements keep the pinned semantics.
+func RequestContainerLayout(w *Window, style Style, walkChildren func(w *Window) []LayoutID) (LayoutID, error) {
+	if walkChildren == nil {
+		return LayoutID{}, fmt.Errorf("gpui: RequestContainerLayout requires a non-nil child walk")
+	}
+	scope := openContainingBlock(w, &style)
+	defer closeContainingBlock(w, scope)
+	children := walkChildren(w)
+	return requestLayoutNode(w, scope, style, children)
 }
 
 // RequestElementMeasuredLayout requests one measured leaf layout node

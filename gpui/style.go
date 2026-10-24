@@ -347,8 +347,20 @@ func ParseDisplay(s string) (Display, error) {
 	}
 }
 
-// Position is the positioning strategy (reference style.rs Position;
-// Relative is the default, unlike CSS).
+// Position is the positioning strategy. Relative is the default (the
+// reference style.rs Position; unlike CSS, whose default is static).
+// PositionStatic is the CSS opt-in of browser-core ticket 33 (spec
+// D3): a static element is laid out in flow exactly like a relative
+// one (the record translation maps it onto Taffy's Relative, which
+// Taffy has no static value), it ignores the insets (CSS static never
+// offsets), and — the point of the value — it is NOT a containing
+// block: an absolutely positioned child skips it and resolves
+// against the nearest positioned ancestor, the way
+// LayoutObject::ContainerForAbsolutePosition walks the parent chain
+// in Chromium (core/layout/layout_object.cc:1877-1883, the research
+// checkout). The default itself flips to static in ticket 76; until
+// then existing behaviour is bit-for-bit unchanged unless a view says
+// Static().
 type Position uint8
 
 const (
@@ -356,6 +368,11 @@ const (
 	PositionRelative Position = iota
 	// PositionAbsolute offsets from the closest positioned ancestor.
 	PositionAbsolute
+	// PositionStatic lays out in flow and is not a containing block for
+	// absolute children (browser-core 33, spec D3; the CSS default,
+	// introduced opt-in — the port's default stays Relative until ticket
+	// 76 flips it).
+	PositionStatic
 )
 
 // String returns the reference variant name.
@@ -365,6 +382,9 @@ func (p Position) String() string {
 	}
 	if p == PositionRelative {
 		return "Relative"
+	}
+	if p == PositionStatic {
+		return "Static"
 	}
 	return fmt.Sprintf("Position(%d)", uint8(p))
 }
@@ -376,6 +396,8 @@ func ParsePosition(s string) (Position, error) {
 		return PositionRelative, nil
 	case "Absolute":
 		return PositionAbsolute, nil
+	case "Static":
+		return PositionStatic, nil
 	default:
 		return 0, fmt.Errorf("invalid Position %q", s)
 	}
