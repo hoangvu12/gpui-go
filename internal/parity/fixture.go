@@ -415,6 +415,14 @@ type Fixture struct {
 	// record, so the flag set is part of the fixture's identity — copy
 	// the flags into the new fixture when cloning one.
 	ChromeFlags []string
+	// SmoothScrolling records the page with Chrome's smooth scrolling
+	// ON (browser-core ticket 45, spec D13): the recorder adds
+	// --enable-smooth-scrolling — which wins over the harness's own
+	// --disable-smooth-scrolling (web_contents_impl.cc:4042-4046's flag
+	// pair) — and the replay opts the test application's smooth
+	// scrolling in, so both sides scroll smoothly. Unlike ChromeFlags
+	// this one IS read at replay time: the record was made under it.
+	SmoothScrolling bool
 	// EmulatedMedia are the CDP emulated media features the recorder
 	// applies before loading the page (record-time only, like
 	// ChromeFlags; see EmulatedMediaFeature). The forced-colours fixture

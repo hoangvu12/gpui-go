@@ -132,7 +132,16 @@ func RecordFixture(f Fixture) error {
 		return err
 	}
 
-	browser, err := launchChrome(chrome, dir, f.ChromeFlags)
+	// browser-core 45 (D13): a smooth-scrolling fixture records with
+	// Chrome's smooth scrolling on — --enable-smooth-scrolling wins over
+	// the harness's own --disable-smooth-scrolling (the flag pair's OR,
+	// web_contents_impl.cc:4042-4046) — so the record was made under the
+	// same animated scrolls the replay runs.
+	flags := append([]string{}, f.ChromeFlags...)
+	if f.SmoothScrolling {
+		flags = append(flags, "--enable-smooth-scrolling")
+	}
+	browser, err := launchChrome(chrome, dir, flags)
 	if err != nil {
 		return err
 	}

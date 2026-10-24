@@ -357,6 +357,13 @@ func (s *elementScroll) applyScrollAnchoring(w *Window, layoutID LayoutID) {
 	delta := float32(math.Round(float64(saved.Top - s.anchor.savedTop)))
 	if delta != 0 {
 		s.offset.Y -= delta
+		// browser-core 45: an anchoring adjustment during a running
+		// animation shifts the curve with the offset (ApplyAdjustment,
+		// scroll_offset_animation_curve.cc:300-305 — blink's kAnchoring
+		// arm calls ScrollAnimator::AdjustAnimation, scrollable_area.cc:
+		// 379-383), so the animation keeps running toward the shifted
+		// target instead of snapping back at its next tick.
+		s.smoothScrollAdjust(Point{Y: -delta})
 	}
 	s.anchor.savedTop = saved.Top
 }

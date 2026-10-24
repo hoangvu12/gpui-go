@@ -153,6 +153,12 @@ type listStateInner struct {
 	// (R:list.rs:196-214); measureAll false is the Visible default.
 	measureAll  bool
 	hasMeasured bool
+	// animator is the list's smooth-scroll state (browser-core 45,
+	// scroll_smooth.go): the running wheel animation, in the port's
+	// negative-down convention over the pixel scroll top. The wheel
+	// latch's identity is this same state, so the animation's lifetime
+	// is the list's.
+	animator *smoothScrollAnimator
 }
 
 // resetMeasuring is ListMeasuringBehavior::reset (R:list.rs:207-213).
@@ -556,6 +562,86 @@ func (st *listStateInner) canConsumeWheelDelta(scrollTop ListOffset, height floa
 	scrollMax := max32(st.totalHeight()+padding.Top+padding.Bottom-height, 0)
 	current := st.pixelScrollTop(scrollTop)
 	return min32(max32(current-delta.Y, 0), scrollMax) != current
+}
+
+// listSmoothWheelScroll starts or retargets the list's smooth wheel
+// animation (browser-core 45): the compositor wheel path's formula over
+// the pixel scroll top (negated into the port's negative-down
+// convention so the shared curve math applies) — the create target is
+// clamp(current + delta) (LayerTreeHostImpl::ScrollAnimationCreate,
+// layer_tree_host_impl.cc:4684-4722) and a running animation retargets
+// to clamp(target + delta) (scroll_offset_animations_impl.cc:118-135).
+func listSmoothWheelScroll(st *listStateInner, scrollTop ListOffset, height float32, delta Point, notify func(*Window, *App), w *Window, app *App) {
+	if st == nil || w == nil || app == nil {
+		return
+	}
+	padding := listPadding{}
+	if last := st.lastPadding; last != nil {
+		padding = *last
+	}
+	scrollMax := max32(st.totalHeight()+padding.Top+padding.Bottom-height, 0)
+	current := Point{Y: -st.pixelScrollTop(scrollTop)}
+	current.Y = clampF32(current.Y, -scrollMax, 0)
+	if st.animator == nil {
+		st.animator = &smoothScrollAnimator{}
+	}
+	target := current
+	if anim := st.animator.anim; anim != nil {
+		target = anim.target
+	}
+	next := Point{Y: clampF32(target.Y+delta.Y, -scrollMax, 0)}
+	if st.animator.startAt(current, next, smoothScrollWheel, app.Now()) {
+		requestSmoothListTick(w, st.animator, st, height, notify)
+	}
+}
+
+// requestSmoothListTick schedules the list animator's next-frame tick
+// (requestSmoothScrollTick's list form: the tick drives the list's own
+// scroll body instead of an offset cell).
+func requestSmoothListTick(w *Window, an *smoothScrollAnimator, st *listStateInner, height float32, notify func(*Window, *App)) {
+	if w == nil || an == nil || st == nil || an.pending {
+		return
+	}
+	an.pending = true
+	w.OnNextFrame(func(w *Window, app *App) {
+		an.pending = false
+		smoothListTick(w, app, an, st, height, notify)
+	})
+}
+
+// smoothListTick is the list animator's frame: sample the curve at
+// the application's clock, apply the delta from the list's PRESENT
+// pixel scroll top through the list's own scroll body (the rebasing,
+// the eager clamp and the scroll handler all run), and request the
+// next frame only while the animation runs. The reduced-motion and
+// disabled gates adopt the target at once.
+func smoothListTick(w *Window, app *App, an *smoothScrollAnimator, st *listStateInner, height float32, notify func(*Window, *App)) {
+	if an == nil || an.anim == nil || st == nil {
+		return
+	}
+	anim := an.anim
+	scrollTop := ListOffset{}
+	if st.logicalScrollTop != nil {
+		scrollTop = *st.logicalScrollTop
+	}
+	if app == nil || app.MotionReduced() || !app.smoothScrolling {
+		// Adopt the target at once (the D13 gate).
+		if d := -anim.target.Y - st.pixelScrollTop(scrollTop); d != 0 {
+			st.scroll(scrollTop, height, Point{Y: -d}, notify, w, app)
+		}
+		an.anim = nil
+		return
+	}
+	elapsed := app.Now() - anim.start
+	value := anim.valueAt(elapsed) // negative-down pixels
+	if delta := st.pixelScrollTop(scrollTop) + value.Y; delta != 0 {
+		st.scroll(scrollTop, height, Point{Y: delta}, notify, w, app)
+	}
+	if elapsed >= anim.duration {
+		an.anim = nil
+		return
+	}
+	requestSmoothListTick(w, an, st, height, notify)
 }
 
 func (st *listStateInner) scroll(scrollTop ListOffset, height float32, delta Point, notify func(*Window, *App), w *Window, app *App) {
@@ -1202,6 +1288,21 @@ func (l *ListElement) Paint(global *GlobalElementID, inspector *InspectorElement
 				(delta.Y != 0 && !overscrollY.propagatesScroll())
 			if !w.wheelScrollLatchTake(e, inner, canConsume, cuts, app) {
 				return
+			}
+			// browser-core 45 (D13): a non-precise (line or page) delta whose
+			// larger axis moves scrolls smoothly — the same Chromium wheel
+			// path the div's listener runs (animate to clamp(current +
+			// delta), retarget a running animation to clamp(target + delta);
+			// see scroll_smooth.go's citations). A precise delta never
+			// animates — it cancels a running animation and scrolls
+			// instantly.
+			if app.smoothScrollAnimated() && !e.Delta.Precise() &&
+				(abs32(delta.X) > smoothScrollCreateEpsilon || abs32(delta.Y) > smoothScrollCreateEpsilon) {
+				listSmoothWheelScroll(inner, scrollTop, height, delta, notify, w, app)
+				return
+			}
+			if inner.animator != nil {
+				inner.animator.anim = nil
 			}
 			inner.scroll(scrollTop, height, delta, notify, w, app)
 		})

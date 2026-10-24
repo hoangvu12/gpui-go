@@ -299,7 +299,14 @@ new fixtures. The implementation lives in `internal/parity`:
    the `textpaint` rasterization fixtures are the pattern (`textpaint-raster` with the
    default flags, `textpaint-raster-gray` with `--disable-lcd-text`). The flags are
    record-time only; the replay never reads them, but the record they produced is what
-   the replay is compared against, so copy them when cloning a fixture.
+   the replay is compared against, so copy them when cloning a fixture. A smooth-
+   scrolling fixture (browser-core ticket 45, spec D13) sets `SmoothScrolling: true`
+   instead: the recorder adds `--enable-smooth-scrolling` (which wins over the
+   harness's own disable flag) and the replay opts the test application's smooth
+   scrolling in — unlike `ChromeFlags`, this one IS read at replay time, because the
+   record was made under it (`fixtures/smoothscroll` is the fixture set; see the
+   smooth-scrolling note under "Recorder details worth knowing" for why its records
+   pin end states and the mid-flight curve lives in the port-side tests).
 
    A fixture that needs the page rendered under a **media feature** sets `EmulatedMedia`
    (CDP `Emulation.setEmulatedMedia`, applied before the page loads): the
@@ -509,13 +516,30 @@ it, and the capture ticket's own tests pin it
   `position-visibility` delivery) has landed, exactly like the replay, whose
   boxes come from a fully parked final frame (ticket 25 found the un-settled
   read capturing a scroll one key behind).
-- **Smooth scrolling is disabled in the recorder's Chrome**
-  (`--disable-smooth-scrolling`): with it on, keyboard scrolls land as
-  compositor-driven animated offsets at nondeterministic times
-  (PaintLayerScrollableArea::ScrollAnimatorEnabled reads the setting), which a
-  recorded fixture cannot compare against the port's instant scrolls. The
-  smooth-scrolling ticket (spec D13) re-records its fixtures when the port scrolls
-  smoothly.
+- **Smooth scrolling is off in the recorder's Chrome by default, and a
+  fixture can turn it on** (`SmoothScrolling: true`, browser-core ticket
+  45): the harness's own `--disable-smooth-scrolling` keeps every
+  pre-45 fixture's scrolls instant on both sides (Chrome's flag pair
+  ORs, web_contents_impl.cc:4042-4046, so the fixture's
+  `--enable-smooth-scrolling` wins over it when set), and the replay's
+  TestApp mirrors the split — the deterministic test application runs
+  with the port's smooth scrolling off (the recorder's Chrome shape;
+  `TestApp.WithSmoothScrolling` opts in) while a real application's
+  default is on (spec D13). The smooth fixtures (`fixtures/smoothscroll`)
+  record with the flag on and replay with the port's smooth scrolling
+  on. One hard limit, worked around: Chrome's smooth scroll animations
+  run on the compositor as impl-only cc animations — they are not
+  document.getAnimations() Web Animations, so the Wait step cannot seek
+  them — and CDP-dispatched wheel events are `kScrollByPrecisePixel`
+  (input_handler.cc:484), which never animates, so no timed mid-animation
+  scroll offset can be recorded from Chrome. The smooth records
+  therefore pin the END states (the convergence and the step sizes),
+  the keyboard path being the recordable non-precise source, and the
+  mid-flight curve is pinned on the port side: the fixture package's
+  own mid-animation replay (the offset at exactly half the 150ms
+  keyboard animation is the ease-in-out midpoint, 20px of the 40px step)
+  and the gpui unit tests that fit Chromium's curve formulas
+  (`gpui/scroll_smooth_test.go`).
 - **Keyboard scrolls land synchronously** with the flag off (measured at the harness's
   2.0 device scale: 40 CSS px per arrow — Chromium's kPixelsPerLineStep — the page step
   max(0.875xlength, length-40), Home/End to the axis ends): the keyorder scroll

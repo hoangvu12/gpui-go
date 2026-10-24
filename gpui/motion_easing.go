@@ -342,13 +342,13 @@ func absMotion32(v float32) float32 {
 	return v
 }
 
-// CubicBezier returns a cubic bezier easing like CSS `cubic-bezier`
-// (U:animation.rs:9-63; moved from base). The input is elapsed progress
-// along x: the curve parameter solving x(s) = t is found by Newton
-// iteration with a bisection fallback, then y(s) is sampled. Input and
-// output are clamped to [0, 1] (the core asserts easing deltas stay in
-// range).
-func CubicBezier(x1, y1, x2, y2 float32) func(float32) float32 {
+// cubicBezierParts returns the bezier's y sampler and its dy/dx slope
+// at a progress x, for the unit cubic bezier (x1, y1), (x2, y2) — the
+// solver CubicBezier uses (Newton with a bisection fallback), shared
+// with the smooth-scroll curve (whose retarget needs the slope, as
+// gfx::CubicBezier::Slope serves Chromium's velocity math,
+// timing_function.cc:67-69).
+func cubicBezierParts(x1, y1, x2, y2 float32) (sample, slope func(float32) float32) {
 	// Polynomial form of the unit bezier, where p0 = (0, 0) and p3 = (1, 1).
 	cx, cy := 3*x1, 3*y1
 	bx, by := float32(3*(x2-x1))-cx, float32(3*(y2-y1))-cy
@@ -356,6 +356,7 @@ func CubicBezier(x1, y1, x2, y2 float32) func(float32) float32 {
 	sampleX := func(t float32) float32 { return float32(float32(float32(ax*t)+bx)*t+cx) * t }
 	sampleY := func(t float32) float32 { return float32(float32(float32(ay*t)+by)*t+cy) * t }
 	slopeX := func(t float32) float32 { return float32(float32(float32(3*ax)*t)+float32(2*bx))*t + cx }
+	slopeY := func(t float32) float32 { return float32(float32(float32(3*ay)*t)+float32(2*by))*t + cy }
 
 	// Solve `x(s) = t` for the curve parameter `s` (U:animation.rs:24-53).
 	solveS := func(t float32) float32 {
@@ -365,11 +366,11 @@ func CubicBezier(x1, y1, x2, y2 float32) func(float32) float32 {
 			if absMotion32(err) < 1e-6 {
 				return s
 			}
-			slope := slopeX(s)
-			if absMotion32(slope) < 1e-6 {
+			sl := slopeX(s)
+			if absMotion32(sl) < 1e-6 {
 				break
 			}
-			s = clampMotion32(s-err/slope, 0, 1)
+			s = clampMotion32(s-err/sl, 0, 1)
 		}
 
 		low, high := float32(0), float32(1)
@@ -389,10 +390,35 @@ func CubicBezier(x1, y1, x2, y2 float32) func(float32) float32 {
 		return s
 	}
 
-	return func(t float32) float32 {
+	sample = func(t float32) float32 {
 		t = clampMotion32(t, 0, 1)
 		return clampMotion32(sampleY(solveS(t)), 0, 1)
 	}
+	slope = func(t float32) float32 {
+		t = clampMotion32(t, 0, 1)
+		s := solveS(t)
+		dx, dy := slopeX(s), slopeY(s)
+		if absMotion32(dx) < 1e-6 {
+			// A vertical tangent: report the clamped slope's limit.
+			if dy > 0 {
+				return 1e6
+			}
+			return -1e6
+		}
+		return dy / dx
+	}
+	return sample, slope
+}
+
+// CubicBezier returns a cubic bezier easing like CSS `cubic-bezier`
+// (U:animation.rs:9-63; moved from base). The input is elapsed progress
+// along x: the curve parameter solving x(s) = t is found by Newton
+// iteration with a bisection fallback, then y(s) is sampled. Input and
+// output are clamped to [0, 1] (the core asserts easing deltas stay in
+// range).
+func CubicBezier(x1, y1, x2, y2 float32) func(float32) float32 {
+	sample, _ := cubicBezierParts(x1, y1, x2, y2)
+	return sample
 }
 
 // EaseOutCubic is the cubic ease-out — fast start, slow end; good for

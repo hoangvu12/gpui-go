@@ -80,6 +80,10 @@ type scrollHandleState struct {
 	overflowX, overflowY Overflow
 	// activeItem is the deferred scroll-to target (R:div.rs:4733).
 	activeItem *scrollActiveItem
+	// animator is the scroller's smooth-scroll state (browser-core 45,
+	// scroll_smooth.go): the running animation lives next to the offset
+	// cell it writes, like Chromium's per-ScrollableArea ScrollAnimator.
+	animator *smoothScrollAnimator
 	// anchor is the scroll-anchoring bookkeeping (browser-core 46,
 	// scroll_anchor.go): the handle form of the element-state cell.
 	anchor scrollAnchorState
@@ -97,7 +101,11 @@ type ScrollHandle struct {
 // NewScrollHandle constructs a new scroll handle (R:div.rs:4762-4765
 // ScrollHandle::new).
 func NewScrollHandle() ScrollHandle {
-	return ScrollHandle{state: &scrollHandleState{offset: &Point{}, ongoingScroll: &OngoingScroll{}}}
+	return ScrollHandle{state: &scrollHandleState{
+		offset:        &Point{},
+		ongoingScroll: &OngoingScroll{},
+		animator:      &smoothScrollAnimator{},
+	}}
 }
 
 // Offset returns the current scroll offset (R:div.rs:4767-4770).
@@ -210,7 +218,9 @@ func (h ScrollHandle) ScrollToTopOfItem(ix int) {
 
 // scrollToActiveItem applies the deferred scroll-to request against the
 // last prepaint's bounds, children and overflow (R:div.rs:4844-4893). A
-// request for a child that does not exist yet stays pending.
+// request for a child that does not exist yet stays pending. An
+// instant write under a running smooth animation adjusts (not cancels)
+// the animation (browser-core 45, Chromium's crbug.com/1264266 rule).
 func (h ScrollHandle) scrollToActiveItem() {
 	state := h.state
 	active := state.activeItem
@@ -222,6 +232,7 @@ func (h ScrollHandle) scrollToActiveItem() {
 	}
 	bounds := state.childBounds[active.index]
 	offset := state.offset
+	old := *offset
 	switch active.strategy {
 	case divScrollFirstVisible:
 		if state.overflowY == OverflowScroll {
@@ -250,6 +261,9 @@ func (h ScrollHandle) scrollToActiveItem() {
 		}
 	}
 	state.activeItem = nil
+	if *offset != old && state.animator != nil && state.animator.anim != nil {
+		state.animator.anim.adjust(pointSub(*offset, old))
+	}
 }
 
 // ScrollToBottom scrolls to the bottom at the element's next prepaint
@@ -261,9 +275,73 @@ func (h ScrollHandle) ScrollToBottom() {
 // SetOffset sets the offset explicitly: the distance from the top left of
 // the parent container to the top left of the first child, more negative
 // as the content scrolls further down (R:div.rs:4901-4907). The
-// scrollable element clamps it at its next prepaint.
+// scrollable element clamps it at its next prepaint. A running smooth
+// scroll animation is adjusted (not cancelled) by the write (browser-
+// core 45, Chromium's crbug.com/1264266 rule); use ScrollTo for a smooth
+// programmatic scroll.
 func (h ScrollHandle) SetOffset(offset Point) {
+	if h.state == nil {
+		return
+	}
+	if h.state.animator != nil {
+		h.state.animator.writeInstant(h.state.offset, offset)
+		return
+	}
 	*h.state.offset = offset
+}
+
+// ScrollBehavior is the timing of a programmatic scroll (CSSOM's
+// ScrollBehavior, dom.d.ts scrollIntoView/scrollTo): auto follows the
+// scroller's own policy (the port has no scroll-behavior style, so it
+// is the instant default Chrome computes), instant jumps, smooth
+// animates with the programmatic curve — while the application scrolls
+// smoothly (the D13 pref and the reduced-motion gate; otherwise it
+// jumps like instant).
+type ScrollBehavior uint8
+
+const (
+	// ScrollBehaviorAuto follows the scroller's policy (instant in the
+	// port — Chrome's computed scroll-behavior default).
+	ScrollBehaviorAuto ScrollBehavior = iota
+	// ScrollBehaviorInstant jumps to the target.
+	ScrollBehaviorInstant
+	// ScrollBehaviorSmooth animates to the target with the programmatic
+	// curve (Chromium's kProgrammatic scroll type: the tweaked bezier and
+	// the sqrt-of-delta duration).
+	ScrollBehaviorSmooth
+)
+
+// ScrollTo sets the offset with an explicit behavior (CSSOM's
+// Element.scrollTo): smooth starts a programmatic animation toward the
+// clamped target — a running user animation is cancelled first, as
+// Chromium cancels the user scroll animation before a programmatic one
+// (scrollable_area.cc:519-525), leaving the offset at its current
+// animated position — and auto or instant write it directly, adjusting
+// (not cancelling) a running animation (crbug.com/1264266). The
+// scrollable element clamps the result at its next prepaint; w and app
+// drive the smooth animation's frames (nil falls back to the instant
+// write, as do the reduced-motion and smooth-scrolling gates).
+func (h ScrollHandle) ScrollTo(offset Point, behavior ScrollBehavior, w *Window, app *App) {
+	if h.state == nil {
+		return
+	}
+	if behavior == ScrollBehaviorSmooth && w != nil && app != nil && app.smoothScrollAnimated() {
+		if an := h.state.animator; an != nil {
+			if anim := an.anim; anim != nil {
+				// Cancel at the current animated position (the offset cell
+				// holds the last tick's sample; re-sample for exactness).
+				*h.state.offset = anim.valueAt(app.Now() - anim.start)
+				an.anim = nil
+			}
+			target := offset
+			target.X = clampF32(target.X, -h.state.maxOffset.X, 0)
+			target.Y = clampF32(target.Y, -h.state.maxOffset.Y, 0)
+			animateSmoothScroll(h.state.offset, h.state.maxOffset, &h.state.animator, target,
+				smoothScrollProgrammatic, func(w *Window, app *App) { w.requestRefresh() }, w, app)
+			return
+		}
+	}
+	h.SetOffset(offset)
 }
 
 // LogicalScrollTop returns the top child index and the pixel offset of

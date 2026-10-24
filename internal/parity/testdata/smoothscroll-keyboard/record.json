@@ -1,0 +1,44 @@
+{
+  "name": "smoothscroll-keyboard",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T20:18:09Z",
+  "viewport": {
+    "width": 320,
+    "height": 240
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "rrow0": {
+      "x": 10,
+      "y": -70,
+      "width": 200,
+      "height": 40
+    },
+    "rrow1": {
+      "x": 10,
+      "y": -30,
+      "width": 200,
+      "height": 40
+    },
+    "rrow2": {
+      "x": 10,
+      "y": 10,
+      "width": 200,
+      "height": 40
+    },
+    "rrow4": {
+      "x": 10,
+      "y": 90,
+      "width": 200,
+      "height": 40
+    },
+    "scroller": {
+      "x": 10,
+      "y": 10,
+      "width": 200,
+      "height": 200
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

@@ -614,6 +614,10 @@ type keyScrollContainer struct {
 	// propagate (RecomputeScrollChain's RespectOverscrollBehavior
 	// arm, scroll_manager.cc:192-206).
 	overscrollX, overscrollY OverscrollBehavior
+	// smooth is the scroller's smooth-scroll animator cell (browser-core
+	// 45): the same cell the wheel listener and the handle's programmatic
+	// scrolls use, so one scroller runs one animation.
+	smooth **smoothScrollAnimator
 	// notify refreshes the view that rendered the scroller.
 	notify func(w *Window, app *App)
 }
@@ -624,7 +628,11 @@ type keyScrollContainer struct {
 // (keyScrollLineStep); page steps move keyScrollPageStep of the
 // visible length; document steps jump to the axis start or end. The
 // offset clamps into [-maxOffset, 0] per axis, matching the next
-// prepaint's clamp.
+// prepaint's clamp. Under the smooth-scrolling gate the clamped target
+// animates with the keyboard curve (browser-core 45: Chromium's
+// ScrollAnimator::UserScroll computes the clamped target,
+// scroll_animator.cc:88-140, and animates it while ScrollAnimatorEnabled
+// holds — 150ms, the constant duration).
 func (c *keyScrollContainer) applyScroll(mapping keyScrollMapping, w *Window, app *App) bool {
 	if c == nil || c.offset == nil {
 		return false
@@ -678,6 +686,29 @@ func (c *keyScrollContainer) applyScroll(mapping keyScrollMapping, w *Window, ap
 	}
 	if next == old {
 		return false
+	}
+	// browser-core 45: the keyboard scroll animates toward the target
+	// under the gate (the instant write otherwise, exactly the
+	// pre-ticket behaviour). The target follows blink's UserScroll
+	// (scroll_animator.cc:88-140): the running animation's target
+	// (DesiredTargetOffset) plus the clamped delta computed from the
+	// current offset (ComputeDeltaToConsume), so two presses in quick
+	// succession accumulate like Chrome's.
+	if app.smoothScrollAnimated() && c.smooth != nil {
+		base := *c.offset
+		base.X = clampF32(base.X, -c.maxOffset.X, 0)
+		base.Y = clampF32(base.Y, -c.maxOffset.Y, 0)
+		if an := *c.smooth; an != nil && an.anim != nil {
+			base = an.anim.target
+		}
+		target := base
+		if vertical {
+			target.Y = clampF32(base.Y+(next.Y-old.Y), -c.maxOffset.Y, 0)
+		} else {
+			target.X = clampF32(base.X+(next.X-old.X), -c.maxOffset.X, 0)
+		}
+		animateSmoothScroll(c.offset, c.maxOffset, c.smooth, target, smoothScrollKeyboard, c.notify, w, app)
+		return true
 	}
 	*c.offset = next
 	if c.notify != nil {
@@ -735,6 +766,7 @@ func registerKeyScrollContainer(w *Window, scroll *elementScroll, style *Style) 
 		overflowY:   style.OverflowY,
 		overscrollX: style.OverscrollBehaviorX,
 		overscrollY: style.OverscrollBehaviorY,
+		smooth:      scroll.smooth,
 		notify:      currentViewNotifier(w),
 	})
 }

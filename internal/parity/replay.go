@@ -84,6 +84,13 @@ func Replay(t testing.TB, f Fixture) (*ReplayResult, error) {
 		return nil, err
 	}
 	ta := gpui.NewTestApp()
+	// browser-core 45 (D13): a smooth-scrolling fixture opts the
+	// application's smooth scrolling in (the TestApp default is off, the
+	// recorder's Chrome shape); every other fixture replays the instant
+	// scrolls its record was made with.
+	if f.SmoothScrolling {
+		ta = ta.WithSmoothScrolling(true)
+	}
 	t.Cleanup(func() { _ = ta.App().Shutdown() })
 	app := ta.App()
 	// The fixture's app-level configuration runs before the window and
