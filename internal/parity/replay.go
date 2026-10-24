@@ -122,6 +122,10 @@ func Replay(t testing.TB, f Fixture) (*ReplayResult, error) {
 			return nil, fmt.Errorf("parity: %s: step %v: %w", f.Name, step, err)
 		}
 	}
+	// The drag entries settle with their events' final states (the
+	// drag dispatches run inside the platform events' dispatches, so
+	// the per-step marking cannot see them — browser-core ticket 16).
+	log.FinalizeDragEntries()
 	cx.RunUntilParked()
 	if _, err := gpui.DrawWindowFrame(window); err != nil {
 		return nil, fmt.Errorf("parity: %s: final draw: %w", f.Name, err)
@@ -332,6 +336,19 @@ func applyStep(cx *gpui.VisualTestContext, log *EventLog, step Step) error {
 			Position:   position,
 			TouchPhase: gpui.TouchPhaseEnded,
 		})
+	case StepCancelDrag:
+		// Escape mid-drag (browser-core ticket 16): the replay half of
+		// the CDP Input.cancelDragging the recorder drives — one Escape
+		// KeyDown, which the drag machinery consumes before any listener
+		// (the OLE drag loop owns the keyboard), cancelling the session
+		// (dragleave on the current target, dragend with no drop). No key
+		// entries: the event never reaches a listener on either side.
+		key, err := gpui.ParseKeystroke("escape")
+		if err != nil {
+			return err
+		}
+		key = key.WithSimulatedCode()
+		cx.SimulateEvent(&gpui.KeyDownEvent{Keystroke: key})
 	default:
 		return fmt.Errorf("unknown step kind %q", step.Kind)
 	}

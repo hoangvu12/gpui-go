@@ -1154,7 +1154,7 @@ func (d *DivElement) requiresElementState() bool {
 		d.dragListener != nil || len(d.hoverListeners) > 0 ||
 		len(d.pointerEnterListeners) > 0 || len(d.pointerLeaveListeners) > 0 ||
 		d.activeStyle != nil || d.groupActiveStyle != nil ||
-		len(d.contextMenuListeners) > 0
+		len(d.contextMenuListeners) > 0 || d.hasDragEventListeners()
 }
 
 // shouldInsertHitbox is div.rs:2887-2911 should_insert_hitbox, bounded
@@ -1184,6 +1184,7 @@ func (d *DivElement) shouldInsertHitbox(style *Style, w *Window) bool {
 		d.dragListener != nil ||
 		len(d.dropListeners) > 0 ||
 		d.dragOverStyle != nil ||
+		d.hasDragEventListeners() ||
 		w.IsInspectorPicking()
 }
 
@@ -1470,14 +1471,24 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, path string, es *Interac
 	// listener of the drag value's type whose own can-drop predicate
 	// passes (or, without one, with this element hovered) stops the drag,
 	// receives the value, refreshes and stops propagation. A refusal
-	// leaves the drop to the enclosing targets.
+	// leaves the drop to the enclosing targets. Browser-core ticket 16:
+	// the same query answers the dragenter/dragover events — a matching,
+	// hovered listener marks the drag session accepted (Chromium's
+	// dragover acceptance is a cancelled event; the pin's drop listener
+	// is this port's acceptance twin), so the drop lands and the OLE
+	// drag loop reports COPY only over a target that would take it.
 	if len(d.dropListeners) > 0 {
 		listeners := append([]typedDropListener(nil), d.dropListeners...)
 		canDropPredicate := d.canDropPredicate
 		box := hitbox
 		w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
 			up, isUp := event.(*MouseUpEvent)
-			if !isUp || phase != DispatchBubble {
+			_, isOver := event.(*DragOverEvent)
+			_, isEnter := event.(*DragEnterEvent)
+			if !isUp && !isOver && !isEnter {
+				return
+			}
+			if phase != DispatchBubble {
 				return
 			}
 			drag := app.ActiveDrag()
@@ -1498,12 +1509,21 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, path string, es *Interac
 				} else if !box.IsHovered(w) {
 					continue
 				}
-				value, _ := app.StopDrag(w)
-				if listener.onDrop != nil {
-					listener.onDrop(value, up, w, app)
+				if isUp {
+					// The mouse-up arm: the value delivery (div.rs's drop arm).
+					value, _ := app.StopDrag(w)
+					if listener.onDrop != nil {
+						listener.onDrop(value, up, w, app)
+					}
+					w.requestRefresh()
+					app.StopPropagation()
+				} else {
+					// The dragenter/dragover arm (browser-core ticket 16):
+					// a matching, hovered listener marks the session accepted
+					// without consuming the event — the DOM acceptance is the
+					// event's own cancellation, this marks the pin's twin.
+					dragSessionOf(w).accepted = true
 				}
-				w.requestRefresh()
-				app.StopPropagation()
 				break
 			}
 		})
@@ -1553,7 +1573,11 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, path string, es *Interac
 		})
 
 		// A bubbled move past the drag threshold with the left button
-		// pending starts the drag once (div.rs:3482-3510).
+		// pending starts the drag once (div.rs:3482-3510). Browser-core
+		// ticket 16: the drag start fires dragstart on the source's chain
+		// first, and a prevented dragstart cancels the start (Chromium's
+		// TryStartDrag, mouse_event_manager.cc:1051) — the press stays
+		// clickable, exactly a drag that never started.
 		w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
 			move, isMove := event.(*MouseMoveEvent)
 			if !isMove || phase == DispatchCapture || dragListener == nil {
@@ -1573,10 +1597,19 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, path string, es *Interac
 			}
 			listenedDrag := dragListener
 			listenedCursor := dragCursorStyle
-			dragListener = nil
-			*clicked = ElementClickedState{}
 			cursorOffset := Point{X: move.Position.X - box.Bounds.Origin.X, Y: move.Position.Y - box.Bounds.Origin.Y}
 			drag := listenedDrag(cursorOffset, listenedCursor, w, app)
+			drag.sourcePath = path
+			if !w.beginDragSession(&drag, path, app) {
+				// The prevented dragstart: no drag (Chromium resets the
+				// drag source and leaves the press clickable).
+				dragListener = nil
+				pending.event = nil
+				w.requestRefresh()
+				return
+			}
+			dragListener = nil
+			*clicked = ElementClickedState{}
 			app.StartDrag(drag)
 			pending.event = nil
 			// The drag consumed the press (browser-core ticket 12): its
@@ -1670,6 +1703,11 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, path string, es *Interac
 	// The pointer boundary listeners (browser-core ticket 10): the
 	// DOM pointerenter/pointerleave sweeps drive them (hoverboundary.go).
 	d.paintBoundaryListeners(hitbox, es, w, app)
+
+	// The DOM drag-event listeners (browser-core ticket 16): the drag
+	// session's dispatches drive them (dragevent.go
+	// paintDragEventListeners).
+	d.paintDragEventListeners(hitbox, path, w, app)
 
 	// The pointer-capture listeners (browser-core ticket 11): the
 	// gotpointercapture/lostpointercapture sweeps drive them

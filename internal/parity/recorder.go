@@ -79,6 +79,13 @@ func instrumentScript(kinds []string) string {
 					entry.inputType = e.inputType === undefined || e.inputType === null ? "" : e.inputType;
 					entry.data = e.data === undefined || e.data === null ? "" : e.data;
 				}
+				if (kind === "dragenter" || kind === "dragover" || kind === "dragleave" || kind === "drop" || kind === "dragend") {
+					// The drop effect of the drag kinds (browser-core ticket
+					// 16): read from the event's dataTransfer at the end (the
+					// eventsScript below), like defaultPrevented — a listener's
+					// dropEffect assignment lands in the entry.
+					entry.hasDropEffect = true;
+				}
 				window.__events.push(entry);
 			});
 		}
@@ -96,7 +103,7 @@ func instrumentScript(kinds []string) string {
 // data field of composition entries (browser-core ticket 18), the
 // state field of toggle entries (browser-core ticket 21) and the
 // inputType field of beforeinput entries (browser-core ticket 26).
-const eventsScript = `JSON.stringify(window.__events.map(r => ({kind: r.kind, target: r.target, defaultPrevented: r.event.defaultPrevented, key: r.key || "", code: r.code || "", location: (r.kind === "keydown" || r.kind === "keyup") ? r.location : 0, focus: r.focus || "", isComposing: (r.kind === "keydown" || r.kind === "keyup") ? !!r.isComposing : false, data: r.data || "", state: r.state || "", inputType: (r.kind === "beforeinput") ? (r.inputType || "") : ""})))`
+const eventsScript = `JSON.stringify(window.__events.map(r => ({kind: r.kind, target: r.target, defaultPrevented: r.event.defaultPrevented, key: r.key || "", code: r.code || "", location: (r.kind === "keydown" || r.kind === "keyup") ? r.location : 0, focus: r.focus || "", isComposing: (r.kind === "keydown" || r.kind === "keyup") ? !!r.isComposing : false, data: r.data || "", state: r.state || "", inputType: (r.kind === "beforeinput") ? (r.inputType || "") : "", effect: r.hasDropEffect ? ((r.event.dataTransfer && r.event.dataTransfer.dropEffect) || "none") : ""})))`
 
 // RecordFixture records one fixture in headless Chrome and writes its
 // files (record.json, chrome.png, page.html) into
@@ -641,9 +648,26 @@ func (p *cdpPage) dispatchStep(step Step) error {
 			"deltaX": -step.DeltaX, "deltaY": -step.DeltaY,
 		})
 		return err
+	case StepCancelDrag:
+		// Escape mid-drag (browser-core ticket 16): the browser half of
+		// the user pressing Escape — the OS drag loop ends with
+		// DRAGDROP_S_CANCEL, which the CDP drag controller drives as
+		// DragTargetDragLeave + DragSourceEndedAt(none).
+		return p.dispatchCancelDrag()
 	default:
 		return fmt.Errorf("unknown step kind %q", step.Kind)
 	}
+}
+
+// dispatchCancelDrag drives the CDP drag cancel (browser-core ticket
+// 16's StepCancelDrag): Input.cancelDragging ends the CDP-driven drag
+// the way the OS drag loop ends on the escape flag — DragTargetDrag-
+// Leave plus DragSourceEndedAt with none (content/browser/devtools/
+// protocol/input_handler.cc:1670-1683 CancelDragging) — which the
+// page sees as dragleave and dragend, with no drop and no key events.
+func (p *cdpPage) dispatchCancelDrag() error {
+	_, err := p.call("Input.cancelDragging", map[string]any{})
+	return err
 }
 
 // keyPressMode selects which half of a keystroke the recorder sends
