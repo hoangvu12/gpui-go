@@ -34,6 +34,8 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+
+	"github.com/hoangvu12/gpui-go/internal/native"
 )
 
 // ---------------------------------------------------------------------------
@@ -556,6 +558,16 @@ func (d *drawable[L, P, E]) rootStretchStyle() (Style, bool) {
 		return s.LayoutNodeStyle()
 	}
 	return Style{}, false
+}
+
+// paintsAfterInFlow implements elementObject's sticky paint-order
+// query (browser-core ticket 34, sticky.go): the drawable forwards it
+// to its element — a sticky div reports true.
+func (d *drawable[L, P, E]) paintsAfterInFlow() bool {
+	if p, ok := any(d.element).(interface{ PaintsAfterInFlow() bool }); ok {
+		return p.PaintsAfterInFlow()
+	}
+	return false
 }
 
 // prepaint implements elementObject: resolves the element's bounds from
@@ -1136,6 +1148,24 @@ type frameDrawState struct {
 	// being requested, and static parents defer their absolute children
 	// into it. Balanced per element; empty outside a request walk.
 	containingBlockScopes []*containingBlockScope
+	// stickyScrollers is the open scroll-container scope stack of the
+	// prepaint phase (browser-core ticket 34, spec L3; sticky.go): the
+	// innermost context belongs to the nearest scroll container of the
+	// elements whose prepaint is running, and sticky elements resolve
+	// their constraints against it. Balanced per scroller around its
+	// child walk; empty outside a prepaint walk or in frames with no
+	// scrollers.
+	stickyScrollers []stickyScrollContext
+	// stickyRequested reports that this frame's request walk saw a
+	// PositionSticky div (sticky.go): only then do divs' prepaints fill
+	// stickyFlowBoxes, so views without sticky pay one boolean check.
+	stickyRequested bool
+	// stickyFlowBoxes is the frame's flow-rectangle registry for sticky
+	// descendants (sticky.go): the native layout node of each div whose
+	// prepaint ran, mapped to its flow containing-block rect (the
+	// content box, or the scroller's scrollable extent). Filled only
+	// while stickyRequested.
+	stickyFlowBoxes map[native.NodeHandle]Bounds
 	// elementOffset is the current absolute element offset
 	// (window.element_offset_stack tail).
 	elementOffset Point

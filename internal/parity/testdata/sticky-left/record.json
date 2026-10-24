@@ -1,0 +1,44 @@
+{
+  "name": "sticky-left",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T05:15:07Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "col": {
+      "x": 34,
+      "y": 60,
+      "width": 60,
+      "height": 160
+    },
+    "hfiller": {
+      "x": 0,
+      "y": 60,
+      "width": 700,
+      "height": 160
+    },
+    "hfocus": {
+      "x": -100,
+      "y": 60,
+      "width": 40,
+      "height": 160
+    },
+    "hscroller": {
+      "x": 20,
+      "y": 60,
+      "width": 320,
+      "height": 160
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

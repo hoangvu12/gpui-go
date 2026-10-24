@@ -70,9 +70,10 @@ type containingBlockScope struct {
 
 // openContainingBlock pushes one containing-block scope for an element
 // whose position makes it a containing block for absolute descendants
-// (relative and absolute today; sticky and fixed join when tickets 34
-// and 35 land). A static element returns nil: it opens no scope, and
-// its absolute children defer to the enclosing one.
+// (relative, absolute and sticky today — everything but static, which
+// is Chromium's rule; fixed joins with ticket 35). A static element
+// returns nil: it opens no scope, and its absolute children defer to
+// the enclosing one.
 func openContainingBlock(w *Window, style *Style) *containingBlockScope {
 	if style.Position == PositionStatic {
 		return nil

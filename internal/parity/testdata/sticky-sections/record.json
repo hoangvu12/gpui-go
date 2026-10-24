@@ -1,0 +1,104 @@
+{
+  "name": "sticky-sections",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T05:15:09Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "f1": {
+      "x": 20,
+      "y": -116,
+      "width": 240,
+      "height": 136
+    },
+    "f2": {
+      "x": 20,
+      "y": 44,
+      "width": 240,
+      "height": 136
+    },
+    "f3": {
+      "x": 20,
+      "y": 204,
+      "width": 240,
+      "height": 136
+    },
+    "f4": {
+      "x": 20,
+      "y": 364,
+      "width": 240,
+      "height": 136
+    },
+    "focus": {
+      "x": 20,
+      "y": -180,
+      "width": 240,
+      "height": 40
+    },
+    "h1": {
+      "x": 20,
+      "y": -4,
+      "width": 240,
+      "height": 24
+    },
+    "h2": {
+      "x": 20,
+      "y": 20,
+      "width": 240,
+      "height": 24
+    },
+    "h3": {
+      "x": 20,
+      "y": 180,
+      "width": 240,
+      "height": 24
+    },
+    "h4": {
+      "x": 20,
+      "y": 340,
+      "width": 240,
+      "height": 24
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "s1": {
+      "x": 20,
+      "y": -140,
+      "width": 240,
+      "height": 160
+    },
+    "s2": {
+      "x": 20,
+      "y": 20,
+      "width": 240,
+      "height": 160
+    },
+    "s3": {
+      "x": 20,
+      "y": 180,
+      "width": 240,
+      "height": 160
+    },
+    "s4": {
+      "x": 20,
+      "y": 340,
+      "width": 240,
+      "height": 160
+    },
+    "scroller": {
+      "x": 20,
+      "y": 20,
+      "width": 240,
+      "height": 300
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

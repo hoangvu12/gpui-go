@@ -1584,7 +1584,6 @@ var unsupportedClasses = []struct {
 	{[]string{"select"}, "text in a div is not selectable, so select-* has no effect; drop it"},
 	{[]string{"pointer-events"}, "pointer-events-* is not supported"},
 	{[]string{"fixed"}, "fixed positioning is not supported; use absolute inside a relative ancestor that fills the window, or gpui.Deferred / gpui.Anchored for overlays"},
-	{[]string{"sticky"}, "sticky positioning is not supported"},
 	{[]string{"inline-block", "inline-grid", "inline-table", "table", "contents", "flow-root", "list-item"}, "this display type is not supported; use flex, grid, block, inline or inline-flex"},
 	{[]string{"text-justify"}, "justified text is not supported"},
 	{[]string{"no-underline"}, "no-underline is not supported; leave underline out, or call .TextDecorationNone()"},
