@@ -282,7 +282,7 @@ func (f *inlineFlow) RequestLayout(global *gpui.GlobalElementID, _ *gpui.Inspect
 
 	id, err := gpui.RequestElementMeasuredLayout(w, gpui.DefaultStyle(), func(req gpui.MeasureRequest) gpui.Size {
 		var wrapWidth *float32
-		if typography.textStyle.WhiteSpace == gpui.WhiteSpaceNormal {
+		if typography.textStyle.WhiteSpace.WrapsAtWidth() {
 			if req.KnownWidthPresent {
 				width := req.KnownWidth
 				wrapWidth = &width
@@ -371,7 +371,10 @@ func (f *inlineFlow) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElementI
 			fragmentStyle := textStyle
 			fragmentStyle.FontSize = gpui.Px(fragment.fontSize)
 			fragmentStyle.LineHeight = gpui.DefinitePx(fragment.size.Height)
-			fragmentStyle.WhiteSpace = gpui.WhiteSpaceNowrap
+			// CSS pre's pair — preserved text, no soft wrap — the verbatim
+			// no-wrap of a pre-wrapped fragment (browser-core 38: nowrap
+			// would collapse the fragment's spaces).
+			fragmentStyle.WhiteSpace = gpui.WhiteSpacePre
 			origin := textPointAdd(textPointAdd(bounds.Origin, fragment.origin), gpui.Point{X: padding})
 			sel := fragment.selectionBounds
 			el := newInlineText(fragState, fragment.links, fragment.highlights, f.linkClickHandler).

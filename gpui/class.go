@@ -893,15 +893,34 @@ func typographyClass(b *StyleBuilder, u string) (bool, string) {
 			return true, "leading-… takes none, tight, snug, normal, relaxed, loose, a number on the 0.25rem scale, or [1.4] / [20px]"
 		}
 	case strings.HasPrefix(u, "tracking-"):
-		inner, ok := arbitrary(u[len("tracking-"):])
-		if !ok {
-			return true, "named tracking-* values are em-based and GPUI letter spacing is in px; use tracking-[0.5px]"
+		// Ticket 38: the named values are em-based and resolve against
+		// the element's own font size (CSS letter-spacing's <length> em
+		// conversion, style_builder_converter.cc ConvertSpacing); the
+		// arbitrary form stays pixels.
+		switch u {
+		case "tracking-tighter":
+			b.LetterSpacingEm(-0.05)
+		case "tracking-tight":
+			b.LetterSpacingEm(-0.025)
+		case "tracking-normal":
+			b.LetterSpacingEm(0)
+		case "tracking-wide":
+			b.LetterSpacingEm(0.025)
+		case "tracking-wider":
+			b.LetterSpacingEm(0.05)
+		case "tracking-widest":
+			b.LetterSpacingEm(0.1)
+		default:
+			inner, ok := arbitrary(u[len("tracking-"):])
+			if !ok {
+				return true, "tracking-… takes tighter, tight, normal, wide, wider, widest or [0.5px]"
+			}
+			px, ok := pixels(inner)
+			if !ok {
+				return true, "tracking-[…] takes pixels, like [0.5px] (the named values are em-based)"
+			}
+			b.LetterSpacing(px)
 		}
-		px, ok := pixels(inner)
-		if !ok {
-			return true, "tracking-[…] takes pixels, like [0.5px] (GPUI letter spacing is in px)"
-		}
-		b.LetterSpacing(px)
 	case strings.HasPrefix(u, "line-clamp-"):
 		n, ok := parseCount(u[len("line-clamp-"):])
 		if !ok || n == 0 || n > math.MaxInt32 {
@@ -1615,7 +1634,7 @@ var unsupportedClasses = []struct {
 	{[]string{"columns", "break-after", "break-before", "break-inside"}, "multi-column layout is not supported; use grid"},
 	{[]string{"place-content", "place-items", "place-self", "justify-items", "justify-self"}, "use items-*, justify-*, content-* and self-* instead"},
 	{[]string{"box-border", "box-content", "box-decoration"}, "box sizing is always border-box; drop it"},
-	{[]string{"whitespace-pre", "whitespace-break-spaces"}, "only whitespace-normal and whitespace-nowrap are supported"},
+	{[]string{"whitespace-break-spaces"}, "only whitespace-normal, whitespace-nowrap, whitespace-pre, whitespace-pre-line and whitespace-pre-wrap are supported (browser-core 38); break-spaces is not"},
 	{[]string{"break-words", "break-all", "break-keep", "break-normal", "hyphens", "text-balance", "text-pretty"}, "text wrapping modes other than whitespace-normal / whitespace-nowrap are not supported"},
 	{[]string{"antialiased", "subpixel-antialiased"}, "GPUI chooses text antialiasing itself; drop it"},
 	{[]string{"list"}, "list styles are not supported"},

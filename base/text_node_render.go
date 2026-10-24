@@ -61,7 +61,16 @@ func spanLeafKey(span *Span) *textLeafKey {
 }
 
 // textBlockDiv is the Block box of a text block (see the file comment).
-func textBlockDiv() *gpui.DivElement { return gpui.Div().Flex().FlexCol() }
+// The white-space mode pins the TextView's verbatim rendering (browser-
+// core 38, gpui/white_space.go): the pin's TextView lays text out
+// byte-for-byte with soft wrap — exactly CSS pre-wrap, the mode the
+// browser's UA sheet gives input-like verbatim content — where the
+// core's default normal would collapse runs of spaces and newlines in
+// Base's code blocks and paragraphs. Recorded divergence: tabs in
+// pre-wrapped text follow the browser's 8-space stops (Chromium
+// tab_size.h's TabSize(8)), where the pin's platform line used
+// DirectWrite's 4em stops.
+func textBlockDiv() *gpui.DivElement { return gpui.Div().Flex().FlexCol().WhitespacePreWrap() }
 
 // nodeRenderContext is the render half of NodeContext
 // (U:text/node.rs:1984-2048).
@@ -929,7 +938,7 @@ func renderBlock(b blockNode, options nodeRenderOptions, cx *nodeRenderContext, 
 		}
 		// rems(..).to_pixels(px(14.)).
 		heading := cx.style.Heading(v.level)
-		return StyledExtOf(textBlockDiv().Pb(gpui.RemsOf(0.3)).WhitespaceNormal().TextSize(gpui.Px(size * 14)).FontWeight(weight)).
+		return StyledExtOf(textBlockDiv().Pb(gpui.RemsOf(0.3)).WhitespacePreWrap().TextSize(gpui.Px(size * 14)).FontWeight(weight)).
 			RefineStyle(&heading).Child(v.children.render(spanLeafKey(v.span), cx, w, app)).IntoElement()
 	case *blockBlockquote:
 		el := textBlockDiv().WFull().TextColor(cx.style.MutedForeground()).BorderL3().BorderColor(cx.style.Border()).Px4()

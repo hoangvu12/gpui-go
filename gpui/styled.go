@@ -390,6 +390,20 @@ func (s *Styled[Self]) WhitespaceNormal[_ lazy]() Self { return s.Whitespace(Whi
 // WhitespaceNowrap sets white space to nowrap (styled.rs:214).
 func (s *Styled[Self]) WhitespaceNowrap[_ lazy]() Self { return s.Whitespace(WhiteSpaceNowrap) }
 
+// WhitespacePre sets white space to pre (browser-core 38, CSS
+// white-space: pre: spaces, tabs and newlines preserved, no wrapping,
+// tabs at 8-space stops).
+func (s *Styled[Self]) WhitespacePre[_ lazy]() Self { return s.Whitespace(WhiteSpacePre) }
+
+// WhitespacePreLine sets white space to pre-line (browser-core 38,
+// CSS white-space: pre-line: spaces collapse, newlines break).
+func (s *Styled[Self]) WhitespacePreLine[_ lazy]() Self { return s.Whitespace(WhiteSpacePreLine) }
+
+// WhitespacePreWrap sets white space to pre-wrap (browser-core 38,
+// CSS white-space: pre-wrap: spaces, tabs and newlines preserved,
+// wrapping on).
+func (s *Styled[Self]) WhitespacePreWrap[_ lazy]() Self { return s.Whitespace(WhiteSpacePreWrap) }
+
 // TextEllipsis truncates overflowing text with an ellipsis at the end
 // (styled.rs:221).
 func (s *Styled[Self]) TextEllipsis[_ lazy]() Self {
@@ -433,6 +447,15 @@ func (s *Styled[Self]) TextRight[_ lazy]() Self { return s.TextAlign(TextAlignRi
 // (styled.rs:270).
 func (s *Styled[Self]) LetterSpacing[_ lazy](spacing float32) Self {
 	s.TextStyleMut().LetterSpacing = Some(spacing)
+	return s.self
+}
+
+// LetterSpacingEm sets the letter spacing in ems of the element's own
+// font size (browser-core 38, CSS letter-spacing: <length> in em —
+// Tailwind's named tracking-* values; resolved against the font size
+// at run-build time, ToRunAt).
+func (s *Styled[Self]) LetterSpacingEm[_ lazy](em float32) Self {
+	s.TextStyleMut().LetterSpacingEm = Some(em)
 	return s.self
 }
 

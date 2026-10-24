@@ -213,7 +213,8 @@ func (t TextStyle) Highlight(style HighlightStyle) TextStyle {
 
 // ToRun converts the text style into a run of the given byte length
 // (R:style.rs:724-740 TextStyle::to_run): the style's font, paint
-// fields and letter spacing.
+// fields and letter spacing (pixels only — the pin's field; an
+// em-based LetterSpacingEm resolves through ToRunAt).
 func (t TextStyle) ToRun(length int) TextRun {
 	run := TextRun{
 		Len:             length,
@@ -224,6 +225,17 @@ func (t TextStyle) ToRun(length int) TextRun {
 		Strikethrough:   t.Strikethrough,
 		LetterSpacing:   t.LetterSpacing,
 	}
+	return run
+}
+
+// ToRunAt builds the shaping run of this style resolved against a font
+// size (browser-core 38): like ToRun, with an em-based LetterSpacingEm
+// folded into pixels (resolveLetterSpacing). The element-layer call
+// sites that know the resolved font size use this; ToRun keeps the
+// pin's pixel-only shape for callers without one.
+func (t TextStyle) ToRunAt(length int, fontSize float32) TextRun {
+	run := t.ToRun(length)
+	run.LetterSpacing = t.resolveLetterSpacing(fontSize)
 	return run
 }
 

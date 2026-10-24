@@ -24,6 +24,7 @@ import (
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/textpaint"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/textstyle"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/tracer"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/whitespace"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/transition"
 )
 

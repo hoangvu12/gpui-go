@@ -103,7 +103,7 @@ func TestComputeStyledRunsFillsGaps(t *testing.T) {
 	red := Hsla{H: 0, S: 1, L: 0.5, A: 1}
 	runs := computeStyledRuns(text, base, []HighlightRange{
 		{Range: TextRange{Start: 6, End: 11}, Style: HighlightStyleFromColor(red)},
-	})
+	}, 16)
 	if len(runs) != 3 {
 		t.Fatalf("runs = %d, want 3 (gap, highlight, tail)", len(runs))
 	}

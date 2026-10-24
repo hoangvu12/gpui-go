@@ -736,6 +736,11 @@ func (e *inlineText) RequestLayout(global *gpui.GlobalElementID, inspector *gpui
 	if e.textStyle != nil {
 		style = *e.textStyle
 	}
+	// The white-space mode arrives from the enclosing text block's
+	// pre-wrap pin (textBlockDiv) — the U: pin's inline text renders
+	// verbatim with soft wrap, which is pre-wrap exactly; the flow's
+	// pre-wrapped fragments pass their own mode (base/text_inline_flow.
+	// go).
 	runs := textRuns(len(e.text), style, e.highlights)
 	e.fontSize = style.FontSizePixels(gpui.RemSize(w))
 	// Deviation (ticket 37): the previous frame's layout is taken but not

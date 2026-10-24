@@ -852,6 +852,12 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.WhitespaceNormal()
 	case "whitespace-nowrap":
 		b.WhitespaceNowrap()
+	case "whitespace-pre":
+		b.WhitespacePre()
+	case "whitespace-pre-line":
+		b.WhitespacePreLine()
+	case "whitespace-pre-wrap":
+		b.WhitespacePreWrap()
 	default:
 		return false
 	}
@@ -859,4 +865,4 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 }
 
 // methodClassCount is the number of classes applyMethodClass knows.
-const methodClassCount = 423
+const methodClassCount = 426

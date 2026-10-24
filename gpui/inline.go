@@ -83,6 +83,11 @@ type inlineTextContent struct {
 	runs       []TextRun
 	fontSize   float32
 	lineHeight float32
+	// whiteSpace is the white-space mode the publishing element
+	// resolved for this text (browser-core 38): the paragraph collapses
+	// each record under its own mode, like Blink's per-item white-space
+	// (inline_items_builder.cc reads each LayoutText's ComputedStyle).
+	whiteSpace WhiteSpace
 	// paintStyled reports that runs carry their paint styles (color,
 	// background, decorations), like the pin's runs always do
 	// (R:elements/text.rs:903-915: the given runs, else
@@ -207,7 +212,11 @@ type InlineTextMetrics struct {
 }
 
 // InlineTextStyle is the resolved font size and line height for one
-// byte range of an inline document (the reference InlineTextStyle).
+// byte range of an inline document (the reference InlineTextStyle),
+// plus the white-space mode that range's element resolved (browser-
+// core 38: the collapse is per inline record, like Blink's per-item
+// styles — white space is an inherited property, so a span can switch
+// it for its own text).
 type InlineTextStyle struct {
 	// Range is the UTF-8 byte range receiving the metrics.
 	Range TextRange
@@ -215,6 +224,9 @@ type InlineTextStyle struct {
 	FontSize float32
 	// LineHeight is the range's absolute line height.
 	LineHeight float32
+	// WhiteSpace is the range's white-space mode (the zero value is
+	// normal).
+	WhiteSpace WhiteSpace
 }
 
 // InlineBoxRequest is one atomic element box inserted at a UTF-8
@@ -569,6 +581,7 @@ func (c *inlineParagraphCollector) collectElement(layoutID LayoutID) {
 			Range:      TextRange{Start: textStart, End: len(c.currentDocument.text)},
 			FontSize:   record.fontSize,
 			LineHeight: record.lineHeight,
+			WhiteSpace: record.whiteSpace,
 		})
 		c.recordSpanRanges(layoutID, textStart, boxStart)
 		c.recordOpenSpanRanges(textStart, boxStart)
@@ -695,6 +708,16 @@ func (c *inlineParagraphCollector) finishParagraph() {
 	if len(document.text) == 0 && len(document.boxes) == 0 {
 		return
 	}
+	// Ticket 38: the white-space processing (gpui/white_space.go) folds
+	// the collected document once, before any measure runs — the
+	// collapse is a property of the source and the per-record modes, not
+	// of the wrap width — remapping the covering runs, the style ranges,
+	// the boxes' insertion indices and the spans' byte ranges onto the
+	// display text. A document that collapses away entirely keeps its
+	// (empty) text; the inline layout then answers no rows, like
+	// Chromium's self-collapsing empty line box
+	// (inline_layout_algorithm.cc:1488-1492).
+	collapseParagraphDocument(document, c.textStyle.WhiteSpace)
 
 	textStyle := c.textStyle
 	rem := RemSize(c.window)
@@ -719,7 +742,7 @@ func (c *inlineParagraphCollector) finishParagraph() {
 		// segment, like Chromium's InlineNode::ComputeMinMaxSizes
 		// (inline_node.cc:2314-2323).
 		var wrapWidth *float32
-		if textStyle.WhiteSpace == WhiteSpaceNormal {
+		if textStyle.WhiteSpace.whiteSpaceWrapsAtWidth() {
 			if req.KnownWidthPresent {
 				width := req.KnownWidth
 				wrapWidth = &width

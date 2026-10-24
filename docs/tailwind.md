@@ -64,7 +64,7 @@ A class and its style method have the same name:
 | `leading-tight`, `uppercase`, `italic`, `underline` | `LeadingTight()`, `Uppercase()`, `Italic()`, `Underline()` |
 | `font-sans`, `font-serif`, `font-mono` | The Windows families Chrome resolves Tailwind's default stacks to (the system UI font, Georgia, Consolas) |
 | `tabular-nums` and the other numeric variants (`proportional-nums`, `lining-nums`, `oldstyle-nums`, `slashed-zero`, `ordinal`, `diagonal-fractions`, `stacked-fractions`, `normal-nums`) | The class sets the OpenType feature (`tnum`, `pnum`, `lnum`, `onum`, `zero`, `ordn`, `frac`, `afrc`; `normal-nums` clears them) |
-| `text-center`, `truncate`, `whitespace-nowrap` | `TextCenter()`, `Truncate()`, `WhitespaceNowrap()` |
+| `text-center`, `truncate`, `whitespace-*` | `TextCenter()`, `Truncate()`, `WhitespaceNormal()` / `WhitespaceNowrap()` / `WhitespacePre()` / `WhitespacePreLine()` / `WhitespacePreWrap()` (browser-core 38) |
 | `rounded-lg`, `rounded-full`, `rounded-t-md` | `RoundedLg()`, `RoundedFull()`, `RoundedTMd()` |
 | `border`, `border-2`, `border-t`, `border-dashed` | `Border1()`, `Border2()`, `BorderT1()`, `BorderDashed()` |
 | `shadow-md`, `ring-2` | `ShadowMd()`, `Ring2()` |
@@ -162,7 +162,7 @@ The palette is Tailwind CSS v3.4's default palette. It has 22 families (slate, g
 - **Borders**: `border`, `border-t|r|b|l|x|y` (1px), `border-<n>`, `border-[3px]`, `border-t-[3px]`, `border-solid`, `border-dashed`.
 - **Radii**: `rounded` and `rounded-t|r|b|l|tl|tr|br|bl` (0.25rem), `rounded-none|xs|sm|md|lg|xl|2xl|3xl|full`, `rounded-[10px]`, `rounded-tl-[10px]`.
 - **Shadows and rings**: `shadow` (v3's default), `shadow-2xs` … `shadow-2xl`, `shadow-none`, `shadow-inner`, `ring` (3px), `ring-<n>`, `ring-[3px]`, `inset-ring` (1px), `inset-ring-<n>`, `inset-ring-[3px]`.
-- **Typography**: `text-xs` … `text-9xl`, `text-[13px]`, `font-thin` … `font-black`, `font-[550]`, `leading-none|tight|snug|normal|relaxed|loose`, `leading-<n>` (n/4 rem), `leading-[1.4]` (a multiple of the font size), `leading-[20px]`, `tracking-[0.5px]`, `line-clamp-<n>`, `text-wrap`, `text-nowrap`.
+- **Typography**: `text-xs` … `text-9xl`, `text-[13px]`, `font-thin` … `font-black`, `font-[550]`, `leading-none|tight|snug|normal|relaxed|loose`, `leading-<n>` (n/4 rem), `leading-[1.4]` (a multiple of the font size), `leading-[20px]`, `tracking-[0.5px]`, `tracking-tighter|tight|normal|wide|wider|widest` (em-based, browser-core 38), `line-clamp-<n>`, `text-wrap`, `text-nowrap`, `whitespace-pre|pre-line|pre-wrap` (browser-core 38).
 - **Opacity**: `opacity-<0..100>`, `opacity-[.35]`, `opacity-[35%]`.
 - **Flex and grid**: `flex-grow`, `flex-shrink`, `grid-cols-<n>`, `grid-rows-<n>`, `col-span-<n>`, `row-span-<n>`, `col-start-<n>`, `col-end-<n>`, `row-start-<n>`, `row-end-<n>`.
 - **Aspect ratio**: `aspect-square`, `aspect-video`, `aspect-[4/3]`, `aspect-[1.5]`.
@@ -205,10 +205,10 @@ A rejected class is skipped, the rest of the string still applies, and the reaso
 | `columns-*`, `break-after-*`, `break-inside-*` | Use grid. |
 | `place-*`, `justify-items-*`, `justify-self-*` | Use `items-*`, `justify-*`, `content-*` and `self-*`. |
 | `box-border`, `box-content` | Box sizing is always border-box. Drop it. |
-| `whitespace-pre*`, `break-words`, `break-all`, `hyphens-*`, `text-balance`, `text-pretty` | Only `whitespace-normal` and `whitespace-nowrap` are supported. |
+| `whitespace-break-spaces`, `break-words`, `break-all`, `hyphens-*`, `text-balance`, `text-pretty` | `whitespace-normal`, `whitespace-nowrap`, `whitespace-pre`, `whitespace-pre-line` and `whitespace-pre-wrap` are supported (browser-core 38); break-spaces and the word-break family are not. |
 | `text-justify` | Justified text is not supported. |
 | `antialiased`, `subpixel-antialiased` | GPUI chooses text antialiasing itself. Drop it. |
-| `tracking-tight` and other named `tracking-*` | Named values are em-based. Use `tracking-[0.5px]`. |
+
 | `no-underline` | Leave `underline` out, or call `.TextDecorationNone()`. |
 | `decoration-*`, `underline-offset-*` | Use `underline` with `text-decoration-wavy` / `text-decoration-2` in the same string, or call `.TextDecorationColor(c)`. |
 | `w-screen`, `h-screen`, `min-h-screen`, `*-dvh`, `*-svh`, `*-lvh` | There are no viewport units. Use `size-full` on a parent that fills the window. The root view is window-sized. |
