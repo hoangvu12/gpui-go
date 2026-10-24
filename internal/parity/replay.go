@@ -270,10 +270,42 @@ func applyStep(cx *gpui.VisualTestContext, log *EventLog, step Step) error {
 		before := len(log.entries)
 		result := cx.SimulateEvent(event)
 		log.markDefaultPrevented(before, result.DefaultPrevented)
+	case StepImeSet, StepImeCommit:
+		// A composition message (browser-core ticket 18): the replay's
+		// simulated IME seam drives the ported composition driver
+		// (gpui.Window.SimulateIMEComposition) with the same message
+		// the recorder's Input.imeSetComposition / Input.insertText
+		// produced the page's composition events from: the composition
+		// string and cursor of an update (GCS_COMPSTR|GCS_CURSORPOS, the
+		// cursor adjacent to ATTR_INPUT text so the IME's position is
+		// used), or the result string of a commit (GCS_RESULTSTR).
+		var msg gpui.IMECompositionMessage
+		if step.Kind == StepImeSet {
+			msg = gpui.IMECompositionMessage{
+				Flags:       gpui.GCSCompStr | gpui.GCSCursorPos,
+				Composition: step.Text,
+				Cursor:      step.SelEnd,
+				Attrs:       imeInputAttrs(step.Text),
+			}
+		} else {
+			msg = gpui.IMECompositionMessage{
+				Flags:  gpui.GCSResultStr,
+				Result: step.Text,
+			}
+		}
+		cx.Window().SimulateIMEComposition(msg, cx)
+		cx.RunUntilParked()
 	default:
 		return fmt.Errorf("unknown step kind %q", step.Kind)
 	}
 	return nil
+}
+
+// imeInputAttrs spells a composition string's GCS_COMPATTR bytes for
+// the simulated update: every character unconverted (ATTR_INPUT), so
+// the composition cursor position is used (the adjacency test).
+func imeInputAttrs(text string) []byte {
+	return make([]byte, len([]rune(text)))
 }
 
 // mouseButton maps the shared button name onto gpui's MouseButton.

@@ -79,7 +79,17 @@ func formatEvent(e EventRecord) string {
 	if e.DefaultPrevented {
 		prevented = " (defaultPrevented)"
 	}
-	return fmt.Sprintf("%s:%s%s", e.Kind, e.Target, prevented)
+	// The key and composition fields ride along readably (browser-core
+	// tickets 13 and 18): a key entry that differs only in isComposing,
+	// or a composition entry that differs only in data, names it.
+	fields := ""
+	if e.Key != "" || e.Code != "" || e.Location != 0 || e.Focus != "" || e.IsComposing {
+		fields = fmt.Sprintf(" key=%q code=%q location=%d focus=%q isComposing=%v", e.Key, e.Code, e.Location, e.Focus, e.IsComposing)
+	}
+	if e.Data != "" {
+		fields += fmt.Sprintf(" data=%q", e.Data)
+	}
+	return fmt.Sprintf("%s:%s%s%s", e.Kind, e.Target, prevented, fields)
 }
 
 // PixelStats is one region's Tier C statistics: the mean per-channel

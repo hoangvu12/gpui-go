@@ -1,0 +1,155 @@
+{
+  "name": "imecompose",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T08:59:39Z",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "field": {
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 40
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 360
+    }
+  },
+  "events": [
+    {
+      "kind": "mousedown",
+      "target": "field",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "field",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "compositionstart",
+      "target": "field",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "compositionupdate",
+      "target": "field",
+      "defaultPrevented": false,
+      "data": "n"
+    },
+    {
+      "kind": "compositionupdate",
+      "target": "field",
+      "defaultPrevented": false,
+      "data": "ni"
+    },
+    {
+      "kind": "keydown",
+      "target": "field",
+      "defaultPrevented": false,
+      "key": "Enter",
+      "focus": "field",
+      "code": "Enter",
+      "isComposing": true
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Enter",
+      "focus": "field",
+      "code": "Enter",
+      "isComposing": true
+    },
+    {
+      "kind": "keyup",
+      "target": "field",
+      "defaultPrevented": false,
+      "key": "Enter",
+      "focus": "field",
+      "code": "Enter",
+      "isComposing": true
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Enter",
+      "focus": "field",
+      "code": "Enter",
+      "isComposing": true
+    },
+    {
+      "kind": "compositionupdate",
+      "target": "field",
+      "defaultPrevented": false,
+      "data": "nihao"
+    },
+    {
+      "kind": "compositionend",
+      "target": "field",
+      "defaultPrevented": false,
+      "data": "nihao"
+    },
+    {
+      "kind": "keydown",
+      "target": "field",
+      "defaultPrevented": false,
+      "key": "a",
+      "focus": "field",
+      "code": "KeyA"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "a",
+      "focus": "field",
+      "code": "KeyA"
+    },
+    {
+      "kind": "keyup",
+      "target": "field",
+      "defaultPrevented": false,
+      "key": "a",
+      "focus": "field",
+      "code": "KeyA"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "a",
+      "focus": "field",
+      "code": "KeyA"
+    },
+    {
+      "kind": "compositionstart",
+      "target": "field",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "compositionupdate",
+      "target": "field",
+      "defaultPrevented": false,
+      "data": "x"
+    },
+    {
+      "kind": "compositionupdate",
+      "target": "field",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "compositionend",
+      "target": "field",
+      "defaultPrevented": false
+    }
+  ],
+  "screenshot": "chrome.png"
+}
