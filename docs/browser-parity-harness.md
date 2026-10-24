@@ -44,11 +44,20 @@ new fixtures. The implementation lives in `internal/parity`:
   The key kinds are `keydown` and `keyup` (browser-core ticket 09): key entries also carry the
   event's key (`e.key`, DOM key names — `Tab`, ` `, `ArrowDown`), the physical code and
   location (`e.code`/`e.location`, browser-core ticket 13 — `BracketRight`, `Numpad1`
-  at 3), and the focused element's id at listener time (`document.activeElement`, body
+  at 3), the focused element's id at listener time (`document.activeElement`, body
   normalized to `""`), which is the order probe for the default-action fixtures — a
-  listener that still sees the old focus ran before the default action changed it. The
+  listener that still sees the old focus ran before the default action changed it — and
+  the `isComposing` flag (browser-core ticket 18), which proves keydowns during an IME
+  composition reach the listeners flagged, not dropped. The
   replay's key step is one full press — key down then key up, like the recorder's CDP
   `keyDown`+`keyUp` pair — and both halves' default-prevented states are recorded.
+  The composition kinds are `compositionstart`, `compositionupdate` and
+  `compositionend` (browser-core ticket 18): entries carry the event's `data` (the
+  selected text a start replaces, the new composition string of an update, the
+  committed text of an end, `""` for a cancel). They live on the input-handler seam,
+  not the div listeners: the page's editable element receives the DOM events, and the
+  view's handler implements `gpui.IMECompositionHandler` and logs through
+  `log.AppendComposition` (`fixtures/imecompose` is the fixture).
 - **Tier C — pixels, approximately.** The replay's final frame is rendered offscreen at
   device resolution and compared with the recorded Chrome screenshot under the fixture's
   provisional `PixelTolerance` (mean channel diff and hot-pixel fraction, image-wide and
@@ -135,7 +144,16 @@ new fixtures. The implementation lives in `internal/parity`:
    side, and the view simply registers only the matching handlers).
 
 4. **The input script is one vocabulary.** Steps are logical (CSS-pixel) positions:
-   `parity.Move/Down/Up/Click/Key/Wait`. The recorder dispatches them to Chrome as trusted
+   `parity.Move/Down/Up/Click/Key/Wait`, plus the IME composition steps of
+   browser-core ticket 18: `parity.ImeSet(text, selStart, selEnd)` drives one
+   composition update (the recorder's CDP `Input.imeSetComposition` — the page's real
+   IME adapter — and the replay's simulated `WM_IME_COMPOSITION`, the composition
+   string with the cursor at `selEnd`), and `parity.ImeCommit(text)` commits
+   (`Input.insertText` / the simulated result string). A non-empty `ImeSet` over no
+   session starts one, over an active session updates it, and an empty `ImeSet`
+   cancels it; a commit over an active session ends it. The keyed steps never type
+   text on either side (the recorder sends no `text` param and the replay dispatches
+   only the platform events), so a key press mid-composition is pure transcript. The recorder dispatches them to Chrome as trusted
    input (full hit testing) and the replay simulates them through the visual test context
    — the exact same coordinates, the exact same expansion (`Click` = move + down + up on
    both sides). `Key("<keystroke>")` is one full press on both sides: the recorder sends

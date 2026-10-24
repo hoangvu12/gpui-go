@@ -826,6 +826,10 @@ func (w *Window) dispatchKeyEvent(event any, app *App) (propagate bool) {
 	// styles and hover suppression), propagation starts enabled and the
 	// prevent-default flag clears.
 	w.beginPlatformInputDispatch(event, app)
+	// Browser-core ticket 18: the keydown/keyup carry the DOM's
+	// isComposing flag, stamped at dispatch time from the window's
+	// composition state (keyboard_event.cc:122; see ime.go).
+	markKeyEventComposition(event, w, app)
 	w.dispatchKeyEventInner(event, app)
 	return app.propagateEvent
 }

@@ -67,6 +67,10 @@ func instrumentScript(kinds []string) string {
 					entry.code = e.code;
 					entry.location = e.location;
 					entry.focus = focusOf();
+					entry.isComposing = e.isComposing;
+				}
+				if (kind === "compositionstart" || kind === "compositionupdate" || kind === "compositionend") {
+					entry.data = e.data === undefined || e.data === null ? "" : e.data;
 				}
 				window.__events.push(entry);
 			});
@@ -79,10 +83,11 @@ func instrumentScript(kinds []string) string {
 // eventsScript reads the recorded transcript out of the page: each
 // event's final default-prevented state (read live from the event
 // object, after the whole dispatch, matching the replay's post-dispatch
-// markDefaultPrevented) and the key, code, location and focus fields
-// of key entries (listener-time snapshots; the location is a number
-// only key entries carry, 0 otherwise).
-const eventsScript = `JSON.stringify(window.__events.map(r => ({kind: r.kind, target: r.target, defaultPrevented: r.event.defaultPrevented, key: r.key || "", code: r.code || "", location: (r.kind === "keydown" || r.kind === "keyup") ? r.location : 0, focus: r.focus || ""})))`
+// markDefaultPrevented), the key, code, location, focus and
+// isComposing fields of key entries (listener-time snapshots; the
+// location is a number only key entries carry, 0 otherwise) and the
+// data field of composition entries (browser-core ticket 18).
+const eventsScript = `JSON.stringify(window.__events.map(r => ({kind: r.kind, target: r.target, defaultPrevented: r.event.defaultPrevented, key: r.key || "", code: r.code || "", location: (r.kind === "keydown" || r.kind === "keyup") ? r.location : 0, focus: r.focus || "", isComposing: (r.kind === "keydown" || r.kind === "keyup") ? !!r.isComposing : false, data: r.data || ""})))`
 
 // RecordFixture records one fixture in headless Chrome and writes its
 // files (record.json, chrome.png, page.html) into
@@ -558,6 +563,25 @@ func (p *cdpPage) dispatchStep(step Step) error {
 			return fmt.Errorf("advancing the page's animations by %dms: %w", step.Ms, err)
 		}
 		return nil
+	case StepImeSet:
+		// A composition update (browser-core ticket 18):
+		// Input.imeSetComposition drives the page's real IME adapter
+		// (input_handler.cc ImeSetComposition → ImeAdapter::SetComposition),
+		// which fires the composition events exactly like an installed
+		// IME. The text and its selection are the message the replay
+		// spells as the simulated GCS_COMPSTR composition.
+		_, err := p.call("Input.imeSetComposition", map[string]any{
+			"text":           step.Text,
+			"selectionStart": step.SelStart,
+			"selectionEnd":   step.SelEnd,
+		})
+		return err
+	case StepImeCommit:
+		// A commit (browser-core ticket 18): Input.insertText drives
+		// ImeCommitText — the commit that ends an active composition
+		// (compositionend) or inserts plain text when none is active.
+		_, err := p.call("Input.insertText", map[string]any{"text": step.Text})
+		return err
 	default:
 		return fmt.Errorf("unknown step kind %q", step.Kind)
 	}

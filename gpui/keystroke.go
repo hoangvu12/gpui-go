@@ -638,12 +638,27 @@ type KeyDownEvent struct {
 	// over a key binding for this keystroke (dead keys and
 	// layout-dependent AltGr characters set this on Windows).
 	PreferCharacterInput bool
+	// IsComposing reports that the event was dispatched while an IME
+	// composition is active on the window's focused input handler (DOM
+	// KeyboardEvent.isComposing, keyboard_event.cc:100, set from
+	// HasCurrentComposition at event construction, keyboard_event.cc:
+	// 72-78,122). Key events are NOT dropped during composition: they
+	// reach the listeners flagged, so apps can ignore keys while text
+	// is composing (browser-core ticket 18). The flag is stamped at
+	// dispatch time; the field is ignored on input.
+	IsComposing bool
 }
 
 // KeyUpEvent is a key up platform event (platform.rs KeyUpEvent).
 type KeyUpEvent struct {
 	// Keystroke is the key that was released.
 	Keystroke Keystroke
+	// IsComposing reports that the event was dispatched while an IME
+	// composition is active on the window's focused input handler (DOM
+	// KeyboardEvent.isComposing, set on keyup exactly like keydown,
+	// keyboard_event.cc:122). Stamped at dispatch time; ignored on
+	// input.
+	IsComposing bool
 }
 
 // ModifiersChangedEvent is a change of the keyboard modifier state

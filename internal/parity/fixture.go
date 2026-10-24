@@ -76,6 +76,17 @@ const (
 	// replay advances the test application's virtual clock and delivers
 	// one animation frame (browser-core ticket 44).
 	StepWait StepKind = "wait"
+	// StepImeSet updates the IME composition (browser-core ticket 18):
+	// the recorder drives CDP Input.imeSetComposition and the replay a
+	// simulated WM_IME_COMPOSITION (GCS_COMPSTR), so both sides run a
+	// real composition session on the focused editable element. An
+	// empty Text cancels the composition.
+	StepImeSet StepKind = "imeset"
+	// StepImeCommit commits text (browser-core ticket 18): the recorder
+	// drives CDP Input.insertText and the replay a simulated
+	// WM_IME_COMPOSITION (GCS_RESULTSTR) — the commit that ends a
+	// composition session.
+	StepImeCommit StepKind = "imecommit"
 )
 
 // MouseButton names, shared by the recorder and the replay.
@@ -102,6 +113,13 @@ type Step struct {
 	// Numpad1, key "1" and the numpad location). Empty means the code
 	// is derived from the key (browser-core 13).
 	Code string
+	// Text is the composition or committed text of a StepImeSet /
+	// StepImeCommit step (browser-core 18).
+	Text string
+	// SelStart and SelEnd are the composition selection of a
+	// StepImeSet step, within Text (Input.imeSetComposition's
+	// selectionStart/selectionEnd).
+	SelStart, SelEnd int
 }
 
 // Move returns a pointer-move step to (x, y).
@@ -137,6 +155,23 @@ func KeyUp(keystroke string) Step { return Step{Kind: StepKeyUp, Key: keystroke}
 // one animation frame, so mid-transition states are sampled at a fixed
 // time on both sides (browser-core ticket 44).
 func Wait(ms int64) Step { return Step{Kind: StepWait, Ms: ms} }
+
+// ImeSet returns a composition-update step (browser-core ticket 18):
+// the recorder drives Input.imeSetComposition with the text and its
+// selection, and the replay a simulated WM_IME_COMPOSITION carrying
+// the composition string (GCS_COMPSTR) with the cursor at selEnd. A
+// non-empty text over no session starts one; a non-empty text over an
+// active session updates it; an empty text cancels it.
+func ImeSet(text string, selStart, selEnd int) Step {
+	return Step{Kind: StepImeSet, Text: text, SelStart: selStart, SelEnd: selEnd}
+}
+
+// ImeCommit returns a commit step (browser-core ticket 18): the
+// recorder drives Input.insertText and the replay a simulated
+// WM_IME_COMPOSITION carrying the result string (GCS_RESULTSTR). A
+// commit over an active session ends it; over no session it inserts
+// plain text.
+func ImeCommit(text string) Step { return Step{Kind: StepImeCommit, Text: text} }
 
 // KeyCode returns a keystroke step with an explicit physical DOM code
 // (browser-core 13): the keystroke's key and modifiers parse as usual
@@ -223,8 +258,13 @@ type Fixture struct {
 	// "pointerup", "gotpointercapture" and "lostpointercapture" (ticket
 	// 11), and "keydown" and "keyup" (ticket 09: key entries carry the
 	// key and the focused element at listener time; ticket 13 adds the
-	// physical code and location); a fixture avoids the kinds whose
-	// delivery order the pin currently gets wrong (see
+	// physical code and location; ticket 18 adds the isComposing flag),
+	// plus the composition kinds "compositionstart", "compositionupdate"
+	// and "compositionend" (ticket 18: entries carry the event's data,
+	// logged from the input handler's IMECompositionHandler callbacks —
+	// EventLog.AppendComposition — since composition events live on the
+	// handler seam, not the div listeners); a fixture avoids the kinds
+	// whose delivery order the pin currently gets wrong (see
 	// docs/browser-parity-harness.md, known divergences).
 	EventKinds []string
 	// BoxIDs are the page's data-id values (the gpui elements' ids)
@@ -307,6 +347,19 @@ type EventRecord struct {
 	// entries (KeyboardEvent.location: 0 standard, 1 left, 2 right,
 	// 3 numpad; 0 for the mouse kinds).
 	Location int `json:"location,omitempty"`
+	// Data is the event's data for compositionstart, compositionupdate
+	// and compositionend entries (CompositionEvent.data: the selected
+	// text a start replaces, the new composition string of an update,
+	// the committed text of an end, "" for a cancel; "" for the other
+	// kinds) — browser-core ticket 18.
+	Data string `json:"data,omitempty"`
+	// IsComposing is the event's isComposing flag for keydown and
+	// keyup entries (KeyboardEvent.isComposing: true while an IME
+	// composition is active on the focused editable element; false for
+	// the mouse and composition kinds) — browser-core ticket 18. Key
+	// entries carrying true prove keydowns are delivered during a
+	// composition, flagged, not dropped.
+	IsComposing bool `json:"isComposing,omitempty"`
 }
 
 // EventLog is the fixture-side event recorder the View's handlers
@@ -389,23 +442,25 @@ func (l *EventLog) PointerLeave(target string) func(*gpui.PointerLeaveEvent, *gp
 }
 
 // KeyDown returns an OnKeyDown handler that records a "keydown" on
-// target with the event's key, physical code, location and the
-// focused element's id at listener time (the page side's e.key /
-// e.code / e.location / document.activeElement set). The focus field
-// is the order probe of the key fixtures: it proves a listener ran
-// before the default action moved focus.
+// target with the event's key, physical code, location, the
+// isComposing flag and the focused element's id at listener time (the
+// page side's e.key / e.code / e.location / e.isComposing /
+// document.activeElement set). The focus field is the order probe of
+// the key fixtures: it proves a listener ran before the default
+// action moved focus. The isComposing field proves keydowns during an
+// IME composition reach the listeners flagged (ticket 18).
 func (l *EventLog) KeyDown(target string) func(*gpui.KeyDownEvent, *gpui.Window, *gpui.App) {
 	return func(e *gpui.KeyDownEvent, w *gpui.Window, app *gpui.App) {
-		l.appendKey("keydown", target, domKeyOf(e.Keystroke.Key), e.Keystroke.Code, int(e.Keystroke.Location), l.focusTarget(w))
+		l.appendKey("keydown", target, domKeyOf(e.Keystroke.Key), e.Keystroke.Code, int(e.Keystroke.Location), l.focusTarget(w), e.IsComposing)
 	}
 }
 
 // KeyUp returns an OnKeyUp handler that records a "keyup" on target
-// with the event's key, physical code, location and the focused
-// element's id at listener time.
+// with the event's key, physical code, location, isComposing flag and
+// the focused element's id at listener time.
 func (l *EventLog) KeyUp(target string) func(*gpui.KeyUpEvent, *gpui.Window, *gpui.App) {
 	return func(e *gpui.KeyUpEvent, w *gpui.Window, app *gpui.App) {
-		l.appendKey("keyup", target, domKeyOf(e.Keystroke.Key), e.Keystroke.Code, int(e.Keystroke.Location), l.focusTarget(w))
+		l.appendKey("keyup", target, domKeyOf(e.Keystroke.Key), e.Keystroke.Code, int(e.Keystroke.Location), l.focusTarget(w), e.IsComposing)
 	}
 }
 
@@ -414,7 +469,7 @@ func (l *EventLog) KeyUp(target string) func(*gpui.KeyUpEvent, *gpui.Window, *gp
 // listener that calls preventDefault).
 func (l *EventLog) KeyDownPreventDefault(target string) func(*gpui.KeyDownEvent, *gpui.Window, *gpui.App) {
 	return func(e *gpui.KeyDownEvent, w *gpui.Window, app *gpui.App) {
-		l.appendKey("keydown", target, domKeyOf(e.Keystroke.Key), e.Keystroke.Code, int(e.Keystroke.Location), l.focusTarget(w))
+		l.appendKey("keydown", target, domKeyOf(e.Keystroke.Key), e.Keystroke.Code, int(e.Keystroke.Location), l.focusTarget(w), e.IsComposing)
 		w.PreventDefault()
 	}
 }
@@ -443,16 +498,27 @@ func (l *EventLog) focusTarget(w *gpui.Window) string {
 }
 
 // appendKey records one key event entry with its key, physical code,
-// location and listener-time focus.
-func (l *EventLog) appendKey(kind, target, key, code string, location int, focus string) {
+// location, listener-time focus and isComposing flag.
+func (l *EventLog) appendKey(kind, target, key, code string, location int, focus string, isComposing bool) {
 	l.entries = append(l.entries, EventRecord{
-		Kind:     kind,
-		Target:   target,
-		Key:      key,
-		Code:     code,
-		Location: location,
-		Focus:    focus,
+		Kind:        kind,
+		Target:      target,
+		Key:         key,
+		Code:        code,
+		Location:    location,
+		Focus:       focus,
+		IsComposing: isComposing,
 	})
+}
+
+// AppendComposition records one composition event entry (kind is
+// "compositionstart", "compositionupdate" or "compositionend", data
+// the event's data) on target — browser-core ticket 18. The
+// composition callbacks live on the input handler
+// (gpui.IMECompositionHandler), not the div listener surface, so a
+// fixture's handler implementation calls this from its callbacks.
+func (l *EventLog) AppendComposition(kind, target, data string) {
+	l.entries = append(l.entries, EventRecord{Kind: kind, Target: target, Data: data})
 }
 
 // domKeyOf maps the pinned keystroke key name onto the DOM key name
@@ -575,6 +641,9 @@ var eventKindVocabulary = map[string]bool{
 	"pointerup":          true,
 	"gotpointercapture":  true,
 	"lostpointercapture": true,
+	"compositionstart":   true,
+	"compositionupdate":  true,
+	"compositionend":     true,
 }
 
 // validate checks a fixture's invariants at record and replay time,
@@ -594,7 +663,7 @@ func validate(f Fixture) error {
 	}
 	for _, step := range f.Steps {
 		switch step.Kind {
-		case StepMove, StepDown, StepUp, StepClick, StepKey, StepKeyDown, StepKeyUp, StepWait:
+		case StepMove, StepDown, StepUp, StepClick, StepKey, StepKeyDown, StepKeyUp, StepWait, StepImeSet, StepImeCommit:
 		default:
 			return fmt.Errorf("parity: fixture %q: unknown step kind %q", f.Name, step.Kind)
 		}

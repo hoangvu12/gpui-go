@@ -286,6 +286,268 @@ func imeRestoreHandler(w *Window, handler InputHandler) {
 }
 
 // ---------------------------------------------------------------------------
+// The composition events (browser-core ticket 18)
+// ---------------------------------------------------------------------------
+
+// IMECompositionHandler is the optional composition-event extension of
+// InputHandler (browser-core ticket 18): the compositionstart /
+// compositionupdate / compositionend callbacks the DOM fires on the
+// focused editable element, delivered in Chromium's order around the
+// text mutations the IME composition driver performs (third_party/
+// blink/renderer/core/editing/ime/input_method_controller.cc):
+//
+//   - compositionstart fires when the first non-empty composition
+//     string marks text (SetComposition's start arm, :1020-1022), its
+//     data the selection the composition replaces
+//     (DispatchCompositionStartEvent :935-948 passes
+//     GetFrame().SelectedText());
+//   - compositionupdate fires before every text mutation of the
+//     session — the start, each update, the commit
+//     (InsertTextDuringCompositionWithEvents :391) and the cancel —
+//     its data the new composition string (the commit's data is the
+//     committed text);
+//   - compositionend fires after the commit's or cancel's mutation
+//     (ReplaceComposition :728 — "No DOM update after
+//     'compositionend'"; CancelComposition :932), its data the
+//     committed text for a commit, the empty string for a cancel.
+//
+// The order and data were verified against headless Chrome through
+// CDP Input.imeSetComposition / Input.insertText (the imecompose
+// parity fixture's record). A handler that does not implement this
+// interface still receives the text mutations through the base
+// interface; the composition events are skipped (like the base/
+// IMEInputHandler split, this keeps earlier tickets' handlers
+// compiling).
+type IMECompositionHandler interface {
+	InputHandler
+
+	// CompositionStart reports that a composition session started; its
+	// data is the selection text the composition replaces ("" for an
+	// empty selection).
+	CompositionStart(data string, w *Window, app *App)
+	// CompositionUpdate reports a composition-string change (including
+	// the one that starts the session, the commit's final string and
+	// the empty string of a cancel); its data is the new string.
+	CompositionUpdate(data string, w *Window, app *App)
+	// CompositionEnd reports that the session ended: committed (the
+	// data is the committed text) or cancelled (empty data).
+	CompositionEnd(data string, w *Window, app *App)
+}
+
+// compositionEventKind is one of the DOM composition event kinds.
+type compositionEventKind uint8
+
+const (
+	compositionStart compositionEventKind = iota
+	compositionUpdate
+	compositionEnd
+)
+
+// deliverCompositionEvent delivers one composition callback to the
+// handler's optional IMECompositionHandler surface (the DOM event the
+// page's focused editable element receives; a handler that does not
+// implement the surface still gets the text mutations).
+func deliverCompositionEvent(h IMEInputHandler, kind compositionEventKind, data string, w *Window, app *App) {
+	c, ok := h.(IMECompositionHandler)
+	if !ok {
+		return
+	}
+	switch kind {
+	case compositionStart:
+		c.CompositionStart(data, w, app)
+	case compositionUpdate:
+		c.CompositionUpdate(data, w, app)
+	case compositionEnd:
+		c.CompositionEnd(data, w, app)
+	}
+}
+
+// compositionStartData is the text the composition replaces
+// (DispatchCompositionStartEvent's GetFrame().SelectedText()): the
+// handler's current selection text, "" when the queries fail.
+func compositionStartData(h IMEInputHandler, w *Window, app *App) string {
+	selection, ok := h.SelectedTextRange(true, w, app)
+	if !ok {
+		return ""
+	}
+	text, _, ok := h.TextForRange(selection.Range, w, app)
+	if !ok {
+		return ""
+	}
+	return text
+}
+
+// imeHandlerComposing reports whether the handler holds an active
+// composition (Chromium's InputMethodController::HasComposition, the
+// checks the composition paths branch on): the marked range's
+// presence in the port's model.
+func imeHandlerComposing(h IMEInputHandler, w *Window, app *App) bool {
+	_, composing := h.MarkedTextRange(w, app)
+	return composing
+}
+
+// imeCompositionActive reports whether the window's active input
+// handler holds an active composition — the window-level form
+// Chromium's KeyboardEvent constructor reads (HasCurrentComposition,
+// core/events/keyboard_event.cc:72-78: the frame's
+// InputMethodController::HasComposition). A handler that does not
+// implement the IME extension has no composition state.
+func imeCompositionActive(w *Window, app *App) bool {
+	if w == nil {
+		return false
+	}
+	handler := focusState(w).inputHandler
+	ime, ok := handler.(IMEInputHandler)
+	if !ok || ime == nil {
+		return false
+	}
+	return imeHandlerComposing(ime, w, app)
+}
+
+// markKeyEventComposition stamps the DOM's isComposing flag onto a
+// keyboard event at dispatch time (keyboard_event.cc:122 sets
+// is_composing_ from HasCurrentComposition when the DOM event is
+// constructed, which is the dispatch the listeners observe). Both
+// halves of a press carry it; the event's own field is ignored on
+// input.
+func markKeyEventComposition(event any, w *Window, app *App) {
+	composing := imeCompositionActive(w, app)
+	switch e := event.(type) {
+	case *KeyDownEvent:
+		e.IsComposing = composing
+	case *KeyUpEvent:
+		e.IsComposing = composing
+	}
+}
+
+// attrsUseIMECursorPosition is events.rs's
+// should_use_ime_cursor_position adjacency test over the GCS_COMPATTR
+// bytes: the suggested cursor position is used only when it sits
+// adjacent to unconverted (ATTR_INPUT) composition text.
+func attrsUseIMECursorPosition(attrs []byte, cursorPos int) bool {
+	// Keep the cursor adjacent to the inserted text by only using the
+	// suggested position if it's adjacent to unconverted text.
+	atCursorIsInput := cursorPos >= 0 && cursorPos < len(attrs) && attrs[cursorPos] == ATTRInput
+	beforeCursorIsInput := cursorPos > 0 && cursorPos-1 < len(attrs) && attrs[cursorPos-1] == ATTRInput
+	return atCursorIsInput || beforeCursorIsInput
+}
+
+// ---------------------------------------------------------------------------
+// The simulated composition seam (browser-core ticket 18)
+// ---------------------------------------------------------------------------
+
+// IMECompositionMessage is one simulated WM_IME_COMPOSITION message:
+// the recorded composition data a test drives through the ported
+// composition driver against a window's active input handler, the
+// test-window seam of the host's real IMM32 path (ime_win32.go
+// handleIMEComposition, which reads the same data out of the IME
+// context).
+type IMECompositionMessage struct {
+	// Flags are the message's GCS_* flags (GCSCompStr, GCSResultStr,
+	// GCSCursorPos, or 0 for the Japanese zero-lParam message).
+	Flags uint32
+	// Composition is the GCS_COMPSTR string (UTF-8; the session's new
+	// composition string).
+	Composition string
+	// Result is the GCS_RESULTSTR string (UTF-8; the committed text).
+	Result string
+	// Cursor is the GCS_CURSORPOS position in UTF-16 units within the
+	// composition string; the driver only reads it when Flags carries
+	// GCSCursorPos.
+	Cursor int
+	// Attrs are the GCS_COMPATTR bytes (the ATTR_INPUT adjacency test
+	// the cursor policy applies).
+	Attrs []byte
+}
+
+// SimulateIMEComposition drives one simulated WM_IME_COMPOSITION
+// message through the composition driver against the window's active
+// input handler (the test-window seam of the host's IMM32 path).
+// It reports whether the message was handled: false is the reference's
+// Option::None (no handler, or a handler without the IME extension —
+// DefWindowProc). The driver derives and delivers the DOM composition
+// events (IMECompositionHandler) around the text mutations, exactly
+// like the host path. The dispatch runs inside one application update.
+func (w *Window) SimulateIMEComposition(msg IMECompositionMessage, cx AppContext) bool {
+	if w == nil {
+		panic("gpui: SimulateIMEComposition requires a live window")
+	}
+	app := appFrom(cx)
+	var handled bool
+	app.Update(func(a *App) {
+		handled = w.simulateIMEComposition(msg, a)
+	})
+	return handled
+}
+
+// simulateIMEComposition is the body; it runs inside an update on the
+// foreground thread.
+func (w *Window) simulateIMEComposition(msg IMECompositionMessage, app *App) bool {
+	driver := &imeCompositionDriver{
+		seam: windowIMESeam{w: w},
+		src:  simulatedIMECompositionSource{msg: msg},
+	}
+	_, handled := driver.handleComposition(uintptr(msg.Flags))
+	return handled
+}
+
+// windowIMESeam is the test window's imeHandlerSeam: the active input
+// handler is taken out for the callback (the take/put discipline the
+// host seam applies, so nested composition messages observe no
+// handler) and the callback runs with the window's own application.
+type windowIMESeam struct {
+	w *Window
+}
+
+func (s windowIMESeam) withIMEHandler(f func(h IMEInputHandler, w *Window, app *App)) bool {
+	w := s.w
+	if w == nil || w.app == nil {
+		return false
+	}
+	handler := imeTakeHandler(w)
+	ime, ok := handler.(IMEInputHandler)
+	if !ok {
+		imeRestoreHandler(w, handler)
+		return false
+	}
+	defer imeRestoreHandler(w, handler)
+	f(ime, w, w.app)
+	return true
+}
+
+// simulatedIMECompositionSource is an imeCompositionSource over a
+// simulated message's recorded data (the fake of
+// imeContextSource's ImmGetCompositionStringW reads: an absent or
+// empty buffer is ok=true with no units).
+type simulatedIMECompositionSource struct {
+	msg IMECompositionMessage
+}
+
+func (s simulatedIMECompositionSource) compositionString(compType uint32) ([]uint16, bool) {
+	var text string
+	switch compType {
+	case GCSResultStr:
+		text = s.msg.Result
+	case GCSCompStr:
+		text = s.msg.Composition
+	default:
+		return nil, false
+	}
+	if text == "" {
+		return nil, true
+	}
+	return utf16.Encode([]rune(text)), true
+}
+
+func (s simulatedIMECompositionSource) cursorPosition() int {
+	return s.msg.Cursor
+}
+
+func (s simulatedIMECompositionSource) shouldUseIMECursorPosition(cursorPos int) bool {
+	return attrsUseIMECursorPosition(s.msg.Attrs, cursorPos)
+}
+
+// ---------------------------------------------------------------------------
 // The composition message driver (events.rs handle_ime_composition)
 // ---------------------------------------------------------------------------
 
@@ -364,19 +626,37 @@ type imeCompositionDriver struct {
 // returns (result, handled): handled=false is the reference's
 // Option::None (DefWindowProcW); a handled composition returns 0.
 //
-// Policies (events.rs handle_ime_composition_inner):
+// Policies (events.rs handle_ime_composition_inner), with the DOM
+// composition events (browser-core ticket 18) derived around the
+// mutations in Chromium's order (input_method_controller.cc; see
+// IMECompositionHandler's citations):
 //
 //   - lParam == 0: a Japanese IME signals that there is no composition
 //     string; the current composition is replaced with empty text and
-//     the message is consumed (when an input handler exists).
+//     the message is consumed (when an input handler exists). With an
+//     active session this is a cancel: compositionupdate("") before
+//     the mutation, compositionend("") after it (CancelComposition:
+//     :920-932).
 //   - GCS_RESULTSTR: the committed result replaces the text (sent
 //     BEFORE the composition update, so a commit followed by a new
-//     composition mark lands in the right order).
+//     composition mark lands in the right order). With an active
+//     session the commit fires compositionupdate(result) before the
+//     mutation and compositionend(result) after it (ReplaceComposition
+//     :718-728); without one it is a plain insert — no composition
+//     events (CommitText's InsertText arm, :630-635).
 //   - GCS_COMPSTR: the composition string replaces-and-marks; the
 //     composition cursor becomes the marked selection when
 //     GCS_CURSORPOS is set and the composition is non-empty, using the
 //     IME's cursor position only when it is adjacent to unconverted
-//     (ATTR_INPUT) text, else the composition string's length.
+//     (ATTR_INPUT) text, else the composition string's length. A
+//     non-empty string starting a session fires compositionstart
+//     (then compositionupdate) before the mutation (SetComposition's
+//     start arm, :1020-1022); a non-empty string over an active session
+//     fires compositionupdate; an EMPTY string over an active session
+//     cancels it (SetComposition's empty-text arm, :1003-1015 —
+//     compositionupdate("") before the mutation, compositionend("")
+//     after it), and without a session mutates without events
+//     (:1009-1012, "without sending extra events").
 //   - Other flag combinations are not consumed ("currently, we don't
 //     care other stuff").
 func (d *imeCompositionDriver) handleComposition(lparam uintptr) (uintptr, bool) {
@@ -384,7 +664,14 @@ func (d *imeCompositionDriver) handleComposition(lparam uintptr) (uintptr, bool)
 	if flags == 0 {
 		// Japanese IME zero-lParam path.
 		if !d.seam.withIMEHandler(func(h IMEInputHandler, w *Window, app *App) {
+			composing := imeHandlerComposing(h, w, app)
+			if composing {
+				deliverCompositionEvent(h, compositionUpdate, "", w, app)
+			}
 			h.ReplaceTextInRange(nil, "", w, app)
+			if composing {
+				deliverCompositionEvent(h, compositionEnd, "", w, app)
+			}
 		}) {
 			return 0, false
 		}
@@ -395,8 +682,16 @@ func (d *imeCompositionDriver) handleComposition(lparam uintptr) (uintptr, bool)
 		if !ok {
 			return 0, false
 		}
+		resultText := UTF16DecodeLossy(result)
 		if !d.seam.withIMEHandler(func(h IMEInputHandler, w *Window, app *App) {
-			h.ReplaceTextInRange(nil, UTF16DecodeLossy(result), w, app)
+			composing := imeHandlerComposing(h, w, app)
+			if composing {
+				deliverCompositionEvent(h, compositionUpdate, resultText, w, app)
+			}
+			h.ReplaceTextInRange(nil, resultText, w, app)
+			if composing {
+				deliverCompositionEvent(h, compositionEnd, resultText, w, app)
+			}
 		}) {
 			return 0, false
 		}
@@ -415,8 +710,25 @@ func (d *imeCompositionDriver) handleComposition(lparam uintptr) (uintptr, bool)
 			}
 			caret = &UTF16Range{Start: pos, End: pos}
 		}
+		compText := UTF16DecodeLossy(comp)
 		if !d.seam.withIMEHandler(func(h IMEInputHandler, w *Window, app *App) {
-			h.ReplaceAndMarkTextInRange(nil, UTF16DecodeLossy(comp), caret, w, app)
+			composing := imeHandlerComposing(h, w, app)
+			if compText != "" {
+				if !composing {
+					// A session starts: compositionstart (data: the
+					// selection it replaces) then compositionupdate
+					// (SetComposition's start arm).
+					deliverCompositionEvent(h, compositionStart, compositionStartData(h, w, app), w, app)
+				}
+				deliverCompositionEvent(h, compositionUpdate, compText, w, app)
+			} else if composing {
+				// An empty composition string cancels the session.
+				deliverCompositionEvent(h, compositionUpdate, "", w, app)
+			}
+			h.ReplaceAndMarkTextInRange(nil, compText, caret, w, app)
+			if compText == "" && composing {
+				deliverCompositionEvent(h, compositionEnd, "", w, app)
+			}
 		}) {
 			return 0, false
 		}

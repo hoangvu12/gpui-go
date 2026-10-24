@@ -165,7 +165,8 @@ func (s imeContextSource) cursorPosition() int {
 // shouldUseIMECursorPosition ports should_use_ime_cursor_position:
 // read the GCS_COMPATTR bytes and use the suggested cursor position
 // only when the cursor sits adjacent to unconverted (ATTR_INPUT)
-// composition text.
+// composition text (the shared attrsUseIMECursorPosition policy in
+// ime.go).
 func (s imeContextSource) shouldUseIMECursorPosition(cursorPos int) bool {
 	size, _, _ := procImmGetCompositionStringW.Call(s.ctx.himc, uintptr(GCSCompAttr), 0, 0)
 	if int64(size) <= 0 {
@@ -178,11 +179,7 @@ func (s imeContextSource) shouldUseIMECursorPosition(cursorPos int) bool {
 	if int64(got) <= 0 {
 		return false
 	}
-	// Keep the cursor adjacent to the inserted text by only using the
-	// suggested position if it's adjacent to unconverted text.
-	atCursorIsInput := cursorPos >= 0 && cursorPos < len(attrs) && attrs[cursorPos] == ATTRInput
-	beforeCursorIsInput := cursorPos > 0 && cursorPos-1 < len(attrs) && attrs[cursorPos-1] == ATTRInput
-	return atCursorIsInput || beforeCursorIsInput
+	return attrsUseIMECursorPosition(attrs, cursorPos)
 }
 
 // ---------------------------------------------------------------------------
