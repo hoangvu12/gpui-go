@@ -1,0 +1,56 @@
+{
+  "name": "outline-focusring-tab",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T10:26:51Z",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "box": {
+      "x": 24,
+      "y": 24,
+      "width": 160,
+      "height": 80
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 360
+    }
+  },
+  "events": [
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "box",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "box",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "box",
+      "code": "Tab"
+    }
+  ],
+  "screenshot": "chrome.png",
+  "computed": {
+    "colorScheme": "normal",
+    "lightDark": "rgb(255, 0, 0)",
+    "outline": "auto 1px rgb(16, 16, 16)",
+    "scheme": "light"
+  }
+}

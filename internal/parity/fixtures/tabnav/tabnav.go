@@ -232,6 +232,10 @@ func InertView() func(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.
 			Size(gpui.Px(boxWidth), gpui.Px(boxHeight/2)).
 			Bg(gpui.Rgb(0x94a3b8)).
 			TrackFocus(focusB).
+			// The pages pin outline: none on the focusable boxes; the
+			// port has a default focus ring now (ticket 48), so the
+			// view carries the pin's twin.
+			OutlineNone().
 			Focus(func(s gpui.StyleRefinement) gpui.StyleRefinement {
 				s.Background = gpui.Some(gpui.BackgroundOf(gpui.Rgb(focusColor)))
 				return s
@@ -545,6 +549,10 @@ func focusBox(id string, handle gpui.FocusHandle, log *parity.EventLog) *gpui.Di
 		Size(gpui.Px(boxWidth), gpui.Px(boxHeight)).
 		Bg(gpui.Rgb(boxBackground)).
 		TrackFocus(handle).
+		// The pages pin outline: none on the focusable boxes; the
+		// port has a default focus ring now (ticket 48), so the view
+		// carries the pin's twin.
+		OutlineNone().
 		Focus(func(s gpui.StyleRefinement) gpui.StyleRefinement {
 			s.Background = gpui.Some(gpui.BackgroundOf(gpui.Rgb(focusColor)))
 			return s

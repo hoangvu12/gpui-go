@@ -258,6 +258,20 @@ func applyForcedColors(s *Style, colors SystemColors) {
 		s.InsetRing.Color = RingColorOf(SolidBackground(forcedColor))
 	}
 
+	// outline-color: the port's outline is a real outline now
+	// (browser-core ticket 48). An author's explicit colour maps to the
+	// forced colour (InternalForcedOutlineColor::ColorIncludingFallback,
+	// longhands_custom.cc:6248-6260); the default focus ring's unset
+	// colour is the forced Highlight (the UA forced-colours rule
+	// `:focus-visible { -internal-forced-outline-color: Highlight }`,
+	// forced_colors.css:18-19) — a currentColor outline already
+	// resolves against the forced text colour.
+	if s.Outline.Color.Explicit {
+		s.Outline.Color = RingColorOf(SolidBackground(forcedColor))
+	} else if s.Outline.Kind == OutlineFocusRing {
+		s.Outline.Color = RingColorOf(SolidBackground(colors.Highlight))
+	}
+
 	// text-decoration-color: the underline and strikethrough colours map
 	// to the forced colour (TextDecorationColor::ColorIncludingFallback
 	// returns the forced current colour, longhands_custom.cc:10036-

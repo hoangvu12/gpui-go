@@ -22,6 +22,7 @@ import (
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/keycode"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/keyorder"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/mincontent"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/outline"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/popover"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/position"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/scrollrange"
@@ -31,8 +32,8 @@ import (
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/textpaint"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/textstyle"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/tracer"
-	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/whitespace"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/transition"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/whitespace"
 )
 
 // TestFixtures replays every registered fixture and runs the three

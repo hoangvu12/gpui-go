@@ -1,0 +1,56 @@
+{
+  "name": "outline-offset",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T10:19:26Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "neg": {
+      "x": 24,
+      "y": 196,
+      "width": 140,
+      "height": 70
+    },
+    "pos": {
+      "x": 24,
+      "y": 24,
+      "width": 140,
+      "height": 70
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "rounded": {
+      "x": 180,
+      "y": 196,
+      "width": 140,
+      "height": 70
+    },
+    "thin": {
+      "x": 180,
+      "y": 24,
+      "width": 140,
+      "height": 70
+    },
+    "wide": {
+      "x": 180,
+      "y": 110,
+      "width": 140,
+      "height": 70
+    },
+    "zero": {
+      "x": 24,
+      "y": 110,
+      "width": 140,
+      "height": 70
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

@@ -1,0 +1,84 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		flex-direction: row;
+		padding: 24px;
+		box-sizing: border-box;
+		gap: 16px;
+		font: 16px/1.618 "Segoe UI", system-ui, sans-serif;
+	}
+	.col {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+	#pos {
+		box-sizing: border-box;
+		width: 140px;
+		height: 70px;
+		background: #e2e8f0;
+		outline: 3px solid #22c55e;
+		outline-offset: 6px;	}
+	#zero {
+		box-sizing: border-box;
+		width: 140px;
+		height: 70px;
+		background: #e2e8f0;
+		outline: 2px solid #0ea5e9;
+		outline-offset: 0px;	}
+	#neg {
+		box-sizing: border-box;
+		width: 140px;
+		height: 70px;
+		background: #e2e8f0;
+		outline: 3px solid #f97316;
+		outline-offset: -6px;	}
+	#thin {
+		box-sizing: border-box;
+		width: 140px;
+		height: 70px;
+		background: #e2e8f0;
+		outline: 1px solid #dc2626;
+		outline-offset: 4px;	}
+	#wide {
+		box-sizing: border-box;
+		width: 140px;
+		height: 70px;
+		background: #e2e8f0;
+		outline: 6px solid #7c3aed;
+		outline-offset: 2px;	}
+	#rounded {
+		box-sizing: border-box;
+		width: 140px;
+		height: 70px;
+		background: #e2e8f0;
+		outline: 3px solid #0f766e;
+		outline-offset: 4px;
+		border-radius: 16px;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div class="col">
+	<div id="pos" data-id="pos"></div>
+	<div id="zero" data-id="zero"></div>
+	<div id="neg" data-id="neg"></div>
+	</div>
+	<div class="col">
+	<div id="thin" data-id="thin"></div>
+	<div id="wide" data-id="wide"></div>
+	<div id="rounded" data-id="rounded"></div>
+	</div>
+</body>
+</html>

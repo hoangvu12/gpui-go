@@ -243,6 +243,10 @@ func ShiftedView() func(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpu
 			DebugSelector("box").
 			Size(gpui.Px(boxWidth), gpui.Px(boxHeight)).
 			Bg(gpui.Rgb(boxBackground)).
+			// The page pins outline: none on the focusable box; the
+			// port has a default focus ring now (ticket 48), so the
+			// view carries the pin's twin.
+			OutlineNone().
 			TrackFocus(focus).
 			Focus(func(s gpui.StyleRefinement) gpui.StyleRefinement {
 				s.Background = gpui.Some(gpui.BackgroundOf(gpui.Rgb(focusColor)))
@@ -296,6 +300,10 @@ func BindingView(spelling string) func(log *parity.EventLog, w *gpui.Window, app
 			DebugSelector("box").
 			Size(gpui.Px(boxWidth), gpui.Px(boxHeight)).
 			Bg(gpui.Rgb(boxBackground)).
+			// The page pins outline: none on the focusable box; the
+			// port has a default focus ring now (ticket 48), so the
+			// view carries the pin's twin.
+			OutlineNone().
 			TrackFocus(focus).
 			Focus(func(s gpui.StyleRefinement) gpui.StyleRefinement {
 				s.Background = gpui.Some(gpui.BackgroundOf(gpui.Rgb(focusColor)))

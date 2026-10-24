@@ -315,6 +315,17 @@ func stageArms(blur, percents, hues []string) []TSType {
 		Template([]string{"inset-ring-[", "px]"}, numType),
 		Lit("inset-ring-[0]"),
 	)
+	// Outline widths and offsets are pixels (like ring widths; the
+	// engine rejects rem outlines). The bare outline, outline-none and
+	// outline-dashed literals come from the method/special tables.
+	arms = append(arms,
+		Template([]string{"outline-", ""}, numType),
+		Template([]string{"outline-[", "px]"}, numType),
+		Lit("outline-[0]"),
+		Template([]string{"outline-offset-", ""}, numType),
+		Template([]string{"outline-offset-[", "px]"}, numType),
+		Lit("outline-offset-[0]"),
+	)
 	// The monochrome filters: bare, off, or an arbitrary amount, each
 	// with a negative form.
 	mono := Lits("grayscale", "sepia", "invert")
