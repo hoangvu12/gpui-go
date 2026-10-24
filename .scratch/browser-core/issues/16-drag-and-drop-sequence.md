@@ -25,6 +25,7 @@ Every behaviour check is a browser-parity harness fixture (an HTML page recorded
 ## Comments
 
 - 2026-10-24, orchestrator 9 (verification): merged fcde1bd as 23954c2. The harness conflicts were with 15's Wheel and 19's click counts; I kept all three. StepCancelDrag is wired in the validation, the recorder and the replay. Spot check: the default dropEffect from effectAllowed (`DefaultOperationForDrag`, drag_controller.cc:870-889) matches. On the merged tree, ./gpui/, ./internal/parity/..., ./internal/dropspec, ./internal/inspectorspec, ./base, ./examples/zterm and ./cmd/parityrecord pass. authorspec failed once on the known `TestRealTwoWindowCounterSharedModel` reentrancy panic, then passed 5/5 and as a whole package. Follow-up (not done): examples/zterm/drag.go's two workarounds can now be removed. Resolved.
+- 2026-10-25, orchestrator 9 (follow-up): the broad run after 20 failed spellspec `TestSpellcheckWorkerRunsPinnedToItsOwnThread`; a bisect pointed at this merge. The worker showed it's a scheduling flake that also reproduces before the merge (`-count=20`): the test sampled "the UI thread" from an unpinned goroutine. e86491d pins the test goroutine with `runtime.LockOSThread`, as the production UI thread is pinned; the assertion is unchanged. Merged; it passes 20/20 and as a whole package.
 
 ## Answer
 
