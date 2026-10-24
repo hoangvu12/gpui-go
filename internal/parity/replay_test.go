@@ -17,6 +17,7 @@ import (
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/hover"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/keycode"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/keyorder"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/mincontent"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/position"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/shadow"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/sticky"

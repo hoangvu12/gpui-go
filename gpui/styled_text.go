@@ -261,6 +261,13 @@ type textLayoutInner struct {
 	runs       []TextRun
 	lineHeight float32
 	wrapWidth  *float32
+	// minContent marks an inner measured for a MIN-CONTENT query:
+	// wrapped at width zero with the min-content size (the longest word
+	// by the word count). The sizing-mode cache key (D2, browser-core
+	// 32): it answers min-content queries only, never a max-content or
+	// definite one, so the wrapped shape cannot leak into an unwrapped
+	// measurement.
+	minContent bool
 	// truncateWidth is the truncation width the document was shaped
 	// under (nil: not truncated).
 	truncateWidth *float32
@@ -283,8 +290,13 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 
 	state := l.state
 	measure := func(req MeasureRequest) Size {
-		// evaluate_wrap_width (R:elements/text.rs:809-827).
+		// evaluate_wrap_width (R:elements/text.rs:809-827), with the D2
+		// min-content rule (browser-core 32): a min-content available
+		// width wraps at width zero — every break opportunity — so the
+		// min-content is the widest unbreakable segment, like Chromium's
+		// InlineNode::ComputeMinMaxSizes (inline_node.cc:2314-2323).
 		var wrapWidth *float32
+		minContent := false
 		if textStyle.WhiteSpace != WhiteSpaceNowrap {
 			if req.KnownWidthPresent {
 				width := req.KnownWidth
@@ -292,18 +304,32 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 			} else if req.AvailWidth.Kind == AvailDefinite {
 				width := req.AvailWidth.Definite
 				wrapWidth = &width
+			} else if req.AvailWidth.Kind == AvailMinContent {
+				zero := float32(0)
+				wrapWidth, minContent = &zero, true
 			}
 		}
 		truncation := EvaluateTextOverflow(textStyle, req)
 		// The CSS ellipsis marker resolves from the primary font ("…" or
 		// "...", text_truncate.go).
 		truncation = resolveTruncationAffix(frameTextSystem(w), textStyle.FontDescriptorOf(), truncation)
-		// The cached-layout reuse (R:elements/text.rs:931-946): neither
-		// this request nor the cached layout may truncate.
-		if inner := state.inner; inner != nil && inner.size != nil &&
-			(wrapWidth == nil || (inner.wrapWidth != nil && *wrapWidth == *inner.wrapWidth)) &&
-			truncation.Width == nil && inner.truncateWidth == nil {
-			return *inner.size
+		// The cached-layout reuse (R:elements/text.rs:931-946), keyed by
+		// sizing mode (D2): neither this request nor the cached layout
+		// may truncate, and the wrap must be unconstrained or match the
+		// cached wrap — tightened like the text element's cell: a
+		// min-content query reuses only the min-content inner, and an
+		// unconstrained (max-content) query reuses only an unconstrained
+		// inner, never a wrapped one, so no wrapped size leaks into a
+		// max-content measurement.
+		if inner := state.inner; inner != nil && inner.size != nil && truncation.Width == nil && inner.truncateWidth == nil {
+			if minContent {
+				if inner.minContent {
+					return *inner.size
+				}
+			} else if !inner.minContent &&
+				(wrapWidth == nil && inner.wrapWidth == nil || wrapWidth != nil && inner.wrapWidth != nil && *wrapWidth == *inner.wrapWidth) {
+				return *inner.size
+			}
 		}
 		seam := frameTextSystem(w)
 		// A per-invocation copy: the truncation below rewrites it, and
@@ -318,6 +344,12 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 			panic(fmt.Sprintf("gpui: StyledText shaping failed: %v", err))
 		}
 		size := document.size(lineHeight)
+		if minContent {
+			// The min-content size: the wrap-zero shaping's widest line
+			// (the longest word) by its line count, not the pinned
+			// min(wrap, width) clamp, which would be zero at wrap zero.
+			size = Size{Width: document.width(), Height: lineHeight * float32(document.lineCount())}
+		}
 		state.inner = &textLayoutInner{
 			len:           document.textLen(),
 			text:          effective,
@@ -325,6 +357,7 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 			runs:          mergeDecorationRuns(runs),
 			lineHeight:    lineHeight,
 			wrapWidth:     wrapWidth,
+			minContent:    minContent,
 			truncateWidth: truncation.Width,
 			size:          &size,
 		}

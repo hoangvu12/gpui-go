@@ -531,6 +531,13 @@ type stringLayoutState struct {
 type shapedCell struct {
 	shaped    shapedText
 	wrapWidth *float32
+	// minContent marks a cell shaped for a MIN-CONTENT query: wrapped
+	// at width zero, with the min-content size (the longest word by the
+	// word count), not the pinned min(wrap, width) size. The cell is a
+	// sizing-mode-keyed cache entry (D2, browser-core 32): it answers
+	// only min-content queries — never a max-content or definite query
+	// — so the wrapped shape cannot leak into an unwrapped measurement.
+	minContent bool
 	// truncateWidth is the truncation width the document was shaped
 	// under (nil: not truncated).
 	truncateWidth *float32
@@ -602,28 +609,52 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 	text := applyTextTransformPreservingByteLen(t.text, textStyle.TextTransform)
 	measure := func(req MeasureRequest) Size {
 		// The pinned measure closure: wrap at the known width or the
-		// definite available width (WhiteSpace::Normal); min/max-content
-		// content-based sizing measures unwrapped.
+		// definite available width (WhiteSpace::Normal); a max-content
+		// query measures unwrapped. D2 (browser-core 32) adds the
+		// min-content rule: a min-content available width wraps at width
+		// zero — every break opportunity — so the min-content is the
+		// widest unbreakable segment, like Chromium's
+		// InlineNode::ComputeMinMaxSizes (the max line width over a
+		// zero-available-inline-size line breaking, inline_node.cc:
+		// 2314-2323).
 		var wrap float32
 		hasWrap := false
+		minContent := false
 		if textStyle.WhiteSpace == WhiteSpaceNowrap {
 			hasWrap = false
 		} else if req.KnownWidthPresent {
 			wrap, hasWrap = req.KnownWidth, true
 		} else if req.AvailWidth.Kind == AvailDefinite {
 			wrap, hasWrap = req.AvailWidth.Definite, true
+		} else if req.AvailWidth.Kind == AvailMinContent {
+			wrap, hasWrap, minContent = 0, true, true
 		}
 		truncation := EvaluateTextOverflow(textStyle, req)
 		// The CSS ellipsis marker resolves from the primary font ("…" or
 		// "...", text_truncate.go).
 		truncation = resolveTruncationAffix(frameTextSystem(w), textStyle.FontDescriptorOf(), truncation)
-		// Cached-layout reuse (R:elements/text.rs:931-946): a shaped
-		// layout with a size answers when the wrap is unconstrained or
-		// matches the cached wrap, and neither this request nor the
-		// cached layout truncates.
-		if cell.shaped != nil && (!hasWrap || (cell.wrapWidth != nil && wrap == *cell.wrapWidth)) &&
-			truncation.Width == nil && cell.truncateWidth == nil {
-			return cell.size
+		// Cached-layout reuse (R:elements/text.rs:931-946), keyed by
+		// sizing mode (D2): a shaped layout with a size answers when the
+		// wrap is unconstrained or matches the cached wrap, and neither
+		// this request nor the cached layout truncates. The sizing-mode
+		// key tightens that to: a min-content query reuses only the
+		// min-content cell (its wrap-zero shape), and an unconstrained
+		// (max-content) query reuses only an unconstrained cell — never a
+		// wrapped one, min-content or definite. Otherwise a wrapped size
+		// leaks into a max-content measurement: with the pin's rule a
+		// definite-width shape cached earlier in the same compute answered
+		// the flex base-size query, shrinking the item to its wrapped
+		// line width instead of its unwrapped max-content (the wrap-leaf
+		// divergence the mincontent fixture records).
+		if cell.shaped != nil && truncation.Width == nil && cell.truncateWidth == nil {
+			if minContent {
+				if cell.minContent {
+					return cell.size
+				}
+			} else if !cell.minContent &&
+				(!hasWrap && cell.wrapWidth == nil || hasWrap && cell.wrapWidth != nil && wrap == *cell.wrapWidth) {
+				return cell.size
+			}
 		}
 		// The wrap width is boxed only when the text shapes (gpui-perf
 		// ticket 06: cache hits do not allocate).
@@ -651,12 +682,20 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		if err != nil {
 			panic(fmt.Sprintf("gpui: text element shaping failed: %v", err))
 		}
+		size := shaped.size(lineHeight)
+		if minContent {
+			// The min-content size: the wrap-zero shaping's widest line
+			// (the longest word) by its line count, not the pinned
+			// min(wrap, width) clamp, which would be zero at wrap zero.
+			size = Size{Width: shaped.width(), Height: lineHeight * float32(shaped.lineCount())}
+		}
 		cell.shaped = shaped
 		cell.wrapWidth = wrapWidth
+		cell.minContent = minContent
 		cell.truncateWidth = truncation.Width
 		cell.runs = runs
-		cell.size = shaped.size(lineHeight)
-		return cell.size
+		cell.size = size
+		return size
 	}
 	layoutID, err := requestMeasuredLayoutOf(w, DefaultStyle(), measure)
 	if err != nil {

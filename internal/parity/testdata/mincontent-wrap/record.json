@@ -1,0 +1,80 @@
+{
+  "name": "mincontent-wrap",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T07:20:08Z",
+  "viewport": {
+    "width": 640,
+    "height": 480
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 480
+    },
+    "row-block": {
+      "x": 16,
+      "y": 16,
+      "width": 380,
+      "height": 68
+    },
+    "row-leaf": {
+      "x": 16,
+      "y": 96,
+      "width": 380,
+      "height": 68
+    },
+    "row-longword": {
+      "x": 16,
+      "y": 361,
+      "width": 380,
+      "height": 43
+    },
+    "row-shrink": {
+      "x": 16,
+      "y": 256,
+      "width": 380,
+      "height": 93
+    },
+    "row-styled": {
+      "x": 16,
+      "y": 176,
+      "width": 380,
+      "height": 68
+    },
+    "shrink-fixed": {
+      "x": 25,
+      "y": 265,
+      "width": 100,
+      "height": 25
+    },
+    "shrink-text": {
+      "x": 125,
+      "y": 265,
+      "width": 262,
+      "height": 75
+    },
+    "wrap-block": {
+      "x": 25,
+      "y": 25,
+      "width": 362,
+      "height": 50
+    },
+    "wrap-leaf": {
+      "x": 25,
+      "y": 105,
+      "width": 362,
+      "height": 50
+    },
+    "wrap-styled": {
+      "x": 25,
+      "y": 185,
+      "width": 362,
+      "height": 50
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}
