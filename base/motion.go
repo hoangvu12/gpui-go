@@ -1,17 +1,24 @@
 package base
 
-// The motion system's Base half (U:motion.rs). browser-core ticket 44
-// moved the timing, easing and keyframe-interpolation engine — the
-// Transition policy with CSS's reversing rule, the keyed value
-// transitions and keyframe playback — into the core (gpui/motion.go,
-// gpui/motion_easing.go, gpui/motion_timing.go, gpui/motion_keyframes.go
-// and the bezier solver from base/animation.go); this file keeps Base's
-// public surface as aliases over the moved engine plus the parts the
-// research split assigns to components: the springs (research/
+// The motion system's Base half (U:motion.rs). Ticket 44 moved the
+// timing, easing and keyframe-interpolation engine — the Transition
+// policy with CSS's reversing rule, the keyed value transitions and
+// keyframe playback — into the core (gpui/motion.go, gpui/
+// motion_easing.go, gpui/motion_timing.go, gpui/motion_keyframes.go and
+// the bezier solver from base/animation.go); this file keeps Base's
+// public surface as aliases over the moved engine. Ticket 74 then
+// removed the rest of Base's own motion code: the presets call the core
+// engine directly (Presence runs on gpui.TransitionFromWithStatus, the
+// sequences and springs on the core's Transition policies and clock)
+// and every reduced-motion gate is the core's single source,
+// App.MotionReduced (the App flag plus the live SystemPreferences
+// record; Base no longer reads the platform preference itself).
+//
+// What remains Base's is the research split's component half (research/
 // browser-parity README, "Presence, stagger, sequence, reveal, springs
-// as tokens → Components") and the MotionTransform presentation bundle.
-// The move is behaviour-preserving: every alias names the same code
-// Base shipped before, and Base's own tests keep passing unchanged.
+// as tokens → Components"): the springs and the MotionTransform
+// presentation bundle, plus the presence/sequence/stagger/reveal
+// orchestration in their own files.
 //
 // Core seams (R: = reference/ce-source/crates/gpui/src):
 //
@@ -290,7 +297,12 @@ func (m MotionTransform) Interpolate(target MotionTransform, progress float32) M
 }
 
 // ---------------------------------------------------------------------------
-// Springs (stay in Base: the research split's component half)
+// Springs (stay in Base: the research split's component half —
+// research/browser-parity/02-motion-and-compositing.md §5, "Keyframes
+// and springs can stay in components", and the README's table row
+// "Presence, stagger, sequence, reveal, springs as tokens →
+// Components"; the timing, easing and keyed-transition engine they run
+// against is the core's)
 // ---------------------------------------------------------------------------
 
 // Spring is a physical spring policy for MotionSpring (U:motion.rs:409-423).
@@ -351,7 +363,7 @@ func (s Spring) WithDamping(ratio float32) Spring {
 
 // TryWithDamping is the checked WithDamping (U:motion.rs:490-497).
 func (s Spring) TryWithDamping(ratio float32) (Spring, error) {
-	if !finite32(ratio) || ratio < 0 {
+	if !springFinite32(ratio) || ratio < 0 {
 		return s, SpringErrorInvalidDamping
 	}
 	s.damping = ratio
@@ -381,7 +393,7 @@ func (s Spring) WithEpsilon(epsilon float32) Spring {
 
 // TryWithEpsilon is the checked WithEpsilon (U:motion.rs:534-541).
 func (s Spring) TryWithEpsilon(epsilon float32) (Spring, error) {
-	if !finite32(epsilon) || epsilon <= 0 {
+	if !springFinite32(epsilon) || epsilon <= 0 {
 		return s, SpringErrorInvalidEpsilon
 	}
 	s.epsilon = epsilon
@@ -394,8 +406,21 @@ func (s Spring) Epsilon() float32 { return s.epsilon }
 // config is the stiffness and damping coefficient of the integrator
 // (U:motion.rs:548-554); the response must be non-zero.
 func (s Spring) config() (float32, float32) {
-	frequency := float32(2*math.Pi) / secsF32(s.response)
+	frequency := float32(2*math.Pi) / springSecsF32(s.response)
 	return float32(frequency * frequency), float32(2 * s.damping * frequency)
+}
+
+// springFinite32 is Rust's f32::is_finite: the spring parameter
+// validation's own check (the engine's easing validation carries the
+// core's copy).
+func springFinite32(v float32) bool {
+	return !math.IsNaN(float64(v)) && !math.IsInf(float64(v), 0)
+}
+
+// springSecsF32 is Rust's Duration::as_secs_f32: the spring
+// integrator's own conversion of a response and an elapsed span.
+func springSecsF32(d time.Duration) float32 {
+	return float32(d/time.Second) + float32(d%time.Second)/float32(1e9)
 }
 
 // SpringValue is a scalar MotionSpring animates (U:motion.rs:557-585):
@@ -452,14 +477,16 @@ func MotionSpring[I IntoTransitionID, T SpringValue](id I, target T, policy Spri
 		s.updatedAt = now
 	}
 
-	if reduceMotionGate(cx) || !policy.travel || policy.response == 0 {
+	if cx.MotionReduced() || !policy.travel || policy.response == 0 {
 		state.Update(cx, settle)
 		return T(targetPosition)
 	}
 
 	// Advance over the frame that just elapsed, which the previous target
-	// governed, before adopting the new one (U:motion.rs:672-678).
-	elapsed := secsF32(satSubDuration(now, snapshot.updatedAt))
+	// governed, before adopting the new one (U:motion.rs:672-678). The
+	// clock is monotonic and updatedAt is a previous sample's now, so the
+	// subtraction cannot go negative.
+	elapsed := springSecsF32(now - snapshot.updatedAt)
 	stiffness, damping := policy.config()
 	stepped := stepSpring(snapshot, snapshot.target, elapsed, stiffness, damping)
 
@@ -476,55 +503,4 @@ func MotionSpring[I IntoTransitionID, T SpringValue](id I, target T, policy Spri
 	})
 	gpui.RequestAnimationFrame(w)
 	return T(stepped.position)
-}
-
-// ---------------------------------------------------------------------------
-// The private helpers Base's remaining files share (the moved engine
-// carries its own copies in the core; these stay so Base's behaviour is
-// byte-identical where the two halves still call them)
-// ---------------------------------------------------------------------------
-
-// reduceMotionGate is Base's reduced-motion gate: App.ReduceMotion plus
-// the core's system-preference reading (ticket 27; the same gate the
-// moved engine applies).
-func reduceMotionGate(cx *gpui.App) bool {
-	return cx.ReduceMotion() || cx.SystemPreferences().ReducedMotion
-}
-
-// finite32 is Rust's f32::is_finite (the engine's copy moved to the
-// core; Base keeps this one for its own remaining files).
-func finite32(v float32) bool {
-	return !math.IsNaN(float64(v)) && !math.IsInf(float64(v), 0)
-}
-
-// in01 reports a value in [0, 1] (the engine's copy moved to the core).
-func in01(v float32) bool { return v >= 0 && v <= 1 }
-
-// secsF32 is Rust's Duration::as_secs_f32 (the engine's copy moved to
-// the core; Base keeps this one for its own remaining files).
-func secsF32(d time.Duration) float32 {
-	return float32(d/time.Second) + float32(d%time.Second)/float32(1e9)
-}
-
-// mulF32 scales a duration by a factor (the engine's copy moved to the
-// core; Base keeps this one for its own remaining files).
-func mulF32(d time.Duration, rhs float32) time.Duration {
-	return time.Duration(math.Round(float64(d) * float64(rhs)))
-}
-
-// satAddDuration and satSubDuration are the saturating duration
-// arithmetic (the engine's copies moved to the core; Base keeps these
-// for its own remaining files).
-func satAddDuration(a, b time.Duration) time.Duration {
-	if b > 0 && a > math.MaxInt64-b {
-		return math.MaxInt64
-	}
-	return a + b
-}
-
-func satSubDuration(a, b time.Duration) time.Duration {
-	if a < b {
-		return 0
-	}
-	return a - b
 }

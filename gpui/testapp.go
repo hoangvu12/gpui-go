@@ -116,6 +116,18 @@ func (ta *TestApp) WithHTTPClient(client HttpClient) *TestApp {
 	return ta
 }
 
+// WithSystemPreferences pins the system-preference record this hostless
+// application reports through App.SystemPreferences (browser-core ticket
+// 74): a test drives the record an attached host would have read from
+// Windows — the OS half of the reduced-motion gate (App.MotionReduced)
+// and the preference-driven styling. A later call replaces the pin, so
+// a test can flip a preference mid-flight; SystemColors still answers
+// the default palette (a host is needed to pin colours).
+func (ta *TestApp) WithSystemPreferences(prefs SystemPreferences) *TestApp {
+	ta.app.testSystemPreferences = &prefs
+	return ta
+}
+
 // ---------------------------------------------------------------------------
 // Base ticket 12: the TestAppContext window and input surface
 // (R:app/test_context.rs, R:app/test_app.rs; R: = reference/ce-source/

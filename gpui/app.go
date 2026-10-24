@@ -115,6 +115,11 @@ type App struct {
 	// set (App.SetForcedColors, forced_colors.go); nil means the pass
 	// derives from the system preferences (App.ForcedColors).
 	forcedColorsOverride *ForcedColorsState
+	// testSystemPreferences pins the system-preference record a hostless
+	// application reports (TestApp.WithSystemPreferences, browser-core
+	// ticket 74); nil reads the host's live record, or the documented
+	// default without a host.
+	testSystemPreferences *SystemPreferences
 	// forcedColorsCache is the style-resolution path's cached
 	// derivation of the pass state, derived at the host's
 	// forcedColorsStamp record version (browser-core 29): the host

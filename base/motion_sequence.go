@@ -107,7 +107,10 @@ func (s Sequence[T]) From() T { return s.from }
 func (s Sequence[T]) Steps() []SequenceStep[T] { return s.steps }
 
 // Sample samples the sequence and requests a frame while a step is active
-// (U:motion/sequence.rs:131-208).
+// (U:motion/sequence.rs:131-208). The steps are played by the core's
+// Transition policies (Progress, Sample, FinishesAfter, InterpolateValue);
+// the chaining state is Base's. Reduced motion comes from the core's
+// single source (App.MotionReduced).
 func (s Sequence[T]) Sample(w *gpui.Window, cx *gpui.App) SequenceSample[T] {
 	if len(s.steps) == 0 {
 		return SequenceSample[T]{value: s.from, step: 0, status: MotionStatusIdle}
@@ -125,7 +128,7 @@ func (s Sequence[T]) Sample(w *gpui.Window, cx *gpui.App) SequenceSample[T] {
 		state.Update(cx, func(st *sequenceState[T], _ *gpui.Context[sequenceState[T]]) { *st = next })
 	}
 
-	if cx.ReduceMotion() {
+	if cx.MotionReduced() {
 		if snapshot.step != lastStep || snapshot.from != last.target {
 			write(startSequenceState(lastStep, last.target, s.steps, now))
 		}
@@ -192,9 +195,11 @@ func startSequenceState[T any](step int, from T, steps []SequenceStep[T], starte
 	}
 }
 
-// progress is U:motion/sequence.rs:233-238.
+// progress is U:motion/sequence.rs:233-238. The clock is monotonic and
+// a state's start is a previous sample's now (or a hand-over instant the
+// finished step already reached), so the subtraction cannot go negative.
 func (s sequenceState[T]) progress(now time.Duration) (float32, MotionStatus) {
-	return s.transition.Progress(satSubDuration(now, s.startedAt), s.transition.Duration())
+	return s.transition.Progress(now-s.startedAt, s.transition.Duration())
 }
 
 // value is U:motion/sequence.rs:240-243.
