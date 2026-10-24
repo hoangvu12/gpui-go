@@ -55,6 +55,13 @@ const (
 	// DefaultTabStopEms is the incremental tab stop in ems: DirectWrite's
 	// default (4 × the font size), the stop Base's 0.2.2 line drew tabs at.
 	DefaultTabStopEms = 4
+	// CSSDefaultTabSizeSpaces is the browser's default tab-size in
+	// spaces (browser-core 38): Blink's tab-size initial value is
+	// TabSize(8) (core/css/css_properties.json5:6211), and a tab stop is
+	// tab-size × (the space advance + letter spacing + word spacing)
+	// (platform/text/tab_size.h:34-38 GetPixelSize; word spacing is
+	// always zero in this port).
+	CSSDefaultTabSizeSpaces uint32 = 8
 	// tabFitPasses bounds the re-shapes one tab fit may take.
 	tabFitPasses = 4
 	// tabFitTolerance is the error (px) a fitted tab end may keep.
@@ -68,17 +75,44 @@ const (
 // (DirectWrite's default, 4 × the font size).
 func DefaultTabStop(fontSize float32) float32 { return fontSize * DefaultTabStopEms }
 
-// nextTabStop returns the first stop strictly past x.
+// nextTabStop returns the first stop strictly past x (the pin's
+// DirectWrite rule).
 func nextTabStop(x, stop float32) float32 {
 	return float32(math.Floor(float64((x+tabStopEpsilon)/stop))+1) * stop
 }
 
+// browserTabTarget returns the advance a browser-mode tab needs from x
+// (Font::TabWidth, platform/fonts/font.cc:319-337): the distance to the
+// next stop is stop - (x mod stop), and a tab that would land within
+// half a space of the stop advances one stop further — “the minimum
+// width is the half of the space width so that it's always
+// recognizable”.
+func browserTabTarget(x, stop, halfSpace float32) float32 {
+	if stop <= 0 {
+		return 0
+	}
+	mod := float32(math.Mod(float64(x), float64(stop)))
+	if mod < 0 {
+		mod += stop
+	}
+	distance := stop - mod
+	if distance < halfSpace {
+		distance += stop
+	}
+	return distance
+}
+
 // tabFit is a shaped document's hard-tab bookkeeping: where its tabs
 // are, the native run each one shapes in, and the letter spacing the fit
-// gave each.
+// gave each. browser selects the tab-stop rule: the pin's shared
+// DirectWrite stop (fontSize × 4) or the browser's per-tab tab-size
+// stops (browser-core 38: tabSize × the tab's own shaped advance, with
+// the half-space minimum).
 type tabFit struct {
-	// stop is the incremental tab stop (px).
+	// stop is the incremental tab stop (px) of the pin mode.
 	stop float32
+	// browser marks the tab-size stop mode (TabSizeSpaces requests).
+	browser bool
 	// tabs are the tabs' byte indices, in order.
 	tabs []int
 	// runs are the indices of the tabs' one-byte runs in the native
@@ -87,6 +121,11 @@ type tabFit struct {
 	// base is each tab run's own letter spacing (the run it was cut
 	// from); extra is the spacing the fit adds.
 	base, extra []float32
+	// stops and halfSpaces are the browser mode's per-tab stop and
+	// half-space minimum, measured on the first pass (each tab's stop is
+	// its font's own space advance × the tab size — the pin measures one
+	// shared stop from the font size).
+	stops, halfSpaces []float32
 }
 
 // prepareTabs rewrites a request holding hard tabs for the fit: every tab
@@ -108,7 +147,7 @@ func prepareTabs(request TextLayoutRequest) (TextLayoutRequest, *tabFit) {
 	if total != len(request.Text) {
 		return request, nil
 	}
-	fit := &tabFit{stop: DefaultTabStop(request.FontSize)}
+	fit := &tabFit{stop: DefaultTabStop(request.FontSize), browser: request.TabSizeSpaces != nil}
 	runs := make([]TextRun, 0, len(request.Runs)+2*strings.Count(request.Text, "\t"))
 	offset := 0
 	for _, run := range request.Runs {
@@ -150,12 +189,19 @@ func prepareTabs(request TextLayoutRequest) (TextLayoutRequest, *tabFit) {
 
 // fitTabsLocked widens every tab of the line to the next stop past its
 // x on its visual row, re-shaping until the tabs sit on their stops (or
-// tabFitPasses shapes ran). The caller holds l.mu and the line holds a
-// live handle.
+// tabFitPasses shapes ran). The pin mode measures every tab against the
+// shared DirectWrite stop; the browser mode (browser-core 38) measures
+// each tab's stop from its own first-pass advance — the tab shapes as a
+// space of its run's font, so its initial advance is that font's space
+// glyph plus the run's letter spacing, exactly Chromium's
+// TabSize::GetPixelSize(space_width, letter_spacing) (platform/text/
+// tab_size.h:34-38) — and applies Font::TabWidth's half-space minimum
+// (platform/fonts/font.cc:326-337). The caller holds l.mu and the line
+// holds a live handle.
 func (l *WrappedLine) fitTabsLocked() error {
 	fit := l.tabs
 	svc := l.system.svc
-	for range tabFitPasses {
+	for pass := range tabFitPasses {
 		changed := false
 		rowY := float32(math.NaN())
 		var shift float32
@@ -181,7 +227,31 @@ func (l *WrappedLine) fitTabsLocked() error {
 			}
 			// Earlier tabs on the row move this one by what they change.
 			x := start.Bounds.X + shift
-			delta := nextTabStop(x, fit.stop) - x - have
+			if fit.browser && pass == 0 {
+				// The first pass measures the browser stop from the tab's
+				// own advance: have = the space glyph + the run's letter
+				// spacing, so tabSize × have is the stop (tab_size.h's
+				// GetPixelSize) and the half-space minimum is half the raw
+				// space advance. The arrays stay index-aligned with the
+				// tabs (a tab whose caret failed this pass keeps a zero
+				// stop, and the lookup guard skips it).
+				for len(fit.stops) <= i {
+					fit.stops = append(fit.stops, 0)
+					fit.halfSpaces = append(fit.halfSpaces, 0)
+				}
+				spaces := *l.tabSizeSpaces
+				fit.stops[i] = float32(spaces) * have
+				fit.halfSpaces[i] = max32(0, have-fit.base[i]) / 2
+			}
+			var target float32
+			if fit.browser {
+				if i < len(fit.stops) {
+					target = browserTabTarget(x, fit.stops[i], fit.halfSpaces[i])
+				}
+			} else {
+				target = nextTabStop(x, fit.stop) - x
+			}
+			delta := target - have
 			shift += delta
 			if delta > tabFitTolerance || delta < -tabFitTolerance {
 				fit.extra[i] += delta

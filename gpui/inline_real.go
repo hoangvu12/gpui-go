@@ -158,6 +158,10 @@ type inlineSegment struct {
 	runs       []TextRun
 	fontSize   float32
 	lineHeight float32
+	// tabSizeSpaces is the browser tab-size when the segment's
+	// white-space mode preserves tabs (browser-core 38); nil keeps the
+	// pin's DirectWrite stops.
+	tabSizeSpaces *uint32
 }
 
 // inlineAssemblyRow is one row under assembly: its pieces and boxes
@@ -252,7 +256,7 @@ func (r *realWindowTextSystem) layoutInline(request inlineLayoutRequest) (inline
 			budget = &remaining_budget
 		}
 
-		shaped, err := r.shapeRuns(remaining, segment.fontSize, runs, budget, nil)
+		shaped, err := r.shapeRuns(remaining, segment.fontSize, runs, budget, nil, segment.tabSizeSpaces)
 		if err != nil {
 			return inlineLayout{}, err
 		}
@@ -463,14 +467,16 @@ func (r *realWindowTextSystem) layoutInline(request inlineLayoutRequest) (inline
 // reference's platform layout_text call sits under the same
 // LineLayoutCache), so a paragraph whose text, runs and row budgets
 // repeat across frames reuses its pieces' lines instead of re-shaping
-// them.
-func (r *realWindowTextSystem) shapeRuns(text string, fontSize float32, runs []TextRun, wrapWidth *float32, lineClamp *uint32) (shapedText, error) {
+// them. tabSizeSpaces selects the browser's tab-size stops when the
+// segment's white-space mode preserves tabs (browser-core 38).
+func (r *realWindowTextSystem) shapeRuns(text string, fontSize float32, runs []TextRun, wrapWidth *float32, lineClamp *uint32, tabSizeSpaces *uint32) (shapedText, error) {
 	line, err := r.lines.layoutWrappedLine(r.system, TextLayoutRequest{
-		Text:      text,
-		FontSize:  fontSize,
-		Runs:      runs,
-		WrapWidth: wrapWidth,
-		LineClamp: lineClamp,
+		Text:          text,
+		FontSize:      fontSize,
+		Runs:          runs,
+		WrapWidth:     wrapWidth,
+		LineClamp:     lineClamp,
+		TabSizeSpaces: tabSizeSpaces,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("shapeRuns (text %q len %d, runs %+v, size %v, wrap %v): %w", text, len(text), runs, fontSize, wrapWidth, err)
@@ -519,19 +525,22 @@ func splitInlineSegments(request inlineLayoutRequest) []inlineSegment {
 			continue
 		}
 		fontSize, lineHeight := request.fontSize, request.lineHeight
+		var tabSizeSpaces *uint32
 		for _, style := range request.textStyles {
 			if style.Range.Start <= start && end <= style.Range.End && style.Range.Start != style.Range.End {
 				fontSize = style.FontSize
 				lineHeight = style.LineHeight
+				tabSizeSpaces = whiteSpaceTabSize(style.WhiteSpace)
 				break
 			}
 		}
 		segments = append(segments, inlineSegment{
-			text:       request.text[start:end],
-			byteStart:  start,
-			runs:       sliceInlineRuns(request.runs, start, end),
-			fontSize:   fontSize,
-			lineHeight: lineHeight,
+			text:          request.text[start:end],
+			byteStart:     start,
+			runs:          sliceInlineRuns(request.runs, start, end),
+			fontSize:      fontSize,
+			lineHeight:    lineHeight,
+			tabSizeSpaces: tabSizeSpaces,
 		})
 	}
 	return segments

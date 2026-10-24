@@ -137,6 +137,11 @@ type shapedLineKey struct {
 	hasWrap  bool
 	clamp    uint32
 	hasClamp bool
+	// tabSize keys the browser tab-stop mode (browser-core 38): a
+	// request with tab-size stops shapes different geometry than the
+	// pin's DirectWrite stops, so the mode is part of the key.
+	tabSize    uint32
+	hasTabSize bool
 }
 
 // shapedLineKeyOf builds the cache key of one shaping request (the
@@ -154,6 +159,10 @@ func shapedLineKeyOf(request TextLayoutRequest) shapedLineKey {
 	if request.LineClamp != nil {
 		key.clamp = *request.LineClamp
 		key.hasClamp = true
+	}
+	if request.TabSizeSpaces != nil {
+		key.tabSize = *request.TabSizeSpaces
+		key.hasTabSize = true
 	}
 	return key
 }

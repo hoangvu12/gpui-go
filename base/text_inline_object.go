@@ -117,7 +117,9 @@ func (o measuredInlineObject) element() (gpui.AnyElement, bool) {
 		H(gpui.Px(o.metrics.size.Height)).
 		TextSize(gpui.Px(o.fontSize)).
 		LineHeight(gpui.Px(o.metrics.size.Height)).
-		WhitespaceNowrap().
+		// CSS pre's pair: the object's label renders verbatim without
+		// wrapping (browser-core 38: nowrap would collapse it).
+		WhitespacePre().
 		OverflowHidden().
 		Child(text).
 		IntoElement(), false

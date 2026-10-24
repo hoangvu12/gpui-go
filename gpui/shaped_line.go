@@ -115,7 +115,7 @@ func (t *WindowTextSystem) ShapeLine(text string, fontSize float32, runs []TextR
 	if err != nil {
 		return nil, err
 	}
-	layout, err := shapeStyledRuns(seam, text, fontSize, runs, nil, nil)
+	layout, err := shapeStyledRuns(seam, text, fontSize, runs, nil, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("gpui: ShapeLine: %w", err)
 	}
@@ -178,13 +178,15 @@ func layoutWidthOf(seam windowTextSystem, font FontDescriptor, fontSize float32,
 // window text seam: the real stack shapes every run's font through the
 // window's line-layout cache (inline_real.go shapeRuns); the
 // deterministic test system ignores fonts like the pinned
-// TestTextSystem (one FontId for every run, platform.rs).
-func shapeStyledRuns(seam windowTextSystem, text string, fontSize float32, runs []TextRun, wrapWidth *float32, lineClamp *uint32) (shapedText, error) {
+// TestTextSystem (one FontId for every run, platform.rs). tabSizeSpaces
+// carries the browser's tab-size stops (browser-core 38; nil keeps the
+// pin's DirectWrite stops).
+func shapeStyledRuns(seam windowTextSystem, text string, fontSize float32, runs []TextRun, wrapWidth *float32, lineClamp *uint32, tabSizeSpaces *uint32) (shapedText, error) {
 	if err := validateRuns(text, runs); err != nil {
 		return nil, err
 	}
 	if real, ok := seam.(*realWindowTextSystem); ok {
-		return real.shapeRuns(text, fontSize, runs, wrapWidth, lineClamp)
+		return real.shapeRuns(text, fontSize, runs, wrapWidth, lineClamp, tabSizeSpaces)
 	}
 	font := DefaultFontDescriptor()
 	if len(runs) > 0 {

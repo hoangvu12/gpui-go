@@ -621,3 +621,20 @@ unreliability). Base keeps its own input bindings (they win over the core defaul
 through the binding position); the core actions add the alternate keys to Base inputs
 as browser-parity wins (Ctrl+Insert copies like Chrome's, where the pin's keymap had
 no binding).
+
+Ticket 38 (white-space and tracking) made the element layer collapse white
+space like CSS before shaping, keeping an offset map (`gpui/white_space.go`):
+normal, nowrap and pre-line fold runs of spaces, tabs, newlines and carriage
+returns to one space (removed at a paragraph's start or end, and across inline
+element boundaries), pre-line preserves the newlines as breaks, and pre/
+pre-wrap keep everything — tabs included, which advance to the browser's
+8-space stops (`gpui/text_tabs.go`, keyed by `TextLayoutRequest.TabSizeSpaces`
+through the shape cache). The Text leaf, the inline paragraph and StyledText
+all collapse; StyledText's `PositionForIndex`/`IndexForPosition` map through
+the byte map, so carets and selection keep answering in source offsets; a
+paragraph that collapses away entirely measures no line box, like Chromium's
+self-collapsing empty line. Base's TextView opts out with pre-wrap (its text
+is the pin's verbatim rich text — `base/text_inline.go`), so no Base behaviour
+changed. `fixtures/whitespace` is the fixture pair (`whitespace-collapse`,
+`whitespace-pre`); the wrong view (everything pre) is the pre-ticket pin.
+No existing fixture changed.

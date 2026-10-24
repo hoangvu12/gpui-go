@@ -272,6 +272,10 @@ func stageArms(blur, percents, hues []string) []TSType {
 		Lit("leading-[0]"),
 		Template([]string{"tracking-[", "px]"}, numType),
 		Lit("tracking-[0]"),
+		// The named tracking scale is em-based (browser-core 38) and
+		// resolves against the element's own font size.
+		Lits("tracking-tighter", "tracking-tight", "tracking-normal",
+			"tracking-wide", "tracking-wider", "tracking-widest"),
 		Template([]string{"line-clamp-", ""}, numType),
 	)
 	// Border widths: any side, any count or bracket length (a bare

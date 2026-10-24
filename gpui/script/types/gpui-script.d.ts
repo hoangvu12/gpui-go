@@ -914,12 +914,21 @@ type CoreClass =
 	"text-xl" |
 	"text-xs" |
 	"tracking-[0]" |
+	"tracking-normal" |
+	"tracking-tight" |
+	"tracking-tighter" |
+	"tracking-wide" |
+	"tracking-wider" |
+	"tracking-widest" |
 	"truncate" |
 	"underline" |
 	"uppercase" |
 	"visible" |
 	"whitespace-normal" |
 	"whitespace-nowrap" |
+	"whitespace-pre" |
+	"whitespace-pre-line" |
+	"whitespace-pre-wrap" |
 	`group/${string}` |
 	`${PosPrefix}-${LengthValue}` |
 	`-${NegPrefix}-${LengthValue}` |
@@ -1562,12 +1571,21 @@ type Class =
 	"text-xl" |
 	"text-xs" |
 	"tracking-[0]" |
+	"tracking-normal" |
+	"tracking-tight" |
+	"tracking-tighter" |
+	"tracking-wide" |
+	"tracking-wider" |
+	"tracking-widest" |
 	"truncate" |
 	"underline" |
 	"uppercase" |
 	"visible" |
 	"whitespace-normal" |
 	"whitespace-nowrap" |
+	"whitespace-pre" |
+	"whitespace-pre-line" |
+	"whitespace-pre-wrap" |
 	`group/${string}` |
 	`${PosPrefix}-${LengthValue}` |
 	`-${NegPrefix}-${LengthValue}` |

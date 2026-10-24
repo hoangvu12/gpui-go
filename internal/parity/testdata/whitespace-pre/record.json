@@ -1,0 +1,56 @@
+{
+  "name": "whitespace-pre",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T10:39:22Z",
+  "viewport": {
+    "width": 640,
+    "height": 260
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 260
+    },
+    "row-pre": {
+      "x": 16,
+      "y": 16,
+      "width": 380,
+      "height": 68
+    },
+    "row-prewrap": {
+      "x": 16,
+      "y": 96,
+      "width": 380,
+      "height": 93
+    },
+    "row-tracking": {
+      "x": 16,
+      "y": 201,
+      "width": 380,
+      "height": 43
+    },
+    "span-pre": {
+      "x": 25,
+      "y": 25,
+      "width": 362,
+      "height": 50
+    },
+    "span-prewrap": {
+      "x": 25,
+      "y": 105,
+      "width": 362,
+      "height": 75
+    },
+    "span-tracking": {
+      "x": 25,
+      "y": 210,
+      "width": 362,
+      "height": 25
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

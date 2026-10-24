@@ -126,7 +126,16 @@ func (t *SelectableText) RequestLayout(global *gpui.GlobalElementID, inspector *
 			return id
 		})
 	} else {
-		id, _ = t.styledText.RequestLayout(global, inspector, w, app)
+		// Without an explicit refinement the run renders verbatim
+		// (browser-core 38, gpui/white_space.go): the pin's selectable
+		// text is user-provided text — pre-wrap — where the core's
+		// default normal would collapse its newlines and space runs.
+		// An explicit refinement still wins (a caller can opt into the
+		// collapse with WhiteSpaceNormal).
+		id = gpui.WithTextStyle(w, &gpui.TextStyleRefinement{WhiteSpace: gpui.Some(gpui.WhiteSpacePreWrap)}, func(w *gpui.Window) gpui.LayoutID {
+			id, _ := t.styledText.RequestLayout(global, inspector, w, app)
+			return id
+		})
 	}
 	return id, handle
 }

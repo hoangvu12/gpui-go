@@ -27,6 +27,11 @@ const realMonoFamily = "Consolas"
 func realLaidOut(w *gpui.Window, app *gpui.App, text string, wrapWidth float32, origin gpui.Point) (*gpui.TextLayout, []gpui.TextRun, float32) {
 	style := bodyStyle(16)
 	style.FontFamily = realMonoFamily
+	// Divergence note (browser-core 38): TextView renders verbatim
+	// (inlineText pins white-space: pre-wrap, base/text_inline.go), so
+	// the layout under test here must pin it too — the core's normal
+	// would collapse the newlines these walk tests exercise.
+	style.WhiteSpace = gpui.WhiteSpacePreWrap
 	runs := textRuns(len(text), style, nil)
 	if len(runs) == 0 {
 		// gpui's StyledText rejects a text without runs; the empty text

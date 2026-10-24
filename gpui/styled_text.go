@@ -74,7 +74,10 @@ func (s *StyledText) WithDefaultHighlights(defaultStyle TextStyle, highlights []
 	if s.hasDelayedHighlights {
 		panic("gpui: StyledText: can't use WithDefaultHighlights and WithHighlights")
 	}
-	return s.WithRuns(computeStyledRuns(s.text, defaultStyle, highlights))
+	// The eager runs cannot resolve an em-based LetterSpacingEm (no
+	// font size yet — it resolves at layout); WithHighlights defers the
+	// run building and resolves there (browser-core 38).
+	return s.WithRuns(computeStyledRuns(s.text, defaultStyle, highlights, 0))
 }
 
 // WithHighlights sets highlighted ranges resolved against the window's
@@ -123,18 +126,18 @@ func (s *StyledText) WithRuns(runs []TextRun) *StyledText {
 // computeStyledRuns is the pinned compute_runs (R:elements/text.rs:
 // 452-477): default-style runs fill the gaps between highlights, and
 // each highlight runs with the default style highlighted.
-func computeStyledRuns(text string, defaultStyle TextStyle, highlights []HighlightRange) []TextRun {
+func computeStyledRuns(text string, defaultStyle TextStyle, highlights []HighlightRange, fontSize float32) []TextRun {
 	var runs []TextRun
 	ix := 0
 	for _, highlight := range highlights {
 		if ix < highlight.Range.Start {
-			runs = append(runs, defaultStyle.ToRun(highlight.Range.Start-ix))
+			runs = append(runs, defaultStyle.ToRunAt(highlight.Range.Start-ix, fontSize))
 		}
-		runs = append(runs, defaultStyle.Highlight(highlight.Style).ToRun(highlight.Range.End-highlight.Range.Start))
+		runs = append(runs, defaultStyle.Highlight(highlight.Style).ToRunAt(highlight.Range.End-highlight.Range.Start, fontSize))
 		ix = highlight.Range.End
 	}
 	if ix < len(text) {
-		runs = append(runs, defaultStyle.ToRun(len(text)-ix))
+		runs = append(runs, defaultStyle.ToRunAt(len(text)-ix, fontSize))
 	}
 	return runs
 }
@@ -162,23 +165,26 @@ func applyFontFamilyOverrides(runs []TextRun, overrides []FontFamilyOverride) {
 
 // takeRuns is the pinned take_runs (R:elements/text.rs:523-537): the
 // explicit runs, else the delayed highlights against the default style,
-// else one default run; then the font family overrides.
-func (s *StyledText) takeRuns(defaultStyle TextStyle) []TextRun {
+// else one default run; then the font family overrides. The default
+// runs resolve at the font size so an em-based LetterSpacingEm folds
+// into pixels (browser-core 38); explicit runs carry their caller's
+// already-resolved spacing.
+func (s *StyledText) takeRuns(defaultStyle TextStyle, fontSize float32) []TextRun {
 	var runs []TextRun
 	switch {
 	case s.hasRuns:
 		runs = append([]TextRun(nil), s.runs...)
 	case s.hasDelayedHighlights:
-		runs = computeStyledRuns(s.text, defaultStyle, s.delayedHighlights)
+		runs = computeStyledRuns(s.text, defaultStyle, s.delayedHighlights, fontSize)
 	}
 	if s.hasFontFamilyOverrides {
 		if runs == nil {
-			runs = []TextRun{defaultStyle.ToRun(len(s.text))}
+			runs = []TextRun{defaultStyle.ToRunAt(len(s.text), fontSize)}
 		}
 		applyFontFamilyOverrides(runs, s.delayedFontFamilyOverrides)
 	}
 	if runs == nil {
-		runs = []TextRun{defaultStyle.ToRun(len(s.text))}
+		runs = []TextRun{defaultStyle.ToRunAt(len(s.text), fontSize)}
 	}
 	return runs
 }
@@ -215,7 +221,7 @@ func (s *StyledText) SourceLocation() *SourceLocation { return nil }
 // RequestLayout implements Element (R:elements/text.rs:568-580): take
 // the runs against the window's text style and lay the text out.
 func (s *StyledText) RequestLayout(global *GlobalElementID, inspector *InspectorElementID, w *Window, app *App) (LayoutID, struct{}) {
-	runs := s.takeRuns(WindowTextStyle(w))
+	runs := s.takeRuns(WindowTextStyle(w), WindowTextStyle(w).FontSizePixels(RemSize(w)))
 	return s.layout.layout(s.text, runs, w), struct{}{}
 }
 
@@ -261,6 +267,12 @@ type textLayoutInner struct {
 	runs       []TextRun
 	lineHeight float32
 	wrapWidth  *float32
+	// collapse is the display text's byte map (browser-core 38, gpui/
+	// white_space.go): nil when the layout text is the source text.
+	// The geometry queries (PositionForIndex, IndexForPosition) and
+	// Len/Text/WrappedText answer in SOURCE byte offsets, mapped
+	// through it — the ticket's caret byte map.
+	collapse *collapseMap
 	// minContent marks an inner measured for a MIN-CONTENT query:
 	// wrapped at width zero with the min-content size (the longest word
 	// by the word count). The sizing-mode cache key (D2, browser-core
@@ -297,7 +309,7 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 		// InlineNode::ComputeMinMaxSizes (inline_node.cc:2314-2323).
 		var wrapWidth *float32
 		minContent := false
-		if textStyle.WhiteSpace != WhiteSpaceNowrap {
+		if textStyle.WhiteSpace.whiteSpaceWrapsAtWidth() {
 			if req.KnownWidthPresent {
 				width := req.KnownWidth
 				wrapWidth = &width
@@ -335,11 +347,17 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 		// A per-invocation copy: the truncation below rewrites it, and
 		// the measure closure may run more than once.
 		effective := text
-		effective, runs := applyTextTruncation(effective, runs, wrapWidth, textStyle.LineClamp, truncation,
+		// Ticket 38: the white-space processing (gpui/white_space.go)
+		// folds the display text and remaps the covering runs BEFORE the
+		// truncation and the shaping (Blink's InlineItemsBuilder precedes
+		// the line breaker); the byte map rides along so the geometry
+		// queries below keep answering in source offsets.
+		effective, runs, collapse := collapseStyledRuns(effective, runs, textStyle.WhiteSpace)
+		effective, runs = applyTextTruncation(effective, runs, wrapWidth, textStyle.LineClamp, truncation,
 			func(candidate string, candidateRuns []TextRun, wrapWidth *float32) (shapedText, error) {
-				return shapeStyledRuns(seam, candidate, fontSize, candidateRuns, wrapWidth, nil)
+				return shapeStyledRuns(seam, candidate, fontSize, candidateRuns, wrapWidth, nil, nil)
 			})
-		document, err := shapeStyledRuns(seam, effective, fontSize, runs, wrapWidth, lineClamp)
+		document, err := shapeStyledRuns(seam, effective, fontSize, runs, wrapWidth, lineClamp, whiteSpaceTabSize(textStyle.WhiteSpace))
 		if err != nil {
 			panic(fmt.Sprintf("gpui: StyledText shaping failed: %v", err))
 		}
@@ -350,13 +368,20 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 			// min(wrap, width) clamp, which would be zero at wrap zero.
 			size = Size{Width: document.width(), Height: lineHeight * float32(document.lineCount())}
 		}
+		if effective == "" {
+			// Everything collapsed away: no line box at all (Chromium's
+			// empty-line self-collapsing block,
+			// inline_layout_algorithm.cc:1488-1492).
+			size = Size{}
+		}
 		state.inner = &textLayoutInner{
-			len:           document.textLen(),
-			text:          effective,
+			len:           len(text),
+			text:          text,
 			document:      document,
 			runs:          mergeDecorationRuns(runs),
 			lineHeight:    lineHeight,
 			wrapWidth:     wrapWidth,
+			collapse:      collapse,
 			minContent:    minContent,
 			truncateWidth: truncation.Width,
 			size:          &size,
@@ -368,10 +393,16 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 		panic(fmt.Sprintf("gpui: StyledText request_layout: %v", err))
 	}
 	publishInlineContent(w, layoutID, &inlineTextContent{
+		// The published text is the SOURCE text: a parent paragraph
+		// collects it and folds its own white-space processing over the
+		// whole document (browser-core 38, inline.go
+		// collapseParagraphDocument), so the collapse crosses inline
+		// element boundaries.
 		text:       text,
 		runs:       runs,
 		fontSize:   fontSize,
 		lineHeight: lineHeight,
+		whiteSpace: textStyle.WhiteSpace,
 		// The runs carry their paint styles: a parent paragraph paints
 		// them per run (Base ticket 35, inline.go paintInlineLayout).
 		paintStyled: true,
@@ -455,7 +486,14 @@ func (l *TextLayout) IndexForPosition(position Point) (int, bool) {
 	if !ok {
 		return 0, false
 	}
-	return geometry.byteIndexForPixelPoint(Point{X: position.X - bounds.Origin.X, Y: position.Y - bounds.Origin.Y}, inner.lineHeight)
+	index, ok := geometry.byteIndexForPixelPoint(Point{X: position.X - bounds.Origin.X, Y: position.Y - bounds.Origin.Y}, inner.lineHeight)
+	// Ticket 38: the hit lands on a display-text byte; the first source
+	// offset it can stand for answers (ConvertTextContentToFirstDOM
+	// Offset, offset_mapping.cc:175-188 — GetFirstMappingUnit's
+	// boundary choice keeps a hit on the collapsed side of a boundary on
+	// the source's removed range). The edge carets map the same way
+	// whether the point was inside a row or not (the pinned Ok shape).
+	return inner.collapse.textToDomFirst(index), ok
 }
 
 // PositionForIndex returns the window position of a byte index
@@ -466,7 +504,11 @@ func (l *TextLayout) PositionForIndex(index int) (Point, bool) {
 	if !ok {
 		return Point{}, false
 	}
-	position, ok := geometry.visualPositionForByteIndex(index, inner.lineHeight)
+	// Ticket 38: the query is a SOURCE byte index; the display offset it
+	// maps to places the caret (ConvertDOMOffsetToTextContent,
+	// offset_mapping.cc:156-172 — offsets inside a removed run map to
+	// the collapse point, so they share the kept space's position).
+	position, ok := geometry.visualPositionForByteIndex(inner.collapse.domToText(index), inner.lineHeight)
 	if !ok {
 		return Point{}, false
 	}
@@ -484,10 +526,15 @@ func (l *TextLayout) Bounds() Bounds {
 func (l *TextLayout) LineHeight() float32 { return l.measured().lineHeight }
 
 // Len returns the UTF-8 length of the underlying text
-// (R:elements/text.rs:1131-1134).
+// (R:elements/text.rs:1131-1134): the SOURCE length — the byte map's
+// dom space (browser-core 38), so indices stay source offsets however
+// much the display text collapsed.
 func (l *TextLayout) Len() int { return l.measured().len }
 
-// Text returns the laid-out text (R:elements/text.rs:1136-1146).
+// Text returns the laid-out text (R:elements/text.rs:1136-1146): the
+// source text of the layout — the byte map's dom space (browser-core
+// 38; the collapsed display text is a shaping detail, and the pin's
+// text-transform is byte-preserving so this is the caller's text).
 func (l *TextLayout) Text() string {
 	inner := l.measured()
 	if inner.document == nil {
@@ -507,10 +554,22 @@ func (l *TextLayout) WrappedText() string {
 	var b strings.Builder
 	for i := 0; i < inner.document.lineCount(); i++ {
 		start, end := inner.document.lineRange(i)
-		if i > 0 {
+		// Ticket 38: the row's display range maps to its source range
+		// (first at the start, last at the end — GetFirstMappingUnit /
+		// GetLastMappingUnit), so a row's text is the source slice it
+		// renders, collapsed spaces included.
+		domStart := inner.collapse.textToDomFirst(start)
+		domEnd := inner.collapse.textToDomLast(end)
+		if domEnd < domStart {
+			domEnd = domStart
+		}
+		row := inner.text[domStart:domEnd]
+		// A hard break's row carries its own newline (the shaper keeps
+		// the separator in its row); only the SOFT wraps add the joiner.
+		if i > 0 && !strings.HasSuffix(b.String(), "\n") {
 			b.WriteByte('\n')
 		}
-		b.WriteString(inner.text[start:end])
+		b.WriteString(row)
 	}
 	return b.String()
 }

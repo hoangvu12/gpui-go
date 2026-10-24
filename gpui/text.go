@@ -684,6 +684,17 @@ type TextLayoutRequest struct {
 	WrapWidth *float32
 	// LineClamp, when non-nil, caps the visual row count (>= 1).
 	LineClamp *uint32
+	// TabSizeSpaces, when non-nil, shapes tabs at the browser's
+	// tab-size stops (browser-core 38): the tab advances to the next
+	// multiple of tabSize × (the space advance + the run's letter
+	// spacing) from the row start — Chromium's TabSize::GetPixelSize
+	// (platform/text/tab_size.h:34-38) with the CSS default 8 spaces
+	// (core/css/css_properties.json5: tab-size's default_value
+	// "TabSize(8)"), plus Font::TabWidth's half-space minimum
+	// (platform/fonts/font.cc:319-337). Nil keeps the pin's DirectWrite
+	// stops (text_tabs.go, 4 × the font size — the editor and Base's
+	// line wrapper).
+	TabSizeSpaces *uint32
 }
 
 // ShapeText shapes the request through the native text service (the
@@ -704,7 +715,9 @@ func (ts *TextSystem) ShapeText(request TextLayoutRequest) (*WrappedLine, error)
 	if request.LineClamp != nil && *request.LineClamp < 1 {
 		return nil, fmt.Errorf("gpui: ShapeText: %w: line clamp must be >= 1", ErrTextValue)
 	}
-	// Hard tabs shape as spaces fitted to the tab stops (text_tabs.go).
+	// Hard tabs shape as spaces fitted to the tab stops (text_tabs.go):
+	// the pin's DirectWrite stops, or the browser's tab-size stops when
+	// the request carries a tab size (browser-core 38).
 	request, tabs := prepareTabs(request)
 	specs := make([]native.TextRunSpec, len(request.Runs))
 	for i, run := range request.Runs {
@@ -741,7 +754,7 @@ func (ts *TextSystem) ShapeText(request TextLayoutRequest) (*WrappedLine, error)
 	if err != nil {
 		return nil, wrapTextError("ShapeText", err)
 	}
-	line := &WrappedLine{system: ts, handle: handle, request: shapeRequest, tabs: tabs}
+	line := &WrappedLine{system: ts, handle: handle, request: shapeRequest, tabs: tabs, tabSizeSpaces: copyUint32Ptr(request.TabSizeSpaces)}
 	// The handle counts as live before the summary fetch so the failure
 	// path's own Dispose balances the counter.
 	ts.liveHandles.Add(1)
@@ -1201,6 +1214,10 @@ type WrappedLine struct {
 	// request then carries the tabs as spaces with their fitted spacing
 	// (text_tabs.go).
 	tabs *tabFit
+	// tabSizeSpaces is the request's browser tab-size (nil: the pin's
+	// DirectWrite stops); the browser fit reads it when measuring each
+	// tab's stop (browser-core 38).
+	tabSizeSpaces *uint32
 	// evictable marks a line owned by a line-layout cache (text_cache.go):
 	// its handle may be parked under the live-handle bound.
 	evictable bool

@@ -1,0 +1,92 @@
+{
+  "name": "whitespace-collapse",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T10:39:21Z",
+  "viewport": {
+    "width": 640,
+    "height": 350
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 350
+    },
+    "row-empty": {
+      "x": 16,
+      "y": 316,
+      "width": 380,
+      "height": 18
+    },
+    "row-leaf": {
+      "x": 16,
+      "y": 71,
+      "width": 380,
+      "height": 43
+    },
+    "row-normal": {
+      "x": 16,
+      "y": 16,
+      "width": 380,
+      "height": 43
+    },
+    "row-preline": {
+      "x": 16,
+      "y": 236,
+      "width": 380,
+      "height": 68
+    },
+    "row-spans": {
+      "x": 16,
+      "y": 181,
+      "width": 380,
+      "height": 43
+    },
+    "row-styled": {
+      "x": 16,
+      "y": 126,
+      "width": 380,
+      "height": 43
+    },
+    "span-empty": {
+      "x": 25,
+      "y": 325,
+      "width": 362,
+      "height": 0
+    },
+    "span-leaf": {
+      "x": 25,
+      "y": 80,
+      "width": 362,
+      "height": 25
+    },
+    "span-normal": {
+      "x": 25,
+      "y": 25,
+      "width": 362,
+      "height": 25
+    },
+    "span-preline": {
+      "x": 25,
+      "y": 245,
+      "width": 362,
+      "height": 50
+    },
+    "span-spans": {
+      "x": 25,
+      "y": 190,
+      "width": 362,
+      "height": 25
+    },
+    "span-styled": {
+      "x": 25,
+      "y": 135,
+      "width": 362,
+      "height": 25
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

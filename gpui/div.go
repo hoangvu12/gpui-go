@@ -59,15 +59,29 @@ const (
 	TextAlignRight
 )
 
-// WhiteSpace controls text wrapping (the reference WhiteSpace; Normal is
-// the default).
+// WhiteSpace controls text wrapping (the reference WhiteSpace plus
+// browser-core 38's CSS values). Normal is the default.
 type WhiteSpace uint8
 
 const (
-	// WhiteSpaceNormal wraps text at the wrap width.
+	// WhiteSpaceNormal collapses runs of white space to single spaces
+	// and wraps text at the wrap width (CSS white-space: normal).
 	WhiteSpaceNormal WhiteSpace = iota
-	// WhiteSpaceNowrap never wraps.
+	// WhiteSpaceNowrap collapses white space like normal but never wraps
+	// (CSS white-space: nowrap).
 	WhiteSpaceNowrap
+	// WhiteSpacePre preserves spaces, tabs and newlines and never wraps
+	// (CSS white-space: pre); a tab advances to the next 8-space stop
+	// (browser-core 38, tab_size.h's TabSize(8) default).
+	WhiteSpacePre
+	// WhiteSpacePreLine collapses spaces and tabs but preserves newlines
+	// as line breaks, wrapping at the wrap width (CSS white-space:
+	// pre-line).
+	WhiteSpacePreLine
+	// WhiteSpacePreWrap preserves spaces, tabs and newlines and wraps at
+	// the wrap width (CSS white-space: pre-wrap); tabs advance to the
+	// next 8-space stop.
+	WhiteSpacePreWrap
 )
 
 // TextStyle is the resolved text style of an element (style.rs:590-646
@@ -112,6 +126,13 @@ type TextStyle struct {
 	// LetterSpacing is the extra spacing between characters in pixels
 	// (nil = None).
 	LetterSpacing *float32
+	// LetterSpacingEm is the extra spacing between characters in ems of
+	// the element's own font size (browser-core 38, the CSS em lengths:
+	// letter-spacing: 0.025em resolves to 0.025 × the font size at
+	// computed-style time, core/css/resolver/style_builder_converter.cc
+	// ConvertSpacing:2821-2830). A non-nil LetterSpacing (px) wins when
+	// both are set; resolveLetterSpacing folds the em into pixels.
+	LetterSpacingEm *float32
 	// TextTransform is the layout-time case mapping (nil = None).
 	TextTransform *TextTransform
 }
@@ -154,6 +175,8 @@ type TextStyleRefinement struct {
 	TextAlign       Optional[TextAlign]
 	LineClamp       Optional[int]
 	LetterSpacing   Optional[float32]
+	// LetterSpacingEm sets the em-based tracking (browser-core 38).
+	LetterSpacingEm Optional[float32]
 	TextTransform   Optional[TextTransform]
 }
 
@@ -180,6 +203,7 @@ func (r *TextStyleRefinement) Refine(style *TextStyle) {
 	refineValue(&style.TextAlign, r.TextAlign)
 	refinePointer(&style.LineClamp, r.LineClamp)
 	refinePointer(&style.LetterSpacing, r.LetterSpacing)
+	refinePointer(&style.LetterSpacingEm, r.LetterSpacingEm)
 	refinePointer(&style.TextTransform, r.TextTransform)
 }
 
@@ -210,6 +234,7 @@ func (r *TextStyleRefinement) Merge(other *TextStyleRefinement) {
 	mergeOptional(&r.TextAlign, other.TextAlign)
 	mergeOptional(&r.LineClamp, other.LineClamp)
 	mergeOptional(&r.LetterSpacing, other.LetterSpacing)
+	mergeOptional(&r.LetterSpacingEm, other.LetterSpacingEm)
 	mergeOptional(&r.TextTransform, other.TextTransform)
 }
 
@@ -221,7 +246,8 @@ func (r *TextStyleRefinement) IsSome() bool {
 		r.FontWeight.present || r.FontStyle.present || r.BackgroundColor.present ||
 		r.Underline.present || r.Strikethrough.present || r.WhiteSpace.present ||
 		r.TextOverflow.present || r.TextAlign.present || r.LineClamp.present ||
-		r.LetterSpacing.present || r.TextTransform.present
+		r.LetterSpacing.present || r.LetterSpacingEm.present ||
+		r.TextTransform.present
 }
 
 // Clone returns an independent copy (the slice-valued fields copied).
@@ -254,6 +280,22 @@ func (t TextStyle) LineHeightPixels(fontSize, rem float32) float32 {
 	default:
 		return fontSize * t.LineHeight.Value
 	}
+}
+
+// resolveLetterSpacing folds the style's letter spacing into pixels
+// against a font size (browser-core 38): the pixel value wins, else the
+// em resolves like CSS's ConvertSpacing length conversion — em × the
+// element's own font size (core/css/resolver/style_builder_converter.
+// cc:2821-2830).
+func (t TextStyle) resolveLetterSpacing(fontSize float32) *float32 {
+	if t.LetterSpacing != nil {
+		return t.LetterSpacing
+	}
+	if t.LetterSpacingEm != nil {
+		em := *t.LetterSpacingEm * fontSize
+		return &em
+	}
+	return nil
 }
 
 // FontDescriptorOf builds the shaping font descriptor of this text
@@ -620,7 +662,8 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		var wrap float32
 		hasWrap := false
 		minContent := false
-		if textStyle.WhiteSpace == WhiteSpaceNowrap {
+		if !textStyle.WhiteSpace.whiteSpaceWrapsAtWidth() {
+			// The non-wrapping modes (nowrap, pre — white_space.h:84-86).
 			hasWrap = false
 		} else if req.KnownWidthPresent {
 			wrap, hasWrap = req.KnownWidth, true
@@ -667,18 +710,26 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		// The pinned TextLayout::layout shapes the ambient style's run
 		// (elements/text.rs:902-915: vec![text_style.to_run(text.len())])
 		// so the document paints with its runs — the decorations of a
-		// plain text child live here, not only in StyledText.
-		runs := []TextRun{textStyle.ToRun(len(text))}
+		// plain text child live here, not only in StyledText. The run
+		// resolves at the font size so an em-based LetterSpacingEm folds
+		// into pixels (browser-core 38).
+		runs := []TextRun{textStyle.ToRunAt(len(text), fontSize)}
 		// A per-invocation copy: the truncation below rewrites it, and
 		// the measure closure may run more than once.
 		effective := text
+		// Ticket 38: the white-space processing (gpui/white_space.go)
+		// folds the display text and remaps the covering runs BEFORE the
+		// truncation and the shaping — the truncation's grapheme
+		// bisection works on the display text, exactly as Blink's
+		// InlineItemsBuilder precedes the line breaker.
+		effective, runs = collapseElementText(effective, runs, textStyle.WhiteSpace)
 		if truncation.Width != nil {
 			effective, runs = applyTextTruncation(effective, runs, wrapWidth, textStyle.LineClamp, truncation,
 				func(candidate string, candidateRuns []TextRun, wrapWidth *float32) (shapedText, error) {
-					return shapeStyledRuns(seam, candidate, fontSize, candidateRuns, wrapWidth, nil)
+					return shapeStyledRuns(seam, candidate, fontSize, candidateRuns, wrapWidth, nil, nil)
 				})
 		}
-		shaped, err := shapeStyledRuns(seam, effective, fontSize, runs, wrapWidth, textLineClamp(textStyle))
+		shaped, err := shapeStyledRuns(seam, effective, fontSize, runs, wrapWidth, textLineClamp(textStyle), whiteSpaceTabSize(textStyle.WhiteSpace))
 		if err != nil {
 			panic(fmt.Sprintf("gpui: text element shaping failed: %v", err))
 		}
@@ -688,6 +739,12 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 			// (the longest word) by its line count, not the pinned
 			// min(wrap, width) clamp, which would be zero at wrap zero.
 			size = Size{Width: shaped.width(), Height: lineHeight * float32(shaped.lineCount())}
+		}
+		if effective == "" {
+			// Everything collapsed away: no line box at all (Chromium's
+			// empty-line self-collapsing block,
+			// inline_layout_algorithm.cc:1488-1492), not one empty row.
+			size = Size{}
 		}
 		cell.shaped = shaped
 		cell.wrapWidth = wrapWidth
@@ -708,9 +765,10 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 	// inline span's own color and decorations survive the paragraph.
 	publishInlineContent(w, layoutID, &inlineTextContent{
 		text:        text,
-		runs:        []TextRun{textStyle.ToRun(len(text))},
+		runs:        []TextRun{textStyle.ToRunAt(len(text), fontSize)},
 		fontSize:    fontSize,
 		lineHeight:  lineHeight,
+		whiteSpace:  textStyle.WhiteSpace,
 		paintStyled: true,
 	})
 	return layoutID, state
@@ -754,7 +812,7 @@ func (t *textElement) Paint(global *GlobalElementID, inspector *InspectorElement
 	// text.
 	runs := layout.cell.runs
 	if len(runs) == 0 {
-		runs = []TextRun{textStyle.ToRun(layout.cell.shaped.textLen())}
+		runs = []TextRun{textStyle.ToRunAt(layout.cell.shaped.textLen(), layout.fontSize)}
 	}
 	align := textStyle.TextAlign
 	alignWidth := layout.bounds.Size.Width
