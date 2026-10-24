@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		position: relative;
+	}
+	button {
+		appearance: none;
+		border: 0;
+		margin: 0;
+		padding: 0;
+		display: block;
+		position: absolute;
+		width: 40px;
+		height: 20px;
+		background: #2563eb;
+		outline: none;
+	}
+	#b1 {
+		left: 0px;
+		top: 0px;
+	}
+	#anchor {
+		left: 600px;
+		top: 0px;
+		background: #94a3b8;
+	}
+	/* The UA stylesheet centers dialogs (position: absolute; inset: 0;
+	   margin: auto; border; padding; color: canvastext), so the page
+	   resets all of it back to a plain fixed box at an explicit
+	   coordinate. The ::backdrop is the UA dialog's rgba(0,0,0,0.1)
+	   scrim (html.css:2007-2010) — the page styles its own 40% black
+	   one, the port's TopLayer backdrop twin. */
+	dialog {
+		position: fixed;
+		inset: auto;
+		margin: 0;
+		border: 0;
+		padding: 0;
+		overflow: visible;
+		color: #000000;
+	}
+	#d {
+		left: 60px;
+		top: 80px;
+		width: 150px;
+		height: 120px;
+		background: #fde68a;
+	}
+	#d::backdrop {
+		background: rgba(0, 0, 0, 0.4);
+	}
+	#d1 {
+		left: 10px;
+		top: 10px;
+	}
+	#d2 {
+		left: 60px;
+		top: 10px;
+	}
+</style>
+</head>
+<body data-id="root" data-events="keydown,keyup">
+	<button id="b1" data-id="b1"></button>
+	<button id="anchor" data-id="anchor"></button>
+	<!-- The dialog binds no mouse listeners (data-events): Chrome's
+	     ::backdrop pseudo propagates its pointer events onto the dialog
+	     element, where the port's plain backdrop div (a sibling of the
+	     content, no hitbox) delivers nothing — the narrowing keeps the
+	     transcripts equal while the light dismiss itself (the toggle
+	     entries and the restored focus) carries the behaviour. -->
+	<dialog id="d" data-id="d" data-events="keydown,keyup,toggle">
+		<button id="d1" data-id="d1" tabindex="0"></button>
+		<button id="d2" data-id="d2" tabindex="0"></button>
+	</dialog>
+	<script>
+		document.getElementById("b1").addEventListener("click", () => {
+			document.getElementById("d").showModal();
+		});
+	</script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+{
+  "name": "tooltip-focus",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T17:29:47Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "anchor": {
+      "x": 600,
+      "y": 0,
+      "width": 40,
+      "height": 20
+    },
+    "b1": {
+      "x": 0,
+      "y": 0,
+      "width": 40,
+      "height": 20
+    }
+  },
+  "events": [
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "b1",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "b1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "b1",
+      "code": "Tab"
+    },
+    {
+      "kind": "toggle",
+      "target": "tip",
+      "defaultPrevented": false,
+      "state": "open"
+    },
+    {
+      "kind": "keydown",
+      "target": "b1",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "b1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "b1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "anchor",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "anchor",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "anchor",
+      "code": "Tab"
+    },
+    {
+      "kind": "toggle",
+      "target": "tip",
+      "defaultPrevented": false,
+      "state": "closed"
+    }
+  ],
+  "screenshot": "chrome.png"
+}

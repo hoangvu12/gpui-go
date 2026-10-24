@@ -1,0 +1,37 @@
+{
+  "name": "tooltip-look",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T17:31:06Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "b1": {
+      "x": 0,
+      "y": 0,
+      "width": 40,
+      "height": 20
+    },
+    "tooltip": {
+      "x": 0,
+      "y": 24,
+      "width": 30,
+      "height": 34
+    }
+  },
+  "events": [
+    {
+      "kind": "pointerenter",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerenter",
+      "target": "b1",
+      "defaultPrevented": false
+    }
+  ],
+  "screenshot": "chrome.png"
+}

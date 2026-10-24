@@ -1,0 +1,57 @@
+{
+  "name": "tooltip-escape",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T17:29:39Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "b1": {
+      "x": 0,
+      "y": 0,
+      "width": 40,
+      "height": 20
+    }
+  },
+  "events": [
+    {
+      "kind": "pointerenter",
+      "target": "b1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "toggle",
+      "target": "tip",
+      "defaultPrevented": false,
+      "state": "open"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Escape",
+      "code": "Escape"
+    },
+    {
+      "kind": "toggle",
+      "target": "tip",
+      "defaultPrevented": false,
+      "state": "closed"
+    },
+    {
+      "kind": "pointerleave",
+      "target": "b1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Escape",
+      "code": "Escape"
+    }
+  ],
+  "screenshot": "chrome.png"
+}

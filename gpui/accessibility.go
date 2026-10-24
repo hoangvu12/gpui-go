@@ -945,7 +945,12 @@ func beginElementA11yNode[L, P any](w *Window, global *GlobalElementID, e *a11yE
 	// ax_node_object.cc:1368 ShouldIgnoreForHiddenOrInert). The
 	// element's own Inert() (the inert root) or an inert ancestor
 	// (inertPrepaintDepth, the inherited property) marks it.
-	if inertPrepaintDepth(w) > 0 || elementIsInert(e.child) {
+	// Browser-core ticket 23: the blocked document hides the same way —
+	// everything outside the active modal's content path publishes
+	// hidden nodes (the modal's inert outside, style_resolver.cc:
+	// 563-583).
+	if inertPrepaintDepth(w) > 0 || elementIsInert(e.child) ||
+		(global != nil && modalA11yBlocked(w, global.key())) {
 		spec.Hidden = true
 	}
 	if !specPublishes(spec, hasCompanion) {

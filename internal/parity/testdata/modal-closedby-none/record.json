@@ -1,0 +1,102 @@
+{
+  "name": "modal-closedby-none",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T16:08:35Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "anchor": {
+      "x": 600,
+      "y": 0,
+      "width": 40,
+      "height": 20
+    },
+    "b1": {
+      "x": 0,
+      "y": 0,
+      "width": 40,
+      "height": 20
+    },
+    "d": {
+      "x": 60,
+      "y": 80,
+      "width": 150,
+      "height": 120
+    }
+  },
+  "events": [
+    {
+      "kind": "mousedown",
+      "target": "b1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "b1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "b1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "toggle",
+      "target": "d",
+      "defaultPrevented": false,
+      "state": "open"
+    },
+    {
+      "kind": "keydown",
+      "target": "d1",
+      "defaultPrevented": false,
+      "key": "Escape",
+      "focus": "d1",
+      "code": "Escape"
+    },
+    {
+      "kind": "keydown",
+      "target": "d",
+      "defaultPrevented": false,
+      "key": "Escape",
+      "focus": "d1",
+      "code": "Escape"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Escape",
+      "focus": "d1",
+      "code": "Escape"
+    },
+    {
+      "kind": "keyup",
+      "target": "d1",
+      "defaultPrevented": false,
+      "key": "Escape",
+      "focus": "d1",
+      "code": "Escape"
+    },
+    {
+      "kind": "keyup",
+      "target": "d",
+      "defaultPrevented": false,
+      "key": "Escape",
+      "focus": "d1",
+      "code": "Escape"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Escape",
+      "focus": "d1",
+      "code": "Escape"
+    }
+  ],
+  "screenshot": "chrome.png"
+}

@@ -696,6 +696,12 @@ func (w *Window) dispatchMouseClick(up *MouseUpEvent, capturedChain []string, sk
 	// popover on an outside click. Keyboard-activation clicks never come
 	// through here, matching Chromium's null pointer targets.
 	w.lightDismissFromClick(app)
+	// The dialog light dismiss (browser-core ticket 23): the same
+	// pre-click spot, right after the popover walk
+	// (HandleDialogLightDismissForClick, mouse_event_manager.cc:262-267)
+	// — a click outside the topmost closedby=any modal requests its
+	// close (modal.go lightDismissModalFromClick).
+	w.lightDismissModalFromClick(app)
 	chain := capturedChain
 	if chain == nil {
 		chain = commonAncestorClickChain(fs.rendered, pressChain, is.mouseHitTest)
