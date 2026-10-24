@@ -11,11 +11,12 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - **Known flakes:** `gpui` TestWin32TranslateKeyDownCarriesCodeAndLocation (it reads the live Shift key; fails while the user types), TestFrameLoopPreferredFrameIntervalDrawsEveryOtherVblank and TestSystemNotificationResponseDrain and gpui/script TestFrameOverheadIsUnder1msAtTheProbeSize (load-sensitive), and authorspec TestRealTwoWindowCounterSharedModel (rare). Re-run them.
 - **Open follow-up from 33+25:** Anchored, Deferred and custom containers don't call `RequestContainerLayout`, so a `Static()` div inside them defers its absolute children past the overlay (opt-in only; for 76).
 - 29 forced colours, 30 spellcheck and 77 (rev 15.1) are merged and resolved. 77 left open: the partial-region backdrop crop zoom (fold into R16), and the 42/43 text fields, which are blocked behind the pinned Parley/Taffy seams (per-field plans in TEXT_ABI.md/LAYOUT_ABI.md). Watch authorspec TestRealTwoWindowCounterSharedModel (a rare reentrancy panic, seen once; then 19/19).
-- **Running (they report to this chat, 08b88b23):**
-  - 16 full drag and drop sequence: chat 16397ca0, worktree `gpui-go-wt-core-16`, branch `core/16-drag-drop` (told to keep Escape-cancel inside the drag loop, so it merges cleanly with 22)
-  - 19 core text selection: chat 1c05b939, worktree `gpui-go-wt-core-19`, branch `core/19-text-selection`
-  - 22+35 (bundle: close watchers and Escape, position: fixed): chat 54b805fb, worktree `gpui-go-wt-core-22`, branch `core/22-35-escape-fixed`
-  - 15 wheel latching, overscroll and keyboard scroll: chat d728884c, worktree `gpui-go-wt-core-15`, branch `core/15-wheel-latching`
+- **INTERRUPTED (2026-10-24 ~20:02): Roboco restarted** (all roboco.exe processes started at 20:02), which killed every running worker; 16 reported exit 0x40010004 (terminated from outside). This chat's Roboco tools disconnected, so the workers can't be read or resumed from here. Their work is on disk, mostly uncommitted:
+  - 22+35 (chat 54b805fb, `gpui-go-wt-core-22`, `core/22-35-escape-fixed`): 22 committed (cf2b1ac); 35 in progress (13 changed files)
+  - 15 (chat d728884c, `gpui-go-wt-core-15`, `core/15-wheel-latching`): uncommitted (26 changed files)
+  - 16 (chat 16397ca0, `gpui-go-wt-core-16`, `core/16-drag-drop`): uncommitted (11 changed files)
+  - 19 (chat 1c05b939, `gpui-go-wt-core-19`, `core/19-text-selection`): uncommitted (41 changed files)
+  Next: once Roboco is reachable again, resume each chat with send_messages ("you were interrupted by a Roboco restart; your worktree has your uncommitted work; continue from it"), or start fresh workers on the same worktrees. Don't delete these worktrees.
 - The user asked for more speed (2026-10-24, "speed things uppppp"). 5 workers are running, with GOFLAGS=-p=4 and targeted tests.
 - **Rules:** as in orchestrator 7's block below and the handoff doc, with these changes from the user (2026-10-24):
   - KEEP the Go build cache. Clear it only when it passes about 40 GB (`go env GOCACHE`), because a cold cache makes every worker recompile gpui, which freezes the PC.
