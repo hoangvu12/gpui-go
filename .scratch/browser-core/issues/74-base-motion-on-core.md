@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 27, 44
 Triage: ready-for-agent
@@ -20,6 +20,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged 467ae33 into main with no conflicts. Build, vet and gofmt are clean. With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./base, ./gpui/, buildcostspec, ./internal/parity/..., authorspec, inspectorspec and ./examples/.... Behaviour note for the user: reduced motion is now `App.ReduceMotion() || SystemPreferences().ReducedMotion` everywhere (as 44's core transitions already were), so `SetReduceMotion(false)` no longer forces animation on a machine whose OS asks to reduce motion. If apps need an "ignore the OS" opt-out, that is a small follow-up.
 
 ## Answer
 
