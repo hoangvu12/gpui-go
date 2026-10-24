@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 520px;
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		padding: 16px;
+		box-sizing: border-box;
+		/* No line-height pin: the initial normal (browser-parity D1)
+		   is the rule under test — the record carries Chrome's
+		   font-metrics line boxes. */
+		font: 16px "Segoe UI", system-ui, sans-serif;
+		color: #0f172a;
+	}
+
+	.row {
+		box-sizing: border-box;
+		width: 380px;
+		padding: 8px;
+		border: 1px solid #334155;
+		background: #e2e8f0;
+		display: flex;
+	}
+	.fill {
+		box-sizing: border-box;
+		background: #dbeafe;
+		display: block;
+		width: 100%;
+	}
+
+</style>
+</head>
+<body data-id="root">
+
+	<div class="row" data-id="row-12"><span class="fill" data-id="span-12" style="font-size: 12px">Twelve point text</span></div>
+	<div class="row" data-id="row-13"><span class="fill" data-id="span-13" style="font-size: 13px">Thirteen point text</span></div>
+	<div class="row" data-id="row-16"><span class="fill" data-id="span-16" style="font-size: 16px">Sixteen point text</span></div>
+	<div class="row" data-id="row-24"><span class="fill" data-id="span-24" style="font-size: 24px">Twenty-four</span></div>
+	<div class="row" data-id="row-48"><span class="fill" data-id="span-48" style="font-size: 48px">Forty-eight</span></div>
+	<div class="row" data-id="row-wrap"><span class="fill" data-id="span-wrap" style="font-size: 16px">consequences determination possibilities extraordinary architecture mathematics</span></div>
+	<div class="row" data-id="row-mixed"><span class="fill" data-id="span-mixed" style="font-size: 16px">one <span style="font-size: 24px">BIG</span> tail</span></div>
+	<div class="row" data-id="row-ratio"><span class="fill" data-id="span-ratio" style="font-size: 16px; line-height: 1.5">Explicit ratio 1.5</span></div>
+
+</body>
+</html>

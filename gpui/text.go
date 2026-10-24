@@ -44,7 +44,13 @@ package gpui
 // height is the golden ratio times the font size
 // (TextStyle::default().line_height = phi() = relative(GOLDEN_RATIO),
 // crates/gpui/src/style.rs line 657; phi() at geometry.rs line 3833):
-// DefaultLineHeight records that exact f32 factor.
+// DefaultLineHeight records that exact f32 factor. Browser-parity D1:
+// the PORT's default text style carries the CSS `normal` keyword
+// instead (div.go DefaultTextStyle, DefiniteLengthNormal), resolved
+// from the resolved font's metrics (FontMetrics.LineSpacingPx, the
+// lroundf(ascent)+lroundf(descent)+lroundf(line gap) rule of
+// Chromium's FontMetrics::LineSpacing); the golden ratio is the
+// opt-in (PhiLineHeight).
 //
 // Handle lifecycle: shaping handles are native resources that do not
 // follow Go garbage collection. A WrappedLine holds its native handle
@@ -84,10 +90,33 @@ import (
 // untyped constant rounds to the same nearest f32 Rust's constant holds.
 const goldenRatio float32 = 1.6180339887498948482045868343656
 
-// DefaultLineHeight returns the reference text style's default line
-// height for a font size: the golden ratio times the size, in f32
-// arithmetic (px(font_size * GOLDEN_RATIO) — the exact pinned
-// derivation, e.g. 16px -> 25.888544f32, bits 0x41CF1BBD).
+// NormalLineHeight returns the CSS `normal` line height (browser-parity
+// spec D1): the text style's default since the port adopted the browser
+// rule — DefiniteLength{Kind: DefiniteLengthNormal}. Pass it to
+// Styled.LineHeight (or set TextStyle.LineHeight) to opt back in after
+// an explicit value; the resolution computes it from the resolved font's
+// metrics (FontMetrics.LineSpacingPx).
+func NormalLineHeight() DefiniteLength {
+	return DefiniteLength{Kind: DefiniteLengthNormal}
+}
+
+// PhiLineHeight returns the golden-ratio relative line height — the
+// pinned reference's default, and the port's default before D1 made CSS
+// `normal` the default. The opt-in for apps and components that want the
+// reference look: DefiniteLength{Kind: DefiniteLengthFraction, Value:
+// goldenRatio} (16px -> 25.888544f32, bits 0x41CF1BBD, the same f32
+// DefaultLineHeight derives).
+func PhiLineHeight() DefiniteLength {
+	return DefiniteLength{Kind: DefiniteLengthFraction, Value: goldenRatio}
+}
+
+// DefaultLineHeight returns the golden-ratio line height for a font
+// size: phi × the size, in f32 arithmetic (px(font_size *
+// GOLDEN_RATIO) — the exact pinned derivation, e.g. 16px ->
+// 25.888544f32, bits 0x41CF1BBD). This is the PIN's default line
+// height; the port's default is CSS `normal` since browser-parity D1
+// (NormalLineHeight), so this is the opt-in derivation for the
+// reference look — PhiLineHeight is the style-value form.
 func DefaultLineHeight(fontSize float32) float32 {
 	return fontSize * goldenRatio
 }
@@ -353,6 +382,35 @@ func (m FontMetrics) DescentPx(fontSize float32) float32 {
 // XHeightPx scales the x-height to a font size (FontMetrics::x_height).
 func (m FontMetrics) XHeightPx(fontSize float32) float32 {
 	return (m.XHeight / float32(m.UnitsPerEm)) * fontSize
+}
+
+// LineSpacingPx scales the font's line spacing to a font size — the CSS
+// `normal` line height, Chromium's FontMetrics::LineSpacing derivation
+// (third_party/blink/renderer/platform/fonts/simple_font_data.cc:
+// PlatformInit, lines 158-165: SetLineSpacing(lroundf(ascent) +
+// lroundf(descent) + lroundf(line_gap)), where ascent/descent are the
+// already-rounded Windows metrics of font_metrics.cc:113-114
+// AscentDescentWithHacks — SkScalarRoundToScalar of the scaled hhea
+// values). Each term is the design-unit metric scaled to the size
+// first, then rounded half away from zero (lroundf); the sum is a whole
+// pixel value by construction (Segoe UI 16px: round(17.2656) +
+// round(4.0156) + round(0) = 17 + 4 + 0 = 21, Chrome's used line-height
+// for `normal`, ComputedStyle::ComputedLineHeight, computed_style.cc:
+// 2425-2436).
+func (m FontMetrics) LineSpacingPx(fontSize float32) float32 {
+	if m.UnitsPerEm == 0 {
+		return 0
+	}
+	ascent := roundToNearest((m.Ascent / float32(m.UnitsPerEm)) * fontSize)
+	descent := roundToNearest((m.Descent / float32(m.UnitsPerEm)) * fontSize)
+	lineGap := roundToNearest((m.LineGap / float32(m.UnitsPerEm)) * fontSize)
+	return ascent + descent + lineGap
+}
+
+// roundToNearest rounds v to the nearest whole value, halves away from
+// zero (C's lroundf, the rounding of Chromium's line-spacing sum).
+func roundToNearest(v float32) float32 {
+	return float32(math.Round(float64(v)))
 }
 
 // ---------------------------------------------------------------------------
@@ -630,6 +688,26 @@ func (ts *TextSystem) FontMetrics(fontID FontID) (FontMetrics, error) {
 	}
 	ts.raster.storeFontMetrics(fontID, metrics)
 	return metrics, nil
+}
+
+// NormalLineHeight returns the CSS `normal` line height of a descriptor
+// at a font size (browser-parity spec D1): the resolved font's line
+// spacing, FontMetrics.LineSpacingPx — the rounded ascent, descent and
+// line gap scaled to the size, the value ComputedStyle::ComputedLineHeight
+// uses for `line-height: normal` (Chromium computed_style.cc:2425-2436,
+// LineSpacing from simple_font_data.cc:158-165). An unresolvable
+// descriptor still answers through the pinned fallback chain, like
+// ResolveFont; the error is reserved for a text-system failure.
+func (ts *TextSystem) NormalLineHeight(font FontDescriptor, fontSize float32) (float32, error) {
+	identity, err := ts.ResolveFont(font)
+	if err != nil {
+		return 0, err
+	}
+	metrics, err := ts.FontMetrics(identity.FontID)
+	if err != nil {
+		return 0, err
+	}
+	return metrics.LineSpacingPx(fontSize), nil
 }
 
 // ---------------------------------------------------------------------------

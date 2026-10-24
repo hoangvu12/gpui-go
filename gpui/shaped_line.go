@@ -90,6 +90,22 @@ func (t *WindowTextSystem) seam() (windowTextSystem, error) {
 	return ds.text, nil
 }
 
+// NormalLineHeight returns the CSS `normal` line height of a
+// descriptor at a font size (browser-parity spec D1): the resolved
+// font's line spacing — rounded ascent, descent and line gap scaled to
+// the size (FontMetrics.LineSpacingPx), Chromium's
+// ComputedStyle::ComputedLineHeight value for `line-height: normal`
+// (computed_style.cc:2425-2436). Like the rest of this handle it uses
+// the in-flight frame's text system during a draw and the window's own
+// otherwise.
+func (t *WindowTextSystem) NormalLineHeight(font FontDescriptor, fontSize float32) (float32, error) {
+	seam, err := t.seam()
+	if err != nil {
+		return 0, fmt.Errorf("gpui: WindowTextSystem.NormalLineHeight: %w", err)
+	}
+	return seam.normalLineHeight(font, fontSize), nil
+}
+
 // ShapeLine shapes one line of text at a font size with the given
 // style runs for painting (legacy text_system.rs:430-469 shape_line):
 // the runs must exactly cover the text on UTF-8 character boundaries,

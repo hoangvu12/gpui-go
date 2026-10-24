@@ -50,6 +50,7 @@ package gpui
 
 import (
 	"fmt"
+	"math"
 	"sort"
 )
 
@@ -76,6 +77,17 @@ func (r *realWindowTextSystem) inlineMetrics(font FontDescriptor, fontSize float
 		Descent: metrics.DescentPx(fontSize),
 		XHeight: metrics.XHeightPx(fontSize),
 	}
+}
+
+// normalLineHeight implements windowTextSystem (browser-parity D1):
+// the resolved font's line spacing; a failure answers the pin's
+// golden-ratio default so rows keep a sane height.
+func (r *realWindowTextSystem) normalLineHeight(font FontDescriptor, fontSize float32) float32 {
+	lineHeight, err := r.system.NormalLineHeight(font, fontSize)
+	if err != nil {
+		return DefaultLineHeight(fontSize)
+	}
+	return lineHeight
 }
 
 // glyphForChar implements windowTextSystem: resolve the descriptor,
@@ -153,11 +165,18 @@ func (s *realShapedText) selectionRects(start, end int, lineHeight float32) []Te
 // style-range boundaries: its document slice, covering runs, font size
 // and line height.
 type inlineSegment struct {
-	text       string
-	byteStart  int
-	runs       []TextRun
-	fontSize   float32
+	text      string
+	byteStart int
+	runs      []TextRun
+	fontSize  float32
+	// lineHeight is the segment's resolved line height (its style
+	// range's, else the request's).
 	lineHeight float32
+	// lineHeightNormal reports that lineHeight is the CSS `normal`
+	// derivation (browser-parity D1): the row bounds of the segment's
+	// pieces round the font metrics (inline_real.go's row-geometry
+	// loop) instead of the symmetric fractional half leading.
+	lineHeightNormal bool
 	// tabSizeSpaces is the browser tab-size when the segment's
 	// white-space mode preserves tabs (browser-core 38); nil keeps the
 	// pin's DirectWrite stops.
@@ -275,14 +294,15 @@ func (r *realWindowTextSystem) layoutInline(request inlineLayoutRequest) (inline
 			if fits || row.width == 0 {
 				pieceIndex := len(pieces)
 				pieces = append(pieces, inlinePaintPiece{
-					row:        len(rows) - 1,
-					x:          row.width,
-					advance:    lineAdvance,
-					byteStart:  segment.byteStart + segOffset,
-					byteEnd:    segment.byteStart + len(segment.text),
-					shaped:     shaped,
-					lineIndex:  0,
-					lineHeight: segment.lineHeight,
+					row:              len(rows) - 1,
+					x:                row.width,
+					advance:          lineAdvance,
+					byteStart:        segment.byteStart + segOffset,
+					byteEnd:          segment.byteStart + len(segment.text),
+					shaped:           shaped,
+					lineIndex:        0,
+					lineHeight:       segment.lineHeight,
+					lineHeightNormal: segment.lineHeightNormal,
 				})
 				row.pieceIndices = append(row.pieceIndices, pieceIndex)
 				row.width += lineAdvance
@@ -299,14 +319,15 @@ func (r *realWindowTextSystem) layoutInline(request inlineLayoutRequest) (inline
 		row := currentRow()
 		pieceIndex := len(pieces)
 		pieces = append(pieces, inlinePaintPiece{
-			row:        len(rows) - 1,
-			x:          row.width,
-			advance:    lineAdvance,
-			byteStart:  segment.byteStart + segOffset,
-			byteEnd:    segment.byteStart + segOffset + (lineEnd - lineStart),
-			shaped:     shaped,
-			lineIndex:  0,
-			lineHeight: segment.lineHeight,
+			row:              len(rows) - 1,
+			x:                row.width,
+			advance:          lineAdvance,
+			byteStart:        segment.byteStart + segOffset,
+			byteEnd:          segment.byteStart + segOffset + (lineEnd - lineStart),
+			shaped:           shaped,
+			lineIndex:        0,
+			lineHeight:       segment.lineHeight,
+			lineHeightNormal: segment.lineHeightNormal,
 		})
 		row.pieceIndices = append(row.pieceIndices, pieceIndex)
 		row.width += lineAdvance
@@ -370,11 +391,42 @@ func (r *realWindowTextSystem) layoutInline(request inlineLayoutRequest) (inline
 		lines[rowIndex].Baseline = request.lineHeight
 
 		top, bottom := baseInlineLineBounds(request.textMetrics, request.lineHeight)
+		if request.lineHeightNormal {
+			// D1 (browser-parity): the paragraph's own line height is the
+			// CSS `normal` derivation, so the strut's text bounds are the
+			// font's ROUNDED metrics — Chrome's line box for normal is the
+			// font's line spacing with the rounded ascent above and rounded
+			// descent below the baseline (FixedAscent/FixedDescent of
+			// font_metrics.h:96-98, united into the line's text metrics by
+			// inline_box_state.cc:113-158), not the fractional scaled
+			// metrics with the symmetric half leading.
+			roundedTop, roundedBottom := roundedInlineLineBounds(request.textMetrics, request.lineHeight)
+			top, bottom = roundedTop, roundedBottom
+		}
 		metrics := request.textMetrics
 		for _, pieceIndex := range row.pieceIndices {
 			piece := pieces[pieceIndex]
 			ascent := piece.shaped.ascent()
 			descent := piece.shaped.descent()
+			if piece.lineHeightNormal {
+				// D1: a normal piece's row bounds come from its font's
+				// rounded metrics with Chrome's leading split — the ascent
+				// side floored, the remainder below (CalculateLeadingSpace,
+				// core/layout/inline/line_utils.cc:34-43): the piece
+				// contributes exactly its font's line spacing, so a row of
+				// normal text is line-spacing tall with the rounded ascent
+				// above the baseline (Segoe UI 16px: [-17, +4], height 21).
+				roundedAscent := roundToNearest(ascent)
+				roundedDescent := roundToNearest(descent)
+				leading := piece.lineHeight - roundedAscent - roundedDescent
+				ascentLeading := float32(math.Floor(float64(leading / 2)))
+				descentLeading := leading - ascentLeading
+				top = min32(top, -roundedAscent-ascentLeading)
+				bottom = max32(bottom, roundedDescent+descentLeading)
+				metrics.Ascent = max32(metrics.Ascent, roundedAscent)
+				metrics.Descent = max32(metrics.Descent, roundedDescent)
+				continue
+			}
 			halfLeading := maxZero32((piece.lineHeight - ascent - descent) / 2)
 			top = min32(top, -ascent-halfLeading)
 			bottom = max32(bottom, descent+halfLeading)
@@ -525,22 +577,25 @@ func splitInlineSegments(request inlineLayoutRequest) []inlineSegment {
 			continue
 		}
 		fontSize, lineHeight := request.fontSize, request.lineHeight
+		lineHeightNormal := request.lineHeightNormal
 		var tabSizeSpaces *uint32
 		for _, style := range request.textStyles {
 			if style.Range.Start <= start && end <= style.Range.End && style.Range.Start != style.Range.End {
 				fontSize = style.FontSize
 				lineHeight = style.LineHeight
+				lineHeightNormal = style.LineHeightNormal
 				tabSizeSpaces = whiteSpaceTabSize(style.WhiteSpace)
 				break
 			}
 		}
 		segments = append(segments, inlineSegment{
-			text:          request.text[start:end],
-			byteStart:     start,
-			runs:          sliceInlineRuns(request.runs, start, end),
-			fontSize:      fontSize,
-			lineHeight:    lineHeight,
-			tabSizeSpaces: tabSizeSpaces,
+			text:             request.text[start:end],
+			byteStart:        start,
+			runs:             sliceInlineRuns(request.runs, start, end),
+			fontSize:         fontSize,
+			lineHeight:       lineHeight,
+			lineHeightNormal: lineHeightNormal,
+			tabSizeSpaces:    tabSizeSpaces,
 		})
 	}
 	return segments

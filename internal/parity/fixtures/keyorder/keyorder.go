@@ -386,6 +386,11 @@ func TabView(prevent bool) func(log *parity.EventLog, w *gpui.Window, app *gpui.
 			Flex().
 			FlexCol().
 			Bg(gpui.Rgb(pageBackground)).
+			// The page pins the reference's 1.618 line height (body font
+			// 16px/1.618); the port's default is CSS normal since
+			// browser-parity D1, so the golden-ratio opt-in keeps the
+			// recorded text placement.
+			LineHeight(gpui.PhiLineHeight()).
 			OnClick(log.Click("root")).
 			OnKeyDown(rootKeyDown).
 			OnKeyUp(log.KeyUp("root"))
@@ -515,6 +520,11 @@ func ScrollView(prevent bool) func(log *parity.EventLog, w *gpui.Window, app *gp
 			Flex().
 			FlexCol().
 			Bg(gpui.Rgb(pageBackground)).
+			// The page pins the reference's 1.618 line height (body font
+			// 16px/1.618); the port's default is CSS normal since
+			// browser-parity D1, so the golden-ratio opt-in keeps the
+			// recorded text placement.
+			LineHeight(gpui.PhiLineHeight()).
 			OnClick(log.Click("root")).
 			OnKeyDown(rootKeyDown).
 			OnKeyUp(log.KeyUp("root"))
@@ -647,6 +657,11 @@ func ActivateView(prevent bool) func(log *parity.EventLog, w *gpui.Window, app *
 			Flex().
 			FlexCol().
 			Bg(gpui.Rgb(pageBackground)).
+			// The page pins the reference's 1.618 line height (body font
+			// 16px/1.618); the port's default is CSS normal since
+			// browser-parity D1, so the golden-ratio opt-in keeps the
+			// recorded text placement.
+			LineHeight(gpui.PhiLineHeight()).
 			OnKeyDown(rootKeyDown).
 			OnKeyUp(log.KeyUp("root"))
 		button := gpui.Div().
@@ -748,6 +763,11 @@ func BindingOrderView(browserOrder bool) func(log *parity.EventLog, w *gpui.Wind
 			Flex().
 			FlexCol().
 			Bg(gpui.Rgb(pageBackground)).
+			// The page pins the reference's 1.618 line height (body font
+			// 16px/1.618); the port's default is CSS normal since
+			// browser-parity D1, so the golden-ratio opt-in keeps the
+			// recorded text placement.
+			LineHeight(gpui.PhiLineHeight()).
 			OnClick(log.Click("root")).
 			OnKeyDown(log.KeyDown("root")).
 			OnKeyUp(log.KeyUp("root")).

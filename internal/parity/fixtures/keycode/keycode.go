@@ -235,6 +235,11 @@ func ShiftedView() func(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpu
 			Flex().
 			FlexCol().
 			Bg(gpui.Rgb(pageBackground)).
+			// The page pins the reference's 1.618 line height (body font
+			// 16px/1.618); the port's default is CSS normal since
+			// browser-parity D1, so the golden-ratio opt-in keeps the
+			// recorded text placement.
+			LineHeight(gpui.PhiLineHeight()).
 			OnClick(log.Click("root")).
 			OnKeyDown(log.KeyDown("root")).
 			OnKeyUp(log.KeyUp("root"))
@@ -291,6 +296,9 @@ func BindingView(spelling string) func(log *parity.EventLog, w *gpui.Window, app
 			Flex().
 			FlexCol().
 			Bg(gpui.Rgb(pageBackground)).
+			// The page's 1.618 line-height pin, mirrored (D1: the port's
+			// default is CSS normal; PhiLineHeight is the opt-in).
+			LineHeight(gpui.PhiLineHeight()).
 			OnClick(log.Click("root")).
 			OnKeyDown(log.KeyDown("root")).
 			OnKeyUp(log.KeyUp("root")).

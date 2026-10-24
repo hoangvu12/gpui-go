@@ -101,8 +101,9 @@ type TextStyle struct {
 	FontFallbacks []string
 	// FontSize is the font size in pixels or rems (1rem by default).
 	FontSize AbsoluteLength
-	// LineHeight is the line height in pixels, rems or a relative
-	// fraction (the golden ratio by default).
+	// LineHeight is the line height in pixels, rems, a relative
+	// fraction, or the CSS `normal` keyword (the default; D1). See
+	// LineHeightPixels and ResolveLineHeight.
 	LineHeight DefiniteLength
 	// FontWeight is the font weight (400 by default).
 	FontWeight float32
@@ -144,9 +145,12 @@ type TextStyle struct {
 }
 
 // DefaultTextStyle returns the reference TextStyle::default()
-// (style.rs:648-671): black text, the system UI font at 1rem, the
-// golden-ratio line height, normal weight and style, left-aligned
-// normal white space, and every optional field None.
+// (style.rs:648-671): black text, the system UI font at 1rem, the line
+// height CSS `normal` (browser-parity spec D1 — the font-metrics
+// derivation the text system resolves; the pinned reference keeps
+// golden-ratio phi here, PhiLineHeight is the port's opt-in for that
+// look), normal weight and style, left-aligned normal white space, and
+// every optional field None.
 func DefaultTextStyle() TextStyle {
 	return TextStyle{
 		Color:      Hsla{H: 0, S: 0, L: 0, A: 1},
@@ -154,7 +158,7 @@ func DefaultTextStyle() TextStyle {
 		FontWeight: DefaultFontWeight,
 		FontStyle:  FontStyleNormal,
 		FontSize:   RemsOf(1),
-		LineHeight: DefiniteLength{Kind: DefiniteLengthFraction, Value: goldenRatio},
+		LineHeight: NormalLineHeight(),
 		TextAlign:  TextAlignLeft,
 		WhiteSpace: WhiteSpaceNormal,
 	}
@@ -283,16 +287,69 @@ func (t TextStyle) FontSizePixels(rem float32) float32 {
 
 // LineHeightPixels resolves the line height against the font size and
 // rem size (DefiniteLength::to_pixels: pixels pass through, rems resolve
-// through the rem size, fractions scale the font size).
+// through the rem size, fractions scale the font size). The CSS `normal`
+// keyword — the default since browser-parity D1 — has no answer here:
+// it derives from the resolved font's metrics, which a pure style value
+// cannot see. ResolveLineHeight (and Window.LineHeight) resolve it
+// through the text system; this method panics on it so a caller cannot
+// silently draw with a fabricated number.
 func (t TextStyle) LineHeightPixels(fontSize, rem float32) float32 {
 	switch t.LineHeight.Kind {
 	case DefiniteLengthPx:
 		return t.LineHeight.Value
 	case DefiniteLengthRem:
 		return t.LineHeight.Value * rem
+	case DefiniteLengthNormal:
+		panic("gpui: TextStyle.LineHeightPixels cannot resolve the CSS normal line height (it derives from the font's metrics); use gpui.ResolveLineHeight or Window.LineHeight")
 	default:
 		return fontSize * t.LineHeight.Value
 	}
+}
+
+// ResolveLineHeight resolves a text style's line height in logical
+// pixels against a window (browser-parity spec D1): a definite length
+// resolves through the style's font size, the window's rem size and the
+// pixel snap (LineHeightPixels), and the CSS `normal` keyword — the
+// default text style's value — through the font-metrics rule: the
+// resolved font's line spacing (rounded ascent + rounded descent +
+// rounded line gap at the resolved font size, FontMetrics.LineSpacingPx,
+// Chromium simple_font_data.cc:158-165 used for `normal` by
+// ComputedStyle::ComputedLineHeight, computed_style.cc:2425-2436).
+// The window's own text seam answers, so a deterministic test window
+// resolves through its modeled font exactly like a real window resolves
+// through the native stack.
+func ResolveLineHeight(w *Window, style TextStyle) float32 {
+	if w == nil {
+		panic("gpui: ResolveLineHeight requires a live window")
+	}
+	rem := RemSize(w)
+	fontSize := style.FontSizePixels(rem)
+	if style.LineHeight.Kind == DefiniteLengthNormal {
+		lineHeight, err := w.TextSystem().NormalLineHeight(style.FontDescriptorOf(), fontSize)
+		if err != nil {
+			// Outside a frame the window may have no text system yet; the
+			// pin's golden-ratio default answers so the value stays usable
+			// (the font-metrics path needs the native stack).
+			return DefaultLineHeight(fontSize)
+		}
+		return lineHeight
+	}
+	return PixelSnap(w, style.LineHeightPixels(fontSize, rem))
+}
+
+// resolveStyleLineHeight resolves the style's line height in logical
+// pixels inside a frame (the four layout entry points call it with
+// their already-resolved font size and rem), reporting whether the
+// value came from the CSS `normal` rule: the inline line-bounds
+// computation needs to know (a normal row's text bounds come from the
+// font's rounded metrics, baseInlineLineBounds' callers in
+// inline_real.go), while a definite length keeps the pin's fractional
+// metrics with the symmetric half leading.
+func resolveStyleLineHeight(w *Window, style TextStyle, fontSize, rem float32) (lineHeight float32, normal bool) {
+	if style.LineHeight.Kind == DefiniteLengthNormal {
+		return frameTextSystem(w).normalLineHeight(style.FontDescriptorOf(), fontSize), true
+	}
+	return PixelSnap(w, style.LineHeightPixels(fontSize, rem)), false
 }
 
 // resolveLetterSpacing folds the style's letter spacing into pixels
@@ -362,6 +419,13 @@ type windowTextSystem interface {
 	// font size for an inline container's base font (the reference
 	// WindowTextSystem::ascent / descent / x_height).
 	inlineMetrics(font FontDescriptor, fontSize float32) InlineTextMetrics
+	// normalLineHeight returns the CSS `normal` line height of one
+	// descriptor at a font size (browser-parity D1): the resolved font's
+	// line spacing (FontMetrics.LineSpacingPx, the rounded ascent,
+	// descent and line gap). A resolution failure falls back to the
+	// pin's golden-ratio default (DefaultLineHeight) so a layout never
+	// collapses to zero-height rows.
+	normalLineHeight(font FontDescriptor, fontSize float32) float32
 	// glyphForChar maps one character to its nominal glyph id in the
 	// font a descriptor resolves to (the public TextSystem::GlyphForChar
 	// over ResolveFont): the CSS ellipsis fallback ("…" → "...") reads
@@ -571,6 +635,11 @@ type stringLayoutState struct {
 	layoutID LayoutID
 	// lineHeight is the pixel-snapped resolved line height.
 	lineHeight float32
+	// lineHeightNormal reports that lineHeight is the CSS `normal`
+	// derivation (browser-parity D1) — the font's line spacing, not a
+	// definite length. The published inline content carries it so a
+	// parent paragraph's row bounds use the font's rounded metrics.
+	lineHeightNormal bool
 	// cell is the shared shaped-document cache written by the measure
 	// closure during layout compute.
 	cell *shapedCell
@@ -670,10 +739,10 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 	textStyle := WindowTextStyle(w)
 	rem := RemSize(w)
 	fontSize := textStyle.FontSizePixels(rem)
-	lineHeight := PixelSnap(w, textStyle.LineHeightPixels(fontSize, rem))
+	lineHeight, lineHeightNormal := resolveStyleLineHeight(w, textStyle, fontSize, rem)
 
 	cell := &shapedCell{}
-	state := stringLayoutState{lineHeight: lineHeight, fontSize: fontSize, cell: cell}
+	state := stringLayoutState{lineHeight: lineHeight, lineHeightNormal: lineHeightNormal, fontSize: fontSize, cell: cell}
 	// The pinned TextLayout::layout applies the style's text-transform
 	// before shaping (elements/text.rs:895): the shaped document and the
 	// published inline content carry the transformed text (byte length
@@ -798,12 +867,13 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 	// included (TextStyle::to_run, elements/text.rs:903-915), so a nested
 	// inline span's own color and decorations survive the paragraph.
 	publishInlineContent(w, layoutID, &inlineTextContent{
-		text:        text,
-		runs:        []TextRun{textStyle.ToRunAt(len(text), fontSize)},
-		fontSize:    fontSize,
-		lineHeight:  lineHeight,
-		whiteSpace:  textStyle.WhiteSpace,
-		paintStyled: true,
+		text:             text,
+		runs:             []TextRun{textStyle.ToRunAt(len(text), fontSize)},
+		fontSize:         fontSize,
+		lineHeight:       lineHeight,
+		lineHeightNormal: lineHeightNormal,
+		whiteSpace:       textStyle.WhiteSpace,
+		paintStyled:      true,
 	})
 	return layoutID, state
 }

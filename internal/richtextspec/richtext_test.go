@@ -428,8 +428,11 @@ func quadsColored(t *testing.T, scene *gpui.Scene, color gpui.Hsla) []gpui.Quad 
 // on the deterministic test window and pins the per-run background,
 // underline and strikethrough records (R:text_system/line.rs:421-464 per
 // fragment; the port per run rectangle). Geometry at scale 2, 16px:
-// em 9.6, line height pixel_snap(16 * phi) = 26, ascent 16.4, descent
-// -4.4, baseline 23.4; underline 1px below the baseline (Chrome's max(1, ceil(thickness/2))
+// em 9.6, line height CSS `normal` (browser-parity D1) = round(16.4) +
+// round(4.4) + 0 = 20 (the modeled face's rounded metrics), ascent
+// 16.4, descent -4.4, baseline 20.4 (the test system's half-leading
+// derivation over the modeled metrics: (20 - 12)/2 + 16.4); underline
+// 1px below the baseline (Chrome's max(1, ceil(thickness/2))
 // offset, browser-core 06's recorded divergence from the pin's
 // baseline + descent * 0.618) and the derived strikethrough at baseline - ascent * 0.5 (rich_paint.go).
 func TestStyledTextRunDecorationsTranscript(t *testing.T) {
@@ -459,8 +462,8 @@ func TestStyledTextRunDecorationsTranscript(t *testing.T) {
 			t.Errorf("%s bounds = %v, want ~(%v,%v %vx%v) logical at scale 2", what, got, x, y, w, h)
 		}
 	}
-	checkBounds("run 1 background", yellowQuads[0].Bounds, 0, 0, 28.8, 26)
-	checkBounds("run 3 background", grayQuads[0].Bounds, 57.6, 0, 28.8, 26)
+	checkBounds("run 1 background", yellowQuads[0].Bounds, 0, 0, 28.8, 20)
+	checkBounds("run 3 background", grayQuads[0].Bounds, 57.6, 0, 28.8, 20)
 
 	// Decorations: the run-2 underline and the run-3 strikethrough, each
 	// over its run's extent, colored by its run.
@@ -483,7 +486,7 @@ func TestStyledTextRunDecorationsTranscript(t *testing.T) {
 	if under == nil || strike == nil {
 		t.Fatalf("decoration colors = %+v, want the run colors green (underline) and blue (strikethrough)", underlines)
 	}
-	baseline := float32(23.4)
+	baseline := float32(20.4)
 	if !near(under.Bounds.Origin.X, 28.8*scale, 1) || !near(under.Bounds.Size.Width, 28.8*scale, 1) ||
 		!near(under.Bounds.Origin.Y, (baseline+1)*scale, 1) {
 		t.Errorf("underline bounds = %v, want x 28.8, width 28.8, y baseline + 1 (Chrome's offset for a 1px underline; logical, scale 2)", under.Bounds)
@@ -510,12 +513,12 @@ func TestStyledTextLayoutGeometry(t *testing.T) {
 	if layout.Len() != 5 || layout.Text() != "hello" || layout.WrappedText() != "hello" {
 		t.Fatalf("len/text/wrapped = %d/%q/%q", layout.Len(), layout.Text(), layout.WrappedText())
 	}
-	if got := layout.LineHeight(); got != 26 {
-		t.Fatalf("line height = %v, want 26 (pixel-snapped 16 * phi at scale 2)", got)
+	if got := layout.LineHeight(); got != 20 {
+		t.Fatalf("line height = %v, want 20 (CSS normal of the modeled face: round(16.4) + round(4.4), D1)", got)
 	}
 	bounds := layout.Bounds()
-	if !near(bounds.Size.Width, 48, 1e-3) || !near(bounds.Size.Height, 26, 1e-3) {
-		t.Fatalf("bounds = %v, want 48x26", bounds)
+	if !near(bounds.Size.Width, 48, 1e-3) || !near(bounds.Size.Height, 20, 1e-3) {
+		t.Fatalf("bounds = %v, want 48x20", bounds)
 	}
 	for i, want := range []float32{0, 9.6, 19.2, 28.8, 38.4, 48} {
 		p, ok := layout.PositionForIndex(i)
@@ -609,8 +612,8 @@ func TestStyledTextMeasurementFollowsWrapWidth(t *testing.T) {
 		if layout.Len() != len(text) || layout.Text() != text {
 			t.Fatalf("width %v: len/text = %d/%q, want %d/%q", width, layout.Len(), layout.Text(), len(text), text)
 		}
-		if layout.LineHeight() != 26 {
-			t.Fatalf("width %v: line height = %v, want 26", width, layout.LineHeight())
+		if layout.LineHeight() != 20 {
+			t.Fatalf("width %v: line height = %v, want 20 (CSS normal, D1)", width, layout.LineHeight())
 		}
 		if got := layout.Bounds().Size.Width; !near(got, width, 1e-3) {
 			t.Fatalf("width %v: bounds width %v, want the stretched wrap width", width, got)

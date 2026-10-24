@@ -292,7 +292,7 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 	textStyle := WindowTextStyle(w)
 	rem := RemSize(w)
 	fontSize := textStyle.FontSizePixels(rem)
-	lineHeight := PixelSnap(w, textStyle.LineHeightPixels(fontSize, rem))
+	lineHeight, lineHeightNormal := resolveStyleLineHeight(w, textStyle, fontSize, rem)
 	lineClamp := textLineClamp(textStyle)
 	// The pinned TextLayout::layout applies the style's text-transform
 	// before shaping (elements/text.rs:895): the shaped document and the
@@ -398,11 +398,12 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 		// whole document (browser-core 38, inline.go
 		// collapseParagraphDocument), so the collapse crosses inline
 		// element boundaries.
-		text:       text,
-		runs:       runs,
-		fontSize:   fontSize,
-		lineHeight: lineHeight,
-		whiteSpace: textStyle.WhiteSpace,
+		text:             text,
+		runs:             runs,
+		fontSize:         fontSize,
+		lineHeight:       lineHeight,
+		lineHeightNormal: lineHeightNormal,
+		whiteSpace:       textStyle.WhiteSpace,
 		// The runs carry their paint styles: a parent paragraph paints
 		// them per run (Base ticket 35, inline.go paintInlineLayout).
 		paintStyled: true,

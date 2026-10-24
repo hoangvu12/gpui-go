@@ -887,3 +887,36 @@ builder), `OnDragEnter`, `OnDragOverEvent` (the pin's `OnDragOver` is the
 drag-over style), `OnDragLeave`, `OnDropEvent` (the pin's `OnDrop` is the
 value delivery) and `OnDragEnd`. `fixtures/dnd` is the fixture set
 (`dnd-across`, `dnd-drop-refused`, `dnd-escape`).
+
+Ticket 37 (the default line height is CSS `normal`, spec D1) flipped the
+default text style's line height from the reference's golden-ratio fraction to
+the CSS keyword (`gpui/style.go` `DefiniteLengthNormal`, constructed by
+`gpui.NormalLineHeight`): the resolution lives where the font is —
+`gpui.ResolveLineHeight(w, style)`, `Window.LineHeight` and the layout entry
+points of `gpui/div.go`/`inline.go`/`styled_text.go` compute the resolved
+font's line spacing, `lroundf(ascent) + lroundf(descent) + lroundf(line gap)`
+scaled to the font size (`FontMetrics.LineSpacingPx`, Chromium's
+`simple_font_data.cc` PlatformInit `SetLineSpacing` used for `normal` by
+`ComputedStyle::ComputedLineHeight`), and an inline row with a normal line
+height bounds itself from the font's ROUNDED metrics with Chrome's leading
+split — the ascent side floored (`gpui/inline.go`
+`roundedInlineLineBounds`, `line_utils.cc` `CalculateLeadingSpace`) — so a
+line-gap-less face's row is exactly its rounded ascent and descent (Segoe UI
+16px: 21, baseline 17). The golden ratio stays available as the opt-in
+(`gpui.PhiLineHeight`, `DefaultLineHeight`; the arbitrary Tailwind class
+`leading-[normal]` opts into the keyword, Tailwind's own `leading-normal`
+stays 1.5). The style value cannot resolve without the font, so
+`TextStyle.LineHeightPixels` panics on the normal kind (the reference's
+`Absolute` panics for fractions the same way) and Base's three
+`LineHeightPixels` call sites resolve through the window
+(`gpui.ResolveLineHeight`). `fixtures/lineheight` is the fixture pair
+(`lh-normal-segoe`, `lh-normal-geist` — the embedded face both sides shape,
+the page through an @font-face data URL and the replay through
+`TextSystem.AddFont`); the wrong view (the golden ratio, the port's pre-D1
+default) is the discrimination test. The fixtures whose pages pin the
+reference's 1.618 kept their records by pinning the opt-in on their views
+(tracer, tsxslots, tsxtracer, activation, contextmenu, dnd, editkeys,
+imecompose, keycode, keyorder, outline, tabnav, textpaint); tooltip-look
+dropped its pin and was re-recorded — its Tier C measured mean dropped from
+2.47 to 0.59, the closer match D1 predicts for a page that leaves the line
+height at its initial value.

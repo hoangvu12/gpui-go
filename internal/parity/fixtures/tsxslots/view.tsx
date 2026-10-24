@@ -11,7 +11,11 @@ export function App() {
 	return (
 		<div
 			id="root"
-			className="flex items-center justify-center"
+			// leading-[1.618]: the page pins the reference's 1.618 line
+			// height (body font 16px/1.618); the port's default is CSS
+			// `normal` since browser-parity D1, so the class opts into the
+			// golden ratio to draw the page's text placement.
+			className="flex items-center justify-center leading-[1.618]"
 			style={{ width: 640, height: 400, background: "#ffffff" }}
 			onMouseDown={() => logEvent("mousedown", "root")}
 			onClick={() => logEvent("click", "root")}

@@ -73,6 +73,15 @@ func (w *Window) Modifiers() Modifiers {
 // rem_size()), style.rs:719-721 rounds the result). Outside a frame the
 // text style stack is empty, so the default text style and the window's
 // rem size apply, like the reference between draws.
+//
+// The CSS `normal` keyword — the default text style's value since
+// browser-parity D1 — resolves through the window's text system: the
+// resolved font's line spacing, the rounded ascent + rounded descent +
+// rounded line gap (FontMetrics.LineSpacingPx, Chromium's
+// ComputedStyle::ComputedLineHeight for normal, computed_style.cc:
+// 2425-2436), already a whole pixel value. A window without its text
+// system yet (outside a frame, before any draw) answers the pin's
+// golden-ratio default, the reference behavior.
 func (w *Window) LineHeight() float32 {
 	if w == nil {
 		panic("gpui: LineHeight requires a live window")
@@ -85,6 +94,13 @@ func (w *Window) LineHeight() float32 {
 		rem = ds.frame.rem
 	}
 	fontSize := style.FontSizePixels(rem)
+	if style.LineHeight.Kind == DefiniteLengthNormal {
+		lineHeight, err := w.TextSystem().NormalLineHeight(style.FontDescriptorOf(), fontSize)
+		if err != nil {
+			return DefaultLineHeight(fontSize)
+		}
+		return lineHeight
+	}
 	return float32(math.Round(float64(style.LineHeightPixels(fontSize, rem))))
 }
 
