@@ -54,6 +54,11 @@ type elementScroll struct {
 	// scroll_anchor.go): the same persistent cell the offset lives in —
 	// the handle's state or the element state's.
 	anchor *scrollAnchorState
+	// smooth is the scroller's smooth-scroll animator (browser-core 45,
+	// scroll_smooth.go): the same persistent cell the offset lives in,
+	// so the wheel, keyboard and programmatic paths share one animation
+	// per scroller like Chromium's per-ScrollableArea ScrollAnimator.
+	smooth **smoothScrollAnimator
 }
 
 // divScrollElementState is the scroll part of the pinned
@@ -72,6 +77,9 @@ type divScrollElementState struct {
 	// anchor is the scroll-anchoring bookkeeping (browser-core 46,
 	// scroll_anchor.go).
 	anchor scrollAnchorState
+	// animator is the scroller's smooth-scroll state (browser-core 45,
+	// scroll_smooth.go), persistent like the offset cell.
+	animator *smoothScrollAnimator
 }
 
 // baseOverflowScrolls is the pinned base_style.overflow.x/y ==
@@ -102,7 +110,7 @@ func baseOverflowAuto(base *StyleRefinement) bool {
 // then keep it honest (an auto axis with no overflow has range zero).
 func resolveElementScroll(handle *ScrollHandle, base *StyleRefinement, global *GlobalElementID, w *Window) *elementScroll {
 	if handle != nil {
-		es := &elementScroll{offset: handle.state.offset, ongoing: handle.state.ongoingScroll, handle: handle, anchor: &handle.state.anchor}
+		es := &elementScroll{offset: handle.state.offset, ongoing: handle.state.ongoingScroll, handle: handle, anchor: &handle.state.anchor, smooth: &handle.state.animator}
 		if global != nil && baseOverflowAuto(base) {
 			es.auto = withAutoScrollbarFlags(global, w)
 		}
@@ -124,7 +132,10 @@ func resolveElementScroll(handle *ScrollHandle, base *StyleRefinement, global *G
 		if slot.auto == nil && baseOverflowAuto(base) {
 			slot.auto = &divAutoScrollbarFlags{}
 		}
-		return &elementScroll{offset: slot.offset, ongoing: slot.ongoing, auto: slot.auto, anchor: &slot.anchor}, slot
+		if slot.animator == nil {
+			slot.animator = &smoothScrollAnimator{}
+		}
+		return &elementScroll{offset: slot.offset, ongoing: slot.ongoing, auto: slot.auto, anchor: &slot.anchor, smooth: &slot.animator}, slot
 	})
 }
 
@@ -182,12 +193,20 @@ func (s *elementScroll) clamp(bounds Bounds, style *Style, maxOffset Point, w *W
 	s.visible = bounds.Size
 
 	offset := s.offset
+	old := *offset
 	offset.X = clampF32(offset.X, -scrollMax.X, 0)
 	if scrollToBottom {
 		offset.Y = -scrollMax.Y
 	} else {
 		offset.Y = clampF32(offset.Y, -scrollMax.Y, 0)
 	}
+	// browser-core 45: the range correction adjusts (not cancels) a
+	// running animation (Chromium's kClamping arm, scrollable_area.cc:
+	// 372-377 — ClampScrollOffset's delta is ScrollAnimator::
+	// AdjustAnimation's adjustment), so an animation survives a clamp
+	// instead of snapping back at its next tick. Mid-animation the
+	// offset is already in range, so this is a no-op then.
+	s.smoothScrollAdjust(pointSub(*offset, old))
 
 	if s.handle != nil {
 		s.handle.state.maxOffset = scrollMax
@@ -278,6 +297,40 @@ func (s *elementScroll) paintListener(hitbox Hitbox, style *Style, w *Window) {
 		if !w.wheelScrollLatchTake(e, offset, canConsume, cuts, app) {
 			return
 		}
+		// browser-core 45 (D13): a non-precise (line or page) delta whose
+		// larger axis moves scrolls smoothly — Chromium's animated wheel
+		// path animates to clamp(current + delta)
+		// (LayerTreeHostImpl::ScrollAnimationCreate,
+		// layer_tree_host_impl.cc:4684-4722, deltas at or under 0.1px
+		// scrolling instantly) and retargets a running animation to
+		// clamp(target + delta) (ScrollOffsetAnimationImpl::
+		// ScrollAnimationUpdateTarget, scroll_offset_animations_impl.cc:
+		// 118-135). A precise delta never animates — it cancels a running
+		// animation and scrolls instantly (InputHandler::ScrollBegin's
+		// precise arm, input_handler.cc:149-161, and ShouldAnimateScroll,
+		// :2484-2492) — and so do the reduced-motion and smooth-scrolling
+		// gates (scroll_animator.cc:99-103, web_contents_impl.cc:
+		// 4042-4046).
+		if app.smoothScrollAnimated() && !e.Delta.Precise() &&
+			(abs32(deltaX) > smoothScrollCreateEpsilon || abs32(deltaY) > smoothScrollCreateEpsilon) {
+			// The base is the scroller's clamped position (Chromium's
+			// current offset is always in range), or the running
+			// animation's target (the update path).
+			base := *offset
+			base.X = clampF32(base.X, -s.maxOffset.X, 0)
+			base.Y = clampF32(base.Y, -s.maxOffset.Y, 0)
+			if an := s.animator(); an != nil && an.anim != nil {
+				base = an.anim.target
+			}
+			target := base
+			target.X = clampF32(base.X+deltaX, -s.maxOffset.X, 0)
+			target.Y = clampF32(base.Y+deltaY, -s.maxOffset.Y, 0)
+			s.animateSmoothScroll(target, smoothScrollWheel, notify, w, app)
+			return
+		}
+		// The instant path: cancel any running animation first (the
+		// precise-delta cancellation Chromium runs at ScrollBegin).
+		s.smoothScrollCancel()
 		offset.Y += deltaY
 		offset.X += deltaX
 		if *offset != old {

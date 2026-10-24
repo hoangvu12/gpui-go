@@ -222,6 +222,12 @@ type App struct {
 	// reduceMotion is the animation policy flag (the reference
 	// App.reduce_motion / set_reduce_motion, app.rs lines 1119-1128).
 	reduceMotion bool
+	// smoothScrolling is the smooth-scroll policy flag (browser-core
+	// ticket 45, spec D13 — Chromium's smooth-scrolling pref, on by
+	// default and off under reduced motion): wheel line/page deltas,
+	// keyboard scrolls and smooth programmatic scrolls animate with
+	// Chrome's curve while it is set and motion is allowed.
+	smoothScrolling bool
 	// imageCodec is the application's image decode+atlas pair the image
 	// cache retains frames in (lazily built; the first failure sticks).
 	imageCodec    *ImageCodec
@@ -265,6 +271,7 @@ func newApp(sched *scheduler) *App {
 		assetRegistry:         NewAssetRegistry(),
 		httpClient:            NullHttpClient{},
 		loadingAssets:         make(map[assetKey]*taskRun),
+		smoothScrolling:       true,
 		sched:                 sched,
 	}
 	app.rootScope = newScope(app, nil)
@@ -347,6 +354,24 @@ func (a *App) ReduceMotion() bool { return a.reduceMotion }
 func (a *App) SetReduceMotion(reduce bool) {
 	if a.reduceMotion != reduce {
 		a.reduceMotion = reduce
+		a.RefreshWindows()
+	}
+}
+
+// SmoothScrolling reports whether smooth scrolling is enabled: wheel,
+// keyboard and smooth programmatic scrolls animate (the browser-core
+// 45 pref, D13 — Chromium's smooth-scrolling pref). Reduced motion
+// still turns every scroll instant (App.MotionReduced is the gate the
+// animator honours).
+func (a *App) SmoothScrolling() bool { return a.smoothScrolling }
+
+// SetSmoothScrolling sets the smooth-scrolling flag (the browser-side
+// twin of Chrome's pref; --disable-smooth-scrolling): a change refreshes
+// the windows, and a running scroll animation adopts its target at once
+// (smoothScrollTick's gate).
+func (a *App) SetSmoothScrolling(enabled bool) {
+	if a.smoothScrolling != enabled {
+		a.smoothScrolling = enabled
 		a.RefreshWindows()
 	}
 }

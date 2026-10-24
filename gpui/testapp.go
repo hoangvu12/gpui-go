@@ -40,10 +40,13 @@ func (ta *TestApp) serveFrames() {
 	drawDirtyTestWindows(ta.app, ta.sched.run)
 }
 
-// NewTestApp creates a deterministic test application.
+// NewTestApp creates a deterministic test application. It runs with
+// smooth scrolling disabled, the recorder's Chrome shape
+// (--disable-smooth-scrolling; see WithSmoothScrolling).
 func NewTestApp() *TestApp {
 	sched := newScheduler()
 	app := newApp(sched)
+	app.smoothScrolling = false
 	return &TestApp{app: app, sched: sched}
 }
 
@@ -125,6 +128,18 @@ func (ta *TestApp) WithHTTPClient(client HttpClient) *TestApp {
 // the default palette (a host is needed to pin colours).
 func (ta *TestApp) WithSystemPreferences(prefs SystemPreferences) *TestApp {
 	ta.app.testSystemPreferences = &prefs
+	return ta
+}
+
+// WithSmoothScrolling pins the application's smooth-scrolling flag
+// (browser-core ticket 45): the deterministic test application runs
+// with smooth scrolling OFF by default — the exact analogue of the
+// recorder's Chrome (--disable-smooth-scrolling), so tests that assert
+// settled scroll offsets synchronously see the instant scrolls the
+// records were made with — and a smooth-scroll test opts in here. The
+// real application default stays ON (spec D13).
+func (ta *TestApp) WithSmoothScrolling(enabled bool) *TestApp {
+	ta.app.smoothScrolling = enabled
 	return ta
 }
 
