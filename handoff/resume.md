@@ -14,7 +14,7 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 **ORCHESTRATOR 10 STATUS (2026-10-25). Latest.** Claude Code, Opus 5.5; Roboco chat d041f254. It took over from orchestrator 9 (chat b38c2f03; handoff doc `%TEMP%\gpui-go-handoff-orchestrator10.md`). Rules: orchestrator 8's block plus the native decision above.
 - **Resolved (55 of 77):** 45 (smooth scrolling; merge e52bfd0, which dropped a duplicate `pointSub`).
-- **Running:** 73 (chat 18f60856, `gpui-go-wt-core-73`, `core/73-base-editing`; took over by a queued message).
+- **Running:** 73 (chat 18f60856, `gpui-go-wt-core-73`, `core/73-base-editing`; took over by a queued message); 37 (chat a2046e8e, `gpui-go-wt-core-37`, `core/37-line-height`); 68 (chat 90b9fdde, `gpui-go-wt-core-68`, `core/68-display-codemod`; the tool only, 69/70 apply it).
 - **Next:** 37 and 68 (repo-wide), then 69/70 → 71 → 75 → 76. Native (R16 50-61, 42/43) only after every Go-only ticket is resolved.
 
 **ORCHESTRATOR 9 STATUS (2026-10-24/25). History now.** Claude Code, Opus 5.5; Roboco chat b38c2f03. It took over from orchestrator 8 (chat 08b88b23; handoff doc `%TEMP%\gpui-go-handoff-orchestrator9.md`). The rules are those in orchestrator 8's block below, unchanged.
