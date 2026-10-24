@@ -27,7 +27,7 @@ new fixtures. The implementation lives in `internal/parity`:
   fixture's `EventKinds`; the view's handlers append to an `EventLog`. Kinds, targets,
   order (including bubble order: target first, then ancestors) and the final
   `defaultPrevented` state must match exactly. The vocabulary is `mousedown`, `mouseup`,
-  `click`, the pointer boundary events `pointerenter`/`pointerleave` (browser-core
+  `click`, `contextmenu` (browser-core ticket 17), the pointer boundary events `pointerenter`/`pointerleave` (browser-core
   ticket 10) and the pointer events `pointerdown`, `pointermove`, `pointerup`,
   `gotpointercapture` and `lostpointercapture` (browser-core ticket 11); the boundary kinds arrive
   in Chromium's order — leave events innermost
@@ -465,3 +465,53 @@ measured paths, the flex-shrink case, the long unbreakable word); its wrong view
 (`WhitespaceNowwrap` everywhere) is the pre-ticket pin. No existing fixture
 changed: they all pin fixed sizes or `flex-shrink: 0` on children that must
 overflow, so no text in them ever shrank.
+Ticket 14 (core Tab navigation, focus fixup and Inert, D4) gave the Tab default
+the HTML sequential order (`gpui/focus.go` `TabStopMap` — positive tab indexes
+ascending, then the zero bucket in tree order; a negative index is never a stop,
+and a focused excluded element's search runs in tree order, Chromium
+`focus_controller.cc:1347-1443`), the pass-out boundary (Tab past the last stop
+blurs — Chrome hands focus to the browser UI at the document scope's end, which
+headless records as the body — and the sequential focus navigation starting
+point keeps the removed element's position, `gpui/focus.go`
+`fixupFocusedElement`/`focusSearchStart`), the end-of-frame focus fixup
+(removed, hidden or inert focused elements blur, `gpui/helpers_frame.go`
+`finishFrame`), the mouse-focus default with no focusable press target
+(`gpui/mouseevent.go` `defaultMouseFocus` — the flat-tree ancestor walk of
+`HandleMouseFocus`, so an occluding popup does not eat its host's focus, and a
+press on empty space blurs), and the `Inert()` style (`gpui/div.go` — the
+subtree's registrations are suppressed, its hitboxes are skipped by the hit test
+as pointer-events: none, and its accessibility nodes are hidden; the a11y half
+is pinned by `gpui/div_a11y_test.go` `TestA11yDivInertHidesTheSubtree` since the
+harness cannot see the tree). Two pin behaviours closed with it, both recorded
+as divergences toward Chrome: key events with focus on the body now reach the
+root element's listeners (`gpui/key_dispatch.go` `focusDispatchPath`'s
+`bodyNodeID` — the pin dropped them on the tree root alone), and
+`Window.FocusNext`/`FocusPrev` no longer wrap (the pass-out blur above; Base's
+questionnaire tests pass because the fixup only answers removal, never a
+state-only handle). `fixtures/tabnav` is the fixture set, with one recorded
+quirk: a second forward pass-out from the same last element lands
+nondeterministically in headless Chrome, so `tabnav-order` steps each boundary
+exactly once.
+Ticket 17 (the contextmenu event, story 60) added `DivElement.OnContextMenu`
+(`gpui/contextmenu.go`): the right-button release dispatches a bubbling
+contextmenu after the whole up tail — the listeners, the capture release, the
+click/auxclick, the boundary settling — regardless of the click having been
+swallowed, targeted at the element under the release; the unmodified Menu key
+fires it on key UP and Shift+F10 on key DOWN (Windows' arms,
+`web_frame_widget_impl.cc:1112-1141`), after the key listeners and only when
+the event was not canceled, targeted at the focused element's chain with the
+menu position at the focused element's centre. The keyboard registration
+lives on the dispatch node (like the keyboard click) and the mouse one on the
+frame's path-keyed registrations (like the click listeners); the harness's
+`contextmenu` kind and `log.ContextMenu`/`log.ContextMenuPreventDefault`
+helpers record it. One recorder fix landed with it: a key step without text
+now sends the CDP `rawKeyDown` type (the shape a real Windows key press
+takes) instead of `keyDown` — Chrome's Shift+F10 arm requires kRawKeyDown
+(`web_frame_widget_impl.cc:1112`), so the untextured `keyDown` type never
+triggered it; the transcripts of the existing key fixtures are unchanged by
+the switch (verified by re-recording `tabnav-order`). The synthesized
+follow-up shares the triggering dispatch's default-prevented flag — the
+mouse-up's or the key-up's — so the prevented record binds only the
+`contextmenu` kind (the coarseness the activation click already documents).
+`fixtures/contextmenu` is the fixture set (mouse, menu-key, shift-f10 and the
+prevented pair whose Tab-after-menu pins "suppresses nothing else").

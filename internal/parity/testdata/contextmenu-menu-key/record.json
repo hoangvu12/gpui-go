@@ -1,0 +1,99 @@
+{
+  "name": "contextmenu-menu-key",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T08:27:25Z",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "a": {
+      "x": 0,
+      "y": 0,
+      "width": 120,
+      "height": 60
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 360
+    }
+  },
+  "events": [
+    {
+      "kind": "mousedown",
+      "target": "a",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "a",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "a",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keydown",
+      "target": "a",
+      "defaultPrevented": false,
+      "key": "ContextMenu",
+      "focus": "a",
+      "code": "ContextMenu"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "ContextMenu",
+      "focus": "a",
+      "code": "ContextMenu"
+    },
+    {
+      "kind": "keyup",
+      "target": "a",
+      "defaultPrevented": false,
+      "key": "ContextMenu",
+      "focus": "a",
+      "code": "ContextMenu"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "ContextMenu",
+      "focus": "a",
+      "code": "ContextMenu"
+    },
+    {
+      "kind": "contextmenu",
+      "target": "a",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "contextmenu",
+      "target": "root",
+      "defaultPrevented": false
+    }
+  ],
+  "screenshot": "chrome.png"
+}

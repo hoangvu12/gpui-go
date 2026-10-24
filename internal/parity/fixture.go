@@ -26,6 +26,7 @@ package parity
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/hoangvu12/gpui-go/gpui"
@@ -356,6 +357,24 @@ func (l *EventLog) Click(target string) func(*gpui.ClickEvent, *gpui.Window, *gp
 	return func(*gpui.ClickEvent, *gpui.Window, *gpui.App) { l.Append("click", target) }
 }
 
+// ContextMenu returns an OnContextMenu handler that records a
+// "contextmenu" on target (browser-core ticket 17: the DOM's menu
+// event, from the right-button release, the Menu key and Shift+F10).
+func (l *EventLog) ContextMenu(target string) func(*gpui.ContextMenuEvent, *gpui.Window, *gpui.App) {
+	return func(*gpui.ContextMenuEvent, *gpui.Window, *gpui.App) { l.Append("contextmenu", target) }
+}
+
+// ContextMenuPreventDefault returns an OnContextMenu handler that
+// records the "contextmenu" on target and prevents the default (the
+// DOM listener that calls preventDefault — the core itself suppresses
+// nothing with it, the acceptance's check).
+func (l *EventLog) ContextMenuPreventDefault(target string) func(*gpui.ContextMenuEvent, *gpui.Window, *gpui.App) {
+	return func(e *gpui.ContextMenuEvent, w *gpui.Window, app *gpui.App) {
+		l.Append("contextmenu", target)
+		w.PreventDefault()
+	}
+}
+
 // PointerEnter returns an OnPointerEnter handler that records a
 // "pointerenter" on target (browser-core ticket 10: the DOM boundary
 // events, delivered outermost-first on the entered chain).
@@ -477,6 +496,17 @@ func domKeyOf(key string) string {
 		return "Alt"
 	case "fn":
 		return "Fn"
+	case "menu":
+		// The DOM key name of the application menu key (VKEY_APPS,
+		// KeyboardEvent.key "ContextMenu" — the contextmenu trigger of
+		// browser-core ticket 17).
+		return "ContextMenu"
+	case "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10",
+		"f11", "f12":
+		// The function keys' DOM names are capitalized ("F10" —
+		// Shift+F10 is the contextmenu trigger of browser-core ticket
+		// 17).
+		return strings.ToUpper(key[:1]) + key[1:]
 	}
 	return key
 }
@@ -535,6 +565,7 @@ var eventKindVocabulary = map[string]bool{
 	"mousedown":          true,
 	"mouseup":            true,
 	"click":              true,
+	"contextmenu":        true,
 	"pointerenter":       true,
 	"pointerleave":       true,
 	"keydown":            true,

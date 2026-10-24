@@ -657,9 +657,20 @@ func cdpKeyEvents(key gpui.Keystroke) ([]map[string]any, error) {
 	for k, v := range base {
 		down[k] = v
 	}
-	down["type"] = "keyDown"
+	// The keyDown's CDP type: "keyDown" (kKeyDown, the type that carries
+	// the keypress follow-up) only when the key types a character; a key
+	// press without text is "rawKeyDown" (kRawKeyDown), the shape a real
+	// Windows key press takes (WM_KEYDOWN → kRawKeyDown; the keypress
+	// only follows for character keys). The distinction is observable:
+	// Chrome's Shift+F10 context-menu arm requires kRawKeyDown
+	// (web_frame_widget_impl.cc:1112's is_key_down), which the
+	// untextured "keyDown" type never satisfies — browser-core ticket
+	// 17's shift-f10 fixture is the case that needs it.
 	if key.KeyChar != "" && modifiers == 0 {
+		down["type"] = "keyDown"
 		down["text"] = key.KeyChar
+	} else {
+		down["type"] = "rawKeyDown"
 	}
 	// Enter needs its keypress (browser-core ticket 12): the DOM
 	// dispatches the Enter activation click from the '\r' keypress
@@ -714,7 +725,10 @@ func init() {
 	} {
 		cdpVKOfCode[pair[0].(string)] = pair[1].(uint16)
 	}
-	// The immutable names the keystroke grammar spells.
+	// The immutable names the keystroke grammar spells. ContextMenu is
+	// VKEY_APPS (0x5D, the application menu key — the contextmenu
+	// trigger of browser-core ticket 17).
+	cdpVKOfCode["ContextMenu"] = 0x5D
 	for _, pair := range [][2]any{
 		{"Enter", uint16(0x0D)}, {"Escape", uint16(0x1B)}, {"Tab", uint16(0x09)},
 		{"Backspace", uint16(0x08)}, {"Delete", uint16(0x2E)}, {"Space", uint16(0x20)},

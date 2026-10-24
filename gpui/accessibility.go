@@ -908,6 +908,16 @@ func elementA11ySpec(child any) (A11ySpec, bool) {
 	return spec, found
 }
 
+// elementIsInert reports whether the a11y wrapper's element carries
+// the inert marker (browser-core ticket 14): the div's own Inert()
+// (an inert root — its descendants are covered by the prepaint depth).
+func elementIsInert(child any) bool {
+	if inert, ok := child.(interface{ elementInert() bool }); ok {
+		return inert.elementInert()
+	}
+	return false
+}
+
 // specPublishes reports whether a spec makes a node join the tree.
 func specPublishes(spec A11ySpec, hasCompanion bool) bool {
 	if !hasCompanion {
@@ -929,6 +939,15 @@ func beginElementA11yNode[L, P any](w *Window, global *GlobalElementID, e *a11yE
 		return state, nil
 	}
 	spec, hasCompanion := elementA11ySpec(e.child)
+	// Browser-core ticket 14 (spec D4's Inert style): an inert subtree
+	// is hidden from accessibility — the node and its descendants carry
+	// the hidden flag like aria-hidden (Chromium ignores inert nodes,
+	// ax_node_object.cc:1368 ShouldIgnoreForHiddenOrInert). The
+	// element's own Inert() (the inert root) or an inert ancestor
+	// (inertPrepaintDepth, the inherited property) marks it.
+	if inertPrepaintDepth(w) > 0 || elementIsInert(e.child) {
+		spec.Hidden = true
+	}
 	if !specPublishes(spec, hasCompanion) {
 		return state, nil
 	}

@@ -1,0 +1,335 @@
+{
+  "name": "tabnav-order",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T08:20:41Z",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "n": {
+      "x": 0,
+      "y": 240,
+      "width": 120,
+      "height": 60
+    },
+    "p1": {
+      "x": 0,
+      "y": 180,
+      "width": 120,
+      "height": 60
+    },
+    "p2": {
+      "x": 0,
+      "y": 60,
+      "width": 120,
+      "height": 60
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 360
+    },
+    "z1": {
+      "x": 0,
+      "y": 120,
+      "width": 120,
+      "height": 60
+    },
+    "z2": {
+      "x": 0,
+      "y": 0,
+      "width": 120,
+      "height": 60
+    }
+  },
+  "events": [
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "p1",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "p1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "p1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "p1",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "p1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "p1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "p2",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "p2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "p2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "p2",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "p2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "p2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "z2",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "z2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "z2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "z2",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "z2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "z2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "z1",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "z1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "z1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "z1",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "z1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "z1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "z1",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "z1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "z1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "z1",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "z1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "z1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "z2",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "z2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "z2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "z2",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "z2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "z2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "p2",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "p2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "p2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "p2",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "p2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "p2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "p1",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "p1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "p1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "p1",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "p1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "p1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "code": "Tab"
+    }
+  ],
+  "screenshot": "chrome.png"
+}

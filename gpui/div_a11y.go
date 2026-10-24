@@ -493,6 +493,11 @@ func (d *DivElement) a11yNodeSpec() A11ySpec {
 // node (element.rs:106-115).
 func (e *divElement) A11ySpec() A11ySpec { return e.builder.a11yNodeSpec() }
 
+// elementInert is the a11y runtime's inert marker (browser-core ticket
+// 14; accessibility.go elementIsInert): the div's own Inert() — an
+// inert root's node is hidden from accessibility like aria-hidden.
+func (e *divElement) elementInert() bool { return e.builder.inert }
+
 // A11yActionRegistrations implements A11yActions: the div's
 // on_a11y_action listeners (registered at paint, div.rs:3086-3098).
 func (e *divElement) A11yActionRegistrations(_ *divPrepaintState) []A11yActionRegistration {

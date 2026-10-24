@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 480px;
+		height: 360px;
+		display: flex;
+		flex-direction: column;
+		font: 16px/1.618 "Segoe UI", system-ui, sans-serif;
+	}
+	#box, #a, #b {
+		box-sizing: border-box;
+		width: 120px;
+		height: 60px;
+		background: #e2e8f0;
+	}
+	#box:focus, #a:focus, #b:focus {
+		background: #22c55e;
+		outline: none;
+	}
+	#box.menued, #a.menued, #b.menued {
+		background: #f97316;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div id="a" data-id="a" tabindex="0"></div>
+	<div id="b" data-id="b" tabindex="0"></div>
+<script>
+	document.getElementById("a").addEventListener("contextmenu", function (e) {
+		this.classList.add("menued");
+		e.preventDefault();
+	});
+</script>
+</body>
+</html>

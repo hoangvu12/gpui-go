@@ -272,6 +272,12 @@ func moveDispatchNode(target *DispatchTree, source *dispatchNode) {
 	node.keyListeners = source.keyListeners
 	node.actionListeners = source.actionListeners
 	node.modifiersChangedListeners = source.modifiersChangedListeners
+	// Browser-core ticket 14: a reused suppressed node keeps its
+	// focus-suppression mark (the end-of-frame focus fixup reads it;
+	// focus.go fixupFocusedElement). Browser-core ticket 17: its
+	// contextmenu registration rides along (contextmenu.go).
+	node.focusSuppressed = source.focusSuppressed
+	node.contextMenu = source.contextMenu
 }
 
 // viewPathReversed is DispatchTree::view_path_reversed
