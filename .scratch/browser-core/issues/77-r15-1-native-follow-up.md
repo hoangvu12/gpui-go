@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 39
 Triage: ready-for-agent
@@ -26,6 +26,7 @@ Every behaviour check is a browser-parity harness fixture (an HTML page recorded
 
 ## Comments
 
+- 2026-10-24, orchestrator 8 (verification): merged db394e9 into main. The committed DLL hashes to the manifest's `ef337ad3…` (native_revision 151). The draw.rs fix is `&[*uniforms]` → `&[**uniforms]` in both arms. Tolerance changes go one way only: textpaint's gates tightened (0.75/3.7/0.05 → 0.45/1.4/0.02) because italic got closer to Chrome, and the filters/shadow-backdrop gates are new at 2x the measured values. Scope grew past the ticket: per-function colour matrices with a clamp between functions, so the filter record went from 188 to 780 bytes. The worker measured that this is required for filters-chain to match Chrome (15.47 → 0.0). That is a fair extension of acceptance item 1. With GOFLAGS=-p=4 and `go test -p 1 -count=1`, everything passes: native, fontspec, glyphspec, scenespec, textspec, layoutspec, consumerspec, parity/..., the 08 probes, gpui, base, richtextspec, authorspec, dropspec, inspectorspec, spellspec and examples/zterm. Still open: (a) the partial-region backdrop crop composite geometry (it zooms when the backdrop is smaller than the window; the fix is a crop-sized half-res ping/pong), to fold into R16; (b) word-break, overflow-wrap, locale, width, variations, optical size, justify and the baseline are blocked behind the pinned Parley adapter and Taffy seams, recorded per field in TEXT_ABI.md and LAYOUT_ABI.md, so 42/43 need a plan (likely R16 or a vendored adapter).
 - 2026-10-24, worker (core/77-r15-1): built, measured, verified. `go test -p 1 -count=1` passes on the required set (native, fontspec, glyphspec, scenespec, textspec, layoutspec, consumerspec, parity/..., the 08 probes, gpui, base, richtextspec, zterm); the only failure anywhere in the run is the known pre-existing portfixture `TestFx0004` (font count 94 vs 95, out of the required set), and `gpui TestWin32TranslateKeyDownCarriesCodeAndLocation` needed one re-run (it reads the live Shift key; it passed). `go vet ./...` clean, `gofmt -l` clean on the touched files, `go build ./...` clean. `cargo test -p gpui-go-native` still fails to compile the lib test target on the same 5 pre-existing a11y/capture errors; nothing new (this rebuild's record changes updated the scene test constructors). The revision choice (151 = the u32 encoding of 15.1) is explained in the Answer before its use.
 
 ## Answer

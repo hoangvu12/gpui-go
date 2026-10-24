@@ -7,14 +7,13 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 ## ACTIVE EFFORT (2026-10-23): recreate zgui's terminal app ("zterm") on gpui-go
 
 **ORCHESTRATOR 8 STATUS (2026-10-24). CURRENT.** Claude Code, Opus 5.5. It took over from orchestrator 7 (Roboco chat d209bee2; handoff doc `%TEMP%\gpui-go-handoff-orchestrator8.md`, which still holds the rules, the rev 15.1 list, why workers are slow, and the frontier).
-- **Resolved (25 of 76; orchestrator 7's "22" was a miscount, it was 21):** 01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 13, 25, 27, 29, 30, 31, 33, 39 (rev 15, DLL 8b944eae), 40, 41, 47, 49 (the R16 design, approved), 62, 64, 65. Each has a verification comment, and the map's Decisions list a gist of each. Orchestrator 8 verified and merged 33 (position: static opt-in), then 25 (anchored to an element). The merges had no conflicts, and the required packages pass on main.
+- **Resolved (26 of 77; orchestrator 7's "22" was a miscount, it was 21):** 01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 13, 25, 27, 29, 30, 31, 33, 77 (rev 15.1 = native revision 151, DLL ef337ad3), 39 (rev 15, DLL 8b944eae), 40, 41, 47, 49 (the R16 design, approved), 62, 64, 65. Each has a verification comment, and the map's Decisions list a gist of each. Orchestrator 8 verified and merged 33 (position: static opt-in), then 25 (anchored to an element). The merges had no conflicts, and the required packages pass on main.
 - **Known flake:** `gpui` TestWin32TranslateKeyDownCarriesCodeAndLocation reads the live Shift key, so it fails while the user types. Re-run it.
 - **Open follow-up from 33+25:** Anchored, Deferred and custom containers don't call `RequestContainerLayout`, so a `Static()` div inside them defers its absolute children past the overlay (opt-in only; for 76).
-- 29 forced colours and 30 spellcheck: merged and resolved. Watch authorspec TestRealTwoWindowCounterSharedModel (a rare reentrancy panic, seen once; then 19/19).
+- 29 forced colours, 30 spellcheck and 77 (rev 15.1) are merged and resolved. 77 left open: the partial-region backdrop crop zoom (fold into R16), and the 42/43 text fields, which are blocked behind the pinned Parley/Taffy seams (per-field plans in TEXT_ABI.md/LAYOUT_ABI.md). Watch authorspec TestRealTwoWindowCounterSharedModel (a rare reentrancy panic, seen once; then 19/19).
 - **Running (they report to this chat, 08b88b23):**
   - 12 click/activation/focus-visible: chat 10746939, worktree `gpui-go-wt-core-12`, branch `core/12-click-focus-visible`
   - 34 position: sticky: chat 4fed7233, worktree `gpui-go-wt-core-34`, branch `core/34-sticky`
-  - 77 rev 15.1 native rebuild (the user approved it on 2026-10-24: "ok try that"): chat 4a073277, worktree `gpui-go-wt-core-77`, branch `core/77-r15-1`. It covers the uniform-upload fix (unskip the filters fixtures, re-register shadow-backdrop), the italic shear set to -0.25, and the text-run fields and baseline as best effort, with each blocker recorded. Cargo runs with `-j 6`.
 - The user said the PC can take more workers ("yea go ahead"). Ramp up gradually.
 - **Rules:** as in orchestrator 7's block below and the handoff doc, with these changes from the user (2026-10-24):
   - KEEP the Go build cache. Clear it only when it passes about 40 GB (`go env GOCACHE`), because a cold cache makes every worker recompile gpui, which freezes the PC.
