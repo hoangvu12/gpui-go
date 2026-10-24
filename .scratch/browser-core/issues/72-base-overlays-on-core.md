@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 9 (Claude Code)
 Blocked by: 21, 22, 23, 24, 25
 Triage: ready-for-agent
@@ -21,6 +21,11 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-25, orchestrator 9 (verification): merged f76327b as 6c4bed1. One conflict in base/select.go: I kept 72's picker close watcher together with 20's `SelectNone()` on the trigger. The full broad batch set passed on the merged tree except:
+  - spellspec `TestSpellcheckCheckNeverBlocksTheUIThread` (a load-timing gap); it passed 3/3 on re-run and as a whole package.
+  - clipspec `TestClipboardPowerShellNativeInterop`: the OS clipboard was held by another process, and a plain `Set-Clipboard` from PowerShell failed the same way, so it's environmental.
+  The diff also fixes a core bug: `finishOverlayFrame` never reset `registered`, so unmounted overlays stayed in the top layer forever. Behaviour changes (backdrop press now reports Cancel, as in the DOM; the focusing steps only see focusables with element IDs) are listed in the Answer. Resolved.
 
 ## Answer
 
