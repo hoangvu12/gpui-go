@@ -79,6 +79,9 @@ func formatEvent(e EventRecord) string {
 	if e.DefaultPrevented {
 		prevented = " (defaultPrevented)"
 	}
+	if e.Kind == "toggle" && e.State != "" {
+		return fmt.Sprintf("%s:%s %s%s", e.Kind, e.Target, e.State, prevented)
+	}
 	// The key and composition fields ride along readably (browser-core
 	// tickets 13 and 18): a key entry that differs only in isComposing,
 	// or a composition entry that differs only in data, names it.

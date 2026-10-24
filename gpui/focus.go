@@ -152,6 +152,13 @@ type renderedFrame struct {
 	// at paint — the mouse trigger's dispatch (the right-button up)
 	// resolves the release chain by those keys.
 	contextMenuListeners []contextMenuRegistration
+	// overlayRegistrations are the frame's top-layer entries
+	// (browser-core ticket 21, toplayer.go): every open TopLayer
+	// element registers its handle, kind, invoker name and content
+	// path at paint — the frame-end reconciliation
+	// (finishOverlayFrame) resolves the invoker paths and updates the
+	// layer, and the click dispatch's light dismiss walks the layer.
+	overlayRegistrations []overlayRegistration
 	// hitboxStack is the transient stack of hitboxes whose subtrees are
 	// prepainting (browser-core ticket 11): each hitbox records the top
 	// of this stack as its parent, which is how the capture chain

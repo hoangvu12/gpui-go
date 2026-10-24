@@ -533,3 +533,19 @@ mouse-up's or the key-up's — so the prevented record binds only the
 `contextmenu` kind (the coarseness the activation click already documents).
 `fixtures/contextmenu` is the fixture set (mouse, menu-key, shift-f10 and the
 prevented pair whose Tab-after-menu pins "suppresses nothing else").
+
+Ticket 21 (the top layer and light dismiss) added the `toggle` transcript
+kind (the DOM popover toggle event, `log.Toggle`, with the entry's
+`state` field carrying `newState`) and the popover fixtures
+(`fixtures/popover`): nested popovers whose child opens from an invoker
+inside the parent, with steps clicking inside the child, the parent, the
+invoker and the empty page — the recorded transcripts pin Chromium's
+click-based light dismiss (the press/release pair rule, the invoker link
+and the hide-everything-above walk; `mouse_event_manager.cc:262-267`,
+`html_element.cc:3141-3227`). The pages reset the popover UA stylesheet
+(Chrome centers `[popover]` with `inset: 0; margin: auto;
+width: fit-content`, html.css:1966-1977) and record the popover
+`::backdrop`'s own rule: it is `pointer-events: none` (html.css:
+2012-2015), so a click on the scrim region falls through to the page and
+light-dismisses the whole layer — the port's plain backdrop div matches
+it without a hitbox.

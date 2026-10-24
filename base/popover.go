@@ -62,6 +62,11 @@ type PopoverState struct {
 	// deferredContext is held while open, so that a state collected
 	// without being closed takes its registration with it.
 	deferredContext *DeferredPopover
+	// overlay is the popover's entry in the window's top layer
+	// (browser-core ticket 21): created lazily at the first render
+	// (the layer is per window), kept in step with open, and closed by
+	// the core's click-based light dismiss.
+	overlay gpui.OverlayHandle
 }
 
 // NewPopoverState builds the state of a popover entity
@@ -136,6 +141,18 @@ func (s *PopoverState) transitionTo(opening, announce bool, w *gpui.Window, cx *
 		}
 	}
 	s.SetOpen(opening, cx)
+	// browser-core ticket 21: the top-layer entry follows the state's
+	// open (the handle exists once the popover has rendered). The
+	// layer's toggle notification fires to the OnToggle listener, which
+	// ignores opens (the state is already open) and only acts on the
+	// layer's own closes.
+	if s.overlay != (gpui.OverlayHandle{}) {
+		if opening {
+			s.overlay.Show()
+		} else {
+			s.overlay.Hide()
+		}
+	}
 
 	if s.open {
 		target := s.focusHandle
@@ -352,6 +369,36 @@ func (p *Popover) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
 			app.Notify(parentView)
 		}
 	}
+	// The top-layer entry (browser-core ticket 21): created lazily at
+	// the first render (the layer is per window), kept in step with the
+	// state's open, and listening for the layer's light-dismiss closes.
+	overlay := state.UpdateWith(app, func(s *PopoverState, cx *gpui.Context[PopoverState]) gpui.OverlayHandle {
+		if s.overlay == (gpui.OverlayHandle{}) {
+			s.overlay = gpui.NewOverlayHandle(w)
+		}
+		if s.open != s.overlay.IsOpen() {
+			// A state-only transition (SetOpen without a window, or the
+			// keyed state's first read of defaultOpen) syncs the layer.
+			if s.open {
+				s.overlay.Show()
+			} else {
+				s.overlay.Hide()
+			}
+		}
+		return s.overlay
+	})
+	if p.overlayClosable {
+		overlay.OnToggle(func(open bool, w *gpui.Window, app *gpui.App) {
+			if open {
+				return
+			}
+			// A light-dismiss close: hide through the state so the focus
+			// lifecycle and the open-change announcement run (the handle
+			// is already closed; Dismiss no-ops on a closed state).
+			state.Update(app, func(s *PopoverState, cx *gpui.Context[PopoverState]) { s.Dismiss(w, cx) })
+			notifyParent(app)
+		})
+	}
 	style := p.Style()
 	popup := StyledExtOf(NewPopup(p.id, p.trigger(open, w, app))).RefineStyle(&style).
 		Anchor(p.anchor).
@@ -394,11 +441,30 @@ func (p *Popover) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
 		child := state.UpdateWith(app, func(s *PopoverState, cx *gpui.Context[PopoverState]) any { return build(s, w, cx) })
 		content.Child(child)
 	}
-	if p.overlayClosable {
-		content.OnMouseDownOut(func(_ *gpui.MouseDownEvent, w *gpui.Window, app *gpui.App) {
-			state.Update(app, func(s *PopoverState, cx *gpui.Context[PopoverState]) { s.Dismiss(w, cx) })
-			notifyParent(app)
-		})
+	// invoker carries the top-layer registration's invoker name
+	// (browser-core ticket 21): the popover's own id when it is a name,
+	// which names the trigger container the popup root carries — the
+	// element a click on keeps this popover open.
+	invoker := ""
+	if p.overlayClosable && p.id.Kind == gpui.ElementIDName {
+		invoker = p.id.Name
 	}
-	return gpui.OwnRecipe(popup.Content(content))
+	popupChild := any(content)
+	if p.overlayClosable {
+		// browser-core ticket 21: the per-popover mousedown-out dismissal
+		// is replaced by the core top layer's click-based light dismiss
+		// (research/browser-parity 06 §1: the old rule dismissed the
+		// parent on a press inside a nested child popover, because the
+		// deferred child renders outside the parent's box, and every
+		// popover decided independently). The popover registers as an
+		// OverlayPopover entry with the trigger container as its invoker;
+		// the layer hides the popovers above the clicked one, treating
+		// the invoker and nested popovers as inside, like HTML popovers.
+		popupChild = gpui.TopLayer(overlay).
+			PassThrough().
+			Kind(gpui.OverlayPopover).
+			Invoker(invoker).
+			Child(content)
+	}
+	return gpui.OwnRecipe(popup.Content(popupChild))
 }

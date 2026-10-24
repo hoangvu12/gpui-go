@@ -685,6 +685,17 @@ func (w *Window) dispatchMouseClick(up *MouseUpEvent, capturedChain []string, sk
 	if fs.rendered == nil || down == nil {
 		return
 	}
+	// The popover light dismiss (browser-core ticket 21): Chromium runs
+	// HandlePopoverLightDismissForClick while creating the click event,
+	// right before the listeners (mouse_event_manager.cc:262-267),
+	// comparing the popovers related to the press and the release
+	// targets — the pair rule that keeps a drag from inside a popover
+	// from dismissing it. It runs for every click dispatch, including a
+	// click on empty space (the DOM's body-targeted click, which the
+	// port's empty click chain stands for), which is what closes every
+	// popover on an outside click. Keyboard-activation clicks never come
+	// through here, matching Chromium's null pointer targets.
+	w.lightDismissFromClick(app)
 	chain := capturedChain
 	if chain == nil {
 		chain = commonAncestorClickChain(fs.rendered, pressChain, is.mouseHitTest)
@@ -799,6 +810,12 @@ type windowInputState struct {
 	// target is the common ancestor of this chain and the release chain
 	// (mouse_event_manager.cc:358-367 CommonAncestor).
 	pressClickChain []string
+	// pressHitPaths is the press's own hit-test chain paths
+	// (browser-core ticket 21): the pointer-down target's ancestor
+	// walk, recorded at the down dispatch, that the click's light
+	// dismiss pairs with the release's chain — Chromium's
+	// pointer_down_target (mouse_event_manager.cc:265).
+	pressHitPaths []string
 	// pendingKeyboardActivation is the focus generation at an
 	// unmodified Space keydown (browser-core ticket 12: the armed
 	// activation — the keyup clicks only when the generation still
@@ -1042,6 +1059,13 @@ func (w *Window) dispatchMouseEvent(event any, app *App) {
 		pressed := *down
 		is.pendingMouseClick = &pressed
 		is.pressClickChain = nil
+		// The press's own hit chain (browser-core ticket 21): the
+		// pointer-down target's ancestor walk — the light-dismiss pair's
+		// down half, mirroring Chromium's pointer_down_target
+		// (mouse_event_manager.cc:262-267).
+		if fs.rendered != nil {
+			is.pressHitPaths = chainPathsOf(fs.rendered, is.mouseHitTest)
+		}
 	}
 	// Inspector picking replaces the normal mouse dispatch while active
 	// (window.rs:6088-6092: handle_inspector_mouse_event after the hit
@@ -1190,12 +1214,19 @@ func (w *Window) dispatchMouseEvent(event any, app *App) {
 	if _, isCancel := event.(*PointerCancelEvent); isCancel {
 		is.pendingMouseClick = nil
 		is.pressClickChain = nil
+		is.pressHitPaths = nil
 		is.pendingKeyboardActivation = nil
 		if is.activePointerCapture != (pointerCapture{}) {
 			is.pendingPointerCapture = (pointerCapture{})
 			w.processPendingPointerCapture(event, app)
 		}
 	}
+	// The overlay toggle notifications drain at the input task's end
+	// (browser-core ticket 21): the DOM queues popover toggle events as
+	// tasks, so they land after the whole dispatch's listeners —
+	// after the click's own entries in the transcript, exactly where
+	// the recorder reads them (toplayer.go drainOverlayToggles).
+	w.drainOverlayToggles(app)
 }
 
 // defaultMouseFocus is the mousedown's focus default when no focusable

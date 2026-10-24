@@ -1882,6 +1882,16 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 	if d.elementID != nil && d.elementID.Kind == ElementIDName && windowTracksAnchors(w) {
 		recordAnchorBounds(w, d.elementID.Name, bounds, ContentMask(w))
 	}
+	// Ticket 21: a named element records its global id path into the
+	// frame's invoker registry for TopLayer().Invoker() lookups — the
+	// light-dismiss walk resolves the invoker's element path from it.
+	// The registry fills only while this window's overlays name their
+	// invokers (requestInvokerTracking at request layout), so plain
+	// frames pay nothing. A later same-named element wins, like the
+	// anchor registry.
+	if d.elementID != nil && d.elementID.Kind == ElementIDName && global != nil && windowTracksInvokers(w) {
+		recordInvokerPath(w, d.elementID.Name, global.key())
+	}
 	if global == nil && d.requiresElementState() {
 		panic("gpui: OnClick, OnAuxClick, OnDrag, OnHover, Active and GroupActive require an element ID (the pinned StatefulInteractiveElement methods, div.rs:1495-1899)")
 	}
