@@ -316,6 +316,13 @@ type Window struct {
 	// on first use; touched only on the foreground thread.
 	overlays *windowOverlayState
 
+	// closeWatchers is the window's close-watcher stack (browser-core
+	// ticket 22, closewatcher.go's windowCloseWatcherState: the active
+	// watcher groups and the user-activation bookkeeping the Escape
+	// default action signals). Created on first use; touched only on
+	// the foreground thread.
+	closeWatchers *windowCloseWatcherState
+
 	// frames is the window's frame-loop state (Base ticket 03,
 	// frameloop.go: the invalidator's dirty flag, next-frame callbacks,
 	// needs-present and the tracked rendered views). Touched only on the

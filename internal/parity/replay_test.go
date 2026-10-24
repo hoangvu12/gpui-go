@@ -11,6 +11,7 @@ import (
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/anchoring"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/boxpaint"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/capture"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/closewatcher"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/contextmenu"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/display"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/editkeys"

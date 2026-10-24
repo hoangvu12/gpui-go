@@ -1,0 +1,64 @@
+{
+  "name": "closewatcher-hint",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T12:14:56Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "b3": {
+      "x": 0,
+      "y": 0,
+      "width": 40,
+      "height": 20
+    }
+  },
+  "events": [
+    {
+      "kind": "mousedown",
+      "target": "b3",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "b3",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "b3",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "toggle",
+      "target": "hint",
+      "defaultPrevented": false,
+      "state": "open"
+    },
+    {
+      "kind": "keydown",
+      "target": "b3",
+      "defaultPrevented": false,
+      "key": "Escape",
+      "focus": "b3",
+      "code": "Escape"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Escape",
+      "focus": "b3",
+      "code": "Escape"
+    },
+    {
+      "kind": "toggle",
+      "target": "hint",
+      "defaultPrevented": false,
+      "state": "closed"
+    }
+  ],
+  "screenshot": "chrome.png"
+}
