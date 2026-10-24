@@ -6,6 +6,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 ## ACTIVE EFFORT (2026-10-23): recreate zgui's terminal app ("zterm") on gpui-go
 
+**HANDOFF 2026-10-24 (orchestrator 8 → orchestrator 9).** The user asked for it. The handoff doc is `%TEMP%\gpui-go-handoff-orchestrator9.md`: it covers resuming the 4 workers that Roboco's restart interrupted, the user's rules from today, the merge lessons, the open questions and the frontier. The predecessor is Roboco chat 08b88b23.
+
 **ORCHESTRATOR 8 STATUS (2026-10-24). CURRENT.** Claude Code, Opus 5.5. It took over from orchestrator 7 (Roboco chat d209bee2; handoff doc `%TEMP%\gpui-go-handoff-orchestrator8.md`, which still holds the rules, the rev 15.1 list, why workers are slow, and the frontier).
 - **Resolved (45 of 77; orchestrator 7's "22" was a miscount, it was 21):** 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 17, 18, 21, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 36, 38, 77 (rev 15.1 = native revision 151, DLL ef337ad3), 39 (rev 15, DLL 8b944eae), 40, 41, 44, 46, 47, 48, 49 (the R16 design, approved), 62, 63, 64, 65, 66, 67, 74. Each has a verification comment, and the map's Decisions list a gist of each. Orchestrator 8 verified and merged 33 (position: static opt-in), then 25 (anchored to an element). The merges had no conflicts, and the required packages pass on main.
 - **Known flakes:** `gpui` TestWin32TranslateKeyDownCarriesCodeAndLocation (it reads the live Shift key; fails while the user types), TestFrameLoopPreferredFrameIntervalDrawsEveryOtherVblank and TestSystemNotificationResponseDrain and gpui/script TestFrameOverheadIsUnder1msAtTheProbeSize (load-sensitive), and authorspec TestRealTwoWindowCounterSharedModel (rare). Re-run them.
