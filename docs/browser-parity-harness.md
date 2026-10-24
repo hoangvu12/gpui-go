@@ -712,3 +712,57 @@ the mouse-press node's chain (`LogicalScroll`'s fallback order,
 the press-node keyboard scroll now scrolls the scroller even when the fixture's
 click misses the focusable row (the wrong view's old premise), and the top-padding
 basis cancels at the end scroll — the end padding does not.
+as browser-parity wins (Ctrl+Insert copies like Chrome's, where the pin's keymap had
+no binding).
+Ticket 22 (close watchers and the Escape default action) added the close-watcher
+stack (`gpui/closewatcher.go` — the DOM CloseWatcher: `NewCloseWatcher`,
+`RequestClose`/`Close`/`Destroy`, `OnCancel` with a preventable
+`CloseWatcherEvent`, `OnClose`; the Escape default action signals the NEWEST
+watcher group newest-first, stopping at a prevented cancel,
+`close_watcher.cc:195-215`, routed from the keydown default chain after Tab
+`keyboard_event_manager.cc:454-464` → `DefaultEscapeEventHandler` :618-630), the
+user-activation grouping (every key down or mouse press notifies the stack at
+the head of the input dispatch; a watcher created after an interaction gets its
+own group, a programmatic one joins the newest, so nested popovers close
+newest-first on repeated Escape), and the TopLayer registration (the show steps
+create each entry's watcher and the hide steps destroy it,
+`html_element.cc:2146-2157`/`:2834-2836`; manual popovers create none — the kind
+correction runs at the entry's first registration, since `Show` precedes the
+element's render). `fixtures/closewatcher` is the fixture set
+(`closewatcher-escape`, `closewatcher-hint`, `closewatcher-prevented`), and it
+found two harness facts worth knowing: the recorder's CDP **key commands do not
+pump the renderer's task loop while its mouse commands do** — the popover
+toggle events are queued DOM tasks, so a key step that closes a popover leaves
+its toggle queued in Chrome (a later transition coalesces it through the toggle
+task tracker, and it fires only at the record's settle) where the port's
+end-of-dispatch drain delivers it right after the causing dispatch; the
+fixtures insert a listener-less pointer **Move as a task-loop pump** between
+the clicks and the Escapes so both sides deliver the toggles at the same
+positions. And the port's **occluding popover hitbox cuts the mouse propagation
+chain at the popover** (`Occlude()` ends the hit-test walk, so an ancestor's
+`OnMouseDown` never fires for clicks inside an overlay), where the DOM's body
+still sees the bubbled mouse events — the closewatcher pages narrow the root to
+`data-events="keydown"` (the popover fixtures' pages simply bind no root mouse
+listeners); the recorded divergence stays with ticket 12's follow-ups.
+and the anchor's hitbox record for the mouse-focus default's ancestor
+walk). The discrimination view keeps Tier A passing.
+717i
+Ticket 35 (position: fixed) added `PositionFixed` and `Fixed()` (the
+Tailwind `fixed` class left the unsupported list), the containing-block
+rule (`gpui/containingblock.go`'s fixed split: every container defers a
+fixed child into the ROOT scope — the window root is the port's
+initial-containing-block stand-in, since nothing but a transform, filter
+or containment makes an ancestor a fixed container,
+`layout_object.cc:2009-2067`, and the port has no transforms), and the
+paint rule (`gpui/fixed.go`: the fixed div's whole draw defers at
+`fixedDrawPriority` under a zeroed element offset, so it paints above
+the whole in-flow scene — Appendix E step 8 — is not scrolled or
+clipped by any ancestor scroller, and keeps its hitbox on top;
+explicitly deferred surfaces and the top layer still paint above it).
+`fixtures/fixed` is the fixture (`fixed-window`): the scroller scrolled
+120 by three keyboard line steps with the fixed box straddling the
+scroller's right edge (the clip escape), the relative+static escape
+chain, and the flow column whose fixed box overlaps a later in-flow
+sibling. The wrong view (the boxes as plain absolute — the pre-ticket
+pin, the old class.go advice) fails Tier A on exactly the three moved
+boxes.

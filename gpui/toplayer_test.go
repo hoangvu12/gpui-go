@@ -41,6 +41,18 @@ type overlayView struct {
 	sibling bool
 	// backdrop gives the parent's entry a backdrop slot.
 	backdrop bool
+	// anchor adds a focusable box at the root, outside every popover
+	// (closewatcher_test.go's focus-elsewhere Escape test: focus sits
+	// on it while the newest overlay closes).
+	anchor bool
+	// escapePrevented binds a root keydown listener that calls
+	// PreventDefault (closewatcher_test.go's listener-gate test: the
+	// default action, and with it the close-watcher signal, is
+	// suppressed).
+	escapePrevented bool
+	// anchorFocus is the anchor box's focus handle, created on the
+	// first render of the window.
+	anchorFocus FocusHandle
 	// log records clicks ("click:p1") and layer toggles ("toggle:p1
 	// open") in delivery order.
 	log []string
@@ -63,15 +75,36 @@ func (v *overlayView) ensureHandles(w *Window) {
 
 func (v *overlayView) Render(w *Window, cx *Context[overlayView]) AnyElement {
 	v.ensureHandles(w)
-	root := Div().ID("root").SizeFull().Flex().Bg(overlayColors.page).
-		// The parent's invoker: clicking it toggles the parent (the
-		// popovertarget activation).
-		Child(Div().ID("b1").DebugSelector("b1").
-			W(Px(40)).H(Px(20)).Bg(overlayColors.invoker).
-			OnClick(func(*ClickEvent, *Window, *App) {
-				v.log = append(v.log, "click:b1")
-				v.parent.Toggle()
-			}))
+	root := Div().ID("root").SizeFull().Flex().Bg(overlayColors.page)
+	if v.escapePrevented {
+		root = root.OnKeyDown(func(_ *KeyDownEvent, w *Window, _ *App) {
+			w.PreventDefault()
+		})
+	}
+	// The parent's invoker: clicking it toggles the parent (the
+	// popovertarget activation).
+	root.Child(Div().ID("b1").DebugSelector("b1").
+		W(Px(40)).H(Px(20)).Bg(overlayColors.invoker).
+		OnClick(func(*ClickEvent, *Window, *App) {
+			v.log = append(v.log, "click:b1")
+			v.parent.Toggle()
+		}))
+	if v.anchor {
+		if v.anchorFocus == (FocusHandle{}) {
+			v.anchorFocus = NewFocusHandle(w).TabStop(true)
+		}
+		root.Child(Div().ID("anchor").DebugSelector("anchor").
+			W(Px(40)).H(Px(20)).TrackFocus(v.anchorFocus))
+	}
+	v.appendOverlays(root)
+	return root.IntoElement()
+}
+
+// appendOverlays appends this view's popover children to root: the
+// nested TopLayer entries, and b2 at the root in sibling mode. Split
+// out of Render so other tests (closewatcher_test.go) can compose a
+// root with extra children beside the overlays.
+func (v *overlayView) appendOverlays(root *DivElement) {
 	// b2: inside p1's content (the invoker link that makes p1 an
 	// ancestor of p2), or at the root in sibling mode.
 	b2 := Div().ID("b2").DebugSelector("b2").
@@ -114,7 +147,6 @@ func (v *overlayView) Render(w *Window, cx *Context[overlayView]) AnyElement {
 					v.log = append(v.log, "click:p2")
 				})))
 	}
-	return root.IntoElement()
 }
 
 // overlayFixture is one test app, window and overlayView.

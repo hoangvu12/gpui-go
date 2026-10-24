@@ -436,6 +436,19 @@ const (
 	// PositionSticky lays out in flow and sticks inside its scroll
 	// container at prepaint (browser-core 34, spec L3).
 	PositionSticky
+	// PositionFixed is placed relative to the window root (browser-core
+	// 35, spec L10): the containing block of a fixed element is the
+	// viewport — LayoutObject::ContainerForFixedPosition walks PAST
+	// every positioned ancestor to the LayoutView
+	// (core/layout/layout_object.cc:1885-1892), because nothing but a
+	// transform, filter or containment makes an ancestor a fixed
+	// container (ComputeIsFixedContainer, layout_object.cc:2009-2067,
+	// and the port has no transforms). The record translation maps it
+	// onto Taffy's Absolute (out of flow, insets kept); the containing
+	// block is decided Go-side (gpui/containingblock.go defers the node
+	// into the root scope) and the draw defers above the whole in-flow
+	// scene (gpui/fixed.go).
+	PositionFixed
 )
 
 // String returns the reference variant name.
@@ -452,6 +465,9 @@ func (p Position) String() string {
 	if p == PositionSticky {
 		return "Sticky"
 	}
+	if p == PositionFixed {
+		return "Fixed"
+	}
 	return fmt.Sprintf("Position(%d)", uint8(p))
 }
 
@@ -466,6 +482,8 @@ func ParsePosition(s string) (Position, error) {
 		return PositionStatic, nil
 	case "Sticky":
 		return PositionSticky, nil
+	case "Fixed":
+		return PositionFixed, nil
 	default:
 		return 0, fmt.Errorf("invalid Position %q", s)
 	}

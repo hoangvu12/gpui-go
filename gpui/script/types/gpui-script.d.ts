@@ -601,6 +601,7 @@ type CoreClass =
 	"debug" |
 	"debug-below" |
 	"diagonal-fractions" |
+	"fixed" |
 	"flex" |
 	"flex-1" |
 	"flex-auto" |
@@ -1276,6 +1277,7 @@ type Class =
 	"debug" |
 	"debug-below" |
 	"diagonal-fractions" |
+	"fixed" |
 	"flex" |
 	"flex-1" |
 	"flex-auto" |

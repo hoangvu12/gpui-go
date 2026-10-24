@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		position: relative;
+	}
+	button {
+		appearance: none;
+		border: 0;
+		margin: 0;
+		padding: 0;
+		display: block;
+		position: absolute;
+		width: 40px;
+		height: 20px;
+		background: #2563eb;
+		outline: none;
+	}
+	#b1 {
+		left: 0px;
+		top: 0px;
+	}
+	.popover {
+		position: fixed;
+		inset: auto;
+		margin: 0;
+		border: 0;
+		padding: 0;
+		overflow: visible;
+	}
+	#p1 {
+		left: 20px;
+		top: 60px;
+		width: 150px;
+		height: 120px;
+		background: #fde68a;
+	}
+	#b2 {
+		left: 10px;
+		top: 10px;
+	}
+	#p2 {
+		left: 200px;
+		top: 60px;
+		width: 100px;
+		height: 80px;
+		background: #86efac;
+	}
+	#anchor {
+		position: absolute;
+		left: 600px;
+		top: 0px;
+		width: 40px;
+		height: 20px;
+		background: #94a3b8;
+		outline: none;
+	}
+</style>
+</head>
+<body data-id="root" data-events="keydown">
+	<button id="b1" popovertarget="p1" data-id="b1"></button>
+	<div id="p1" class="popover" popover data-id="p1">
+		<button id="b2" popovertarget="p2" data-id="b2"></button>
+	</div>
+	<div id="p2" class="popover" popover data-id="p2"></div>
+	<div id="anchor" data-id="anchor" tabindex="0"></div>
+	<script>
+		document.addEventListener('keydown', e => e.preventDefault(), true);
+	</script>
+</body>
+</html>

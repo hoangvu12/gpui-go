@@ -196,6 +196,17 @@ func (w *Window) runKeyDefaultActions(event any, app *App) bool {
 		if w.defaultTabNavigation(e) {
 			return true
 		}
+		// browser-core ticket 22 (spec story 69): the Escape default
+		// action — the close-watcher stack, after Tab and before the
+		// navigation keys exactly as Chromium's keydown chain routes it
+		// (keyboard_event_manager.cc:454-464: Tab, then Escape →
+		// DefaultEscapeEventHandler :618-630, then the navigation keys).
+		// An unhandled Escape signals the newest watcher group
+		// (closewatcher.go): the newest overlay closes regardless of
+		// where focus is. The arm never consumes the key (nothing in
+		// Chromium's Escape path calls SetDefaultHandled), so it reports
+		// nothing and the dispatch proceeds to the contextmenu check.
+		w.defaultEscapeCloseWatchers(e, app)
 		// The contextmenu keyboard trigger (browser-core ticket 17,
 		// contextmenu.go dispatchContextMenuFromKey): Shift+F10 fires
 		// on key down, after the listeners (Chromium
@@ -207,6 +218,23 @@ func (w *Window) runKeyDefaultActions(event any, app *App) bool {
 		return w.dispatchContextMenuFromKey(e, app)
 	}
 	return false
+}
+
+// defaultEscapeCloseWatchers is the Escape default action
+// (DefaultEscapeEventHandler, keyboard_event_manager.cc:618-630 →
+// CloseWatcher::WatcherStack::EscapeKeyHandler, close_watcher.cc:
+// 195-202): an Escape keydown signals the window's close-watcher
+// stack, closing the newest watcher group (the newest overlay) no
+// matter where focus is. The EscapeKeyHandler's own gates map onto
+// the port's machinery: the not-default-prevented gate is the
+// default-action phase's (runKeyDefaultActions), DefaultHandled is a
+// prior arm returning early, and every platform dispatch is a trusted
+// event — so what remains is the key check.
+func (w *Window) defaultEscapeCloseWatchers(e *KeyDownEvent, app *App) {
+	if e.Keystroke.Key != "escape" {
+		return
+	}
+	w.signalCloseWatchers(app)
 }
 
 // nodeClickActivation is one element's keyboard-activation registration

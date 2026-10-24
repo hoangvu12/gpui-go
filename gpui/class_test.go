@@ -572,7 +572,6 @@ func TestCheckClassesReasons(t *testing.T) {
 		{"shadow-red-500", "shadow colors"},
 		{"translate-x-1", "transforms"},
 		{"transition", "transitions"},
-		{"fixed", "fixed positioning"},
 	} {
 		err := CheckClasses(tc.classes)
 		if err == nil || !strings.Contains(err.Error(), tc.want) {

@@ -488,6 +488,17 @@ func (w *Window) beginPlatformInputDispatch(event any, app *App) {
 	if is.lastInputModality != old || is.hadKeyboardEvent != hadKeyboard {
 		w.requestRefresh()
 	}
+	// browser-core ticket 22 (spec story 69): a key down or a mouse
+	// press is a user interaction, notified to the close-watcher stack
+	// before any listener runs (Chromium's user activation is granted
+	// while the input event is processed, Frame::NotifyUserActivation-
+	// InFrame frame.cc:1041-1055 → SetHadUserInteraction,
+	// close_watcher.cc:129-137) — so a watcher created from a listener
+	// (a popover's show) rides the fresh group the interaction bought.
+	switch event.(type) {
+	case *KeyDownEvent, *MouseDownEvent:
+		w.notifyCloseWatcherUserInteraction()
+	}
 	app.propagateEvent = true
 	is.defaultPrevented = false
 }

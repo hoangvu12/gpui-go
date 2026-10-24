@@ -1634,9 +1634,11 @@ func (d *DivElement) IntoElement() AnyElement {
 	// An a11y-authored div joins the semantic tree through its companion
 	// (div.rs:2261-2269, 4065-4162; Base ticket 11).
 	if d.hasA11yAuthoring() {
-		return divIntoA11yElement(d)
+		return fixedDrawElement(d, divIntoA11yElement(d))
 	}
-	return CustomElement[divFrameState, divPrepaintState](&divElement{builder: d})
+	// browser-core 35 (spec L10): a fixed div's whole draw defers above
+	// the in-flow scene under a zeroed element offset (fixed.go).
+	return fixedDrawElement(d, CustomElement[divFrameState, divPrepaintState](&divElement{builder: d}))
 }
 
 // divPrepaintState is the div's prepaint state (div.rs:2362 the

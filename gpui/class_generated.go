@@ -336,6 +336,8 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.Debug()
 	case "debug-below":
 		b.DebugBelow()
+	case "fixed":
+		b.Fixed()
 	case "flex":
 		b.Flex()
 	case "flex-1":
@@ -887,4 +889,4 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 }
 
 // methodClassCount is the number of classes applyMethodClass knows.
-const methodClassCount = 437
+const methodClassCount = 438

@@ -1182,6 +1182,12 @@ type frameDrawState struct {
 	// PositionSticky div (sticky.go): only then do divs' prepaints fill
 	// stickyFlowBoxes, so views without sticky pay one boolean check.
 	stickyRequested bool
+	// fixedRequested reports that this frame's request walk saw a
+	// PositionFixed node (browser-core 35, fixed.go): only then do the
+	// node requests scan their children for fixed ones to defer into
+	// the root scope, so views without fixed elements pay one boolean
+	// check per node request.
+	fixedRequested bool
 	// stickyFlowBoxes is the frame's flow-rectangle registry for sticky
 	// descendants (sticky.go): the native layout node of each div whose
 	// prepaint ran, mapped to its flow containing-block rect (the

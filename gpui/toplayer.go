@@ -169,6 +169,10 @@ func (h OverlayHandle) Show() bool {
 	rec.pendingShowRules = true
 	os := overlayState(h.window)
 	os.entries = append(os.entries, rec)
+	// browser-core ticket 22: the show steps create the entry's close
+	// watcher (html_element.cc:2146-2157, the stack-append branch), so
+	// an unhandled Escape signals this overlay (closewatcher.go).
+	rec.ensureCloseWatcher()
 	queueOverlayToggle(rec, true)
 	return true
 }
@@ -221,7 +225,8 @@ func (h OverlayHandle) record() *overlayRecord {
 
 // hide is the record's close path (the handle's Hide and the layer's
 // light dismiss and show rules): leave the ordered layer and queue the
-// toggle notification.
+// toggle notification. browser-core ticket 22: the hide steps destroy
+// the entry's close watcher (html_element.cc:2834-2836).
 func (rec *overlayRecord) hide() {
 	if rec.window == nil || rec.window.overlays == nil || !rec.open {
 		return
@@ -236,6 +241,7 @@ func (rec *overlayRecord) hide() {
 	rec.open = false
 	rec.registered = false
 	rec.pendingShowRules = false
+	rec.destroyCloseWatcher()
 	queueOverlayToggle(rec, false)
 }
 
@@ -263,6 +269,41 @@ type overlayRecord struct {
 	pendingShowRules bool
 	// onToggle is the handle's toggle listener.
 	onToggle func(open bool, w *Window, app *App)
+	// watcher is the entry's close watcher (browser-core ticket 22,
+	// closewatcher.go): created at show, destroyed at hide — the
+	// popover show/hide steps' watcher (html_element.cc:2146-2157 and
+	// :2834-2836). Zero while the entry carries none (manual popovers).
+	watcher CloseWatcher
+}
+
+// ensureCloseWatcher creates the entry's close watcher when its kind
+// registers one (browser-core ticket 22): every kind but manual —
+// popover=auto and popover=hint create a watcher per show
+// (html_element.cc:2146-2157, inside the stack-append branch both
+// kinds take) and the modal dialog slot registers one
+// (html_dialog_element.cc:536-545); popover=manual never joins the
+// popover stacks and creates none. The watcher's close listener hides
+// the entry (the PopoverCloseWatcherEventListener's close arm,
+// html_element.cc:240-242), and its cancel listener stays unset (the
+// HTML popover rule: "Don't do anything in response to cancel events",
+// html_element.cc:243-245).
+func (rec *overlayRecord) ensureCloseWatcher() {
+	if rec == nil || rec.watcher != (CloseWatcher{}) || rec.kind == OverlayPopoverManual {
+		return
+	}
+	watcher := NewCloseWatcher(rec.window)
+	watcher.OnClose(func(_ *Window, _ *App) { rec.hide() })
+	rec.watcher = watcher
+}
+
+// destroyCloseWatcher destroys the entry's close watcher (the hide
+// steps' close_watcher_->destroy(), html_element.cc:2834-2836).
+func (rec *overlayRecord) destroyCloseWatcher() {
+	if rec == nil || rec.watcher == (CloseWatcher{}) {
+		return
+	}
+	rec.watcher.Destroy()
+	rec.watcher = CloseWatcher{}
 }
 
 // overlayToggle is one queued toggle notification (the DOM's toggle
@@ -402,6 +443,16 @@ func (w *Window) finishOverlayFrame(app *App) bool {
 		}
 		rec.registered = true
 		rec.kind = regs[i].kind
+		// browser-core ticket 22: the watcher follows the registered
+		// kind — Show created one on the default kind before the entry
+		// ever rendered, so a manual entry's first registration takes it
+		// back out (manual popovers never join the close-watcher family;
+		// every other kind ensures one exists, the show steps' rule).
+		if rec.kind == OverlayPopoverManual {
+			rec.destroyCloseWatcher()
+		} else {
+			rec.ensureCloseWatcher()
+		}
 		rec.invokerName = regs[i].invokerName
 		rec.contentPath = regs[i].contentPath
 		if regs[i].invokerName != "" {
@@ -433,6 +484,7 @@ func (w *Window) finishOverlayFrame(app *App) bool {
 	for _, rec := range os.entries {
 		if !rec.registered && !rec.pendingShowRules {
 			rec.open = false
+			rec.destroyCloseWatcher()
 			changed = true
 			continue
 		}

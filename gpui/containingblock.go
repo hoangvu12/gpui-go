@@ -70,10 +70,12 @@ type containingBlockScope struct {
 
 // openContainingBlock pushes one containing-block scope for an element
 // whose position makes it a containing block for absolute descendants
-// (relative, absolute and sticky today — everything but static, which
-// is Chromium's rule; fixed joins with ticket 35). A static element
-// returns nil: it opens no scope, and its absolute children defer to
-// the enclosing one.
+// (relative, absolute, sticky and fixed — everything but static, which
+// is Chromium's rule; a fixed element IS an absolute container too:
+// ComputeIsAbsoluteContainer runs is_fixed_container || position !=
+// kStatic, layout_object.cc:2069-2081). A static element returns nil:
+// it opens no scope, and its absolute children defer to the enclosing
+// one.
 func openContainingBlock(w *Window, style *Style) *containingBlockScope {
 	if style.Position == PositionStatic {
 		return nil
@@ -116,6 +118,30 @@ func deferAbsoluteChild(w *Window, child LayoutID) bool {
 	return true
 }
 
+// deferFixedChild hands one fixed child to the OUTERMOST open
+// containing-block scope — the window root's, when the root element
+// participates (the first scope opened in the frame's request walk is
+// the root's, the whole tree's outermost container, and it stays at
+// the bottom of the stack while the subtree requests). CSS: a fixed
+// element's containing block is the viewport —
+// LayoutObject::ContainerForFixedPosition walks PAST every positioned
+// ancestor to the LayoutView (layout_object.cc:1885-1892), because
+// only a transform, filter or containment makes an ancestor a fixed
+// container (ComputeIsFixedContainer, layout_object.cc:2009-2067) —
+// and the port has no transforms, so the root is always the one. It
+// reports false when no scope is open (a non-participating root
+// element); the caller then keeps the child attached to its direct
+// parent (the pin's behaviour, the ticket-33 documented approximation).
+func deferFixedChild(w *Window, child LayoutID) bool {
+	f := currentFrame(w)
+	if len(f.containingBlockScopes) == 0 {
+		return false
+	}
+	scope := f.containingBlockScopes[0]
+	scope.deferred = append(scope.deferred, child)
+	return true
+}
+
 // requestLayoutNode requests one layout node under the containing-block
 // policy (browser-core 33, spec D3):
 //
@@ -150,16 +176,49 @@ func requestLayoutNode(w *Window, own *containingBlockScope, style Style, childr
 	ds := drawState(w)
 	ctx := layoutContextOf(w)
 	children = expandContentsChildren(w, children)
+	if style.Position == PositionFixed {
+		// browser-core 35: this node IS fixed — flag the frame so every
+		// container's request scan (below) looks for fixed children. The
+		// flag is set at the node's own request, which runs before every
+		// enclosing container's request (children are requested first),
+		// and views without fixed elements pay one boolean check.
+		currentFrame(w).fixedRequested = true
+	}
 	attached := children
+	// browser-core 35 (spec L10): the fixed split. A fixed child escapes
+	// EVERY ancestor — its containing block is the window root, not the
+	// nearest positioned one (ContainerForFixedPosition walks past the
+	// positioned ancestors, layout_object.cc:1885-1892) — so every
+	// container (static, relative, absolute, sticky, a custom element, a
+	// TopLayer entry) defers it into the ROOT scope instead of attaching
+	// it to itself. The scan runs only in frames whose request walk saw
+	// a fixed element; the static split below keeps ticket 33's rule
+	// unchanged for absolute children.
+	deferredFixed := false
+	if currentFrame(w).fixedRequested && len(children) > 0 {
+		flow := make([]LayoutID, 0, len(children))
+		for _, child := range children {
+			if _, position := layoutDisplayAndPositionOf(w, child); position == PositionFixed {
+				if deferFixedChild(w, child) {
+					deferredFixed = true
+					continue
+				}
+			}
+			flow = append(flow, child)
+		}
+		if deferredFixed {
+			attached = flow
+		}
+	}
 	if style.Position == PositionStatic {
 		// The static opt-in: absolute children skip this element and
 		// resolve against the nearest positioned ancestor (the innermost
 		// open scope). The split reads each child's recorded position
 		// (the engine records the display/position pair of every node at
 		// request time, the pinned TaffyLayoutEngine bookkeeping).
-		flow := make([]LayoutID, 0, len(children))
+		flow := make([]LayoutID, 0, len(attached))
 		deferredAny := false
-		for _, child := range children {
+		for _, child := range attached {
 			if _, position := layoutDisplayAndPositionOf(w, child); position == PositionAbsolute {
 				if deferAbsoluteChild(w, child) {
 					deferredAny = true
@@ -173,11 +232,19 @@ func requestLayoutNode(w *Window, own *containingBlockScope, style Style, childr
 		}
 	} else if own != nil && len(own.deferred) > 0 {
 		// The scope owner: attach the absolutes deferred by static
-		// descendants as children of this (positioned) node, after the
-		// element children — out of flow, so their order in the child
-		// list does not affect the in-flow layout.
-		attached = make([]LayoutID, 0, len(children)+len(own.deferred))
-		attached = append(attached, children...)
+		// descendants AND the fixed children deferred by every descendant
+		// as children of this (positioned) node, after the element
+		// children — out of flow, so their order in the child list does
+		// not affect the in-flow layout. For the ROOT scope this is the
+		// initial-containing-block stand-in (ticket 33's static-chain
+		// case): the fixed children become Taffy children of the root
+		// node and their insets resolve against its padding box — the
+		// window. (The element children here are the POST-split list:
+		// a fixed child deferred above is already in own.deferred, not
+		// in the element list.)
+		element := attached
+		attached = make([]LayoutID, 0, len(element)+len(own.deferred))
+		attached = append(attached, element...)
 		attached = append(attached, own.deferred...)
 		own.deferred = nil
 	}
