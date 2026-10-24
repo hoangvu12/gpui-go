@@ -124,6 +124,17 @@ type Step struct {
 	X, Y float32
 	// Button is the step's mouse button (ButtonLeft and so on).
 	Button string
+	// Clicks is the press's click count of a StepDown or StepUp step
+	// (browser-core ticket 19): the multi-click count the event carries
+	// (CDP Input.dispatchMouseEvent's clickCount, which becomes the
+	// WebMouseEvent's click_count the renderer's double/triple-click
+	// arms read; the DOM event's detail). 0 means 1. A double click is a
+	// Click followed by a Down/Up pair with Clicks 2; a triple click
+	// adds a pair with Clicks 3 — the counts a real rapid sequence of
+	// presses reports, so the selection's word and paragraph arms fire
+	// (MouseEventManager hands SelectionController the click count of
+	// the event; it does not count the presses itself).
+	Clicks int
 	// Key is the keystroke of a StepKey step, in the pinned keystroke
 	// syntax ("a", "enter", "ctrl-shift-]").
 	Key string
@@ -172,6 +183,29 @@ func Up(x, y float32, button string) Step {
 
 // Click returns a left-button click step at (x, y).
 func Click(x, y float32) Step { return Step{Kind: StepClick, X: x, Y: y, Button: ButtonLeft} }
+
+// MultiClick returns one multi-click press/release pair at (x, y)
+// carrying count as its click count (browser-core ticket 19): count 2 is
+// the double-click press of a real two-press sequence, count 3 the
+// triple-click press of a three-press one. Pair it with the preceding
+// presses the sequence needs: Click then MultiClick(x, y, 2) is a double
+// click, Click, MultiClick(x, y, 2), MultiClick(x, y, 3) a triple click.
+func MultiClick(x, y float32, count int) Step {
+	return Step{Kind: StepClick, X: x, Y: y, Button: ButtonLeft, Clicks: count}
+}
+
+// DownWithClicks returns a button-press step at (x, y) carrying count as
+// its click count (the raw half of MultiClick: a fixture that moves or
+// waits between the halves of a multi-click press spells them out).
+func DownWithClicks(x, y float32, button string, count int) Step {
+	return Step{Kind: StepDown, X: x, Y: y, Button: button, Clicks: count}
+}
+
+// UpWithClicks returns a button-release step at (x, y) carrying count as
+// its click count.
+func UpWithClicks(x, y float32, button string, count int) Step {
+	return Step{Kind: StepUp, X: x, Y: y, Button: button, Clicks: count}
+}
 
 // Key returns a keystroke step.
 func Key(keystroke string) Step { return Step{Kind: StepKey, Key: keystroke} }
@@ -808,6 +842,12 @@ func validate(f Fixture) error {
 	for _, step := range f.Steps {
 		switch step.Kind {
 		case StepMove, StepDown, StepUp, StepClick, StepKey, StepKeyDown, StepKeyUp, StepWait, StepImeSet, StepImeCommit, StepWheel:
+			if step.Clicks < 0 {
+				return fmt.Errorf("parity: fixture %q: a step's click count %d is negative", f.Name, step.Clicks)
+			}
+			if step.Clicks > 0 && step.Kind != StepDown && step.Kind != StepUp && step.Kind != StepClick {
+				return fmt.Errorf("parity: fixture %q: only press and release steps carry a click count (browser-core 19)", f.Name)
+			}
 		case StepScript:
 			if step.Script == "" || step.Run == nil {
 				return fmt.Errorf("parity: fixture %q: a script step needs both its page script and its Go half", f.Name)

@@ -28,6 +28,7 @@ import (
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/popover"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/position"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/scrollrange"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/selection"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/shadow"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/sticky"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/tabnav"

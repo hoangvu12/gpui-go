@@ -1,0 +1,34 @@
+{
+  "name": "selection-line",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T13:48:22Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "text": {
+      "x": 130,
+      "y": 162.5,
+      "width": 380,
+      "height": 75
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png",
+  "computed": {
+    "anchor": "11",
+    "anchorNode": "text",
+    "focus": "23",
+    "focusNode": "text",
+    "text": "second line\n",
+    "wash": "#0078d4"
+  }
+}

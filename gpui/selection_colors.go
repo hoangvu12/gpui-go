@@ -41,11 +41,21 @@ type SelectionColors struct {
 	Foreground Hsla
 }
 
+// SetSelectionColors pins the selection colours the paint path uses
+// (SetForcedColors' pattern: a test or a preview pins the colours instead
+// of the derived system record; nil restores the derivation).
+func (a *App) SetSelectionColors(colors *SelectionColors) {
+	a.selectionColorsOverride = colors
+}
+
 // SelectionColors returns the selection colours the system record
 // resolves (always fresh, any thread). The paint/render path — once per
 // frame, not per element — uses SelectionColorsForPaint, the cached
 // spelling.
 func (a *App) SelectionColors() SelectionColors {
+	if a.selectionColorsOverride != nil {
+		return *a.selectionColorsOverride
+	}
 	colors := a.systemColorsForRecord()
 	return SelectionColors{
 		Background: blendWithWhite(colors.Highlight),
@@ -60,7 +70,7 @@ func (a *App) SelectionColors() SelectionColors {
 // thread state, like the rest of the frame path; App.SelectionColors is
 // the any-thread spelling.
 func (a *App) SelectionColorsForPaint() SelectionColors {
-	if a.host == nil {
+	if a.host == nil || a.selectionColorsOverride != nil {
 		return a.SelectionColors()
 	}
 	if stamp := a.host.systemPreferencesStamp(); stamp != a.selectionColorsStamp {

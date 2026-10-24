@@ -162,6 +162,7 @@ type App struct {
 	// record-version pattern); selectionColorsDerivations counts the
 	// derivations (the test seam).
 	selectionColorsCache       SelectionColors
+	selectionColorsOverride    *SelectionColors
 	selectionColorsStamp       uint64
 	selectionColorsDerivations int
 	// platformWake wakes the real-mode foreground dispatcher when the

@@ -61,5 +61,5 @@ func (e ElementExt[S]) TextSelectionScope(scope TextSelectionScopeID) gpui.AnyEl
 	if err != nil {
 		panic(fmt.Sprintf("base: ElementExt.TextSelectionScope: %v", err))
 	}
-	return textSelectionScope(scope, element)
+	return gpui.TextSelectionScope(scope, element)
 }
