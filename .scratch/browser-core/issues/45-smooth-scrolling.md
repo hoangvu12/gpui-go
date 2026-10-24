@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 9 (Claude Code)
+Status: resolved
+Assignee: orchestrator 9 (Claude Code); verified by orchestrator 10
 Blocked by: 15, 44
 Triage: ready-for-agent
 
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-25, orchestrator 10: verified and merged (f773a9f, merge e52bfd0). The merge needed one fix: `pointSub` was declared twice (19's text_selection_band.go and 45's scroll_smooth.go); the scroll_smooth.go copy was dropped. On the merged tree `go test -p 1 -count=1 ./gpui/ ./internal/parity/... ./base ./internal/layoutspec ./examples/zterm`: all 43 packages ok. Spot-check: the duration constants (kConstantDuration 9, kDurationDivisor 60, the inverse-delta ramp 120-480 px over 12-6 sixtieths) match cc/animation/scroll_offset_animation_curve.cc:17-47 at 0d4dcd4f. Limitation accepted: Chrome can't be sampled mid-animation (impl-side cc animations), so the records pin end states and the curve is pinned by unit tests against Chromium's formulas.
 
 ## Answer
 

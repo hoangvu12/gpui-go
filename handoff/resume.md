@@ -12,7 +12,12 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 **HANDOFF 2026-10-24 (orchestrator 8 → orchestrator 9).** History: `%TEMP%\gpui-go-handoff-orchestrator9.md`; the predecessor was Roboco chat 08b88b23.
 
-**ORCHESTRATOR 9 STATUS (2026-10-24/25). Latest; orchestrator 10 renames it when it updates.** Claude Code, Opus 5.5; Roboco chat b38c2f03. It took over from orchestrator 8 (chat 08b88b23; handoff doc `%TEMP%\gpui-go-handoff-orchestrator9.md`). The rules are those in orchestrator 8's block below, unchanged.
+**ORCHESTRATOR 10 STATUS (2026-10-25). Latest.** Claude Code, Opus 5.5; Roboco chat d041f254. It took over from orchestrator 9 (chat b38c2f03; handoff doc `%TEMP%\gpui-go-handoff-orchestrator10.md`). Rules: orchestrator 8's block plus the native decision above.
+- **Resolved (55 of 77):** 45 (smooth scrolling; merge e52bfd0, which dropped a duplicate `pointSub`).
+- **Running:** 73 (chat 18f60856, `gpui-go-wt-core-73`, `core/73-base-editing`; took over by a queued message).
+- **Next:** 37 and 68 (repo-wide), then 69/70 → 71 → 75 → 76. Native (R16 50-61, 42/43) only after every Go-only ticket is resolved.
+
+**ORCHESTRATOR 9 STATUS (2026-10-24/25). History now.** Claude Code, Opus 5.5; Roboco chat b38c2f03. It took over from orchestrator 8 (chat 08b88b23; handoff doc `%TEMP%\gpui-go-handoff-orchestrator9.md`). The rules are those in orchestrator 8's block below, unchanged.
 - **Resolved (54 of 77):** orchestrator 8's 45, plus 15 (wheel latching, overscroll-behavior, keyboard scroll target, 100/3 px line step), 22 (close watchers + Escape), 35 (position: fixed), 19 (core text selection), 16 (drag and drop sequence), 23 (ShowModal), 24 (tooltip hook), 20 (text selectable by default) and 72 (Base overlays on core). Each has a verification comment and a map gist. The broad batch set passed in full after 15/22/35/19.
 - **Pi processes:** a pi chat's `cmd.exe` + `node.exe` pair (150-270 MB) stays alive after its turn, and it holds the worktree folder locked. After each merge, kill that worker's tree: find the `cmd.exe` whose command line names `--session ...gpui-go-wt-core-NN--` and `taskkill /PID <it> /T /F`. Roboco respawns pi with `--session` if the chat gets a new message. Never kill a running worker's pair.
 - **research-src:** `%TEMP%\research-src` was deleted in a user-approved disk cleanup (Pane chat, 14:24 UTC). Chromium is restored as a shallow blobless clone at 0d4dcd4ffc1d23d05eea824a8462be66288d2528 (`git show HEAD:<path>` fetches blobs on demand). Skia (e71ecd07) is not restored; re-fetch it the same way if needed. The Go build cache is 69 GB, but the user didn't pick clearing it, so leave it.
