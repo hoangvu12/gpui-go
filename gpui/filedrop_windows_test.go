@@ -847,13 +847,13 @@ func releaseMouseButton() {
 }
 
 // procWindowFromPoint resolves the window under a screen point;
-// procSetCursorPos places the cursor; procClientToScreen converts a
-// client point (the drag simulation's client-area scan).
+// procSetCursorPos places the cursor; ClientToScreen (the host's
+// procClientToScreen) converts a client point (the drag simulation's
+// client-area scan).
 var (
 	procWindowFromPoint = modUser32.NewProc("WindowFromPoint")
 	procGetWindow       = modUser32.NewProc("GetWindow")
 	procSetCursorPos    = modUser32.NewProc("SetCursorPos")
-	procClientToScreen  = modUser32.NewProc("ClientToScreen")
 )
 
 // bringWindowTopmostUnderCursor moves the window under the cursor,

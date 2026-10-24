@@ -516,7 +516,8 @@ func (w *Window) Close() { w.handle.Close() }
 func (w *Window) Bounds() (Bounds, error) { return w.handle.Bounds() }
 
 // SetBounds resizes and moves the window to the requested logical
-// bounds.
+// bounds; Bounds and SetBounds round-trip exactly (to device rounding),
+// so a saved position restores without drift.
 func (w *Window) SetBounds(bounds Bounds) { w.handle.SetBounds(bounds) }
 
 // ScaleFactor returns the window's current scale factor (device pixels

@@ -98,6 +98,10 @@ type Host struct {
 	// The reload-time type check (ticket 63): see typecheck.go.
 	typeCheck TypeChecker
 	typeDiags func([]TypeDiagnostic)
+	// reportedTypeErr is the last checker error already reported to
+	// stderr: the same error is reported once per session (see
+	// reportTypes).
+	reportedTypeErr string
 
 	// vmGen is the generation of the live VM: every Load builds a fresh
 	// one, and the timers, frame callbacks and in-flight fetches a

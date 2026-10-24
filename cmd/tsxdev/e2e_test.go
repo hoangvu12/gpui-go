@@ -5,8 +5,10 @@ package main
 // The dev command, end to end (ticket 66): a real supervisor process
 // running a real app — examples/tsx-hello in dev shape, copied to a
 // temp module so the edits the test makes never touch the repository —
-// with a real .tsx edit (an in-place reload, same process) and a real
-// .go edit (a rebuild, a graceful restart, state restored).
+// with a real .tsx edit (an in-place reload, same process) and two
+// real .go edits (each a rebuild, a graceful save-and-exit and a
+// restart; the second proves consecutive restarts restore the window
+// position exactly, without drifting).
 //
 // Headless throughout: the supervisor runs with script.DevHeadlessEnv
 // set, which the dev app honours by opening its window far off the
@@ -143,27 +145,22 @@ func TestEndToEndDevCommand(t *testing.T) {
 	// back, which is what a save captures), then its move, then the
 	// started line with the seed's state visible.
 	restoredA := log.expectBounds(t, "dev: window restored")
-	// What a set reads back is not always exactly what was set — the
-	// platform carries a client/frame offset (reference-inherited:
-	// windowRectFromClient splits the frame symmetrically). Calibrate
-	// it from this restore and reuse it for the restart's assertion,
-	// so the test tolerates the offset without magic numbers: a
-	// missed restore (the app's own default position) is still far
-	// outside these bounds.
-	var frameOffset [4]float64
-	want := [4]float64{float64(seedBounds.X), float64(seedBounds.Y), float64(seedBounds.Width), float64(seedBounds.Height)}
-	for i := range frameOffset {
-		frameOffset[i] = restoredA[i] - want[i]
-		if frameOffset[i] > 48 || frameOffset[i] < -48 {
-			t.Fatalf("the seeded position did not restore: %v (want %v; the frame offset is small)", restoredA, want)
-		}
-	}
+	// Bounds and SetBounds round-trip exactly now (the window places
+	// the requested client origin; the old symmetric-split frame math
+	// drifted every round trip), so the assertions are direct: what
+	// was saved is what comes back, and the only movement is the
+	// explicit drags. The tolerance is device rounding, not drift.
+	assertBoundsNear(t, "the seeded position", restoredA, [4]float64{
+		float64(seedBounds.X), float64(seedBounds.Y), float64(seedBounds.Width), float64(seedBounds.Height)})
 	movedA := log.expectBounds(t, "dev: window moved")
 	// The move is the drag a user would make — it must actually show
 	// in the window's position, beyond the rounding tolerance.
 	if dx, dy := movedA[0]-restoredA[0], movedA[1]-restoredA[1]; dx < dragDX-boundsTolerance || dy < dragDY-boundsTolerance {
 		t.Fatalf("the dev app did not move its window: %v -> %v", restoredA, movedA)
 	}
+	assertBoundsNear(t, "the moved position", movedA, [4]float64{
+		float64(seedBounds.X) + dragDX, float64(seedBounds.Y) + dragDY,
+		float64(seedBounds.Width), float64(seedBounds.Height)})
 	startLine := log.expectNext(t, "dev: started", 90*time.Second)
 	pidA, labelA := parseStarted(t, startLine)
 	pids = append(pids, pidA)
@@ -172,13 +169,13 @@ func TestEndToEndDevCommand(t *testing.T) {
 	}
 
 	// A slow machine gets out rather than taking the whole budget: what
-	// is left is the restart — one more app build and start, roughly
-	// the first phase minus the supervisor's own build — plus the
+	// is left is two restarts — two more app builds and starts, roughly
+	// the first phase minus the supervisor's own build each — plus the
 	// graceful stop. The state restore and first start above already
 	// passed; the estimate says why the rest is skipped.
 	firstPhase := time.Since(started)
-	if estimated := firstPhase + (firstPhase - supBuild) + 5*time.Second; estimated > 60*time.Second {
-		t.Skipf("the first phase (supervisor build %v + app build and start %v) took %v on this loaded machine; the restart would repeat the app build, putting the whole session at ~%v, over the ~60s end-to-end budget", supBuild, firstPhase-supBuild, firstPhase, estimated)
+	if estimated := firstPhase + 2*(firstPhase-supBuild) + 5*time.Second; estimated > 60*time.Second {
+		t.Skipf("the first phase (supervisor build %v + app build and start %v) took %v on this loaded machine; the two restarts would repeat the app build, putting the whole session at ~%v, over the ~60s end-to-end budget", supBuild, firstPhase-supBuild, firstPhase, estimated)
 	}
 
 	// A .tsx save: an in-place reload — the same process, the fresh
@@ -194,32 +191,50 @@ func TestEndToEndDevCommand(t *testing.T) {
 	}
 
 	// A .go save: a rebuild, a graceful save-and-exit, a restart — and
-	// the state comes back: the same keyed count, the position the app
-	// was moved to, and the key the edited .tsx added (which only the
-	// save could have written: the seed did not have it).
-	editGo(t, appDir)
-	restoredB := log.expectBounds(t, "dev: window restored")
-	// The replacement restores what the first app saved: the moved
-	// position, one frame offset above it (the same offset every set
-	// carries, calibrated above).
-	assertBoundsNear(t, "the moved position", restoredB, [4]float64{
-		movedA[0] + frameOffset[0], movedA[1] + frameOffset[1], movedA[2] + frameOffset[2], movedA[3] + frameOffset[3]})
-	startLine = log.expectNext(t, "dev: started", 90*time.Second)
-	pidB, labelB := parseStarted(t, startLine)
-	pids = append(pids, pidB)
-	if pidB == pidA {
-		t.Fatal("the .go edit did not restart the app: the same pid came back")
+	// the state comes back. Two of them in a row: each replacement
+	// restores exactly the position the previous app was moved to (the
+	// bounds round trip is exact, so consecutive restarts cannot drift
+	// — a per-restart offset would show up doubled here), the keyed
+	// count survives, and the key the edited .tsx added stays (only a
+	// save could have written it: the seed did not have it).
+	restarts := 0
+	restart := func(priorMoved [4]float64, priorPid int) ([4]float64, int) {
+		t.Helper()
+		restarts++
+		editGo(t, appDir, restarts)
+		restored := log.expectBounds(t, "dev: window restored")
+		assertBoundsNear(t, "the restarted position", restored, priorMoved)
+		moved := log.expectBounds(t, "dev: window moved")
+		assertBoundsNear(t, "the position after the restart's own move", moved, [4]float64{
+			priorMoved[0] + dragDX, priorMoved[1] + dragDY, priorMoved[2], priorMoved[3]})
+		startLine := log.expectNext(t, "dev: started", 90*time.Second)
+		pid, label := parseStarted(t, startLine)
+		pids = append(pids, pid)
+		if pid == priorPid {
+			t.Fatalf("the .go edit did not restart the app: the same pid %d came back", pid)
+		}
+		if label != fmt.Sprintf("Hello DEV! %d", int(seedClicks)) {
+			t.Fatalf("the restarted app's label = %q, want the kept count over the edited text", label)
+		}
+		return moved, pid
 	}
-	if labelB != fmt.Sprintf("Hello DEV! %d", int(seedClicks)) {
-		t.Fatalf("the restarted app's label = %q, want the kept count over the edited text", labelB)
-	}
-	// The restart's own timing line may land before or after the
-	// replacement's startup lines (the child starts concurrently).
+	movedB, pidB := restart(movedA, pidA)
 	t.Logf("edit-to-restart: %s", log.eventually(t, "tsxdev: rebuilt", 30*time.Second))
+	movedC, pidC := restart(movedB, pidB)
+	if pidC == pidA || pidC == pidB {
+		t.Fatal("the second .go edit did not restart the app")
+	}
+	// The whole chain, end to end: the only movement since the seed is
+	// the three explicit drags — two restarts in between moved the
+	// window by nothing (a per-restart offset would show up doubled
+	// here, well outside the tolerance).
+	assertBoundsNear(t, "the position after two restarts (no drift)", movedC, [4]float64{
+		float64(seedBounds.X) + 3*dragDX, float64(seedBounds.Y) + 3*dragDY,
+		float64(seedBounds.Width), float64(seedBounds.Height)})
 
-	// The handoff file the first app wrote on its way out: exactly the
-	// position the window read after its move (the save reads the
-	// window, so no offset sits in between).
+	// The handoff file the second app wrote on its way out: exactly the
+	// position it read after its move (the save reads the window),
+	// which the third app restored above (no drift between them).
 	state, err := script.ReadDevState(statePath)
 	if err != nil {
 		t.Fatalf("read the handoff: %v", err)
@@ -236,7 +251,7 @@ func TestEndToEndDevCommand(t *testing.T) {
 	assertBoundsNear(t, "the saved position", [4]float64{
 		float64(state.Window.X), float64(state.Window.Y),
 		float64(state.Window.Width), float64(state.Window.Height)},
-		movedA)
+		movedB)
 
 	// The graceful stop: a closed stdin (the supervisor's other stop
 	// channel) asks the app to save and exit; the supervisor exits 0.
@@ -331,15 +346,16 @@ func editTsx(t *testing.T, appDir string) {
 	}
 }
 
-// editGo makes the save that rebuilds: a comment in the app's main.
-func editGo(t *testing.T, appDir string) {
+// editGo makes the save that rebuilds: a distinct comment in the
+// app's main each time, so the tree differs per restart.
+func editGo(t *testing.T, appDir string, n int) {
 	t.Helper()
 	path := filepath.Join(appDir, "main.go")
 	src, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	src = append(src, []byte("\n// a dev edit: the supervisor must rebuild and restart\n")...)
+	src = append(src, []byte(fmt.Sprintf("\n// dev edit %d: the supervisor must rebuild and restart\n", n))...)
 	if err := os.WriteFile(path, src, 0o644); err != nil {
 		t.Fatal(err)
 	}

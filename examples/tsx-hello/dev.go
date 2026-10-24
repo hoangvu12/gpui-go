@@ -90,12 +90,11 @@ func runDev() error {
 		},
 	}, func(app *gpui.App, window *gpui.Window) {
 		// Restore where the previous run left the window — through the
-		// public window API, like everything else here. What the window
-		// reads back after a set is not always exactly what was set (the
-		// platform's client/frame offset, inherited from the reference:
-		// windowRectFromClient splits the frame symmetrically); the
-		// prints below read the window, so what they show is what a
-		// save will capture and a restart compares against.
+		// public window API, like everything else here. Bounds and
+		// SetBounds round-trip exactly, so what a restart restores is
+		// what the previous run saved, with no drift; the prints read
+		// the window, so what they show is what a save captures and a
+		// restart compares against.
 		restored := false
 		if saved, ok := state.WindowBounds(); ok {
 			window.SetBounds(saved)
