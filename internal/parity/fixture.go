@@ -132,6 +132,22 @@ type PixelTolerance struct {
 	MaxHotPixelFraction float64 `json:"maxHotPixelFraction"`
 }
 
+// EmulatedMediaFeature is one CDP emulated media feature the recorder
+// applies to the page before loading it (Emulation.setEmulatedMedia,
+// features: [{name, value}]): forced-colors active, prefers-color-scheme,
+// print, and the rest of the media-feature emulation vocabulary. The
+// features are record-time only (like ChromeFlags): the replay never
+// reads them, but the record they produce — a page rendered under
+// those features — is what the replay compares against, so the feature
+// set is part of the fixture's identity; copy it when cloning a
+// fixture (the forcedcolors fixture is the pattern).
+type EmulatedMediaFeature struct {
+	// Name is the media feature name ("forced-colors").
+	Name string `json:"name"`
+	// Value is the feature's value ("active", "none", ...).
+	Value string `json:"value"`
+}
+
 // Fixture is one browser-parity fixture: an HTML/CSS page, the
 // equivalent gpui-go view, the scripted input sequence, and the
 // comparison policy.
@@ -192,6 +208,30 @@ type Fixture struct {
 	// record, so the flag set is part of the fixture's identity — copy
 	// the flags into the new fixture when cloning one.
 	ChromeFlags []string
+	// EmulatedMedia are the CDP emulated media features the recorder
+	// applies before loading the page (record-time only, like
+	// ChromeFlags; see EmulatedMediaFeature). The forced-colours fixture
+	// records with forced-colors active so its Chrome record carries the
+	// mapped system colours.
+	EmulatedMedia []EmulatedMediaFeature
+	// ComputedScript, when non-empty, is a JavaScript expression the
+	// recorder evaluates on the settled page (after the input steps,
+	// before the screenshot); its value must be a JSON object of strings
+	// and lands verbatim in Record.Computed. A fixture that needs
+	// page-computed values on the replay side records them here — the
+	// forced-colours fixture reads Chrome's emulated system palette out
+	// of the record so its replay injects the exact colours the record
+	// was rendered with, independent of the machine's theme.
+	ComputedScript string
+	// Configure, when non-nil, runs on the replay's application right
+	// after it is created, before the test window and the fixture's
+	// view: the place to pin app-level state the view's styles resolve
+	// against (the forced-colours fixture installs the palette Chrome
+	// used and turns the pass on through gpui.App.SetForcedColors). It
+	// runs in every replay of the fixture — the harness's own run, the
+	// tolerance headroom check, and the discrimination tests — because
+	// the fixture value is copied wholesale when a test swaps the View.
+	Configure func(app *gpui.App) error
 
 	// SkipPixels, when non-empty, skips the Tier C pixel comparison
 	// (and its tolerance-headroom check) with this reason, while Tier A

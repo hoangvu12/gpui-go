@@ -1,0 +1,65 @@
+{
+  "name": "forcedcolors",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T03:12:51Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "alpha": {
+      "x": 200,
+      "y": 126,
+      "width": 240,
+      "height": 64
+    },
+    "keep": {
+      "x": 200,
+      "y": 294,
+      "width": 240,
+      "height": 64
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "shadow": {
+      "x": 200,
+      "y": 210,
+      "width": 240,
+      "height": 64
+    },
+    "text-line": {
+      "x": 200,
+      "y": 42,
+      "width": 240,
+      "height": 64
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png",
+  "computed": {
+    "accentcolor": "#ffffff",
+    "accentcolortext": "#ffffff",
+    "activetext": "#ffff00",
+    "buttonborder": "#ffffff",
+    "buttonface": "#000000",
+    "buttontext": "#ffffff",
+    "canvas": "#000000",
+    "canvastext": "#ffffff",
+    "field": "#000000",
+    "fieldtext": "#ffffff",
+    "graytext": "#3ff23f",
+    "highlight": "#1aebff",
+    "highlighttext": "#000000",
+    "linktext": "#ffff00",
+    "mark": "#ffff00",
+    "marktext": "#000000",
+    "selecteditem": "#1967d2",
+    "selecteditemtext": "#ffffff",
+    "visitedtext": "#ffff00"
+  }
+}

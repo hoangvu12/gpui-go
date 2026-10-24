@@ -938,6 +938,12 @@ type Style struct {
 	// Text is the text style refinement the element cascades
 	// (style.rs:380).
 	Text TextStyleRefinement
+	// ForcedColorAdjust is the forced-color-adjust property (CSS Color
+	// Adjustment 1): Auto (the default) maps the element's colours onto
+	// the system palette while the forced-colours pass is active,
+	// None opts the element out (browser-core ticket 29; see
+	// forced_colors.go).
+	ForcedColorAdjust ForcedColorAdjust
 	// MouseCursor is the cursor shown over the element (style.rs:383).
 	MouseCursor *CursorStyle
 	// Opacity is the element opacity (style.rs:386).

@@ -85,14 +85,22 @@ func Replay(t testing.TB, f Fixture) (*ReplayResult, error) {
 	}
 	ta := gpui.NewTestApp()
 	t.Cleanup(func() { _ = ta.App().Shutdown() })
-	window := gpui.NewTestWindow(ta.App(), gpui.Size{Width: f.Window.Width, Height: f.Window.Height})
+	app := ta.App()
+	// The fixture's app-level configuration runs before the window and
+	// the view, so the first frame already resolves styles against it
+	// (the forced-colours pass's palette).
+	if f.Configure != nil {
+		if err := f.Configure(app); err != nil {
+			return nil, fmt.Errorf("parity: %s: configuring the app: %w", f.Name, err)
+		}
+	}
+	window := gpui.NewTestWindow(app, gpui.Size{Width: f.Window.Width, Height: f.Window.Height})
 	t.Cleanup(func() { gpui.CloseTestWindow(window) })
 	if err := gpui.UseRealTextSystem(window); err != nil {
 		return nil, fmt.Errorf("parity: %s: real text system: %w", f.Name, err)
 	}
 
 	log := &EventLog{}
-	app := ta.App()
 	build := f.View
 	if build == nil {
 		build = func(l *EventLog) gpui.AnyElement { return f.ViewWithWindow(l, window, app) }

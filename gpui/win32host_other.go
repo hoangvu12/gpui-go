@@ -2,7 +2,10 @@
 
 package gpui
 
-import "fmt"
+import (
+	"fmt"
+	"sync/atomic"
+)
 
 // The Win32 host stub for non-windows builds: the same public surface
 // as win32host_windows.go with typed errors instead of windows, so the
@@ -15,6 +18,11 @@ import "fmt"
 type Host struct {
 	startedOnce bool
 	stopped     bool
+	// systemPrefsStamp is the windows host's system-preference record
+	// version, mirrored so the platform-neutral forced-colours cache
+	// (forced_colors.go) compiles; the stub never bumps it, so the
+	// record (and the derived state) stays constant here.
+	systemPrefsStamp atomic.Uint64
 }
 
 // NewHost creates a host. On non-windows builds it cannot start.
@@ -37,6 +45,12 @@ func (h *Host) Wait() error { return ErrHostUnsupportedPlatform }
 
 // ThreadID reports 0: no foreground thread exists here.
 func (h *Host) ThreadID() uint32 { return 0 }
+
+// systemPreferencesStamp reports the (never-bumped) record version;
+// see the field.
+func (h *Host) systemPreferencesStamp() uint64 {
+	return h.systemPrefsStamp.Load()
+}
 
 // IsForegroundThread reports false: the Win32 foreground thread does
 // not exist here.

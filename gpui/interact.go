@@ -1184,6 +1184,12 @@ func (d *DivElement) computeStyleInternal(hitbox *Hitbox, es *InteractiveElement
 			style.Refine(d.activeStyle)
 		}
 	}
+
+	// The forced-colours pass (browser-core 29) runs last, like
+	// Chromium's adjuster after the cascade (style_adjuster.cc:1326-
+	// 1327): the fully resolved style maps onto the system palette when
+	// the pass is active and the element did not opt out.
+	applyForcedColorsToStyle(&style, app)
 	return style
 }
 

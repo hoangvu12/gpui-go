@@ -110,6 +110,22 @@ type App struct {
 	// host is the real-mode platform host attached by Attach/Run; nil in
 	// test applications.
 	host *Host
+
+	// forcedColorsOverride pins the forced-colours pass's state when
+	// set (App.SetForcedColors, forced_colors.go); nil means the pass
+	// derives from the system preferences (App.ForcedColors).
+	forcedColorsOverride *ForcedColorsState
+	// forcedColorsCache is the style-resolution path's cached
+	// derivation of the pass state, derived at the host's
+	// forcedColorsStamp record version (browser-core 29): the host
+	// bumps its stamp on every system-preference refresh, so the cache
+	// re-derives at most once per record version instead of once per
+	// element per frame. Foreground-thread state, like the rest of the
+	// frame path that reads it; forcedColorsDerivations counts the
+	// derivations (the no-per-element-host-reads test's seam).
+	forcedColorsCache       ForcedColorsState
+	forcedColorsStamp       uint64
+	forcedColorsDerivations int
 	// platformWake wakes the real-mode foreground dispatcher when the
 	// scheduler gains runnable work (installed by Host.attach; nil in
 	// test applications, whose tests drive the scheduler themselves).

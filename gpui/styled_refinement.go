@@ -165,6 +165,12 @@ type StyleRefinement struct {
 
 	Text TextStyleRefinement
 
+	// ForcedColorAdjust is the forced-color-adjust opt-out of the
+	// forced-colours pass (browser-core ticket 29): None keeps the
+	// element's authored colours under forced colours; Auto (absent) is
+	// the CSS default.
+	ForcedColorAdjust Optional[ForcedColorAdjust]
+
 	MouseCursor Optional[CursorStyle]
 	Opacity     Optional[float32]
 
@@ -325,6 +331,7 @@ func (s *Style) refineBoxed(r *StyleRefinement, boxes *styleBoxes) {
 	refinePointer(&s.ObjectPosition, r.ObjectPosition)
 	refinePointer(&s.ImageRendering, r.ImageRendering)
 	s.Text.Merge(&r.Text)
+	refineValue(&s.ForcedColorAdjust, r.ForcedColorAdjust)
 	refineBoxed(&s.MouseCursor, r.MouseCursor, &boxes.mouseCursor, equalComparable[CursorStyle])
 	refinePointer(&s.Opacity, r.Opacity)
 	refinePointer(&s.GridCols, r.GridCols)
@@ -415,6 +422,7 @@ func (r *StyleRefinement) Refine(other *StyleRefinement) {
 	mergeOptional(&r.ObjectPosition, other.ObjectPosition)
 	mergeOptional(&r.ImageRendering, other.ImageRendering)
 	r.Text.Merge(&other.Text)
+	mergeOptional(&r.ForcedColorAdjust, other.ForcedColorAdjust)
 	mergeOptional(&r.MouseCursor, other.MouseCursor)
 	mergeOptional(&r.Opacity, other.Opacity)
 	mergeOptional(&r.GridCols, other.GridCols)

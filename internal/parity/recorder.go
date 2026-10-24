@@ -127,6 +127,14 @@ func RecordFixture(f Fixture) error {
 	if err := page.setDeviceMetrics(int(f.Window.Width+0.5), int(f.Window.Height+0.5), DeviceScaleFactor); err != nil {
 		return err
 	}
+	// The fixture's emulated media features apply before the page loads,
+	// so the first style resolution already sees them (forced-colors
+	// active restyles the page from scratch).
+	if len(f.EmulatedMedia) > 0 {
+		if err := page.setEmulatedMedia(f.EmulatedMedia); err != nil {
+			return err
+		}
+	}
 	if err := page.navigate("file:///" + filepath.ToSlash(pagePath)); err != nil {
 		return err
 	}
@@ -179,6 +187,18 @@ func RecordFixture(f Fixture) error {
 	if err := json.Unmarshal([]byte(boxesJSON), &boxes); err != nil {
 		return fmt.Errorf("parsing the element boxes: %w", err)
 	}
+	var computed map[string]string
+	if f.ComputedScript != "" {
+		computedJSON, err := page.evaluate(f.ComputedScript)
+		if err != nil {
+			return fmt.Errorf("evaluating the fixture's computed script: %w", err)
+		}
+		if computedJSON != "" {
+			if err := json.Unmarshal([]byte(computedJSON), &computed); err != nil {
+				return fmt.Errorf("parsing the computed script's result (it must be a JSON object of strings): %w", err)
+			}
+		}
+	}
 	png, err := page.screenshot()
 	if err != nil {
 		return fmt.Errorf("capturing the screenshot: %w", err)
@@ -192,6 +212,7 @@ func RecordFixture(f Fixture) error {
 		DeviceScaleFactor: float64(DeviceScaleFactor),
 		Boxes:             boxes,
 		Events:            events,
+		Computed:          computed,
 	}
 	if err := writeRecord(record, png, f.HTML); err != nil {
 		return err
@@ -425,6 +446,19 @@ func (p *cdpPage) setDeviceMetrics(width, height int, scale float32) error {
 	_, err := p.call("Emulation.setDeviceMetricsOverride", map[string]any{
 		"width": width, "height": height, "deviceScaleFactor": scale, "mobile": false,
 	})
+	return err
+}
+
+// setEmulatedMedia applies the fixture's emulated media features
+// (Emulation.setEmulatedMedia), before the page loads: forced-colors
+// active restyles the page (the browser's forced-colours mode, whose
+// emulated palette the fixture reads back through its ComputedScript).
+func (p *cdpPage) setEmulatedMedia(features []EmulatedMediaFeature) error {
+	list := make([]map[string]string, len(features))
+	for i, feature := range features {
+		list[i] = map[string]string{"name": feature.Name, "value": feature.Value}
+	}
+	_, err := p.call("Emulation.setEmulatedMedia", map[string]any{"features": list})
 	return err
 }
 
