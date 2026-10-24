@@ -15,7 +15,8 @@ import "fmt"
 //     user turns high contrast off — so there is no opt-in flag; apps
 //     that need a deterministic pass (tests, a "preview high contrast"
 //     developer toggle) pin the state with App.SetForcedColors, which
-//     wins until cleared.
+//     wins until cleared, and pinning Active false turns the pass off
+//     for the whole app (the spec's optional pass).
 //   - The mapping is Chromium's AdjustForForcedColorsMode
 //     (third_party/blink/renderer/core/css/resolver/style_adjuster.cc:
 //     1034-1058 @ 0d4dcd4f) plus the ShouldForceColor accessors
@@ -40,10 +41,16 @@ import "fmt"
 // The pass runs at the END of style resolution — the div's
 // computeStyleInternal (interact.go) and the image's computeStyle —
 // so it sees the fully refined style, like the adjuster that runs after
-// the cascade. Because every frame re-resolves every style, the mapping
-// follows the live preference record without its own invalidation
-// machinery; a host whose WM_SETTINGCHANGE flipped the record
-// (system_prefs_windows.go) shows the new colours on the next redraw.
+// the cascade. The style-resolution path reads the pass state through
+// a cached derivation (styleForcedColors): the host versions its
+// system-preference record with a stamp it bumps on every refresh
+// (WM_SETTINGCHANGE and family), so the style path re-derives at most
+// once per record version — no host accessor round trip per element —
+// and a preference flip is visible on the very next style resolution
+// (the next frame), with no invalidation machinery of its own. The
+// application-level opt-out is SetForcedColors(&ForcedColorsState{
+// Active: false}): the pass is off for the whole app, whatever the OS
+// reports.
 //
 // Not mapped (no Style-layer equivalent in the port): caret-color (the
 // editor draws its own caret), column-rule-color (no multi-column
@@ -103,8 +110,11 @@ type ForcedColorsState struct {
 // state derived from the system preferences (active exactly when the
 // system reports forced colours, the palette the system reports). A
 // hostless test application answers the documented default record: the
-// pass is off. The derivation is live — every read re-derives — so a
-// preference change is visible on the next frame.
+// pass is off. This is the always-fresh, any-thread spelling: every
+// call derives through the host accessors (SystemPreferences and
+// SystemColors marshal to the foreground), so a preference change is
+// visible on the next call. The style-resolution path uses the cached
+// styleForcedColors spelling instead (no host round trip per element).
 func (a *App) ForcedColors() ForcedColorsState {
 	if a.forcedColorsOverride != nil {
 		return *a.forcedColorsOverride
@@ -112,21 +122,58 @@ func (a *App) ForcedColors() ForcedColorsState {
 	if a.host == nil {
 		return ForcedColorsState{}
 	}
+	return a.deriveForcedColors()
+}
+
+// deriveForcedColors derives the pass state from the live records.
+func (a *App) deriveForcedColors() ForcedColorsState {
 	return ForcedColorsState{
 		Active: a.SystemPreferences().ForcedColors,
 		Colors: a.SystemColors(),
 	}
 }
 
+// styleForcedColors is the style-resolution path's read of the pass
+// state: the application's cached derivation, re-derived only when the
+// host's system-preference record version moved (the host bumps its
+// stamp on every WM_SETTINGCHANGE-family refresh, system_prefs_
+// windows.go). One derivation per record version — two foreground
+// accessor calls — instead of two per element per frame; an inactive
+// read is an override check, a host check and one atomic load. The
+// cache is foreground-thread state, like the rest of the frame path
+// that reaches here (element request/prepaint/paint run on the
+// application's foreground thread); App.ForcedColors is the any-thread
+// spelling.
+func (a *App) styleForcedColors() ForcedColorsState {
+	if a.forcedColorsOverride != nil {
+		return *a.forcedColorsOverride
+	}
+	if a.host == nil {
+		return ForcedColorsState{}
+	}
+	if stamp := a.host.systemPreferencesStamp(); stamp != a.forcedColorsStamp {
+		a.forcedColorsStamp = stamp
+		a.forcedColorsDerivations++
+		a.forcedColorsCache = a.deriveForcedColors()
+	}
+	return a.forcedColorsCache
+}
+
 // SetForcedColors pins the forced-colours pass's state (the
 // preference-driven derivation stops while the override is set); nil
-// clears the pin and returns to the derived state. This is the
+// clears the pin and returns to the derived state. Pinning
+// &ForcedColorsState{Active: false} is the application-level opt-out —
+// the pass is off for the whole app, whatever the OS reports (the
+// spec's "optional" pass: an app whose own palette already meets
+// high-contrast needs can refuse the mapping). This is also the
 // deterministic spelling for tests and for apps that preview the pass
 // (a high-contrast preview toggle); an app that wants the real
 // behaviour never calls it — the pass follows the OS. Call it inside
 // App.Update; a change queues the RefreshWindows effect so every
 // window redraws with the new state (the SetReduceMotion shape,
-// app.rs:1123-1129).
+// app.rs:1123-1129). Clearing the pin re-derives on the next style
+// read if the host record moved while it was set (the stamp compare
+// catches up), so no extra invalidation is needed.
 func (a *App) SetForcedColors(state *ForcedColorsState) {
 	if a.forcedColorsOverride == nil && state == nil {
 		return
@@ -141,15 +188,23 @@ func (a *App) SetForcedColors(state *ForcedColorsState) {
 // applyForcedColorsToStyle maps s's colours onto the system palette at
 // the end of style resolution (the port of AdjustForForcedColorsMode
 // plus the ShouldForceColor accessors; see the file comment). Inactive
-// passes and opted-out elements return unchanged.
+// passes and opted-out elements return unchanged — the opt-out check
+// first (it needs no app state), then the cached pass state, so the
+// inactive path makes no host accessor calls and allocates nothing.
 func applyForcedColorsToStyle(s *Style, app *App) {
-	if !app.forcedColorsActive() {
-		return
-	}
 	if s.ForcedColorAdjust == ForcedColorAdjustNone {
 		return
 	}
-	colors := app.ForcedColors().Colors
+	state := app.styleForcedColors()
+	if !state.Active {
+		return
+	}
+	applyForcedColors(s, state.Colors)
+}
+
+// applyForcedColors is the mapping body: colors is the system palette
+// the pass resolved (styleForcedColors).
+func applyForcedColors(s *Style, colors SystemColors) {
 	forcedColor := colors.CanvasText
 
 	// color: every element's used colour is the forced colour
@@ -228,16 +283,4 @@ func applyForcedColorsToStyle(s *Style, app *App) {
 func withAlpha(color Hsla, a float32) Hsla {
 	color.A = clamp01(a)
 	return color
-}
-
-// forcedColorsActive is the pass's cheap gate: the override's flag, or
-// the derived preference (a hostless app is never active).
-func (a *App) forcedColorsActive() bool {
-	if a.forcedColorsOverride != nil {
-		return a.forcedColorsOverride.Active
-	}
-	if a.host == nil {
-		return false
-	}
-	return a.SystemPreferences().ForcedColors
 }

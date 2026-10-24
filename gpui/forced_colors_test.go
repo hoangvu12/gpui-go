@@ -304,3 +304,42 @@ func TestForcedColorsMapsTheImageStyle(t *testing.T) {
 		t.Fatalf("image border color = %+v, want CanvasText", border)
 	}
 }
+
+// BenchmarkForcedColorsInactiveGate measures the pass's inactive gate on
+// the style-resolution path: the opt-out check, the cached state read
+// (override check, host check, one atomic stamp load) and the early
+// return — no host accessor calls, no allocation. The paired active
+// benchmark shows the mapping's own cost for contrast.
+func BenchmarkForcedColorsInactiveGate(b *testing.B) {
+	ta := NewTestApp()
+	app := ta.App()
+	style := DefaultStyle()
+	style.Text.Color = Some(Rgb(0xdc2626))
+	background := SolidBackground(Rgb(0x2563eb))
+	style.Background = &background
+	app.Update(func(*App) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			applyForcedColorsToStyle(&style, app)
+		}
+	})
+}
+
+// BenchmarkForcedColorsActiveMapping measures the mapping with the pass
+// pinned on: the colour writes (the background and decoration colours
+// box fresh values) per style.
+func BenchmarkForcedColorsActiveMapping(b *testing.B) {
+	ta := NewTestApp()
+	app := ta.App()
+	forceForcedColors(app)
+	style := DefaultStyle()
+	style.Text.Color = Some(Rgb(0xdc2626))
+	background := SolidBackground(Rgb(0x2563eb))
+	style.Background = &background
+	app.Update(func(*App) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			applyForcedColorsToStyle(&style, app)
+		}
+	})
+}

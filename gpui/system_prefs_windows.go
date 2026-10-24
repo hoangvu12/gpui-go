@@ -250,6 +250,7 @@ func (h *Host) seedSystemPreferencesOnHostThread() {
 	snap := systemSettingsSnapshotProvider()
 	h.desktop.systemPrefs = deriveSystemPreferences(snap)
 	h.desktop.systemColors = deriveSystemColors(snap)
+	h.systemPrefsStamp.Add(1)
 }
 
 // refreshSystemPreferencesOnHostThread re-reads the snapshot, updates the
@@ -264,6 +265,10 @@ func (h *Host) refreshSystemPreferencesOnHostThread(forceInForcedColors bool) {
 	changed := prefs != h.desktop.systemPrefs || colors != h.desktop.systemColors
 	h.desktop.systemPrefs = prefs
 	h.desktop.systemColors = colors
+	// The stamp moves with the record, before any observer notification:
+	// a frame the notification triggers re-derives the forced-colours
+	// state exactly once (forced_colors.go's style-path cache).
+	h.systemPrefsStamp.Add(1)
 	if changed || (forceInForcedColors && prefs.ForcedColors) {
 		h.withDesktopCallback(
 			func(c *desktopCallbacks) *func(SystemPreferences, SystemColors) {

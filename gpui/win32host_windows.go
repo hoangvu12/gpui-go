@@ -1467,8 +1467,15 @@ type Host struct {
 	// callers that are NOT the foreground thread anymore — the exact
 	// bug that let a second Stop() post a WM_QUIT into a thread nobody
 	// pumps, killing the next host that reused that thread.
-	threadID         uint32
-	loopDone         atomic.Bool
+	threadID uint32
+	loopDone atomic.Bool
+	// systemPrefsStamp versions the cached system-preference record
+	// (browser-core 29): the host thread bumps it on every seed and
+	// refresh of the record (system_prefs_windows.go), and the
+	// application's style-resolution path reads it with one atomic load
+	// to re-derive the forced-colours state only when the record moved
+	// — no host round trip per element (forced_colors.go).
+	systemPrefsStamp atomic.Uint64
 	platformHWND     uintptr
 	windowSeq        uint64
 	windows          map[uintptr]*hostWindow
@@ -1906,6 +1913,14 @@ func (h *Host) Stop() error {
 // ThreadID returns the host (foreground) thread's OS id, or 0 before
 // the host started.
 func (h *Host) ThreadID() uint32 { return h.threadID }
+
+// systemPreferencesStamp returns the system-preference record's
+// version: bumped on every host-thread seed and refresh of the record
+// (see the field). The App's style-resolution path loads it to decide
+// whether to re-derive the forced-colours state (forced_colors.go).
+func (h *Host) systemPreferencesStamp() uint64 {
+	return h.systemPrefsStamp.Load()
+}
 
 // hostStarted reports whether the host's message loop has been started
 // (Start completed its boot). App.Update's foreground marshal only
