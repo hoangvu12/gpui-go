@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 10 (Claude Code)
 Blocked by: none
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-25, orchestrator 10: verified and merged (3952f29). One fix on merge: a display class under a variant (`hover:flex`) was counted as an explicit display, but it only sets display in that state, so the base still relies on the default. Variant-prefixed classes now don't count (`!flex`/`flex!` still do); the test case moved to the pinning table. No such class is used in the repo today. `go test ./cmd/displaycodemod` ok; the dry run matches the worker's counts; `./internal/parity/...` ok on the merged tree. inlinespec TestInlineDivPlacesElementChildrenInTextFlow and listspec TestUniformListRetainsFocusedItemDispatch fail on main independently of 68 (outside the batch set; followed up separately).
 
 ## Answer
 

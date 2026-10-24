@@ -13,7 +13,7 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 **HANDOFF 2026-10-24 (orchestrator 8 → orchestrator 9).** History: `%TEMP%\gpui-go-handoff-orchestrator9.md`; the predecessor was Roboco chat 08b88b23.
 
 **ORCHESTRATOR 10 STATUS (2026-10-25). Latest.** Claude Code, Opus 5.5; Roboco chat d041f254. It took over from orchestrator 9 (chat b38c2f03; handoff doc `%TEMP%\gpui-go-handoff-orchestrator10.md`). Rules: orchestrator 8's block plus the native decision above.
-- **Resolved (56 of 77):** 45 (smooth scrolling; merge e52bfd0, which dropped a duplicate `pointSub`), 73 (Base editing on the core; merge b0c6e0c). The broad batch set passed after 45+73 (62 ok; clipspec contention and the gpui/script timing flake re-ran or are known).
+- **Resolved (57 of 77):** 45 (smooth scrolling; merge e52bfd0, which dropped a duplicate `pointSub`), 73 (Base editing on the core; merge b0c6e0c), 68 (display codemod; merge 1936d2c, variant-prefixed display classes fixed). The broad batch set passed after 45+73 (62 ok; clipspec contention and the gpui/script timing flake re-ran or are known).
 - **Running:** 37 (chat a2046e8e, `gpui-go-wt-core-37`, `core/37-line-height`); 68 (chat 90b9fdde, `gpui-go-wt-core-68`, `core/68-display-codemod`; the tool only, 69/70 apply it).
 - **Next:** 37 and 68 (repo-wide), then 69/70 → 71 → 75 → 76. Native (R16 50-61, 42/43) only after every Go-only ticket is resolved.
 
