@@ -426,8 +426,12 @@ func deriveSystemColors(s systemSettingsSnapshot) SystemColors {
 // SystemPreferences returns the current system-preference record. A real
 // application answers the host's cached record, refreshed on Windows
 // settings messages; a test application (no host) answers the documented
-// default. Follow changes with OnSystemPreferencesChanged.
+// default, or the record pinned by TestApp.WithSystemPreferences. Follow
+// changes with OnSystemPreferencesChanged.
 func (a *App) SystemPreferences() SystemPreferences {
+	if a.testSystemPreferences != nil {
+		return *a.testSystemPreferences
+	}
 	if a.host == nil {
 		return defaultSystemPreferences()
 	}

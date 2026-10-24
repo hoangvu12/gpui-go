@@ -2,10 +2,15 @@ package base
 
 // Mount presence: an element that enters, stays, exits and only unmounts
 // after its exit finished (U:motion/presence.rs).
+//
+// Ticket 74: the phases are Base's, but the transition itself runs on
+// the core's keyed engine — Sample is a thin mapping over
+// gpui.TransitionFromWithStatus, which seeds the keyed state from 0 the
+// way presence's own state machine used to (U:motion/presence.rs:128-135)
+// and applies the engine's retarget, reversal and reduced-motion rules.
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/hoangvu12/gpui-go/gpui"
 )
@@ -68,79 +73,28 @@ func (p Presence) Transition(transition Transition) Presence {
 	return p
 }
 
-// presenceState is the keyed state (U:motion/presence.rs:128-135).
-type presenceState struct {
-	from, target    float32
-	startedAt       time.Duration
-	reversingFactor float32
-	duration        time.Duration
-}
-
 // Sample samples the presence and requests a frame while it moves
 // (U:motion/presence.rs:48-125). A first sample of a present element
-// enters from 0; reduced motion and a zero duration resolve at once.
+// enters from 0 (the engine seam seeds its keyed state with from = 0);
+// an element that was never present still runs its exit duration out —
+// that clock is what a transit driven by an outgoing presence measures
+// (nav_stack). Reduced motion and a zero duration resolve at once, both
+// through the engine's single reduced-motion source (App.MotionReduced).
 func (p Presence) Sample(w *gpui.Window, cx *gpui.App) PresenceSample {
-	key := gpui.NamedChildElementID(p.id.Key(), "__presence")
-	now := cx.Now()
 	var target float32
 	if p.present {
 		target = 1
 	}
-	state := w.UseKeyedState[presenceState](key, cx, func(*gpui.Window, *gpui.Context[presenceState]) presenceState {
-		return presenceState{from: 0, target: target, startedAt: now, reversingFactor: 1, duration: p.transition.Duration()}
-	})
-	snapshot := state.Read(cx, func(s *presenceState, _ *gpui.App) presenceState { return *s })
-
-	if cx.ReduceMotion() || p.transition.Duration() == 0 {
-		if snapshot.from != target || snapshot.target != target {
-			state.Update(cx, func(s *presenceState, _ *gpui.Context[presenceState]) {
-				s.from = target
-				s.target = target
-				s.startedAt = now
-				s.reversingFactor = 1
-				s.duration = p.transition.Duration()
-			})
-		}
-		return stablePresenceSample(p.present)
-	}
-
-	elapsed := satSubDuration(now, snapshot.startedAt)
-	progress, status := p.transition.Progress(elapsed, snapshot.duration)
-	sampled := lerp32(snapshot.from, snapshot.target, p.transition.Sample(progress))
-
-	if snapshot.target != target {
-		reversing := target == snapshot.from
-		reversingFactor := float32(1)
-		if reversing {
-			reversingFactor = clamp32(
-				float32(p.transition.Sample(progress)*snapshot.reversingFactor)+(1-snapshot.reversingFactor), 0, 1)
-		}
-		duration := mulF32(p.transition.Duration(), reversingFactor)
-		state.Update(cx, func(s *presenceState, _ *gpui.Context[presenceState]) {
-			s.from = sampled
-			s.target = target
-			s.startedAt = now
-			s.reversingFactor = reversingFactor
-			s.duration = duration
-		})
-		initial, initialStatus := p.transition.Progress(0, duration)
-		progress, status = lerp32(sampled, target, p.transition.Sample(initial)), initialStatus
-	} else {
-		progress = sampled
-	}
-
-	if status.IsActive() {
-		gpui.RequestAnimationFrame(w)
-	}
-
-	if status == MotionStatusFinished {
+	value := gpui.TransitionFromWithStatus(gpui.TransitionIDWithChannel(p.id, "__presence"),
+		float32(0), target, p.transition, w, cx)
+	if value.Status == MotionStatusFinished {
 		return stablePresenceSample(p.present)
 	}
 	phase := PresencePhaseExiting
 	if p.present {
 		phase = PresencePhaseEntering
 	}
-	return PresenceSample{Phase: phase, Progress: progress, Status: status}
+	return PresenceSample{Phase: phase, Progress: value.Value, Status: value.Status}
 }
 
 // stablePresenceSample is U:motion/presence.rs:137-147.

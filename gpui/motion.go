@@ -7,11 +7,13 @@ package gpui
 // (research/browser-parity README, motion split: "Timing, easing and
 // keyframe interpolation ... and the reversing rule → Core"); Base keeps
 // aliases over this file plus its springs and orchestration
-// (base/motion.go), with no behaviour change.
+// (base/motion.go), with no behaviour change. Ticket 74 then moved Base's
+// presets onto the engine directly: Presence runs on
+// TransitionFromWithStatus (the presence seeding), and every gate reads
+// App.MotionReduced, the one reduced-motion source (the App flag plus
+// the live SystemPreferences record).
 //
-// Every function honours the reduced-motion flag (App.ReduceMotion, plus
-// the OS preference through SystemPreferences) by adopting its target at
-// once.
+// Every function honours that gate by adopting its target at once.
 //
 // Core seams (R: = reference/ce-source/crates/gpui/src):
 //
@@ -28,9 +30,11 @@ package gpui
 // Go adaptations:
 //
 //   - Names: the free functions `transition` and `spring` would collide
-//     with the policy types Transition and Spring in one Go package; the
-//     transition half (which moved here) is MotionTransition. The spring
-//     half stays in Base.
+//     with the policy types Transition and Spring in one Go package; they
+//     are MotionTransition and MotionSpring. The transition half lives
+//     here; the spring half stays in Base (the research split's
+//     component half), so TransitionFromWithStatus is the seam Base's
+//     presence seeds its enter animation through.
 //   - Interpolate (U:motion.rs:32-59) is implemented upstream for every
 //     Lerp type plus the foreign Size<Pixels> and Bounds<Pixels>. The Go
 //     trait is the interface Interpolate[T] plus InterpolateValue, which
@@ -375,12 +379,40 @@ func MotionTransition[I IntoTransitionID, T comparable](id I, target T, policy T
 // shortening factor is the interrupted transition's eased progress times
 // its old factor plus (1 - old factor), and the new duration is the rule
 // duration times that factor.
+//
+// The keyed state adopts the first target immediately, and a state at
+// rest (from == target) reports Idle; use TransitionFromWithStatus when
+// the first sample must begin from a caller-owned starting value instead
+// (the mount-presence seeding).
 func TransitionWithStatus[I IntoTransitionID, T comparable](id I, target T, policy Transition, w *Window, cx *App) MotionValue[T] {
-	key := TransitionIDOf(id).ElementID()
+	return transitionWithStatus(TransitionIDOf(id), target, target, policy, w, cx, true)
+}
+
+// TransitionFromWithStatus is TransitionWithStatus with a caller-owned
+// starting value: the keyed state seeds from `from` and target, so the
+// first sample begins a transition from from toward target instead of
+// adopting it (the mount-presence seeding, U:motion/presence.rs:128-135,
+// which seeds its keyed state the same way). Every later target change
+// retargets and reverses exactly as TransitionWithStatus does, and the
+// reduced-motion gate resolves at once. Presence runs on this seam.
+//
+// Unlike the adopting form, a seeded state whose from equals its target
+// does not report Idle: the transition still runs out its policy
+// duration (the mount clock a presence owes an exit even from nothing —
+// U:motion/presence.rs:48-125, which nav_stack's transit measures).
+func TransitionFromWithStatus[I IntoTransitionID, T comparable](id I, from, target T, policy Transition, w *Window, cx *App) MotionValue[T] {
+	return transitionWithStatus(TransitionIDOf(id), from, target, policy, w, cx, false)
+}
+
+// transitionWithStatus is the shared keyed-transition body; adopting
+// marks the entry point that adopts its first target, whose at-rest
+// state (from == target) reports Idle instead of running out the policy.
+func transitionWithStatus[T comparable](id TransitionID, from, target T, policy Transition, w *Window, cx *App, adopting bool) MotionValue[T] {
+	key := id.ElementID()
 	now := cx.Now()
 	state := w.UseKeyedState[valueTransition[T]](key, cx, func(*Window, *Context[valueTransition[T]]) valueTransition[T] {
 		return valueTransition[T]{
-			from:            target,
+			from:            from,
 			target:          target,
 			startedAt:       now,
 			reversingFactor: 1,
@@ -389,7 +421,7 @@ func TransitionWithStatus[I IntoTransitionID, T comparable](id I, target T, poli
 	})
 	snapshot := state.Read(cx, func(s *valueTransition[T], _ *App) valueTransition[T] { return *s })
 
-	if reduceMotionActive(cx) || policy.duration == 0 {
+	if cx.MotionReduced() || policy.duration == 0 {
 		if snapshot.from != target || snapshot.target != target {
 			state.Update(cx, func(s *valueTransition[T], _ *Context[valueTransition[T]]) {
 				s.from = target
@@ -427,7 +459,7 @@ func TransitionWithStatus[I IntoTransitionID, T comparable](id I, target T, poli
 		status = initialStatus
 	} else {
 		value = sampled
-		if snapshot.from == snapshot.target {
+		if adopting && snapshot.from == snapshot.target {
 			status = MotionStatusIdle
 		}
 	}
@@ -459,7 +491,7 @@ func AnimateKeyframes[I IntoTransitionID, T any](id I, keyframes Keyframes[T], t
 	})
 	startedAt := state.Read(cx, func(s *keyframePlayback, _ *App) time.Duration { return s.startedAt })
 
-	if reduceMotionActive(cx) {
+	if cx.MotionReduced() {
 		return MotionValue[T]{Value: keyframes.Sample(1), Status: MotionStatusFinished}
 	}
 
@@ -479,13 +511,15 @@ func AnimateKeyframes[I IntoTransitionID, T any](id I, keyframes Keyframes[T], t
 	return MotionValue[T]{Value: keyframes.Sample(sample.DirectedProgress), Status: status}
 }
 
-// reduceMotionActive reports whether motion is reduced: the App's own
-// flag (App.ReduceMotion) or the OS preference through ticket 27's
-// SystemPreferences (the live reading the host refreshes on
-// WM_SETTINGCHANGE). The style-diff transition engine shares this gate.
-func reduceMotionActive(a *App) bool {
-	if a.ReduceMotion() {
-		return true
-	}
-	return a.SystemPreferences().ReducedMotion
+// MotionReduced reports whether motion is reduced for this application:
+// the App's own policy flag (ReduceMotion / SetReduceMotion) or the OS
+// preference through SystemPreferences — the live record the host
+// refreshes on the Windows settings messages (ticket 27), or the default
+// record when there is no host. This is the single reduced-motion
+// source: the keyed transitions and keyframe playback in this package,
+// the style-diff transition engine (transition.go), and Base's motion
+// presets (browser-core ticket 74) all gate on it, so a component never
+// reads the platform preference itself.
+func (a *App) MotionReduced() bool {
+	return a.reduceMotion || a.SystemPreferences().ReducedMotion
 }

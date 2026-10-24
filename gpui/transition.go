@@ -429,7 +429,7 @@ func resolveStyleTransitions(global *GlobalElementID, style Style, w *Window, ap
 		// Reduced motion: no runs, the target applies at once (Chromium's
 		// forced reduce-motion turns animations off; the port's gate is
 		// the App flag plus the OS preference).
-		if reduceMotionActive(app) {
+		if app.MotionReduced() {
 			return style, next
 		}
 

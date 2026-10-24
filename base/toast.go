@@ -311,7 +311,7 @@ func (m *ToastManager[I, T]) Advance(now time.Time, paused bool) ToastAdvance[I,
 				break
 			}
 			if remaining, ok := entry.timeoutRemaining.Get(); ok {
-				remaining = satSubDuration(remaining, delta)
+				remaining = max(remaining-delta, 0)
 				entry.timeoutRemaining = gpui.Some(remaining)
 				if remaining == 0 {
 					entry.status = ToastEnding

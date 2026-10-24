@@ -7,8 +7,12 @@ import (
 	"github.com/hoangvu12/gpui-go/gpui"
 )
 
-// Ported app-level tests: global_state.rs (2/2), reduce_motion.rs (5/5).
-// Go-own tests are marked.
+// Ported app-level tests: global_state.rs (2/2). Go-own tests are
+// marked. The reduce_motion.rs tests are gone with Base's reader
+// (browser-core ticket 74): reduced motion is the core's single source
+// (App.MotionReduced, covered in motion_reduced_test.go through the
+// pinned SystemPreferences record), so there is no Base-side preference
+// application left to test.
 
 // U:global_state.rs:156-173
 func TestGlobalStateInitializationIsIdempotentAndSuppressionCanBeReset(t *testing.T) {
@@ -103,100 +107,6 @@ func TestGlobalStateTouchPress(t *testing.T) {
 			t.Fatal("a fresh touch is not a touch press")
 		}
 	})
-}
-
-// U:reduce_motion.rs:191-197
-func TestReduceMotionASystemPreferenceForReducedMotionSetsTheFlag(t *testing.T) {
-	ta := gpui.NewTestApp()
-	ta.Update(func(app *gpui.App) {
-		applyReduceMotionPreference(true, true, app)
-		if !app.ReduceMotion() {
-			t.Fatal("flag not set")
-		}
-	})
-}
-
-// U:reduce_motion.rs:199-209
-func TestReduceMotionAnUnknownSystemPreferenceLeavesTheFlagAlone(t *testing.T) {
-	ta := gpui.NewTestApp()
-	ta.Update(func(app *gpui.App) {
-		applyReduceMotionPreference(false, false, app)
-		if app.ReduceMotion() {
-			t.Fatal("unknown preference set the flag")
-		}
-		app.SetReduceMotion(true)
-		applyReduceMotionPreference(false, false, app)
-		if !app.ReduceMotion() {
-			t.Fatal("unknown preference cleared the flag")
-		}
-	})
-}
-
-// U:reduce_motion.rs:211-224
-func TestReduceMotionTheSystemDrivesTheFlagUntilTheApplicationSetsIt(t *testing.T) {
-	ta := gpui.NewTestApp()
-	ta.Update(func(app *gpui.App) {
-		applyReduceMotionPreference(true, true, app)
-		applyReduceMotionPreference(false, true, app)
-		if app.ReduceMotion() {
-			t.Fatal("system false not applied")
-		}
-		applyReduceMotionPreference(true, true, app)
-		if !app.ReduceMotion() {
-			t.Fatal("system true not applied")
-		}
-
-		app.SetReduceMotion(false)
-		applyReduceMotionPreference(true, true, app)
-		if app.ReduceMotion() {
-			t.Fatal("the system overrode the application")
-		}
-	})
-}
-
-// U:reduce_motion.rs:226-234
-func TestReduceMotionTheTestSchedulerIsNeverAskedForThePlatformPreference(t *testing.T) {
-	ta := gpui.NewTestApp()
-	ta.Update(func(app *gpui.App) {
-		ApplySystemReduceMotion(app)
-		if app.ReduceMotion() {
-			t.Fatal("flag set under the test scheduler")
-		}
-		if gpui.HasGlobal[*systemReduceMotion](app) {
-			t.Fatal("the platform path ran under the test scheduler")
-		}
-	})
-	ta.RunUntilParked()
-	ta.Update(func(app *gpui.App) {
-		if app.ReduceMotion() {
-			t.Fatal("flag set after parking")
-		}
-	})
-}
-
-// U:reduce_motion.rs:236-243
-func TestReduceMotionAFlagTheApplicationSetBeforeTheFirstReadingIsKept(t *testing.T) {
-	ta := gpui.NewTestApp()
-	ta.Update(func(app *gpui.App) {
-		app.SetReduceMotion(true)
-		applyReduceMotionPreference(false, true, app)
-		if !app.ReduceMotion() {
-			t.Fatal("the system overrode the application's first setting")
-		}
-	})
-}
-
-// Go-own: the Windows reader answers through SystemParametersInfoW
-// (U:reduce_motion.rs:115-139). It reads the real system setting, so it
-// asserts only that the call succeeds on Windows.
-func TestReduceMotionPlatformReaderAnswersOnWindows(t *testing.T) {
-	_, ok := platformReadReduceMotion()
-	if runtime.GOOS == "windows" && !ok {
-		t.Fatal("SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION) failed")
-	}
-	if runtime.GOOS != "windows" && ok {
-		t.Fatal("a non-Windows platform reported a preference")
-	}
 }
 
 // Go-own: Init installs the globals (U:lib.rs:228-245).
