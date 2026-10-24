@@ -27,7 +27,7 @@ new fixtures. The implementation lives in `internal/parity`:
   fixture's `EventKinds`; the view's handlers append to an `EventLog`. Kinds, targets,
   order (including bubble order: target first, then ancestors) and the final
   `defaultPrevented` state must match exactly. The vocabulary is `mousedown`, `mouseup`,
-  `click`, the pointer boundary events `pointerenter`/`pointerleave` (browser-core
+  `click`, `contextmenu` (browser-core ticket 17), the pointer boundary events `pointerenter`/`pointerleave` (browser-core
   ticket 10) and the pointer events `pointerdown`, `pointermove`, `pointerup`,
   `gotpointercapture` and `lostpointercapture` (browser-core ticket 11); the boundary kinds arrive
   in Chromium's order — leave events innermost
@@ -465,3 +465,26 @@ state-only handle). `fixtures/tabnav` is the fixture set, with one recorded
 quirk: a second forward pass-out from the same last element lands
 nondeterministically in headless Chrome, so `tabnav-order` steps each boundary
 exactly once.
+Ticket 17 (the contextmenu event, story 60) added `DivElement.OnContextMenu`
+(`gpui/contextmenu.go`): the right-button release dispatches a bubbling
+contextmenu after the whole up tail — the listeners, the capture release, the
+click/auxclick, the boundary settling — regardless of the click having been
+swallowed, targeted at the element under the release; the unmodified Menu key
+fires it on key UP and Shift+F10 on key DOWN (Windows' arms,
+`web_frame_widget_impl.cc:1112-1141`), after the key listeners and only when
+the event was not canceled, targeted at the focused element's chain with the
+menu position at the focused element's centre. The keyboard registration
+lives on the dispatch node (like the keyboard click) and the mouse one on the
+frame's path-keyed registrations (like the click listeners); the harness's
+`contextmenu` kind and `log.ContextMenu`/`log.ContextMenuPreventDefault`
+helpers record it. One recorder fix landed with it: a key step without text
+now sends the CDP `rawKeyDown` type (the shape a real Windows key press
+takes) instead of `keyDown` — Chrome's Shift+F10 arm requires kRawKeyDown
+(`web_frame_widget_impl.cc:1112`), so the untextured `keyDown` type never
+triggered it; the transcripts of the existing key fixtures are unchanged by
+the switch (verified by re-recording `tabnav-order`). The synthesized
+follow-up shares the triggering dispatch's default-prevented flag — the
+mouse-up's or the key-up's — so the prevented record binds only the
+`contextmenu` kind (the coarseness the activation click already documents).
+`fixtures/contextmenu` is the fixture set (mouse, menu-key, shift-f10 and the
+prevented pair whose Tab-after-menu pins "suppresses nothing else").

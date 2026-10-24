@@ -126,13 +126,18 @@ type dispatchNode struct {
 	// carries this flag, like Chromium's ClearFocusedElementIfNeeded
 	// (document.cc:3261-3277, the IsFocusable check at :3263).
 	focusSuppressed bool
-	context         *KeyContext
-	focusID         uint64
-	hasFocusID      bool
-	viewID          EntityID
-	hasViewID       bool
-	parent          DispatchNodeID
-	hasParent       bool
+	// contextMenu is the node's contextmenu registration (browser-core
+	// ticket 17, contextmenu.go): the keyboard trigger (the Menu key,
+	// Shift+F10) reads the FOCUSED node's path — its listeners fire
+	// focused-first down the path and its bounds place the menu.
+	contextMenu *nodeContextMenu
+	context     *KeyContext
+	focusID     uint64
+	hasFocusID  bool
+	viewID      EntityID
+	hasViewID   bool
+	parent      DispatchNodeID
+	hasParent   bool
 }
 
 // DispatchTree is the per-frame interaction tree (DispatchTree).
@@ -275,6 +280,14 @@ func (t *DispatchTree) SetFocusID(focusID uint64) {
 func (t *DispatchTree) SetFocusSuppressed() {
 	id := t.activeNodeIDValue()
 	t.nodes[id.Index].focusSuppressed = true
+}
+
+// SetContextMenu registers the active node's contextmenu listeners
+// (browser-core ticket 17, contextmenu.go registerDivContextMenu):
+// the keyboard trigger dispatches them from the focused node's path.
+func (t *DispatchTree) SetContextMenu(registration nodeContextMenu) {
+	id := t.activeNodeIDValue()
+	t.nodes[id.Index].contextMenu = &registration
 }
 
 // SetViewID marks the active node with the view identity

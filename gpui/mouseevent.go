@@ -1168,6 +1168,15 @@ func (w *Window) dispatchMouseEvent(event any, app *App) {
 			}
 			w.dispatchHoverBoundaryEvents(up.Position, up.Modifiers, app)
 		}
+		// The contextmenu trigger (browser-core ticket 17, contextmenu.
+		// go dispatchContextMenuFromMouse): Chromium's right-button up
+		// dispatches the contextmenu event after the whole up tail —
+		// pointerup, lostpointercapture, click/auxclick, the boundary
+		// settling — regardless of the click having been swallowed
+		// (WebFrameWidgetImpl::HandleMouseUp, web_frame_widget_impl.cc:
+		// 1253-1260, the Windows context_menu_on_mouse_up default,
+		// web_preferences.h:64).
+		w.dispatchContextMenuFromMouse(up, app)
 	}
 
 	// The pointercancel tail: the release fires lostpointercapture but

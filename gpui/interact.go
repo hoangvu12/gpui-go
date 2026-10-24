@@ -1142,7 +1142,8 @@ func (d *DivElement) requiresElementState() bool {
 	return len(d.clickListeners) > 0 || len(d.auxClickListeners) > 0 ||
 		d.dragListener != nil || len(d.hoverListeners) > 0 ||
 		len(d.pointerEnterListeners) > 0 || len(d.pointerLeaveListeners) > 0 ||
-		d.activeStyle != nil || d.groupActiveStyle != nil
+		d.activeStyle != nil || d.groupActiveStyle != nil ||
+		len(d.contextMenuListeners) > 0
 }
 
 // shouldInsertHitbox is div.rs:2887-2911 should_insert_hitbox, bounded
@@ -1166,6 +1167,7 @@ func (d *DivElement) shouldInsertHitbox(style *Style, w *Window) bool {
 		len(d.mouseMoveListeners) > 0 ||
 		len(d.clickListeners) > 0 ||
 		len(d.auxClickListeners) > 0 ||
+		len(d.contextMenuListeners) > 0 ||
 		len(d.scrollWheelListeners) > 0 ||
 		len(d.pinchListeners) > 0 ||
 		d.dragListener != nil ||

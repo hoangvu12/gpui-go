@@ -1,0 +1,57 @@
+{
+  "name": "contextmenu-mouse",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T08:27:24Z",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "box": {
+      "x": 0,
+      "y": 0,
+      "width": 120,
+      "height": 60
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 360
+    }
+  },
+  "events": [
+    {
+      "kind": "mousedown",
+      "target": "box",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "box",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "contextmenu",
+      "target": "box",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "contextmenu",
+      "target": "root",
+      "defaultPrevented": false
+    }
+  ],
+  "screenshot": "chrome.png"
+}

@@ -1,0 +1,43 @@
+{
+  "name": "contextmenu-prevented",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T08:27:27Z",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "a": {
+      "x": 0,
+      "y": 0,
+      "width": 120,
+      "height": 60
+    },
+    "b": {
+      "x": 0,
+      "y": 60,
+      "width": 120,
+      "height": 60
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 360
+    }
+  },
+  "events": [
+    {
+      "kind": "contextmenu",
+      "target": "a",
+      "defaultPrevented": true
+    },
+    {
+      "kind": "contextmenu",
+      "target": "root",
+      "defaultPrevented": true
+    }
+  ],
+  "screenshot": "chrome.png"
+}

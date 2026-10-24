@@ -183,9 +183,18 @@ func (w *Window) runKeyDefaultActions(event any, app *App) bool {
 		if w.defaultKeyboardScroll(e, app) {
 			return true
 		}
-		return w.defaultTabNavigation(e)
+		if w.defaultTabNavigation(e) {
+			return true
+		}
+		// The contextmenu keyboard trigger (browser-core ticket 17,
+		// contextmenu.go dispatchContextMenuFromKey): Shift+F10 fires
+		// on key down, after the listeners (Chromium
+		// web_frame_widget_impl.cc:1125-1131).
+		return w.dispatchContextMenuFromKey(e, app)
 	case *KeyUpEvent:
-		return false
+		// The Menu key fires on key up on Windows
+		// (web_frame_widget_impl.cc:1115-1118).
+		return w.dispatchContextMenuFromKey(e, app)
 	}
 	return false
 }

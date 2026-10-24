@@ -146,6 +146,12 @@ type renderedFrame struct {
 	// dispatchMouseClick) resolves the target chain by those keys and
 	// fires the listeners target-first, like a bubbling DOM click.
 	clickListeners []clickListenerRegistration
+	// contextMenuListeners are the frame's contextmenu registrations
+	// (browser-core ticket 17, contextmenu.go): every id'd element with
+	// OnContextMenu listeners registers them under its element path key
+	// at paint — the mouse trigger's dispatch (the right-button up)
+	// resolves the release chain by those keys.
+	contextMenuListeners []contextMenuRegistration
 	// hitboxStack is the transient stack of hitboxes whose subtrees are
 	// prepainting (browser-core ticket 11): each hitbox records the top
 	// of this stack as its parent, which is how the capture chain

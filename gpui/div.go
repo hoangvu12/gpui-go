@@ -906,6 +906,9 @@ type DivElement struct {
 	// interactivity: inert, html.css:2143-2145): unfocusable, unclickable
 	// (pointer-events: none) and hidden from accessibility.
 	inert bool
+	// contextMenuListeners are the element's OnContextMenu handlers
+	// (browser-core ticket 17, contextmenu.go).
+	contextMenuListeners []func(*ContextMenuEvent, *Window, *App)
 	// trackedScrollHandle is the tracked scroll handle (div.rs:2582
 	// tracked_scroll_handle; Base ticket 07, scroll_element.go).
 	trackedScrollHandle *ScrollHandle
@@ -1822,9 +1825,11 @@ func registerDivElementDispatch(w *Window, d *DivElement, suppressed bool, hitbo
 
 	// The keyboard click (div.rs:3512-3577) registers before the
 	// element's own key listeners, as paint_mouse_listeners runs before
-	// paint_keyboard_listeners (div.rs:3075, 3084).
+	// paint_keyboard_listeners (div.rs:3075, 3084). The contextmenu
+	// registration follows (browser-core ticket 17, contextmenu.go).
 	if hitbox != nil {
 		registerDivKeyboardClick(w, d, *hitbox, es)
+		registerDivContextMenu(w, d, hitbox)
 	}
 
 	if d.keyContext != nil {
@@ -1963,6 +1968,15 @@ func (d *DivElement) paint(global *GlobalElementID, inspector *InspectorElementI
 								clickPath = global.key()
 							}
 							d.paintMouseListeners(*hitbox, clickPath, es, w, app)
+							// The contextmenu registration (browser-core
+							// ticket 17): the mouse trigger's dispatch
+							// resolves the release chain by the path key.
+							if len(d.contextMenuListeners) > 0 {
+								appendContextMenuRegistration(w, contextMenuRegistration{
+									path:      clickPath,
+									listeners: append([]func(*ContextMenuEvent, *Window, *App){}, d.contextMenuListeners...),
+								})
+							}
 							// paint_scroll_listener (div.rs:3081).
 							d.scroll.paintListener(*hitbox, &style, w)
 						}
