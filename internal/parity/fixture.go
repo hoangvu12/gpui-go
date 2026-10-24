@@ -360,6 +360,11 @@ type EventRecord struct {
 	// entries carrying true prove keydowns are delivered during a
 	// composition, flagged, not dropped.
 	IsComposing bool `json:"isComposing,omitempty"`
+	// InputType is the event's inputType for beforeinput entries
+	// (InputEvent.inputType: "deleteByCut" for the cut command's
+	// mutation, "insertFromPaste" for a paste, "insertText" for typed
+	// text; "" for the other kinds) — browser-core ticket 26.
+	InputType string `json:"inputType,omitempty"`
 }
 
 // EventLog is the fixture-side event recorder the View's handlers
@@ -521,6 +526,34 @@ func (l *EventLog) AppendComposition(kind, target, data string) {
 	l.entries = append(l.entries, EventRecord{Kind: kind, Target: target, Data: data})
 }
 
+// AppendEditEvent records one editing event entry (kind is "copy",
+// "cut", "paste" or "select") on target — browser-core ticket 26. The
+// clipboard and select events live on the input handler
+// (gpui.EditActionHandler), not the div listener surface, so a
+// fixture's handler implementation calls this from its callbacks.
+func (l *EventLog) AppendEditEvent(kind, target string) {
+	l.entries = append(l.entries, EventRecord{Kind: kind, Target: target})
+}
+
+// AppendEditEventWithData records one editing event entry carrying
+// data (the paste event's clipboard text) on target — browser-core
+// ticket 26.
+func (l *EventLog) AppendEditEventWithData(kind, target, data string) {
+	l.entries = append(l.entries, EventRecord{Kind: kind, Target: target, Data: data})
+}
+
+// AppendBeforeInput records one beforeinput entry on target with the
+// event's inputType ("deleteByCut", "insertFromPaste", ...) and data —
+// browser-core ticket 26.
+func (l *EventLog) AppendBeforeInput(target, inputType, data string) {
+	l.entries = append(l.entries, EventRecord{
+		Kind:      "beforeinput",
+		Target:    target,
+		InputType: inputType,
+		Data:      data,
+	})
+}
+
 // domKeyOf maps the pinned keystroke key name onto the DOM key name
 // the recorder reads from e.key ("tab" → "Tab", "space" → " ",
 // "arrowdown" → "ArrowDown"); single characters pass through.
@@ -554,6 +587,8 @@ func domKeyOf(key string) string {
 		return "Backspace"
 	case "delete":
 		return "Delete"
+	case "insert":
+		return "Insert"
 	case "shift":
 		return "Shift"
 	case "control":
@@ -644,6 +679,15 @@ var eventKindVocabulary = map[string]bool{
 	"compositionstart":   true,
 	"compositionupdate":  true,
 	"compositionend":     true,
+	// The editing-event kinds of browser-core ticket 26: the clipboard
+	// events and beforeinput/select fire on the focused editable
+	// element (the input-handler seam, gpui.EditActionHandler), bound
+	// on the page side like any other kind.
+	"copy":        true,
+	"cut":         true,
+	"paste":       true,
+	"beforeinput": true,
+	"select":      true,
 }
 
 // validate checks a fixture's invariants at record and replay time,

@@ -195,6 +195,12 @@ const (
 
 	monitorDefaultToNearest = 0x00000002
 
+	// wmClipboardUpdate is WM_CLIPBOARDUPDATE (winuser.h, 0x031D): the
+	// message a window registered with AddClipboardFormatListener
+	// receives when the system clipboard's contents change
+	// (browser-core ticket 26).
+	wmClipboardUpdate = 0x031D
+
 	userDefaultScreenDPI = 96
 
 	hwndMessage = ^uintptr(2) // HWND_MESSAGE ((HWND)-3)
@@ -501,6 +507,13 @@ func platformWndProc(hwnd uintptr, message uint32, wparam uintptr, lparam unsafe
 		// an automatic resume runs the system-wake callback; every power
 		// broadcast returns TRUE.
 		return h.handlePowerBroadcastMsg(wparam)
+	case wmClipboardUpdate:
+		// WM_CLIPBOARDUPDATE (browser-core ticket 26): the clipboard
+		// listener registered this platform window, so the system
+		// clipboard changed — run the observer. The message is consumed
+		// (DefWindowProcW would only pass it on).
+		h.handleClipboardUpdateMsg()
+		return 0
 	case wmGPUIDockAction:
 		// WM_GPUI_DOCK_MENU_ACTION (ticket26, platform.rs
 		// handle_gpui_events -> handle_dock_action_event): the validation

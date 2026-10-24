@@ -89,6 +89,9 @@ func formatEvent(e EventRecord) string {
 	if e.Data != "" {
 		fields += fmt.Sprintf(" data=%q", e.Data)
 	}
+	if e.InputType != "" {
+		fields += fmt.Sprintf(" inputType=%q", e.InputType)
+	}
 	return fmt.Sprintf("%s:%s%s%s", e.Kind, e.Target, prevented, fields)
 }
 

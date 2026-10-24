@@ -72,6 +72,10 @@ func instrumentScript(kinds []string) string {
 				if (kind === "compositionstart" || kind === "compositionupdate" || kind === "compositionend") {
 					entry.data = e.data === undefined || e.data === null ? "" : e.data;
 				}
+				if (kind === "beforeinput") {
+					entry.inputType = e.inputType === undefined || e.inputType === null ? "" : e.inputType;
+					entry.data = e.data === undefined || e.data === null ? "" : e.data;
+				}
 				window.__events.push(entry);
 			});
 		}
@@ -87,7 +91,7 @@ func instrumentScript(kinds []string) string {
 // isComposing fields of key entries (listener-time snapshots; the
 // location is a number only key entries carry, 0 otherwise) and the
 // data field of composition entries (browser-core ticket 18).
-const eventsScript = `JSON.stringify(window.__events.map(r => ({kind: r.kind, target: r.target, defaultPrevented: r.event.defaultPrevented, key: r.key || "", code: r.code || "", location: (r.kind === "keydown" || r.kind === "keyup") ? r.location : 0, focus: r.focus || "", isComposing: (r.kind === "keydown" || r.kind === "keyup") ? !!r.isComposing : false, data: r.data || ""})))`
+const eventsScript = `JSON.stringify(window.__events.map(r => ({kind: r.kind, target: r.target, defaultPrevented: r.event.defaultPrevented, key: r.key || "", code: r.code || "", location: (r.kind === "keydown" || r.kind === "keyup") ? r.location : 0, focus: r.focus || "", isComposing: (r.kind === "keydown" || r.kind === "keyup") ? !!r.isComposing : false, data: r.data || "", inputType: (r.kind === "beforeinput") ? (r.inputType || "") : ""})))`
 
 // RecordFixture records one fixture in headless Chrome and writes its
 // files (record.json, chrome.png, page.html) into

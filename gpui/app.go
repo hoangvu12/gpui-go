@@ -1244,6 +1244,23 @@ func (a *App) OnSystemWake(cb func()) error {
 	return h.OnSystemWake(func() { a.Update(func(*App) { cb() }) })
 }
 
+// OnClipboardChange registers the clipboard-change observer
+// (browser-core ticket 26): the callback runs inside an application
+// update for every system-wide clipboard change — any application's
+// write, including this process's own (AddClipboardFormatListener on
+// the host's platform window; WM_CLIPBOARDUPDATE; Chromium's
+// ClipboardMonitor shape). The last registration wins.
+func (a *App) OnClipboardChange(cb func()) error {
+	h, err := a.desktopHost()
+	if err != nil {
+		return err
+	}
+	if cb == nil {
+		return fmt.Errorf("gpui: OnClipboardChange requires a non-nil callback")
+	}
+	return h.OnClipboardChange(func() { a.Update(func(*App) { cb() }) })
+}
+
 // OnQuit registers the quit callback (Platform::on_quit): it runs after
 // the message loop exits and on session end; returning true reports
 // completed shutdown.

@@ -58,6 +58,17 @@ new fixtures. The implementation lives in `internal/parity`:
   not the div listeners: the page's editable element receives the DOM events, and the
   view's handler implements `gpui.IMECompositionHandler` and logs through
   `log.AppendComposition` (`fixtures/imecompose` is the fixture).
+  The editing kinds are `copy`, `cut`, `paste`, `beforeinput` and `select` (browser-core
+  ticket 26): entries carry the event's `data` (the paste's clipboard text) and, for
+  `beforeinput`, the `inputType` ("deleteByCut", "insertFromPaste"). They live on the
+  input-handler seam too: the page's editable element receives the DOM events, and the
+  view's handler implements `gpui.EditActionHandler` and logs through
+  `log.AppendEditEvent`/`log.AppendBeforeInput` (`fixtures/editkeys` is the fixture
+  set). One recording caveat: headless Chrome consumes Ctrl+C/X/V in the browser
+  process before the renderer (the Edit-menu accelerators — no keydown reaches the
+  page), so the editing fixtures record through the Windows alternates the renderer
+  does deliver (Ctrl+Insert, Shift+Delete, Shift+Insert — the same editing commands);
+  the letter bindings are pinned by gpui's unit tests.
 - **Tier C — pixels, approximately.** The replay's final frame is rendered offscreen at
   device resolution and compared with the recorded Chrome screenshot under the fixture's
   provisional `PixelTolerance` (mean channel diff and hot-pixel fraction, image-wide and
@@ -533,3 +544,32 @@ mouse-up's or the key-up's — so the prevented record binds only the
 `contextmenu` kind (the coarseness the activation click already documents).
 `fixtures/contextmenu` is the fixture set (mouse, menu-key, shift-f10 and the
 prevented pair whose Tab-after-menu pins "suppresses nothing else").
+Ticket 26 (edit actions and the HTML clipboard) added the core's editing commands
+(`gpui/edit_action.go` — Copy/Cut/Paste/SelectAll as the actions `edit::Copy` &c., the
+Windows-Chrome key table of `editing_behavior.cc:168-170,174-178` mapped in
+`editCommandOfKeystroke`, and the default-action wiring that runs them as the FIRST arm
+of `runKeyDefaultActions`, Chromium's editor-commands-before-everything order
+`keyboard_event_manager.cc:442-445`): the commands dispatch to the focused input
+handler's optional `gpui.EditActionHandler` seam, firing the DOM's copy/cut/paste/
+beforeinput/select events in the recorded order and performing the mutations through
+the base/IME interfaces — cut writes then fires beforeinput(deleteByCut) then deletes;
+paste reads, fires paste (carrying the item), fires beforeinput(insertFromPaste) then
+inserts; the clipboard events fire regardless of the selection's state (the record's
+collapsed-caret shape) with the write and mutation gating on it. The clipboard layer
+gained the CF_HTML exchange (`gpui/cfhtml_windows.go`, Chromium's HtmlToCFHtml/
+CFHtmlToHTML with the header offsets, published as the registered "HTML Format"),
+the `ClipboardString.HTML` companion, and the clipboard-change observer
+(`App.OnClipboardChange` — AddClipboardFormatListener on the host's platform window,
+WM_CLIPBOARDUPDATE). The busy clipboard now retries OpenClipboard 5 times with a 5 ms
+backoff (Chromium's ScopedClipboard::Acquire, `clipboard_win.cc:102-130`) before the
+typed Denied error names the attempts — a recorded divergence from the pin's single
+immediate attempt. `fixtures/editkeys` is the fixture set: `editkeys` (a disabled copy,
+select, copy, cut through the Windows alternates) and `editkeys-paste` (the paste
+command's event pair); the Ctrl+C/X/V letter bindings cannot be recorded (headless
+Chrome consumes them pre-renderer), so gpui's `TestEditCommandKeyMapping` pins them,
+and the paste's real clipboard half is pinned by internal/clipspec's
+`TestClipboardPasteEditActionRoundTrip` (the ticket's fallback for headless-clipboard
+unreliability). Base keeps its own input bindings (they win over the core defaults
+through the binding position); the core actions add the alternate keys to Base inputs
+as browser-parity wins (Ctrl+Insert copies like Chrome's, where the pin's keymap had
+no binding).

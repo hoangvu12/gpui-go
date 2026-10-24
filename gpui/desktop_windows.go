@@ -78,6 +78,8 @@ var (
 	procFlashWindowEx                           = modUser32.NewProc("FlashWindowEx")
 	procRegisterSuspendResumeNotification       = modUser32.NewProc("RegisterSuspendResumeNotification")
 	procUnregisterSuspendResumeNotification     = modUser32.NewProc("UnregisterSuspendResumeNotification")
+	procAddClipboardFormatListener              = modUser32.NewProc("AddClipboardFormatListener")
+	procRemoveClipboardFormatListener           = modUser32.NewProc("RemoveClipboardFormatListener")
 	procMessageBeep                             = modUser32.NewProc("MessageBeep")
 	procTrackMouseEvent                         = modUser32.NewProc("TrackMouseEvent")
 	procDwmSetWindowAttribute                   = modDwmapi.NewProc("DwmSetWindowAttribute")
@@ -255,6 +257,10 @@ type desktopCallbacks struct {
 	// thread runs it with the refreshed record whenever a settings
 	// message changed it.
 	systemPreferencesChanged func(SystemPreferences, SystemColors)
+	// clipboardChange is the clipboard-change observer (browser-core
+	// ticket 26): the host thread runs it on every WM_CLIPBOARDUPDATE.
+	// Guarded by mu; repeated (unlike the one-shot callbacks above).
+	clipboardChange func()
 }
 
 // jumpListState is the in-process jump list (destination_list.rs
@@ -323,6 +329,10 @@ type desktopHostState struct {
 	// suspendResumeNotify is the RegisterSuspendResumeNotification
 	// handle; host thread.
 	suspendResumeNotify uintptr
+	// clipboardFormatListener records that AddClipboardFormatListener
+	// registered the platform window (browser-core ticket 26), so the
+	// shutdown removes it and re-registration stays once. Host thread.
+	clipboardFormatListener bool
 	// menus is the recorded application menus (set_menus/get_menus).
 	// Host thread (mutations marshal to the host thread).
 	menus []Menu
@@ -384,6 +394,13 @@ func (h *Host) shutdownDesktopStateOnHostThread() {
 	if h.desktop.suspendResumeNotify != 0 {
 		procUnregisterSuspendResumeNotification.Call(h.desktop.suspendResumeNotify)
 		h.desktop.suspendResumeNotify = 0
+	}
+	// The clipboard listener comes off before the platform window is
+	// destroyed (WindowsPlatform::drop's unregister-before-destroy
+	// shape; RemoveClipboardFormatListener, browser-core ticket 26).
+	if h.desktop.clipboardFormatListener {
+		procRemoveClipboardFormatListener.Call(h.platformHWND)
+		h.desktop.clipboardFormatListener = false
 	}
 	if n := h.desktop.notif; n != nil {
 		n.mu.Lock()

@@ -51,6 +51,7 @@ import (
 	"image/png"
 	"sync"
 	"syscall"
+	"time"
 	"unicode/utf16"
 	"unsafe"
 )
@@ -112,16 +113,22 @@ var (
 	clipboardPNGFormat      uint32 // "PNG"
 	clipboardJPGFormat      uint32 // "JFIF"
 
+	// clipboardHTMLFormat is the MS HTML format's registered id
+	// (browser-core ticket 26; Chromium registers "HTML Format",
+	// clipboard_format_type_win.cc:132-137).
+	clipboardHTMLFormat uint32 // "HTML Format"
+
 	// clipboardImageFormats mirrors clipboard.rs IMAGE_FORMATS_MAP; it
 	// is built inside the formats' once, after registration.
 	clipboardImageFormats map[uint32]ImageFormat
 )
 
-// ensureClipboardRegisteredFormats registers the six pinned formats once
+// ensureClipboardRegisteredFormats registers the pinned formats once
 // per process (the LazyLock statics). Like the reference's
 // register_clipboard_format, a registration failure panics — the
 // reference aborts at LazyLock initialization; RegisterClipboardFormatW
-// with these fixed names only fails on resource exhaustion.
+// with these fixed names only fails on resource exhaustion. The HTML
+// format is ticket 26's addition (Chromium's HtmlType).
 func ensureClipboardRegisteredFormats() {
 	clipboardFormatsOnce.Do(func() {
 		clipboardHashFormat = mustRegisterClipboardFormat("GPUI internal text hash")
@@ -130,6 +137,7 @@ func ensureClipboardRegisteredFormats() {
 		clipboardGIFFormat = mustRegisterClipboardFormat("GIF")
 		clipboardPNGFormat = mustRegisterClipboardFormat("PNG")
 		clipboardJPGFormat = mustRegisterClipboardFormat("JFIF")
+		clipboardHTMLFormat = mustRegisterClipboardFormat("HTML Format")
 		clipboardImageFormats = map[uint32]ImageFormat{
 			clipboardPNGFormat: ImageFormatPNG,
 			clipboardGIFFormat: ImageFormatGIF,
@@ -171,17 +179,33 @@ type clipboardGuard struct{}
 
 // openClipboardGuard opens the clipboard with a NULL owner
 // (OpenClipboard(None)). A busy clipboard — another window holds it —
-// fails here; the reference logs and gives up, the Go port surfaces the
-// typed Denied error (see Host.ReadClipboard/WriteClipboard).
+// fails here after a short bounded retry: browser-core ticket 26's
+// browser-parity divergence from the pin's single immediate attempt.
+// Chromium's ScopedClipboard::Acquire retries OpenClipboard 5 times
+// with a 5 ms sleep between attempts (ui/base/clipboard/clipboard_win.
+// cc:102-130 — the rdpclip.exe contention the comment describes; the
+// pin's clipboard.rs logs and gives up on the first failure). The Go
+// port adopts the browser's retry (the spec's "retry OpenClipboard with
+// a short backoff") and reports the attempts in the typed Denied
+// error's message.
 func openClipboardGuard() (*clipboardGuard, error) {
-	opened, _, callErr := procOpenClipboard.Call(0)
-	if opened == 0 {
-		return nil, &ClipboardReadError{
-			Kind:    ClipboardReadDenied,
-			Message: fmt.Sprintf("OpenClipboard failed: %v", callErr),
+	const attempts = 5
+	const backoff = 5 // milliseconds, the browser's ::Sleep(5)
+	var lastErr error
+	for i := 0; i < attempts; i++ {
+		opened, _, callErr := procOpenClipboard.Call(0)
+		if opened != 0 {
+			return &clipboardGuard{}, nil
+		}
+		lastErr = callErr
+		if i+1 < attempts {
+			time.Sleep(time.Duration(backoff) * time.Millisecond)
 		}
 	}
-	return &clipboardGuard{}, nil
+	return nil, &ClipboardReadError{
+		Kind:    ClipboardReadDenied,
+		Message: fmt.Sprintf("OpenClipboard failed after %d attempts (the clipboard is held by another window): %v", attempts, lastErr),
+	}
 }
 
 // close closes the clipboard (ClipboardGuard::drop). A close failure is
@@ -315,26 +339,38 @@ func (h *Host) writeClipboardOnHostThread(item ClipboardItem) error {
 	return nil
 }
 
-// writeClipboardString is clipboard.rs write_string: CF_UNICODETEXT,
-// then — when metadata exists — the 8-byte native-endian text hash in
-// the hash format and the metadata as UTF-16 in the metadata format.
+// writeClipboardString is clipboard.rs write_string, plus ticket 26's
+// CF_HTML companion: CF_UNICODETEXT, then — when metadata exists — the
+// 8-byte native-endian text hash in the hash format and the metadata as
+// UTF-16 in the metadata format, then — when the entry carries HTML —
+// the CF_HTML payload (Chromium's WriteHTML: HtmlToCFHtml over the
+// markup, clipboard_win.cc:1055-1063; the payload carries one trailing
+// NUL like CreateGlobalData, clipboard_win.cc:183-196).
 func writeClipboardString(value *ClipboardString) error {
 	text := utf16.Encode([]rune(value.Text))
 	text = append(text, 0)
 	if err := setClipboardDataBytes(utf16Bytes(text), cfUnicodeText); err != nil {
 		return err
 	}
-	if value.Metadata == "" {
-		return nil
+	if value.Metadata != "" {
+		hashBytes := make([]byte, 8)
+		binary.NativeEndian.PutUint64(hashBytes, textHash(value.Text))
+		if err := setClipboardDataBytes(hashBytes, clipboardHashFormat); err != nil {
+			return err
+		}
+		metadata := utf16.Encode([]rune(value.Metadata))
+		metadata = append(metadata, 0)
+		if err := setClipboardDataBytes(utf16Bytes(metadata), clipboardMetadataFormat); err != nil {
+			return err
+		}
 	}
-	hashBytes := make([]byte, 8)
-	binary.NativeEndian.PutUint64(hashBytes, textHash(value.Text))
-	if err := setClipboardDataBytes(hashBytes, clipboardHashFormat); err != nil {
-		return err
+	if value.HTML != "" {
+		payload := append([]byte(htmlToCFHTML(value.HTML, "")), 0)
+		if err := setClipboardDataBytes(payload, clipboardHTMLFormat); err != nil {
+			return err
+		}
 	}
-	metadata := utf16.Encode([]rune(value.Metadata))
-	metadata = append(metadata, 0)
-	return setClipboardDataBytes(utf16Bytes(metadata), clipboardMetadataFormat)
+	return nil
 }
 
 // writeClipboardImage is clipboard.rs write_image: the native
@@ -531,15 +567,43 @@ func (h *Host) readClipboardOnHostThread() (*ClipboardItem, error) {
 	return &ClipboardItem{Entries: entries}, nil
 }
 
-// readClipboardStringEntry is clipboard.rs read_string: CF_UNICODETEXT
-// text plus the hash-gated metadata.
+// readClipboardStringEntry is clipboard.rs read_string plus ticket
+// 26's CF_HTML companion: CF_UNICODETEXT text plus the hash-gated
+// metadata, then — when the board carries the "HTML Format" data —
+// the parsed fragment as the entry's HTML (Chromium's ReadHTML →
+// CFHtmlToHTML, clipboard_util_win.cc:1377-1391). The HTML read is a
+// companion of the text entry (the one-entry-per-kind walk stays); a
+// CF_HTML-only board is not a text entry.
 func readClipboardStringEntry() (ClipboardEntry, bool) {
 	text, ok := clipboardGetString(cfUnicodeText)
 	if !ok {
 		return ClipboardEntry{}, false
 	}
 	metadata := readClipboardMetadata(text)
-	return NewStringClipboardEntry(ClipboardString{Text: text, Metadata: metadata}), true
+	value := ClipboardString{Text: text, Metadata: metadata}
+	if html, ok := readClipboardHTML(); ok {
+		value.HTML = html
+	}
+	return NewStringClipboardEntry(value), true
+}
+
+// readClipboardHTML reads and parses the CF_HTML data currently on the
+// board (Chromium's ReadHTML): the locked global's bytes (the trailing
+// NUL of CreateGlobalData rides harmlessly outside the fragment),
+// through CFHtmlToHTML (cfhtml_windows.go). ok is false when the board
+// carries no HTML format data or the payload has no parseable
+// fragment.
+func readClipboardHTML() (string, bool) {
+	global, _, _ := procGetClipboardData.Call(uintptr(clipboardHTMLFormat))
+	if global == 0 {
+		return "", false
+	}
+	locked := lockClipboardGlobal(global)
+	if locked == nil {
+		return "", false
+	}
+	defer locked.unlock()
+	return cfHTMLToHTML(string(locked.bytes()))
 }
 
 // clipboardGetString is clipboard.rs get_clipboard_string: the locked

@@ -81,11 +81,24 @@ func (k ClipboardEntryKind) String() string {
 // convention (see PathPromptOptions.Prompt). Consequence: writing
 // Some("") metadata round-trips as None. The pinned corpus only uses
 // non-empty JSON metadata.
+//
+// browser-core ticket 26 adds the HTML companion: the entry's text can
+// carry its HTML representation ("" = none), which the Windows write
+// publishes as CF_HTML (the "HTML Format" registered format, Chromium's
+// WriteHTML) and the read parses back (CFHtmlToHTML). The reference's
+// ClipboardString has no HTML member — the browser-parity direction
+// (the spec's clipboard reads and writes the HTML format) extends the
+// text entry the way a multi-MIME-type clipboard data object carries
+// text/html beside text/plain.
 type ClipboardString struct {
 	// Text is the text content.
 	Text string
 	// Metadata is the associated metadata ("" = none).
 	Metadata string
+	// HTML is the entry's HTML representation ("" = none) — the
+	// text/html companion the Windows exchange publishes as CF_HTML
+	// (browser-core ticket 26).
+	HTML string
 }
 
 // NewClipboardString creates a clipboard string with no metadata
@@ -98,6 +111,13 @@ func NewClipboardString(text string) ClipboardString {
 // with_json_metadata tail: metadata set verbatim, no serialization).
 func (s ClipboardString) WithMetadata(metadata string) ClipboardString {
 	s.Metadata = metadata
+	return s
+}
+
+// WithHTML replaces the HTML representation (browser-core ticket 26;
+// the text/html companion the Windows exchange publishes as CF_HTML).
+func (s ClipboardString) WithHTML(html string) ClipboardString {
+	s.HTML = html
 	return s
 }
 
