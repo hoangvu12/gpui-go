@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 62
 Triage: ready-for-agent
@@ -15,13 +15,15 @@ Triage: ready-for-agent
 
 **Status:** ready-for-agent
 
-- [ ] Editing a Go file restarts the app with the same keyed state and window position.
-- [ ] Editing a .tsx file reloads in place without a restart.
-- [ ] Edit-to-screen times recorded for both paths.
+- [x] Editing a Go file restarts the app with the same keyed state and window position.
+- [x] Editing a .tsx file reloads in place without a restart.
+- [x] Edit-to-screen times recorded for both paths.
 
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): the first review (b156646) sent it back: the window drifted by the Bounds/SetBounds frame offset on every Go restart, the e2e calibrated the offset away, and the no-tsc message repeated on every reload. 87d51af fixes the drift at its source: `windowRectFromClient` used the reference's symmetric borderW/2, borderH/2 split, and now uses the measured client origin (ClientToScreen minus GetWindowRect: ncLeft/ncTop, refreshed with the border extents). `SetBounds(Bounds())` is now a no-op, pinned by internal/winhostspec/bounds_test.go, and the e2e checks two consecutive restarts with exact restores. The no-tsc error reports once per session. Merged into main with no conflicts. Because the fix moves every real window's placement (about 12 px in Y, now exactly the requested client origin), I ran the broad window set: with GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./gpui/, winhostspec, dropspec, authorspec, inspectorspec, focusspec, ./internal/parity/..., ./base, ./examples/..., ./cmd/..., ./gpui/script/... and tsxgen.
 
 ## Answer
 
