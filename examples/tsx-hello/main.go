@@ -2,9 +2,12 @@
 // window's content is the .tsx view in ui/app.tsx, compiled to
 // ui.tsxbundle.js at build time (go generate) and embedded in this
 // binary — the release shape of scripting. The shipped app reads no
-// scripts from disk and links no esbuild; development would instead
-// compile on demand and reload on save (gpui/script/compile, the dev
-// command of ticket 66).
+// scripts from disk and links no esbuild; the dev shape of the same
+// app (dev.go, behind the `dev` build tag) compiles the same .tsx on
+// demand and answers cmd/tsxdev's reload and restart commands — run
+// it with:
+//
+//	go run github.com/hoangvu12/gpui-go/cmd/tsxdev .
 //
 // The same binary self-tests its release shape: -selftest loads the
 // embedded bundle, renders one frame in an offscreen test window (no
@@ -36,6 +39,14 @@ func main() {
 		if err := selfTest(); err != nil {
 			fmt.Fprintln(os.Stderr, "tsx-hello -selftest:", err)
 			os.Exit(1)
+		}
+		return
+	}
+	// The dev supervisor (cmd/tsxdev) sets the state file's path on
+	// every child it starts; the dev build answers it (dev.go).
+	if os.Getenv(script.DevEnv) != "" {
+		if err := runDev(); err != nil {
+			log.Fatal(err)
 		}
 		return
 	}
@@ -96,8 +107,9 @@ func selfTest() error {
 	return nil
 }
 
-// run is the windowed app: the embedded view is the window's root, and
-// the host redraws it whenever the script changes what it shows.
+// run is the windowed app, in release shape: the embedded view is
+// the window's root, and the host redraws it whenever the script
+// changes what it shows.
 func run() error {
 	host := script.New(
 		script.WithoutBanner(),
@@ -106,7 +118,25 @@ func run() error {
 	if err := host.Load(UI.Bundle()); err != nil {
 		return fmt.Errorf("load the embedded bundle: %w", err)
 	}
+	return runApp(host, gpui.WindowOptions{
+		Title:     "gpui-go tsx-hello",
+		Show:      true,
+		Activate:  true,
+		Resizable: true,
+		Bounds: gpui.Bounds{
+			Origin: gpui.Point{X: 160, Y: 120},
+			Size:   gpui.Size{Width: 480, Height: 320},
+		},
+	}, nil)
+}
 
+// runApp opens the host's window and runs the app until the window
+// closes: the shared shape of the release run and the dev run. The
+// window's content is the host's view, redrawn whenever the script
+// changes what it shows. onWindow, when set, runs on the foreground
+// thread right after the window opens — the dev run restores the
+// saved window position there and starts the dev session.
+func runApp(host *script.Host, opts gpui.WindowOptions, onWindow func(app *gpui.App, window *gpui.Window)) error {
 	app := gpui.NewApp()
 	h := gpui.NewHost()
 	if err := app.Attach(h); err != nil {
@@ -149,17 +179,8 @@ func run() error {
 	}
 
 	h.Post(func() {
-		window, err := app.OpenWindowView(gpui.WindowOptions{
-			Title:     "gpui-go tsx-hello",
-			Show:      true,
-			Activate:  true,
-			Resizable: true,
-			Bounds: gpui.Bounds{
-				Origin: gpui.Point{X: 160, Y: 120},
-				Size:   gpui.Size{Width: 480, Height: 320},
-			},
-			OnRedraw: present,
-		}, func(w *gpui.Window, app *gpui.App) gpui.View {
+		opts.OnRedraw = present
+		window, err := app.OpenWindowView(opts, func(w *gpui.Window, app *gpui.App) gpui.View {
 			return gpui.ViewOf(gpui.NewEntity(app, w.Scope(),
 				func(v *script.View, _ *gpui.Context[script.View]) { v.Host = host }))
 		})
@@ -167,6 +188,9 @@ func run() error {
 			log.Fatal(err)
 		}
 		shown = window
+		if onWindow != nil {
+			onWindow(app, window)
+		}
 	})
 
 	// Run returns when the last window closes.

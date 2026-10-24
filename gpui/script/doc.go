@@ -338,12 +338,56 @@
 // surface — every palette color, scale value, bracketed length and
 // opacity modifier — for where a single class is built.
 //
+// # The dev command: watch, reload, restart (ticket 66)
+//
+// `tauri dev`'s loop, on Go: cmd/tsxdev is the supervisor — it builds
+// the app (go build -tags dev, the dev tag that compiles an app's
+// dev-mode file), starts it as its child, and watches the app's
+// package directory (a cheap poll with content hashes and a debounce,
+// never a busy loop):
+//
+//		go run github.com/hoangvu12/gpui-go/cmd/tsxdev .
+//
+//	  - a .tsx/.ts/.js/.json change sends "reload" to the app, which
+//	    reloads in place (the reload path above; keyed state keeps its
+//	    values, ~4 ms of script work);
+//	  - a .go/go.mod/go.sum change rebuilds first (a failed build keeps
+//	    the running app up, like a failed reload keeps the last good
+//	    tree), then asks the app to save its state and exit, restarts
+//	    it, and the fresh app restores what was saved.
+//
+// The restart handoff is the state file named by the GPUI_DEV_STATE
+// environment variable the supervisor sets on every child, plus the
+// two command lines it writes to the child's stdin ("reload" and
+// "save"); both halves of that protocol are implemented once, here
+// (RunDev) and in cmd/tsxdev, and dev.go documents it in full. What
+// the app saves and restores:
+//
+//	state, _ := script.ReadDevState(os.Getenv(script.DevEnv))
+//	store := script.NewShared()
+//	store.Restore(state.Shared)
+//	host := script.New(
+//		script.WithSource(source),                  // compile.Open, the dev shape
+//		script.WithStateSnapshot(state.State),      // keyed state, seeded
+//		script.WithShared(store))
+//	// after the window opens, through the public window API:
+//	if bounds, ok := state.WindowBounds(); ok {
+//		window.SetBounds(bounds)
+//	}
+//	script.RunDev(script.DevConfig{...})          // the command stream
+//
+// DevState.Save writes the same file atomically on the save command.
+// The window position travels as Window.Bounds' logical pixels and is
+// restored with Window.SetBounds — the public window API, no private
+// state. examples/tsx-hello is the sample: its release shape (the
+// embedded bundle) and its dev shape (compile.Open + RunDev behind the
+// dev tag) are the same app.
+//
 // # Later tickets (not built here)
 //
-// The dev command (Go rebuild
-// and restart with state restore); plugin slots, contributions and
-// capability grants (each plugin in its own goja runtime with a time
-// budget) — the ActionResolver and SharedStore seams above are the
-// gates those wrap. The SetGlobal mechanism and this package's public
-// surface are the seam those build on.
+// Plugin slots, contributions and capability grants (each plugin in
+// its own goja runtime with a time budget) — the ActionResolver and
+// SharedStore seams above are the gates those wrap. The SetGlobal
+// mechanism and this package's public surface are the seam those
+// build on.
 package script
