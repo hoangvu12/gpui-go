@@ -123,6 +123,10 @@ func (t *Toolbar) render(w *gpui.Window, app *gpui.App) *gpui.DivElement {
 		TrackFocus(focusHandle).
 		Role(gpui.RoleToolbar).
 		AriaOrientation(gpui.A11yOrientationHorizontal).
+		// A toolbar's items are controls, like the UA stylesheet's
+		// button rule (user-select: none, html.css:850/:904; browser-
+		// core 20's default-on selection opts them back out).
+		SelectNone().
 		OnKeyDown(func(event *gpui.KeyDownEvent, w *gpui.Window, app *gpui.App) {
 			toolbarHandleKeyDown(disabled, focusHandle, event, w, app)
 		})

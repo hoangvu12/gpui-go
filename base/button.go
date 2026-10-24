@@ -218,6 +218,11 @@ func (b *Button) render(w *gpui.Window, app *gpui.App) *gpui.DivElement {
 		Flex().
 		ItemsCenter().
 		JustifyCenter().
+		// Chrome's UA stylesheet opts buttons out of text selection
+		// (user-select: none, html.css:850/:904); browser-core 20 makes
+		// text selectable by default, so the control opts back out the
+		// same way.
+		SelectNone().
 		LineHeight(gpui.Fraction(1))
 	if role, ok := b.role.Resolve(func() gpui.Role { return gpui.RoleButton }); ok {
 		d.Role(role)

@@ -158,6 +158,10 @@ func (r *Radio) render(w *gpui.Window, app *gpui.App) *gpui.DivElement {
 
 	d := TestSupport(r.base).
 		Role(gpui.RoleRadioButton).
+		// A form control, like the UA stylesheet's opt-outs
+		// (user-select: none, html.css:850/:904; browser-core 20's
+		// default-on selection opts it back out).
+		SelectNone().
 		AriaToggled(toggledOf(checked)).
 		// Both toggled and selected: assistive technologies read one or
 		// the other (U:radio.rs:209-212).

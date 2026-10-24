@@ -772,6 +772,12 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.RowStartAuto()
 	case "scrollbar-gutter-stable":
 		b.ScrollbarGutterStable()
+	case "select-auto":
+		b.SelectAuto()
+	case "select-none":
+		b.SelectNone()
+	case "select-text":
+		b.SelectText()
 	case "self-baseline":
 		b.SelfBaseline()
 	case "self-center":
@@ -889,4 +895,4 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 }
 
 // methodClassCount is the number of classes applyMethodClass knows.
-const methodClassCount = 438
+const methodClassCount = 441

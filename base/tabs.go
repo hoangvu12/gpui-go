@@ -140,6 +140,10 @@ func (t *Tab) render(*gpui.Window, *gpui.App) *gpui.DivElement {
 		Flex().
 		ItemsCenter().
 		JustifyCenter().
+		// A tab is a control, like the UA stylesheet's button rule
+		// (user-select: none, html.css:850/:904; browser-core 20's
+		// default-on selection opts it back out).
+		SelectNone().
 		LineHeight(gpui.Fraction(1))
 	if t.accessibilityLabel != nil {
 		d.AriaLabel(*t.accessibilityLabel)

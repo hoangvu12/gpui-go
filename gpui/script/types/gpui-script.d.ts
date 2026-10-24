@@ -881,6 +881,9 @@ type CoreClass =
 	"row-span-full" |
 	"row-start-auto" |
 	"scrollbar-gutter-stable" |
+	"select-auto" |
+	"select-none" |
+	"select-text" |
 	"self-baseline" |
 	"self-center" |
 	"self-end" |
@@ -1557,6 +1560,9 @@ type Class =
 	"row-span-full" |
 	"row-start-auto" |
 	"scrollbar-gutter-stable" |
+	"select-auto" |
+	"select-none" |
+	"select-text" |
 	"self-baseline" |
 	"self-center" |
 	"self-end" |

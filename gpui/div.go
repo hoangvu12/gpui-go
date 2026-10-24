@@ -135,6 +135,12 @@ type TextStyle struct {
 	LetterSpacingEm *float32
 	// TextTransform is the layout-time case mapping (nil = None).
 	TextTransform *TextTransform
+	// UserSelect is the computed user-select (CSS UI 4 §user-select;
+	// browser-core ticket 20): the innermost explicit value on the text
+	// style stack, Auto (the initial) when nothing set one. The walk
+	// that resolves auto against the ancestors is
+	// userSelectAllowsSelection (user_select.go).
+	UserSelect UserSelect
 }
 
 // DefaultTextStyle returns the reference TextStyle::default()
@@ -178,6 +184,11 @@ type TextStyleRefinement struct {
 	// LetterSpacingEm sets the em-based tracking (browser-core 38).
 	LetterSpacingEm Optional[float32]
 	TextTransform   Optional[TextTransform]
+	// UserSelect sets the user-select property (CSS UI 4 §user-select;
+	// browser-core ticket 20): absent leaves the inherited value, None
+	// forbids selection on the subtree, Text re-enables it under a None,
+	// and Auto resolves from the ancestors.
+	UserSelect Optional[UserSelect]
 }
 
 // Refine applies the explicitly supplied fields onto style (the derived
@@ -205,6 +216,7 @@ func (r *TextStyleRefinement) Refine(style *TextStyle) {
 	refinePointer(&style.LetterSpacing, r.LetterSpacing)
 	refinePointer(&style.LetterSpacingEm, r.LetterSpacingEm)
 	refinePointer(&style.TextTransform, r.TextTransform)
+	refineValue(&style.UserSelect, r.UserSelect)
 }
 
 // Merge applies the present fields of other onto r (the derived
@@ -236,6 +248,7 @@ func (r *TextStyleRefinement) Merge(other *TextStyleRefinement) {
 	mergeOptional(&r.LetterSpacing, other.LetterSpacing)
 	mergeOptional(&r.LetterSpacingEm, other.LetterSpacingEm)
 	mergeOptional(&r.TextTransform, other.TextTransform)
+	mergeOptional(&r.UserSelect, other.UserSelect)
 }
 
 // IsSome reports whether any field is present (the derived
@@ -247,7 +260,7 @@ func (r *TextStyleRefinement) IsSome() bool {
 		r.Underline.present || r.Strikethrough.present || r.WhiteSpace.present ||
 		r.TextOverflow.present || r.TextAlign.present || r.LineClamp.present ||
 		r.LetterSpacing.present || r.LetterSpacingEm.present ||
-		r.TextTransform.present
+		r.TextTransform.present || r.UserSelect.present
 }
 
 // Clone returns an independent copy (the slice-valued fields copied).
@@ -565,6 +578,14 @@ type stringLayoutState struct {
 	fontSize float32
 	// bounds is committed by prepaint (parent-relative).
 	bounds *Bounds
+	// hitbox is the selection hitbox prepaint inserted while user-select
+	// allows selection (browser-core 20, D7): the hitbox the text's
+	// selection participant registers under and the automatic I-beam
+	// cursor request targets. Nil when the text is not selectable —
+	// user-select forbids it, or the subtree draws under
+	// WithUserSelectSuppressed (the drag preview, the inspector, an
+	// inline flow's fragments).
+	hitbox *Hitbox
 }
 
 // shapedCell is the shared shaped-document cache of one text element
@@ -589,6 +610,15 @@ type shapedCell struct {
 	// like the pin's document-carried runs.
 	runs []TextRun
 	size Size
+	// source is the SOURCE text the document was shaped from — the
+	// post-transform text before the white-space collapse (browser-
+	// core 20): the selection participant's run text and its layout's
+	// byte space.
+	source string
+	// collapse is the source↔display byte map of the white-space
+	// collapse (nil when the display text is the source text): the
+	// selection geometry queries map source offsets through it.
+	collapse *collapseMap
 }
 
 // textElement is the Text element: a string displayed as one shaped,
@@ -721,8 +751,10 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		// folds the display text and remaps the covering runs BEFORE the
 		// truncation and the shaping — the truncation's grapheme
 		// bisection works on the display text, exactly as Blink's
-		// InlineItemsBuilder precedes the line breaker.
-		effective, runs = collapseElementText(effective, runs, textStyle.WhiteSpace)
+		// InlineItemsBuilder precedes the line breaker. Browser-core 20
+		// retains the source text and the byte map on the cell: the
+		// selection run answers in source offsets through them.
+		effective, runs, collapse := collapseElementTextWithMap(effective, runs, textStyle.WhiteSpace)
 		if truncation.Width != nil {
 			effective, runs = applyTextTruncation(effective, runs, wrapWidth, textStyle.LineClamp, truncation,
 				func(candidate string, candidateRuns []TextRun, wrapWidth *float32) (shapedText, error) {
@@ -752,6 +784,8 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		cell.truncateWidth = truncation.Width
 		cell.runs = runs
 		cell.size = size
+		cell.source = text
+		cell.collapse = collapse
 		return size
 	}
 	layoutID, err := requestMeasuredLayoutOf(w, DefaultStyle(), measure)
@@ -779,24 +813,64 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 // text placement stays stable when its container moves). Inside a
 // parent paragraph the element's prepaint is a no-op — the paragraph
 // owns its geometry (window.current_inline_fragments is Some).
-func (t *textElement) Prepaint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *stringLayoutState, w *Window, app *App) struct{} {
+// Browser-core 20 (spec D7): while user-select allows selection and
+// the window runs a selection state, the text also inserts the hitbox
+// its selection participant registers under — the I-beam's hover box
+// and the gesture's hit test (HitboxNormal: text never blocks mouse
+// handling, like a text node in the hit test).
+func (t *textElement) Prepaint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *stringLayoutState, w *Window, app *App) Hitbox {
 	if currentFrame(w).currentInlineFragments != nil {
-		return struct{}{}
+		return Hitbox{}
 	}
 	textBounds, err := parentRelativeLayoutBoundsOf(w, layout.layoutID)
 	if err != nil {
 		panic(fmt.Sprintf("gpui: text element prepaint bounds: %v", err))
 	}
 	layout.bounds = &textBounds
-	return struct{}{}
+	if !textSelectableByUserSelect(t, layout, w, app) {
+		return Hitbox{}
+	}
+	layout.hitbox = ptrOf(w.InsertHitbox(textBounds, HitboxNormal))
+	return *layout.hitbox
 }
+
+// textSelectableByUserSelect reports whether this text element joins
+// the window selection (browser-core 20): user-select allows selection
+// (the ancestor-chain walk, user_select.go), the window has a live
+// selection state (the automatic install gives every window one), and
+// the frame is not a detached subtree's prepaint — the drag preview's
+// snapshot, the inspector UI, an inline flow's object fragments (base's
+// inline machinery owns the paragraph's selection). The plain source
+// text must have laid out — an empty or fully collapsed text has no line
+// box to select.
+func textSelectableByUserSelect(t *textElement, layout *stringLayoutState, w *Window, app *App) bool {
+	if !userSelectAllowsSelection(w) || app == nil {
+		return false
+	}
+	if _, ok := textSelectionStateExisting(w, app); !ok {
+		// The first selectable text brings the window's selection state
+		// into existence (the install resolves it lazily, so a window
+		// with no selectable text never owns the entity).
+		ensureUserSelectState(w, app)
+	}
+	return t.text != "" && layout.cell != nil && layout.cell.source != ""
+}
+
+// ptrOf boxes a value's address.
+func ptrOf[T any](v T) *T { return &v }
 
 // Paint implements Element: draw the shaped line at the committed
 // bounds origin (the reference TextLayout::paint with the ambient text
 // style, elements/text.rs:1021-1060: paint_background then paint, each
 // aligned within the element bounds). Inside a parent paragraph the
 // paragraph paints the text, so the element's paint is a no-op.
-func (t *textElement) Paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *stringLayoutState, prepaint *struct{}, w *Window, app *App) {
+// Browser-core 20 (spec D7): a selectable text joins the window's
+// selection — the participant registers its run (the drag, double and
+// triple click the model's gestures already carry), the selection wash
+// paints under the glyphs, and the automatic I-beam is requested for
+// the hitbox while no explicit cursor is set (event_handler.cc:563-573
+// ShouldShowIBeamForNode).
+func (t *textElement) Paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *stringLayoutState, prepaint *Hitbox, w *Window, app *App) {
 	if currentFrame(w).currentInlineFragments != nil {
 		return
 	}
@@ -804,6 +878,11 @@ func (t *textElement) Paint(global *GlobalElementID, inspector *InspectorElement
 		panic(fmt.Sprintf("gpui: measurement or prepaint has not been performed on %q", t.text))
 	}
 	textStyle := WindowTextStyle(w)
+	// The user-select registration (browser-core 20): paint inserts the
+	// participant before the glyphs so the wash can paint under them.
+	if prepaint != nil && layout.hitbox != nil {
+		paintUserSelectText(t, layout, layout.hitbox, w, app)
+	}
 	// The runs the document was shaped with (the ambient style's run,
 	// cut by truncation): the paint fields — color, background,
 	// underline, strikethrough — paint from them, like the pin's

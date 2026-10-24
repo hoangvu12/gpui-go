@@ -158,9 +158,20 @@ func (t *SelectableText) RequestLayout(global *GlobalElementID, inspector *Inspe
 }
 
 // Prepaint lays the text out and registers the run for the frame
-// (U:selectable_text.rs:179-197).
+// (U:selectable_text.rs:179-197). Browser-core 20: user-select: none
+// on the ambient text style (an ancestor's opt-out) suppresses the
+// registration — the run still paints, but it never joins the window
+// selection, like Chrome's none text.
 func (t *SelectableText) Prepaint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, handle *TextSelectionHandle, w *Window, app *App) Hitbox {
 	t.styledText.Prepaint(global, inspector, bounds, &struct{}{}, w, app)
+	if !userSelectAllowsSelection(w) {
+		return Hitbox{}
+	}
+	// An explicit participant brings the window's selection state into
+	// existence the same way the automatic one does (browser-core 20:
+	// the install resolves the state lazily, so the first participant
+	// creates it).
+	ensureUserSelectState(w, app)
 	hitbox := w.InsertHitbox(bounds, HitboxNormal)
 	registration := NewTextSelectionRegistration(hitbox, bounds).
 		WithDocumentOrder(t.documentOrder).

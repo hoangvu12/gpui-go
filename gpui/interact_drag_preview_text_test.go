@@ -66,7 +66,7 @@ func previewTextBounds(t *testing.T, f *interactFixture, entity Entity[previewTe
 		if v.textEl.obj == nil {
 			t.Fatal("the preview view rendered no text element")
 		}
-		text, ok := v.textEl.obj.(*drawable[stringLayoutState, struct{}, Element[stringLayoutState, struct{}]])
+		text, ok := v.textEl.obj.(*drawable[stringLayoutState, Hitbox, Element[stringLayoutState, Hitbox]])
 		if !ok {
 			t.Fatalf("the preview's text child is a %T, want the text element drawable", v.textEl.obj)
 		}
@@ -153,7 +153,7 @@ func TestInteractDragPreviewTextUpdatesWhenNotifiedMidDrag(t *testing.T) {
 	}
 	var rendered string
 	preview.Update(f.app, func(v *previewTextView, cx *Context[previewTextView]) {
-		if te, ok := v.textEl.obj.(*drawable[stringLayoutState, struct{}, Element[stringLayoutState, struct{}]]); ok {
+		if te, ok := v.textEl.obj.(*drawable[stringLayoutState, Hitbox, Element[stringLayoutState, Hitbox]]); ok {
 			if element, ok := te.element.(*textElement); ok {
 				rendered = element.text
 			}

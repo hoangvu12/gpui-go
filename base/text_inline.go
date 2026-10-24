@@ -824,6 +824,15 @@ func (e *inlineText) Paint(global *gpui.GlobalElementID, _ *gpui.InspectorElemen
 	}
 
 	if isSelectable {
+		// Browser-core 20: a user-select: none ancestor opts the whole
+		// rich-text document out — the inline registration joins plain
+		// text's opt-out (the walk resolves auto from the ancestors,
+		// Chromium's Node::CanStartSelection, node.cc:2017-2041).
+		if !gpui.UserSelectAllowsSelection(w) {
+			isSelectable = false
+		}
+	}
+	if isSelectable {
 		if hasView && textSelectionRegisterInline != nil {
 			textSelectionRegisterInline(view, inlineTextLineBounds(e.text, layout, layout.LineHeight(), gpui.ContentMask(w)), e.text, layout, hitbox.Bounds, app)
 		}

@@ -339,6 +339,13 @@ func drawRoots(w *Window, app *App, ds *windowDrawState, frame *frameDrawState) 
 	if err := computeLayoutOf(w, layoutID, available); err != nil {
 		return fmt.Errorf("root layout compute: %w", err)
 	}
+	// Browser-core 20 (spec D7): the window's selection gestures install
+	// before the root's phases run, so every element that prepaints or
+	// paints after this point — the root tree, the overlays, the deferred
+	// draws — registers its participants and mouse listeners inside a
+	// window that already has its selection state, and the selection
+	// listeners sit outermost in the frame's listener order.
+	installWindowTextSelection(w, app)
 	WithAbsoluteElementOffsetVoid(w, Point{}, func(w *Window) {
 		root.Prepaint(w, app)
 	})
@@ -360,7 +367,20 @@ func drawRoots(w *Window, app *App, ds *windowDrawState, frame *frameDrawState) 
 		mouse := w.TrackedMousePosition()
 		dragOffset = Point{X: mouse.X - drag.CursorOffset.X, Y: mouse.Y - drag.CursorOffset.Y}
 	}
-	dragElement, hasDragElement := prepaintActiveDragPreview(w, app)
+	// Browser-core 20: the drag preview's tree draws under selection
+	// suppression — Chrome's drag image is a snapshot, not hit-testable
+	// DOM, so its text never joins the window selection.
+	dragElement, hasDragElement := func() (AnyElement, bool) {
+		type pair struct {
+			element AnyElement
+			has     bool
+		}
+		p := WithUserSelectSuppressed(w, func(w *Window) pair {
+			element, has := prepaintActiveDragPreview(w, app)
+			return pair{element, has}
+		})
+		return p.element, p.has
+	}()
 
 	root.Paint(w, app)
 
@@ -371,10 +391,18 @@ func drawRoots(w *Window, app *App, ds *windowDrawState, frame *frameDrawState) 
 	paintDeferredDraws(w, app)
 	if hasDragElement {
 		WithAbsoluteElementOffsetVoid(w, dragOffset, func(w *Window) {
-			paintActiveDragPreview(dragElement, w, app)
+			WithUserSelectSuppressedVoid(w, func(w *Window) {
+				paintActiveDragPreview(dragElement, w, app)
+			})
 		})
 	}
 	paintInspectorHighlight(w, app)
+
+	// Browser-core 20: apply the frame's collected automatic selection
+	// registrations — the element phases are complete, so the pending
+	// list is full; one entity update, before the frame completes and
+	// before any input dispatch reads the participants.
+	flushUserSelectionRegistrations(w, app)
 
 	// The debug frame overlay (window.rs 3187-3197: painted after
 	// draw_roots, into the frame under construction, with the viewport

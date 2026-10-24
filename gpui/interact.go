@@ -393,11 +393,16 @@ func groupHitboxPop(name string, app *App) {
 // ---------------------------------------------------------------------------
 
 // cursorStyleRequest is window.rs:748-753 CursorStyleRequest: a style
-// for a hitbox, or (hasHitbox false) for the whole window.
+// for a hitbox, or (hasHitbox false) for the whole window. The
+// automatic flag (browser-core 20) marks the default-on I-beam over
+// selectable text — CSS's cursor: auto resolution (Chromium's
+// SelectAutoCursor, event_handler.cc:839-847): an explicit request
+// (an element's cursor style, a drag preview) always wins over it.
 type cursorStyleRequest struct {
 	hitboxID  uint64
 	hasHitbox bool
 	style     CursorStyle
+	automatic bool
 }
 
 // frameCursorRequests are one frame's cursor requests (window.rs Frame
@@ -691,10 +696,29 @@ func (w *Window) SetWindowCursorStyle(style CursorStyle) {
 	appendCursorRequest(w, frame, cursorStyleRequest{style: style})
 }
 
+// setAutomaticCursorStyle requests the cursor: auto resolution for a
+// hitbox (browser-core 20): the default cursor the window resolves
+// when NO explicit request covers the pointer — the I-beam over
+// selectable text (Chromium's SelectAutoCursor,
+// input/event_handler.cc:839-847, answering ShouldShowIBeamForNode at
+// :563-573; event_handler_test.cc:489 pins the none case). Paint phase
+// only.
+func (w *Window) setAutomaticCursorStyle(style CursorStyle, hitbox *Hitbox) {
+	if hitbox == nil {
+		return
+	}
+	frame := cursorRequestFrame(w, "setAutomaticCursorStyle")
+	appendCursorRequest(w, frame, cursorStyleRequest{hitboxID: hitbox.id, hasHitbox: true, style: style, automatic: true})
+}
+
 // frameCursorStyle is window.rs:1200-1213 Frame::cursor_style: walking
 // the requests newest first, a window request wins outright; otherwise
 // the newest request whose hitbox is hovered (ignoring the keyboard
-// modality) decides.
+// modality) decides. Browser-core 20: an explicit request beats the
+// automatic I-beam of cursor: auto — the walk remembers the newest
+// hovered automatic request and returns it only when no explicit
+// hovered request exists (Chromium's SelectCursor: the cursor property
+// resolves to SelectAutoCursor only at auto, event_handler.cc:764).
 func frameCursorStyle(w *Window, frame *renderedFrame) (CursorStyle, bool) {
 	st, ok := interactWindowStates[w]
 	if !ok || frame == nil {
@@ -704,19 +728,29 @@ func frameCursorStyle(w *Window, frame *renderedFrame) (CursorStyle, bool) {
 		if f.frame != frame {
 			continue
 		}
-		var found *CursorStyle
+		var found, autoFound *CursorStyle
 		for i := len(f.requests) - 1; i >= 0; i-- {
 			request := f.requests[i]
 			if !request.hasHitbox {
 				return request.style, true
 			}
-			if found == nil && HitboxID(request.hitboxID).isHoveredIgnoringLastInput(w) {
-				style := request.style
+			if !HitboxID(request.hitboxID).isHoveredIgnoringLastInput(w) {
+				continue
+			}
+			style := request.style
+			if request.automatic {
+				if autoFound == nil {
+					autoFound = &style
+				}
+			} else if found == nil {
 				found = &style
 			}
 		}
 		if found != nil {
 			return *found, true
+		}
+		if autoFound != nil {
+			return *autoFound, true
 		}
 		return CursorArrow, false
 	}

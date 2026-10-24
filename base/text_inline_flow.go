@@ -238,6 +238,10 @@ type inlineFlowLayoutState struct {
 type inlineFlowPrepaint struct {
 	element    gpui.AnyElement
 	background *textCodeBackground
+	// suppressed marks the detached-root fragments (objects and images,
+	// browser-core 20): their paints run under selection suppression
+	// like their prepaints.
+	suppressed bool
 }
 
 // IntoElement implements gpui.IntoElement.
@@ -339,11 +343,17 @@ func (f *inlineFlow) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElementI
 				gpui.Bounds{Origin: textPointAdd(bounds.Origin, sel.Origin), Size: sel.Size},
 				gpui.Bounds{Origin: gpui.Point{X: bounds.Left(), Y: bounds.Top() + sel.Top()}, Size: gpui.Size{Width: bounds.Size.Width, Height: sel.Size.Height}},
 			).withLink(item.link, f.linkClickHandler).IntoElement()
-			el.PrepaintAsRoot(textPointAdd(bounds.Origin, fragment.origin), gpui.AvailableSize{
-				Width:  gpui.DefiniteAvailableSpace(objectSize.Width),
-				Height: gpui.DefiniteAvailableSpace(objectSize.Height),
-			}, w, app)
-			elements = append(elements, inlineFlowPrepaint{element: el})
+			// Browser-core 20: an object's content prepaints as its own
+			// root, outside the window's plain-text document — its inner
+			// text must not register a second, competing participant (the
+			// paragraph's own registration owns the line).
+			gpui.WithUserSelectSuppressedVoid(w, func(w *gpui.Window) {
+				el.PrepaintAsRoot(textPointAdd(bounds.Origin, fragment.origin), gpui.AvailableSize{
+					Width:  gpui.DefiniteAvailableSpace(objectSize.Width),
+					Height: gpui.DefiniteAvailableSpace(objectSize.Height),
+				}, w, app)
+			})
+			elements = append(elements, inlineFlowPrepaint{element: el, suppressed: true})
 		case positionedText:
 			item := &f.items[fragment.itemIx]
 			if item.kind != inlineFlowText {
@@ -402,11 +412,14 @@ func (f *inlineFlow) Prepaint(_ *gpui.GlobalElementID, _ *gpui.InspectorElementI
 				continue
 			}
 			el := inlineFlowImageElement(len(elements), item.source, item.link, fragment.size, f.linkClickHandler)
-			el.PrepaintAsRoot(textPointAdd(bounds.Origin, fragment.origin), gpui.AvailableSize{
-				Width:  gpui.DefiniteAvailableSpace(fragment.size.Width),
-				Height: gpui.DefiniteAvailableSpace(fragment.size.Height),
-			}, w, app)
-			elements = append(elements, inlineFlowPrepaint{element: el})
+			// Like the object fragments (browser-core 20): detached roots.
+			gpui.WithUserSelectSuppressedVoid(w, func(w *gpui.Window) {
+				el.PrepaintAsRoot(textPointAdd(bounds.Origin, fragment.origin), gpui.AvailableSize{
+					Width:  gpui.DefiniteAvailableSpace(fragment.size.Width),
+					Height: gpui.DefiniteAvailableSpace(fragment.size.Height),
+				}, w, app)
+			})
+			elements = append(elements, inlineFlowPrepaint{element: el, suppressed: true})
 		}
 	}
 	if textFragmentCount < len(state.frameState.fragmentStates) {
@@ -436,7 +449,15 @@ func (f *inlineFlow) Paint(_ *gpui.GlobalElementID, _ *gpui.InspectorElementID, 
 			q.CornerRadii = gpui.Corners{TopLeft: radius, TopRight: radius, BottomRight: radius, BottomLeft: radius}
 			w.PaintQuad(q)
 		}
-		p.element.Paint(w, app)
+		// The object and image fragments paint under selection
+		// suppression, like their prepaint (browser-core 20).
+		if p.suppressed {
+			gpui.WithUserSelectSuppressedVoid(w, func(w *gpui.Window) {
+				p.element.Paint(w, app)
+			})
+		} else {
+			p.element.Paint(w, app)
+		}
 	}
 }
 

@@ -1096,15 +1096,28 @@ func TestUnitSelectionElementSupportsScopeAndRegistrationOnTheFirstFrame(t *test
 	})
 }
 
-// U:text_selection.rs:4094-4119
+// U:text_selection.rs:4094-4119, updated by browser-core 20: every
+// window now has its selection state (the automatic install), so a bare
+// Register lands in the map — but the element never renders, and the
+// frame-end sweep drops the registration: without its element the
+// participant enables no queries.
 func TestLazyRegistrationDoesNotEnableQueriesWithoutTheElement(t *testing.T) {
 	ta := newSelectionTestApp(t)
 	_, cx := openSelectionView(t, ta, emptyView)
+	drawSelectionFrame(t, cx)
 	cx.Update(func(w *Window, app *App) {
 		selection := NewTextSelectionHandle("registered", app, app.RootScope())
 		selection.SetLocalSelection(true, app)
 		bounds := Bounds{Size: Size{Width: 100, Height: 20}}
 		selection.Register(NewTextSelectionRegistration(fakeHitbox(bounds), bounds).WithTextBounds([]Bounds{bounds}), w, app)
+	})
+	// The participant's element never renders: the completing frames'
+	// sweep drops it (the frame it registered in keeps it — the sweep
+	// compares against the generation that frame registered under — and
+	// the NEXT frame's sweep drops it).
+	drawSelectionFrame(t, cx)
+	drawSelectionFrame(t, cx)
+	cx.Update(func(w *Window, app *App) {
 		if TextSelectionSelectedText(w, app) != "" || TextSelectionHasSelection(w, app) {
 			t.Fatal("registration enabled queries")
 		}
