@@ -1582,6 +1582,14 @@ func interactiveStateOf(global *GlobalElementID, state *InteractiveElementState)
 func (d *DivElement) requestLayout(global *GlobalElementID, inspector *InspectorElementID, w *Window, app *App) (LayoutID, divFrameState) {
 	// The scroll offset and gesture cells (div.rs:2735-2755).
 	d.scroll = resolveElementScroll(d.trackedScrollHandle, d.Styled.storage(), global, w)
+	if d.scroll != nil {
+		// browser-core 46: a scroll container's anchoring walk identifies
+		// its anchor node across frames by the element id path, so the
+		// request walk below (this element's whole subtree) must record
+		// the node paths (one small string per node per frame; windows
+		// without scroll containers never pay it).
+		drawState(w).engine.RequestAnchorBookkeeping()
+	}
 	style := WithOptionalElementState(w, global, func(slot *InteractiveElementState, w *Window) (Style, *InteractiveElementState) {
 		es := interactiveStateOf(global, slot)
 		if es != nil && app.HasActiveDrag() {
@@ -1868,6 +1876,11 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 					// its element's inspector id.
 					w.InsertInspectorHitbox(box, inspector)
 				}
+				// browser-core 46: the scroll anchoring — resolve the
+				// anchor under this frame's layout and move the offset by the
+				// content-space delta BEFORE the clamp bounds it, so the
+				// children prepaint (and the paint) under the adjusted offset.
+				d.scroll.applyScrollAnchoring(w, layout.layoutID)
 				// clamp_scroll_position (div.rs:2876-2877), on the
 				// record-derived range (browser-core 07).
 				scrollOffset := d.scroll.clamp(bounds, &style, scrollMax, w)

@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 320px;
+		height: 240px;
+		display: flex;
+	}
+	#scroller {
+		box-sizing: border-box;
+		width: 240px;
+		height: 200px;
+		margin-left: 10px;
+		margin-top: 10px;
+		display: flex;
+		flex-direction: column;
+		overflow-y: scroll;
+		/* The port draws no scrollbars and reserves no gutter. */
+		scrollbar-width: none;
+		background: #f1f5f9;
+	}
+	#rows {
+		display: flex;
+		flex-direction: column;
+	}
+	#rows > div {
+		box-sizing: border-box;
+		width: 240px;
+		height: 50px;
+		flex-shrink: 0;
+	}
+	#focus {
+		background: #fca5a5;
+		outline: none;
+	}
+	.row {
+		background: #cbd5e1;
+	}
+	#inserted {
+		background: #2563eb;
+	}
+</style>
+</head>
+<body>
+	<div id="scroller" data-id="scroller">
+		<div id="rows">
+			<div id="focus" data-id="focus" tabindex="0"></div>
+			<div class="row" data-id="r2"></div>
+			<div class="row" data-id="r3"></div>
+			<div class="row" data-id="r4"></div>
+			<div class="row" data-id="r5"></div>
+			<div class="row" data-id="r6"></div>
+			<div class="row" data-id="r7"></div>
+			<div class="row" data-id="r8"></div>
+			<div class="row" data-id="r9"></div>
+		</div>
+	</div>
+</body>
+</html>

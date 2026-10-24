@@ -48,6 +48,10 @@ type elementScroll struct {
 	// reserve) and written at prepaint (what this frame's overflow
 	// shows). Nil unless an axis is auto.
 	auto *divAutoScrollbarFlags
+	// anchor is the scroll-anchoring state (browser-core 46,
+	// scroll_anchor.go): the same persistent cell the offset lives in —
+	// the handle's state or the element state's.
+	anchor *scrollAnchorState
 }
 
 // divScrollElementState is the scroll part of the pinned
@@ -63,6 +67,9 @@ type divScrollElementState struct {
 	// frame's request walk reserves what the previous frame's prepaint
 	// saw overflowing.
 	auto *divAutoScrollbarFlags
+	// anchor is the scroll-anchoring bookkeeping (browser-core 46,
+	// scroll_anchor.go).
+	anchor scrollAnchorState
 }
 
 // baseOverflowScrolls is the pinned base_style.overflow.x/y ==
@@ -93,7 +100,7 @@ func baseOverflowAuto(base *StyleRefinement) bool {
 // then keep it honest (an auto axis with no overflow has range zero).
 func resolveElementScroll(handle *ScrollHandle, base *StyleRefinement, global *GlobalElementID, w *Window) *elementScroll {
 	if handle != nil {
-		es := &elementScroll{offset: handle.state.offset, ongoing: handle.state.ongoingScroll, handle: handle}
+		es := &elementScroll{offset: handle.state.offset, ongoing: handle.state.ongoingScroll, handle: handle, anchor: &handle.state.anchor}
 		if global != nil && baseOverflowAuto(base) {
 			es.auto = withAutoScrollbarFlags(global, w)
 		}
@@ -115,7 +122,7 @@ func resolveElementScroll(handle *ScrollHandle, base *StyleRefinement, global *G
 		if slot.auto == nil && baseOverflowAuto(base) {
 			slot.auto = &divAutoScrollbarFlags{}
 		}
-		return &elementScroll{offset: slot.offset, ongoing: slot.ongoing, auto: slot.auto}, slot
+		return &elementScroll{offset: slot.offset, ongoing: slot.ongoing, auto: slot.auto, anchor: &slot.anchor}, slot
 	})
 }
 
