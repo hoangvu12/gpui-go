@@ -82,6 +82,7 @@ var (
 	procSetWindowPos         = modUser32.NewProc("SetWindowPos")
 	procGetWindowRect        = modUser32.NewProc("GetWindowRect")
 	procGetClientRect        = modUser32.NewProc("GetClientRect")
+	procClientToScreen       = modUser32.NewProc("ClientToScreen")
 	procGetDpiForWindow      = modUser32.NewProc("GetDpiForWindow")
 	procIsWindow             = modUser32.NewProc("IsWindow")
 	procIsWindowVisible      = modUser32.NewProc("IsWindowVisible")
@@ -118,7 +119,7 @@ func resolveHostProcs() error {
 			procPostMessageW, procPostQuitMessage, procDestroyWindow, procSendMessageW,
 			procSetWindowTextW, procGetWindowTextW, procGetWindowTextLengthW,
 			procShowWindow, procSetForegroundWindow, procSetActiveWindow,
-			procSetFocus, procSetWindowPos, procGetWindowRect, procGetClientRect,
+			procSetFocus, procSetWindowPos, procGetWindowRect, procGetClientRect, procClientToScreen,
 			procGetDpiForWindow, procIsWindow, procIsWindowVisible,
 			procIsIconic, procIsZoomed, procValidateRect, procMonitorFromWindow,
 			procGetMonitorInfoW, procGetCurrentThreadId, procGetModuleHandleW,
@@ -1019,6 +1020,14 @@ type hostWindow struct {
 	// borderW/H is the window-minus-client frame extent (reference
 	// WindowBorderOffset), updated after creation and DPI changes.
 	borderW, borderH int32
+	// ncLeft/ncTop is where the client area sits inside the outer
+	// window: the client origin minus the frame origin, in device
+	// pixels, measured (ClientToScreen minus GetWindowRect). A caption
+	// window is not split symmetrically — the caption takes the top —
+	// so the placement math uses these measured offsets rather than
+	// half the extent, which is what makes a requested client position
+	// land exactly (SetBounds(Bounds()) is a no-op).
+	ncLeft, ncTop int32
 	// minSize is the window's minimum client size in logical pixels
 	// (WindowOptions.MinSize; a zero dimension is unconstrained). The
 	// WM_GETMINMAXINFO floor and the programmatic sizing clamps derive
@@ -1329,6 +1338,14 @@ func (w *hostWindow) updateBorderOffset() {
 	procGetClientRect.Call(w.hwnd, uintptr(unsafe.Pointer(&cr)))
 	w.borderW = (wr.right - wr.left) - (cr.right - cr.left)
 	w.borderH = (wr.bottom - wr.top) - (cr.bottom - cr.top)
+	// Where the client area actually sits inside the frame: the top is
+	// the caption, not half the extent (the split the reference's
+	// calculate_window_rect assumes). Measured, so any frame layout —
+	// a hidden title bar, a custom WM_NCCALCSIZE — lands exactly.
+	origin := point{0, 0}
+	procClientToScreen.Call(w.hwnd, uintptr(unsafe.Pointer(&origin)))
+	w.ncLeft = origin.x - wr.left
+	w.ncTop = origin.y - wr.top
 }
 
 // applySizeChange records a new client size and reports it (WM_SIZE and
@@ -1403,12 +1420,19 @@ func (w *hostWindow) clampClientDeviceSize(cx, cy int32) (int32, int32) {
 }
 
 // windowRectFromClient computes the outer window rect for a desired
-// client rect, distributing the frame offset like the reference's
-// calculate_window_rect (which avoids AdjustWindowRectEx deliberately:
-// it reports incorrect sizes).
+// client rect, keeping the reference's calculate_window_rect approach
+// (it avoids AdjustWindowRectEx deliberately: it reports incorrect
+// sizes) but placing the client origin exactly: the measured
+// ncLeft/ncTop offsets put the frame around the requested client
+// position instead of splitting the frame symmetrically (the
+// reference's assumption, wrong for a caption window — the caption
+// takes the top — so a requested position landed an offset off and
+// every Bounds()/SetBounds() round trip drifted; SetBounds(Bounds())
+// is now a no-op up to device rounding). The sizes are the
+// reference's: client size plus the whole frame extent.
 func (w *hostWindow) windowRectFromClient(x, y, cx, cy int32) rect {
-	left := w.borderW / 2
-	top := w.borderH / 2
+	left := w.ncLeft
+	top := w.ncTop
 	right := w.borderW - left
 	bottom := w.borderH - top
 	return rect{
@@ -2564,9 +2588,11 @@ func (wh WindowHandle) Bounds() (Bounds, error) {
 
 // SetBounds moves and resizes the window to the requested logical
 // bounds. The client area becomes the requested size (the frame offset
-// is added like the reference's calculate_window_rect); the position is
-// the requested origin. A size below WindowOptions.MinSize clamps up
-// to the minimum, like the interactive-resize floor.
+// is added like the reference's calculate_window_rect); the client
+// origin becomes the requested origin exactly (the measured frame
+// offsets place it, so SetBounds(Bounds()) is a no-op up to device
+// rounding). A size below WindowOptions.MinSize clamps up to the
+// minimum, like the interactive-resize floor.
 func (wh WindowHandle) SetBounds(bounds Bounds) {
 	wh.host.runForegroundAsync(func() {
 		w := wh.record()

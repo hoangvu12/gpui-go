@@ -106,8 +106,17 @@ func (h *Host) checkTypes() {
 }
 
 // reportTypes delivers one check's result to the hook (or stderr).
+// A checker error is a session-level fact, not a per-reload event:
+// a dev session without tsc installed reloads every save, and one
+// line says everything there is to say. So the same error is
+// reported once per host (a dev restart is a new session and says it
+// again); a different error is news and is reported.
 func (h *Host) reportTypes(diags []TypeDiagnostic, err error) {
 	if err != nil {
+		if h.reportedTypeErr == err.Error() {
+			return
+		}
+		h.reportedTypeErr = err.Error()
 		fmt.Fprintln(os.Stderr, "[script] type check:", err)
 		return
 	}
