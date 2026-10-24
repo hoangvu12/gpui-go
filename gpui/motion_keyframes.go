@@ -1,6 +1,7 @@
-package base
+package gpui
 
-// Keyframe tracks and discrete values (U:motion/keyframes.rs).
+// Keyframe tracks and discrete values (U:motion/keyframes.rs; moved from
+// base/motion_keyframes.go by browser-core ticket 44).
 //
 // Go adaptation: Keyframes interpolates with InterpolateValue, the Go
 // form of the `T: Interpolate` bound (see motion.go).
@@ -54,7 +55,7 @@ func (e KeyframeError) Error() string {
 	case KeyframeErrorMissingEndpoint:
 		return "MissingEndpoint"
 	}
-	return fmt.Sprintf("KeyframeError(%d)", uint8(e))
+	return fmt.Sprintf("KeyframeError(%d)", e)
 }
 
 // Keyframes is a validated keyframe track (U:motion/keyframes.rs:36-39).
@@ -93,7 +94,7 @@ func KeyframesTryNew[T any](frames ...Keyframe[T]) (Keyframes[T], error) {
 // Sample samples the track at progress, clamped to [0, 1]; the segment's
 // own easing shapes the interpolation (U:motion/keyframes.rs:70-90).
 func (k Keyframes[T]) Sample(progress float32) T {
-	progress = clamp32(progress, 0, 1)
+	progress = clampMotion32(progress, 0, 1)
 	frames := k.frames
 	upper := sort.Search(len(frames), func(i int) bool { return frames[i].Offset > progress })
 	if upper == 0 {
@@ -125,7 +126,13 @@ const (
 )
 
 // Error renders the variant name (the Rust Debug derive).
-func (e DiscreteError) Error() string { return "InvalidSwitchPoint" }
+func (e DiscreteError) Error() string {
+	switch e {
+	case DiscreteErrorInvalidSwitchPoint:
+		return "InvalidSwitchPoint"
+	}
+	return fmt.Sprintf("DiscreteError(%d)", e)
+}
 
 // Discrete is a value that switches from one value to another at a
 // progress (U:motion/keyframes.rs:106-111).

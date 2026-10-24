@@ -1583,7 +1583,7 @@ func (d *DivElement) requestLayout(global *GlobalElementID, inspector *Inspector
 				*es.clickedState = ElementClickedState{}
 			}
 		}
-		return d.computeStyleInternal(nil, es, w, app), es
+		return resolveStyleTransitions(global, d.computeStyleInternal(nil, es, w, app), w, app), es
 	})
 	d.lastStyle = style
 	state := divFrameState{}
@@ -1732,7 +1732,7 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 	}
 	WithOptionalElementState(w, global, func(slot *InteractiveElementState, w *Window) (struct{}, *InteractiveElementState) {
 		es := interactiveStateOf(global, slot)
-		style := d.computeStyleInternal(nil, es, w, app)
+		style := resolveStyleTransitions(global, d.computeStyleInternal(nil, es, w, app), w, app)
 		if es != nil && (d.hoverStyle != nil || d.groupHoverStyle != nil) && es.hoverState == nil {
 			es.hoverState = &ElementHoverState{}
 		}
@@ -1984,7 +1984,7 @@ func (d *DivElement) paint(global *GlobalElementID, inspector *InspectorElementI
 func (d *DivElement) paintInFlow(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *divFrameState, prepaint *divPrepaintState, hitbox *Hitbox, w *Window, app *App) {
 	WithOptionalElementState(w, global, func(slot *InteractiveElementState, w *Window) (struct{}, *InteractiveElementState) {
 		es := interactiveStateOf(global, slot)
-		style := d.computeStyleInternal(hitbox, es, w, app)
+		style := resolveStyleTransitions(global, d.computeStyleInternal(hitbox, es, w, app), w, app)
 		d.paintHoverGroupHandler(w, app)
 		if style.Visibility == VisibilityHidden {
 			return struct{}{}, es

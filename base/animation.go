@@ -1,9 +1,9 @@
 package base
 
-// Animation helpers (U:animation.rs): the CSS cubic-bezier solver, the
-// cubic easing presets, the Lerp trait and the EffectTransition
-// combinator over the core animation element (gpui/animation.go, ticket
-// 08; R:elements/animation.rs).
+// Animation helpers (U:animation.rs): the cubic easing presets, the
+// Lerp trait surface and the EffectTransition combinator over the core
+// animation element (gpui/animation.go, ticket 08; R:elements/
+// animation.rs).
 //
 // Go adaptations:
 //
@@ -14,6 +14,12 @@ package base
 //     any T: the core's float32 (f32 and Pixels, which the core represents
 //     as float32), gpui.Point and gpui.Hsla are interpolated in place,
 //     and any other T must implement Lerp[T].
+//   - browser-core ticket 44 moved the CSS cubic-bezier solver
+//     (CubicBezier), the default ease (EaseOutCubic) and the Lerp value
+//     machinery into the core with the motion engine (gpui/
+//     motion_easing.go, gpui/motion.go); Base aliases them in motion.go.
+//     What stays here is the rest of the U:animation.rs surface plus the
+//     private arithmetic helpers Base's own files share.
 //   - The deprecated alias `Transition = EffectTransition`
 //     (U:animation.rs:252-257) is not ported: in this package Transition
 //     is the motion timing policy (U:motion.rs:108), the name the alias was
@@ -22,7 +28,6 @@ package base
 //     not ported: the core has no FluentBuilder trait.
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/hoangvu12/gpui-go/gpui"
@@ -46,65 +51,10 @@ func abs32(v float32) float32 {
 	return v
 }
 
-// CubicBezier returns a cubic bezier easing like CSS `cubic-bezier`
-// (U:animation.rs:9-63). The input is elapsed progress along x: the
-// curve parameter solving x(s) = t is found by Newton iteration with a
-// bisection fallback, then y(s) is sampled. Input and output are clamped
-// to [0, 1] (the core asserts easing deltas stay in range).
-func CubicBezier(x1, y1, x2, y2 float32) func(float32) float32 {
-	// Polynomial form of the unit bezier, where p0 = (0, 0) and p3 = (1, 1).
-	cx, cy := 3*x1, 3*y1
-	bx, by := float32(3*(x2-x1))-cx, float32(3*(y2-y1))-cy
-	ax, ay := 1-cx-bx, 1-cy-by
-	sampleX := func(t float32) float32 { return float32(float32(float32(ax*t)+bx)*t+cx) * t }
-	sampleY := func(t float32) float32 { return float32(float32(float32(ay*t)+by)*t+cy) * t }
-	slopeX := func(t float32) float32 { return float32(float32(float32(3*ax)*t)+float32(2*bx))*t + cx }
-
-	// Solve `x(s) = t` for the curve parameter `s` (U:animation.rs:24-53).
-	solveS := func(t float32) float32 {
-		s := t
-		for range 8 {
-			err := sampleX(s) - t
-			if abs32(err) < 1e-6 {
-				return s
-			}
-			slope := slopeX(s)
-			if abs32(slope) < 1e-6 {
-				break
-			}
-			s = clamp32(s-err/slope, 0, 1)
-		}
-
-		low, high := float32(0), float32(1)
-		s = t
-		for range 32 {
-			x := sampleX(s)
-			if abs32(x-t) < 1e-6 {
-				break
-			}
-			if x < t {
-				low = s
-			} else {
-				high = s
-			}
-			s = (low + high) / 2
-		}
-		return s
-	}
-
-	return func(t float32) float32 {
-		t = clamp32(t, 0, 1)
-		return clamp32(sampleY(solveS(t)), 0, 1)
-	}
-}
-
-// EaseOutCubic is the cubic ease-out — fast start, slow end; good for
-// enter animations (U:animation.rs:67-71).
-func EaseOutCubic(t float32) float32 {
-	t = clamp32(t, 0, 1)
-	u := 1 - t
-	return 1 - u*u*u
-}
+// lerp32 is `impl Lerp for f32` (U:animation.rs:96-100). The explicit
+// conversion keeps the product rounded on its own (no fused multiply-add),
+// as Rust computes it.
+func lerp32(from, target, t float32) float32 { return from + float32((target-from)*t) }
 
 // EaseInCubic is the cubic ease-in — slow start, fast end; good for exit
 // animations (U:animation.rs:73-77).
@@ -122,48 +72,6 @@ func EaseInOutCubic(t float32) float32 {
 	}
 	u := -2*t + 2
 	return 1 - u*u*u/2
-}
-
-// Lerp is implemented by types that support linear interpolation
-// (U:animation.rs:91-94). See LerpValue for the core's types.
-type Lerp[T any] interface {
-	Lerp(target T, t float32) T
-}
-
-// lerp32 is `impl Lerp for f32` (U:animation.rs:96-100). The explicit
-// conversion keeps the product rounded on its own (no fused multiply-add),
-// as Rust computes it.
-func lerp32(from, target, t float32) float32 { return from + float32((target-from)*t) }
-
-// LerpValue interpolates from toward target by t, the Lerp trait method
-// for any T: float32 (f32 and Pixels, U:animation.rs:96-108), gpui.Point
-// (Point<Pixels>, :110-117) and gpui.Hsla (:119-132) are built in; any
-// other T must implement Lerp[T] (it panics otherwise).
-//
-// Hsla: every channel is interpolated linearly and clamped like the
-// pinned hsla() constructor (R:color.rs:49-60). Deviation: the core
-// stores the hue as the 0..1 fraction, so the upstream round trip through
-// palette's into_degrees (which wraps hues past 0.5 to negative degrees)
-// does not apply; intended, as upstream says, for near-grayscale colors.
-func LerpValue[T any](from, target T, t float32) T {
-	switch f := any(from).(type) {
-	case float32:
-		return any(lerp32(f, any(target).(float32), t)).(T)
-	case gpui.Point:
-		to := any(target).(gpui.Point)
-		return any(gpui.Point{X: lerp32(f.X, to.X, t), Y: lerp32(f.Y, to.Y, t)}).(T)
-	case gpui.Hsla:
-		to := any(target).(gpui.Hsla)
-		return any(gpui.Hsla{
-			H: clamp32(lerp32(f.H, to.H, t), 0, 1),
-			S: clamp32(lerp32(f.S, to.S, t), 0, 1),
-			L: clamp32(lerp32(f.L, to.L, t), 0, 1),
-			A: clamp32(lerp32(f.A, to.A, t), 0, 1),
-		}).(T)
-	case Lerp[T]:
-		return f.Lerp(target, t)
-	}
-	panic(fmt.Sprintf("base: %T implements neither Lerp nor Interpolate", from))
 }
 
 // transitionEffectKind is the TransitionEffect variant

@@ -1,0 +1,73 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 320px;
+		height: 240px;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 10px;
+	}
+	#go {
+		width: 40px;
+		height: 20px;
+		background: #cccccc;
+	}
+	.box {
+		height: 30px;
+	}
+	#width-linear {
+		width: 100px;
+		background: #00ff00;
+		transition: width 400ms linear;
+	}
+	#width-steps {
+		width: 100px;
+		background: #00ff00;
+		transition: width 800ms steps(4, jump-end);
+	}
+	#width-ease {
+		width: 100px;
+		background: #00ff00;
+		transition: width 400ms ease;
+	}
+	#opacity {
+		width: 100px;
+		background: #0000ff;
+		opacity: 1;
+		transition: opacity 400ms linear;
+	}
+	#bg {
+		width: 100px;
+		background: #ff0000;
+		transition: background-color 400ms linear;
+	}
+	body.on #width-linear { width: 200px; }
+	body.on #width-steps  { width: 200px; }
+	body.on #width-ease   { width: 200px; }
+	body.on #opacity      { opacity: 0; }
+	body.on #bg           { background: #0000ff; }
+</style>
+</head>
+<body>
+	<div id="go" data-id="go"></div>
+	<div class="box" id="width-linear" data-id="width-linear"></div>
+	<div class="box" id="width-steps" data-id="width-steps"></div>
+	<div class="box" id="width-ease" data-id="width-ease"></div>
+	<div class="box" id="opacity" data-id="opacity"></div>
+	<div class="box" id="bg" data-id="bg"></div>
+	<script>
+		document.getElementById("go").addEventListener("click", () => {
+			document.body.classList.toggle("on");
+		});
+	</script>
+</body>
+</html>

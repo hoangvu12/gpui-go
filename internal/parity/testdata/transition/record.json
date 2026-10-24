@@ -1,0 +1,32 @@
+{
+  "name": "transition",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T06:23:11Z",
+  "viewport": {
+    "width": 320,
+    "height": 240
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "width-linear": {
+      "x": 0,
+      "y": 30,
+      "width": 150,
+      "height": 30
+    },
+    "width-steps": {
+      "x": 0,
+      "y": 70,
+      "width": 125,
+      "height": 30
+    }
+  },
+  "events": [
+    {
+      "kind": "click",
+      "target": "go",
+      "defaultPrevented": false
+    }
+  ],
+  "screenshot": "chrome.png"
+}

@@ -34,6 +34,7 @@ import (
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/textpaint"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/textstyle"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/tracer"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/transition"
 )
 
 func main() {

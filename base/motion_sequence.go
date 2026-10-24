@@ -115,7 +115,7 @@ func (s Sequence[T]) Sample(w *gpui.Window, cx *gpui.App) SequenceSample[T] {
 	lastStep := len(s.steps) - 1
 	last := s.steps[lastStep]
 
-	key := gpui.NamedChildElementID(s.id.id, "__sequence")
+	key := gpui.NamedChildElementID(s.id.Key(), "__sequence")
 	now := cx.Now()
 	state := w.UseKeyedState[sequenceState[T]](key, cx, func(*gpui.Window, *gpui.Context[sequenceState[T]]) sequenceState[T] {
 		return startSequenceState(0, s.from, s.steps, now)
@@ -138,7 +138,7 @@ func (s Sequence[T]) Sample(w *gpui.Window, cx *gpui.App) SequenceSample[T] {
 
 	if !retargeted && !handingOver {
 		sample := SequenceSample[T]{value: snapshot.value(progress), step: snapshot.step, status: status}
-		if status.active() {
+		if status.IsActive() {
 			gpui.RequestAnimationFrame(w)
 		}
 		return sample
@@ -166,7 +166,7 @@ func (s Sequence[T]) Sample(w *gpui.Window, cx *gpui.App) SequenceSample[T] {
 	}
 	sample := SequenceSample[T]{value: value, step: next.step, status: status}
 	write(next)
-	if status.active() {
+	if status.IsActive() {
 		gpui.RequestAnimationFrame(w)
 	}
 	return sample
@@ -194,16 +194,16 @@ func startSequenceState[T any](step int, from T, steps []SequenceStep[T], starte
 
 // progress is U:motion/sequence.rs:233-238.
 func (s sequenceState[T]) progress(now time.Duration) (float32, MotionStatus) {
-	return s.transition.progress(satSubDuration(now, s.startedAt), s.transition.duration)
+	return s.transition.Progress(satSubDuration(now, s.startedAt), s.transition.Duration())
 }
 
 // value is U:motion/sequence.rs:240-243.
 func (s sequenceState[T]) value(progress float32) T {
-	return InterpolateValue(s.from, s.target, s.transition.sample(progress))
+	return InterpolateValue(s.from, s.target, s.transition.Sample(progress))
 }
 
 // handOver starts the next step where this finished one ended
 // (U:motion/sequence.rs:245-255).
 func (s sequenceState[T]) handOver(steps []SequenceStep[T]) sequenceState[T] {
-	return startSequenceState(s.step+1, s.target, steps, s.startedAt+s.transition.finishesAfter())
+	return startSequenceState(s.step+1, s.target, steps, s.startedAt+s.transition.FinishesAfter())
 }

@@ -855,6 +855,18 @@ func (s *Styled[Self]) Opacity[_ lazy](opacity float32) Self {
 	return s.self
 }
 
+// Transition sets the element's transition rules — CSS transition
+// (browser-core ticket 44; see transition.go). A covered style property's
+// resolved change animates over the rule's duration, delay and easing;
+// the last matching rule for a property wins, and a TransitionAll rule
+// covers every interpolable property. Build rules with
+// NewTransitionRule (the CSS shorthand defaults: the `ease` timing
+// function, no delay).
+func (s *Styled[Self]) Transition[_ lazy](rules ...TransitionRule) Self {
+	s.StyleMut().Transition = Some(rules)
+	return s.self
+}
+
 // ---- Grid (styled.rs:917-1054) ----
 
 // GridCols sets the column template (styled.rs:917: min size Zero).

@@ -1,15 +1,32 @@
-package base
+package gpui
 
-// CSS-compatible easing policies (U:motion/easing.rs).
+// CSS-compatible easing policies (browser-core ticket 44; moved from
+// base/motion_easing.go, which ports U:motion/easing.rs).
+//
+// The Chromium rules this implements:
+//   - Cubic Bézier: gfx::CubicBezier::Solve solves x(s) = t by Newton's
+//     method with a bisection fallback (ui/gfx/geometry/cubic_bezier.cc:
+//     181-236; kMaxNewtonIterations = 4 at :18, the bisection loop at
+//     :225-234); blink wraps it as CubicBezierTimingFunction::Evaluate
+//     (third_party/blink/renderer/platform/animation/timing_function.cc:
+//     132-137). The CSS keyword curves are the four cubic-bézier presets
+//     (css-timing-1: ease = (0.25, 0.1, 0.25, 1), ease-in = (0.42, 0, 1,
+//     1), ease-out = (0, 0, 0.58, 1), ease-in-out = (0.42, 0, 0.58, 1)).
+//   - steps(): gfx::StepsTimingFunction::GetValue is
+//     floor(steps * t + offset) clamped to [0, jumps] and divided by
+//     jumps (ui/gfx/animation/keyframe/timing_function.cc:98-116), with
+//     jumps = steps, steps + 1 (jump-both) or steps - 1 (jump-none)
+//     (NumberOfJumps, :118-133) and offset = 1 for start/jump-start/
+//     jump-both, 0 otherwise (GetStepsStartOffset, :136-150).
 //
 // Go adaptation: the Easing enum (U:motion/easing.rs:64-85) is a value
 // type whose variants are built by functions: the unit variants
-// EasingLinear, EasingEase, EasingEaseIn, EasingEaseOut, EasingEaseInOut
-// and EasingCustom; the data variants CubicBezier, Steps and LinearStops
-// only through their checked constructors EasingCubicBezier, EasingSteps
-// and EasingLinearStops (Rust also lets a caller build those variants
-// unchecked; Go has no public variant syntax to port). The zero Easing is
-// Linear; DefaultEasing is the Rust default, EaseOut.
+// EasingLinear, EasingEase, EasingEaseIn, EasingEaseOut and
+// EasingEaseInOut; the data variants CubicBezier, Steps and LinearStops
+// only through their checked constructors EasingCubicBezier,
+// EasingSteps and EasingLinearStops (Rust also lets a caller build those
+// variants unchecked; Go has no public variant syntax to port). The zero
+// Easing is Linear; DefaultEasing is the Rust default, EaseOut.
 
 import (
 	"fmt"
@@ -19,7 +36,7 @@ import (
 )
 
 // StepPosition is the point at which a stepped easing jumps
-// (U:motion/easing.rs:5-12).
+// (U:motion/easing.rs:5-12; CSS step-position).
 type StepPosition uint8
 
 const (
@@ -41,7 +58,7 @@ func (p StepPosition) String() string {
 	case StepPositionJumpBoth:
 		return "JumpBoth"
 	}
-	return fmt.Sprintf("StepPosition(%d)", uint8(p))
+	return fmt.Sprintf("StepPosition(%d)", p)
 }
 
 // LinearStop is one output and its optional input position in a CSS-like
@@ -84,7 +101,7 @@ func (e EasingError) Error() string {
 	case EasingErrorInvalidLinearStops:
 		return "linear easing stops are invalid"
 	}
-	return fmt.Sprintf("EasingError(%d)", uint8(e))
+	return fmt.Sprintf("EasingError(%d)", e)
 }
 
 type easingKind uint8
@@ -143,6 +160,22 @@ func finite32(v float32) bool {
 }
 
 func in01(v float32) bool { return v >= 0 && v <= 1 }
+
+// clampMotion32 is Rust's f32::clamp: NaN passes through.
+func clampMotion32(v, lo, hi float32) float32 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+// lerpMotion32 is `impl Lerp for f32` (U:animation.rs:96-100). The
+// explicit conversion keeps the product rounded on its own (no fused
+// multiply-add), as Rust computes it.
+func lerpMotion32(from, target, t float32) float32 { return from + float32((target-from)*t) }
 
 // EasingCubicBezier is a validated CSS cubic-bezier curve
 // (U:motion/easing.rs:114-125): every control point finite and both x
@@ -222,7 +255,7 @@ func EasingLinearStops(stops ...LinearStop) (Easing, error) {
 
 // Sample eases progress, clamped to [0, 1] first (U:motion/easing.rs:178-216).
 func (e Easing) Sample(progress float32) float32 {
-	progress = clamp32(progress, 0, 1)
+	progress = clampMotion32(progress, 0, 1)
 	switch e.kind {
 	case easingEase:
 		return CubicBezier(0.25, 0.1, 0.25, 1.0)(progress)
@@ -248,7 +281,7 @@ func (e Easing) Sample(progress float32) float32 {
 			jumps, offset = count+1, 1
 		}
 		floor := float32(math.Floor(float64(float32(progress * count))))
-		return clamp32(floor+offset, 0, jumps) / jumps
+		return clampMotion32(floor+offset, 0, jumps) / jumps
 	case easingLinearStops:
 		stops := e.stops
 		// partition_point(|(input, _)| *input <= progress)
@@ -295,4 +328,77 @@ func (e Easing) String() string {
 		return "Custom(..)"
 	}
 	return "Linear"
+}
+
+// ---------------------------------------------------------------------------
+// The bezier solver (moved from base/animation.go)
+// ---------------------------------------------------------------------------
+
+// absMotion32 is Rust's f32::abs.
+func absMotion32(v float32) float32 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+// CubicBezier returns a cubic bezier easing like CSS `cubic-bezier`
+// (U:animation.rs:9-63; moved from base). The input is elapsed progress
+// along x: the curve parameter solving x(s) = t is found by Newton
+// iteration with a bisection fallback, then y(s) is sampled. Input and
+// output are clamped to [0, 1] (the core asserts easing deltas stay in
+// range).
+func CubicBezier(x1, y1, x2, y2 float32) func(float32) float32 {
+	// Polynomial form of the unit bezier, where p0 = (0, 0) and p3 = (1, 1).
+	cx, cy := 3*x1, 3*y1
+	bx, by := float32(3*(x2-x1))-cx, float32(3*(y2-y1))-cy
+	ax, ay := 1-cx-bx, 1-cy-by
+	sampleX := func(t float32) float32 { return float32(float32(float32(ax*t)+bx)*t+cx) * t }
+	sampleY := func(t float32) float32 { return float32(float32(float32(ay*t)+by)*t+cy) * t }
+	slopeX := func(t float32) float32 { return float32(float32(float32(3*ax)*t)+float32(2*bx))*t + cx }
+
+	// Solve `x(s) = t` for the curve parameter `s` (U:animation.rs:24-53).
+	solveS := func(t float32) float32 {
+		s := t
+		for range 8 {
+			err := sampleX(s) - t
+			if absMotion32(err) < 1e-6 {
+				return s
+			}
+			slope := slopeX(s)
+			if absMotion32(slope) < 1e-6 {
+				break
+			}
+			s = clampMotion32(s-err/slope, 0, 1)
+		}
+
+		low, high := float32(0), float32(1)
+		s = t
+		for range 32 {
+			x := sampleX(s)
+			if absMotion32(x-t) < 1e-6 {
+				break
+			}
+			if x < t {
+				low = s
+			} else {
+				high = s
+			}
+			s = (low + high) / 2
+		}
+		return s
+	}
+
+	return func(t float32) float32 {
+		t = clampMotion32(t, 0, 1)
+		return clampMotion32(sampleY(solveS(t)), 0, 1)
+	}
+}
+
+// EaseOutCubic is the cubic ease-out — fast start, slow end; good for
+// enter animations (U:animation.rs:67-71; moved from base).
+func EaseOutCubic(t float32) float32 {
+	t = clampMotion32(t, 0, 1)
+	u := 1 - t
+	return 1 - u*u*u
 }
