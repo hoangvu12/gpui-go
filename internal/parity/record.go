@@ -37,6 +37,11 @@ type Record struct {
 	Events []EventRecord `json:"events"`
 	// Screenshot names the recorded PNG beside this file.
 	Screenshot string `json:"screenshot"`
+	// Computed is the fixture's ComputedScript result (present only for
+	// fixtures that set one): the page-computed values the replay side
+	// needs, as recorded strings — the forced-colours fixture's system
+	// palette, in CSS hex.
+	Computed map[string]string `json:"computed,omitempty"`
 
 	// image is the decoded screenshot (loaded lazily).
 	image *image.RGBA

@@ -383,10 +383,13 @@ func (i *ImgElement) IntoElement() AnyElement {
 }
 
 // computeStyle is the base style (Style::default() refined by the base
-// style refinement).
-func (i *ImgElement) computeStyle() Style {
+// style refinement), then the forced-colours pass (browser-core 29)
+// like the div's computeStyleInternal: the img's background and border
+// map onto the system palette while forced colours are active.
+func (i *ImgElement) computeStyle(w *Window, app *App) Style {
 	style := DefaultStyle()
 	style.Refine(i.Styled.storage())
+	applyForcedColorsToStyle(&style, app)
 	return style
 }
 
@@ -459,7 +462,7 @@ func (d *imgDrawable) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		if state != nil {
 			frameIndex = state.FrameIndex
 		}
-		style := img.computeStyle()
+		style := img.computeStyle(w, app)
 		var id LayoutID
 		WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
 			var replacementIDs []LayoutID
@@ -535,7 +538,7 @@ func (d *imgDrawable) RequestLayout(global *GlobalElementID, inspector *Inspecto
 // prepaints (the port's img registers no hitbox; see the file comment).
 func (d *imgDrawable) Prepaint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *imgLayoutState, w *Window, app *App) struct{} {
 	if layout.replacement != nil {
-		style := d.img.computeStyle()
+		style := d.img.computeStyle(w, app)
 		WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
 			WithContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
 				layout.replacement.Prepaint(w, app)
@@ -561,7 +564,7 @@ func (d *imgDrawable) Prepaint(global *GlobalElementID, inspector *InspectorElem
 // box (img.rs:492-493 passes the element bounds to both roles).
 func (d *imgDrawable) Paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *imgLayoutState, prepaint *struct{}, w *Window, app *App) {
 	img := d.img
-	style := img.computeStyle()
+	style := img.computeStyle(w, app)
 	if style.Visibility == VisibilityHidden {
 		return
 	}

@@ -384,6 +384,8 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.FontSemibold()
 	case "font-thin":
 		b.FontThin()
+	case "forced-color-adjust-none":
+		b.ForcedColorAdjustNone()
 	case "grid":
 		b.Grid()
 	case "grow":
@@ -845,4 +847,4 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 }
 
 // methodClassCount is the number of classes applyMethodClass knows.
-const methodClassCount = 416
+const methodClassCount = 417

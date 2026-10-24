@@ -175,6 +175,31 @@ new fixtures. The implementation lives in `internal/parity`:
    record-time only; the replay never reads them, but the record they produced is what
    the replay is compared against, so copy them when cloning a fixture.
 
+   A fixture that needs the page rendered under a **media feature** sets `EmulatedMedia`
+   (CDP `Emulation.setEmulatedMedia`, applied before the page loads): the
+   forced-colours fixture (`internal/parity/fixtures/forcedcolors`) records with
+   `forced-colors: active`, so Chrome's forced-colors mode maps the page's colours
+   onto the system palette during style resolution and the record carries the mapped
+   result. Like `ChromeFlags`, the features are record-time only and part of the
+   fixture's identity.
+
+   A fixture whose replay needs **page-computed values** sets `ComputedScript` (a
+   JavaScript expression evaluated on the settled page whose value must be a JSON
+   object of strings) and reads them from `Record.Computed`. The forced-colours
+   fixture is the pattern: Chrome's emulated forced-colours palette is not this PC's
+   Windows palette, so the page carries hidden `[data-color-probe]` elements each
+   authoring one CSS system-colour keyword (a system colour passes through forced
+   colors unforced), the script reads their computed colours into the record, and the
+   replay injects exactly those colours — deterministic, theme-independent.
+
+   A fixture whose **view resolves styles against app-level state** sets `Configure
+   func(app *gpui.App) error`: `Replay` runs it on the application right after
+   creating it, before the window and the view, so the first frame already resolves
+   under it. The forced-colours fixture pins the pass on with the recorded palette
+   (`gpui.App.SetForcedColors`); the fixture value is copied wholesale when a test
+   swaps the View, so the configuration flows into the discrimination replays too —
+   a wrong-view test that needs it off swaps in a no-op.
+
 7. Record, from the module root:
 
    ```sh

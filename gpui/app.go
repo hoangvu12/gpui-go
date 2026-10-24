@@ -110,6 +110,11 @@ type App struct {
 	// host is the real-mode platform host attached by Attach/Run; nil in
 	// test applications.
 	host *Host
+
+	// forcedColorsOverride pins the forced-colours pass's state when
+	// set (App.SetForcedColors, forced_colors.go); nil means the pass
+	// derives from the system preferences (App.ForcedColors).
+	forcedColorsOverride *ForcedColorsState
 	// platformWake wakes the real-mode foreground dispatcher when the
 	// scheduler gains runnable work (installed by Host.attach; nil in
 	// test applications, whose tests drive the scheduler themselves).

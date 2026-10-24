@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 20px;
+		color: #dc2626;
+		font: 16px/25px "Segoe UI", system-ui, sans-serif;
+	}
+	.box {
+		box-sizing: border-box;
+		width: 240px;
+		height: 64px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	/* The coloured text line: transparent background, red text. Under
+	   forced colors the text becomes CanvasText and the (transparent)
+	   background stays unpainted. */
+	.text-line {
+		color: #dc2626;
+	}
+	/* The alpha background: half-transparent blue with a green border.
+	   Under forced colors the background becomes Canvas with the 0.5
+	   alpha kept and the border becomes CanvasText. */
+	.alpha {
+		background: rgba(37, 99, 235, 0.5);
+		border: 3px solid #16a34a;
+	}
+	/* The shadow: a blue box with a soft shadow. Under forced colors
+	   the background becomes Canvas and the shadow disappears. */
+	.shadow {
+		background: #2563eb;
+		box-shadow: 0 6px 12px rgba(255, 255, 255, 0.6);
+	}
+	/* The opt-out: forced-color-adjust: none keeps every authored
+	   colour, the background, the border, the text colour and the
+	   shadow. */
+	.keep {
+		forced-color-adjust: none;
+		background: #9333ea;
+		color: #fde047;
+		border: 2px solid #f97316;
+		box-shadow: 0 6px 12px rgba(255, 255, 255, 0.6);
+	}
+	.probe {
+		display: none;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div class="box text-line" data-id="text-line">The quick brown fox</div>
+	<div class="box alpha" data-id="alpha"></div>
+	<div class="box shadow" data-id="shadow"></div>
+	<div class="box keep" data-id="keep">Kept</div>
+	<i class="probe" data-color-probe="canvas" style="color: Canvas"></i>
+	<i class="probe" data-color-probe="canvastext" style="color: CanvasText"></i>
+	<i class="probe" data-color-probe="linktext" style="color: LinkText"></i>
+	<i class="probe" data-color-probe="visitedtext" style="color: VisitedText"></i>
+	<i class="probe" data-color-probe="activetext" style="color: ActiveText"></i>
+	<i class="probe" data-color-probe="buttonface" style="color: ButtonFace"></i>
+	<i class="probe" data-color-probe="buttontext" style="color: ButtonText"></i>
+	<i class="probe" data-color-probe="buttonborder" style="color: ButtonBorder"></i>
+	<i class="probe" data-color-probe="field" style="color: Field"></i>
+	<i class="probe" data-color-probe="fieldtext" style="color: FieldText"></i>
+	<i class="probe" data-color-probe="highlight" style="color: Highlight"></i>
+	<i class="probe" data-color-probe="highlighttext" style="color: HighlightText"></i>
+	<i class="probe" data-color-probe="selecteditem" style="color: SelectedItem"></i>
+	<i class="probe" data-color-probe="selecteditemtext" style="color: SelectedItemText"></i>
+	<i class="probe" data-color-probe="mark" style="color: Mark"></i>
+	<i class="probe" data-color-probe="marktext" style="color: MarkText"></i>
+	<i class="probe" data-color-probe="graytext" style="color: GrayText"></i>
+	<i class="probe" data-color-probe="accentcolor" style="color: AccentColor"></i>
+	<i class="probe" data-color-probe="accentcolortext" style="color: AccentColorText"></i>
+</body>
+</html>
