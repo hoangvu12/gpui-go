@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 01
 Triage: ready-for-agent
@@ -19,6 +19,8 @@ Triage: ready-for-agent
 - [x] overflow: auto shows no scrollbar when content fits and one when it overflows.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged f2c7791 into main with no conflicts (the worker had already merged main and regenerated the TSX types; `go generate ./gpui/script/types` is unchanged on main). Build, vet and gofmt are clean. With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./gpui/, ./internal/parity/... (display-modes, overflow-auto), layoutspec, tsxgen, ./gpui/script/..., ./base, authorspec, inspectorspec, richtextspec, dropspec and ./examples/.... Behaviour change: the `overflow-auto` classes now set the real OverflowAuto (a scrollbar and 15 px gutter only while an axis overflows) instead of always-scroll. Nothing in base/ or examples/ uses them. Citations spot-checked: layout_object.cc:428-431 (contents → no LayoutObject) and paint_layer_scrollable_area.cc:1852-1861 (auto scrollbars only with overflow).
 
 ## Answer
 
