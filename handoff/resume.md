@@ -16,7 +16,10 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
   - 34 position: sticky: chat 4fed7233, worktree `gpui-go-wt-core-34`, branch `core/34-sticky`
   - 77 rev 15.1 native rebuild (the user approved it on 2026-10-24: "ok try that"): chat 4a073277, worktree `gpui-go-wt-core-77`, branch `core/77-r15-1`. It covers the uniform-upload fix (unskip the filters fixtures, re-register shadow-backdrop), the italic shear set to -0.25, and the text-run fields and baseline as best effort, with each blocker recorded. Cargo runs with `-j 6`.
 - The user said the PC can take more workers ("yea go ahead"). Ramp up gradually.
-- **Rules:** as in orchestrator 7's block below and the handoff doc. Run `go clean -cache` after each round of merges.
+- **Rules:** as in orchestrator 7's block below and the handoff doc, with these changes from the user (2026-10-24):
+  - KEEP the Go build cache. Clear it only when it passes about 40 GB (`go env GOCACHE`), because a cold cache makes every worker recompile gpui, which freezes the PC.
+  - Workers run go commands with `GOFLAGS=-p=4` and cargo with `-j 4`.
+  - Don't rerun the whole suite each time. Workers run targeted tests plus the packages their diff touches. The orchestrator verifies a merge with the touched packages plus the parity suite. The broad set (the commonly forgotten packages: authorspec, dropspec, inspectorspec, richtextspec, examples/zterm) runs once per batch of merges, not per merge.
 
 **ORCHESTRATOR 7 STATUS (2026-10-24). History now.** This was Roboco chat d209bee2 (Claude Code, Opus 5.5). It took over from orchestrator 6 (chat 3d6efd46; handoff doc `%TEMP%\gpui-go-handoff-orchestrator7.md`).
 - **Resolved (22 of 76):** 01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 13, 27, 31, 39 (rev 15, DLL 8b944eae), 40, 41, 47, 49 (the R16 design, approved), 62, 64, 65. Each has a verification comment, and the map's Decisions list a gist of each.
