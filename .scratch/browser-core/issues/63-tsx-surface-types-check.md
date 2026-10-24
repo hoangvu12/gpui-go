@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 62
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged efd8959 into main. The merged tree immediately failed `TestDTSIsCurrent`/`TestDTSDeclaresTheEngineSurface`/`TestClassTypesMatchTheEngine`, because `sticky` (34) had landed since the branch point. That proves the drift tests work. I regenerated with `go generate ./gpui/script/types` (+`sticky` in CoreClass and Class) and committed it. Outside the TSX layer, the diff touches only the ticket file. With GOFLAGS=-p=4, `go test -count=1` passes for ./internal/tsxgen/, ./gpui/script/..., ./cmd/..., ./internal/parity/... and ./examples/tsx-hello, and build, vet and gofmt are clean. tsc is not installed on this PC, so the tsc tests skip; the worker ran them against an existing local typescript 5.9.3 through GPUI_TYPESCRIPT. Workflow note: any ticket that adds a class or style key must run `go generate ./gpui/script/types`, or tsxgen fails.
 
 ## Answer
 
