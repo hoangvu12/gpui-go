@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 9 (Claude Code)
 Blocked by: 21, 22
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-25, orchestrator 9 (verification): merged 913c31d as f01ea9d, together with 23. Spot check: the delays are kDefaultInterestDelayStartSeconds = 0.25 and kDefaultInterestDelayEndSeconds = 0.15 (element.h:307-308), and the implicit anchor (html_element.cc:2187) matches. Headless Chrome coalesces the timers, so the fixtures pin only the shape and unit tests pin the constants (recorded in the Answer). Tests as for 23. Resolved.
 
 ## Answer
 

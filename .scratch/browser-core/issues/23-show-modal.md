@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 9 (Claude Code)
 Blocked by: 14, 21, 22
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-25, orchestrator 9 (verification): merged a6aba5c as f01ea9d (no conflicts), together with 24. Spot check: `showModal` (html_dialog_element.cc:553), `SetFocusForDialog` → `GetFocusDelegate` (:673-676), the dialog close-watcher listener (:497-531) and `ClosedBy` (:240-248) match. On the merged tree, ./gpui/, ./internal/parity/..., ./base, ./internal/focusspec, ./internal/authorspec, ./internal/inspectorspec, ./examples/zterm and ./internal/tsxgen/ pass. The known load flake TestFrameLoopPreferredFrameIntervalDrawsEveryOtherVblank failed once and passed on re-run. Resolved.
 
 ## Answer
 
