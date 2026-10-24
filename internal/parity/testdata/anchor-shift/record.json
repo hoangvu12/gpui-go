@@ -1,0 +1,38 @@
+{
+  "name": "anchor-shift",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T00:49:11Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "anchor-sx": {
+      "x": 560,
+      "y": 200,
+      "width": 60,
+      "height": 40
+    },
+    "anchor-sy": {
+      "x": 100,
+      "y": 360,
+      "width": 60,
+      "height": 40
+    },
+    "p-sx": {
+      "x": 540,
+      "y": 248,
+      "width": 100,
+      "height": 60
+    },
+    "p-sy": {
+      "x": 12,
+      "y": 350,
+      "width": 80,
+      "height": 50
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

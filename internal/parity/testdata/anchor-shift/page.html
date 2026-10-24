@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		position: relative;
+	}
+	.anchor {
+		position: absolute;
+		width: 60px;
+		height: 40px;
+		background: #2563eb;
+	}
+	#anchor-sx {
+		left: 560px;
+		top: 200px;
+		anchor-name: --sx;
+	}
+	#anchor-sy {
+		left: 100px;
+		top: 360px;
+		anchor-name: --sy;
+	}
+	/* 8px below the anchor, start-aligned; the anchor is 20px from the
+	   right window edge, so a 100px popup would overflow by 20px and
+	   the clamp holds its right edge at the window's right. */
+	#p-sx {
+		position: fixed;
+		position-anchor: --sx;
+		top: calc(anchor(bottom) + 8px);
+		left: min(anchor(left), calc(100vw - 100px));
+		width: 100px;
+		height: 60px;
+		background: #16a34a;
+	}
+	/* 8px left of the anchor, start-aligned; the anchor's bottom edge
+	   is the window's, so a 50px popup would overflow by 10px and the
+	   clamp holds its bottom edge at the window's bottom. */
+	#p-sy {
+		position: fixed;
+		position-anchor: --sy;
+		right: calc(anchor(left) + 8px);
+		top: min(anchor(top), calc(100vh - 50px));
+		width: 80px;
+		height: 50px;
+		background: #9333ea;
+	}
+</style>
+</head>
+<body>
+	<div class="anchor" id="anchor-sx" data-id="anchor-sx"></div>
+	<div id="p-sx" data-id="p-sx"></div>
+	<div class="anchor" id="anchor-sy" data-id="anchor-sy"></div>
+	<div id="p-sy" data-id="p-sy"></div>
+</body>
+</html>

@@ -145,6 +145,22 @@ func RecordFixture(f Fixture) error {
 		}
 	}
 
+	// Settle: wait for two animation frames before reading anything, so
+	// the state the record captures is the settled post-input state —
+	// the last input's rendering work (a scroll's compositor update, the
+	// anchored elements' recalculation, the intersection observers of
+	// position-visibility: anchors-visible) has landed, exactly like the
+	// replay, whose boxes come from a fully parked, drawn final frame
+	// (ticket 25 found the un-settled read capturing a scroll one key
+	// behind).
+	if _, err := page.call("Runtime.evaluate", map[string]any{
+		"expression":    "new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(1))))",
+		"awaitPromise":  true,
+		"returnByValue": true,
+	}); err != nil {
+		return fmt.Errorf("settling the page after the input steps: %w", err)
+	}
+
 	// The event transcript, the boxes and the screenshot of the final
 	// state.
 	eventsJSON, err := page.evaluate(eventsScript)

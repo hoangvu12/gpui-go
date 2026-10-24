@@ -1,0 +1,372 @@
+{
+  "name": "anchor-hidden",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T00:59:25Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "scroller": {
+      "x": 20,
+      "y": 40,
+      "width": 200,
+      "height": 300
+    }
+  },
+  "events": [
+    {
+      "kind": "click",
+      "target": "anchor",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "content",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "scroller",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keydown",
+      "target": "anchor",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "content",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "scroller",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "anchor",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "content",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "scroller",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "anchor",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "content",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "scroller",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "anchor",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "content",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "scroller",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "anchor",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "content",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "scroller",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "anchor",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "content",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "scroller",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "anchor",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "content",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "scroller",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "anchor",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "content",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "scroller",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "anchor",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "content",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "scroller",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "anchor",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "content",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "scroller",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "anchor",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "content",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "scroller",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "anchor",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "content",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "scroller",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "anchor",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "content",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keydown",
+      "target": "scroller",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "anchor",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "content",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    },
+    {
+      "kind": "keyup",
+      "target": "scroller",
+      "defaultPrevented": false,
+      "key": "ArrowDown",
+      "focus": "anchor",
+      "code": "ArrowDown"
+    }
+  ],
+  "screenshot": "chrome.png"
+}

@@ -1649,6 +1649,16 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 		recordDebugBounds(w, d.debugSelector, bounds)
 		state.debugBounds = true
 	}
+	// Ticket 25: a named element records its prepaint bounds (and the
+	// content mask it prepaints under — its clipping scroller's visible
+	// rectangle) into the frame's anchor registry for Anchored().
+	// AnchorTo lookups. The registry fills only while this window's
+	// Anchored elements ask for it (requestAnchorTracking at request
+	// layout), so plain frames pay nothing. A later same-named element
+	// wins, matching prepaint order.
+	if d.elementID != nil && d.elementID.Kind == ElementIDName && windowTracksAnchors(w) {
+		recordAnchorBounds(w, d.elementID.Name, bounds, ContentMask(w))
+	}
 	if global == nil && d.requiresElementState() {
 		panic("gpui: OnClick, OnAuxClick, OnDrag, OnHover, Active and GroupActive require an element ID (the pinned StatefulInteractiveElement methods, div.rs:1495-1899)")
 	}

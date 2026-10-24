@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		position: relative;
+	}
+	#anchor {
+		position: absolute;
+		left: 240px;
+		top: 180px;
+		width: 160px;
+		height: 40px;
+		background: #2563eb;
+		anchor-name: --a;
+	}
+	.p {
+		position: fixed;
+		position-anchor: --a;
+		width: 60px;
+		height: 40px;
+	}
+	/* top, aligned end: the popup's bottom sits 8px above the anchor's
+	   top (an end-side inset measures from the viewport's bottom edge,
+	   so the gap adds), its right edge at the anchor's right. */
+	#p-top {
+		bottom: calc(anchor(top) + 8px);
+		left: calc(anchor(right) - 60px);
+		background: #ea580c;
+	}
+	/* bottom, aligned start: the popup's top sits 8px below the anchor's
+	   bottom, its left edge at the anchor's left. */
+	#p-bottom {
+		top: calc(anchor(bottom) + 8px);
+		left: anchor(left);
+		background: #16a34a;
+	}
+	/* left, aligned center: the popup's right edge sits 8px left of the
+	   anchor's left edge, vertically centered on the anchor. */
+	#p-left {
+		right: calc(anchor(left) + 8px);
+		top: calc(anchor(center) - 20px);
+		background: #9333ea;
+	}
+	/* right, aligned center: the popup's left edge sits 8px right of the
+	   anchor's right edge, vertically centered on the anchor. */
+	#p-right {
+		left: calc(anchor(right) + 8px);
+		top: calc(anchor(center) - 20px);
+		background: #0d9488;
+	}
+</style>
+</head>
+<body>
+	<div id="anchor" data-id="anchor"></div>
+	<div class="p" id="p-top" data-id="p-top"></div>
+	<div class="p" id="p-bottom" data-id="p-bottom"></div>
+	<div class="p" id="p-left" data-id="p-left"></div>
+	<div class="p" id="p-right" data-id="p-right"></div>
+</body>
+</html>

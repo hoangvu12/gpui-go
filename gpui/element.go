@@ -1023,6 +1023,19 @@ type windowDrawState struct {
 	// lastDebugBounds holds the last COMPLETED frame's debug-selector
 	// bounds (the reference rendered_frame.debug_bounds).
 	lastDebugBounds map[string]Bounds
+	// lastAnchorBounds holds the last COMPLETED frame's element-anchored
+	// anchor registry (ticket 25: the name -> anchorRecord map the
+	// Anchored element's AnchorTo reads when the anchor has not yet
+	// prepainted in the in-flight frame — the first frame or an anchor
+	// later in the tree).
+	lastAnchorBounds map[string]anchorRecord
+	// trackAnchors records that this window has drawn an Anchored
+	// element anchored to an element id (ticket 25): the div prepaint
+	// then records named elements' bounds into the frame's anchor
+	// registry. It is set during request layout (the whole tree
+	// requests before any prepaint) and stays on once set, so a
+	// window's plain frames pay no recording cost until it anchors.
+	trackAnchors bool
 	// lastScene holds the last completed frame's finished scene (the
 	// reference rendered_frame.scene).
 	lastScene *Scene
@@ -1131,6 +1144,11 @@ type frameDrawState struct {
 	// debugBounds is this frame's debug-selector bounds
 	// (window.next_frame.debug_bounds).
 	debugBounds map[string]Bounds
+	// anchorBounds is this frame's element-anchored anchor registry
+	// (ticket 25): the name-id -> anchorRecord map filled by the div
+	// prepaint of named elements, read by the Anchored element's
+	// AnchorTo at its (usually deferred) prepaint.
+	anchorBounds map[string]anchorRecord
 	// inlineFacts is this frame's inline paragraph facts (the
 	// test-support observable; swapped into the window state when the
 	// frame completes).
@@ -1282,6 +1300,70 @@ func recordDebugBounds(w *Window, selector string, bounds Bounds) {
 		f.debugBounds = make(map[string]Bounds)
 	}
 	f.debugBounds[selector] = bounds
+}
+
+// anchorRecord is one tracked anchor of the element-anchored
+// positioning (ticket 25): the anchor element's window-space bounds at
+// its prepaint, and the content mask there — its clipping scroller's
+// visible rectangle, which position-visibility: anchors-visible hides
+// the anchored element against (Chromium's intersection observer over
+// the anchor's nearest clipping ancestor,
+// anchor_position_visibility_observer.cc:33-71).
+type anchorRecord struct {
+	bounds Bounds
+	clip   Bounds
+}
+
+// recordAnchorBounds records one named element's bounds and clip into
+// this frame's anchor registry (ticket 25: the port of CSS
+// position-anchor's anchor lookup — the anchor side names itself by
+// its element id). The div prepaint calls it for elements carrying a
+// plain name id, in prepaint order (a later same-named element wins);
+// the registry is only filled once the window's Anchored elements
+// asked for it (windowDrawState.trackAnchors, set at request layout).
+func recordAnchorBounds(w *Window, name string, bounds, clip Bounds) {
+	f := currentFrame(w)
+	if f.anchorBounds == nil {
+		f.anchorBounds = make(map[string]anchorRecord)
+	}
+	f.anchorBounds[name] = anchorRecord{bounds: bounds, clip: clip}
+}
+
+// lookupAnchorBounds resolves one anchor by name for the Anchored
+// element's prepaint (ticket 25): the in-flight frame's registry first
+// — the anchor prepaints before the (usually deferred) anchored
+// element, so a static or scrolled anchor resolves at its current
+// position — then the last completed frame's (the first frame, or an
+// anchor later in the tree than the anchored element, which lags one
+// frame like Base's popup first-frame sync).
+func lookupAnchorBounds(w *Window, name string) (anchorRecord, bool) {
+	if ds, ok := windowDrawStates[w]; ok {
+		if ds.frame != nil {
+			if record, ok := ds.frame.anchorBounds[name]; ok {
+				return record, true
+			}
+		}
+		if record, ok := ds.lastAnchorBounds[name]; ok {
+			return record, true
+		}
+	}
+	return anchorRecord{}, false
+}
+
+// requestAnchorTracking turns this window's anchor recording on (the
+// Anchored element's request layout calls it; see
+// windowDrawState.trackAnchors).
+func requestAnchorTracking(w *Window) {
+	if ds, ok := windowDrawStates[w]; ok {
+		ds.trackAnchors = true
+	}
+}
+
+// windowTracksAnchors reports whether the window records named
+// elements' bounds into the anchor registry (the div prepaint's gate).
+func windowTracksAnchors(w *Window) bool {
+	ds, ok := windowDrawStates[w]
+	return ok && ds.trackAnchors
 }
 
 // pushElementID pushes an element id onto the window's id stack
