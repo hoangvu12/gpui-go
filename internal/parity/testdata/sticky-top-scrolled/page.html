@@ -1,0 +1,100 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		/* The pin's default display, pinned on the page too. */
+		display: flex;
+		align-items: flex-start;
+	}
+	#scroller {
+		box-sizing: border-box;
+		width: 240px;
+		height: 300px;
+		margin-left: 20px;
+		margin-top: 20px;
+		display: flex;
+		flex-direction: column;
+		overflow-y: scroll;
+		/* The port draws no scrollbars and reserves no gutter
+		   (browser-core ticket 36 owns the gutter). */
+		scrollbar-width: none;
+		background: #f1f5f9;
+	}
+	#scroller > div {
+		flex-shrink: 0;
+		box-sizing: border-box;
+	}
+	#focus {
+		width: 240px;
+		height: 40px;
+		background: #fca5a5;
+		outline: none;
+	}
+	#section-a {
+		width: 240px;
+		height: 200px;
+		display: flex;
+		flex-direction: column;
+		background: #ffffff;
+	}
+	#header-a {
+		/* The behaviour under test. */
+		position: sticky;
+		top: 12px;
+		width: 240px;
+		height: 30px;
+		background: #2563eb;
+	}
+	#bar {
+		width: 240px;
+		height: 10px;
+		background: #93c5fd;
+	}
+	#filler-a {
+		width: 240px;
+		height: 170px;
+		background: #e2e8f0;
+	}
+	#spacer {
+		width: 240px;
+		height: 500px;
+		background: #cbd5e1;
+	}
+	#footer {
+		position: sticky;
+		bottom: 8px;
+		width: 240px;
+		height: 36px;
+		background: #16a34a;
+	}
+	#tail {
+		width: 240px;
+		height: 40px;
+		background: #94a3b8;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div id="scroller" data-id="scroller">
+		<div id="focus" data-id="focus" tabindex="0"></div>
+		<div id="section-a" data-id="section-a">
+			<div id="header-a" data-id="header-a">
+				<div id="bar" data-id="bar"></div>
+			</div>
+			<div id="filler-a" data-id="filler-a"></div>
+		</div>
+		<div id="spacer" data-id="spacer"></div>
+		<div id="footer" data-id="footer"></div>
+		<div id="tail" data-id="tail"></div>
+	</div>
+</body>
+</html>

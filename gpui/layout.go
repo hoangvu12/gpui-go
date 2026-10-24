@@ -275,12 +275,16 @@ func displayToRecord(d Display) uint32 {
 // onto Relative — CSS static lays out in flow exactly like relative —
 // while the element's containing-block semantics (static is not a
 // container for absolute children) are decided Go-side by the scope
-// walk in containingblock.go, not by the Taffy record.
+// walk in containingblock.go, not by the Taffy record. Ticket 34's
+// PositionSticky maps the same way: CSS sticky is an in-flow positioned
+// value, so the layout is the flow layout, and the insets (which Taffy
+// would apply as RELATIVE offsets) are zeroed below — they are sticky
+// constraints applied at prepaint (sticky.go), never layout offsets.
 func positionToRecord(p Position) uint32 {
 	switch p {
 	case PositionAbsolute:
 		return native.PositionAbsolute
-	case PositionStatic, PositionRelative:
+	case PositionStatic, PositionRelative, PositionSticky:
 		return native.PositionRelative
 	default:
 		return native.PositionRelative
@@ -309,8 +313,11 @@ func styleToRecord(s *Style, ctx *LayoutContext) native.LayoutStyleRecord {
 	// positioned boxes), and the record's Relative mapping would apply
 	// them as Taffy relative offsets — zero them for static nodes
 	// (browser-core 33; deliberate CSS rule, no pin behaviour existed for
-	// the value).
-	if s.Position == PositionStatic {
+	// the value). Sticky zeroes them for the layout's sake too
+	// (browser-core 34): its insets are scroll constraints resolved at
+	// prepaint (sticky.go), not relative offsets — the box's flow
+	// position must be the unshifted one the constraints clamp from.
+	if s.Position == PositionStatic || s.Position == PositionSticky {
 		rec.Inset = native.LayoutEdges{}
 	} else {
 		rec.Inset = lengthEdgesToRecord(s.Inset, remSize, scaleFactor)

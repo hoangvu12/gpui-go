@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: flex-start;
+	}
+	#hscroller {
+		box-sizing: border-box;
+		width: 320px;
+		height: 160px;
+		margin-left: 20px;
+		margin-top: 60px;
+		display: flex;
+		overflow-x: scroll;
+		scrollbar-width: none;
+		background: #f1f5f9;
+	}
+	#hscroller > div {
+		flex-shrink: 0;
+		box-sizing: border-box;
+	}
+	#hfocus {
+		width: 40px;
+		height: 160px;
+		background: #fca5a5;
+		outline: none;
+	}
+	#col {
+		position: sticky;
+		left: 14px;
+		width: 60px;
+		height: 160px;
+		background: #2563eb;
+	}
+	#hfiller {
+		width: 700px;
+		height: 160px;
+		background: #cbd5e1;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div id="hscroller" data-id="hscroller">
+		<div id="hfocus" data-id="hfocus" tabindex="0"></div>
+		<div id="col" data-id="col"></div>
+		<div id="hfiller" data-id="hfiller"></div>
+	</div>
+</body>
+</html>

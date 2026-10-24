@@ -767,6 +767,10 @@ type typedActionListener struct {
 type divFrameState struct {
 	// childLayoutIDs are the requested layout nodes of the children.
 	childLayoutIDs []LayoutID
+	// layoutID is this div's own layout node (browser-core ticket 34:
+	// the sticky prepaint resolves the div's flow containing block —
+	// its native layout parent — from it).
+	layoutID LayoutID
 	// inline is the inline frame state (Block/Inline display only).
 	inline *inlineDivFrameState
 	// contentsInParentParagraph records that this div's own layout node
@@ -1481,6 +1485,17 @@ func (e *divElement) LayoutNodeStyle() (Style, bool) {
 	return e.builder.lastStyle, true
 }
 
+// PaintsAfterInFlow reports the sticky paint-order rule (browser-core
+// ticket 34): a sticky element paints — and inserts its hitbox — after
+// its in-flow non-positioned siblings (css2.1 Appendix E step 8: a
+// positioned element, which sticky is, paints above in-flow content,
+// so a pinned header rides over the content scrolling under it). The
+// parent's child walk consults this through paintsAfterInFlow
+// (sticky.go).
+func (e *divElement) PaintsAfterInFlow() bool {
+	return e.builder.lastStyle.Position == PositionSticky
+}
+
 // ChildCount reports the destination's committed child count (the
 // test-support observable of the checked child-insertion contract: a
 // failed batch preserves it).
@@ -1510,6 +1525,12 @@ type divPrepaintState struct {
 	hitboxRecord *hitboxRecord
 	// debugBounds records whether the debug selector was recorded.
 	debugBounds bool
+	// stickyOffset is the sticky positioning offset this frame's
+	// prepaint shifted the div by (browser-core ticket 34, sticky.go):
+	// paint re-applies it to the bounds and the children's element
+	// offset, exactly like scrollOffset below — the port's drawables
+	// re-resolve their bounds at paint.
+	stickyOffset Point
 	// scrollOffset is the clamped scroll offset the children prepainted
 	// under (div.rs:2876-2878, 2460); paint re-applies it because the
 	// port's drawables re-resolve their bounds at paint.
@@ -1576,6 +1597,12 @@ func (d *DivElement) requestLayout(global *GlobalElementID, inspector *Inspector
 		// (containingblock.go).
 		scope := openContainingBlock(w, &style)
 		defer closeContainingBlock(w, scope)
+		// browser-core 34 (spec L3): flag the frame as sticky-carrying so
+		// the prepaints fill the flow-box registry (sticky.go); the cost
+		// for non-sticky views is this one check per div.
+		if style.Position == PositionSticky {
+			currentFrame(w).stickyRequested = true
+		}
 		childLayoutIDs := make([]LayoutID, 0, len(d.children))
 		for i := range d.children {
 			childLayoutIDs = append(childLayoutIDs, d.children[i].RequestLayout(w, app))
@@ -1592,6 +1619,9 @@ func (d *DivElement) requestLayout(global *GlobalElementID, inspector *Inspector
 			}
 			layoutID = id
 		}
+		// browser-core 34: the prepaint resolves this div's sticky
+		// containing block (its native layout parent) from its own node.
+		state.layoutID = layoutID
 		if len(childLayoutIDs) == 0 {
 			// Leaf divs share one read-only empty record (gpui-perf
 			// ticket 06: no allocation per leaf).
@@ -1632,6 +1662,41 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 	// call (the reference commits contents_in_parent_paragraph at
 	// prepaint from window.current_inline_fragments).
 	layout.contentsInParentParagraph = currentFrame(w).currentInlineFragments != nil
+	// browser-core 34 (spec L3): a standalone sticky div shifts at
+	// prepaint — laid out in flow (the record zeroes its insets) and
+	// moved so it stays inside its scroll container's inset-adjusted
+	// scrollport, never leaving its flow containing block (sticky.go,
+	// Chromium's constraint math). The shift moves the element's own
+	// bounds — hitbox, debug bounds, anchors, the painted box — and
+	// opens as the children's element offset below, so everything
+	// resolves consistently; a scroll changes only the offset cell and
+	// this recomputation, never the layout. A div participating in a
+	// parent paragraph does not stick (a documented limitation:
+	// sticky.go's header).
+	stickyOffset := Point{}
+	if d.lastStyle.Position == PositionSticky && !layout.contentsInParentParagraph {
+		stickyOffset = stickyDivOffset(w, &d.lastStyle, bounds, layout.layoutID)
+	}
+	state.stickyOffset = stickyOffset
+	if stickyOffset.X != 0 || stickyOffset.Y != 0 {
+		bounds = Bounds{
+			Origin: Point{X: bounds.Origin.X + stickyOffset.X, Y: bounds.Origin.Y + stickyOffset.Y},
+			Size:   bounds.Size,
+		}
+	}
+	withElementOffsetVoid(w, stickyOffset, func(w *Window) {
+		d.prepaintInFlow(global, inspector, bounds, layout, &state, w, app)
+	})
+	return state
+}
+
+// prepaintInFlow is prepaint's body under the sticky shift (browser-
+// core 34): the content-size and inline placement phase, the debug and
+// anchor records, and the interactivity prepaint — the pinned
+// div.rs:2354-2482 Div::prepaint + div.rs:2766-2885
+// Interactivity::prepaint, with the frame's sticky scroller scope and
+// flow-box record opened around the child walk (sticky.go).
+func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *divFrameState, state *divPrepaintState, w *Window, app *App) {
 	// The content size the scroll clamp measures against, with the
 	// tracked handle's child bounds (div.rs:2383-2413), then the handle's
 	// deferred scroll-to-item (div.rs:2415-2417).
@@ -1690,6 +1755,25 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 				// clamp_scroll_position (div.rs:2876-2877).
 				scrollOffset := d.scroll.clamp(bounds, &style, contentSize, w)
 				state.scrollOffset = scrollOffset
+				// browser-core 34 (spec L3): open this scroller's sticky
+				// scope around the child walk (sticky.go) — sticky
+				// descendants resolve their constraints against the
+				// nearest scroll container, this one while its children
+				// prepaint. The scroller also records its flow rectangle
+				// (the scrollable extent) for its sticky direct children;
+				// every other div records its content box when the frame
+				// requested a sticky element.
+				if d.scroll != nil {
+					ctx := stickyScrollContextOf(w, &style, bounds, d.scroll.maxOffset, scrollOffset, layout.layoutID.node)
+					frame := currentFrame(w)
+					frame.stickyScrollers = append(frame.stickyScrollers, ctx)
+					defer func() {
+						frame.stickyScrollers = frame.stickyScrollers[:len(frame.stickyScrollers)-1]
+					}()
+					recordStickyFlowBox(w, layout.layoutID.node, ctx.selfCB)
+				} else if currentFrame(w).stickyRequested {
+					recordStickyFlowBox(w, layout.layoutID.node, style.ContentBox(bounds, RemSize(w)))
+				}
 				tree := currentDispatchTree(w)
 				endGroup := registerDivElementDispatch(w, d, suppressed, state.hitbox, es)
 				defer func() {
@@ -1713,15 +1797,17 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 					// (div.rs:2460; inline.rs:454 for the inline path), inside
 					// this element's hitbox subtree (browser-core ticket 11:
 					// their hitboxes record this hitbox as their parent, the
-					// capture chain's ancestry).
+					// capture chain's ancestry). Sticky children prepaint
+					// after the in-flow ones (sticky.go's paint-order rule —
+					// their hitboxes land on top, where they paint).
 					withElementOffsetVoid(w, scrollOffset, func(w *Window) {
 						w.withHitboxSubtree(state.hitboxRecord, func() {
 							if standalone := layout.standaloneInline(); standalone != nil {
-								standalone.prepaintChildren(d.children, w, app)
+								standalone.prepaintChildren(stickyChildrenLast(d.children), w, app)
 								return
 							}
-							for i := range d.children {
-								d.children[i].Prepaint(w, app)
+							for _, child := range stickyChildrenLast(d.children) {
+								child.Prepaint(w, app)
 							}
 						})
 					})
@@ -1730,7 +1816,6 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 		})
 		return struct{}{}, es
 	})
-	return state
 }
 
 // registerDivElementDispatch pushes the div's dispatch node and
@@ -1870,10 +1955,33 @@ func invokeTypedActionListener(listener typedActionListener, action any, phase D
 // mouse listeners (div.rs:3075-3080, interact.go); then the children
 // (through the inline frame state — the children first, then the
 // paragraphs — when it owns them; none when Display is None,
-// div.rs:2510-2512) and the group pop (div.rs:3111-3113).
+// div.rs:2510-2512) and the group pop (div.rs:3111-3113). The sticky
+// shift from the prepaint re-applies here (browser-core 34, sticky.go)
+// before the body runs in paintInFlow.
 func (d *DivElement) paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *divFrameState, prepaint *divPrepaintState, w *Window, app *App) {
 	ensurePaintHitTest(w)
 	hitbox := prepaint.hitbox
+	// browser-core 34 (spec L3): re-apply the prepaint's sticky shift —
+	// the port's drawables re-resolve their bounds at paint, so the
+	// element's own box paints at the shifted bounds (the pin reuses
+	// the prepainted bounds; the scroll offset below re-applies the
+	// same way) and the children resolve under the shift, exactly as
+	// they prepainted (sticky.go).
+	if prepaint.stickyOffset.X != 0 || prepaint.stickyOffset.Y != 0 {
+		bounds = Bounds{
+			Origin: Point{X: bounds.Origin.X + prepaint.stickyOffset.X, Y: bounds.Origin.Y + prepaint.stickyOffset.Y},
+			Size:   bounds.Size,
+		}
+	}
+	withElementOffsetVoid(w, prepaint.stickyOffset, func(w *Window) {
+		d.paintInFlow(global, inspector, bounds, layout, prepaint, hitbox, w, app)
+	})
+}
+
+// paintInFlow is paint's body under the sticky shift (browser-core
+// 34): the pinned div.rs:2485-2525 Div::paint + div.rs:2986-3125
+// Interactivity::paint + style.rs:874-1015 Style::paint.
+func (d *DivElement) paintInFlow(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *divFrameState, prepaint *divPrepaintState, hitbox *Hitbox, w *Window, app *App) {
 	WithOptionalElementState(w, global, func(slot *InteractiveElementState, w *Window) (struct{}, *InteractiveElementState) {
 		es := interactiveStateOf(global, slot)
 		style := d.computeStyleInternal(hitbox, es, w, app)
@@ -1919,14 +2027,16 @@ func (d *DivElement) paint(global *GlobalElementID, inspector *InspectorElementI
 						// The children paint under the offset they
 						// prepainted under (the port's drawables re-resolve
 						// their bounds at paint; the pin reuses the
-						// prepainted bounds).
+						// prepainted bounds), in the sticky paint order
+						// (sticky.go: sticky children after the in-flow ones,
+						// where their hitboxes already prepainted).
 						withElementOffsetVoid(w, prepaint.scrollOffset, func(w *Window) {
 							if standalone := layout.standaloneInline(); standalone != nil {
-								standalone.paintChildren(d.children, w, app)
+								standalone.paintChildren(stickyChildrenLast(d.children), w, app)
 								return
 							}
-							for i := range d.children {
-								d.children[i].Paint(w, app)
+							for _, child := range stickyChildrenLast(d.children) {
+								child.Paint(w, app)
 							}
 						})
 					})

@@ -1,0 +1,84 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: flex-start;
+	}
+	#scroller {
+		box-sizing: border-box;
+		width: 240px;
+		height: 300px;
+		margin-left: 20px;
+		margin-top: 20px;
+		display: flex;
+		flex-direction: column;
+		overflow-y: scroll;
+		scrollbar-width: none;
+		background: #f1f5f9;
+	}
+	#scroller > div {
+		flex-shrink: 0;
+		box-sizing: border-box;
+	}
+	#focus {
+		width: 240px;
+		height: 40px;
+		background: #fca5a5;
+		outline: none;
+	}
+	.section {
+		width: 240px;
+		height: 160px;
+		display: flex;
+		flex-direction: column;
+		background: #ffffff;
+	}
+	.hdr {
+		position: sticky;
+		top: 0;
+		width: 240px;
+		height: 24px;
+	}
+	.filler {
+		width: 240px;
+		height: 136px;
+		background: #e2e8f0;
+	}
+	#h1 { background: #2563eb; }
+	#h2 { background: #16a34a; }
+	#h3 { background: #d97706; }
+	#h4 { background: #7c3aed; }
+</style>
+</head>
+<body data-id="root">
+	<div id="scroller" data-id="scroller">
+		<div id="focus" data-id="focus" tabindex="0"></div>
+		<div class="section" id="s1" data-id="s1">
+			<div class="hdr" id="h1" data-id="h1"></div>
+			<div class="filler" id="f1" data-id="f1"></div>
+		</div>
+		<div class="section" id="s2" data-id="s2">
+			<div class="hdr" id="h2" data-id="h2"></div>
+			<div class="filler" id="f2" data-id="f2"></div>
+		</div>
+		<div class="section" id="s3" data-id="s3">
+			<div class="hdr" id="h3" data-id="h3"></div>
+			<div class="filler" id="f3" data-id="f3"></div>
+		</div>
+		<div class="section" id="s4" data-id="s4">
+			<div class="hdr" id="h4" data-id="h4"></div>
+			<div class="filler" id="f4" data-id="f4"></div>
+		</div>
+	</div>
+</body>
+</html>

@@ -361,6 +361,16 @@ func ParseDisplay(s string) (Display, error) {
 // checkout). The default itself flips to static in ticket 76; until
 // then existing behaviour is bit-for-bit unchanged unless a view says
 // Static().
+//
+// PositionSticky is browser-core ticket 34 (spec L3): a sticky element
+// lays out in flow exactly like a relative one WITHOUT the insets as
+// relative offsets (the record translation zeroes them; they are
+// scroll constraints, decided at prepaint by gpui/sticky.go), shifts
+// at prepaint so it stays inside its scroll container's
+// inset-adjusted scrollport, never leaves its flow containing block,
+// and — like every positioned value except static — IS a containing
+// block for absolute descendants (Chromium's ComputeIsAbsolute-
+// Container, position != kStatic).
 type Position uint8
 
 const (
@@ -373,6 +383,9 @@ const (
 	// introduced opt-in — the port's default stays Relative until ticket
 	// 76 flips it).
 	PositionStatic
+	// PositionSticky lays out in flow and sticks inside its scroll
+	// container at prepaint (browser-core 34, spec L3).
+	PositionSticky
 )
 
 // String returns the reference variant name.
@@ -386,6 +399,9 @@ func (p Position) String() string {
 	if p == PositionStatic {
 		return "Static"
 	}
+	if p == PositionSticky {
+		return "Sticky"
+	}
 	return fmt.Sprintf("Position(%d)", uint8(p))
 }
 
@@ -398,6 +414,8 @@ func ParsePosition(s string) (Position, error) {
 		return PositionAbsolute, nil
 	case "Static":
 		return PositionStatic, nil
+	case "Sticky":
+		return PositionSticky, nil
 	default:
 		return 0, fmt.Errorf("invalid Position %q", s)
 	}
