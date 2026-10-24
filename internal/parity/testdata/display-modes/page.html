@@ -1,0 +1,142 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		/* The pin's default display, pinned on the page too. */
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+	}
+	#contents-row {
+		box-sizing: border-box;
+		width: 190px;
+		height: 30px;
+		margin-left: 20px;
+		margin-top: 20px;
+		display: flex;
+		gap: 10px;
+		background: #f1f5f9;
+	}
+	#contents-row > div {
+		flex-shrink: 0;
+		box-sizing: border-box;
+	}
+	.contents {
+		/* The behaviour under test: no box, the children splice into
+		   the row. Box styles stay set to pin that they are inert. */
+		display: contents;
+		background: #dc2626;
+		width: 999px;
+		height: 999px;
+		padding: 8px;
+	}
+	#a, #b, #c, #d {
+		width: 40px;
+		height: 30px;
+		background: #2563eb;
+	}
+	#block {
+		box-sizing: border-box;
+		width: 190px;
+		height: 30px;
+		/* The block parent whose paragraph collects the atomic boxes:
+		   display: block, the browser's default, pinned explicitly. The
+		   fixed height pins the flow below it: the line box's strut
+		   (invisible, no glyphs) extends past it without moving any
+		   compared box or painted pixel. */
+		display: block;
+		margin-left: 20px;
+		margin-top: 20px;
+		background: #f1f5f9;
+	}
+	#block > div {
+		box-sizing: border-box;
+	}
+	#ib1 {
+		/* The behaviour under test: an atomic inline-level box with
+		   block flow inside. */
+		display: inline-block;
+		width: 40px;
+		height: 30px;
+		background: #2563eb;
+	}
+	#ib2 {
+		display: inline-block;
+		width: 50px;
+		height: 30px;
+		background: #16a34a;
+	}
+	#ig {
+		/* The behaviour under test: an atomic inline-level box with
+		   grid inside. */
+		display: inline-grid;
+		width: 90px;
+		height: 30px;
+		grid-template-columns: repeat(2, minmax(0px, 1fr));
+		background: #7c3aed;
+	}
+	#ig > div {
+		box-sizing: border-box;
+	}
+	#g1, #g2 {
+		width: 45px;
+		height: 30px;
+		background: #d97706;
+	}
+	#nest {
+		box-sizing: border-box;
+		width: 40px;
+		/* The nested case: contents(contents(#nb)), an empty contents
+		   element (no box, no space) and #nd stack as the column's own
+		   children. */
+		display: flex;
+		flex-direction: column;
+		margin-left: 20px;
+		margin-top: 20px;
+	}
+	#nest > div {
+		box-sizing: border-box;
+	}
+	#nb, #nc, #nd {
+		width: 40px;
+		height: 30px;
+		background: #16a34a;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div id="contents-row" data-id="contents-row">
+		<div id="a" data-id="a"></div>
+		<div class="contents" data-id="contents">
+			<div id="b" data-id="b"></div>
+			<div id="c" data-id="c"></div>
+		</div>
+		<div id="d" data-id="d"></div>
+	</div>
+	<div id="block" data-id="block">
+		<div id="ib1" data-id="ib1"></div><div id="ib2" data-id="ib2"></div><div id="ig" data-id="ig">
+			<div id="g1" data-id="g1"></div>
+			<div id="g2" data-id="g2"></div>
+		</div>
+	</div>
+	<div id="nest" data-id="nest">
+		<div style="display: contents">
+			<div style="display: contents">
+				<div id="nb" data-id="nb"></div>
+			</div>
+			<div id="nc" data-id="nc"></div>
+		</div>
+		<div style="display: contents"></div>
+		<div id="nd" data-id="nd"></div>
+	</div>
+</body>
+</html>

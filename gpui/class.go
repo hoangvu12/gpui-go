@@ -363,15 +363,19 @@ func (set *classSet) add(token string) error {
 		set.divClasses = append(set.divClasses, token)
 		return nil
 	}
-	if x, y, ok := scrollClass(utility); ok {
+	if x, y, auto, ok := scrollClass(utility); ok {
 		if variant {
 			return &classError{class: token, reason: "scrolling cannot depend on a state"}
 		}
+		value := OverflowScroll
+		if auto {
+			value = OverflowAuto
+		}
 		if x {
-			set.base.OverflowX = Some(OverflowScroll)
+			set.base.OverflowX = Some(value)
 		}
 		if y {
-			set.base.OverflowY = Some(OverflowScroll)
+			set.base.OverflowY = Some(value)
 		}
 		set.scroll = true
 		set.divClasses = append(set.divClasses, token)
@@ -512,18 +516,29 @@ func parseVariant(v string) (kind classStateKind, group, reason string) {
 	return 0, "", reason
 }
 
-// scrollClass reports the scroll axes of overflow-auto / overflow-scroll
-// and their -x / -y forms (div.rs:1746-1763; the overflow is Scroll).
-func scrollClass(u string) (x, y, ok bool) {
+// scrollClass reports the scroll axes of the overflow-auto /
+// overflow-scroll classes and their -x / -y forms (div.rs:1746-1763).
+// Browser-core 36: overflow-auto now sets the real OverflowAuto
+// (scrollbars and their gutter appear only when needed) — it previously
+// pinned to OverflowScroll (always a scroller, the pin's approximation),
+// a recorded divergence toward Chrome; the class still needs an
+// interactive element for the scroll state.
+func scrollClass(u string) (x, y, auto, ok bool) {
 	switch u {
-	case "overflow-auto", "overflow-scroll":
-		return true, true, true
-	case "overflow-x-auto", "overflow-x-scroll":
-		return true, false, true
-	case "overflow-y-auto", "overflow-y-scroll":
-		return false, true, true
+	case "overflow-auto":
+		return true, true, true, true
+	case "overflow-scroll":
+		return true, true, false, true
+	case "overflow-x-auto":
+		return true, false, true, true
+	case "overflow-x-scroll":
+		return true, false, false, true
+	case "overflow-y-auto":
+		return false, true, true, true
+	case "overflow-y-scroll":
+		return false, true, false, true
 	}
-	return false, false, false
+	return false, false, false, false
 }
 
 // ---------------------------------------------------------------------------
@@ -1584,7 +1599,7 @@ var unsupportedClasses = []struct {
 	{[]string{"select"}, "text in a div is not selectable, so select-* has no effect; drop it"},
 	{[]string{"pointer-events"}, "pointer-events-* is not supported"},
 	{[]string{"fixed"}, "fixed positioning is not supported; use absolute inside a relative ancestor that fills the window, or gpui.Deferred / gpui.Anchored for overlays"},
-	{[]string{"inline-block", "inline-grid", "inline-table", "table", "contents", "flow-root", "list-item"}, "this display type is not supported; use flex, grid, block, inline or inline-flex"},
+	{[]string{"inline-table", "table", "list-item"}, "this display type is not supported; use flex, grid, block, inline, inline-flex, inline-block, inline-grid, contents or flow-root"},
 	{[]string{"text-justify"}, "justified text is not supported"},
 	{[]string{"no-underline"}, "no-underline is not supported; leave underline out, or call .TextDecorationNone()"},
 	{[]string{"outline"}, "GPUI draws no focus outline, so outline-* has no effect; drop it (ring-* draws a visible focus ring)"},
@@ -1605,7 +1620,7 @@ var unsupportedClasses = []struct {
 	{[]string{"antialiased", "subpixel-antialiased"}, "GPUI chooses text antialiasing itself; drop it"},
 	{[]string{"list"}, "list styles are not supported"},
 	{[]string{"appearance", "resize", "accent", "caret"}, "form-control styling is not supported; GPUI has no native form controls"},
-	{[]string{"scroll", "snap", "touch", "overscroll", "will-change", "isolation", "isolate"}, "this scrolling or compositing utility is not supported"},
+	{[]string{"scroll", "snap", "touch", "overscroll", "will-change", "isolation", "isolate"}, "this scrolling or compositing utility is not supported (overflow-auto/scroll and scrollbar-gutter-stable are)"},
 	{[]string{"sr-only", "not-sr-only"}, "sr-only is not supported; describe the element through its accessibility properties"},
 	{[]string{"container", "prose"}, "container and prose are not supported; set max-w-* and padding explicitly"},
 	{[]string{"fill", "stroke"}, "an svg element is painted with its text color: use text-<color>"},

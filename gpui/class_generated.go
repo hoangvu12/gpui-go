@@ -284,6 +284,8 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.ContentStart()
 	case "content-stretch":
 		b.ContentStretch()
+	case "contents":
+		b.Contents()
 	case "cursor-alias":
 		b.CursorAlias()
 	case "cursor-col-resize":
@@ -366,6 +368,8 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.FlexWrap()
 	case "flex-wrap-reverse":
 		b.FlexWrapReverse()
+	case "flow-root":
+		b.FlowRoot()
 	case "font-black":
 		b.FontBlack()
 	case "font-bold":
@@ -396,8 +400,12 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.Hidden()
 	case "inline":
 		b.Inline()
+	case "inline-block":
+		b.InlineBlock()
 	case "inline-flex":
 		b.InlineFlex()
+	case "inline-grid":
+		b.InlineGrid()
 	case "inset-ring-0":
 		b.InsetRing0()
 	case "inset-ring-1":
@@ -738,6 +746,8 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.RowSpanFull()
 	case "row-start-auto":
 		b.RowStartAuto()
+	case "scrollbar-gutter-stable":
+		b.ScrollbarGutterStable()
 	case "self-baseline":
 		b.SelfBaseline()
 	case "self-center":
@@ -849,4 +859,4 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 }
 
 // methodClassCount is the number of classes applyMethodClass knows.
-const methodClassCount = 418
+const methodClassCount = 423

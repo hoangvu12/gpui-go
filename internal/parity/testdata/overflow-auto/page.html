@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+	}
+	.row {
+		display: flex;
+		gap: 20px;
+		margin-left: 20px;
+		margin-top: 20px;
+	}
+	.scroller {
+		box-sizing: border-box;
+		display: flex;
+		flex-direction: column;
+		flex-shrink: 0;
+		background: #f1f5f9;
+	}
+	.scroller > div {
+		flex-shrink: 0;
+		box-sizing: border-box;
+	}
+	#sc-fits, #sc-stable, #sc-overflow {
+		width: 180px;
+		height: 150px;
+		overflow-x: hidden;
+		/* The behaviour under test: the scrollbar (and its gutter)
+		   appears only while the content overflows. */
+		overflow-y: auto;
+	}
+	#sc-stable {
+		/* The opt-in under test: the gutter is reserved even while no
+		   scrollbar shows. */
+		scrollbar-gutter: stable;
+	}
+	#sc-h {
+		width: 560px;
+		height: 100px;
+		overflow-x: auto;
+		overflow-y: hidden;
+		display: flex;
+		flex-direction: row;
+		align-items: stretch;
+	}
+	#fits-row, #stable-row, #over-row {
+		height: 40px;
+		background: #93c5fd;
+	}
+	#over-fill {
+		height: 570px;
+		background: #cbd5e1;
+	}
+	#h-fill {
+		width: 1200px;
+		height: 60px;
+		background: #cbd5e1;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div class="row" data-id="row1">
+		<div id="sc-fits" class="scroller" data-id="sc-fits">
+			<div id="fits-row" data-id="fits-row"></div>
+		</div>
+		<div id="sc-stable" class="scroller" data-id="sc-stable">
+			<div id="stable-row" data-id="stable-row"></div>
+		</div>
+		<div id="sc-overflow" class="scroller" data-id="sc-overflow">
+			<div id="over-row" data-id="over-row"></div>
+			<div id="over-fill" data-id="over-fill"></div>
+		</div>
+	</div>
+	<div class="row" data-id="row2">
+		<div id="sc-h" class="scroller" data-id="sc-h">
+			<div id="h-fill" data-id="h-fill"></div>
+		</div>
+	</div>
+</body>
+</html>

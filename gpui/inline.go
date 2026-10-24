@@ -537,8 +537,10 @@ type inlineParagraphCollector struct {
 // collect_element): display-none nodes are skipped, absolute nodes stay
 // separate flow children, published text joins the current document,
 // inline containers recurse into their children, other non-inline
-// nodes finish the paragraph and stay separate, and inline/inline-flex
-// nodes are measured as atomic boxes at their text position.
+// nodes finish the paragraph and stay separate, and atomic inline
+// nodes (inline, inline-flex — and browser-core 36's inline-block and
+// inline-grid, css-display-3's atomic inline-level boxes) are measured
+// as atomic boxes at their text position.
 func (c *inlineParagraphCollector) collectElement(layoutID LayoutID) {
 	display, position := layoutDisplayAndPositionOf(c.window, layoutID)
 	if display == DisplayNone {
@@ -577,7 +579,7 @@ func (c *inlineParagraphCollector) collectElement(layoutID LayoutID) {
 			c.collectElement(child)
 		}
 		c.openSpanLayoutIDs = c.openSpanLayoutIDs[:len(c.openSpanLayoutIDs)-1]
-	} else if display != DisplayInline && display != DisplayInlineFlex {
+	} else if !isAtomicInlineDisplay(display) {
 		c.finishParagraphFor(layoutID)
 	} else {
 		// Measure atomic contents before any layout compute enters its
@@ -606,6 +608,22 @@ func (c *inlineParagraphCollector) collectElement(layoutID LayoutID) {
 		})
 		c.currentDocument.boxLayoutIDs = append(c.currentDocument.boxLayoutIDs, layoutID)
 		c.recordOpenSpanRanges(textStart, boxStart)
+	}
+}
+
+// isAtomicInlineDisplay reports whether a display value contributes
+// one ATOMIC inline box to a paragraph (the reference InlineFlex arm;
+// browser-core 36 adds inline-block and inline-grid — css-display-3:
+// they are inline-level boxes whose contents do not participate in the
+// surrounding inline layout). display:contents never reaches the
+// collector (its children splice into the parent's child list,
+// div.go), so it has no classification here.
+func isAtomicInlineDisplay(display Display) bool {
+	switch display {
+	case DisplayInline, DisplayInlineFlex, DisplayInlineBlock, DisplayInlineGrid:
+		return true
+	default:
+		return false
 	}
 }
 

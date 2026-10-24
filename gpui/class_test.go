@@ -378,10 +378,14 @@ func TestClassVariantsOnDiv(t *testing.T) {
 		Div().ID("p").Class("hover:bg-slate-700").Hover(Styles().TextColor(White()))
 	})
 
-	// Scrolling classes match the scroll builders.
+	// Scrolling classes match the scroll builders. Divergence toward
+	// Chrome (browser-core 36): the overflow-auto classes previously
+	// pinned to the OverflowScroll builders (always a scroller); they
+	// now set the real OverflowAuto — scrollbars and their gutter appear
+	// only while an axis overflows.
 	s := Div().ID("s").Class("overflow-y-auto")
-	if v, ok := s.StyleMut().OverflowY.Get(); !ok || v != OverflowScroll {
-		t.Errorf("overflow-y-auto OverflowY = %v, %v; want OverflowScroll", v, ok)
+	if v, ok := s.StyleMut().OverflowY.Get(); !ok || v != OverflowAuto {
+		t.Errorf("overflow-y-auto OverflowY = %v, %v; want OverflowAuto", v, ok)
 	}
 	if s.StyleMut().OverflowX.IsSome() {
 		t.Error("overflow-y-auto set OverflowX")
@@ -389,8 +393,8 @@ func TestClassVariantsOnDiv(t *testing.T) {
 	if !s.scrollStateful {
 		t.Error("overflow-y-auto did not make the div scroll-stateful")
 	}
-	if want := Div().ID("s").OverflowYScroll(); !reflect.DeepEqual(*s.StyleMut(), *want.StyleMut()) {
-		t.Errorf("overflow-y-auto = %+v; want OverflowYScroll's %+v", *s.StyleMut(), *want.StyleMut())
+	if want := Div().ID("s").OverflowYAuto(); !reflect.DeepEqual(*s.StyleMut(), *want.StyleMut()) {
+		t.Errorf("overflow-y-auto = %+v; want OverflowYAuto's %+v", *s.StyleMut(), *want.StyleMut())
 	}
 	s = Div().ID("s2").Class("overflow-scroll")
 	if want := Div().ID("s2").OverflowScroll(); !s.scrollStateful || !reflect.DeepEqual(*s.StyleMut(), *want.StyleMut()) {
@@ -418,8 +422,11 @@ func TestClassVariantsOnComponent(t *testing.T) {
 	if v, ok := own.PaddingTop.Get(); !ok || v != DefiniteRem(0.5) {
 		t.Errorf("component padding = %v, %v; want 0.5rem", v, ok)
 	}
-	if v, ok := own.OverflowY.Get(); !ok || v != OverflowScroll {
-		t.Errorf("component OverflowY = %v, %v; want OverflowScroll", v, ok)
+	if v, ok := own.OverflowY.Get(); !ok || v != OverflowAuto {
+		// Divergence toward Chrome (browser-core 36): overflow-y-auto
+		// previously pinned to OverflowScroll; it now sets the real
+		// OverflowAuto.
+		t.Errorf("component OverflowY = %v, %v; want OverflowAuto", v, ok)
 	}
 	if own.Background.IsSome() {
 		t.Error("hover background reached the component's base style")

@@ -1054,8 +1054,20 @@ type windowDrawState struct {
 	// lastInlineFacts holds the last completed frame's inline paragraph
 	// facts (the port's test-support observable of the inline layer).
 	lastInlineFacts []InlineParagraphFacts
+	// lastAutoScrollbarFacts holds the last completed frame's shown
+	// overflow: auto scrollbar pairs (browser-core 36, scrollbar.go).
+	lastAutoScrollbarFacts []AutoScrollbarWindowFacts
 	// frame is the in-flight frame draw state; nil outside a draw.
 	frame *frameDrawState
+	// autoScrollbarAppearanceChanged records that this frame's prepaint
+	// changed an overflow: auto element's shown-scrollbar flags
+	// (browser-core 36, scrollbar.go): the notify the prepaint raises is
+	// ignored for the dirty marking while the window draws (the pin's
+	// draw-phase guard, invalidateViewWindows), so completeFrame marks
+	// the window dirty afterwards — the same pattern as a focus move's
+	// refresh — and the reservation settles on the next frame (the
+	// one-frame settle, Chromium's post-layout relayout).
+	autoScrollbarAppearanceChanged bool
 	// draws counts completed frame draws of this window.
 	draws uint64
 	// closed marks a removed window.
@@ -1166,6 +1178,12 @@ type frameDrawState struct {
 	// content box, or the scroller's scrollable extent). Filled only
 	// while stickyRequested.
 	stickyFlowBoxes map[native.NodeHandle]Bounds
+	// contentsContinuations is the display:contents splice register of
+	// the request-layout phase (browser-core 36; contents.go): a
+	// contents element's first child id mapped to the children that
+	// join it at the next node request. Entries are consumed exactly
+	// once (expandContentsChildren); the map dies with the frame.
+	contentsContinuations map[LayoutID][]LayoutID
 	// elementOffset is the current absolute element offset
 	// (window.element_offset_stack tail).
 	elementOffset Point
@@ -1183,6 +1201,11 @@ type frameDrawState struct {
 	// test-support observable; swapped into the window state when the
 	// frame completes).
 	inlineFacts []InlineParagraphFacts
+	// autoScrollbarFacts is this frame's shown overflow: auto scrollbar
+	// pairs (browser-core 36, scrollbar.go; the test-support observable
+	// behind WindowAutoScrollbarFacts, swapped into the window state
+	// when the frame completes).
+	autoScrollbarFacts []AutoScrollbarWindowFacts
 	// accessedElementStates records every element-state key used
 	// during this frame (window.rs accessed_element_states): the
 	// frame-end retention carries over exactly these keys from the

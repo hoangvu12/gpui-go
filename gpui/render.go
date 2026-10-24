@@ -234,6 +234,7 @@ func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawSt
 		}
 		ds.lastScene = frame.scene
 		ds.lastInlineFacts = frame.inlineFacts
+		ds.lastAutoScrollbarFacts = frame.autoScrollbarFacts
 		ds.lastDeferredPriorities = deferredPrioritiesOf(frame)
 		// The rendered frame's ordered lists a cached view's reused ranges
 		// index into (view_cache.go; the pin keeps them on rendered_frame).
@@ -268,6 +269,16 @@ func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawSt
 	w.resetCursorStyle(w.app)
 	if focusMoved {
 		w.Refresh()
+	}
+	// browser-core 36: an auto scrollbar that appeared or disappeared
+	// this frame re-dirties the window (the notify raised during the
+	// draw is ignored for the dirty marking, frameloop.go's
+	// invalidateViewWindows draw-phase guard); the next frame requests
+	// layout with the updated reservation flags — the one-frame settle
+	// documented in scrollbar.go.
+	if ds.autoScrollbarAppearanceChanged {
+		ds.autoScrollbarAppearanceChanged = false
+		w.markFrameDirty()
 	}
 }
 
