@@ -12,6 +12,7 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - **Open follow-up from 33+25:** Anchored, Deferred and custom containers don't call `RequestContainerLayout`, so a `Static()` div inside them defers its absolute children past the overlay (opt-in only; for 76).
 - 29 forced colours, 30 spellcheck and 77 (rev 15.1) are merged and resolved. 77 left open: the partial-region backdrop crop zoom (fold into R16), and the 42/43 text fields, which are blocked behind the pinned Parley/Taffy seams (per-field plans in TEXT_ABI.md/LAYOUT_ABI.md). Watch authorspec TestRealTwoWindowCounterSharedModel (a rare reentrancy panic, seen once; then 19/19).
 - **Running (they report to this chat, 08b88b23):**
+  - 16 full drag and drop sequence: chat 16397ca0, worktree `gpui-go-wt-core-16`, branch `core/16-drag-drop` (told to keep Escape-cancel inside the drag loop, so it merges cleanly with 22)
   - 19 core text selection: chat 1c05b939, worktree `gpui-go-wt-core-19`, branch `core/19-text-selection`
   - 22+35 (bundle: close watchers and Escape, position: fixed): chat 54b805fb, worktree `gpui-go-wt-core-22`, branch `core/22-35-escape-fixed`
   - 15 wheel latching, overscroll and keyboard scroll: chat d728884c, worktree `gpui-go-wt-core-15`, branch `core/15-wheel-latching`
@@ -45,7 +46,7 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
   - Never touch the `gpui-go` main checkout.
   - Never `taskkill` go.exe globally; it kills other sessions' runs.
 - 37 (line-height: normal) changes the default line height repo-wide, so run it nearly alone, like 68.
-- Worktree folders: all leftovers were removed on 2026-10-24, except the empty `gpui-go-wt-core-26`, `-38` and `-48` (finished-worker folders usually release after a while), held by Roboco's per-chat processes for the finished workers (no process command line names them; don't kill roboco.exe); retry later. A stuck Roboco `git diff` on a deleted worktree can hold a folder; stop only that PID (find it by command line).
+- Worktree folders: all leftovers were removed on 2026-10-24, except the empty `gpui-go-wt-core-74` (finished-worker folders usually release after a while), held by Roboco's per-chat processes for the finished workers (no process command line names them; don't kill roboco.exe); retry later. A stuck Roboco `git diff` on a deleted worktree can hold a folder; stop only that PID (find it by command line).
 
 Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
 
