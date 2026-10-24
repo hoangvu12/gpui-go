@@ -292,9 +292,55 @@
 // A failed reload keeps the old VM with its tree, timers and
 // completions running (the last good UI still works).
 //
+// # Type checking: the generated .d.ts and tsc (ticket 63)
+//
+// The whole authoring surface above — the elements, the style
+// object's CSS properties, the events, the host globals and the
+// Tailwind class surface — is also a TypeScript declaration file,
+// generated from the engine's own source (the host's switches and
+// the class layer's generated tables) and committed at
+// gpui/script/types/gpui-script.d.ts. The drift tests in
+// internal/tsxgen regenerate it and compare it against the engine in
+// both directions (everything the engine accepts is declared;
+// everything declared is accepted — classes verified against
+// gpui.CheckClasses), so the types cannot silently drift from the
+// engine; regenerate with:
+//
+//	go generate ./gpui/script/types
+//
+// Write the declarations beside your sources so editors see them:
+//
+//	go run github.com/hoangvu12/gpui-go/cmd/tsxcheck -init ui
+//
+// and type-check a view (tsc, found locally in node_modules, or
+// pinned with GPUI_TYPESCRIPT — nothing is installed for you):
+//
+//	go run github.com/hoangvu12/gpui-go/cmd/tsxcheck ui
+//
+// A dev host runs the same check after every reload when a checker is
+// installed (ADR 0003: debug builds check after each reload when tsc
+// is present) — reported through the WithTypeDiagnostics hook, never
+// gating the running UI (types are advisory to esbuild; the engine's
+// own load-time checks stay the source of truth):
+//
+//	source, _ := compile.Open("ui/app.tsx")
+//	host := script.New(
+//		script.WithSource(source),
+//		script.WithTypeCheck(types.NewChecker("ui")),
+//		script.WithTypeDiagnostics(func(diags []script.TypeDiagnostic) {
+//			for _, d := range diags { fmt.Println(d) }
+//		}))
+//
+// className stays a string in the types: a class list is
+// space-separated and open-ended, and the engine validates every
+// class at load with the .tsx file and line (the same check
+// Styled.Class runs). The generated Class type is the single-class
+// surface — every palette color, scale value, bracketed length and
+// opacity modifier — for where a single class is built.
+//
 // # Later tickets (not built here)
 //
-// The generated .d.ts and check command; the dev command (Go rebuild
+// The dev command (Go rebuild
 // and restart with state restore); plugin slots, contributions and
 // capability grants (each plugin in its own goja runtime with a time
 // budget) — the ActionResolver and SharedStore seams above are the
