@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 8 (Claude Code)
+Status: resolved
+Assignee: orchestrator 9 (Claude Code)
 Blocked by: 10
 Triage: ready-for-agent
 
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 9 (verification): merged 19687df as 40a1260. The conflicts were the fixture step validation (kept 19's click-count checks and 15's StepWheel) and the harness guide. Spot check: `HandleTripleClick` expands with `TextGranularity::kParagraph` (selection_controller.cc:1110-1155), which matches. The broad batch set passed with no failures on the merged tree (with 15, 22 and 35): ./gpui/, ./internal/parity/..., ./base, every internal/*spec package in the batch list, ./internal/tsxgen/, ./gpui/script/..., ./examples/... and ./cmd/.... Resolved.
 
 ## Answer
 
