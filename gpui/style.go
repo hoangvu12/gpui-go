@@ -1079,6 +1079,14 @@ type Style struct {
 	MouseCursor *CursorStyle
 	// Opacity is the element opacity (style.rs:386).
 	Opacity *float32
+	// Transition is the element's transition rules — CSS transition
+	// (browser-core ticket 44): when a covered style property's resolved
+	// value changes between frames, the change animates over the rule's
+	// duration and easing with CSS's reversing rule, driven by the
+	// per-element style diff (transition.go). Nil (the default) animates
+	// nothing and costs nothing. The rules are NOT inherited and a
+	// refinement replaces the whole list.
+	Transition []TransitionRule
 	// Debug draws a red outline around the element (style.rs:401; the
 	// pinned field is cfg(debug_assertions), the port always carries it).
 	Debug bool

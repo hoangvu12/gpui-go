@@ -95,6 +95,10 @@ type Host struct {
 	actions        map[string]ResolvedAction
 	actionResolver ActionResolver
 
+	// The reload-time type check (ticket 63): see typecheck.go.
+	typeCheck TypeChecker
+	typeDiags func([]TypeDiagnostic)
+
 	// vmGen is the generation of the live VM: every Load builds a fresh
 	// one, and the timers, frame callbacks and in-flight fetches a
 	// script registered belong to the generation that made them — a
@@ -290,6 +294,9 @@ func (h *Host) Load(b Bundle) error {
 
 // Reload compiles the source and loads the result: the call a file
 // watcher makes on save (the injected change notification in tests).
+// A reload that succeeds is followed by the type check WithTypeCheck
+// installed (ADR 0003: debug builds check after every reload when tsc
+// is present) — reported, never gating the running UI.
 func (h *Host) Reload() error {
 	if h.source == nil {
 		return errors.New("script: Reload needs a source (New(WithSource(...)) or SetSource)")
@@ -298,7 +305,11 @@ func (h *Host) Reload() error {
 	if err != nil {
 		return h.fail(err)
 	}
-	return h.Load(b)
+	if err := h.Load(b); err != nil {
+		return err
+	}
+	h.checkTypes()
+	return nil
 }
 
 // Err returns the last load or handler error (nil after a good load):
@@ -345,6 +356,21 @@ func (h *Host) Click(id string) error {
 		return fmt.Errorf("script: element %q has no onClick", id)
 	}
 	return h.dispatch(n.OnClick, h.eventObject(0, 0, 0, gpui.Modifiers{}))
+}
+
+// MouseDown invokes the onMouseDown handler of the element with the
+// given id — test support, Click's twin for the other declared event:
+// the same path a simulated left-button press through hit testing
+// takes, without a window. It reports the handler's error, if any.
+func (h *Host) MouseDown(id string) error {
+	n := findNode(h.root, id)
+	if n == nil {
+		return fmt.Errorf("script: no element with id %q", id)
+	}
+	if n.OnMouseDown == nil {
+		return fmt.Errorf("script: element %q has no onMouseDown", id)
+	}
+	return h.dispatch(n.OnMouseDown, h.eventObject(0, 0, 0, gpui.Modifiers{}))
 }
 
 // ---------------------------------------------------------------------------

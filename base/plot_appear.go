@@ -235,7 +235,7 @@ func plotTrackAppear(global *gpui.GlobalElementID, generation uint64, w *gpui.Wi
 		return PlotAppearComplete()
 	}
 	policy := theme.Plot.Motion().Appear()
-	easing := policy.curve()
+	easing := policy.Curve()
 	// Presence keeps the linear time so the marks can each ease over
 	// their own slice of it; see PlotAppear.Staggered.
 	sample := NewPresence(TransitionIDWithChannel(gpui.IntegerElementID(generation), plotAppearKey), true).

@@ -126,6 +126,39 @@ type App struct {
 	forcedColorsCache       ForcedColorsState
 	forcedColorsStamp       uint64
 	forcedColorsDerivations int
+
+	// textScaleOverride pins the text scale rem resolution multiplies
+	// into the base rem (App.SetTextScale, text_scale.go); nil means
+	// the scale derives from the system preferences record. Pinning is
+	// the deterministic spelling for tests and text-size previews.
+	textScaleOverride *float32
+	// systemTextScaleDisabled is the D11 per-app opt-out
+	// (App.SetRemFollowsSystemTextScale): true holds rem at the base 16
+	// logical pixels whatever the OS reports. Zero (the default) keeps
+	// rem following the Windows text size.
+	systemTextScaleDisabled bool
+	// textScaleCache is the frame path's cached text-scale derivation
+	// (text_scale.go), derived at the host's record version: the host
+	// bumps its stamp on every system-preference refresh, so a frame
+	// re-derives at most once per record version instead of once per
+	// frame. Foreground-thread state; textScaleDerivations counts the
+	// derivations (the no-per-frame-host-reads test's seam).
+	textScaleCache       float32
+	textScaleStamp       uint64
+	textScaleDerivations int
+	// textScalePolicyVersion versions the app's own text-scale policy
+	// (the pin and the opt-out, text_scale.go): the frame cache compares
+	// it with the host's record stamp so a policy change re-derives even
+	// though the host record did not move. Foreground-thread state.
+	textScalePolicyVersion uint64
+	textScalePolicyStamp   uint64
+	// selectionColorsCache is the paint path's cached derivation of the
+	// default selection colours (selection_colors.go, the same
+	// record-version pattern); selectionColorsDerivations counts the
+	// derivations (the test seam).
+	selectionColorsCache       SelectionColors
+	selectionColorsStamp       uint64
+	selectionColorsDerivations int
 	// platformWake wakes the real-mode foreground dispatcher when the
 	// scheduler gains runnable work (installed by Host.attach; nil in
 	// test applications, whose tests drive the scheduler themselves).

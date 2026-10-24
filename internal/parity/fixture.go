@@ -69,6 +69,12 @@ const (
 	// ticket 12). The pair spells one full press across steps when a
 	// fixture needs something between the halves.
 	StepKeyUp StepKind = "keyup"
+	// StepWait advances time by Ms milliseconds without input: the
+	// recorder pauses and seeks the page's animations (the Web
+	// Animations seek; see recorder.go) and the
+	// replay advances the test application's virtual clock and delivers
+	// one animation frame (browser-core ticket 44).
+	StepWait StepKind = "wait"
 )
 
 // MouseButton names, shared by the recorder and the replay.
@@ -87,6 +93,8 @@ type Step struct {
 	// Key is the keystroke of a StepKey step, in the pinned keystroke
 	// syntax ("a", "enter", "ctrl-shift-]").
 	Key string
+	// Ms is the milliseconds a StepWait step advances time by.
+	Ms int64
 	// Code is the physical DOM code of a StepKey step when the
 	// keystroke syntax cannot spell the physical key: "Numpad1" with
 	// Key "1" drives the numpad's 1 (a real key press reports code
@@ -122,6 +130,12 @@ func KeyDown(keystroke string) Step { return Step{Kind: StepKeyDown, Key: keystr
 // KeyUp returns the release half of a KeyDown step (browser-core
 // ticket 12).
 func KeyUp(keystroke string) Step { return Step{Kind: StepKeyUp, Key: keystroke} }
+
+// Wait returns a time-advance step: the recorder seeks the page's
+// animations by ms and the replay advances its virtual clock and delivers
+// one animation frame, so mid-transition states are sampled at a fixed
+// time on both sides (browser-core ticket 44).
+func Wait(ms int64) Step { return Step{Kind: StepWait, Ms: ms} }
 
 // KeyCode returns a keystroke step with an explicit physical DOM code
 // (browser-core 13): the keystroke's key and modifiers parse as usual
@@ -549,7 +563,7 @@ func validate(f Fixture) error {
 	}
 	for _, step := range f.Steps {
 		switch step.Kind {
-		case StepMove, StepDown, StepUp, StepClick, StepKey, StepKeyDown, StepKeyUp:
+		case StepMove, StepDown, StepUp, StepClick, StepKey, StepKeyDown, StepKeyUp, StepWait:
 		default:
 			return fmt.Errorf("parity: fixture %q: unknown step kind %q", f.Name, step.Kind)
 		}

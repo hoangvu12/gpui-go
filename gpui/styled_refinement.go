@@ -175,6 +175,12 @@ type StyleRefinement struct {
 	MouseCursor Optional[CursorStyle]
 	Opacity     Optional[float32]
 
+	// Transition is the transition style property's refinement (CSS
+	// transition, browser-core ticket 44): a present list replaces the
+	// whole target list (the property is not inherited and CSS
+	// cascade-level lists replace, not merge).
+	Transition Optional[[]TransitionRule]
+
 	GridCols     Optional[GridTemplate]
 	GridRows     Optional[GridTemplate]
 	GridLocation Optional[GridLocation]
@@ -336,6 +342,9 @@ func (s *Style) refineBoxed(r *StyleRefinement, boxes *styleBoxes) {
 	refineValue(&s.ForcedColorAdjust, r.ForcedColorAdjust)
 	refineBoxed(&s.MouseCursor, r.MouseCursor, &boxes.mouseCursor, equalComparable[CursorStyle])
 	refinePointer(&s.Opacity, r.Opacity)
+	if rules, ok := r.Transition.Get(); ok {
+		s.Transition = slices.Clone(rules)
+	}
 	refinePointer(&s.GridCols, r.GridCols)
 	refinePointer(&s.GridRows, r.GridRows)
 	refinePointer(&s.GridLocation, r.GridLocation)
@@ -428,6 +437,9 @@ func (r *StyleRefinement) Refine(other *StyleRefinement) {
 	mergeOptional(&r.ForcedColorAdjust, other.ForcedColorAdjust)
 	mergeOptional(&r.MouseCursor, other.MouseCursor)
 	mergeOptional(&r.Opacity, other.Opacity)
+	if rules, ok := other.Transition.Get(); ok {
+		r.Transition = Some(slices.Clone(rules))
+	}
 	mergeOptional(&r.GridCols, other.GridCols)
 	mergeOptional(&r.GridRows, other.GridRows)
 	mergeOptional(&r.GridLocation, other.GridLocation)
@@ -448,6 +460,9 @@ func (r StyleRefinement) Clone() StyleRefinement {
 	}
 	if v, ok := r.BackdropFilter.Get(); ok {
 		out.BackdropFilter = Some(slices.Clone(v))
+	}
+	if v, ok := r.Transition.Get(); ok {
+		out.Transition = Some(slices.Clone(v))
 	}
 	out.Text = r.Text.Clone()
 	return out

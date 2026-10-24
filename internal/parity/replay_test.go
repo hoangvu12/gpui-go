@@ -23,6 +23,7 @@ import (
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/textpaint"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/textstyle"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/tracer"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/transition"
 )
 
 // TestFixtures replays every registered fixture and runs the three
