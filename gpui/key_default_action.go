@@ -143,6 +143,16 @@ func (w *Window) runKeyDefaultActions(event any, app *App) bool {
 	tree := fs.renderedDispatchTree()
 	_, nodeID := w.focusDispatchPath()
 
+	// browser-core ticket 26: the editor commands run FIRST (Chromium
+	// runs frame_->GetEditor().HandleKeyboardEvent before the IME skip,
+	// Tab, Escape and the navigation keys, keyboard_event_manager.cc:
+	// 442-445 — an accepting text input consumes arrows, Space and the
+	// editing keys before any other default). The edit-command flow
+	// lives in edit_action.go.
+	if w.defaultEditActions(event, app) {
+		return true
+	}
+
 	// The focused node's registered default actions (activation): the
 	// registration is focus-gated (registerDivKeyboardClick), so the
 	// focused node carries exactly the pin's focused-element activation.

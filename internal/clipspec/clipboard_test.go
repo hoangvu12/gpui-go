@@ -538,11 +538,19 @@ func TestClipboardFilesCFHDROPDragQuery(t *testing.T) {
 
 // TestClipboardBusyDeniedNoHang holds the clipboard open with a real
 // owner window (the deterministic blocker) and proves the host's read
-// and write fail FAST with the typed Denied error — no retry loop, no
-// hang — and that normal operation resumes after the holder releases.
+// and write fail FAST with the typed Denied error after the port's
+// bounded OpenClipboard retry (browser-core ticket 26 adopted
+// Chromium's ScopedClipboard::Acquire — 5 attempts with a 5 ms
+// backoff, clipboard_win.cc:102-130 — over the pin's single immediate
+// attempt; the divergence is recorded in the ticket). The retry's
+// attempt count and clear message are pinned by
+// TestClipboardBusyRetryClearError; this gate pins the no-hang shape
+// and that normal operation resumes after the holder releases.
 func TestClipboardBusyDeniedNoHang(t *testing.T) {
 	h := newHost(t)
 	_, hwnd := holdWindow(t, h)
+	saved := saveClipboard(t, h)
+	t.Cleanup(func() { saved.restore(t, h) })
 
 	hostWrite(t, h, gpui.NewClipboardStringItem("before-busy"))
 
@@ -554,7 +562,7 @@ func TestClipboardBusyDeniedNoHang(t *testing.T) {
 		requireDenied(t, "read", err)
 	}
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
-		t.Fatalf("busy read took %v; the pinned behavior is an immediate give-up", elapsed)
+		t.Fatalf("busy read took %v; the retry budget is ~25 ms", elapsed)
 	}
 
 	start = time.Now()
@@ -568,7 +576,9 @@ func TestClipboardBusyDeniedNoHang(t *testing.T) {
 	}
 	hold.release()
 
-	// The pre-busy write survived; normal operation resumes.
+	// The pre-busy write survived; normal operation resumes (the
+	// save/restore around the whole test returns the user's board at
+	// the end).
 	item := hostRead(t, h)
 	requireStringItem(t, item, "before-busy", "")
 	hostWrite(t, h, gpui.NewClipboardStringItem("after-busy"))

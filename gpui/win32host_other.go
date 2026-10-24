@@ -46,6 +46,10 @@ func (h *Host) Wait() error { return ErrHostUnsupportedPlatform }
 // ThreadID reports 0: no foreground thread exists here.
 func (h *Host) ThreadID() uint32 { return 0 }
 
+// recordFault is the windows host's fault log; there is no platform
+// to record faults for here, so it drops them.
+func (h *Host) recordFault(msg string) {}
+
 // systemPreferencesStamp reports the (never-bumped) record version;
 // see the field.
 func (h *Host) systemPreferencesStamp() uint64 {

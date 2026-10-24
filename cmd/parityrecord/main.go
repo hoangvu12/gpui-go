@@ -25,6 +25,7 @@ import (
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/capture"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/contextmenu"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/display"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/editkeys"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/filters"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/forcedcolors"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/gradient"

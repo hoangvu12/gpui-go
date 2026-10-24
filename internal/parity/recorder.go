@@ -75,6 +75,10 @@ func instrumentScript(kinds []string) string {
 				if (kind === "toggle") {
 					entry.state = e.newState;
 				}
+				if (kind === "beforeinput") {
+					entry.inputType = e.inputType === undefined || e.inputType === null ? "" : e.inputType;
+					entry.data = e.data === undefined || e.data === null ? "" : e.data;
+				}
 				window.__events.push(entry);
 			});
 		}
@@ -89,9 +93,10 @@ func instrumentScript(kinds []string) string {
 // markDefaultPrevented), the key, code, location, focus and
 // isComposing fields of key entries (listener-time snapshots; the
 // location is a number only key entries carry, 0 otherwise), the
-// data field of composition entries (browser-core ticket 18) and the
-// state field of toggle entries (browser-core ticket 21).
-const eventsScript = `JSON.stringify(window.__events.map(r => ({kind: r.kind, target: r.target, defaultPrevented: r.event.defaultPrevented, key: r.key || "", code: r.code || "", location: (r.kind === "keydown" || r.kind === "keyup") ? r.location : 0, focus: r.focus || "", isComposing: (r.kind === "keydown" || r.kind === "keyup") ? !!r.isComposing : false, data: r.data || "", state: r.state || ""})))`
+// data field of composition entries (browser-core ticket 18), the
+// state field of toggle entries (browser-core ticket 21) and the
+// inputType field of beforeinput entries (browser-core ticket 26).
+const eventsScript = `JSON.stringify(window.__events.map(r => ({kind: r.kind, target: r.target, defaultPrevented: r.event.defaultPrevented, key: r.key || "", code: r.code || "", location: (r.kind === "keydown" || r.kind === "keyup") ? r.location : 0, focus: r.focus || "", isComposing: (r.kind === "keydown" || r.kind === "keyup") ? !!r.isComposing : false, data: r.data || "", state: r.state || "", inputType: (r.kind === "beforeinput") ? (r.inputType || "") : ""})))`
 
 // RecordFixture records one fixture in headless Chrome and writes its
 // files (record.json, chrome.png, page.html) into

@@ -1,0 +1,191 @@
+{
+  "name": "editkeys",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T10:07:32Z",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "field": {
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 40
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 360
+    }
+  },
+  "events": [
+    {
+      "kind": "mousedown",
+      "target": "field",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "field",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keydown",
+      "target": "field",
+      "defaultPrevented": false,
+      "key": "Insert",
+      "focus": "field",
+      "code": "Insert"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Insert",
+      "focus": "field",
+      "code": "Insert"
+    },
+    {
+      "kind": "copy",
+      "target": "field",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keyup",
+      "target": "field",
+      "defaultPrevented": false,
+      "key": "Insert",
+      "focus": "field",
+      "code": "Insert"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Insert",
+      "focus": "field",
+      "code": "Insert"
+    },
+    {
+      "kind": "keydown",
+      "target": "field",
+      "defaultPrevented": false,
+      "key": "a",
+      "focus": "field",
+      "code": "KeyA"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "a",
+      "focus": "field",
+      "code": "KeyA"
+    },
+    {
+      "kind": "select",
+      "target": "field",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keyup",
+      "target": "field",
+      "defaultPrevented": false,
+      "key": "a",
+      "focus": "field",
+      "code": "KeyA"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "a",
+      "focus": "field",
+      "code": "KeyA"
+    },
+    {
+      "kind": "keydown",
+      "target": "field",
+      "defaultPrevented": false,
+      "key": "Insert",
+      "focus": "field",
+      "code": "Insert"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Insert",
+      "focus": "field",
+      "code": "Insert"
+    },
+    {
+      "kind": "copy",
+      "target": "field",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keyup",
+      "target": "field",
+      "defaultPrevented": false,
+      "key": "Insert",
+      "focus": "field",
+      "code": "Insert"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Insert",
+      "focus": "field",
+      "code": "Insert"
+    },
+    {
+      "kind": "keydown",
+      "target": "field",
+      "defaultPrevented": false,
+      "key": "Delete",
+      "focus": "field",
+      "code": "Delete"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Delete",
+      "focus": "field",
+      "code": "Delete"
+    },
+    {
+      "kind": "cut",
+      "target": "field",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "beforeinput",
+      "target": "field",
+      "defaultPrevented": false,
+      "inputType": "deleteByCut"
+    },
+    {
+      "kind": "keyup",
+      "target": "field",
+      "defaultPrevented": false,
+      "key": "Delete",
+      "focus": "field",
+      "code": "Delete"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Delete",
+      "focus": "field",
+      "code": "Delete"
+    }
+  ],
+  "screenshot": "chrome.png"
+}

@@ -48,6 +48,10 @@ func (h *Host) OnOpenUrls(cb func(urls []string)) error { return ErrHostUnsuppor
 // OnSystemWake reports the unsupported platform.
 func (h *Host) OnSystemWake(cb func()) error { return ErrHostUnsupportedPlatform }
 
+// OnClipboardChange reports the unsupported platform (browser-core
+// ticket 26: the clipboard-change listener is a Windows surface).
+func (h *Host) OnClipboardChange(cb func()) error { return ErrHostUnsupportedPlatform }
+
 // OnQuit reports the unsupported platform.
 func (h *Host) OnQuit(cb func() bool) error { return ErrHostUnsupportedPlatform }
 
