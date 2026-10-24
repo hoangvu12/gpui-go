@@ -876,6 +876,7 @@ type CoreClass =
 	"slashed-zero" |
 	"stacked-fractions" |
 	"static" |
+	"sticky" |
 	"tabular-nums" |
 	"text-2xl" |
 	"text-3xl" |
@@ -1518,6 +1519,7 @@ type Class =
 	"slashed-zero" |
 	"stacked-fractions" |
 	"static" |
+	"sticky" |
 	"tabular-nums" |
 	"text-2xl" |
 	"text-3xl" |
