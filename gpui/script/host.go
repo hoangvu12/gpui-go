@@ -95,6 +95,22 @@ type Host struct {
 	actions        map[string]ResolvedAction
 	actionResolver ActionResolver
 
+	// The plugin half (ticket 67, plugin.go and budget.go): slots is
+	// the registry this host serves (the app host owns it, a plugin
+	// host references the registry it was registered on), slotNodes
+	// are this host's <slot> declarations (rebuilt every describe),
+	// slotComps are a plugin host's slot components and their roots,
+	// budget is the per-call time budget (plugins only), parked is a
+	// failed plugin's inert state, and watchdog arms the budget.
+	slots      *Slots
+	slotNodes  map[string][]*Node
+	slotComps  []slotComp
+	isPlugin   bool
+	pluginName string
+	budget     time.Duration
+	parked     bool
+	watchdog   watchdog
+
 	// The reload-time type check (ticket 63): see typecheck.go.
 	typeCheck TypeChecker
 	typeDiags func([]TypeDiagnostic)
@@ -203,6 +219,46 @@ func New(opts ...Option) *Host {
 // SetSource sets the dev source Reload compiles.
 func (h *Host) SetSource(s Source) { h.source = s }
 
+// Slots returns the app host's plugin registry, creating it on first
+// use (the registry is the host's: its slot elements render the
+// plugins registered on it, and its actions, shared store and fetch
+// transport are what the plugins' grants reach):
+//
+//	slots := host.Slots()
+//	slots.Add("clock", clockBundle, script.WithPluginGrants(script.Grants{...}))
+//
+// Call it on the app host only; a plugin host's slots are managed by
+// the registry it was registered on (its own slot declarations do
+// take contributions — a plugin can host a slot another fills).
+func (h *Host) Slots() *Slots {
+	if h.isPlugin {
+		panic(errNoSlots)
+	}
+	if h.slots == nil {
+		h.slots = &Slots{app: h}
+	}
+	return h.slots
+}
+
+// park takes a failed plugin out of rotation: its pending work —
+// timers, frame callbacks, in-flight fetches and async actions — is
+// cancelled so nothing calls into a runtime that no longer renders,
+// and runJS drops its callbacks. Load is the recovery path (a reload
+// un-parks on success).
+func (h *Host) park() {
+	h.parked = true
+	for id := range h.timers {
+		h.clearTimer(id)
+	}
+	h.frameCallbacks = nil
+	for _, a := range h.async {
+		if a.cancel != nil {
+			a.cancel()
+		}
+	}
+	h.async = nil
+}
+
 // SetGlobal installs a Go value as a script global (a function the
 // script's handlers can call, an object it can read): the app's bridge
 // from script events to Go. It is reinstalled on every (re)load,
@@ -255,6 +311,12 @@ func (h *Host) setShared(s SharedStore) {
 // aborts in-flight fetches on navigation the same way) — while the
 // keyed state and the shared store keep their values. A failed load
 // keeps the old VM, so its timers and completions keep running.
+//
+// A plugin host (Slots.Add) loads the same way but reads the plugin
+// manifest instead of the App export, and a failed plugin load parks
+// the plugin (no script of its runs until it reloads): its slots show
+// the error placeholder while the app keeps running. The whole load —
+// module run and describe — is one budgeted turn (budget.go).
 func (h *Host) Load(b Bundle) error {
 	oldVM, oldGen := h.vm, h.vmGen
 	vm := goja.New()
@@ -264,6 +326,7 @@ func (h *Host) Load(b Bundle) error {
 	// and its errors carry its positions. Every failure path restores
 	// the old VM with its tree, timers and completions.
 	h.vm, h.vmGen = vm, gen
+	h.parked = false
 	h.install(vm, gen)
 	giveUp := func(err error) error {
 		h.vm, h.vmGen = oldVM, oldGen
@@ -275,20 +338,32 @@ func (h *Host) Load(b Bundle) error {
 	if err != nil {
 		return giveUp(err)
 	}
-	h.inJS++
-	_, runErr := vm.RunProgram(prg)
-	h.inJS--
-	if runErr != nil {
-		return giveUp(runErr)
-	}
-	app, ok := goja.AssertFunction(vm.Get(GlobalName).ToObject(vm).Get("App"))
-	if !ok {
-		return giveUp(fmt.Errorf("%s: the bundle exports no App function (export function App() { ... })", b.Name))
-	}
-	if err := h.describe(app); err != nil {
+	// One budgeted turn: the module run, the entry lookup and the
+	// describe. For app hosts the budget is zero (no watchdog, no
+	// overhead); for plugins a runaway top level or component is
+	// interrupted and the load fails.
+	if err := h.runBudgeted(vm, func() error {
+		h.inJS++
+		_, runErr := vm.RunProgram(prg)
+		h.inJS--
+		if runErr != nil {
+			return runErr
+		}
+		if h.isPlugin {
+			return h.enterPlugin(b)
+		}
+		app, ok := goja.AssertFunction(vm.Get(GlobalName).ToObject(vm).Get("App"))
+		if !ok {
+			return fmt.Errorf("%s: the bundle exports no App function (export function App() { ... })", b.Name)
+		}
+		if err := h.describe(app); err != nil {
+			return err
+		}
+		h.app = app
+		return nil
+	}); err != nil {
 		return giveUp(err)
 	}
-	h.app = app
 	h.err = nil
 	h.dropGeneration(oldGen) // the replaced VM's pending work dies with it
 	h.reportRejections()
@@ -301,6 +376,12 @@ func (h *Host) Load(b Bundle) error {
 // A reload that succeeds is followed by the type check WithTypeCheck
 // installed (ADR 0003: debug builds check after every reload when tsc
 // is present) — reported, never gating the running UI.
+//
+// The reload also reaches the plugins registered from sources (the
+// dev shape, Slots.AddSource): the dev command's reload command
+// reloads the whole .tsx surface in place. A plugin that fails to
+// reload is contained to its placeholder — the app's reload still
+// succeeds (see Slots.ReloadAll).
 func (h *Host) Reload() error {
 	if h.source == nil {
 		return errors.New("script: Reload needs a source (New(WithSource(...)) or SetSource)")
@@ -311,6 +392,9 @@ func (h *Host) Reload() error {
 	}
 	if err := h.Load(b); err != nil {
 		return err
+	}
+	if h.slots != nil && !h.isPlugin {
+		_ = h.slots.ReloadAll()
 	}
 	h.checkTypes()
 	return nil
@@ -327,8 +411,18 @@ func (h *Host) DescribeCount() int { return h.describes }
 
 // NodeCount returns the size of the described tree, nodes and text
 // runs (test support: the timing thresholds are stated at a tree size,
-// the probe's 1,053-node sidebar).
-func (h *Host) NodeCount() int { return countNodes(h.root) }
+// the probe's 1,053-node sidebar). On the app host this includes the
+// plugin trees spliced into its slots; on a plugin host, its roots.
+func (h *Host) NodeCount() int {
+	if !h.isPlugin {
+		return countNodes(h.root)
+	}
+	c := 0
+	for _, sc := range h.slotComps {
+		c += countNodes(sc.root)
+	}
+	return c
+}
 
 // Get returns a keyed state value (test support; scripts read state
 // through state(key).get()).
@@ -336,9 +430,10 @@ func (h *Host) Get(key string) any { return h.state[key] }
 
 // Text returns the text content of the element with the given id, as
 // the described tree holds it (test support, like zgui's
-// TestApp::text).
+// TestApp::text). On the app host this spans the plugin trees spliced
+// into its slots; on a plugin host, its own slot roots.
 func (h *Host) Text(id string) (string, bool) {
-	n := findNode(h.root, id)
+	n := h.findNode(id)
 	if n == nil {
 		return "", false
 	}
@@ -347,19 +442,35 @@ func (h *Host) Text(id string) (string, bool) {
 	return b.String(), true
 }
 
+// findNode locates the element by id across this host's roots.
+func (h *Host) findNode(id string) *Node {
+	if !h.isPlugin {
+		return findNode(h.root, id)
+	}
+	for _, sc := range h.slotComps {
+		if n := findNode(sc.root, id); n != nil {
+			return n
+		}
+	}
+	return nil
+}
+
 // Click invokes the onClick handler of the element with the given id
 // and applies what it changed — test support (zgui's TestApp::click):
 // the same path a simulated click through hit testing takes, without a
-// window. It reports the handler's error, if any.
+// window. The element's own host runs the handler — a plugin's node
+// dispatches into its runtime, under its budget. It reports the
+// handler's error, if any.
 func (h *Host) Click(id string) error {
-	n := findNode(h.root, id)
+	n := h.findNode(id)
 	if n == nil {
 		return fmt.Errorf("script: no element with id %q", id)
 	}
 	if n.OnClick == nil {
 		return fmt.Errorf("script: element %q has no onClick", id)
 	}
-	return h.dispatch(n.OnClick, h.eventObject(0, 0, 0, gpui.Modifiers{}))
+	owner := n.dispatchOwner(h)
+	return owner.dispatch(n.OnClick, owner.eventObject(0, 0, 0, gpui.Modifiers{}))
 }
 
 // MouseDown invokes the onMouseDown handler of the element with the
@@ -367,14 +478,15 @@ func (h *Host) Click(id string) error {
 // the same path a simulated left-button press through hit testing
 // takes, without a window. It reports the handler's error, if any.
 func (h *Host) MouseDown(id string) error {
-	n := findNode(h.root, id)
+	n := h.findNode(id)
 	if n == nil {
 		return fmt.Errorf("script: no element with id %q", id)
 	}
 	if n.OnMouseDown == nil {
 		return fmt.Errorf("script: element %q has no onMouseDown", id)
 	}
-	return h.dispatch(n.OnMouseDown, h.eventObject(0, 0, 0, gpui.Modifiers{}))
+	owner := n.dispatchOwner(h)
+	return owner.dispatch(n.OnMouseDown, owner.eventObject(0, 0, 0, gpui.Modifiers{}))
 }
 
 // ---------------------------------------------------------------------------
@@ -384,21 +496,30 @@ func (h *Host) MouseDown(id string) error {
 // describe runs App and replaces the tree and its bindings.
 func (h *Host) describe(app goja.Callable) error {
 	prevBindings, prevByKey := h.bindings, h.byKey
+	prevSlotNodes, prevAuto := h.slotNodes, h.autoID
 	h.bindings, h.byKey, h.autoID = nil, map[string][]*binding{}, 0
 	h.rootDirty, h.dirtyKeys = false, map[string]bool{}
+	h.slotNodes = nil
 	h.describes++
+	restore := func() {
+		h.bindings, h.byKey = prevBindings, prevByKey
+		h.slotNodes, h.autoID = prevSlotNodes, prevAuto
+	}
 
 	v, err := app(goja.Undefined())
 	if err != nil {
-		h.bindings, h.byKey = prevBindings, prevByKey
+		restore()
 		return err
 	}
 	n, ok := v.Export().(*Node)
 	if !ok {
-		h.bindings, h.byKey = prevBindings, prevByKey
+		restore()
 		return fmt.Errorf("App returned %s, want an element", jsTypeName(v))
 	}
 	h.root = n
+	if h.slots != nil {
+		h.slots.relinkAll() // the fresh tree's slot declarations take their contributions
+	}
 	return nil
 }
 
@@ -411,12 +532,20 @@ func (h *Host) describe(app goja.Callable) error {
 // Unhandled promise rejections are reported here too, after goja has
 // drained the microtask queue at the end of the call (a browser
 // reports them at the end of the microtask checkpoint).
+//
+// A plugin host runs its turn under the per-call budget (a runaway
+// loop is interrupted and the plugin fails); a parked plugin — one
+// that already failed — runs nothing until it reloads.
 func (h *Host) runJS(body func() error) error {
 	h.inJS++
 	// A panic in a Go half-installed function must not leave the host
 	// thinking a script turn is still on the stack.
 	defer func() { h.inJS-- }()
-	bodyErr := body()
+	if h.parked {
+		// The plugin is left out: its callbacks are dropped, not run.
+		return nil
+	}
+	bodyErr := h.runBudgeted(h.vm, body)
 	if bodyErr != nil {
 		h.fail(bodyErr)
 		h.flush()
@@ -446,11 +575,15 @@ func (h *Host) dispatch(fn goja.Callable, ev goja.Value) error {
 // flush applies pending state changes. A state or shared write marks
 // one key dirty (state: the host's map, shared: the store); flush
 // recomputes the bindings on those keys only. rootDirty (a useState
-// write) re-describes the whole tree.
+// write) re-describes the tree — for a plugin host, every slot root
+// it fills.
 func (h *Host) flush() error {
 	if h.rootDirty {
 		h.rootDirty = false
 		clear(h.dirtyKeys)
+		if h.isPlugin {
+			return h.describePlugin(h.slotComps)
+		}
 		return h.describe(h.app)
 	}
 	var firstErr error
@@ -556,9 +689,15 @@ func (h *Host) trackRejection(p *goja.Promise, op goja.PromiseRejectionOperation
 }
 
 // fail records a load or handler error for the banner and the error
-// handler, and returns it.
+// handler, and returns it. A plugin host is parked with it: its
+// pending work is cancelled and no script of its runs until it
+// reloads (a failed plugin is left out, its slots show the
+// placeholder).
 func (h *Host) fail(err error) error {
 	h.err = err
+	if h.isPlugin {
+		h.park()
+	}
 	if h.onError != nil {
 		h.onError(err)
 	}
@@ -677,21 +816,40 @@ func (h *Host) bind(call goja.FunctionCall) goja.Value {
 // ---------------------------------------------------------------------------
 
 // jsxElement builds one host element. Function components ran in JS
-// (the h wrapper); this is where a div/text/Fragment becomes a Node.
+// (the h wrapper); this is where a div/text/slot/Fragment becomes a
+// Node. The node records its host (owner) so its handlers dispatch in
+// the runtime that built them — a plugin's nodes run in the plugin's
+// VM, under its budget, even though they lower with the app's tree.
 func (h *Host) jsxElement(call goja.FunctionCall) goja.Value {
-	n := &Node{}
+	n := &Node{owner: h}
+	slot := false
 	switch typ := call.Argument(0).String(); typ {
 	case "div", "text":
 	case "Fragment":
 		n.kind = nodeFragment
+	case "slot":
+		slot = true
 	default:
-		h.throwf("unknown element <%s> (the host has div and text)", typ)
+		h.throwf("unknown element <%s> (the host has div, text and slot)", typ)
 	}
 
 	var id, key string
 	var extraChildren goja.Value
 	if o, ok := call.Argument(1).(*goja.Object); ok && !goja.IsNull(call.Argument(1)) {
+		if slot {
+			// The slot's name is its identity — which plugins fill it.
+			// Parsed here rather than in the shared prop switch so `name`
+			// stays a slot-only prop (div and text reject it).
+			name := o.Get("name")
+			if name == nil || goja.IsUndefined(name) || name.String() == "" {
+				h.throwf("a slot needs a name, like <slot name=\"sidebar\" />")
+			}
+			n.slotName = name.String()
+		}
 		for _, k := range o.Keys() {
+			if slot && k == "name" {
+				continue // parsed above
+			}
 			v := o.Get(k)
 			switch k {
 			case "key":
@@ -746,6 +904,17 @@ func (h *Host) jsxElement(call goja.FunctionCall) goja.Value {
 	h.addChildren(n, []goja.Value{call.Argument(2)})
 	if extraChildren != nil {
 		h.addChildren(n, []goja.Value{extraChildren})
+	}
+	if slot {
+		// The JSX children are the slot's fallback (shown when no
+		// registered plugin fills it, like a web component's slot); the
+		// registry replaces them with the contributions when there are
+		// any, and restores them when the last plugin is removed.
+		n.slotFallback = n.Children
+		if h.slotNodes == nil {
+			h.slotNodes = map[string][]*Node{}
+		}
+		h.slotNodes[n.slotName] = append(h.slotNodes[n.slotName], n)
 	}
 	return h.vm.ToValue(n)
 }
@@ -844,7 +1013,7 @@ func findNode(n *Node, id string) *Node {
 }
 
 func collectText(n *Node, b *strings.Builder) {
-	if n.kind == nodeText {
+	if n.kind == nodeText || n.kind == nodePlaceholder {
 		b.WriteString(n.Text)
 	}
 	for _, c := range n.Children {

@@ -40,6 +40,7 @@ export function App() {
 			onClick={() => clicks.set(clicks.get() + 1)}
 		>
 			<Label text="surface" />
+			<slot id="demo-slot" name="demo" style={{ display: "block", minHeight: 8 }} />
 			<div
 				id="counter"
 				key="counter"

@@ -13,9 +13,10 @@ import (
 type nodeKind uint8
 
 const (
-	nodeElement  nodeKind = iota // a div (or text, its sugar)
-	nodeText                     // a text run
-	nodeFragment                 // children lower as their parent's children
+	nodeElement     nodeKind = iota // a div (or text, its sugar)
+	nodeText                        // a text run
+	nodeFragment                    // children lower as their parent's children
+	nodePlaceholder                 // a failed plugin's slot contribution
 )
 
 // Node is one element of the described tree: the shape App built
@@ -24,7 +25,8 @@ const (
 type Node struct {
 	kind nodeKind
 
-	// Text is the nodeText's content.
+	// Text is the nodeText's content — and the nodePlaceholder's
+	// message (the plugin error the placeholder shows).
 	Text string
 
 	// ID is the element's identity: the id prop (which is also the
@@ -38,11 +40,30 @@ type Node struct {
 	// Style is the parsed style object.
 	Style style
 
+	// owner is the host whose JSX factory built this node: its runtime
+	// owns the node's handlers, so events dispatch through it (a
+	// plugin's nodes run in the plugin's VM even though they lower
+	// with the app's tree). nil on Go-built nodes (no handlers).
+	owner *Host
+	// slotName is the slot element's name (which plugins fill it), and
+	// slotFallback the JSX children it falls back to when none do.
+	slotName     string
+	slotFallback []*Node
+
 	// OnClick and OnMouseDown are the (callable) event handlers.
 	OnClick     goja.Callable
 	OnMouseDown goja.Callable
 
 	Children []*Node
+}
+
+// dispatchOwner is the host a node's handlers dispatch through: the
+// host that built it, else the asking host.
+func (n *Node) dispatchOwner(fallback *Host) *Host {
+	if n.owner != nil {
+		return n.owner
+	}
+	return fallback
 }
 
 // binding is a bound (computed) value: fn(state[key]) becomes the text

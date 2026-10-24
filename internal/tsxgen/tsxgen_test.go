@@ -116,6 +116,7 @@ func TestPlantedGapsFailTheParityCheck(t *testing.T) {
 	plant("a removed style key", "\tfontSize?: number | `${number}px`;\n", "")
 	plant("a changed style type", "\tdisplay?: \"flex\" | \"block\";\n", "\tdisplay?: \"flex\";\n")
 	plant("a removed element", "\t\ttext: HostProps;\n", "")
+	plant("a removed slot element", "\t\tslot: SlotProps;\n", "")
 	plant("a removed prop", "\tonMouseDown?: (event: MouseEvent) => void;\n", "")
 	plant("a removed event field", "\tmetaKey: boolean;\n", "")
 	plant("a removed global", "declare function btoa(data: string): string;\n\n", "")

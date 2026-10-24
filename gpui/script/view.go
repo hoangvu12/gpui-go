@@ -41,6 +41,11 @@ func (v *View) Render(w *gpui.Window, cx *gpui.Context[View]) gpui.AnyElement {
 		if v.Host.scheduler == nil {
 			v.Host.scheduler = AppScheduler(cx.App())
 		}
+		if v.Host.slots != nil {
+			// The app host's scheduler arrives on first render, after
+			// plugins usually registered: hand it to the plugin hosts.
+			v.Host.slots.wireScheduler()
+		}
 	}
 	if w != nil && v.Host.frameCallbacksPending() {
 		// The pending requestAnimationFrame callbacks run at the

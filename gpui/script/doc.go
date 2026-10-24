@@ -36,7 +36,9 @@
 //
 // Host elements are div and text (a text element is div sugar for a
 // text run), plus Fragment, whose children lower as their parent's
-// direct children. Their props:
+// direct children, and slot — the plugin seam (see Plugins below): a
+// div-like container whose children the slot registry owns. Their
+// props:
 //
 //	key?: string         identity for stateful behaviour (scrolling,
 //	                     hover): becomes the element's id when there is
@@ -62,6 +64,11 @@
 //	onMouseDown?: (e) => void  the left button. The event is DOM-shaped:
 //	                     { button, x, y, shiftKey, ctrlKey, altKey,
 //	                     metaKey }.
+//
+// The slot element takes those shared props plus its own: name —
+// which plugins' contributions fill it (required on slot, rejected on
+// the other elements). Its JSX children are its fallback, shown while
+// no plugin fills it, like a web component's slot.
 //
 // Children are elements, strings, numbers, bindings, arrays (flattened)
 // and false/undefined/null (skipped, so {cond && <x />} works).
@@ -383,11 +390,88 @@
 // embedded bundle) and its dev shape (compile.Open + RunDev behind the
 // dev tag) are the same app.
 //
-// # Later tickets (not built here)
+// # Plugins: slots, grants, budgets (ticket 67)
 //
-// Plugin slots, contributions and capability grants (each plugin in
-// its own goja runtime with a time budget) — the ActionResolver and
-// SharedStore seams above are the gates those wrap. The SetGlobal
-// mechanism and this package's public surface are the seam those
-// build on.
+// A slot is the <slot name="..."/> element of the app's view. A
+// plugin is a compiled bundle whose plugin export — the manifest —
+// names the slots it fills:
+//
+//	// plugin.tsx
+//	export function Main() {
+//		const clicks = state("clicks", 0);
+//		return (
+//			<div id="counter" onClick={() => clicks.set(clicks.get() + 1)}>
+//				<text>{bind(clicks, (n) => ` + "`clicked ${n}`" + `}</text>
+//			</div>
+//		);
+//	}
+//	export const plugin: PluginManifest = { slots: { main: Main } };
+//
+// The app registers it on its host's registry and grants what it may
+// reach (nothing is granted by default):
+//
+//	slots := host.Slots()
+//	slots.Add("counter", counterBundle,                      // release shape
+//		script.WithPluginGrants(script.Grants{
+//			Actions: []string{"note.add"},            // host.Action names
+//			Shared:  []string{"notes"},                // shared-store keys
+//			Network: []string{"https://api.example.com"}, // fetch prefixes
+//		}))
+//	// dev shape: reloadable (see the dev command below)
+//	slots.AddSource("counter", compile.Open("ui/counter.tsx"), ...)
+//
+// Each plugin runs in its own goja runtime — one Host per plugin, its
+// own keyed state, bindings, timers, fetch and grants — with a
+// per-call time budget (DefaultPluginBudget, 50 ms; WithPluginBudget
+// overrides, 0 disables). One script turn — a load, a handler, a
+// timer, a frame callback, a promise settlement — is one budgeted
+// call: a turn that exceeds it is interrupted (goja's Interrupt, the
+// one goja call made from another goroutine, and safe for it — it
+// only sets a flag) and the plugin fails. The generated .d.ts types
+// the manifest (PluginManifest) and the slot element (SlotProps).
+//
+// Containment: a plugin that fails — a throw, a loop past its
+// budget, an invalid element, a reload of a broken source — is left
+// out while the app keeps running. Its slots show an error placeholder
+// with the .tsx file and line (the plugin twin of the error banner);
+// a failed plugin is parked (its timers, frame callbacks and in-flight
+// work are cancelled, no script of its runs) until it reloads. A
+// plugin reaching past its grants gets a named error — action
+// "note.add": the plugin "counter" was not granted it — which fails
+// it like any other script error. A plugin whose module never ran
+// (a load-time crash) fills no slot, so it is simply absent; its
+// failure reaches the app through Add's error and
+// WithPluginErrorHandler.
+//
+// Memory and VM lifetime follow the registration (ADR 0003's recorded
+// decision: time budget only, in process — goja cannot cap a VM's
+// heap; the budget bounds the script a broken plugin can run, and
+// Remove drops the plugin's host with its VM, state and pending work,
+// so the collector reclaims it):
+//
+//	slots.Remove("counter")            // the VM dies with the registration
+//	slots.Reload("counter")             // fresh VM, keyed state kept
+//
+// Slots compose: a plugin can declare a slot another plugin fills
+// (nested slots), a slot with several contributing plugins renders
+// them in registration order, and a slot with no contributions falls
+// back to its own JSX children. All of it runs on the thread that
+// renders — a plugin's handlers dispatch in its own runtime (under
+// its budget) even though its nodes lower with the app's tree, and a
+// plugin's state changes redraw the window through the app's host.
+//
+// The dev command reloads plugins: Host.Reload reloads every plugin
+// registered with a source (Slots.ReloadAll), so cmd/tsxdev's reload
+// command — a .tsx change anywhere under the app's package — reloads
+// the whole scripted surface in place, keyed state kept on both
+// sides. A plugin that fails to reload is contained to its
+// placeholder; the app's own reload still succeeds.
+//
+// What a plugin does not get: the app's own globals (SetGlobal values
+// bypass grants — hand a plugin its own through WithPluginGlobals,
+// an explicit trust decision), Intl, crypto, location, navigator,
+// document and window, all for the reasons in the globals section
+// above; and actions resolve against the app host's registrations
+// only (its own WithActionResolver gate is the app's script's, not
+// the plugin's).
 package script

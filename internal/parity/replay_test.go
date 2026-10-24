@@ -32,6 +32,7 @@ import (
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/textstyle"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/tracer"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/transition"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/tsxslots"
 )
 
 // TestFixtures replays every registered fixture and runs the three

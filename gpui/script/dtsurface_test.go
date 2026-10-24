@@ -85,7 +85,9 @@ func TestJSXElementAcceptsEveryDeclaredElementAndProp(t *testing.T) {
 	if err := rt.Set("__el", h.jsxElement); err != nil {
 		t.Fatal(err)
 	}
-	// One prop per kind: what each declared prop accepts.
+	// One prop per kind: what each declared prop accepts. The slot
+	// element additionally needs its name (its own declared prop, not a
+	// shared one).
 	props := map[string]string{
 		"key":         `key: "x"`,
 		"id":          `id: "x"`,
@@ -96,15 +98,23 @@ func TestJSXElementAcceptsEveryDeclaredElementAndProp(t *testing.T) {
 		"onMouseDown": `onMouseDown: function () {}`,
 	}
 	for _, el := range s.Elements {
+		extra := ""
+		if el == "slot" {
+			extra = `, name: "s"`
+		}
 		for _, p := range s.Props {
 			_, ok := props[p]
 			if !ok {
 				t.Fatalf("no prop sample for %q; teach the test its value", p)
 			}
-			if _, err := rt.RunString(`__el("` + el + `", {` + props[p] + `}, undefined)`); err != nil {
+			if _, err := rt.RunString(`__el("` + el + `", {` + props[p] + extra + `}, undefined)`); err != nil {
 				t.Errorf("<%s %s>: the prop is typed but the engine rejects it: %v", el, p, err)
 			}
 		}
+	}
+	// The slot's own prop is typed (SlotProps) and the engine takes it.
+	if _, err := rt.RunString(`__el("slot", {name: "s"}, undefined)`); err != nil {
+		t.Errorf("<slot name>: the prop is typed but the engine rejects it: %v", err)
 	}
 }
 
@@ -120,6 +130,14 @@ func TestJSXElementRejectsAnUnknownElementAndProp(t *testing.T) {
 	}
 	if _, err := rt.RunString(`__el("div", {onClik: function () {}}, undefined)`); err == nil {
 		t.Errorf("jsxElement accepted an unknown prop")
+	}
+	// name is the slot element's, not a shared prop: div rejects it,
+	// and a slot without one is a describe-time error.
+	if _, err := rt.RunString(`__el("div", {name: "x"}, undefined)`); err == nil {
+		t.Errorf("jsxElement accepted name on a div (it is the slot element's)")
+	}
+	if _, err := rt.RunString(`__el("slot", {}, undefined)`); err == nil {
+		t.Errorf("jsxElement accepted a nameless slot")
 	}
 }
 
