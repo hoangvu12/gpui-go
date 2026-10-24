@@ -138,9 +138,18 @@ func deferAbsoluteChild(w *Window, child LayoutID) bool {
 // every other phase (prepaint, paint, hitboxes, a11y): only the native
 // layout attachment moves, and LayoutBounds walks the native parent
 // chain, so their bounds resolve against the containing block.
+//
+// browser-core 36: this is the ATTACH bottom of every container (the
+// div, RequestContainerLayout, RequestElementLayout and requestLayoutOf
+// all land here), so the display:contents splice lands here too — the
+// child list is expanded before the static/deferred split or the
+// attach (contents.go). The div expands earlier as well, because its
+// Block/Inline display routes the list through the inline collector
+// and the published inline content before any attach.
 func requestLayoutNode(w *Window, own *containingBlockScope, style Style, children []LayoutID) (LayoutID, error) {
 	ds := drawState(w)
 	ctx := layoutContextOf(w)
+	children = expandContentsChildren(w, children)
 	attached := children
 	if style.Position == PositionStatic {
 		// The static opt-in: absolute children skip this element and

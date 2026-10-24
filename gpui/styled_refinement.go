@@ -84,6 +84,7 @@ type StyleRefinement struct {
 	OverflowFadeLeft   Optional[AbsoluteLength]
 
 	ScrollbarWidth        Optional[AbsoluteLength]
+	ScrollbarGutter       Optional[ScrollbarGutter]
 	AllowConcurrentScroll Optional[bool]
 	RestrictScrollToAxis  Optional[bool]
 
@@ -272,6 +273,7 @@ func (s *Style) refineBoxed(r *StyleRefinement, boxes *styleBoxes) {
 	refineValue(&s.OverflowFade.Bottom, r.OverflowFadeBottom)
 	refineValue(&s.OverflowFade.Left, r.OverflowFadeLeft)
 	refineValue(&s.ScrollbarWidth, r.ScrollbarWidth)
+	refineValue(&s.ScrollbarGutter, r.ScrollbarGutter)
 	refineValue(&s.AllowConcurrentScroll, r.AllowConcurrentScroll)
 	refineValue(&s.RestrictScrollToAxis, r.RestrictScrollToAxis)
 	refineValue(&s.Position, r.Position)
@@ -366,6 +368,7 @@ func (r *StyleRefinement) Refine(other *StyleRefinement) {
 	mergeOptional(&r.OverflowFadeBottom, other.OverflowFadeBottom)
 	mergeOptional(&r.OverflowFadeLeft, other.OverflowFadeLeft)
 	mergeOptional(&r.ScrollbarWidth, other.ScrollbarWidth)
+	mergeOptional(&r.ScrollbarGutter, other.ScrollbarGutter)
 	mergeOptional(&r.AllowConcurrentScroll, other.AllowConcurrentScroll)
 	mergeOptional(&r.RestrictScrollToAxis, other.RestrictScrollToAxis)
 	mergeOptional(&r.Position, other.Position)

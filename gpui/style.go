@@ -305,6 +305,40 @@ const (
 	DisplayInlineFlex
 	// DisplayNone hides the element and its children (no space).
 	DisplayNone
+	// DisplayContents is browser-core ticket 36 (spec story 12): the
+	// element generates no box of its own; its children splice into the
+	// parent's layout as if they were the parent's direct children
+	// (css-display-3 §3.1: contents "the element itself does not
+	// generate a box, but its children... are rendered as if they were
+	// children of the element's parent"). Chromium skips the layout
+	// object entirely (LayoutObject::CreateObject's switch returns
+	// nullptr for EDisplay::kContents, core/layout/layout_object.cc:
+	// 430-432) and splices the children through the layout-tree
+	// builder's sibling walk (NextLayoutSiblingInternal, core/dom/
+	// layout_tree_builder_traversal.cc:604-634). The port splices at
+	// request layout (contents.go).
+	DisplayContents
+	// DisplayInlineBlock is browser-core ticket 36 (spec story 12): an
+	// atomic inline-level box whose contents use block flow
+	// (css-display-3: display: block flow, inline-level; Chromium
+	// creates a LayoutBlockFlow for it like a block — core/layout/
+	// layout_object.cc:437-442 — and it participates in the parent's
+	// inline layout as an atomic box). Like the pin's InlineFlex, Taffy
+	// lays its contents out with Block layout while the port's inline
+	// collector measures it as one atomic box (inline.go).
+	DisplayInlineBlock
+	// DisplayInlineGrid is browser-core ticket 36 (spec story 12): an
+	// atomic inline-level box whose children use grid (Chromium's
+	// EDisplay::kInlineGrid creates a LayoutGrid, layout_object.cc:
+	// 470-472). The InlineBlock rule with grid contents.
+	DisplayInlineGrid
+	// DisplayFlowRoot is browser-core ticket 36 (spec story 12): the
+	// element establishes an independent block formatting context while
+	// remaining a block-level box (css-display-3). The native ABI
+	// already carries Taffy's Display::FlowRoot (rev 15, LAYOUT_ABI.md
+	// display tag 4); ticket 39 landed the record field, this exposes
+	// it on the Style.
+	DisplayFlowRoot
 )
 
 // String returns the reference variant name.
@@ -322,6 +356,14 @@ func (d Display) String() string {
 		return "InlineFlex"
 	case DisplayNone:
 		return "None"
+	case DisplayContents:
+		return "Contents"
+	case DisplayInlineBlock:
+		return "InlineBlock"
+	case DisplayInlineGrid:
+		return "InlineGrid"
+	case DisplayFlowRoot:
+		return "FlowRoot"
 	default:
 		return fmt.Sprintf("Display(%d)", uint8(d))
 	}
@@ -342,6 +384,14 @@ func ParseDisplay(s string) (Display, error) {
 		return DisplayInlineFlex, nil
 	case "None":
 		return DisplayNone, nil
+	case "Contents":
+		return DisplayContents, nil
+	case "InlineBlock":
+		return DisplayInlineBlock, nil
+	case "InlineGrid":
+		return DisplayInlineGrid, nil
+	case "FlowRoot":
+		return DisplayFlowRoot, nil
 	default:
 		return 0, fmt.Errorf("invalid Display %q", s)
 	}
@@ -434,6 +484,18 @@ const (
 	OverflowHidden
 	// OverflowScroll reserves scrollbar space as well.
 	OverflowScroll
+	// OverflowAuto is browser-core ticket 36 (spec story 14): CSS
+	// overflow: auto — a scroll container whose scrollbar (and the
+	// layout space it reserves) appears on an axis only while that
+	// axis' content overflows. Chromium decides existence after layout
+	// (PaintLayerScrollableArea::ComputeScrollbarExistence's kAuto arm:
+	// needs_vertical_scrollbar = HasVerticalOverflow() && ..., core/
+	// paint/paint_layer_scrollable_area.cc:1852-1861) and relayouts when
+	// an auto scrollbar appears or disappears (UpdateAfterOverflowRecalc
+	// -> SetNeedsLayoutAndFullPaintInvalidation, :1480-1500). The port
+	// resolves the reservation one frame after the overflow changes
+	// (scrollbar.go).
+	OverflowAuto
 )
 
 // String returns the reference variant name.
@@ -447,6 +509,8 @@ func (o Overflow) String() string {
 		return "Hidden"
 	case OverflowScroll:
 		return "Scroll"
+	case OverflowAuto:
+		return "Auto"
 	default:
 		return fmt.Sprintf("Overflow(%d)", uint8(o))
 	}
@@ -463,8 +527,49 @@ func ParseOverflow(s string) (Overflow, error) {
 		return OverflowHidden, nil
 	case "Scroll":
 		return OverflowScroll, nil
+	case "Auto":
+		return OverflowAuto, nil
 	default:
 		return 0, fmt.Errorf("invalid Overflow %q", s)
+	}
+}
+
+// ScrollbarGutter selects the scrollbar-gutter policy of a scroll
+// container (CSS overflow-5 §scrollbar-gutter; browser-core ticket 36,
+// spec story 14): the default auto reserves space only while a
+// scrollbar is shown, so content shifts when one appears; stable
+// always reserves the gutter on the inline-end side so nothing shifts.
+// Chromium: LayoutBox::HasScrollbarGutters (core/layout/layout_box.cc:
+// 1477-1503 — the property applies when overflow is auto, scroll or
+// hidden and scrollbars are non-overlay) and ComputeScrollbarsInternal
+// (:1505-1560 — the stable gutter reserves the hypothetical scrollbar
+// thickness on the inline-end side).
+type ScrollbarGutter uint8
+
+const (
+	// ScrollbarGutterAuto reserves nothing while no scrollbar shows.
+	ScrollbarGutterAuto ScrollbarGutter = iota
+	// ScrollbarGutterStable always reserves the scrollbar gutter.
+	ScrollbarGutterStable
+)
+
+// String returns the CSS keyword.
+func (g ScrollbarGutter) String() string {
+	if g == ScrollbarGutterStable {
+		return "Stable"
+	}
+	return "Auto"
+}
+
+// ParseScrollbarGutter parses a variant name.
+func ParseScrollbarGutter(s string) (ScrollbarGutter, error) {
+	switch s {
+	case "Auto":
+		return ScrollbarGutterAuto, nil
+	case "Stable":
+		return ScrollbarGutterStable, nil
+	default:
+		return 0, fmt.Errorf("invalid ScrollbarGutter %q", s)
 	}
 }
 
@@ -832,8 +937,16 @@ type Style struct {
 	OverflowY Overflow
 
 	// ScrollbarWidth reserves space for scrollbars of Overflow::Scroll
-	// nodes (reference: AbsoluteLength, default px(0)).
+	// nodes (reference: AbsoluteLength, default px(0)). For
+	// OverflowAuto it overrides the classic scrollbar width the auto
+	// policy would use (0 keeps the classic width; an auto container's
+	// scrollbar can only be hidden by removing the overflow, like the
+	// pin's Scroll containers).
 	ScrollbarWidth AbsoluteLength
+
+	// ScrollbarGutter is the scrollbar-gutter policy of a scroll
+	// container (browser-core 36; default Auto).
+	ScrollbarGutter ScrollbarGutter
 
 	// Inset tweaks the position relative to the layout-defined position
 	// (reference: Edges<Length>, default auto on every edge).
@@ -992,25 +1105,26 @@ func DefaultStyle() Style {
 	zeroDefinite := DefiniteLength{Kind: DefiniteLengthPx, Value: 0}
 	zeroLen := Length{Definite: zeroDefinite}
 	return Style{
-		Display:        DisplayFlex,
-		Position:       PositionRelative,
-		OverflowX:      OverflowVisible,
-		OverflowY:      OverflowVisible,
-		ScrollbarWidth: zeroAbs,
-		Inset:          LengthEdges{Top: AutoLength(), Right: AutoLength(), Bottom: AutoLength(), Left: AutoLength()},
-		Size:           LengthSize{Width: AutoLength(), Height: AutoLength()},
-		MinSize:        LengthSize{Width: AutoLength(), Height: AutoLength()},
-		MaxSize:        LengthSize{Width: AutoLength(), Height: AutoLength()},
-		Margin:         LengthEdges{Top: zeroLen, Right: zeroLen, Bottom: zeroLen, Left: zeroLen},
-		Padding:        DefiniteLengthEdges{Top: zeroDefinite, Right: zeroDefinite, Bottom: zeroDefinite, Left: zeroDefinite},
-		BorderWidths:   AbsoluteLengthEdges{Top: zeroAbs, Right: zeroAbs, Bottom: zeroAbs, Left: zeroAbs},
-		Gap:            DefiniteLengthSize{Width: zeroDefinite, Height: zeroDefinite},
-		FlexDirection:  FlexDirectionRow,
-		FlexWrap:       FlexWrapNoWrap,
-		FlexBasis:      AutoLength(),
-		FlexGrow:       0.0,
-		FlexShrink:     1.0,
-		VerticalAlign:  VerticalAlignBaseline,
+		Display:         DisplayFlex,
+		Position:        PositionRelative,
+		OverflowX:       OverflowVisible,
+		OverflowY:       OverflowVisible,
+		ScrollbarWidth:  zeroAbs,
+		ScrollbarGutter: ScrollbarGutterAuto,
+		Inset:           LengthEdges{Top: AutoLength(), Right: AutoLength(), Bottom: AutoLength(), Left: AutoLength()},
+		Size:            LengthSize{Width: AutoLength(), Height: AutoLength()},
+		MinSize:         LengthSize{Width: AutoLength(), Height: AutoLength()},
+		MaxSize:         LengthSize{Width: AutoLength(), Height: AutoLength()},
+		Margin:          LengthEdges{Top: zeroLen, Right: zeroLen, Bottom: zeroLen, Left: zeroLen},
+		Padding:         DefiniteLengthEdges{Top: zeroDefinite, Right: zeroDefinite, Bottom: zeroDefinite, Left: zeroDefinite},
+		BorderWidths:    AbsoluteLengthEdges{Top: zeroAbs, Right: zeroAbs, Bottom: zeroAbs, Left: zeroAbs},
+		Gap:             DefiniteLengthSize{Width: zeroDefinite, Height: zeroDefinite},
+		FlexDirection:   FlexDirectionRow,
+		FlexWrap:        FlexWrapNoWrap,
+		FlexBasis:       AutoLength(),
+		FlexGrow:        0.0,
+		FlexShrink:      1.0,
+		VerticalAlign:   VerticalAlignBaseline,
 		// The paint defaults (style.rs:1028-1081): visible, zero overflow
 		// fade, no background or border color, solid border with the
 		// scene's default dash pattern, zero radii, no shadows, rings or

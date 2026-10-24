@@ -1,0 +1,74 @@
+{
+  "name": "overflow-auto",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T07:17:55Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "fits-row": {
+      "x": 20,
+      "y": 20,
+      "width": 180,
+      "height": 40
+    },
+    "h-fill": {
+      "x": 20,
+      "y": 190,
+      "width": 1200,
+      "height": 60
+    },
+    "over-fill": {
+      "x": 420,
+      "y": 60,
+      "width": 165,
+      "height": 570
+    },
+    "over-row": {
+      "x": 420,
+      "y": 20,
+      "width": 165,
+      "height": 40
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "sc-fits": {
+      "x": 20,
+      "y": 20,
+      "width": 180,
+      "height": 150
+    },
+    "sc-h": {
+      "x": 20,
+      "y": 190,
+      "width": 560,
+      "height": 100
+    },
+    "sc-overflow": {
+      "x": 420,
+      "y": 20,
+      "width": 180,
+      "height": 150
+    },
+    "sc-stable": {
+      "x": 220,
+      "y": 20,
+      "width": 180,
+      "height": 150
+    },
+    "stable-row": {
+      "x": 220,
+      "y": 20,
+      "width": 165,
+      "height": 40
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

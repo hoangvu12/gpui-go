@@ -246,6 +246,28 @@ func (i *Interactive[Self]) OverflowYScroll[_ lazy]() Self {
 	return i.self
 }
 
+// OverflowAuto makes the inner div an overflow: auto scroll container
+// (DivElement.OverflowAuto, browser-core 36). Requires an ID on the
+// inner div.
+func (i *Interactive[Self]) OverflowAuto[_ lazy]() Self {
+	i.Interactivity().OverflowAuto()
+	return i.self
+}
+
+// OverflowXAuto makes the inner div's horizontal overflow auto
+// (DivElement.OverflowXAuto, browser-core 36).
+func (i *Interactive[Self]) OverflowXAuto[_ lazy]() Self {
+	i.Interactivity().OverflowXAuto()
+	return i.self
+}
+
+// OverflowYAuto makes the inner div's vertical overflow auto
+// (DivElement.OverflowYAuto, browser-core 36).
+func (i *Interactive[Self]) OverflowYAuto[_ lazy]() Self {
+	i.Interactivity().OverflowYAuto()
+	return i.self
+}
+
 // RestrictScrollToAxis restricts the inner div's scrolling to the
 // gesture's axis (DivElement.RestrictScrollToAxis, div.rs:1765-1771).
 func (i *Interactive[Self]) RestrictScrollToAxis[_ lazy]() Self {

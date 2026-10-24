@@ -42,6 +42,12 @@ type elementScroll struct {
 	// visible is the scroller's visible size of the frame's clamp (the
 	// page-step length of the keyboard scroll, browser-core 09).
 	visible Size
+	// auto is the overflow: auto element's shown-scrollbar flags
+	// (browser-core 36, scrollbar.go): resolved from the same element
+	// state as the offset cell, read at request time (which axes
+	// reserve) and written at prepaint (what this frame's overflow
+	// shows). Nil unless an axis is auto.
+	auto *divAutoScrollbarFlags
 }
 
 // divScrollElementState is the scroll part of the pinned
@@ -52,23 +58,46 @@ type elementScroll struct {
 type divScrollElementState struct {
 	offset  *Point
 	ongoing *OngoingScroll
+	// auto holds the overflow: auto shown-scrollbar flags
+	// (browser-core 36, scrollbar.go) — persistent across frames so a
+	// frame's request walk reserves what the previous frame's prepaint
+	// saw overflowing.
+	auto *divAutoScrollbarFlags
 }
 
 // baseOverflowScrolls is the pinned base_style.overflow.x/y ==
-// Some(Overflow::Scroll) test (R:div.rs:2658, 2739-2740).
+// Some(Overflow::Scroll) test (R:div.rs:2658, 2739-2740), extended by
+// browser-core 36 to the overflow: auto axes: an auto element needs
+// the same scroll state (the offset cell, the gesture tracker and the
+// auto flags) as a scroll one.
 func baseOverflowScrolls(base *StyleRefinement) bool {
 	x, okX := base.OverflowX.Get()
 	y, okY := base.OverflowY.Get()
-	return (okX && x == OverflowScroll) || (okY && y == OverflowScroll)
+	return (okX && (x == OverflowScroll || x == OverflowAuto)) ||
+		(okY && (y == OverflowScroll || y == OverflowAuto))
+}
+
+// baseOverflowAuto reports whether the base style sets overflow: auto
+// on an axis (the div's auto-scrollbar flags only resolve then).
+func baseOverflowAuto(base *StyleRefinement) bool {
+	x, okX := base.OverflowX.Get()
+	y, okY := base.OverflowY.Get()
+	return (okX && x == OverflowAuto) || (okY && y == OverflowAuto)
 }
 
 // resolveElementScroll is R:div.rs:2735-2755: a tracked handle shares its
 // offset and gesture cells; otherwise an identified element whose base
 // style scrolls on either axis keeps them in its element state; any other
-// element does not scroll.
+// element does not scroll. Browser-core 36: an overflow: auto axis needs
+// the same cells (and the auto flags) — the wheel listener and the clamp
+// then keep it honest (an auto axis with no overflow has range zero).
 func resolveElementScroll(handle *ScrollHandle, base *StyleRefinement, global *GlobalElementID, w *Window) *elementScroll {
 	if handle != nil {
-		return &elementScroll{offset: handle.state.offset, ongoing: handle.state.ongoingScroll, handle: handle}
+		es := &elementScroll{offset: handle.state.offset, ongoing: handle.state.ongoingScroll, handle: handle}
+		if global != nil && baseOverflowAuto(base) {
+			es.auto = withAutoScrollbarFlags(global, w)
+		}
+		return es
 	}
 	if global == nil || !baseOverflowScrolls(base) {
 		return nil
@@ -83,7 +112,24 @@ func resolveElementScroll(handle *ScrollHandle, base *StyleRefinement, global *G
 		if slot.ongoing == nil {
 			slot.ongoing = &OngoingScroll{}
 		}
-		return &elementScroll{offset: slot.offset, ongoing: slot.ongoing}, slot
+		if slot.auto == nil && baseOverflowAuto(base) {
+			slot.auto = &divAutoScrollbarFlags{}
+		}
+		return &elementScroll{offset: slot.offset, ongoing: slot.ongoing, auto: slot.auto}, slot
+	})
+}
+
+// withAutoScrollbarFlags resolves (creating on first use) an
+// identified element's auto-scrollbar flag cell.
+func withAutoScrollbarFlags(global *GlobalElementID, w *Window) *divAutoScrollbarFlags {
+	return WithOptionalElementState(w, global, func(slot *divScrollElementState, w *Window) (*divAutoScrollbarFlags, *divScrollElementState) {
+		if slot == nil {
+			slot = &divScrollElementState{}
+		}
+		if slot.auto == nil {
+			slot.auto = &divAutoScrollbarFlags{}
+		}
+		return slot.auto, slot
 	})
 }
 
@@ -162,6 +208,10 @@ func (s *elementScroll) paintListener(hitbox Hitbox, style *Style, w *Window) {
 	offset := s.offset
 	ongoing := s.ongoing
 	overflowX, overflowY := style.OverflowX, style.OverflowY
+	// browser-core 36: an auto axis wheels like a scroll one; the clamp
+	// keeps an empty range from actually scrolling (overflow: auto with
+	// content that fits never moves).
+	scrollsX, scrollsY := overflowAxisUserScrolls(overflowX), overflowAxisUserScrolls(overflowY)
 	allowConcurrent := style.AllowConcurrentScroll
 	restrict := style.RestrictScrollToAxis
 	lineHeight := windowLineHeight(w)
@@ -180,15 +230,15 @@ func (s *elementScroll) paintListener(hitbox Hitbox, style *Style, w *Window) {
 
 		var deltaX, deltaY float32
 		switch {
-		case overflowX == OverflowScroll && delta.X != 0:
+		case scrollsX && delta.X != 0:
 			deltaX = delta.X
-		case overflowX == OverflowScroll && !restrict && overflowY != OverflowScroll:
+		case scrollsX && !restrict && !scrollsY:
 			deltaX = delta.Y
 		}
 		switch {
-		case overflowY == OverflowScroll && delta.Y != 0:
+		case scrollsY && delta.Y != 0:
 			deltaY = delta.Y
-		case overflowY == OverflowScroll && !restrict && overflowX != OverflowScroll:
+		case scrollsY && !restrict && !scrollsX:
 			deltaY = delta.X
 		}
 		if !allowConcurrent && deltaX != 0 && deltaY != 0 {
@@ -310,6 +360,37 @@ func (d *DivElement) OverflowXScroll() *DivElement {
 // (R:div.rs:1759-1763 overflow_y_scroll). Requires an ID.
 func (d *DivElement) OverflowYScroll() *DivElement {
 	d.StyleMut().OverflowY = Some(OverflowScroll)
+	d.scrollStateful = true
+	return d
+}
+
+// OverflowAuto sets the overflow on both axes to auto (browser-core
+// 36, spec story 14): the element is a scroll container whose
+// scrollbar — and the layout space it reserves — appears on an axis
+// only while that axis' content overflows, resolved by the element's
+// prepaint and reserved from the next frame's layout. Requires an ID
+// (the auto policy keeps its shown-scrollbar flags in the element
+// state, like the pin's scroll offset).
+func (d *DivElement) OverflowAuto() *DivElement {
+	style := d.StyleMut()
+	style.OverflowX = Some(OverflowAuto)
+	style.OverflowY = Some(OverflowAuto)
+	d.scrollStateful = true
+	return d
+}
+
+// OverflowXAuto sets the horizontal overflow to auto
+// (browser-core 36). Requires an ID.
+func (d *DivElement) OverflowXAuto() *DivElement {
+	d.StyleMut().OverflowX = Some(OverflowAuto)
+	d.scrollStateful = true
+	return d
+}
+
+// OverflowYAuto sets the vertical overflow to auto
+// (browser-core 36). Requires an ID.
+func (d *DivElement) OverflowYAuto() *DivElement {
+	d.StyleMut().OverflowY = Some(OverflowAuto)
 	d.scrollStateful = true
 	return d
 }

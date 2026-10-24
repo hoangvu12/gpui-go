@@ -252,19 +252,54 @@ func gridPlacementToRecord(p GridPlacement, kind *uint32, value *uint32) {
 // displayToRecord maps the gpui Display onto the ABI display value,
 // folding Inline to Block and InlineFlex to Flex exactly like the pinned
 // Display -> taffy::style::Display conversion (GPUI keeps their inline
-// semantics outside Taffy).
+// semantics outside Taffy). Browser-core 36 adds the same fold for the
+// atomic inline boxes (InlineBlock -> Block, InlineGrid -> Grid: CSS
+// lays their CONTENTS out with block flow / grid, the parent's inline
+// layout treats them as one box — the InlineFlex pattern), FlowRoot
+// onto the rev-15 FlowRoot tag, and Contents onto Block as the
+// harmless fallback: a contents element normally requests no node at
+// all (div.go splices its children into the parent), so this arm only
+// serves a contents Style that reaches a node request through another
+// element's seam — contents has no box semantics to preserve there.
 func displayToRecord(d Display) uint32 {
 	switch d {
-	case DisplayBlock, DisplayInline:
+	case DisplayBlock, DisplayInline, DisplayInlineBlock, DisplayContents:
 		return native.DisplayBlock
 	case DisplayFlex, DisplayInlineFlex:
 		return native.DisplayFlex
-	case DisplayGrid:
+	case DisplayGrid, DisplayInlineGrid:
 		return native.DisplayGrid
+	case DisplayFlowRoot:
+		return native.DisplayFlowRoot
 	case DisplayNone:
 		return native.DisplayNone
 	default:
 		return native.DisplayFlex
+	}
+}
+
+// overflowToRecord maps the gpui Overflow onto the ABI overflow value.
+// Browser-core 36's OverflowAuto folds onto Taffy's Hidden: both zero
+// the automatic minimum size and contain the scroll region, and
+// neither reserves a scrollbar gutter. The auto scrollbar's
+// reservation is decided at request time by the div (scrollbar.go
+// autoOverflowRecordStyle): once the scrollbar shows (or the gutter is
+// stable), the axis maps onto Scroll WITH a scrollbar width, which is
+// Taffy's reservation exactly (compute/flexbox.rs:459-470 adds the
+// scrollbar width to the content-box inset on the inline-end side,
+// like a CSS classic scrollbar).
+func overflowToRecord(o Overflow) uint32 {
+	switch o {
+	case OverflowVisible:
+		return native.OverflowVisible
+	case OverflowClip:
+		return native.OverflowClip
+	case OverflowHidden, OverflowAuto:
+		return native.OverflowHidden
+	case OverflowScroll:
+		return native.OverflowScroll
+	default:
+		return native.OverflowVisible
 	}
 }
 
@@ -307,8 +342,8 @@ func styleToRecord(s *Style, ctx *LayoutContext) native.LayoutStyleRecord {
 	rec := native.NewLayoutStyleRecord()
 	rec.Display = displayToRecord(s.Display)
 	rec.Position = positionToRecord(s.Position)
-	rec.OverflowX = uint32(s.OverflowX)
-	rec.OverflowY = uint32(s.OverflowY)
+	rec.OverflowX = overflowToRecord(s.OverflowX)
+	rec.OverflowY = overflowToRecord(s.OverflowY)
 	// CSS static ignores the insets (css-position-3: they only apply to
 	// positioned boxes), and the record's Relative mapping would apply
 	// them as Taffy relative offsets — zero them for static nodes

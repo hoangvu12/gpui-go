@@ -511,10 +511,13 @@ func (c *keyScrollContainer) applyScroll(mapping keyScrollMapping, w *Window, ap
 		return false
 	}
 	vertical := mapping.direction == keyScrollUp || mapping.direction == keyScrollDown
-	if vertical && c.overflowY != OverflowScroll {
+	// browser-core 36: an auto axis key-scrolls like a scroll one; the
+	// clamp zeroes the range when the content fits, so an empty auto
+	// scroller never moves.
+	if vertical && !overflowAxisUserScrolls(c.overflowY) {
 		return false
 	}
-	if !vertical && c.overflowX != OverflowScroll {
+	if !vertical && !overflowAxisUserScrolls(c.overflowX) {
 		return false
 	}
 	old := *c.offset

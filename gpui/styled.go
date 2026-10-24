@@ -233,6 +233,36 @@ func (s *Styled[Self]) Inline[_ lazy]() Self { return s.Display(DisplayInline) }
 // flex layout inside (styled.rs:124).
 func (s *Styled[Self]) InlineFlex[_ lazy]() Self { return s.Display(DisplayInlineFlex) }
 
+// InlineBlock places this element in a paragraph as one atomic box
+// whose contents use block flow (browser-core 36; CSS
+// display:inline-block). Atomic like InlineFlex, with block layout
+// inside.
+func (s *Styled[Self]) InlineBlock[_ lazy]() Self { return s.Display(DisplayInlineBlock) }
+
+// InlineGrid places this element in a paragraph as one atomic box
+// whose children use grid (browser-core 36; CSS display:inline-grid).
+// Atomic like InlineFlex, with grid layout inside.
+func (s *Styled[Self]) InlineGrid[_ lazy]() Self { return s.Display(DisplayInlineGrid) }
+
+// Contents splices this element's children into its parent's layout —
+// the element itself generates no box (browser-core 36; CSS
+// display:contents; contents.go).
+func (s *Styled[Self]) Contents[_ lazy]() Self { return s.Display(DisplayContents) }
+
+// FlowRoot makes this element a block box that establishes an
+// independent block formatting context (browser-core 36; CSS
+// display:flow-root; the native rev-15 FlowRoot tag).
+func (s *Styled[Self]) FlowRoot[_ lazy]() Self { return s.Display(DisplayFlowRoot) }
+
+// ScrollbarGutterStable opts this scroll container into reserving its
+// scrollbar gutter even while no scrollbar shows, so content does not
+// shift when one appears (browser-core 36; CSS
+// scrollbar-gutter: stable).
+func (s *Styled[Self]) ScrollbarGutterStable[_ lazy]() Self {
+	s.StyleMut().ScrollbarGutter = Some(ScrollbarGutterStable)
+	return s.self
+}
+
 // VerticalAlign sets the vertical alignment in an inline layout
 // (styled.rs:129).
 func (s *Styled[Self]) VerticalAlign[_ lazy](align VerticalAlign) Self {

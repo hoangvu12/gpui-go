@@ -773,6 +773,11 @@ type divFrameState struct {
 	layoutID LayoutID
 	// inline is the inline frame state (Block/Inline display only).
 	inline *inlineDivFrameState
+	// contents records a display:contents div (browser-core 36): no
+	// node of its own — childLayoutIDs holds the spliced children and
+	// layoutID the first child's node (or an inert none node when the
+	// div has no children).
+	contents bool
 	// contentsInParentParagraph records that this div's own layout node
 	// carries placed fragments, so its contents belong to the parent's
 	// paragraph and its own paragraphs stay unplaced (the reference
@@ -1535,6 +1540,10 @@ type divPrepaintState struct {
 	// under (div.rs:2876-2878, 2460); paint re-applies it because the
 	// port's drawables re-resolve their bounds at paint.
 	scrollOffset Point
+	// autoScrollbar is this frame's shown overflow: auto scrollbar pair
+	// (browser-core 36, scrollbar.go): the paint geometry computed at
+	// prepaint from the clamp's results. Nil while no scrollbar shows.
+	autoScrollbar *autoScrollbarFacts
 }
 
 // computeStyle returns the div's base style (Style::default() refined by
@@ -1589,6 +1598,23 @@ func (d *DivElement) requestLayout(global *GlobalElementID, inspector *Inspector
 	state := divFrameState{}
 	var layoutID LayoutID
 	WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
+		// browser-core 36 (spec story 12): display: contents — the element
+		// generates no box. Its children splice into the enclosing node
+		// request (contents.go), its box styles are inert (no containing-
+		// block scope, no sticky flag, no scroll state: a contents element
+		// is not a scroll container), and the text style above still
+		// scopes the children (inherited properties pass through).
+		if style.Display == DisplayContents {
+			childLayoutIDs := make([]LayoutID, 0, len(d.children))
+			for i := range d.children {
+				childLayoutIDs = append(childLayoutIDs, d.children[i].RequestLayout(w, app))
+			}
+			state.childLayoutIDs = childLayoutIDs
+			state.contents = true
+			layoutID = requestContentsLayout(w, &state, app)
+			state.layoutID = layoutID
+			return
+		}
 		// browser-core 33 (spec D3): open this element's containing-block
 		// scope around the child walk and the node request — a positioned
 		// div absorbs the absolutes deferred by static descendants below
@@ -1607,13 +1633,32 @@ func (d *DivElement) requestLayout(global *GlobalElementID, inspector *Inspector
 		for i := range d.children {
 			childLayoutIDs = append(childLayoutIDs, d.children[i].RequestLayout(w, app))
 		}
+		// browser-core 36: expand display:contents splices before the two
+		// non-attaching consumers of this list (the inline paragraph
+		// collector below and the published inline content); the attach
+		// itself expands again (requestLayoutNode, idempotently).
+		childLayoutIDs = expandContentsChildren(w, childLayoutIDs)
 		state.childLayoutIDs = childLayoutIDs
+		// browser-core 36 (spec story 14): the overflow: auto axes fold
+		// onto the record values their reservation needs — a shown (or
+		// gutter-stable) axis becomes Scroll WITH the scrollbar width, so
+		// Taffy reserves the gutter, and an unshown axis becomes Hidden
+		// (scrollbar.go autoOverflowRecordStyle). The flags come from the
+		// element state (what the previous frame's prepaint saw
+		// overflowing); the first frame settles one draw later, like
+		// Chromium's post-layout relayout.
+		nodeStyle := style
+		if d.scroll != nil && d.scroll.auto != nil {
+			if adjusted, ok := autoOverflowRecordStyle(&style, d.scroll.auto, RemSize(w)); ok {
+				nodeStyle = adjusted
+			}
+		}
 		if style.Display == DisplayBlock || style.Display == DisplayInline {
-			id, inlineState := requestInlineDivFrame(w, style, scope, childLayoutIDs, app)
+			id, inlineState := requestInlineDivFrame(w, nodeStyle, scope, childLayoutIDs, app)
 			state.inline = inlineState
 			layoutID = id
 		} else {
-			id, err := requestLayoutNode(w, scope, style, childLayoutIDs)
+			id, err := requestLayoutNode(w, scope, nodeStyle, childLayoutIDs)
 			if err != nil {
 				panic(fmt.Sprintf("gpui: DivElement request_layout: %v", err))
 			}
@@ -1631,6 +1676,40 @@ func (d *DivElement) requestLayout(global *GlobalElementID, inspector *Inspector
 		}
 	})
 	return layoutID, state
+}
+
+// prepaintContents is prepaint's display:contents arm (browser-core
+// 36): no box, so no sticky shift, hitbox, scroll clamp, content mask
+// or debug bounds — only the text style (inherited properties pass
+// through css-display-3 §3.1) and the dispatch node, so key listeners
+// and actions keep their place between the children and the parent in
+// the bubbling chain (a DOM element with no box). The children
+// prepaint in order inside whatever scopes the parent opened around
+// this element's walk (its content mask, its hitbox subtree, its
+// scroll offset): the spliced children behave exactly like the
+// parent's direct children.
+func (d *DivElement) prepaintContents(layout *divFrameState, state *divPrepaintState, w *Window, app *App) {
+	WithTextStyleVoid(w, d.lastStyle.TextStyle(), func(w *Window) {
+		tree := currentDispatchTree(w)
+		tree.PushNode()
+		defer tree.PopNode()
+		registerDivElementKeyDispatch(tree, d)
+		for _, child := range stickyChildrenLast(d.children) {
+			child.Prepaint(w, app)
+		}
+	})
+}
+
+// paintContents is paint's display:contents arm (browser-core 36): the
+// element paints nothing of its own (no box), its children paint in
+// order (sticky children last, like the in-flow path) under the text
+// style, inside whatever scopes the parent opened around this walk.
+func (d *DivElement) paintContents(w *Window, app *App) {
+	WithTextStyleVoid(w, d.lastStyle.TextStyle(), func(w *Window) {
+		for _, child := range stickyChildrenLast(d.children) {
+			child.Paint(w, app)
+		}
+	})
 }
 
 // Prepaint implements Element (div.rs:2354-2482 Div::prepaint +
@@ -1657,6 +1736,16 @@ func (d *DivElement) requestLayout(global *GlobalElementID, inspector *Inspector
 // pin (div.rs:3048-3082).
 func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *divFrameState, w *Window, app *App) divPrepaintState {
 	state := divPrepaintState{}
+	// browser-core 36: a display:contents div has no box — no sticky
+	// shift, no hitbox, no scroll, no mask. It opens only the text style
+	// (inherited properties pass through) and the dispatch node (key
+	// listeners and actions keep their place in the bubbling chain, like
+	// a DOM element without a box), then prepaints its children in order
+	// under whatever scopes the parent opened around this walk.
+	if layout.contents {
+		d.prepaintContents(layout, &state, w, app)
+		return state
+	}
 	// Contents participating in a parent paragraph are detected here:
 	// the drawable scoped this element's placed fragments around this
 	// call (the reference commits contents_in_parent_paragraph at
@@ -1704,7 +1793,12 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 	if standalone := layout.standaloneInline(); standalone != nil {
 		contentSize = standalone.prepareLayout(bounds, layout.childLayoutIDs, w)
 		d.trackInlineChildBounds(layout.childLayoutIDs, w)
-	} else if d.scroll != nil || d.trackedScrollHandle != nil {
+	} else if d.scroll != nil || d.trackedScrollHandle != nil ||
+		(currentFrame(w).stickyRequested && styleIsScrollContainer(&d.lastStyle)) {
+		// browser-core 36: a hidden scroller with no scroll state still
+		// measures its content while the frame requested a sticky element
+		// — its scrollable extent is the sticky containing block of its
+		// direct children (the scroller arm below).
 		contentSize = d.scrollContentSize(bounds, layout.childLayoutIDs, w)
 	}
 	if d.trackedScrollHandle != nil {
@@ -1728,7 +1822,7 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 		panic("gpui: OnClick, OnAuxClick, OnDrag, OnHover, Active and GroupActive require an element ID (the pinned StatefulInteractiveElement methods, div.rs:1495-1899)")
 	}
 	if global == nil && d.scrollStateful {
-		panic("gpui: OverflowScroll, OverflowXScroll, OverflowYScroll, RestrictScrollToAxis and TrackScroll require an element ID (the pinned StatefulInteractiveElement methods, div.rs:1746-1777)")
+		panic("gpui: OverflowScroll, OverflowXScroll, OverflowYScroll, OverflowAuto, OverflowXAuto, OverflowYAuto, RestrictScrollToAxis and TrackScroll require an element ID (the pinned StatefulInteractiveElement methods, div.rs:1746-1777)")
 	}
 	WithOptionalElementState(w, global, func(slot *InteractiveElementState, w *Window) (struct{}, *InteractiveElementState) {
 		es := interactiveStateOf(global, slot)
@@ -1755,16 +1849,60 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 				// clamp_scroll_position (div.rs:2876-2877).
 				scrollOffset := d.scroll.clamp(bounds, &style, contentSize, w)
 				state.scrollOffset = scrollOffset
-				// browser-core 34 (spec L3): open this scroller's sticky
+				// browser-core 36 (spec story 14): the auto-scrollbar
+				// detection — Chromium's ComputeScrollbarExistence kAuto
+				// arm (an axis shows its scrollbar exactly while it
+				// overflows) with UpdateAfterOverflowRecalc's relayout as a
+				// notify: the flags persist in the element state, the NEXT
+				// frame's request walk reserves from them (the one-frame
+				// settle, scrollbar.go), and the shown pair's paint
+				// geometry is resolved here for the paint below.
+				if d.scroll != nil && d.scroll.auto != nil {
+					if d.scroll.auto.update(d.scroll.maxOffset) {
+						currentViewNotifier(w)(w, app)
+						drawState(w).autoScrollbarAppearanceChanged = true
+					}
+					state.autoScrollbar = autoScrollbarPaint(&style, bounds, RemSize(w),
+						d.scroll.maxOffset, scrollOffset, contentSize, d.scroll.auto)
+					recordAutoScrollbarFacts(w, state.autoScrollbar)
+				}
+				// browser-core 34 (spec L3) + 36: open this scroller's sticky
 				// scope around the child walk (sticky.go) — sticky
-				// descendants resolve their constraints against the
-				// nearest scroll container, this one while its children
-				// prepaint. The scroller also records its flow rectangle
-				// (the scrollable extent) for its sticky direct children;
-				// every other div records its content box when the frame
-				// requested a sticky element.
-				if d.scroll != nil {
-					ctx := stickyScrollContextOf(w, &style, bounds, d.scroll.maxOffset, scrollOffset, layout.layoutID.node)
+				// descendants resolve their constraints against the nearest
+				// scroll container, this one while its children prepaint.
+				// Per CSS (ComputedStyle::IsScrollContainer: every overflow
+				// value but visible and clip), an overflow: hidden or auto box
+				// is a scroll container too — ticket 34's recorded
+				// limitation, closed here (Chromium:
+				// PaintLayer::ContainingScrollContainerLayer walks for
+				// IsScrollContainer, paint_layer.cc:275-292, and the
+				// constraint axes follow ScrollableAxes,
+				// paint_layer_scrollable_area.cc:2520-2542). A scroller without
+				// scroll state (hidden) contributes a zero offset and its
+				// content extent as the scroll range. The scroller records its
+				// flow rectangle (the scrollable extent) for its sticky direct
+				// children; every other div records its content box when the
+				// frame requested a sticky element.
+				if d.scroll != nil || (currentFrame(w).stickyRequested && styleIsScrollContainer(&style)) {
+					maxOffset, scrollerOffset := Point{}, Point{}
+					if d.scroll != nil {
+						maxOffset, scrollerOffset = d.scroll.maxOffset, scrollOffset
+					} else {
+						// A hidden scroller never scrolls, but its sticky
+						// children's containing block is still its scrollable
+						// extent (the clamp's arithmetic on the measured
+						// content size).
+						rem := RemSize(w)
+						padLeft := PixelSnap(w, resolveDefiniteListLength(style.Padding.Left, bounds.Size.Width, rem))
+						padRight := PixelSnap(w, resolveDefiniteListLength(style.Padding.Right, bounds.Size.Width, rem))
+						padTop := PixelSnap(w, resolveDefiniteListLength(style.Padding.Top, bounds.Size.Height, rem))
+						padBottom := PixelSnap(w, resolveDefiniteListLength(style.Padding.Bottom, bounds.Size.Height, rem))
+						maxOffset = Point{
+							X: max32(roundToTwoDecimals(contentSize.Width+padLeft+padRight-bounds.Size.Width), 0),
+							Y: max32(roundToTwoDecimals(contentSize.Height+padTop+padBottom-bounds.Size.Height), 0),
+						}
+					}
+					ctx := stickyScrollContextOf(w, &style, bounds, maxOffset, scrollerOffset, layout.layoutID.node)
 					frame := currentFrame(w)
 					frame.stickyScrollers = append(frame.stickyScrollers, ctx)
 					defer func() {
@@ -1837,6 +1975,7 @@ func registerDivElementDispatch(w *Window, d *DivElement, suppressed bool, hitbo
 	if d.focusHandle != nil {
 		tree.SetFocusID(d.focusHandle.id)
 	}
+	registerDivElementKeyDispatch(tree, d)
 	if suppressed {
 		return false
 	}
@@ -1859,6 +1998,16 @@ func registerDivElementDispatch(w *Window, d *DivElement, suppressed bool, hitbo
 		registerDivKeyboardClick(w, d, *hitbox, es)
 	}
 
+	return endGroup
+}
+
+// registerDivElementKeyDispatch registers a div's key context, key
+// listeners and action listeners on its dispatch node — the pieces that
+// do not need a box (browser-core 36's display:contents arm reuses
+// them: a DOM element without a box still sits in the bubbling chain;
+// the mouse/keyboard-click/focus registrations do need a box and stay
+// in registerDivElementDispatch).
+func registerDivElementKeyDispatch(tree *DispatchTree, d *DivElement) {
 	if d.keyContext != nil {
 		if context, err := ParseKeyContext(*d.keyContext); err == nil {
 			tree.SetKeyContext(context)
@@ -1889,7 +2038,6 @@ func registerDivElementDispatch(w *Window, d *DivElement, suppressed bool, hitbo
 			invokeTypedActionListener(listener, action, phase, w, app)
 		})
 	}
-	return endGroup
 }
 
 // registerMouseListener wraps one typed mouse-family listener as a
@@ -1961,6 +2109,13 @@ func invokeTypedActionListener(listener typedActionListener, action any, phase D
 func (d *DivElement) paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *divFrameState, prepaint *divPrepaintState, w *Window, app *App) {
 	ensurePaintHitTest(w)
 	hitbox := prepaint.hitbox
+	// browser-core 36: display:contents paints no box — the children
+	// paint in order under the text style (paintContents), inside the
+	// parent's scopes.
+	if layout.contents {
+		d.paintContents(w, app)
+		return
+	}
 	// browser-core 34 (spec L3): re-apply the prepaint's sticky shift —
 	// the port's drawables re-resolve their bounds at paint, so the
 	// element's own box paints at the shifted bounds (the pin reuses
@@ -2039,6 +2194,10 @@ func (d *DivElement) paintInFlow(global *GlobalElementID, inspector *InspectorEl
 								child.Paint(w, app)
 							}
 						})
+						// browser-core 36: the overflow: auto scrollbar paints
+						// after the children, above the content, inside this
+						// content mask (scrollbar.go).
+						paintAutoScrollbar(w, prepaint.autoScrollbar)
 					})
 				})
 			})

@@ -97,10 +97,14 @@ type stickyScrollContext struct {
 	// custom scroller (whose headers resolve their containing blocks
 	// through the StickyOffset hook, not the flow-box registry).
 	scrollerNode native.NodeHandle
-	// scrollsX and scrollsY report whether the axis actually scrolls
-	// (the computed overflow style): Chromium computes an axis's
-	// constraints only when the scroll container scrolls that axis
-	// (ComputeStickyPositionConstraints' scroll_axes gate).
+	// scrollsX and scrollsY report whether the axis is a CSS scroll-
+	// container axis — every overflow value but visible and clip, per
+	// ComputedStyle::IsScrollContainer (browser-core 36; Chromium's
+	// ScrollableAxes, paint_layer_scrollable_area.cc:2520-2542). A
+	// hidden axis is one: its sticky descendants resolve constraints
+	// against a scrollport that never moves, so they stay put — the CSS
+	// behaviour (ticket 34's recorded OverflowHidden limitation, closed
+	// by this ticket).
 	scrollsX, scrollsY bool
 }
 
@@ -152,8 +156,8 @@ func stickyScrollContextOf(w *Window, style *Style, bounds Bounds, maxOffset, of
 		constraining: constraining,
 		selfCB:       selfCB,
 		scrollerNode: node,
-		scrollsX:     style.OverflowX == OverflowScroll,
-		scrollsY:     style.OverflowY == OverflowScroll,
+		scrollsX:     overflowAxisScrollable(style.OverflowX),
+		scrollsY:     overflowAxisScrollable(style.OverflowY),
 	}
 }
 
