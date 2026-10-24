@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 7 (Claude Code)
 Blocked by: 01
 Triage: ready-for-agent
@@ -15,12 +15,14 @@ Triage: ready-for-agent
 
 **Status:** ready-for-agent
 
-- [ ] Box fixtures for each side and for flip and shift near window edges match Chrome's anchor positioning.
-- [ ] Base's positioner can be replaced in one component (proof, not the full migration).
+- [x] Box fixtures for each side and for flip and shift near window edges match Chrome's anchor positioning.
+- [x] Base's positioner can be replaced in one component (proof, not the full migration).
 
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged f986cc4 into main on top of 33 (0ea9aac). The merge had no conflicts. On the merged tree, `go build ./...`, `go vet` and `gofmt -l` are clean. `go test -p 1 -count=1` passes for ./gpui/, ./internal/parity/... (the 4 anchor fixtures and the position fixture), ./internal/layoutspec/, ./base, richtextspec, dropspec, authorspec, inspectorspec, examples/zterm and ./cmd/.... The anchor/position tests in gpui and base pass 3/3 (`-count=3`). gpui failed twice on `TestWin32TranslateKeyDownCarriesCodeAndLocation` (the live Shift key, a known flake) and passed on the third run. I read the diff: the shared-code changes (the anchor registry in element.go, its publication in render.go, the named-element recording in div.go) are additive, and the recording is gated on `trackAnchors`, so windows without an anchor pay nothing. Base is limited to the tooltip. The recorder's two-frame settle only affects new recordings; existing records were not re-recorded and still replay. Chromium citations checked: out_of_flow_layout_part.cc:113 (OOFCandidateStyleIterator), :2158-2257 (the try loop with the base style first) and anchor_position_visibility_observer.cc:21-35. Interaction with 33: Anchored doesn't call RequestContainerLayout, so a `Static()` div inside an Anchored defers its absolute children past the overlay to an outer positioned ancestor. Only opt-in views hit this; it is left for 76.
 
 ## Answer
 

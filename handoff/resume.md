@@ -6,9 +6,19 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 ## ACTIVE EFFORT (2026-10-23): recreate zgui's terminal app ("zterm") on gpui-go
 
-**HANDOFF 2026-10-24 (orchestrator 7 → orchestrator 8).** The user asked for it at about 300k tokens. The handoff doc is `%TEMP%\gpui-go-handoff-orchestrator8.md` (state, the rev 15.1 list, why workers are slow, rules, the next tickets). The predecessor is Roboco chat d209bee2; workers 25 (7a5ffa3e) and 33 (b36a6943) report to it, so poll them with get_chat/read_chat.
+**ORCHESTRATOR 8 STATUS (2026-10-24). CURRENT.** Claude Code, Opus 5.5. It took over from orchestrator 7 (Roboco chat d209bee2; handoff doc `%TEMP%\gpui-go-handoff-orchestrator8.md`, which still holds the rules, the rev 15.1 list, why workers are slow, and the frontier).
+- **Resolved (23 of 76; orchestrator 7's "22" was a miscount, it was 21):** 01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 13, 25, 27, 31, 33, 39 (rev 15, DLL 8b944eae), 40, 41, 47, 49 (the R16 design, approved), 62, 64, 65. Each has a verification comment, and the map's Decisions list a gist of each. Orchestrator 8 verified and merged 33 (position: static opt-in), then 25 (anchored to an element). The merges had no conflicts, and the required packages pass on main.
+- **Known flake:** `gpui` TestWin32TranslateKeyDownCarriesCodeAndLocation reads the live Shift key, so it fails while the user types. Re-run it.
+- **Open follow-up from 33+25:** Anchored, Deferred and custom containers don't call `RequestContainerLayout`, so a `Static()` div inside them defers its absolute children past the overlay (opt-in only; for 76).
+- **No workers running.** Claimed, not yet delegated: 29, 30. Ask the user before adding load (the PC froze earlier on 2026-10-24).
+- **Waiting on the user:** rev 15.1, a small native rebuild:
+  - the text-run fields and baseline for 42/43
+  - the italic shear from 08
+  - the extension-uniform upload bug: draw.rs:2327/2330 `&[*uniforms]` copies a reference, so colour filters are no-ops (41) and the backdrop crop is most likely broken by it too (04)
+  The alternative is to fold it into R16; rev 16 (54) needs its own approval.
+- **Rules:** as in orchestrator 7's block below and the handoff doc. Run `go clean -cache` after each round of merges.
 
-**ORCHESTRATOR 7 STATUS (2026-10-24). CURRENT, read with the handoff doc.** This is Roboco chat d209bee2 (Claude Code, Opus 5.5). It took over from orchestrator 6 (chat 3d6efd46; handoff doc `%TEMP%\gpui-go-handoff-orchestrator7.md`).
+**ORCHESTRATOR 7 STATUS (2026-10-24). History now.** This was Roboco chat d209bee2 (Claude Code, Opus 5.5). It took over from orchestrator 6 (chat 3d6efd46; handoff doc `%TEMP%\gpui-go-handoff-orchestrator7.md`).
 - **Resolved (22 of 76):** 01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 13, 27, 31, 39 (rev 15, DLL 8b944eae), 40, 41, 47, 49 (the R16 design, approved), 62, 64, 65. Each has a verification comment, and the map's Decisions list a gist of each.
 - **Off-screen test windows: merged** (e3e3476). Under `go test`, real windows open at +(20000, 20000), and so do SetBounds and synthetic WM_DPICHANGED rectangles. Switches: `GPUI_TEST_ONSCREEN=1` shows them; `GPUI_TEST_REPORT_ONSCREEN=1` logs any test window on a monitor; `GPUI_REAL_INPUT_TESTS=1` turns it off. The full suite on the off-screen branch had no window on a monitor. The two maximize tests are behind `realinput.Require`. Fixed along the way: dropspec's drag points follow the window, authorspec's drag preview dispatches input directly, and inspectorspec counts only the move (since 10's hover sweeps).
 - **Full suite** (`go test -p 1 ./... -count=1`, off-screen): 65 packages ok. The only failure left is portfixture TestFx0004 (the system font count went from 94 to 95). clipspec's PowerShell clipboard test failed once with "Requested Clipboard operation did not succeed" (the clipboard was held by something else); it passed on the next run.
