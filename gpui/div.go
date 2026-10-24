@@ -1012,6 +1012,15 @@ type DivElement struct {
 	// interactivity: inert, html.css:2143-2145): unfocusable, unclickable
 	// (pointer-events: none) and hidden from accessibility.
 	inert bool
+	// autoFocus marks this element as its enclosing modal dialog's
+	// autofocus delegate (browser-core ticket 23, the autofocus
+	// attribute of the dialog focusing steps — GetAutofocusDelegate's
+	// first autofocusable focusable descendant, html_dialog_element.
+	// cc:662-666): a modal's focusing steps prefer it over the first
+	// focusable element. It needs a tracked focus handle to take effect
+	// (an autofocus element the port cannot focus is skipped, like
+	// Chromium's IsFocusable gate).
+	autoFocus bool
 	// contextMenuListeners are the element's OnContextMenu handlers
 	// (browser-core ticket 17, contextmenu.go).
 	contextMenuListeners []func(*ContextMenuEvent, *Window, *App)
@@ -1465,6 +1474,18 @@ func (d *DivElement) TabGroup() *DivElement {
 // one.
 func (d *DivElement) Inert() *DivElement {
 	d.inert = true
+	return d
+}
+
+// AutoFocus marks this element as its enclosing modal dialog's
+// autofocus delegate (browser-core ticket 23; the autofocus attribute
+// the dialog focusing steps honor — GetAutofocusDelegate's first
+// autofocusable focusable descendant, core/html/html_dialog_element.
+// cc:662-666): Window.ShowModal's focusing steps focus this element
+// over the dialog's first focusable one. The element must also track
+// a focus handle (TrackFocus), like every focusable div.
+func (d *DivElement) AutoFocus() *DivElement {
+	d.autoFocus = true
 	return d
 }
 
@@ -2004,7 +2025,17 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 		// focused, so no key dispatch path reaches it), and the hit test
 		// skips the subtree's hitboxes (mouseevent.go hitTestAt —
 		// pointer-events: none); the element still paints.
+		//
+		// Browser-core ticket 23: the blocked document joins here — while
+		// a modal dialog is open, everything outside its content path is
+		// inert (style_resolver.cc:563-583: the root's inherited html_inert
+		// with the modal element's escape). The path test runs only while
+		// a modal is open (the plain-frame cost is the active-modal lookup,
+		// a short scan of the layer).
 		inert := d.inert || inertPrepaintDepth(w) > 0
+		if !inert && w.overlays != nil && w.overlays.activeModal() != nil {
+			inert = modalInertnessBlocks(w, (&GlobalElementID{Path: currentElementIDs(w)}).key())
+		}
 		suppressed := hidden || hiddenPrepaintDepth(w) > 0 || inert
 		WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
 			WithContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
@@ -2190,6 +2221,14 @@ func registerDivElementDispatch(w *Window, d *DivElement, global *GlobalElementI
 	}
 	if d.focusHandle != nil {
 		registerFocusStop(w, *d.focusHandle)
+		// browser-core ticket 23: while a modal is open, every focusable
+		// element of the frame records itself for the dialog focusing
+		// steps (modal.go appendModalFocusEntry — the entry list is
+		// filtered to the modal's content at the entry's first
+		// registration; the gate keeps plain frames free of cost).
+		if global != nil {
+			appendModalFocusEntry(w, global.key(), *d.focusHandle, d.autoFocus)
+		}
 	}
 
 	// The keyboard click (div.rs:3512-3577) registers before the

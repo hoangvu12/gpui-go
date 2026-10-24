@@ -81,6 +81,13 @@ type closeWatcherRecord struct {
 	// its own cancel listener (the scoped_committing AutoReset,
 	// close_watcher.cc:290-292).
 	dispatchingCancel bool
+	// alwaysCancelable marks a watcher whose requests are always
+	// cancelable (browser-core ticket 23): the dialog's requestClose
+	// path calls CloseWatcher::RequestClose with AllowCancel::kAlways
+	// (html_dialog_element.cc:536, RequestCloseInternal), bypassing the
+	// user-activation gate that the Escape signal's kWithUserActivation
+	// form applies (close_watcher.cc:246-249).
+	alwaysCancelable bool
 	// onCancel is the cancel listener (the oncancel event listener).
 	onCancel func(*CloseWatcherEvent, *Window, *App)
 	// onClose is the close listener (the onclose event listener).
@@ -348,7 +355,7 @@ func (rec *closeWatcherRecord) requestClose(withUserActivation bool, app *App) b
 		return true
 	}
 	cs := closeWatcherState(rec.window)
-	cancelable := !withUserActivation ||
+	cancelable := !withUserActivation || rec.alwaysCancelable ||
 		(len(cs.groups) < cs.allowedGroups && cs.historyActivation)
 	event := &CloseWatcherEvent{cancelable: cancelable}
 	if rec.onCancel != nil {

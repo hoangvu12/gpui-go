@@ -1,0 +1,156 @@
+{
+  "name": "modal-focus",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T16:07:38Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "anchor": {
+      "x": 600,
+      "y": 0,
+      "width": 40,
+      "height": 20
+    },
+    "b1": {
+      "x": 0,
+      "y": 0,
+      "width": 40,
+      "height": 20
+    }
+  },
+  "events": [
+    {
+      "kind": "mousedown",
+      "target": "b1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "b1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "b1",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "toggle",
+      "target": "d",
+      "defaultPrevented": false,
+      "state": "open"
+    },
+    {
+      "kind": "keydown",
+      "target": "d1",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "d1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "d",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "d1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "d1",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "d2",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "d2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "d",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "d2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "d2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "d2",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "d2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "d",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "d2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "focus": "d2",
+      "code": "Tab"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Tab",
+      "code": "Tab"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Escape",
+      "code": "Escape"
+    },
+    {
+      "kind": "toggle",
+      "target": "d",
+      "defaultPrevented": false,
+      "state": "closed"
+    },
+    {
+      "kind": "keyup",
+      "target": "b1",
+      "defaultPrevented": false,
+      "key": "Escape",
+      "focus": "b1",
+      "code": "Escape"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Escape",
+      "focus": "b1",
+      "code": "Escape"
+    }
+  ],
+  "screenshot": "chrome.png"
+}

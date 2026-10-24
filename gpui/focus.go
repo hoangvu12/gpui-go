@@ -159,6 +159,13 @@ type renderedFrame struct {
 	// (finishOverlayFrame) resolves the invoker paths and updates the
 	// layer, and the click dispatch's light dismiss walks the layer.
 	overlayRegistrations []overlayRegistration
+	// modalFocusEntries are the frame's focusable elements while a
+	// modal dialog is open (browser-core ticket 23, modal.go): each
+	// focusable div's path key, focus handle and autofocus marking,
+	// registered at prepaint and read by the dialog focusing steps at
+	// the modal entry's first registration (the entries outside the
+	// modal's content are inert and never register).
+	modalFocusEntries []modalFocusEntry
 	// hitboxStack is the transient stack of hitboxes whose subtrees are
 	// prepainting (browser-core ticket 11): each hitbox records the top
 	// of this stack as its parent, which is how the capture chain

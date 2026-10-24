@@ -24,6 +24,7 @@ import (
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/keycode"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/keyorder"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/mincontent"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/modal"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/outline"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/popover"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/position"

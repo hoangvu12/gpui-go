@@ -167,6 +167,18 @@ func (h OverlayHandle) Show() bool {
 	}
 	rec.open = true
 	rec.pendingShowRules = true
+	// browser-core ticket 23: a plain Show opens the entry as the
+	// popover family (a dialog shown with show() is not modal — the
+	// is_modal_ mark belongs to showModal alone, html_dialog_element.
+	// cc:579-580 vs 460-486), so a re-shown entry drops the modal
+	// bookkeeping (the blocked document, the focusing steps, the
+	// restore) until ShowModal marks it again.
+	rec.modal = false
+	rec.pendingModalFocus = false
+	rec.closedBy = ClosedByAuto
+	rec.dialogFocus = FocusHandle{}
+	rec.prevFocus = FocusHandle{}
+	rec.modalPath = ""
 	os := overlayState(h.window)
 	os.entries = append(os.entries, rec)
 	// browser-core ticket 22: the show steps create the entry's close
@@ -187,6 +199,22 @@ func (h OverlayHandle) Hide() bool {
 	}
 	rec.hide()
 	return true
+}
+
+// OnCancel sets a MODAL entry's cancel listener (browser-core ticket
+// 23): the dialog's own cancel event (the DOM dialog element's
+// oncancel — DialogCloseWatcherFiredCancel forwards the watcher's
+// cancel onto the dialog, html_dialog_element.cc:497-510), fired when
+// a close request (Escape or the closedby=any light dismiss) reaches
+// the dialog. The listener can call the event's PreventDefault to keep
+// the dialog open. Non-modal entries never signal it (the HTML
+// popover rule leaves cancel alone). Setting it again replaces the
+// listener. It reports the handle for chaining.
+func (h OverlayHandle) OnCancel(f func(e *CloseWatcherEvent, w *Window, app *App)) OverlayHandle {
+	if rec := h.record(); rec != nil {
+		rec.onCancel = f
+	}
+	return h
 }
 
 // Toggle toggles the overlay and returns the resulting open state.
@@ -226,7 +254,11 @@ func (h OverlayHandle) record() *overlayRecord {
 // hide is the record's close path (the handle's Hide and the layer's
 // light dismiss and show rules): leave the ordered layer and queue the
 // toggle notification. browser-core ticket 22: the hide steps destroy
-// the entry's close watcher (html_element.cc:2834-2836).
+// the entry's close watcher (html_element.cc:2834-2836). browser-core
+// ticket 23: a modal dialog's close restores focus to the previously
+// focused element (close, html_dialog_element.cc:206-223 —
+// previously_focused_element->Focus(preventScroll) when the dialog was
+// modal), after the entry has left the layer.
 func (rec *overlayRecord) hide() {
 	if rec.window == nil || rec.window.overlays == nil || !rec.open {
 		return
@@ -238,11 +270,17 @@ func (rec *overlayRecord) hide() {
 			break
 		}
 	}
+	wasModal := rec.modal
 	rec.open = false
 	rec.registered = false
 	rec.pendingShowRules = false
+	rec.pendingModalFocus = false
+	rec.modalPath = ""
 	rec.destroyCloseWatcher()
 	queueOverlayToggle(rec, false)
+	if wasModal {
+		rec.restoreModalFocus(rec.window)
+	}
 }
 
 // overlayRecord is one overlay's persistent record: the handle's open
@@ -269,11 +307,43 @@ type overlayRecord struct {
 	pendingShowRules bool
 	// onToggle is the handle's toggle listener.
 	onToggle func(open bool, w *Window, app *App)
+	// onCancel is a MODAL entry's dialog cancel listener (browser-core
+	// ticket 23, the DOM dialog's oncancel event — the watcher's cancel
+	// forwards onto the dialog, html_dialog_element.cc:497-510).
+	onCancel func(e *CloseWatcherEvent, w *Window, app *App)
 	// watcher is the entry's close watcher (browser-core ticket 22,
 	// closewatcher.go): created at show, destroyed at hide — the
 	// popover show/hide steps' watcher (html_element.cc:2146-2157 and
 	// :2834-2836). Zero while the entry carries none (manual popovers).
 	watcher CloseWatcher
+	// modal marks a dialog entry opened by Window.ShowModal
+	// (browser-core ticket 23): the entry registers with the modal
+	// kind whatever the builder says, everything outside its content
+	// path is inert, and close restores focus (modal.go).
+	modal bool
+	// closedBy is the modal's closedby policy (the TopLayer element's
+	// ClosedAt registration; the auto default resolves to closerequest
+	// for a modal). Zero (unset) means auto.
+	closedBy ClosedBy
+	// dialogFocus is the dialog element's own focus slot (the TopLayer
+	// element's DialogFocus): the focusing steps' last resort and the
+	// app's key-dispatch target for a dialog with nothing focusable
+	// inside.
+	dialogFocus FocusHandle
+	// prevFocus is the previously focused element at ShowModal time
+	// (previously_focused_element_, html_dialog_element.cc:674),
+	// restored on close.
+	prevFocus FocusHandle
+	// pendingModalFocus marks a shown modal whose focusing steps have
+	// not run yet (SetFocusForDialog runs at showModal; the port runs
+	// them at the entry's first registration, when the frame knows the
+	// tree — the show rules' pattern).
+	pendingModalFocus bool
+	// modalPath is the modal's content path as registered by the
+	// TopLayer element's request phase this frame (the blocked
+	// document's escape hatch, style_resolver.cc:563-583: everything
+	// outside it is inert while the entry is the active modal).
+	modalPath string
 }
 
 // ensureCloseWatcher creates the entry's close watcher when its kind
@@ -286,13 +356,32 @@ type overlayRecord struct {
 // the entry (the PopoverCloseWatcherEventListener's close arm,
 // html_element.cc:240-242), and its cancel listener stays unset (the
 // HTML popover rule: "Don't do anything in response to cancel events",
-// html_element.cc:243-245).
+// html_element.cc:243-245) — except a MODAL entry, whose cancel
+// forwards to the dialog's own cancel listener (browser-core ticket
+// 23, DialogCloseWatcherEventListener → CloseWatcherFiredCancel,
+// html_dialog_element.cc:497-510: the dialog's preventDefault stops
+// the close) and whose requestClose is always cancelable (the dialog
+// path's CloseWatcher::RequestClose with AllowCancel::kAlways,
+// html_dialog_element.cc:536 — RequestCloseInternal).
 func (rec *overlayRecord) ensureCloseWatcher() {
-	if rec == nil || rec.watcher != (CloseWatcher{}) || rec.kind == OverlayPopoverManual {
+	if rec == nil || rec.watcher != (CloseWatcher{}) || rec.kind == OverlayPopoverManual && !rec.modal {
 		return
 	}
 	watcher := NewCloseWatcher(rec.window)
 	watcher.OnClose(func(_ *Window, _ *App) { rec.hide() })
+	if rec.modal {
+		// The modal's watcher: always-cancelable requests (the dialog's
+		// requestClose form, html_dialog_element.cc:536) and the dialog
+		// cancel forwarding.
+		if wrec := watcher.record(); wrec != nil {
+			wrec.alwaysCancelable = true
+		}
+		watcher.OnCancel(func(e *CloseWatcherEvent, w *Window, app *App) {
+			if rec.onCancel != nil {
+				rec.onCancel(e, w, app)
+			}
+		})
+	}
 	rec.watcher = watcher
 }
 
@@ -401,6 +490,12 @@ type overlayRegistration struct {
 	kind        OverlayKind
 	invokerName string
 	contentPath string
+	// closedBy is a MODAL entry's closedby policy (browser-core ticket
+	// 23, the TopLayer element's ClosedBy).
+	closedBy ClosedBy
+	// dialogFocus is a MODAL entry's dialog focus slot (the TopLayer
+	// element's DialogFocus).
+	dialogFocus FocusHandle
 }
 
 // appendOverlayRegistration registers one entry on the frame under
@@ -443,15 +538,36 @@ func (w *Window) finishOverlayFrame(app *App) bool {
 		}
 		rec.registered = true
 		rec.kind = regs[i].kind
+		// browser-core ticket 23: the modal mark (Window.ShowModal)
+		// forces the dialog kind — the modal skips the popover light
+		// dismiss walk and paints its own backdrop — and the entry's
+		// closedby policy and dialog focus slot arrive here (the TopLayer
+		// element's ClosedBy/DialogFocus).
+		if rec.modal {
+			rec.kind = OverlayModal
+			rec.closedBy = regs[i].closedBy
+			rec.dialogFocus = regs[i].dialogFocus
+		}
 		// browser-core ticket 22: the watcher follows the registered
 		// kind — Show created one on the default kind before the entry
 		// ever rendered, so a manual entry's first registration takes it
 		// back out (manual popovers never join the close-watcher family;
 		// every other kind ensures one exists, the show steps' rule).
-		if rec.kind == OverlayPopoverManual {
+		if rec.kind == OverlayPopoverManual && !rec.modal {
 			rec.destroyCloseWatcher()
 		} else {
 			rec.ensureCloseWatcher()
+		}
+		if rec.modal && rec.closedBy.effective() == ClosedByNone {
+			// SetCloseWatcherEnabledState (html_dialog_element.cc:531-542):
+			// closedby=none disables the dialog's watcher — it no longer
+			// receives the Escape signal. The port drops it from the stack
+			// (the observable: Escape closes nothing); the drop comes after
+			// the ensure above so it is not immediately re-created, and the
+			// app's own close still works through Hide (a disabled
+			// watcher's requestClose reports true without closing —
+			// Chromium's enabled_ gate).
+			rec.destroyCloseWatcher()
 		}
 		rec.invokerName = regs[i].invokerName
 		rec.contentPath = regs[i].contentPath
@@ -467,6 +583,18 @@ func (w *Window) finishOverlayFrame(app *App) bool {
 		if rec.pendingShowRules {
 			rec.pendingShowRules = false
 			shown = append(shown, rec)
+		}
+		// browser-core ticket 23: the dialog focusing steps run at the
+		// modal entry's first registration (SetFocusForDialog runs inside
+		// showModal, html_dialog_element.cc:611-616; the port's frame is
+		// where the tree — the autofocus marking and the focusable
+		// descendants — is known, the show rules' deferral). The steps
+		// move focus, so the frame end refreshes.
+		if rec.pendingModalFocus {
+			rec.pendingModalFocus = false
+			if w.runModalFocusingSteps(rec, fs.rendered) {
+				changed = true
+			}
 		}
 	}
 	// The show rules run after every entry's paths are current, so the
@@ -484,6 +612,7 @@ func (w *Window) finishOverlayFrame(app *App) bool {
 	for _, rec := range os.entries {
 		if !rec.registered && !rec.pendingShowRules {
 			rec.open = false
+			rec.modalPath = ""
 			rec.destroyCloseWatcher()
 			changed = true
 			continue
@@ -504,9 +633,13 @@ func (w *Window) finishOverlayFrame(app *App) bool {
 // anchor and invoker ancestor paths, FindTopmostPopoverAncestor). An
 // entry with no ancestor closes everything of its family: an auto
 // popover closes the autos and hints above it; a hint closes only
-// hints (the hint stack, html_element.cc:2085-2118).
+// hints (the hint stack, html_element.cc:2085-2118). browser-core
+// ticket 23: a MODAL entry runs the same hide-until (showModal closes
+// the popovers that are not its ancestors, html_dialog_element.cc:
+// 586-593 — TopLayerElementPopoverAncestor then HideAllPopoversUntil),
+// while the popover stacks hold no dialogs so nothing modal is hidden.
 func (os *windowOverlayState) runShowRules(rec *overlayRecord) {
-	if rec.kind == OverlayPopoverManual || rec.kind == OverlayModal {
+	if rec.kind == OverlayPopoverManual {
 		return
 	}
 	var ancestor *overlayRecord
@@ -728,6 +861,17 @@ type TopLayerElement struct {
 	// DOM's popovertarget rule — clicking the trigger of an open
 	// popover does not close it).
 	invoker string
+	// closedBy is a MODAL entry's closedby policy (browser-core ticket
+	// 23): ClosedByAny lets a click outside the dialog close it, ClosedByNone
+	// disables Escape, and the auto default (the zero value) acts as
+	// closerequest for a modal — Escape closes, clicks outside do not.
+	closedBy ClosedBy
+	// dialogFocus is a MODAL entry's dialog focus slot: the focus handle
+	// the dialog focusing steps fall back to when nothing inside is
+	// focusable (the dialog element itself, always focusable in the
+	// DOM). The app tracks it on the dialog box div so key events with
+	// focus on the dialog reach its listeners.
+	dialogFocus FocusHandle
 	// backdrop is the entry's backdrop slot (::backdrop): painted over
 	// everything below the entry and under the entry's content.
 	backdrop AnyElement
@@ -761,6 +905,29 @@ func (t *TopLayerElement) Kind(kind OverlayKind) *TopLayerElement {
 // invoker wins over the popovers the invoker sits inside.
 func (t *TopLayerElement) Invoker(id string) *TopLayerElement {
 	t.invoker = id
+	return t
+}
+
+// ClosedBy sets a MODAL entry's closedby policy (browser-core ticket
+// 23, the dialog element's closedby attribute): ClosedByAny lets a
+// click outside the dialog close it, ClosedByNone disables the Escape
+// close request, and the default (unset) acts as closerequest — Escape
+// closes, clicks outside do not (html_dialog_element.cc:250-253's auto
+// default for a modal).
+func (t *TopLayerElement) ClosedBy(policy ClosedBy) *TopLayerElement {
+	t.closedBy = policy
+	return t
+}
+
+// DialogFocus names a MODAL entry's dialog focus slot: the handle the
+// dialog focusing steps fall back to when nothing inside the dialog
+// is focusable (the dialog element itself, always focusable —
+// html_dialog_element.h:114-116 SupportsFocus). The app tracks the
+// handle on the dialog box div so key events dispatched while the
+// dialog holds focus reach the div's listeners (the DOM dialog
+// element's own position in the bubbling chain).
+func (t *TopLayerElement) DialogFocus(handle FocusHandle) *TopLayerElement {
+	t.dialogFocus = handle
 	return t
 }
 
@@ -889,6 +1056,19 @@ func (d *topLayerDrawable) RequestLayout(global *GlobalElementID, inspector *Ins
 	if t.invoker != "" {
 		requestInvokerTracking(w)
 	}
+	// browser-core ticket 23: a MODAL entry's content path registers
+	// HERE — the request phase covers the whole tree before any
+	// prepaint, and the blocked document's inertness (everything
+	// outside this path) resolves during prepaint, so the path must be
+	// known before the outside's divs prepaint. The path is this
+	// element's id stack key (the drawable pushed overlay-<id>), the
+	// same key the paint registration records and containsPath
+	// compares (modal.go modalInertnessBlocks).
+	if rec := t.handle.record(); rec != nil && rec.modal {
+		if os := w.overlays; os != nil {
+			os.registerModalContentPath(rec, (&GlobalElementID{Path: currentElementIDs(w)}).key())
+		}
+	}
 	if t.passThrough {
 		childLayout := t.child.RequestLayout(w, app)
 		return childLayout, topLayerRequest{childLayout: childLayout}
@@ -924,11 +1104,21 @@ func (d *topLayerDrawable) Paint(global *GlobalElementID, inspector *InspectorEl
 	if !t.handle.IsOpen() {
 		return
 	}
+	kind := t.kind
+	if rec := t.handle.record(); rec != nil && rec.modal {
+		// browser-core ticket 23: ShowModal's entry registers with the
+		// modal kind whatever the builder said (the record's modal mark
+		// wins, so an app that renders TopLayer(handle) plainly after
+		// Window.ShowModal still gets the dialog behaviour).
+		kind = OverlayModal
+	}
 	appendOverlayRegistration(w, overlayRegistration{
 		id:          t.handle.id,
-		kind:        t.kind,
+		kind:        kind,
 		invokerName: t.invoker,
 		contentPath: (&GlobalElementID{Path: currentElementIDs(w)}).key(),
+		closedBy:    t.closedBy,
+		dialogFocus: t.dialogFocus,
 	})
 	if t.passThrough {
 		t.child.Paint(w, app)

@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		position: relative;
+	}
+	button {
+		appearance: none;
+		border: 0;
+		margin: 0;
+		padding: 0;
+		display: block;
+		position: absolute;
+		width: 40px;
+		height: 20px;
+		background: #2563eb;
+		outline: none;
+	}
+	#b1 {
+		left: 0px;
+		top: 0px;
+	}
+	#anchor {
+		left: 600px;
+		top: 0px;
+		background: #94a3b8;
+	}
+	dialog {
+		position: fixed;
+		inset: auto;
+		margin: 0;
+		border: 0;
+		padding: 0;
+		overflow: visible;
+		color: #000000;
+	}
+	#d {
+		left: 60px;
+		top: 80px;
+		width: 150px;
+		height: 120px;
+		background: #fde68a;
+	}
+	#d::backdrop {
+		background: rgba(0, 0, 0, 0.4);
+	}
+</style>
+</head>
+<body data-id="root" data-events="keydown,keyup">
+	<button id="b1" data-id="b1"></button>
+	<button id="anchor" data-id="anchor"></button>
+	<dialog id="d" data-id="d" data-events="keydown,keyup,toggle"></dialog>
+	<script>
+		document.getElementById("b1").addEventListener("click", () => {
+			document.getElementById("d").showModal();
+		});
+	</script>
+</body>
+</html>
