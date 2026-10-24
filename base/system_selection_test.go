@@ -11,13 +11,16 @@ import (
 	"github.com/hoangvu12/gpui-go/gpui"
 )
 
-// withSystemSelectionColors injects the selection colours the platform
-// reports (the systemSelectionColors seam) for one test.
-func withSystemSelectionColors(t *testing.T, colors gpui.SelectionColors) {
+// withSystemSelectionColors pins the selection colours the platform
+// reports on the test's application (App.SetSelectionColors, the
+// forced-colours override's pattern — the core's paint path reads the
+// app, which is where the seam lives since the selection model moved,
+// browser-core 19).
+func withSystemSelectionColors(t *testing.T, ta *gpui.TestApp, colors gpui.SelectionColors) {
 	t.Helper()
-	orig := systemSelectionColors
-	systemSelectionColors = func(*gpui.App) gpui.SelectionColors { return colors }
-	t.Cleanup(func() { systemSelectionColors = orig })
+	pinned := colors
+	ta.App().SetSelectionColors(&pinned)
+	t.Cleanup(func() { ta.App().SetSelectionColors(nil) })
 }
 
 // The default (no injection): the recorded wash of the app's own
@@ -65,9 +68,9 @@ func TestSelectableTextSelectionFollowsTheInjectedSystemColors(t *testing.T) {
 		Background: gpui.Rgb(0x123456).Alpha(0.5),
 		Foreground: gpui.Rgb(0xFEDCBA),
 	}
-	withSystemSelectionColors(t, injected)
-
 	ta := textTestApp(t)
+	withSystemSelectionColors(t, ta, injected)
+
 	_, cx := openSelectionView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
 		return gpui.Div().SizeFull().Child(TextSelectionLayer{}).Child(
 			gpui.Div().W(gpui.Px(240)).H(gpui.Px(32)).Child(NewSelectableText("local", "alpha beta")),

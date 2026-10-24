@@ -167,7 +167,17 @@ new fixtures. The implementation lives in `internal/parity`:
    session starts one, over an active session updates it, and an empty `ImeSet`
    cancels it; a commit over an active session ends it. The keyed steps never type
    text on either side (the recorder sends no `text` param and the replay dispatches
-   only the platform events), so a key press mid-composition is pure transcript. The recorder dispatches them to Chrome as trusted
+   only the platform events), so a key press mid-composition is pure transcript.
+   Press and release steps carry a CLICK COUNT (browser-core ticket 19):
+   `Step.Clicks` (0 = 1) becomes the CDP `clickCount` on the recorder side and the
+   event's `ClickCount` on the replay side — the count a rapid press sequence
+   reports, which the renderer's double/triple-click arms read (MouseEventManager
+   hands SelectionController the event's click count; it does not count the presses
+   itself). `parity.MultiClick(x, y, count)` is the sugar — the same
+   move/press/release triple carrying the count — so a double click is a `Click`
+   followed by `MultiClick(x, y, 2)`, a triple click a third `MultiClick(x, y, 3)`,
+   and a double-click-then-drag spells the second press's halves out with
+   `DownWithClicks`/`UpWithClicks` (`fixtures/selection` is the fixture set). The recorder dispatches them to Chrome as trusted
    input (full hit testing) and the replay simulates them through the visual test context
    — the exact same coordinates, the exact same expansion (`Click` = move + down + up on
    both sides). `Key("<keystroke>")` is one full press on both sides: the recorder sends
@@ -673,3 +683,41 @@ whose pages pin `outline: none` gained the pin's port twin (`.OutlineNone()`)
 with no record change, and dashed, dotted, double and the rest beyond solid
 stay unportable through the scene's two border styles (a recorded
 limitation).
+
+Ticket 19 (core text selection) moved the window-scoped selection model
+from Base into the core (`gpui/text_selection.go`, the whole
+U:text_selection.rs port, plus its auto-scroll, touch-selection and
+gesture-global dependencies; Base re-exports the surface as aliases and
+installs its upstream word/line boundaries over the new
+`gpui.SetTextSelectionBoundaries` seam, so Base's text views are unchanged
+on top of the core model). The core's own boundaries are the browser's
+(`gpui/text_boundary.go`): the UAX #29 Latin-subset word segments for the
+double click, the paragraph-including-its-break line for the triple
+click, and Windows' double-click trailing-whitespace extension; a drag
+after a multi-click extends by the same granularity (the stored
+multi-click range is the anchor word,
+`windowSelectionState.updateGranularityEndpoints`). The copy command
+falls to the window selection when nothing editable is focused
+(`gpui/text_selection_copy.go`, the `EditActionHandler` the model stands
+in for — Chromium's editor commands act on the frame's selection, not
+only on editable elements).
+`fixtures/selection` is the fixture set (`selection-drag`,
+`selection-word`, `selection-line`, `selection-word-drag`): the pages
+carry a hidden `background: Highlight` probe and the records carry
+`window.getSelection()` (anchor/focus offsets, the text) through the
+fixture's `ComputedScript`; the replay reads the model's projection back
+through the participant's `ProjectedRanges`/`ProjectedText` (a final
+Script step's Go half captures it) and the fixture's own test compares
+the source ranges — Tier B-like, beside the harness's three tiers. The
+replay's selection wash is pinned to the record's own screenshot-sampled
+colour (`Configure` + `App.SetSelectionColors`): headless Chrome's wash
+is the embedder default's blend (kDefaultActiveSelectionBgColor
+0xFF1967D2, renderer_preferences.h:26), not the OS palette the computed
+`Highlight` system colour resolves, so the record's pixels are the only
+deterministic source — the comparison then measures the selection's
+geometry, not the theme. Two recorded divergences the fixtures inherit:
+the selected text keeps its own colour over the wash where Chrome paints
+HighlightText (ticket 28's recorded divergence, the tolerance floor),
+and the triple-click's break paints to the last inked glyph (the break
+takes no ink) — a selection crossing a hard break paints the row tail to
+the run's bounds where Chrome uses the line box's width.

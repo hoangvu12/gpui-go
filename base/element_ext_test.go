@@ -21,20 +21,16 @@ func TestElementExtTextSelectionScopeScopesTheSubtree(t *testing.T) {
 	})
 	drawText(t, cx)
 	cx.Update(func(w *gpui.Window, app *gpui.App) {
-		state, ok := textSelectionStateExisting(w, app)
-		if !ok {
+		if !textSelectionStateExists(w, app) {
 			t.Fatal("no state")
 		}
-		_, _ = state.TryRead(app, func(s *windowSelectionState, _ *gpui.App) struct{} {
-			registration, ok := s.participants[selection.EntityID()]
-			if !ok {
-				t.Fatal("the participant did not register on the first frame")
-			}
-			if got := registration.registration.scope; got != scope {
-				t.Errorf("registration scope %v, want %v", got, scope)
-			}
-			return struct{}{}
-		})
+		got, ok := gpui.TextSelectionParticipantScope(w, app, selection.EntityID())
+		if !ok {
+			t.Fatal("the participant did not register on the first frame")
+		}
+		if got != scope {
+			t.Errorf("registration scope %v, want %v", got, scope)
+		}
 	})
 }
 

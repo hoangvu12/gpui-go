@@ -245,14 +245,26 @@ func (w *Window) defaultEditActions(event any, app *App) bool {
 		// 18): no editor commands while composing.
 		return false
 	}
-	fs := focusState(w)
-	handler := fs.inputHandler
-	if handler == nil || !handler.AcceptsTextInput(w, app) {
-		return false
-	}
 	command := editCommandOfKeystroke(keyDown.Keystroke)
 	if command == editCommandNone {
 		return false
+	}
+	fs := focusState(w)
+	handler := fs.inputHandler
+	if handler == nil || !handler.AcceptsTextInput(w, app) {
+		// Chromium's editor commands act on the frame's selection, not
+		// only on editable elements (browser-core 19): the copy command
+		// with a selection on static text still copies. When nothing
+		// editable is focused, the window's text selection stands in for
+		// the focused handler; the other commands are editable-only
+		// (cut, paste and select-all mutate or move a handler's own
+		// selection).
+		if command != editCommandCopy {
+			return false
+		}
+		if handler = windowSelectionEditHandlerFor(w, app); handler == nil {
+			return false
+		}
 	}
 	return w.runEditCommand(command, handler, app)
 }

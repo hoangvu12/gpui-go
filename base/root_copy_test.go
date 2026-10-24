@@ -47,7 +47,7 @@ func TestRootMountsTextSelectionLayer(t *testing.T) {
 	ta.Update(func(app *gpui.App) { focus = app.FocusHandle() })
 	cx := openSelectionRoot(t, ta, selection, focus)
 	cx.Update(func(w *gpui.Window, app *gpui.App) {
-		if _, ok := textSelectionStateExisting(w, app); !ok {
+		if !textSelectionStateExists(w, app) {
 			t.Fatal("the Root mounted no TextSelectionLayer (no window selection state)")
 		}
 		selection.SetLocalSelection(true, app)

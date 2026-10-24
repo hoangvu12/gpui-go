@@ -530,8 +530,13 @@ func (p *cdpPage) dispatchStep(step Step) error {
 		if button == "" {
 			button = ButtonLeft
 		}
+		// The press's click count (browser-core ticket 19): CDP's
+		// clickCount becomes the WebMouseEvent's click_count, which the
+		// renderer's double/triple-click arms (and the DOM events'
+		// detail) read — the count the replay dispatches as the event's
+		// ClickCount, so one spelling serves both sides.
 		_, err := p.call("Input.dispatchMouseEvent", map[string]any{
-			"type": eventType, "x": step.X, "y": step.Y, "button": button, "clickCount": 1,
+			"type": eventType, "x": step.X, "y": step.Y, "button": button, "clickCount": stepClicks(step),
 		})
 		return err
 	case StepKey:

@@ -58,9 +58,9 @@ func (v *virtualBlockSelection) update(snapshot gpui.Optional[TextSelectionSnaps
 		*v = virtualBlockSelection{}
 		return
 	}
-	v.coverage = snap.coverage
-	updateCachedBlockEndpoint(&v.anchor, snap.anchor, entityID)
-	updateCachedBlockEndpoint(&v.cursor, snap.cursor, entityID)
+	v.coverage = snap.Coverage()
+	updateCachedBlockEndpoint(&v.anchor, snap.Anchor(), entityID)
+	updateCachedBlockEndpoint(&v.cursor, snap.Cursor(), entityID)
 }
 
 // updateCachedBlockEndpoint is U:text/selection_adapter.rs:37-49.
@@ -69,8 +69,8 @@ func updateCachedBlockEndpoint(cached *gpui.Optional[cachedBlockEndpoint], endpo
 		return
 	}
 	var blockIx gpui.Optional[int]
-	if endpoint.entityID == gpui.Some(entityID) {
-		if key, ok := endpoint.contentKey.Get(); ok {
+	if endpoint.EntityID() == gpui.Some(entityID) {
+		if key, ok := endpoint.ContentKey().Get(); ok {
 			blockIx = gpui.Some(int(key.Value()))
 		}
 	}
@@ -110,7 +110,7 @@ func (v *virtualBlockSelection) blockRange(entityID gpui.EntityID, last int) *[2
 		}
 		return &[2]int{ix, last}
 	}
-	if anchor.endpoint.entityID != gpui.Some(entityID) || cursor.endpoint.entityID != gpui.Some(entityID) {
+	if anchor.endpoint.EntityID() != gpui.Some(entityID) || cursor.endpoint.EntityID() != gpui.Some(entityID) {
 		return nil
 	}
 	a, ok := anchor.blockIx.Get()
@@ -151,7 +151,7 @@ func newTextViewSelectionBridge(view gpui.WeakEntity[TextViewState], owner *gpui
 				s.preserveInlineSelection = false
 				blocks.update(snapshot, selectionID)
 				snap, ok := snapshot.Get()
-				s.isSelecting = ok && snap.isSelecting
+				s.isSelecting = ok && snap.IsSelecting()
 				cx.Notify()
 			})
 		case TextSelectionEventAutoScroll:
@@ -265,12 +265,12 @@ func (a *textViewSelectionBridge) registerInline(bounds []gpui.Bounds) {
 // register reports this frame's geometry to the window selection
 // (U:text/selection_adapter.rs:216-239).
 func (a *textViewSelectionBridge) register(hitbox gpui.Hitbox, bounds gpui.Bounds, scrollOffset gpui.Point, documentOrder uint64, selfScroll bool, w *gpui.Window, app *gpui.App) {
-	a.selection.setHitTestRuns(a.textRuns, app)
+	a.selection.SetHitTestRuns(a.textRuns, app)
 	registration := NewTextSelectionRegistration(hitbox, bounds).
 		WithScrollOffset(scrollOffset).
 		WithDocumentOrder(documentOrder).
 		WithTextBounds(append([]gpui.Bounds(nil), a.textBounds...)).
-		withSelfScroll(selfScroll).
+		WithSelfScroll(selfScroll).
 		WithRenderedElement(a.selection, w, app)
 	if edges, ok := a.selectionEdges.Get(); ok {
 		registration = registration.WithSelectionEdges(edges[0], edges[1])
@@ -294,11 +294,11 @@ func (a *textViewSelectionBridge) selectionPoints(app *gpui.App) (gpui.Point, gp
 	if !ok {
 		return gpui.Point{}, gpui.Point{}, false
 	}
-	points, ok := snapshot.windowPoints.Get()
+	points, ok := snapshot.WindowPoints().Get()
 	if !ok {
 		return gpui.Point{}, gpui.Point{}, false
 	}
-	return points.anchor, points.cursor, true
+	return points.Anchor(), points.Cursor(), true
 }
 
 // setLocalSelection is U:text/selection_adapter.rs:269-271.
@@ -310,7 +310,7 @@ func (a *textViewSelectionBridge) setLocalSelection(active bool, app *gpui.App) 
 func (a *textViewSelectionBridge) isPartOfWindowSelection(app *gpui.App) bool {
 	id := gpui.Some(a.selection.EntityID())
 	snapshot, ok := a.selection.Snapshot(app).Get()
-	return ok && (snapshot.anchor.entityID == id || snapshot.cursor.entityID == id)
+	return ok && (snapshot.Anchor().EntityID() == id || snapshot.Cursor().EntityID() == id)
 }
 
 // hasSelectionSnapshot is U:text/selection_adapter.rs:280-282.
@@ -434,7 +434,7 @@ func textViewSelectionPaint(state gpui.Entity[TextViewState], hitbox gpui.Hitbox
 		return facts{s.scrollOffset(), s.bounds, s.scrollable, s.textViewStyle.Selection().Opacity(1)}
 	})
 	GlobalStateInit(app)
-	documentOrder := GlobalStateGlobalMut(app).nextSelectionDocumentOrder()
+	documentOrder := gpui.NextSelectionDocumentOrder(app)
 	adapter.register(hitbox, f.bounds, f.scrollOffset, documentOrder, f.selfScroll, w, app)
 	// The handles of a touch selection go over the text, and under
 	// whatever is painted over the text after it.

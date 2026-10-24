@@ -203,13 +203,13 @@ func applyStep(cx *gpui.VisualTestContext, log *EventLog, step Step) error {
 	case StepDown:
 		before := len(log.entries)
 		result := cx.SimulateEvent(&gpui.MouseDownEvent{
-			Position: position, Button: button, ClickCount: 1, FirstMouse: false,
+			Position: position, Button: button, ClickCount: stepClicks(step), FirstMouse: false,
 		})
 		log.markDefaultPrevented(before, result.DefaultPrevented)
 	case StepUp:
 		before := len(log.entries)
 		result := cx.SimulateEvent(&gpui.MouseUpEvent{
-			Position: position, Button: button, ClickCount: 1,
+			Position: position, Button: button, ClickCount: stepClicks(step),
 		})
 		log.markDefaultPrevented(before, result.DefaultPrevented)
 	case StepWait:
@@ -332,9 +332,22 @@ func mouseButton(name string) (gpui.MouseButton, error) {
 	}
 }
 
+// stepClicks resolves a press or release step's click count: the
+// explicit count when the step carries one (browser-core ticket 19: the
+// multi-click count a rapid press sequence reports), else 1.
+func stepClicks(step Step) int {
+	if step.Clicks > 0 {
+		return step.Clicks
+	}
+	return 1
+}
+
 // ExpandSteps expands the click sugar (and validates): both the
 // recorder and the replay dispatch the expanded sequence, so a click
-// means exactly the same three events on both sides.
+// means exactly the same three events on both sides. A MultiClick step
+// (a click with Clicks > 1) expands to the same move/press/release
+// triple carrying its count — the second press of a real double-click
+// sequence.
 func ExpandSteps(steps []Step) []Step {
 	out := make([]Step, 0, len(steps))
 	for _, step := range steps {
@@ -344,10 +357,11 @@ func ExpandSteps(steps []Step) []Step {
 			if button == "" {
 				button = ButtonLeft
 			}
+			clicks := stepClicks(step)
 			out = append(out,
 				Step{Kind: StepMove, X: step.X, Y: step.Y},
-				Step{Kind: StepDown, X: step.X, Y: step.Y, Button: button},
-				Step{Kind: StepUp, X: step.X, Y: step.Y, Button: button},
+				Step{Kind: StepDown, X: step.X, Y: step.Y, Button: button, Clicks: clicks},
+				Step{Kind: StepUp, X: step.X, Y: step.Y, Button: button, Clicks: clicks},
 			)
 		default:
 			out = append(out, step)

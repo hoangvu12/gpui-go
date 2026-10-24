@@ -6,7 +6,6 @@ package base
 // TextView entities and joins with the TextView ticket (28).
 
 import (
-	"time"
 	"weak"
 
 	"github.com/hoangvu12/gpui-go/gpui"
@@ -44,37 +43,36 @@ func (p *DeferredPopover) Release() {
 }
 
 // GlobalState is the application-wide state shared by Base behaviors
-// (U:global_state.rs:18-30). The global is stored as *GlobalState.
+// (U:global_state.rs:18-30). The global is stored as *GlobalState. The
+// selection-gesture fields moved into the core with the selection model
+// (browser-core 19: the suppression flag, the selection document order
+// and the touch-press timestamp live in gpui's selection gesture global,
+// gpui/text_selection_globals.go — the functions below delegate there so
+// one flag serves the core model and Base's controls).
 type GlobalState struct {
-	appMenus               []gpui.Menu
-	deferredPopovers       []weak.Pointer[deferredToken]
-	suppressTextSelection  bool
-	selectionDocumentOrder uint64
-	// lastTouch is when a finger last went down; a tap reaches controls
-	// as a mouse press and this is how they tell it from one.
-	lastTouch    time.Time
-	hasLastTouch bool
+	appMenus         []gpui.Menu
+	deferredPopovers []weak.Pointer[deferredToken]
 }
 
-// newGlobalState returns the initial state (U:global_state.rs:33-42).
+// newGlobalState returns the initial state (U:global_state.rs:33-42;
+// the selection-gesture counters moved to the core's own global).
 func newGlobalState() *GlobalState {
-	return &GlobalState{selectionDocumentOrder: 1}
+	return &GlobalState{}
 }
 
 // GlobalStateNoteTouch records that a finger went down
-// (U:global_state.rs:44-49).
+// (U:global_state.rs:44-49; the timestamp lives in the core's selection
+// gesture global, browser-core 19).
 func GlobalStateNoteTouch(app *gpui.App) {
 	GlobalStateInit(app)
-	s := GlobalStateGlobalMut(app)
-	s.lastTouch, s.hasLastTouch = time.Now(), true
+	gpui.NoteTouchPress(app)
 }
 
 // GlobalStateIsTouchPress reports whether the press being handled came
 // from a finger: a touch went down less than a second ago, within the
 // double-tap window (U:global_state.rs:51-58).
 func GlobalStateIsTouchPress(app *gpui.App) bool {
-	s, ok := gpui.TryGlobal[*GlobalState](app)
-	return ok && s.hasLastTouch && time.Since(s.lastTouch) < time.Second
+	return gpui.IsTouchPress(app)
 }
 
 // GlobalStateInit ensures the Base global exists (U:global_state.rs:60-66).
@@ -86,21 +84,23 @@ func GlobalStateInit(app *gpui.App) {
 
 // GlobalStateSuppressTextSelection suppresses window-level text selection
 // for the current mouse down, so a control owning a press or drag does
-// not also start application text selection (U:global_state.rs:68-74).
+// not also start application text selection (U:global_state.rs:68-74;
+// the flag is the core model's own, browser-core 19).
 func GlobalStateSuppressTextSelection(app *gpui.App) {
-	GlobalStateGlobalMut(app).suppressTextSelection = true
+	GlobalStateInit(app)
+	gpui.SuppressTextSelection(app)
 }
 
 // GlobalStateResetTextSelectionSuppression clears the current mouse-down
 // suppression (U:global_state.rs:76-80).
 func GlobalStateResetTextSelectionSuppression(app *gpui.App) {
-	GlobalStateGlobalMut(app).suppressTextSelection = false
+	gpui.ResetTextSelectionSuppression(app)
 }
 
 // GlobalStateIsTextSelectionSuppressed reports whether the current mouse
 // down suppresses text selection (U:global_state.rs:82-86).
 func GlobalStateIsTextSelectionSuppressed(app *gpui.App) bool {
-	return GlobalStateGlobal(app).suppressTextSelection
+	return gpui.IsTextSelectionSuppressed(app)
 }
 
 // GlobalStateGlobal returns the global; it panics when GlobalStateInit
@@ -116,17 +116,10 @@ func GlobalStateGlobalMut(app *gpui.App) *GlobalState {
 	return s
 }
 
-// BeginSelectionFrame restarts the selection document order
-// (U:global_state.rs:100-103).
-func (s *GlobalState) BeginSelectionFrame() { s.selectionDocumentOrder = 1 }
-
-// nextSelectionDocumentOrder hands out the next document order
-// (U:global_state.rs:105-109; wrapping add).
-func (s *GlobalState) nextSelectionDocumentOrder() uint64 {
-	order := s.selectionDocumentOrder
-	s.selectionDocumentOrder++
-	return order
-}
+// The selection document order moved into the core's selection gesture
+// global with the selection model (browser-core 19: the layer's
+// BeginSelectionFrame and the participants' paint-order counter live in
+// gpui/text_selection_globals.go).
 
 // AppMenus returns the application menus (U:global_state.rs:111-114).
 func (s *GlobalState) AppMenus() []gpui.Menu { return s.appMenus }
