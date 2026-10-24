@@ -24,6 +24,8 @@ Every behaviour check is a browser-parity harness fixture (an HTML page recorded
 
 ## Comments
 
+- 2026-10-24, orchestrator 8 (follow-up): focusspec (missed in the first verification) caught a bug: a default `TabGroup` sorted before its zero-bucket siblings, because `BeginGroup` pushed the raw index while `Insert` used `htmlTabRank`. Fixed in gpui/focus.go `BeginGroup`; focusspec's TestTabTraversalOrder and TestFocusReleaseDuringDispatch now pin D4's order (no wrap, negative never reached) and the body-focused root dispatch.
+
 - 2026-10-24, orchestrator 8 (verification): merged 976cd25+0b21604 into main. Conflicts with 34/36 (fixture import lists, the harness guide, and gpui/div.go's child prepaint) were resolved: div.go keeps 14's inert scope wrapping 34's `stickyChildrenLast` order. With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./gpui/, ./internal/parity/... (tabnav, contextmenu and every existing fixture), ./base, authorspec, inspectorspec, dropspec, winhostspec, richtextspec, spellspec, tsxgen and ./examples/...; build, vet and gofmt are clean. Behaviour changes toward Chrome: `FocusNext`/`FocusPrev` no longer wrap (Tab past the last stop blurs; the next Tab starts from the first stop), and body-focused key events now reach the root element's listeners.
 
 ## Answer

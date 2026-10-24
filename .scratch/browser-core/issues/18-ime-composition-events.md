@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 01
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged 8de1dbf into main with no conflicts. The harness now wires every step kind (move/down/up/click/key/keydown/keyup/wait/imeset/imecommit) in fixture, recorder and replay. The merged run surfaced two failures outside 18: (a) tabnav's wrong-view test matched a diff line that 18's `isComposing` field extended; I loosened it to match the two targets. (b) focusspec, which 14 never ran, failed on 14's D4 changes, and that exposed a real 14 bug: `BeginGroup` pushed the raw group index while `Insert` ranks through `htmlTabRank`, so a default TabGroup sorted before its zero-bucket siblings. I fixed it and updated the focusspec tests with divergence notes. With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./gpui/, focusspec, imespec, ./internal/parity/... (imecompose), ./base, winhostspec, actionspec, authorspec, inspectorspec, dropspec, richtextspec, ./examples/... and tsxgen.
 
 ## Answer
 
