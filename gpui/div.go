@@ -2043,7 +2043,7 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 					recordStickyFlowBox(w, layout.layoutID.node, style.ContentBox(bounds, RemSize(w)))
 				}
 				tree := currentDispatchTree(w)
-				endGroup := registerDivElementDispatch(w, d, suppressed, state.hitbox, es)
+				endGroup := registerDivElementDispatch(w, d, global, suppressed, state.hitbox, es)
 				defer func() {
 					if endGroup {
 						currentTabStops(w).EndGroup()
@@ -2103,9 +2103,16 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 // or a hidden ancestor: only the node and its focus identity register.
 // It reports whether a tab group was opened; the caller closes it and
 // pops the node after the children.
-func registerDivElementDispatch(w *Window, d *DivElement, suppressed bool, hitbox *Hitbox, es *InteractiveElementState) (endGroup bool) {
+func registerDivElementDispatch(w *Window, d *DivElement, global *GlobalElementID, suppressed bool, hitbox *Hitbox, es *InteractiveElementState) (endGroup bool) {
 	tree := currentDispatchTree(w)
 	tree.PushNode()
+	// browser-core ticket 15: the node's element identity — the same
+	// GlobalElementID key the hitbox records carry, so a later frame can
+	// resolve this node from a path (the keyboard scroll's mouse-press
+	// start node).
+	if global != nil {
+		tree.SetElementPath(global.key())
+	}
 	if d.focusHandle != nil {
 		tree.SetFocusID(d.focusHandle.id)
 	}

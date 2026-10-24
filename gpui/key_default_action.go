@@ -356,8 +356,17 @@ func (w *Window) dispatchKeyboardClick(path []DispatchNodeID, nodeID DispatchNod
 // defaultKeyboardScroll is the navigation-key default action
 // (DefaultNavigationKeyEventHandler, keyboard_event_manager.cc:
 // 526-572): the mapped key scrolls the chain of scrollable ancestors
-// of the focused node, the first that can take the delta consuming it
-// (BubblingScroll). It reports whether anything scrolled.
+// of the scroll's START NODE, the first that can take the delta
+// consuming it (BubblingScroll). The start node follows LogicalScroll
+// (scroll_manager.cc:216-232): the FOCUSED element's chain; with
+// nothing focused, the MOUSE-PRESS node's chain — the element under
+// the last mousedown, whose press paths persist until the next press
+// (browser-core 15, mouseevent.go pressHitPaths); with neither, the
+// root scroller (the body path's walk). A scroller whose
+// overscroll-behavior does not propagate on the scroll's axis cuts the
+// walk when it cannot take the delta (RecomputeScrollChain's
+// RespectOverscrollBehavior arm, scroll_manager.cc:192-206 — nothing
+// above it scrolls). It reports whether anything scrolled.
 func (w *Window) defaultKeyboardScroll(e *KeyDownEvent, app *App) bool {
 	stroke := e.Keystroke
 	mapping, ok := mapKeyForScroll(stroke.Key, stroke.Modifiers)
@@ -368,12 +377,12 @@ func (w *Window) defaultKeyboardScroll(e *KeyDownEvent, app *App) bool {
 	// (keyboard_event_manager.cc:442-445): a focused input handler that
 	// accepts text input consumes arrows and Space as caret movement and
 	// typing, before any scrolling default.
-	if fs := focusState(w); fs.inputHandler != nil && fs.inputHandler.AcceptsTextInput(w, app) {
+	fs := focusState(w)
+	if fs.inputHandler != nil && fs.inputHandler.AcceptsTextInput(w, app) {
 		return false
 	}
-	fs := focusState(w)
 	tree := fs.renderedDispatchTree()
-	path, _ := w.focusDispatchPath()
+	path := w.keyboardScrollStartPath(tree)
 	for i := len(path) - 1; i >= 0; i-- {
 		node := tree.Node(path[i])
 		if node == nil || node.scrollContainer == nil {
@@ -382,8 +391,40 @@ func (w *Window) defaultKeyboardScroll(e *KeyDownEvent, app *App) bool {
 		if node.scrollContainer.applyScroll(mapping, w, app) {
 			return true
 		}
+		// The overscroll-behavior cut: this scroller could not take the
+		// delta, and its axis does not propagate — the walk ends here
+		// (can_bubble = false, scroll_manager.cc:192-206).
+		if node.scrollContainer.blocksChaining(mapping) {
+			return false
+		}
 	}
 	return false
+}
+
+// keyboardScrollStartPath resolves the keyboard scroll's start node
+// path (LogicalScroll's node selection, scroll_manager.cc:216-232):
+// the focused element's dispatch path; with nothing focused, the
+// mouse-press node's — the innermost press path that resolves into the
+// current tree, walking outward through the press chain's survivors —
+// and with neither, the body path (the root scroller's walk). The
+// mouse-press half is browser-core 15: the press hit-test chain's
+// element paths (pressHitPaths) are stable identities, resolved into
+// the CURRENT frame's tree through the nodes' element paths (SetElement
+// Path).
+func (w *Window) keyboardScrollStartPath(tree *DispatchTree) []DispatchNodeID {
+	fs := focusState(w)
+	if fs.focused != 0 {
+		path, _ := w.focusDispatchPath()
+		return path
+	}
+	is := inputState(w)
+	for _, pressPath := range is.pressHitPaths {
+		if node, ok := tree.nodeByPath(pressPath); ok {
+			return tree.DispatchPath(node)
+		}
+	}
+	path, _ := w.focusDispatchPath()
+	return path
 }
 
 // defaultTabNavigation is the Tab default action
@@ -529,6 +570,12 @@ type keyScrollContainer struct {
 	// only a scrolling axis takes a delta (CanScroll's axis gate,
 	// scroll_manager.cc:176-191).
 	overflowX, overflowY Overflow
+	// overscrollX and overscrollY are the element's computed
+	// overscroll-behavior per axis (browser-core 15): a scroller that
+	// cannot take the delta cuts the walk when its axis does not
+	// propagate (RecomputeScrollChain's RespectOverscrollBehavior
+	// arm, scroll_manager.cc:192-206).
+	overscrollX, overscrollY OverscrollBehavior
 	// notify refreshes the view that rendered the scroller.
 	notify func(w *Window, app *App)
 }
@@ -611,6 +658,25 @@ func scrollSign(direction keyScrollDirection) float32 {
 	return 1
 }
 
+// blocksChaining reports whether this container cuts the keyboard
+// scroll's chain when it cannot take the delta (browser-core 15):
+// the container scrolls on the mapping's axis (the chain-membership
+// gate — Chromium's CanScroll, scroll_manager.cc:176-191, is
+// style-based) and its overscroll-behavior on that axis does not
+// propagate (RecomputeScrollChain's RespectOverscrollBehavior arm,
+// scroll_manager.cc:192-206: can_bubble = false, the walk ends at this
+// scroller).
+func (c *keyScrollContainer) blocksChaining(mapping keyScrollMapping) bool {
+	if c == nil {
+		return false
+	}
+	vertical := mapping.direction == keyScrollUp || mapping.direction == keyScrollDown
+	if vertical {
+		return overflowAxisUserScrolls(c.overflowY) && !c.overscrollY.propagatesScroll()
+	}
+	return overflowAxisUserScrolls(c.overflowX) && !c.overscrollX.propagatesScroll()
+}
+
 // registerKeyScrollContainer registers the scrolling element's scroll
 // container on the active dispatch node (browser-core 09): called from
 // the div's prepaint after the scroll clamp, so the keyboard-scroll
@@ -624,12 +690,14 @@ func registerKeyScrollContainer(w *Window, scroll *elementScroll, style *Style) 
 	}
 	tree := currentDispatchTree(w)
 	tree.SetKeyScrollContainer(keyScrollContainer{
-		offset:    scroll.offset,
-		maxOffset: scroll.maxOffset,
-		visible:   scroll.visible,
-		overflowX: style.OverflowX,
-		overflowY: style.OverflowY,
-		notify:    currentViewNotifier(w),
+		offset:      scroll.offset,
+		maxOffset:   scroll.maxOffset,
+		visible:     scroll.visible,
+		overflowX:   style.OverflowX,
+		overflowY:   style.OverflowY,
+		overscrollX: style.OverscrollBehaviorX,
+		overscrollY: style.OverscrollBehaviorY,
+		notify:      currentViewNotifier(w),
 	})
 }
 

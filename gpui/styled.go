@@ -263,6 +263,76 @@ func (s *Styled[Self]) ScrollbarGutterStable[_ lazy]() Self {
 	return s.self
 }
 
+// OverscrollContain sets overscroll-behavior: contain on both axes
+// (browser-core 15): a scroller that cannot consume a scroll (it
+// reached its end, or its axis cannot scroll) stops the scroll chain —
+// the remaining delta never reaches the ancestor scrollers. The
+// Tailwind classes overscroll-contain / overscroll-x-contain /
+// overscroll-y-contain land here.
+func (s *Styled[Self]) OverscrollContain[_ lazy]() Self {
+	style := s.StyleMut()
+	style.OverscrollBehaviorX = Some(OverscrollBehaviorContain)
+	style.OverscrollBehaviorY = Some(OverscrollBehaviorContain)
+	return s.self
+}
+
+// OverscrollNone sets overscroll-behavior: none on both axes
+// (browser-core 15): like contain, the scroll chain stops at this
+// scroller; none additionally suppresses the user agent's overscroll
+// affordance (the port has none either way).
+func (s *Styled[Self]) OverscrollNone[_ lazy]() Self {
+	style := s.StyleMut()
+	style.OverscrollBehaviorX = Some(OverscrollBehaviorNone)
+	style.OverscrollBehaviorY = Some(OverscrollBehaviorNone)
+	return s.self
+}
+
+// OverscrollAuto resets overscroll-behavior: auto on both axes
+// (browser-core 15): the scroller lets an unconsumed scroll chain to
+// its ancestors (the CSS default).
+func (s *Styled[Self]) OverscrollAuto[_ lazy]() Self {
+	style := s.StyleMut()
+	style.OverscrollBehaviorX = Some(OverscrollBehaviorAuto)
+	style.OverscrollBehaviorY = Some(OverscrollBehaviorAuto)
+	return s.self
+}
+
+// OverscrollXContain sets overscroll-behavior-x: contain.
+func (s *Styled[Self]) OverscrollXContain[_ lazy]() Self {
+	s.StyleMut().OverscrollBehaviorX = Some(OverscrollBehaviorContain)
+	return s.self
+}
+
+// OverscrollXNone sets overscroll-behavior-x: none.
+func (s *Styled[Self]) OverscrollXNone[_ lazy]() Self {
+	s.StyleMut().OverscrollBehaviorX = Some(OverscrollBehaviorNone)
+	return s.self
+}
+
+// OverscrollXAuto resets overscroll-behavior-x: auto.
+func (s *Styled[Self]) OverscrollXAuto[_ lazy]() Self {
+	s.StyleMut().OverscrollBehaviorX = Some(OverscrollBehaviorAuto)
+	return s.self
+}
+
+// OverscrollYContain sets overscroll-behavior-y: contain.
+func (s *Styled[Self]) OverscrollYContain[_ lazy]() Self {
+	s.StyleMut().OverscrollBehaviorY = Some(OverscrollBehaviorContain)
+	return s.self
+}
+
+// OverscrollYNone sets overscroll-behavior-y: none.
+func (s *Styled[Self]) OverscrollYNone[_ lazy]() Self {
+	s.StyleMut().OverscrollBehaviorY = Some(OverscrollBehaviorNone)
+	return s.self
+}
+
+// OverscrollYAuto resets overscroll-behavior-y: auto.
+func (s *Styled[Self]) OverscrollYAuto[_ lazy]() Self {
+	s.StyleMut().OverscrollBehaviorY = Some(OverscrollBehaviorAuto)
+	return s.self
+}
+
 // VerticalAlign sets the vertical alignment in an inline layout
 // (styled.rs:129).
 func (s *Styled[Self]) VerticalAlign[_ lazy](align VerticalAlign) Self {

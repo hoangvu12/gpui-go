@@ -96,6 +96,19 @@ const (
 	// in the same state the page's script leaves the page in, and
 	// refresh the window when the view must redraw.
 	StepScript StepKind = "script"
+	// StepWheel scrolls the mouse wheel at (X, Y) by (DeltaX, DeltaY)
+	// logical pixels (browser-core ticket 15): the recorder dispatches
+	// CDP Input.dispatchMouseEvent type mouseWheel and the replay a
+	// ScrollWheelEvent with a pixel delta. The deltas follow the
+	// platform's ScrollWheelEvent convention — NEGATIVE deltaY scrolls
+	// down (WebKit's "positive deltaY means scroll up",
+	// ui/events/blink/web_input_event_builders_win.cc:339); the recorder
+	// negates them for CDP, whose params carry the DOM's signs. A wheel
+	// gesture latches to the innermost scroller that can scroll
+	// (browser-core 15); consecutive wheel steps inside the 500ms
+	// latching transaction are ONE gesture — a Wait(600) between steps
+	// starts a new one on both sides.
+	StepWheel StepKind = "wheel"
 )
 
 // MouseButton names, shared by the recorder and the replay.
@@ -129,6 +142,10 @@ type Step struct {
 	// StepImeSet step, within Text (Input.imeSetComposition's
 	// selectionStart/selectionEnd).
 	SelStart, SelEnd int
+	// DeltaX and DeltaY are the wheel step's scroll delta in logical
+	// pixels, in the platform's ScrollWheelEvent convention (negative
+	// deltaY scrolls down) — browser-core ticket 15.
+	DeltaX, DeltaY float32
 	// Script is the JavaScript expression a StepScript step evaluates
 	// on the recorded page (the state change's page half). It must be
 	// side-effecting and synchronous; its return value is ignored.
@@ -204,6 +221,16 @@ func ImeCommit(text string) Step { return Step{Kind: StepImeCommit, Text: text} 
 // window).
 func Script(script string, run func(log *EventLog, w *gpui.Window, app *gpui.App)) Step {
 	return Step{Kind: StepScript, Script: script, Run: run}
+}
+
+// Wheel returns a mouse-wheel step at (x, y) scrolling by (deltaX,
+// deltaY) logical pixels (browser-core ticket 15): negative deltaY
+// scrolls down (the platform ScrollWheelEvent convention; the recorder
+// negates the deltas for CDP's DOM-sign params). Consecutive wheel
+// steps form one latching gesture until a Wait beyond the 500ms
+// latching transaction separates them.
+func Wheel(x, y, deltaX, deltaY float32) Step {
+	return Step{Kind: StepWheel, X: x, Y: y, DeltaX: deltaX, DeltaY: deltaY}
 }
 
 // KeyCode returns a keystroke step with an explicit physical DOM code
@@ -780,7 +807,7 @@ func validate(f Fixture) error {
 	}
 	for _, step := range f.Steps {
 		switch step.Kind {
-		case StepMove, StepDown, StepUp, StepClick, StepKey, StepKeyDown, StepKeyUp, StepWait, StepImeSet, StepImeCommit:
+		case StepMove, StepDown, StepUp, StepClick, StepKey, StepKeyDown, StepKeyUp, StepWait, StepImeSet, StepImeCommit, StepWheel:
 		case StepScript:
 			if step.Script == "" || step.Run == nil {
 				return fmt.Errorf("parity: fixture %q: a script step needs both its page script and its Go half", f.Name)

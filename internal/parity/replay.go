@@ -305,6 +305,33 @@ func applyStep(cx *gpui.VisualTestContext, log *EventLog, step Step) error {
 			step.Run(log, w, app)
 		})
 		cx.RunUntilParked()
+	case StepWheel:
+		// The wheel event (browser-core 15): one ScrollWheelEvent with a
+		// pixel delta at the step's position, through the platform
+		// dispatch (the same path a real Windows wheel takes after the
+		// input translation), followed by the gesture's end — a
+		// zero-delta phase-Ended event that clears the window's wheel
+		// latch. The pairing mirrors the recorder's CDP wheel, which the
+		// DevTools handler stamps kPhaseBegan (input_handler.cc:490),
+		// making every CDP wheel a complete gesture of its own; without
+		// the Ended half a run of Wheel steps would ride one 500ms latch
+		// in the port while Chrome treats each as its own gesture. The
+		// step's deltas are already in the platform's convention
+		// (negative deltaY scrolls down).
+		before := len(log.entries)
+		result := cx.SimulateEvent(&gpui.ScrollWheelEvent{
+			Position:   position,
+			Delta:      gpui.ScrollDeltaPixels(step.DeltaX, step.DeltaY),
+			TouchPhase: gpui.TouchPhaseMoved,
+		})
+		log.markDefaultPrevented(before, result.DefaultPrevented)
+		// The gesture's end: the same shape the recorder's page sees when
+		// the browser's latching transaction timer fires its synthetic
+		// wheel-end (mouse_wheel_phase_handler.cc).
+		cx.SimulateEvent(&gpui.ScrollWheelEvent{
+			Position:   position,
+			TouchPhase: gpui.TouchPhaseEnded,
+		})
 	default:
 		return fmt.Errorf("unknown step kind %q", step.Kind)
 	}

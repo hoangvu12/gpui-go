@@ -1,0 +1,73 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 320px;
+		height: 240px;
+		display: flex;
+		align-items: flex-start;
+	}
+	#left, #right {
+		box-sizing: border-box;
+		width: 140px;
+		height: 200px;
+		margin-top: 10px;
+		display: flex;
+		flex-direction: column;
+		overflow-y: scroll;
+		scrollbar-width: none;
+		background: #f1f5f9;
+	}
+	#left {
+		margin-left: 10px;
+	}
+	#right {
+		margin-left: 20px;
+	}
+	#left > div, #right > div {
+		flex-shrink: 0;
+		box-sizing: border-box;
+		width: 140px;
+		height: 40px;
+		background: #cbd5e1;
+	}
+	#lrow0 {
+		background: #fca5a5;
+		outline: none;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div id="left" data-id="left">
+		<div id="lrow0" data-id="lrow0" tabindex="0"></div>
+		<div id="lrow1" data-id="lrow1"></div>
+		<div id="lrow2" data-id="lrow2"></div>
+		<div id="lrow3" data-id="lrow3"></div>
+		<div id="lrow4" data-id="lrow4"></div>
+		<div id="lrow5" data-id="lrow5"></div>
+		<div id="lrow6" data-id="lrow6"></div>
+		<div id="lrow7" data-id="lrow7"></div>
+		<div id="lrow8" data-id="lrow8"></div>
+		<div id="lrow9" data-id="lrow9"></div>
+	</div>
+	<div id="right" data-id="right">
+		<div id="rrow0" data-id="rrow0"></div>
+		<div id="rrow1" data-id="rrow1"></div>
+		<div id="rrow2" data-id="rrow2"></div>
+		<div id="rrow3" data-id="rrow3"></div>
+		<div id="rrow4" data-id="rrow4"></div>
+		<div id="rrow5" data-id="rrow5"></div>
+		<div id="rrow6" data-id="rrow6"></div>
+		<div id="rrow7" data-id="rrow7"></div>
+		<div id="rrow8" data-id="rrow8"></div>
+		<div id="rrow9" data-id="rrow9"></div>
+	</div>
+</body>
+</html>

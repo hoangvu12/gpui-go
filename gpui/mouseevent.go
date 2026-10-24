@@ -839,6 +839,12 @@ type windowInputState struct {
 	// nextHitboxID assigns hitbox identities (window.rs
 	// next_hitbox_id).
 	nextHitboxID uint64
+	// wheelLatch is the latched scroller of the current wheel gesture
+	// (browser-core ticket 15, wheel_scroll.go): one gesture scrolls
+	// one scroller, the innermost that can consume the gesture's first
+	// delta; the latch expires with the 500ms latching transaction on
+	// the application's clock.
+	wheelLatch *wheelScrollLatch
 }
 
 // inputState returns (creating when absent) the window's input state.

@@ -1620,7 +1620,7 @@ var unsupportedClasses = []struct {
 	{[]string{"antialiased", "subpixel-antialiased"}, "GPUI chooses text antialiasing itself; drop it"},
 	{[]string{"list"}, "list styles are not supported"},
 	{[]string{"appearance", "resize", "accent", "caret"}, "form-control styling is not supported; GPUI has no native form controls"},
-	{[]string{"scroll", "snap", "touch", "overscroll", "will-change", "isolation", "isolate"}, "this scrolling or compositing utility is not supported (overflow-auto/scroll and scrollbar-gutter-stable are)"},
+	{[]string{"scroll", "snap", "touch", "will-change", "isolation", "isolate"}, "this scrolling or compositing utility is not supported (overflow-auto/scroll, scrollbar-gutter-stable and the overscroll-* classes are)"},
 	{[]string{"sr-only", "not-sr-only"}, "sr-only is not supported; describe the element through its accessibility properties"},
 	{[]string{"container", "prose"}, "container and prose are not supported; set max-w-* and padding explicitly"},
 	{[]string{"fill", "stroke"}, "an svg element is painted with its text color: use text-<color>"},

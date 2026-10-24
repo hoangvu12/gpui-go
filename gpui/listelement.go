@@ -542,6 +542,22 @@ func (st *listStateInner) itemHeight(ix int) float32 {
 // (re-anchoring a pending remeasure); the scroll handler observes the
 // visible range of the frame's scroll top (the pinned argument); the
 // view is notified.
+// canConsumeWheelDelta reports whether the list's clamped scroll top
+// moves by delta (browser-core 15: the wheel latch's can-consume
+// check, computed with the same eager clamp scroll applies).
+func (st *listStateInner) canConsumeWheelDelta(scrollTop ListOffset, height float32, delta Point) bool {
+	if st.reset {
+		return false
+	}
+	padding := listPadding{}
+	if last := st.lastPadding; last != nil {
+		padding = *last
+	}
+	scrollMax := max32(st.totalHeight()+padding.Top+padding.Bottom-height, 0)
+	current := st.pixelScrollTop(scrollTop)
+	return min32(max32(current-delta.Y, 0), scrollMax) != current
+}
+
 func (st *listStateInner) scroll(scrollTop ListOffset, height float32, delta Point, notify func(*Window, *App), w *Window, app *App) {
 	if st.reset {
 		return
@@ -1153,7 +1169,12 @@ func (st *listStateInner) autoscrollOffset(requested Bounds, itemIx int, itemOri
 // (ScrollDelta::coalesce), converts lines at the pinned 20px — pages
 // resolve against the list's own visible size (browser-core ticket 02) —
 // and applies the accumulated delta to the frame's scroll top through
-// the eagerly clamping scroll body.
+// the eagerly clamping scroll body. Browser-core ticket 15: the
+// listener joins the window's wheel latching (wheel_scroll.go) with the
+// list's scroll state as the gesture's identity — the innermost
+// scroller that can consume claims the gesture, and the latched list
+// keeps the gesture (no chaining mid-gesture) until the 500ms
+// latching transaction ends.
 func (l *ListElement) Paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *struct{}, prepaint *listPrepaintState, w *Window, app *App) {
 	if prepaint.hitbox != nil {
 		notify := currentViewNotifier(w)
@@ -1162,13 +1183,24 @@ func (l *ListElement) Paint(global *GlobalElementID, inspector *InspectorElement
 		scrollTop := prepaint.scrollTop
 		box := *prepaint.hitbox
 		accumulated := ScrollDelta{}
+		overscrollX, overscrollY := l.style.OverscrollBehaviorX, l.style.OverscrollBehaviorY
 		w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
 			e, ok := event.(*ScrollWheelEvent)
 			if !ok || phase != DispatchBubble || !box.ShouldHandleScroll(w) {
 				return
 			}
 			accumulated = coalesceScrollDelta(accumulated, e.Delta)
-			inner.scroll(scrollTop, height, accumulated.PixelDeltaFor(20, bounds.Size), notify, w, app)
+			delta := accumulated.PixelDeltaFor(20, bounds.Size)
+			// browser-core 15: the latch decides whether the list takes
+			// the event (the eager clamp answers can-consume at the list's
+			// current top).
+			canConsume := inner.canConsumeWheelDelta(scrollTop, height, delta)
+			cuts := (delta.X != 0 && !overscrollX.propagatesScroll()) ||
+				(delta.Y != 0 && !overscrollY.propagatesScroll())
+			if !w.wheelScrollLatchTake(e, inner, canConsume, cuts, app) {
+				return
+			}
+			inner.scroll(scrollTop, height, delta, notify, w, app)
 		})
 	}
 	mask := intersectMask(currentFrame(w).contentMask, bounds)

@@ -538,6 +538,24 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.OverflowXHidden()
 	case "overflow-y-hidden":
 		b.OverflowYHidden()
+	case "overscroll-auto":
+		b.OverscrollAuto()
+	case "overscroll-contain":
+		b.OverscrollContain()
+	case "overscroll-none":
+		b.OverscrollNone()
+	case "overscroll-x-auto":
+		b.OverscrollXAuto()
+	case "overscroll-x-contain":
+		b.OverscrollXContain()
+	case "overscroll-x-none":
+		b.OverscrollXNone()
+	case "overscroll-y-auto":
+		b.OverscrollYAuto()
+	case "overscroll-y-contain":
+		b.OverscrollYContain()
+	case "overscroll-y-none":
+		b.OverscrollYNone()
 	case "relative":
 		b.Relative()
 	case "rendering-auto":
@@ -859,4 +877,4 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 }
 
 // methodClassCount is the number of classes applyMethodClass knows.
-const methodClassCount = 423
+const methodClassCount = 432

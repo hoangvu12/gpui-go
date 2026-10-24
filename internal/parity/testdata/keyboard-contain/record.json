@@ -1,0 +1,44 @@
+{
+  "name": "keyboard-contain",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T13:22:41Z",
+  "viewport": {
+    "width": 320,
+    "height": 240
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "inner": {
+      "x": 30,
+      "y": 30,
+      "width": 180,
+      "height": 120
+    },
+    "irow2": {
+      "x": 30,
+      "y": -30,
+      "width": 180,
+      "height": 60
+    },
+    "irow3": {
+      "x": 30,
+      "y": 30,
+      "width": 180,
+      "height": 60
+    },
+    "irow4": {
+      "x": 30,
+      "y": 90,
+      "width": 180,
+      "height": 60
+    },
+    "ospacer": {
+      "x": 10,
+      "y": 150,
+      "width": 220,
+      "height": 300
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}
