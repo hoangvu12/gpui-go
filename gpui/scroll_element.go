@@ -48,6 +48,10 @@ type elementScroll struct {
 	// reserve) and written at prepaint (what this frame's overflow
 	// shows). Nil unless an axis is auto.
 	auto *divAutoScrollbarFlags
+	// anchor is the scroll-anchoring state (browser-core 46,
+	// scroll_anchor.go): the same persistent cell the offset lives in —
+	// the handle's state or the element state's.
+	anchor *scrollAnchorState
 }
 
 // divScrollElementState is the scroll part of the pinned
@@ -63,6 +67,9 @@ type divScrollElementState struct {
 	// frame's request walk reserves what the previous frame's prepaint
 	// saw overflowing.
 	auto *divAutoScrollbarFlags
+	// anchor is the scroll-anchoring bookkeeping (browser-core 46,
+	// scroll_anchor.go).
+	anchor scrollAnchorState
 }
 
 // baseOverflowScrolls is the pinned base_style.overflow.x/y ==
@@ -93,7 +100,7 @@ func baseOverflowAuto(base *StyleRefinement) bool {
 // then keep it honest (an auto axis with no overflow has range zero).
 func resolveElementScroll(handle *ScrollHandle, base *StyleRefinement, global *GlobalElementID, w *Window) *elementScroll {
 	if handle != nil {
-		es := &elementScroll{offset: handle.state.offset, ongoing: handle.state.ongoingScroll, handle: handle}
+		es := &elementScroll{offset: handle.state.offset, ongoing: handle.state.ongoingScroll, handle: handle, anchor: &handle.state.anchor}
 		if global != nil && baseOverflowAuto(base) {
 			es.auto = withAutoScrollbarFlags(global, w)
 		}
@@ -115,7 +122,7 @@ func resolveElementScroll(handle *ScrollHandle, base *StyleRefinement, global *G
 		if slot.auto == nil && baseOverflowAuto(base) {
 			slot.auto = &divAutoScrollbarFlags{}
 		}
-		return &elementScroll{offset: slot.offset, ongoing: slot.ongoing, auto: slot.auto}, slot
+		return &elementScroll{offset: slot.offset, ongoing: slot.ongoing, auto: slot.auto, anchor: &slot.anchor}, slot
 	})
 }
 
@@ -140,13 +147,18 @@ func roundToTwoDecimals(v float32) float32 {
 	return float32(math.Round(float64(scaled))) / 100
 }
 
-// clamp is R:div.rs:2913-2976 clamp_scroll_position: the scroll max is the
-// content size plus the device-snapped padding minus the bounds, rounded
-// to two decimals and clamped at zero; the offset clamps into
-// [-max, 0] per axis (a pending scroll_to_bottom pins y to -max), and a
-// tracked handle records the overflow, the max offset and the bounds.
+// clamp is R:div.rs:2913-2976 clamp_scroll_position with the
+// browser-core 07 record-derived scroll range: the maximum is the
+// caller's maxOffset — the layout engine's content size less the
+// padding box, plus the in-flow children's end margins and the
+// scrollbar reservation (ScrollLayoutFacts; the pin computed it from
+// the element-tree children's bounds plus the style-resolved padding,
+// which missed descendant overflow, trailing margins and the
+// percentage basis) — clamped at zero; the offset clamps into
+// [-max, 0] per axis (a pending scroll_to_bottom pins y to -max), and
+// a tracked handle records the overflow, the max offset and the bounds.
 // A nil receiver (no scroll) returns the zero offset.
-func (s *elementScroll) clamp(bounds Bounds, style *Style, contentSize Size, w *Window) Point {
+func (s *elementScroll) clamp(bounds Bounds, style *Style, maxOffset Point, w *Window) Point {
 	if s == nil {
 		return Point{}
 	}
@@ -158,17 +170,9 @@ func (s *elementScroll) clamp(bounds Bounds, style *Style, contentSize Size, w *
 		state.scrollToBottom = false
 	}
 
-	rem := RemSize(w)
-	padding := style.Padding
-	left := PixelSnap(w, resolveDefiniteListLength(padding.Left, bounds.Size.Width, rem))
-	right := PixelSnap(w, resolveDefiniteListLength(padding.Right, bounds.Size.Width, rem))
-	top := PixelSnap(w, resolveDefiniteListLength(padding.Top, bounds.Size.Height, rem))
-	bottom := PixelSnap(w, resolveDefiniteListLength(padding.Bottom, bounds.Size.Height, rem))
-	paddedWidth := contentSize.Width + (left + right)
-	paddedHeight := contentSize.Height + (top + bottom)
 	scrollMax := Point{
-		X: max32(roundToTwoDecimals(paddedWidth-bounds.Size.Width), 0),
-		Y: max32(roundToTwoDecimals(paddedHeight-bounds.Size.Height), 0),
+		X: max32(maxOffset.X, 0),
+		Y: max32(maxOffset.Y, 0),
 	}
 	// browser-core 09: record the frame's clamp for the keyboard-scroll
 	// default action (the handle's state keeps its own copy below).
@@ -439,35 +443,47 @@ func (d *DivElement) SetScrollOffset(global *GlobalElementID, w *Window, point P
 	})
 }
 
-// scrollContentSize is the content-size half of R:div.rs:2375-2413: the
-// extent of the children's layout bounds (min origin to max bottom-right,
-// the max starting at the origin point), or the bounds size without
-// children; a tracked handle records every child's bounds.
-func (d *DivElement) scrollContentSize(bounds Bounds, childLayoutIDs []LayoutID, w *Window) Size {
-	if len(childLayoutIDs) == 0 {
-		return bounds.Size
+// scrollLayoutFactsOf queries the div's own node's record-derived
+// scroll facts (browser-core 07), panicking on engine failure like the
+// bounds queries.
+func (d *DivElement) scrollLayoutFactsOf(layout *divFrameState, w *Window) ScrollLayoutFacts {
+	ctx := layoutContextOf(w)
+	facts, err := layout.layoutID.engine.ScrollLayoutFacts(&ctx, layout.layoutID)
+	if err != nil {
+		panic("gpui: DivElement scroll facts: " + err.Error())
 	}
-	childMin := Point{X: math.MaxFloat32, Y: math.MaxFloat32}
-	childMax := Point{}
-	var tracked []Bounds
-	if d.trackedScrollHandle != nil {
-		tracked = make([]Bounds, 0, len(childLayoutIDs))
+	return facts
+}
+
+// inlineScrollMaxOf is the inline scroller's range (the standalone
+// paragraph geometry the inline collector places — the layout record
+// carries no inline content extent), keeping the pin's arithmetic on
+// the RECORD-resolved padding (browser-core 07: the percentage basis
+// follows the layout, not the scroller's own height).
+func inlineScrollMaxOf(contentSize Size, padding Edges, bounds Bounds) Point {
+	return Point{
+		X: max32(roundToTwoDecimals(contentSize.Width+padding.Left+padding.Right-bounds.Size.Width), 0),
+		Y: max32(roundToTwoDecimals(contentSize.Height+padding.Top+padding.Bottom-bounds.Size.Height), 0),
 	}
+}
+
+// trackChildBounds records the direct element-tree children's layout
+// bounds on the tracked handle (the R:div.rs:2394-2399 half of the old
+// content-size union — the range itself comes from the layout record
+// now, browser-core 07).
+func (d *DivElement) trackChildBounds(childLayoutIDs []LayoutID, w *Window) {
+	if d.trackedScrollHandle == nil {
+		return
+	}
+	tracked := make([]Bounds, 0, len(childLayoutIDs))
 	for _, id := range childLayoutIDs {
 		child, err := layoutBoundsOf(w, id)
 		if err != nil {
-			panic("gpui: DivElement scroll content bounds: " + err.Error())
+			panic("gpui: DivElement scroll child bounds: " + err.Error())
 		}
-		childMin = Point{X: min32(childMin.X, child.Origin.X), Y: min32(childMin.Y, child.Origin.Y)}
-		childMax = Point{X: max32(childMax.X, child.Right()), Y: max32(childMax.Y, child.Bottom())}
-		if tracked != nil {
-			tracked = append(tracked, child)
-		}
+		tracked = append(tracked, child)
 	}
-	if d.trackedScrollHandle != nil {
-		d.trackedScrollHandle.state.childBounds = tracked
-	}
-	return Size{Width: childMax.X - childMin.X, Height: childMax.Y - childMin.Y}
+	d.trackedScrollHandle.state.childBounds = tracked
 }
 
 // trackInlineChildBounds is the scroll-handle half of the inline

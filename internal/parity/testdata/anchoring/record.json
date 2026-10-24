@@ -1,0 +1,50 @@
+{
+  "name": "anchoring",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T10:05:19Z",
+  "viewport": {
+    "width": 320,
+    "height": 240
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "inserted": {
+      "x": 10,
+      "y": -290,
+      "width": 240,
+      "height": 50
+    },
+    "r5": {
+      "x": 10,
+      "y": -40,
+      "width": 240,
+      "height": 50
+    },
+    "r6": {
+      "x": 10,
+      "y": 10,
+      "width": 240,
+      "height": 50
+    },
+    "r7": {
+      "x": 10,
+      "y": 60,
+      "width": 240,
+      "height": 50
+    },
+    "r8": {
+      "x": 10,
+      "y": 110,
+      "width": 240,
+      "height": 50
+    },
+    "scroller": {
+      "x": 10,
+      "y": 10,
+      "width": 240,
+      "height": 200
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

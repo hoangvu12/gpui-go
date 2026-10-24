@@ -109,20 +109,21 @@ type stickyScrollContext struct {
 }
 
 // stickyScrollContextOf builds one scroll container's context from its
-// prepaint facts: the style (borders, padding, overflow axes), the
-// border-box bounds, the clamped scroll maximum and the clamped offset
-// (negative when scrolled down/right), and the scroller's native node
-// (zero for custom scrollers). The padding resolves exactly like the
-// scroll clamp (scroll_element.go), so the constraining rect and the
-// clamp's extent agree.
-func stickyScrollContextOf(w *Window, style *Style, bounds Bounds, maxOffset, offset Point, node native.NodeHandle) stickyScrollContext {
+// prepaint facts: the style (borders, overflow axes), the border-box
+// bounds, the resolved padding, the clamped scroll maximum and the
+// clamped offset (negative when scrolled down/right), and the
+// scroller's native node (zero for custom scrollers). padding is the
+// scroller's record-resolved padding for divs (browser-core 07: the
+// percentages resolved against the containing block's width, exactly
+// what Taffy laid out), and the style-resolved values for custom
+// scrollers (WithStickyScrollContainer), which have no node of their
+// own to read.
+func stickyScrollContextOf(w *Window, style *Style, bounds Bounds, padding Edges, maxOffset, offset Point, node native.NodeHandle) stickyScrollContext {
 	rem := RemSize(w)
-	snap := func(v float32) float32 { return PixelSnap(w, v) }
-	borders := style.BorderWidths.ToPixels(rem)
-	padTop := snap(resolveDefiniteListLength(style.Padding.Top, bounds.Size.Height, rem))
-	padBottom := snap(resolveDefiniteListLength(style.Padding.Bottom, bounds.Size.Height, rem))
-	padLeft := snap(resolveDefiniteListLength(style.Padding.Left, bounds.Size.Width, rem))
-	padRight := snap(resolveDefiniteListLength(style.Padding.Right, bounds.Size.Width, rem))
+	// The clamp-lined border widths (browser-core 07): the scrollport
+	// insets by exactly the borders the layout used.
+	borders := style.borderEdges(rem)
+	padTop, padBottom, padLeft, padRight := padding.Top, padding.Bottom, padding.Left, padding.Right
 	// The content box: the border box contracted by border and padding
 	// (ComputeStickyConstrainingRect). Nothing is clamped at zero — a
 	// scroll container always has non-negative inner space by layout.
@@ -171,10 +172,22 @@ func stickyScrollContextOf(w *Window, style *Style, bounds Bounds, maxOffset, of
 // bounds in window coordinates, maxOffset and offset the clamped
 // scroll maximum and the clamped offset of this frame
 // (elementScroll.clamp's results — negative offsets scroll down/right).
-// Custom scrollers that render items themselves (the uniform list
-// shape) pass their containing-block rects directly to StickyOffset.
+// Custom
+// scrollers that render items themselves (the uniform list shape) pass
+// their containing-block rects directly to StickyOffset. The padding
+// resolves from the style here (custom scrollers have no layout node
+// to read the record-resolved values from — browser-core 07's
+// percentage-basis fix covers the div scrollers).
 func WithStickyScrollContainer[R any](w *Window, style *Style, bounds Bounds, maxOffset, offset Point, f func(*Window) R) R {
-	ctx := stickyScrollContextOf(w, style, bounds, maxOffset, offset, 0)
+	rem := RemSize(w)
+	snap := func(v float32) float32 { return PixelSnap(w, v) }
+	padding := Edges{
+		Top:    snap(resolveDefiniteListLength(style.Padding.Top, bounds.Size.Height, rem)),
+		Bottom: snap(resolveDefiniteListLength(style.Padding.Bottom, bounds.Size.Height, rem)),
+		Left:   snap(resolveDefiniteListLength(style.Padding.Left, bounds.Size.Width, rem)),
+		Right:  snap(resolveDefiniteListLength(style.Padding.Right, bounds.Size.Width, rem)),
+	}
+	ctx := stickyScrollContextOf(w, style, bounds, padding, maxOffset, offset, 0)
 	frame := currentFrame(w)
 	frame.stickyScrollers = append(frame.stickyScrollers, ctx)
 	defer func() { frame.stickyScrollers = frame.stickyScrollers[:len(frame.stickyScrollers)-1] }()

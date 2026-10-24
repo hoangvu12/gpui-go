@@ -94,7 +94,7 @@ func Replay(t testing.TB, f Fixture) (*ReplayResult, error) {
 			return nil, fmt.Errorf("parity: %s: configuring the app: %w", f.Name, err)
 		}
 	}
-	window := gpui.NewTestWindow(app, gpui.Size{Width: f.Window.Width, Height: f.Window.Height})
+	window := gpui.NewTestWindowAtScale(app, gpui.Size{Width: f.Window.Width, Height: f.Window.Height}, FixtureScale(f))
 	t.Cleanup(func() { gpui.CloseTestWindow(window) })
 	if err := gpui.UseRealTextSystem(window); err != nil {
 		return nil, fmt.Errorf("parity: %s: real text system: %w", f.Name, err)
@@ -142,9 +142,9 @@ func Replay(t testing.TB, f Fixture) (*ReplayResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parity: %s: %w", f.Name, err)
 	}
-	if scale != DeviceScaleFactor {
-		return nil, fmt.Errorf("parity: %s: the test window's scale factor is %v, want the harness's %v (keep the recorder and the test window in step)",
-			f.Name, scale, DeviceScaleFactor)
+	if scale != FixtureScale(f) {
+		return nil, fmt.Errorf("parity: %s: the test window's scale factor is %v, want the fixture's %v (keep the recorder and the test window in step)",
+			f.Name, scale, FixtureScale(f))
 	}
 	deviceWidth := uint32(f.Window.Width*scale + 0.5)
 	deviceHeight := uint32(f.Window.Height*scale + 0.5)
@@ -294,6 +294,16 @@ func applyStep(cx *gpui.VisualTestContext, log *EventLog, step Step) error {
 			}
 		}
 		cx.Window().SimulateIMEComposition(msg, cx)
+	case StepScript:
+		// The Go half of a scripted state change (browser-core 46): run
+		// the step's function on the application update path (the same
+		// context a listener runs in) and park, so the state change's
+		// refresh draws before the next step samples anything — the same
+		// one-frame settle the recorder's script gets from its own
+		// dispatch loop.
+		cx.Update(func(w *gpui.Window, app *gpui.App) {
+			step.Run(log, w, app)
+		})
 		cx.RunUntilParked()
 	default:
 		return fmt.Errorf("unknown step kind %q", step.Kind)

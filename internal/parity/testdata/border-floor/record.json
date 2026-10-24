@@ -1,0 +1,26 @@
+{
+  "name": "border-floor",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T09:36:58Z",
+  "viewport": {
+    "width": 320,
+    "height": 240
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "boxed": {
+      "x": 12,
+      "y": 12,
+      "width": 200,
+      "height": 152
+    },
+    "inner": {
+      "x": 13,
+      "y": 13,
+      "width": 198,
+      "height": 150
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

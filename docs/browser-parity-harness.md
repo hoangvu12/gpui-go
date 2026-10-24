@@ -190,6 +190,22 @@ new fixtures. The implementation lives in `internal/parity`:
    cannot: the key and modifiers parse as usual, both sides carry the code, and the
    location follows it (`Numpad1` at 3, the numpad).
 
+   `parity.Script(js, run)` is a page-script step (browser-core ticket 46): the
+   recorder evaluates `js` (a JavaScript expression, run synchronously on the
+   settled page after the preceding steps) and the replay calls `run` with the
+   fixture's event log, the test window and its application, inside an update —
+   a scripted state change neither the input vocabulary nor the clock can express
+   (rows inserted above the scrolled viewport, the scroll-anchoring fixture's
+   trigger). The two halves must make the SAME change: the page script mutates
+   the DOM, the Go function mutates the view's state (keyed per run like the
+   view's other state) and refreshes the window, and the record's two-frame
+   settle captures whatever both sides did — Chrome's own follow-ups (a layout
+   pass, the scroll anchoring adjustment) land in the settle. Run must be
+   idempotent across the replays of one fixture (`TestFixtures` and the tolerance
+   check run the steps twice): key the state on the event log or the window so a
+   fresh run starts from the initial state, or make the step reset-then-mutate.
+   `fixtures/anchoring` is the pattern.
+
    The key kinds cover the activation and focus-visible rules (browser-core
    ticket 12, `fixtures/activation`): an Enter full press records the activation click
    between the keydown and keyup entries (the DOM keypress — the recorder types `"\r"`
@@ -224,6 +240,19 @@ new fixtures. The implementation lives in `internal/parity`:
    onto the system palette during style resolution and the record carries the mapped
    result. Like `ChromeFlags`, the features are record-time only and part of the
    fixture's identity.
+
+   A fixture whose device pixel ratio is **not the default 2.0** sets `Scale`
+   (browser-core ticket 07): the recorder forces Chrome to it
+   (`Emulation.setDeviceMetricsOverride`) and the replay opens the test window at it
+   (`gpui.NewTestWindowAtScale`), so one coordinate space still serves the fixture -
+   boxes compare in logical pixels and pixels at the fixture's device resolution,
+   exactly like the default. This is how the border fixtures pin the device-pixel
+   rounding rules at fractional scales: `fixtures/scrollrange` records `border-175`
+   at 1.75 and `border-hairline` at 1.0. Pick geometry whose device edges are
+   integral at the fixture's scale (multiples of 4 work at 1.75) or the port's
+   device-edge bounds snapping lands on different pixels than Chrome's LayoutUnit
+   layout and Tier A fails for reasons unrelated to the behaviour under test. The
+   window's device extent (logical x Scale) must still fit the capture budget.
 
    A fixture whose replay needs **page-computed values** sets `ComputedScript` (a
    JavaScript expression evaluated on the settled page whose value must be a JSON
@@ -308,14 +337,16 @@ screen. `GPUI_REAL_INPUT_TESTS` is never set by anything here.
 
 ## Design notes
 
-- **Device pixel ratio.** The test window's scale factor is fixed at 2.0, so Chrome
+- **Device pixel ratio.** The test window's scale factor defaults to 2.0, so Chrome
   records at `--force-device-scale-factor` 2 and the replay asserts the window's scale
-  (`parity.DeviceScaleFactor`). Boxes compare in logical pixels; pixels compare at device
+  (`parity.DeviceScaleFactor`). A fixture may override the ratio with `Scale`
+  (browser-core ticket 07): both sides then run at the fixture's ratio instead, and
+  the replay asserts that. Boxes compare in logical pixels; pixels compare at device
   resolution; both sides' numbers are the same because the ratios are.
 - **Window size budget.** The pixel capture renders through a real (hidden) window
   surface, whose client area cannot exceed the primary monitor: a fixture's device extent
-  (logical × 2) must fit the screen minus the caption (on a 1080p display at 100%: up to
-  ~1920×1060). The tracer's 640×400 → 1280×800 keeps a wide margin.
+  (logical × its scale) must fit the screen minus the caption (on a 1080p display at
+  100%: up to ~1920×1060). The tracer's 640×400 → 1280×800 keeps a wide margin.
 - **Chrome version.** Every record carries the Chromium version it was captured with
   (`record.json` → `chrome`). Fixtures are machine-and-version-stable: re-record when
   Chrome updates meaningfully.

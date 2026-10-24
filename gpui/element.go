@@ -1695,7 +1695,8 @@ func requestLayoutOf(w *Window, style Style, children ...LayoutID) (LayoutID, er
 func requestMeasuredLayoutOf(w *Window, style Style, measure MeasureFunc) (LayoutID, error) {
 	ds := drawState(w)
 	ctx := layoutContextOf(w)
-	return ds.engine.RequestMeasuredLayout(&ctx, style, measure)
+	id, err := ds.engine.RequestMeasuredLayout(&ctx, style, measure)
+	return recordAnchorPath(w, id, err)
 }
 
 // computeLayoutOf computes one subtree under the given available space

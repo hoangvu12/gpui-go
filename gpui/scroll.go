@@ -80,6 +80,9 @@ type scrollHandleState struct {
 	overflowX, overflowY Overflow
 	// activeItem is the deferred scroll-to target (R:div.rs:4733).
 	activeItem *scrollActiveItem
+	// anchor is the scroll-anchoring bookkeeping (browser-core 46,
+	// scroll_anchor.go): the handle form of the element-state cell.
+	anchor scrollAnchorState
 }
 
 // ScrollHandle is a handle to the scrollable aspects of an element

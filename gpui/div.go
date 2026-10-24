@@ -1646,6 +1646,14 @@ func interactiveStateOf(global *GlobalElementID, state *InteractiveElementState)
 func (d *DivElement) requestLayout(global *GlobalElementID, inspector *InspectorElementID, w *Window, app *App) (LayoutID, divFrameState) {
 	// The scroll offset and gesture cells (div.rs:2735-2755).
 	d.scroll = resolveElementScroll(d.trackedScrollHandle, d.Styled.storage(), global, w)
+	if d.scroll != nil {
+		// browser-core 46: a scroll container's anchoring walk identifies
+		// its anchor node across frames by the element id path, so the
+		// request walk below (this element's whole subtree) must record
+		// the node paths (one small string per node per frame; windows
+		// without scroll containers never pay it).
+		drawState(w).engine.RequestAnchorBookkeeping()
+	}
 	style := WithOptionalElementState(w, global, func(slot *InteractiveElementState, w *Window) (Style, *InteractiveElementState) {
 		es := interactiveStateOf(global, slot)
 		if es != nil && app.HasActiveDrag() {
@@ -1850,20 +1858,42 @@ func (d *DivElement) prepaint(global *GlobalElementID, inspector *InspectorEleme
 // Interactivity::prepaint, with the frame's sticky scroller scope and
 // flow-box record opened around the child walk (sticky.go).
 func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *divFrameState, state *divPrepaintState, w *Window, app *App) {
-	// The content size the scroll clamp measures against, with the
-	// tracked handle's child bounds (div.rs:2383-2413), then the handle's
-	// deferred scroll-to-item (div.rs:2415-2417).
+	// The scroll facts the clamp, the sticky scope and the auto
+	// scrollbar resolve against (browser-core 07): the div's own node's
+	// record-derived content size (the descendants' boxes, their visible
+	// overflow and the END padding), scroll range (the padding-box basis
+	// plus the in-flow children's trailing margins, minus the scrollbar
+	// reservation) and resolved padding (percentages against the
+	// CONTAINING BLOCK's width, exactly what Taffy laid out) — replacing
+	// the pin's element-tree union, which measured only the direct
+	// children's border boxes and resolved vertical padding percentages
+	// against the scroller's own height. The inline path keeps its own
+	// content extent (the paragraph geometry the inline collector
+	// places, which the layout record does not carry) with the record's
+	// padding; the flow path takes the record's facts wholesale. The
+	// tracked handle's child bounds (div.rs:2383-2413) ride along.
 	var contentSize Size
+	var scrollMax Point
+	var scrollerPadding Edges
+	needsFacts := d.scroll != nil || d.trackedScrollHandle != nil ||
+		(currentFrame(w).stickyRequested && styleIsScrollContainer(&d.lastStyle))
 	if standalone := layout.standaloneInline(); standalone != nil {
 		contentSize = standalone.prepareLayout(bounds, layout.childLayoutIDs, w)
 		d.trackInlineChildBounds(layout.childLayoutIDs, w)
-	} else if d.scroll != nil || d.trackedScrollHandle != nil ||
-		(currentFrame(w).stickyRequested && styleIsScrollContainer(&d.lastStyle)) {
+		if needsFacts {
+			scrollerPadding = d.scrollLayoutFactsOf(layout, w).Padding
+			scrollMax = inlineScrollMaxOf(contentSize, scrollerPadding, bounds)
+		}
+	} else if needsFacts {
 		// browser-core 36: a hidden scroller with no scroll state still
 		// measures its content while the frame requested a sticky element
 		// — its scrollable extent is the sticky containing block of its
 		// direct children (the scroller arm below).
-		contentSize = d.scrollContentSize(bounds, layout.childLayoutIDs, w)
+		facts := d.scrollLayoutFactsOf(layout, w)
+		contentSize = facts.ContentSize
+		scrollMax = facts.MaxOffset
+		scrollerPadding = facts.Padding
+		d.trackChildBounds(layout.childLayoutIDs, w)
 	}
 	if d.trackedScrollHandle != nil {
 		d.trackedScrollHandle.scrollToActiveItem()
@@ -1947,8 +1977,14 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 					// its element's inspector id.
 					w.InsertInspectorHitbox(box, inspector)
 				}
-				// clamp_scroll_position (div.rs:2876-2877).
-				scrollOffset := d.scroll.clamp(bounds, &style, contentSize, w)
+				// browser-core 46: the scroll anchoring — resolve the
+				// anchor under this frame's layout and move the offset by the
+				// content-space delta BEFORE the clamp bounds it, so the
+				// children prepaint (and the paint) under the adjusted offset.
+				d.scroll.applyScrollAnchoring(w, layout.layoutID)
+				// clamp_scroll_position (div.rs:2876-2877), on the
+				// record-derived range (browser-core 07).
+				scrollOffset := d.scroll.clamp(bounds, &style, scrollMax, w)
 				state.scrollOffset = scrollOffset
 				// browser-core 36 (spec story 14): the auto-scrollbar
 				// detection — Chromium's ComputeScrollbarExistence kAuto
@@ -1991,19 +2027,12 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 					} else {
 						// A hidden scroller never scrolls, but its sticky
 						// children's containing block is still its scrollable
-						// extent (the clamp's arithmetic on the measured
-						// content size).
-						rem := RemSize(w)
-						padLeft := PixelSnap(w, resolveDefiniteListLength(style.Padding.Left, bounds.Size.Width, rem))
-						padRight := PixelSnap(w, resolveDefiniteListLength(style.Padding.Right, bounds.Size.Width, rem))
-						padTop := PixelSnap(w, resolveDefiniteListLength(style.Padding.Top, bounds.Size.Height, rem))
-						padBottom := PixelSnap(w, resolveDefiniteListLength(style.Padding.Bottom, bounds.Size.Height, rem))
-						maxOffset = Point{
-							X: max32(roundToTwoDecimals(contentSize.Width+padLeft+padRight-bounds.Size.Width), 0),
-							Y: max32(roundToTwoDecimals(contentSize.Height+padTop+padBottom-bounds.Size.Height), 0),
-						}
+						// extent — the record-derived range (browser-core 07:
+						// the content size, the end margins and the padding
+						// box, not the old style-resolved padding arithmetic).
+						maxOffset = scrollMax
 					}
-					ctx := stickyScrollContextOf(w, &style, bounds, maxOffset, scrollerOffset, layout.layoutID.node)
+					ctx := stickyScrollContextOf(w, &style, bounds, scrollerPadding, maxOffset, scrollerOffset, layout.layoutID.node)
 					frame := currentFrame(w)
 					frame.stickyScrollers = append(frame.stickyScrollers, ctx)
 					defer func() {
@@ -2467,7 +2496,7 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 		// box, so its records keep the pinned geometry exactly.
 		insetBounds := bounds
 		insetRadii := radii
-		if widths := s.BorderWidths.ToPixels(rem); widths.Top != 0 || widths.Right != 0 || widths.Bottom != 0 || widths.Left != 0 {
+		if widths := s.borderEdges(rem); widths.Top != 0 || widths.Right != 0 || widths.Bottom != 0 || widths.Left != 0 {
 			width := bounds.Size.Width - widths.Left - widths.Right
 			height := bounds.Size.Height - widths.Top - widths.Bottom
 			if width < 0 {

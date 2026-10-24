@@ -451,10 +451,21 @@ func TestStyleToRecordRemResolution(t *testing.T) {
 	}
 }
 
-// TestStyleToRecordBorderStrokeMinimum pins the stroke rule: exact zero
-// stays zero, anything else snaps to at least one device pixel (pinned
-// taffy.rs border_widths_to_taffy test).
-func TestStyleToRecordBorderStrokeMinimum(t *testing.T) {
+// TestStyleToRecordBorderFloor pins the computed border-width rule
+// (browser-core ticket 07): exact zero stays zero, anything strictly
+// between 0 and 1 keeps one CSS pixel, anything at or above 1 floors —
+// Chromium's ClampLineWidth (style_builder_converter.cc:1971-1987),
+// verified against Chrome 155 (a 0.5px hairline at 100% insets and
+// paints 1 CSS px; a 1px border at 175% insets exactly 1 CSS px).
+//
+// DIVERGENCE TOWARD CHROME (recorded, not silent): the pin's stroke
+// rule (round to the nearest device pixel with a 1-device minimum —
+// taffy.rs border_widths_to_taffy) used to translate these record
+// borders, so 1.6px at scale 1 was 2 device px where Chrome's computed
+// width is 1; ticket 07 replaces the record translation (the PAINT
+// keeps the stroke rule in snapBorderWidths, where a hard-edged strip
+// needs a whole device thickness).
+func TestStyleToRecordBorderFloor(t *testing.T) {
 	style := DefaultStyle()
 	style.BorderWidths = AbsoluteLengthEdges{
 		Top:    Px(0),
@@ -467,13 +478,13 @@ func TestStyleToRecordBorderStrokeMinimum(t *testing.T) {
 		t.Errorf("border top = %v, want 0 (exact zero stays zero)", got)
 	}
 	if got := math.Float32frombits(rec.BorderRight); got != 1 {
-		t.Errorf("border right = %v, want 1 (clamped up)", got)
+		t.Errorf("border right = %v, want 1 (a sub-pixel hairline keeps one pixel)", got)
 	}
 	if got := math.Float32frombits(rec.BorderBottom); got != 1 {
-		t.Errorf("border bottom = %v, want 1 (0.5 device ties toward zero, then the minimum)", got)
+		t.Errorf("border bottom = %v, want 1 (a sub-pixel hairline keeps one pixel)", got)
 	}
-	if got := math.Float32frombits(rec.BorderLeft); got != 2 {
-		t.Errorf("border left = %v, want 2", got)
+	if got := math.Float32frombits(rec.BorderLeft); got != 1 {
+		t.Errorf("border left = %v, want 1 (1.6px floors to 1 CSS px, where the pin rounded to 2)", got)
 	}
 }
 

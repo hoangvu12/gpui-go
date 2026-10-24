@@ -228,7 +228,9 @@ func autoScrollbarPaint(style *Style, bounds Bounds, rem float32, maxOffset, off
 	if flags == nil || (!flags.shownX && !flags.shownY) {
 		return nil
 	}
-	borders := style.BorderWidths.ToPixels(rem)
+	// The clamp-lined border widths (browser-core 07): the tracks sit
+	// inside exactly the borders the layout used.
+	borders := style.borderEdges(rem)
 	width := autoScrollbarWidthPx(style, rem)
 	facts := &autoScrollbarFacts{}
 	if flags.shownY {
