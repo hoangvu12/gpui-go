@@ -172,6 +172,11 @@ type App struct {
 	// cache retains frames in (lazily built; the first failure sticks).
 	imageCodec    *ImageCodec
 	imageCodecErr error
+	// spellcheck is the application's spellcheck service (browser-core
+	// ticket 30), created lazily by Spellcheck or injected through
+	// SetSpellcheck. Its dedicated COM worker thread retires with the
+	// application (Shutdown), like the image codec above.
+	spellcheck *SpellcheckService
 	// svgRenderer is the application's SVG renderer (ticket19; the
 	// reference App.svg_renderer, app.rs line 790): lazily built over
 	// the process native SVG service and tied to the asset registry
