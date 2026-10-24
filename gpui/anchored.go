@@ -131,6 +131,16 @@ type AnchoredElement struct {
 	tryFallbacks          []AnchorFallback
 	margin                Edges
 	hideWhenAnchorClipped bool
+	// occlude blocks the mouse over the placed bounds (browser-core
+	// ticket 72: the DOM popover's hit-test coverage — the top layer
+	// hit-tests above the page beneath, which Base's popup surfaces
+	// express as an occluding hitbox over the placed box).
+	occlude bool
+	// onResolved observes the resolved bounds at each prepaint, before
+	// the children prepaint (browser-core ticket 72: Base's positioner
+	// OnPosition seam — presentation such as a pointer arrow reads the
+	// placement).
+	onResolved func(bounds Bounds)
 }
 
 // Anchored returns an element that avoids overflowing the window bounds
@@ -387,6 +397,29 @@ func (a *AnchoredElement) Margin(edges Edges) *AnchoredElement {
 // AnchorBounds.
 func (a *AnchoredElement) HideWhenAnchorClipped() *AnchoredElement {
 	a.hideWhenAnchorClipped = true
+	return a
+}
+
+// Occlude blocks the mouse over the placed bounds, ahead of the
+// children's own hitboxes (browser-core ticket 72: the DOM popover
+// hit-tests above the page beneath it — the top layer's coverage, which
+// a deferred anchored surface expresses as an occluding hitbox over
+// the placed box; Base's positioner Occlude pattern). The children's
+// own hitboxes sit above it, so the surface's content still receives
+// the pointer.
+func (a *AnchoredElement) Occlude() *AnchoredElement {
+	a.occlude = true
+	return a
+}
+
+// OnResolved sets a listener notified with the element's resolved
+// window-space bounds at each prepaint, before the children prepaint
+// (browser-core ticket 72: Base's positioner OnPosition seam —
+// presentation such as a pointer arrow reads the placement while the
+// content still lays out under it). Only the element-anchored mode
+// reports (the classic modes keep their position math to themselves).
+func (a *AnchoredElement) OnResolved(f func(bounds Bounds)) *AnchoredElement {
+	a.onResolved = f
 	return a
 }
 
@@ -660,6 +693,17 @@ func (d *anchoredDrawable) prepaintAnchoredToElement(a *AnchoredElement, bounds 
 	}
 
 	hidden := a.hideWhenAnchorClipped && anchor.clippedKnown && anchor.clipped
+
+	// browser-core ticket 72: the placement observation and the
+	// occluding hitbox, both ahead of the children's own hitboxes
+	// (Base's positioner order: OnPosition, then the occlude hitbox,
+	// then the children prepaint).
+	if a.onResolved != nil {
+		a.onResolved(desired)
+	}
+	if a.occlude {
+		w.InsertHitbox(desired, HitboxBlockMouse)
+	}
 
 	offset := Point{
 		X: float32(math.Round(float64(desired.Origin.X - bounds.Origin.X))),

@@ -6,10 +6,10 @@ package base
 // Go adaptations, recorded:
 //
 //   - PopoverState lives in keyed element state, which is released when
-//     its element stops drawing. Rust drops the DeferredPopover token with
-//     the state; the port releases it from the entity's release hook
-//     (NewPopoverState registers it), so a state collected while open
-//     closes the deferred interaction context deterministically.
+//     its element stops drawing. Rust drops the state with the element;
+//     the port releases nothing on collection (browser-core ticket 72:
+//     the deferred-popover liveness list is gone with the top layer —
+//     the overlay entry's own registration is the liveness).
 //   - Window::subscribe (R:window.rs:2549) has no app-level form in the
 //     core; the dismissal subscription is the state's own window-bound
 //     subscription to its DismissEvent (gpui.Event.SubscribeIn), cancelled
@@ -23,17 +23,25 @@ package base
 //   - Popover is a gpui.RenderOnce recipe; trigger and content builders
 //     return any child value (an element, IntoElement, string, view or
 //     recipe).
+//   - browser-core ticket 72: the popover's Escape dismissal is the
+//     entry's close watcher (ticket 22 — popover=auto entries create one
+//     per show, html_element.cc:2146-2157): an unhandled Escape signals
+//     the newest watcher, which hides the entry, whose toggle runs the
+//     state's own close (the focus restore and the open-change
+//     announcement). The popover's escape key binding is gone with it;
+//     Enter and Space still dispatch Confirm (U:popover.rs:17-23).
 
 import "github.com/hoangvu12/gpui-go/gpui"
 
 // popoverContext is the popover key context (U:popover.rs:15).
 const popoverContext = "Popover"
 
-// popoverInit binds the popover keys (U:popover.rs:17-23).
+// popoverInit binds the popover keys (U:popover.rs:17-23). Escape is not
+// bound: the top-layer entry's close watcher owns it (browser-core
+// ticket 22, the popover show steps' watcher).
 func popoverInit(app *gpui.App) {
 	ctx := popoverContext
 	app.BindKeys(
-		gpui.NewKeyBinding("escape", CancelAction.Box(Cancel{}), &ctx),
 		gpui.NewKeyBinding("enter", ConfirmAction.Box(Confirm{Secondary: false}), &ctx),
 		gpui.NewKeyBinding("space", ConfirmAction.Box(Confirm{Secondary: false}), &ctx),
 	)
@@ -59,29 +67,22 @@ type PopoverState struct {
 	open                bool
 	onOpenChange        OpenChangeHandler
 	dismissSubscription *gpui.Subscription
-	// deferredContext is held while open, so that a state collected
-	// without being closed takes its registration with it.
-	deferredContext *DeferredPopover
 	// overlay is the popover's entry in the window's top layer
 	// (browser-core ticket 21): created lazily at the first render
 	// (the layer is per window), kept in step with open, and closed by
-	// the core's click-based light dismiss.
+	// the core's click-based light dismiss and Escape close watcher
+	// (ticket 22).
 	overlay gpui.OverlayHandle
 }
 
 // NewPopoverState builds the state of a popover entity
-// (U:popover.rs:44-55 PopoverState::new) and registers the release hook
-// closing its deferred context (see the file comment). Call it from the
-// entity's build:
+// (U:popover.rs:44-55 PopoverState::new). Call it from the entity's
+// build:
 //
 //	gpui.NewEntity(app, scope, func(s *base.PopoverState, cx *gpui.Context[base.PopoverState]) {
 //		*s = base.NewPopoverState(false, cx)
 //	})
 func NewPopoverState(defaultOpen bool, cx *gpui.Context[PopoverState]) PopoverState {
-	cx.OnRelease(func(s *PopoverState, _ *gpui.App) {
-		s.deferredContext.Release()
-		s.deferredContext = nil
-	})
 	return PopoverState{focusHandle: cx.App().FocusHandle(), open: defaultOpen}
 }
 
@@ -102,15 +103,10 @@ func (s *PopoverState) Show(w *gpui.Window, cx *gpui.Context[PopoverState]) {
 	}
 }
 
-// SetOpen sets the open state and the deferred-popup registration
-// without the focus lifecycle (U:popover.rs:73-77, doc(hidden)).
+// SetOpen sets the open state without the focus lifecycle
+// (U:popover.rs:73-77, doc(hidden)).
 func (s *PopoverState) SetOpen(open bool, cx *gpui.Context[PopoverState]) {
 	s.open = open
-	s.deferredContext.Release()
-	s.deferredContext = nil
-	if open {
-		s.deferredContext = GlobalStateRegisterDeferredPopover(cx.App())
-	}
 }
 
 // SyncOpen follows a controlled open value without announcing it

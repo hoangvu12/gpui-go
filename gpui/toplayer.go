@@ -530,6 +530,17 @@ func (w *Window) finishOverlayFrame(app *App) bool {
 	}
 	changed := false
 	regs := fs.rendered.overlayRegistrations
+	// Every open entry starts the reconciliation unregistered; the
+	// registration loop below re-marks the entries whose TopLayer
+	// element rendered this frame, so the tail's drop check ("an entry
+	// left unregistered leaves the layer") sees the entries whose
+	// element stopped rendering — the app unmounted the overlay without
+	// closing it (a page switch, a conditional render). Without the
+	// reset a once-registered entry would stay marked forever and
+	// linger in the layer with its close watcher.
+	for _, rec := range os.entries {
+		rec.registered = false
+	}
 	var shown []*overlayRecord
 	for i := range regs {
 		rec := os.handles[regs[i].id]

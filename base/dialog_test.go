@@ -190,21 +190,64 @@ func TestDialogThePopupIsCenteredByDefault(t *testing.T) {
 	}
 }
 
-// Go-own: the dialog host registers its focus trap, so Tab cycles inside
-// it (U:dialog.rs:565, U:focus_trap.rs:176-187).
-func TestDialogHostRegistersItsFocusTrap(t *testing.T) {
+// Go-own, browser-core ticket 72: the dialog is a core modal, so Tab
+// follows the inert document — focus cannot leave the dialog while it
+// is open (the focus trap's replacement, focus_trap.rs deleted), and
+// Escape closes it through the modal's close watcher, restoring the
+// previously focused element (the dialog focusing steps move focus
+// into the popup at the entry's first frame).
+func TestDialogTabStaysInsideAndEscapeClosesAndRestores(t *testing.T) {
 	ta := gpui.NewTestApp()
 	ta.Update(ovInit)
-	focus := ta.App().FocusHandle()
+	app := ta.App()
+	focus := app.FocusHandle()
+	outside := app.FocusHandle().TabStop(true)
+	inside := app.FocusHandle().TabStop(true)
+	handle := NewDialogHandle(false)
 	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.OwnRecipe(NewDialog().FocusHandle(focus).Popup(gpui.Div().Size(gpui.Px(100))))
+		return gpui.Div().SizeFull().
+			// The outside stop, inert while the modal is open.
+			Child(gpui.Div().Size(gpui.Px(20)).TrackFocus(outside)).
+			Child(gpui.OwnRecipe(NewDialog().
+				Handle(handle).
+				FocusHandle(focus).
+				Popup(gpui.Div().Size(gpui.Px(100)).Occlude().
+					Child(gpui.Div().ID("stop").Size(gpui.Px(20)).TrackFocus(inside))))).
+			IntoElement()
 	})
-	cx.Update(func(w *gpui.Window, _ *gpui.App) { focus.Focus(w) })
+	// The dialog renders closed: focus the outside element first, so the
+	// modal's previously-focused element is a real one.
 	ovDraw(t, cx)
-	var trap gpui.FocusHandle
-	var ok bool
-	cx.Update(func(w *gpui.Window, app *gpui.App) { trap, ok = ActiveFocusTrap(w, app) })
-	if !ok || trap.ID() != focus.ID() {
-		t.Fatalf("active trap = %v (%v), want the dialog's focus handle", trap.ID(), ok)
+	cx.Update(func(w *gpui.Window, _ *gpui.App) { outside.Focus(w) })
+	ovDraw(t, cx)
+	cx.Update(func(w *gpui.Window, app *gpui.App) { handle.Open(w, app) })
+	dialogTestViewport(t, cx)
+
+	// The focusing steps moved focus into the dialog (the first keyboard
+	// focusable inside).
+	if !inside.IsFocused(cx.Window()) {
+		t.Fatalf("focus after the focusing steps = %v, want the dialog's first stop", cx.Window().Focused())
+	}
+	// Tab inside the dialog: the outside stop is inert, so focus
+	// passes out of the dialog to the body (Chrome hands focus to the
+	// browser UI at the scope's end) — never onto the outside stop.
+	cx.SimulateKeystrokes("tab")
+	cx.RunUntilParked()
+	if outside.IsFocused(cx.Window()) {
+		t.Fatal("tab left the modal onto the inert outside element")
+	}
+	// Focus is back inside for the Escape step.
+	cx.Update(func(w *gpui.Window, _ *gpui.App) { inside.Focus(w) })
+
+	// Escape: the modal's close watcher closes the dialog and the core
+	// restores the previously focused element (the outside stop).
+	cx.SimulateKeystrokes("escape")
+	cx.RunUntilParked()
+	ovDraw(t, cx)
+	if handle.IsOpen() {
+		t.Fatal("escape did not close the dialog through the close watcher")
+	}
+	if !outside.IsFocused(cx.Window()) {
+		t.Fatal("the modal's close did not restore the previously focused element")
 	}
 }

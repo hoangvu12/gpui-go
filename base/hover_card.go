@@ -19,6 +19,52 @@ import (
 	"github.com/hoangvu12/gpui-go/gpui"
 )
 
+// overlayDelay is a pending delayed update of an overlay state: the
+// background timer and the foreground continuation awaiting it (the
+// pinned `cx.spawn_in(window, async move |this, cx| {
+// cx.background_executor().timer(delay).await; this.update_in(...) })`,
+// U:hover_card.rs:138-160). It lived in tooltip.go until browser-core
+// ticket 72 deleted the tooltip provider; the hover card is its only
+// user.
+type overlayDelay struct {
+	timer gpui.Task[struct{}]
+	body  gpui.Task[struct{}]
+}
+
+// overlayAfter runs f with the entity and the window once delay has
+// elapsed on the scheduler clock (the virtual clock under TestApp, wall
+// time in a real application). The update is skipped when the entity
+// released or the window closed (the pinned `let _ = this.update_in`).
+func overlayAfter[S any](cx *gpui.Context[S], w *gpui.Window, delay time.Duration, f func(*S, *gpui.Window, *gpui.Context[S])) *overlayDelay {
+	d := &overlayDelay{}
+	d.timer = cx.App().Background().Spawn(func(run *gpui.TaskRun) struct{} {
+		run.Sleep(delay)
+		return struct{}{}
+	})
+	timer := d.timer
+	d.body = cx.SpawnIn(w, func(this gpui.WeakEntity[S], acx *gpui.AsyncWindowContext) struct{} {
+		acx.AsyncApp.Await(timer)
+		if timer.Cancelled() || d.body.Cancelled() {
+			return struct{}{}
+		}
+		_ = acx.Update(func(w *gpui.Window, app *gpui.App) {
+			_ = this.TryUpdateIn(app, w, f)
+		})
+		return struct{}{}
+	})
+	return d
+}
+
+// cancel drops the pending update (the pinned Task drop). It is a no-op
+// on nil.
+func (d *overlayDelay) cancel() {
+	if d == nil {
+		return
+	}
+	d.timer.Cancel()
+	d.body.Cancel()
+}
+
 // HoverCardContentBuilder builds the card content: a div with an id,
 // which receives the card's hover (or tap dismissal) listener
 // (U:hover_card.rs:12-18 ContentBuilder).

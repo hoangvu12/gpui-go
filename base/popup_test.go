@@ -111,3 +111,81 @@ func TestPopupTriggerCaptureEnablesDeferredContentOnTheNextFrame(t *testing.T) {
 		t.Fatalf("content size = %v", b.Size)
 	}
 }
+
+// popupPlacementView renders a Popup around a 100x100 trigger inside a
+// relative container of the same size, so the host's measure canvas
+// captures the trigger's box; the content is a 100x60 debug box.
+func popupPlacementView(anchor gpui.Anchor, offset float32) func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
+	return func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
+		return gpui.Div().SizeFull().Child(gpui.Div().Relative().Mt(gpui.Px(100)).W(gpui.Px(100)).H(gpui.Px(100)).Child(gpui.OwnRecipe(
+			NewPopup("placement", gpui.Div().ID("placement-trigger").Size(gpui.Px(100))).
+				Anchor(anchor).
+				Offset(offset).
+				Content(gpui.Div().DebugSelector("placement-content").W(gpui.Px(100)).H(gpui.Px(60))),
+		))).IntoElement()
+	}
+}
+
+// browser-core ticket 72: the popup host places its content through the
+// core's element-anchored Anchored — each corner anchor maps onto a
+// side and alignment of the measured trigger (the old positioner's
+// corner math, U:popup.rs:102-114), and the placement clamps into the
+// viewport without flipping (the corner rule, U:positioner.rs:95-109).
+// The popup is as wide as the trigger here, so every alignment lands
+// the same left edge; the top-family anchors place below the trigger
+// and the bottom-family above. The placements clamp into the window
+// margin (8px), so a trigger at the container's left edge places its
+// popup 8px in (the corner rule's clamp, U:positioner.rs:303-325).
+func TestPopupPlacesEachCornerAnchorThroughTheCoreAnchored(t *testing.T) {
+	cases := []struct {
+		anchor gpui.Anchor
+		want   gpui.Bounds
+	}{
+		{gpui.AnchorTopLeft, gpui.Bounds{Origin: ovPoint(8, 200), Size: gpui.Size{Width: 100, Height: 60}}},
+		{gpui.AnchorTopCenter, gpui.Bounds{Origin: ovPoint(8, 200), Size: gpui.Size{Width: 100, Height: 60}}},
+		{gpui.AnchorTopRight, gpui.Bounds{Origin: ovPoint(8, 200), Size: gpui.Size{Width: 100, Height: 60}}},
+		{gpui.AnchorBottomLeft, gpui.Bounds{Origin: ovPoint(8, 40), Size: gpui.Size{Width: 100, Height: 60}}},
+		{gpui.AnchorBottomCenter, gpui.Bounds{Origin: ovPoint(8, 40), Size: gpui.Size{Width: 100, Height: 60}}},
+		{gpui.AnchorBottomRight, gpui.Bounds{Origin: ovPoint(8, 40), Size: gpui.Size{Width: 100, Height: 60}}},
+	}
+	for _, tc := range cases {
+		anchor := tc.anchor
+		ta := gpui.NewTestApp()
+		_, cx := openTestView(t, ta, popupPlacementView(anchor, 0))
+		ovDraw(t, cx)
+		ovDraw(t, cx)
+		if got := debugBounds(t, cx, "placement-content"); got != tc.want {
+			t.Fatalf("anchor %v: content = %v, want %v", anchor, got, tc.want)
+		}
+	}
+}
+
+// The offset is the gap along the side (U:popup.rs:60-64), and the
+// placement clamps into the viewport keeping the window margin,
+// without flipping (U:positioner.rs:303-325 — the corner rule).
+func TestPopupOffsetAndClampThroughTheCoreAnchored(t *testing.T) {
+	ta := gpui.NewTestApp()
+	_, cx := openTestView(t, ta, popupPlacementView(gpui.AnchorTopLeft, 8))
+	ovDraw(t, cx)
+	ovDraw(t, cx)
+	// Below the trigger with the 8px gap (and the window margin on the
+	// left).
+	if got := debugBounds(t, cx, "placement-content"); got.Origin != ovPoint(8, 208) {
+		t.Fatalf("offset content origin = %v, want (8,208)", got.Origin)
+	}
+
+	// A trigger near the window's bottom edge: the below placement
+	// overflows, and the shift clamps the popup's bottom edge to the
+	// window's (1920x1080 test window, 8px margin).
+	_, cx = openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
+		return gpui.Div().SizeFull().Child(gpui.Div().Relative().Mt(gpui.Px(1000)).W(gpui.Px(100)).H(gpui.Px(100)).Child(gpui.OwnRecipe(
+			NewPopup("clamped", gpui.Div().ID("clamped-trigger").Size(gpui.Px(100))).
+				Content(gpui.Div().DebugSelector("clamped-content").W(gpui.Px(100)).H(gpui.Px(60))),
+		))).IntoElement()
+	})
+	ovDraw(t, cx)
+	ovDraw(t, cx)
+	if got := debugBounds(t, cx, "clamped-content"); got.Bottom() != 1080-popupWindowMargin {
+		t.Fatalf("clamped bottom = %v, want %v", got.Bottom(), 1080-popupWindowMargin)
+	}
+}

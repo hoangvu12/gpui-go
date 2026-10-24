@@ -10,6 +10,12 @@ package base
 //     which reports failures the pinned write_to_clipboard only logs; the
 //     error is dropped like the input's copy (input_state_edit.go).
 //   - install_window_hit_test_forwarder (U:root.rs:148-149) is macOS-only.
+//   - browser-core ticket 72: the Root's Tab and Shift-Tab bindings and
+//     the focus-trap cycling (U:root.rs:194-262) are gone with the focus
+//     trap (focus_trap.rs, deleted): Tab is the core's default action
+//     (browser-core 14 — ticket 22's Escape rule and 23's modal inertness
+//     both reach it), and a modal dialog's inert outside keeps Tab inside
+//     the dialog, the browser's answer to the trap.
 
 import (
 	"reflect"
@@ -19,24 +25,12 @@ import (
 	"github.com/hoangvu12/gpui-go/gpui"
 )
 
-// The root actions (U:root.rs:11 actions!(root, [Tab, TabPrev])). The
-// module is private upstream; the payloads stay unexported here so they
-// do not collide with tabs.rs's Tab component.
-type (
-	rootTab     struct{}
-	rootTabPrev struct{}
-)
-
-var (
-	rootTabAction     = gpui.DefineUnitAction[rootTab]("root::Tab")
-	rootTabPrevAction = gpui.DefineUnitAction[rootTabPrev]("root::TabPrev")
-)
-
 // rootContext is the root key context (U:root.rs:12).
 const rootContext = "Root"
 
-// rootInit binds the root keys (U:root.rs:14-23): Tab, TabPrev and the
-// platform's copy keystroke for input::Copy.
+// rootInit binds the root keys (U:root.rs:14-23): the platform's copy
+// keystroke for input::Copy. Tab and Shift-Tab are not bound — the
+// core's Tab default action owns focus movement (browser-core 14).
 func rootInit(app *gpui.App) {
 	ctx := rootContext
 	copyKeys := "ctrl-c"
@@ -44,17 +38,9 @@ func rootInit(app *gpui.App) {
 		copyKeys = "cmd-c"
 	}
 	app.BindKeys(
-		gpui.NewKeyBinding("tab", rootTabAction.Box(rootTab{}), &ctx),
-		gpui.NewKeyBinding("shift-tab", rootTabPrevAction.Box(rootTabPrev{}), &ctx),
 		gpui.NewKeyBinding(copyKeys, CopyAction.Box(Copy{}), &ctx),
 	)
 }
-
-// activeFocusTrap returns the focus handle of the active focus trap, if
-// any (crate::active_focus_trap, U:focus_trap.rs:224-228): the focus trap
-// manager's lookup (focus_trap.go). It stays a variable so the root's
-// Go-own Tab test can substitute a trap.
-var activeFocusTrap = ActiveFocusTrap
 
 // RootPlugin is a presentation layer's retained, per-window facilities
 // (U:root.rs:25-75). Register it with RootRegisterPlugin during explicit
@@ -255,30 +241,6 @@ func RootUpdate[R any](w *gpui.Window, app *gpui.App, f func(root *Root, w *gpui
 	})
 }
 
-// focusedEqual compares two Window.Focused results (Option<FocusHandle>
-// equality).
-func focusedEqual(a, b gpui.FocusedResult) bool {
-	if a.Ok != b.Ok {
-		return false
-	}
-	return !a.Ok || a.Handle.ID() == b.Handle.ID()
-}
-
-// rootFocusCycleMaxAttempts prevents an infinite loop (U:root.rs:208).
-const rootFocusCycleMaxAttempts = 100
-
-// onActionTab moves focus forward, cycling inside an active focus trap
-// (U:root.rs:194-227).
-func (r *Root) onActionTab(_ *rootTab, w *gpui.Window, cx *gpui.Context[Root]) {
-	r.cycleFocus(w, cx.App(), w.FocusNext)
-}
-
-// onActionTabPrev moves focus backward, cycling inside an active focus
-// trap (U:root.rs:229-262).
-func (r *Root) onActionTabPrev(_ *rootTabPrev, w *gpui.Window, cx *gpui.Context[Root]) {
-	r.cycleFocus(w, cx.App(), w.FocusPrev)
-}
-
 // onActionCopy copies the window's text selection (U:root.rs:264-273): the
 // selected text, trimmed, goes to the clipboard; with nothing selected the
 // action propagates.
@@ -289,28 +251,6 @@ func (r *Root) onActionCopy(_ *Copy, w *gpui.Window, cx *gpui.Context[Root]) {
 		return
 	}
 	_ = cx.App().WriteClipboard(gpui.NewClipboardStringItem(text))
-}
-
-// cycleFocus is the shared body of the Tab handlers: when focus is inside
-// a focus trap and the move leaves it, keep moving until focus is back
-// inside, or until it cycles back to where it started.
-func (r *Root) cycleFocus(w *gpui.Window, app *gpui.App, move func()) {
-	container, ok := activeFocusTrap(w, app)
-	if !ok {
-		move()
-		return
-	}
-	before := w.Focused()
-	move()
-	if container.ContainsFocused(w) {
-		return
-	}
-	for attempts := 0; !container.ContainsFocused(w) && attempts < rootFocusCycleMaxAttempts; attempts++ {
-		move()
-		if focusedEqual(w.Focused(), before) {
-			break
-		}
-	}
 }
 
 // Render renders the root surface: the application view with every
@@ -328,12 +268,6 @@ func (r *Root) Render(w *gpui.Window, cx *gpui.Context[Root]) gpui.AnyElement {
 	content := gpui.Div().
 		ID("root").
 		KeyContext(rootContext).
-		OnAction(rootTabAction, cx.Listener(func(r *Root, a *rootTab, w *gpui.Window, cx *gpui.Context[Root]) {
-			r.onActionTab(a, w, cx)
-		})).
-		OnAction(rootTabPrevAction, cx.Listener(func(r *Root, a *rootTabPrev, w *gpui.Window, cx *gpui.Context[Root]) {
-			r.onActionTabPrev(a, w, cx)
-		})).
 		OnAction(CopyAction, cx.Listener(func(r *Root, a *Copy, w *gpui.Window, cx *gpui.Context[Root]) {
 			r.onActionCopy(a, w, cx)
 		})).

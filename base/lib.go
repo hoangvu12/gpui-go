@@ -15,18 +15,19 @@ func IsMobile() bool {
 
 // Init initializes the global infrastructure owned by the base layer
 // (U:lib.rs:227-245): the Theme global, GlobalState, the dialog,
-// focus_trap, popover, sheet, combobox, color_picker, select,
-// number_input, time_field, input, tree and text initializers, and the
-// Root key bindings. (The system reduced-motion preference is no longer
-// read here: motion gates on the core's App.MotionReduced, which reads
-// the live SystemPreferences record, browser-core ticket 74.)
+// popover, combobox, color_picker, select, number_input, time_field,
+// input, tree and text initializers, and the Root key bindings. (The
+// system reduced-motion preference is no longer read here: motion gates
+// on the core's App.MotionReduced, which reads the live
+// SystemPreferences record, browser-core ticket 74.) browser-core
+// ticket 72: the focus-trap and sheet key initializers are gone with
+// the focus trap (focus_trap.rs, deleted) and the sheet's Escape
+// binding (the modal entry's close watcher owns Escape).
 func Init(app *gpui.App) {
 	_ = ThemeGlobalMut(app)
 	GlobalStateInit(app)
 	dialogInit(app)
-	focusTrapInit(app)
 	popoverInit(app)
-	sheetInit(app)
 	comboboxInit(app)
 	colorPickerInit(app)
 	selectInit(app)

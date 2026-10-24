@@ -1,13 +1,28 @@
 package base
 
 // Port of U:select.rs: the unstyled controlled select root.
+//
+// browser-core ticket 72: the picker's Escape dismissal is the core's
+// close watcher (ticket 22) — Chrome's customizable <select> picker is a
+// popover=auto element (select_type.cc:611: popover_->setAttribute(
+// kPopoverAttr, "auto")) shown with the select as its invoker
+// (select_type.cc:774: popover_->ShowPopoverInternal(select_, ...)), so
+// Escape signals the picker's close watcher wherever focus sits inside
+// it, and the hide refocuses the select (PopoverElementForAppearanceBase
+// ::HidePopoverInternal's kFocusPreviousElement arm, select_type.cc:
+// 182-196 — closeSelect's trigger refocus). The app-owned picker
+// surface gets the popover's light dismiss by rendering it through
+// Base's Popover (the top layer); a plain Popup is the app's own. The
+// Select's escape key binding is gone with the watcher
+// (U:select.rs:15-28).
 
 import "github.com/hoangvu12/gpui-go/gpui"
 
 // selectContext is the Select key context (U:select.rs:13).
 const selectContext = "Select"
 
-// selectInit binds the select keys (U:select.rs:15-28).
+// selectInit binds the select keys (U:select.rs:15-28). Escape is not
+// bound: the open state's close watcher owns it (see the file comment).
 func selectInit(app *gpui.App) {
 	ctx := selectContext
 	app.BindKeys(
@@ -15,7 +30,6 @@ func selectInit(app *gpui.App) {
 		gpui.NewKeyBinding("down", SelectDownAction.Box(SelectDown{}), &ctx),
 		gpui.NewKeyBinding("enter", ConfirmAction.Box(Confirm{Secondary: false}), &ctx),
 		gpui.NewKeyBinding("secondary-enter", ConfirmAction.Box(Confirm{Secondary: true}), &ctx),
-		gpui.NewKeyBinding("escape", CancelAction.Box(Cancel{}), &ctx),
 	)
 }
 
@@ -37,6 +51,7 @@ type Select struct {
 	gpui.Parent[*Select]
 
 	base               *gpui.DivElement
+	id                 gpui.ElementID
 	open               bool
 	disabled           bool
 	focusHandle        *gpui.FocusHandle
@@ -52,8 +67,10 @@ type Select struct {
 // NewSelect is Select::new (U:select.rs:61-77).
 func NewSelect[I gpui.IntoElementID](id I) *Select {
 	// Gap 2b: the plain upstream div() is a block.
+	eid := gpui.ElementIDOf(id)
 	return gpui.BindParent(gpui.BindStyled(&Select{
-		base:       TestSupport(gpui.Div().ID(gpui.ElementIDOf(id)).Block()),
+		base:       TestSupport(gpui.Div().ID(eid).Block()),
+		id:         eid,
 		keyContext: selectContext,
 	}))
 }
@@ -114,11 +131,12 @@ func (s *Select) KeyContext(keyContext string) *Select {
 	return s
 }
 
-// OnDismiss handles a dismissal, however it was requested: the Cancel
-// action, or the accessible activation that closes an open control
-// (U:select.rs:132-141). It runs before the controlled open state is
-// asked to close, so a caller that commits its pending value on
-// dismissal can still read that value here.
+// OnDismiss handles a dismissal, however it was requested: the Escape
+// key (the open state's close watcher, browser-core ticket 72), or the
+// accessible activation that closes an open control (U:select.rs:132-141).
+// It runs before the controlled open state is asked to close, so a
+// caller that commits its pending value on dismissal can still read
+// that value here.
 func (s *Select) OnDismiss(handler ActionHandler) *Select {
 	s.onDismiss = handler
 	return s
@@ -131,13 +149,23 @@ func (s *Select) OnConfirm(handler ActionHandler) *Select {
 	return s
 }
 
+// selectOverlayState is the open select's close-watcher runtime
+// (browser-core ticket 72): the watcher exists while the select is
+// open — created at the first open render, destroyed when it closes —
+// and its close listener runs the select's close steps. Keyed state
+// keeps it across the app's re-renders and releases it with the
+// element.
+type selectOverlayState struct {
+	watcher gpui.CloseWatcher
+}
+
 // RenderOnce implements gpui.RenderOnce (U:select.rs:165-306).
 func (s *Select) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
 	return s.render(w, app).IntoElement()
 }
 
 // render builds the select's root div (U:select.rs:166-305).
-func (s *Select) render(*gpui.Window, *gpui.App) *gpui.DivElement {
+func (s *Select) render(w *gpui.Window, app *gpui.App) *gpui.DivElement {
 	open := s.open
 	disabled := s.disabled
 	focusHandle := s.focusHandle
@@ -168,6 +196,30 @@ func (s *Select) render(*gpui.Window, *gpui.App) *gpui.DivElement {
 		if contentFocusHandle != nil {
 			contentFocusHandle.Focus(w)
 		}
+	}
+
+	// The open state's close watcher (browser-core ticket 72 — the
+	// picker's popover watcher, see the file comment): Escape not handled
+	// by a listener signals the newest watcher, which runs the same
+	// close steps the Cancel action used to.
+	runtime := w.UseKeyedState(gpui.NamedChildElementID(s.id, "closewatcher"), app, func(w *gpui.Window, cx *gpui.Context[selectOverlayState]) selectOverlayState {
+		cx.OnRelease(func(st *selectOverlayState, _ *gpui.App) { st.watcher.Destroy() })
+		return selectOverlayState{}
+	})
+	watcher := runtime.UpdateWith(app, func(st *selectOverlayState, cx *gpui.Context[selectOverlayState]) gpui.CloseWatcher {
+		if open && st.watcher == (gpui.CloseWatcher{}) {
+			st.watcher = gpui.NewCloseWatcher(w)
+		}
+		if !open && st.watcher != (gpui.CloseWatcher{}) {
+			st.watcher.Destroy()
+			st.watcher = gpui.CloseWatcher{}
+		}
+		return st.watcher
+	})
+	if watcher != (gpui.CloseWatcher{}) {
+		// A fresh closure every render keeps the listener current with
+		// the app's handlers (the listener is replaced, not accumulated).
+		watcher.OnClose(func(w *gpui.Window, app *gpui.App) { closeSelect(w, app) })
 	}
 
 	d := s.base.Role(gpui.RoleComboBox).AriaExpanded(open)
@@ -227,13 +279,6 @@ func (s *Select) render(*gpui.Window, *gpui.App) *gpui.DivElement {
 		if contentFocusHandle != nil {
 			contentFocusHandle.Focus(w)
 		}
-	}).OnAction(CancelAction, func(_ *Cancel, w *gpui.Window, app *gpui.App) {
-		if !open {
-			app.Propagate()
-			return
-		}
-		app.StopPropagation()
-		closeSelect(w, app)
 	})
 	d.Extend(s.TakeChildren())
 	style := s.Style()

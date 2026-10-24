@@ -9,9 +9,8 @@ import (
 
 // popover.rs tests (6/6 ported, U:popover.rs:378-589).
 
-// ovInit runs the base initialization plus the overlay initializers this
-// ticket adds (the upstream crate::init, U:lib.rs:227-245). lib.go's Init
-// does not call them yet (wiring is outside this ticket's files).
+// ovInit runs the base initialization (the upstream crate::init,
+// U:lib.rs:227-245): the popover's key bindings among it.
 func ovInit(app *gpui.App) {
 	Init(app)
 }
@@ -75,49 +74,9 @@ func TestPopoverClickInsideNestedChildKeepsTheParentOpen(t *testing.T) {
 	}
 }
 
-// U:popover.rs:384-400: a state collected while open closes the deferred
-// interaction context.
-func TestPopoverAStateDroppedWhileOpenClosesTheDeferredContext(t *testing.T) {
-	ta := gpui.NewTestApp()
-	var state gpui.Entity[PopoverState]
-	ta.Update(func(app *gpui.App) {
-		GlobalStateInit(app)
-		state = gpui.NewEntity(app, ta.RootScope(), func(s *PopoverState, cx *gpui.Context[PopoverState]) {
-			*s = NewPopoverState(false, cx)
-		})
-		state.Update(app, func(s *PopoverState, cx *gpui.Context[PopoverState]) { s.SetOpen(true, cx) })
-		if !GlobalStateIsInDeferredContext(app) {
-			t.Fatal("an open state did not register the deferred context")
-		}
-	})
-	ta.Update(func(*gpui.App) { state.Release() })
-	ta.Update(func(app *gpui.App) {
-		if GlobalStateIsInDeferredContext(app) {
-			t.Fatal("a dropped open state left the deferred context open")
-		}
-	})
-}
-
-// U:popover.rs:402-416
-func TestPopoverOpenStateRegistersAndUnregistersDeferredContext(t *testing.T) {
-	ta := gpui.NewTestApp()
-	ta.Update(func(app *gpui.App) {
-		GlobalStateInit(app)
-		state := gpui.NewEntity(app, ta.RootScope(), func(s *PopoverState, cx *gpui.Context[PopoverState]) {
-			*s = NewPopoverState(false, cx)
-		})
-		isOpen := func() bool { return state.Read(app, func(s *PopoverState, _ *gpui.App) bool { return s.IsOpen() }) }
-
-		state.Update(app, func(s *PopoverState, cx *gpui.Context[PopoverState]) { s.SetOpen(true, cx) })
-		if !isOpen() || !GlobalStateIsInDeferredContext(app) {
-			t.Fatal("opening did not register")
-		}
-		state.Update(app, func(s *PopoverState, cx *gpui.Context[PopoverState]) { s.SetOpen(false, cx) })
-		if isOpen() || GlobalStateIsInDeferredContext(app) {
-			t.Fatal("closing did not unregister")
-		}
-	})
-}
+// U:popover.rs:384-416: the deferred-popover liveness tests are gone
+// with the liveness list (browser-core ticket 72: the top-layer entry's
+// registration is the popup's liveness).
 
 // popoverHarness is U:popover.rs:418-456 PopoverHarness.
 func popoverHarness(changes *[]bool, defaultOpen bool) func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
@@ -253,5 +212,37 @@ func TestPopoverKeyboardActivationOpensThePopover(t *testing.T) {
 
 	if !ovHasBounds(cx, "keyboard-popover-content") {
 		t.Fatal("enter on the focused trigger did not open the popover")
+	}
+}
+
+// browser-core ticket 72: Escape closes the popover through the
+// top-layer entry's close watcher (ticket 22 — popover=auto entries
+// create one per show, html_element.cc:2146-2157): the key never
+// dispatches an action, the default Escape arm signals the newest
+// watcher, and the entry's toggle runs the state's own close (the
+// focus restore and the open-change announcement).
+func TestPopoverEscapeClosesThroughTheCloseWatcher(t *testing.T) {
+	ta := gpui.NewTestApp()
+	ta.Update(ovInit)
+	var changes []bool
+	_, cx := openTestView(t, ta, popoverHarness(&changes, false))
+	ovDraw(t, cx)
+
+	cx.SimulateClick(ovPoint(20, 10), gpui.NoModifiers())
+	ovDraw(t, cx)
+	if !ovHasBounds(cx, "base-popover-content") {
+		t.Fatal("a click on the trigger did not open the popover")
+	}
+
+	// Escape with focus inside the popover's content: the content has no
+	// Escape listener, so the default action reaches the watcher.
+	ovDraw(t, cx)
+	cx.SimulateKeystrokes("escape")
+	ovDraw(t, cx)
+	if ovHasBounds(cx, "base-popover-content") {
+		t.Fatal("escape did not close the popover through the close watcher")
+	}
+	if !slices.Equal(changes, []bool{true, false}) {
+		t.Fatalf("open changes = %v, want [true false]", changes)
 	}
 }
