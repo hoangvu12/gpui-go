@@ -6,18 +6,16 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 ## ACTIVE EFFORT (2026-10-23): recreate zgui's terminal app ("zterm") on gpui-go
 
-**HANDOFF 2026-10-24 (orchestrator 6 → orchestrator 7). CURRENT.** The user asked for it because orchestrator 6's context was full (~400k tokens). The handoff doc is `%TEMP%\gpui-go-handoff-orchestrator7.md`; the predecessor is Roboco chat 3d6efd46 (Claude Code, Opus 5.5).
-- **Resolved (16 of 76):** 01, 02, 03, 05, 08, 09, 10, 27, 31, 39 (rev 15, DLL 8b944eae), 40, 47, 49 (the R16 design, approved), 62, 64. Each has a verification comment, and the map's Decisions list a gist of each.
-- **Done but not yet verified or merged:**
-  - 04 (`gpui-go-wt-core-04`, deb007b): it reports a native rev-15 backdrop-crop bug.
-  - 13 (`gpui-go-wt-core-13`, 3123f86).
-- **Running** (notices go to chat 3d6efd46; poll with get_chat/read_chat):
-  - 06 (chat c1c2b31c)
-  - 11 (chat 167a7b32)
-  - 41 (chat b48fe0e3)
-  - 65 (chat 7a8ff981)
-- **Off-screen test windows**, which the user asked for: WIP on branch `core/offscreen-tests` (2a235d4, worktree `gpui-go-wt-core-offscreen`), unverified. Under `go test` it parks windows at (20000, 20000). Switches: `GPUI_TEST_ONSCREEN=1`, `GPUI_REAL_INPUT_TESTS=1`, `GPUI_TEST_REPORT_ONSCREEN=1`. Next: a full suite run, fixes, merge.
-- **Waiting on the user:** a small native follow-up rebuild (rev 15.1), with the text-run fields and baseline for 42/43, the italic shear from 08, and probably the backdrop crop from 04. The alternative is to fold it into R16; rev 16 (54) needs its own approval.
+**ORCHESTRATOR 7 STATUS (2026-10-24). CURRENT.** This is Roboco chat d209bee2 (Claude Code, Opus 5.5). It took over from orchestrator 6 (chat 3d6efd46; handoff doc `%TEMP%\gpui-go-handoff-orchestrator7.md`).
+- **Resolved (22 of 76):** 01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 13, 27, 31, 39 (rev 15, DLL 8b944eae), 40, 41, 47, 49 (the R16 design, approved), 62, 64, 65. Each has a verification comment, and the map's Decisions list a gist of each.
+- **Off-screen test windows: merged** (e3e3476). Under `go test`, real windows open at +(20000, 20000), and so do SetBounds and synthetic WM_DPICHANGED rectangles. Switches: `GPUI_TEST_ONSCREEN=1` shows them; `GPUI_TEST_REPORT_ONSCREEN=1` logs any test window on a monitor; `GPUI_REAL_INPUT_TESTS=1` turns it off. The full suite on the off-screen branch had no window on a monitor. The two maximize tests are behind `realinput.Require`. Fixed along the way: dropspec's drag points follow the window, authorspec's drag preview dispatches input directly, and inspectorspec counts only the move (since 10's hover sweeps).
+- **Full suite** (`go test -p 1 ./... -count=1`, off-screen): 65 packages ok. The only failure left is portfixture TestFx0004 (the system font count went from 94 to 95). clipspec's PowerShell clipboard test failed once with "Requested Clipboard operation did not succeed" (the clipboard was held by something else); it passed on the next run.
+- **Claimed, not yet delegated:** 25, 29, 30, 33. The user reported the PC freezing; another Claude session was running parallel cargo/wasmtime builds. Start workers gradually.
+- **Waiting on the user:** the native follow-up rebuild, rev 15.1:
+  - the text-run fields and baseline for 42/43
+  - the italic shear from 08
+  - the extension-uniform upload bug: draw.rs:2327/2330 `&[*uniforms]` copies a reference, so colour filters are no-ops (41) and the backdrop crop is most likely broken by it too (04)
+  The alternative is to fold it into R16; rev 16 (54) needs its own approval.
 - **Rules:**
   - Up to 6 workers (pi + iroha/dashscope/glm-5.3).
   - Clean up merged worktrees and branches after each merge (the user asked).
@@ -25,6 +23,9 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
   - No push, tag or repo creation.
   - Headless only.
   - Never touch the `gpui-go` main checkout.
+  - Never `taskkill` go.exe globally; it kills other sessions' runs.
+- 37 (line-height: normal) changes the default line height repo-wide, so run it nearly alone, like 68.
+- Empty worktree folders that Windows still locks: gpui-go-wt-core-06, -41, -65, -r15, -zterm-bold. Retry `rm -rf` later.
 
 Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
 

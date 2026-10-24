@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 6 (Claude Code)
 Blocked by: 01
 Triage: ready-for-agent
@@ -22,6 +22,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 7: verified and merged (f995670). The harness conflicts with 13 were the shared vocabulary lists, merged so that both sets of kinds are accepted. On the merged tree, with the off-screen test windows: `go test -p 1` over ./gpui/, ./internal/parity/... (incl. fixtures/capture), ./base, ./examples/zterm/..., dropspec, authorspec, inspectorspec and richtextspec passes, and no window landed on a monitor. The zterm change swaps the hitbox-origin subtraction for `e.LocalPosition(hb).Y`, the same value. The authorspec and inspectorspec failures the worker saw on its base commit came from ticket 10 (bisected to f0cf12d) and are fixed on core/offscreen-tests.
 
 ## Answer
 
