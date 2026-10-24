@@ -583,8 +583,10 @@ func TestWin32InputRealWindowWheelScrolls(t *testing.T) {
 		return f.draws() > before && readOffset().Y < 0
 	})
 	f.waitIdle()
-	// The line delta became whole line heights (ScrollDelta::pixel_delta
-	// with the window's line height, div.rs:3827).
+	// The line delta became pixels at Chromium's kScrollbarPixelsPerLine
+	// (browser-core ticket 15, spec D10): 100/3 px per line — one notch of
+	// WheelScrollLines lines moves WheelScrollLines x 100/3 px (the float32
+	// rounding both engines' float arithmetic share).
 	// A Shift held anywhere on the machine (GetAsyncKeyState) turns the
 	// notch into horizontal lines, which the vertical-only scroller still
 	// applies to Y; the per-line check divides by whichever axis carries
@@ -596,8 +598,8 @@ func TestWin32InputRealWindowWheelScrolls(t *testing.T) {
 	}
 	if wantY > -200 && lines != 0 {
 		perLine := -wantY / -lines
-		if perLine < 8 || perLine > 64 || perLine != float32(int(perLine)) {
-			t.Errorf("one notch scrolled %v for %v lines: %v px per line is not a whole line height", -wantY, -lines, perLine)
+		if inputAbs(perLine-wheelPixelsPerLine) > 0.01 {
+			t.Errorf("one notch scrolled %v for %v lines: %v px per line, want %v (Chromium's 100/3 px per line, D10)", -wantY, -lines, perLine, wheelPixelsPerLine)
 		}
 	}
 
