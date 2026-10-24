@@ -1922,6 +1922,16 @@ func (h *Host) systemPreferencesStamp() uint64 {
 	return h.systemPrefsStamp.Load()
 }
 
+// attachedApp returns the application the host is wired to (nil before
+// attach); attach writes the field under mu, so the refresh path reads
+// it under the same lock (system_prefs_windows.go's record-change
+// repaint).
+func (h *Host) attachedApp() *App {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.app
+}
+
 // hostStarted reports whether the host's message loop has been started
 // (Start completed its boot). App.Update's foreground marshal only
 // engages on a started host: before Start, updates run inline (the

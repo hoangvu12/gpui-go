@@ -61,8 +61,14 @@ func DefaultInputEditorStyle() InputEditorStyle {
 
 // Resolved fills in every color that was left unset from the palette;
 // whatever a consumer projected is kept exactly
-// (U:input/editor/highlighting.rs:124-160).
-func (s InputEditorStyle) Resolved(tokens *SemanticThemeTokens) InputEditorStyle {
+// (U:input/editor/highlighting.rs:124-160). An unset selection takes
+// the system's selection wash instead of the pinned accent rule
+// (browser-core 28, D0): selected text paints with the colours the
+// platform reports, the ::selection default Blink resolves from the
+// theme's active selection background (highlight_style_utils.cc:188-
+// 201) — a translucent blend-with-white wash, so the glyphs stay
+// readable through it (the pinned "must not hide the glyphs" property).
+func (s InputEditorStyle) Resolved(app *gpui.App, tokens *SemanticThemeTokens) InputEditorStyle {
 	colors := &tokens.Colors
 	unset := func(value gpui.Hsla) bool { return value.A == 0 }
 	or := func(value, fallback gpui.Hsla) gpui.Hsla {
@@ -75,9 +81,7 @@ func (s InputEditorStyle) Resolved(tokens *SemanticThemeTokens) InputEditorStyle
 	foreground := or(s.Foreground, colors.Foreground)
 	selection := s.Selection
 	if unset(selection) {
-		selection = colors.Accent
-		// A selection must not hide the glyphs it selects.
-		selection.A = 0.4
+		selection = systemSelectionColors(app).Background
 	}
 
 	out := s

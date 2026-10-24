@@ -9,9 +9,10 @@ import "github.com/hoangvu12/gpui-go/gpui"
 // Render implements gpui.Render (U:input/base/state.rs:4355-4511).
 func (s *InputBaseState[M]) Render(w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) gpui.AnyElement {
 	// Before anything reads it: the element resolves this style during
-	// layout and paint, both after this call in the same frame.
+	// layout and paint, both after this call in the same frame. An unset
+	// selection resolves from the system record (browser-core 28).
 	tokens := ThemeGlobal(cx.App()).Tokens
-	s.editorStyle = s.projectedEditorStyle.Resolved(&tokens)
+	s.editorStyle = s.projectedEditorStyle.Resolved(cx.App(), &tokens)
 	// The listeners and the element outlive this callback: the window-owned
 	// self-handle (Context.StrongSelf) is the pinned cx.entity().
 	entity := cx.StrongSelf()

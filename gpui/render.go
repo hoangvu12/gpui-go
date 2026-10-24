@@ -92,6 +92,16 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 		}
 		ds.text = text
 	}
+	if w.app != nil {
+		// D11 (browser-core 28, text_scale.go): the window's rem follows
+		// the Windows text size by default — the base rem (16) scaled by
+		// the app's effective text scale — with SetRemFollowsSystemText
+		// Scale(false) holding it at 16. The scale comes from the
+		// preference-version cache, so a frame never calls into the host
+		// for it; a record change repaints (system_prefs_windows.go) and
+		// this frame's rebuilt layout tree reflows at the new rem.
+		ds.rem = w.app.frameRemSize()
+	}
 
 	scene, err := NewScene()
 	if err != nil {

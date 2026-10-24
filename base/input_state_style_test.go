@@ -21,8 +21,11 @@ func inputStyleDark() SemanticThemeTokens {
 
 // U:input/editor/highlighting.rs:199-219
 func TestInputEditorStyleAnUnprojectedStyleTakesItsInkFromThePalette(t *testing.T) {
+	ta := gpui.NewTestApp()
+	shutdownAtCleanup(t, ta)
+	app := ta.App()
 	tokens := inputStyleDark()
-	resolved := DefaultInputEditorStyle().Resolved(&tokens)
+	resolved := DefaultInputEditorStyle().Resolved(app, &tokens)
 
 	if resolved.Foreground != tokens.Colors.Foreground || resolved.Caret != tokens.Colors.Foreground ||
 		resolved.MutedForeground != tokens.Colors.MutedForeground || resolved.Background != tokens.Colors.Surface ||
@@ -36,21 +39,50 @@ func TestInputEditorStyleAnUnprojectedStyleTakesItsInkFromThePalette(t *testing.
 	}
 }
 
-// U:input/editor/highlighting.rs:221-225
+// U:input/editor/highlighting.rs:221-225, diverged toward the browser
+// (D0, browser-core 28): the pin resolved an unset selection from the
+// palette accent at 0.4 alpha; the port takes the system's selection
+// wash, which keeps the same read-through property.
 func TestInputEditorStyleASelectionStaysTranslucentEnoughToReadThrough(t *testing.T) {
+	ta := gpui.NewTestApp()
+	shutdownAtCleanup(t, ta)
+	app := ta.App()
 	tokens := inputStyleDark()
-	if a := DefaultInputEditorStyle().Resolved(&tokens).Selection.A; a != 0.4 {
-		t.Fatalf("selection alpha = %v, want 0.4", a)
+	selection := DefaultInputEditorStyle().Resolved(app, &tokens).Selection
+	want := app.SelectionColors().Background
+	if selection != want {
+		t.Fatalf("selection = %v, want the system wash %v", selection, want)
+	}
+	if !(selection.A > 0 && selection.A < 1) {
+		t.Fatalf("selection alpha = %v, want a translucent wash the glyphs read through", selection.A)
+	}
+}
+
+// browser-core 28: a projected selection is kept verbatim — the app's
+// own ::selection styling wins over the system.
+func TestInputEditorStyleAProjectedSelectionIsKeptVerbatim(t *testing.T) {
+	ta := gpui.NewTestApp()
+	shutdownAtCleanup(t, ta)
+	app := ta.App()
+	tokens := inputStyleDark()
+	chosen := gpui.Hsla{H: 0.3, S: 0.4, L: 0.5, A: 0.6}
+	style := DefaultInputEditorStyle()
+	style.Selection = chosen
+	if resolved := style.Resolved(app, &tokens); resolved.Selection != chosen {
+		t.Fatalf("projected selection = %v, want %v", resolved.Selection, chosen)
 	}
 }
 
 // U:input/editor/highlighting.rs:227-241
 func TestInputEditorStyleProjectedColoursAreKeptVerbatim(t *testing.T) {
 	chosen := gpui.Hsla{H: 0.3, S: 0.4, L: 0.5, A: 1}
+	ta := gpui.NewTestApp()
+	shutdownAtCleanup(t, ta)
+	app := ta.App()
 	style := DefaultInputEditorStyle()
 	style.Foreground, style.Caret = chosen, chosen
 	tokens := inputStyleDark()
-	resolved := style.Resolved(&tokens)
+	resolved := style.Resolved(app, &tokens)
 	if resolved.Foreground != chosen || resolved.Caret != chosen {
 		t.Fatalf("projected colours changed: %+v", resolved)
 	}
@@ -61,13 +93,16 @@ func TestInputEditorStyleProjectedColoursAreKeptVerbatim(t *testing.T) {
 
 // U:input/editor/highlighting.rs:243-257
 func TestInputEditorStyleResolutionNeverConsumesItsOwnOutput(t *testing.T) {
+	ta := gpui.NewTestApp()
+	shutdownAtCleanup(t, ta)
+	app := ta.App()
 	projected := DefaultInputEditorStyle()
 	dark := inputStyleDark()
-	first := projected.Resolved(&dark)
+	first := projected.Resolved(app, &dark)
 
 	light := DefaultSemanticThemeTokens()
 	light.Colors.Foreground = gpui.Hsla{H: 0, S: 0, L: 0.04, A: 1}
-	second := projected.Resolved(&light)
+	second := projected.Resolved(app, &light)
 
 	if first.Foreground == second.Foreground {
 		t.Fatal("the second resolution kept the first palette")
