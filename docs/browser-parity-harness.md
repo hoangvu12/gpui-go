@@ -123,8 +123,11 @@ new fixtures. The implementation lives in `internal/parity`:
    view closure, and reported with `log.TrackFocus(handle, id)` so key entries can carry
    the focus field); an element whose click the port does not yet deliver (an ancestor
    of a keyboard activation) narrows its listeners with `data-events="keydown,keyup"`
-   on the page and matching handlers in the view; and the pages pin `outline: none` on
-   focusable elements because the port has no default focus ring yet (ticket 48).
+   on the page and matching handlers in the view; and the pages that do not want the
+   browser's ring on their focusable elements pin `outline: none` on the page AND carry
+   the pin's twin `.OutlineNone()` on the view's focusable boxes — the port draws
+   Chrome's default focus ring on focused, focus-visible elements now (ticket 48), so
+   a page without the pin must leave the ring in the view too.
 
 3. **Element ids are the mapping.** Every compared or instrumented HTML element carries
    `data-id="<id>"`; the gpui elements set `.ID("<id>")` (interactive state, click
@@ -336,9 +339,16 @@ screen. `GPUI_REAL_INPUT_TESTS` is never set by anything here.
 These are gpui-go (pin) behaviours that differ from the browser; the fixtures avoid them
 until the owning spec tickets land, and each should get a fixture the day it is fixed:
 
-- **No default focus ring** — Chrome's `:focus-visible` `outline: auto` has no port
-  equivalent yet, so the keyorder pages pin `outline: none` on focusable elements (the
-  outline ticket, spec story 42, owns the port's ring).
+- **No default focus ring** — FIXED by ticket 48 (the outline ticket, spec story 42):
+  a focused, focus-visible element now draws the default ring — one 2px `#101010` stroke
+  centred on the border box with 3px-rounded corners, the look the recorded stable Chrome
+  155 draws (`fixtures/outline` is the fixture set). Two notes from the landing: the pages
+  that pin `outline: none` on focusable elements (keyorder, activation, tabnav, contextmenu,
+  imecompose, keycode) now carry the pin's port twin — `.OutlineNone()` on the view's
+  focusable boxes, so their records stay valid unchanged; and Chromium main has since moved
+  to a two-tone ring (`#E59700` under white on light, outline_painter.cc's PaintFocusRing),
+  recorded as the port's divergence toward the record — re-record when the recorder's Chrome
+  updates past the refresh.
 - **Default line height is 1.618** (CSS `normal` comes with D1): the tracer's page pins
   `line-height: 1.618`.
 - Text rasterization differs in mechanism (Skia's sRGB preblend vs DirectWrite
@@ -533,3 +543,27 @@ mouse-up's or the key-up's — so the prevented record binds only the
 `contextmenu` kind (the coarseness the activation click already documents).
 `fixtures/contextmenu` is the fixture set (mouse, menu-key, shift-f10 and the
 prevented pair whose Tab-after-menu pins "suppresses nothing else").
+Ticket 48 (the outline and the default focus ring, story 42) added the CSS
+outline to the Style (`gpui/style.go` `OutlineStyle`: width, kind, colour,
+offset — a frame painted ABOVE the content as the element's last decoration,
+the outline phase after the foreground, `paint_phase.h:46-47`) and the UA
+focus rule's materialization (`gpui/interact.go` `computeStyleInternal`:
+outline-style: auto — the CSS initial value — becomes the ring kind on a
+focused, focus-visible element and none everywhere else, html.css:1701-1703).
+The ring is one 2px stroke centred on the border box with the element radii
+plus the offset floored at 3 (outline_painter.cc's FocusRingStrokeWidth 3,
+FocusRingOuterStrokeWidth 2, GetFocusRingCornerRadii), in the outline colour
+or the default #101010 the recorded Chrome 155 resolves for
+-webkit-focus-ring-color (web_view_impl.cc:3836's renderer-preference
+override); Chromium main has since refreshed it to a two-tone ring
+(#E59700 under white on light) — a recorded divergence toward the record, to
+re-record when the recorder's Chrome updates. `outline-none` opts out per
+element, a click focus draws nothing (12's focus origin), and the forced
+pass maps the ring colour to Highlight (forced_colors.css:18-19).
+`fixtures/outline` is the fixture set (offsets positive/zero/negative,
+widths, colours, a rounded border, the dashed pattern, the Tab-focused ring
+vs the click-focused no-ring vs the outline-none opt-out); the fixture views
+whose pages pin `outline: none` gained the pin's port twin (`.OutlineNone()`)
+with no record change, and dashed, dotted, double and the rest beyond solid
+stay unportable through the scene's two border styles (a recorded
+limitation).

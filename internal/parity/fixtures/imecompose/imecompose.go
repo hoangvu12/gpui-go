@@ -213,6 +213,10 @@ func View() func(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.AnyEl
 			DebugSelector("field").
 			Size(gpui.Px(fieldWidth), gpui.Px(fieldHeight)).
 			Bg(gpui.Rgb(fieldBackground)).
+			// The page pins outline: none on the editable; the
+			// port has a default focus ring now (ticket 48), so the
+			// view carries the pin's twin.
+			OutlineNone().
 			TrackFocus(focus).
 			OnMouseDown(gpui.MouseButtonLeft, log.MouseDown("field")).
 			OnMouseUp(gpui.MouseButtonLeft, log.MouseUp("field")).
@@ -256,6 +260,10 @@ func PlainView() func(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.
 			DebugSelector("field").
 			Size(gpui.Px(fieldWidth), gpui.Px(fieldHeight)).
 			Bg(gpui.Rgb(fieldBackground)).
+			// The page pins outline: none on the editable; the
+			// port has a default focus ring now (ticket 48), so the
+			// view carries the pin's twin.
+			OutlineNone().
 			TrackFocus(focus).
 			OnMouseDown(gpui.MouseButtonLeft, log.MouseDown("field")).
 			OnMouseUp(gpui.MouseButtonLeft, log.MouseUp("field")).

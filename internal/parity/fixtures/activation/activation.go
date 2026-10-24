@@ -584,6 +584,10 @@ func ButtonView(variant ButtonVariant) func(log *parity.EventLog, w *gpui.Window
 			Size(gpui.Px(btnWidth), gpui.Px(btnHeight)).
 			Bg(gpui.Rgb(childBColor)).
 			TrackFocus(focus).
+			// The page pins outline: none on :focus (buttonPage); the
+			// port has a default focus ring now (ticket 48), so the
+			// view carries the pin's twin.
+			OutlineNone().
 			Focus(func(s gpui.StyleRefinement) gpui.StyleRefinement {
 				s.Background = gpui.Some(gpui.BackgroundOf(gpui.Rgb(focusColor)))
 				return s
@@ -669,6 +673,10 @@ func FocusView(count FocusBoxCount, mode FocusRingMode) func(log *parity.EventLo
 				Size(gpui.Px(btnWidth), gpui.Px(btnHeight)).
 				Bg(gpui.Rgb(boxBackground)).
 				TrackFocus(handle).
+				// focusPage pins outline: none on :focus; the port has
+				// a default focus ring now (ticket 48), so the view
+				// carries the pin's twin.
+				OutlineNone().
 				Focus(func(s gpui.StyleRefinement) gpui.StyleRefinement {
 					s.Background = gpui.Some(gpui.BackgroundOf(gpui.Rgb(focusBackground)))
 					return s

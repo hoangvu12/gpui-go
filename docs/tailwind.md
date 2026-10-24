@@ -120,6 +120,7 @@ The palette is Tailwind CSS v3.4's default palette. It has 22 families (slate, g
 | `border-red-500` | `BorderColor(tw.Red500)` |
 | `ring-blue-500` | `RingColor(tw.Blue500)` |
 | `inset-ring-blue-500` | `InsetRingColor(tw.Blue500)` |
+| `outline-blue-500` | `OutlineColor(tw.Blue500)` |
 | `bg-transparent` | `Bg(tw.Transparent)` |
 | `bg-black/50`, `bg-slate-900/[0.35]` | `Bg(tw.Black.Alpha(0.5))`, `Bg(tw.Slate900.Alpha(0.35))` |
 | `bg-[#1e293b]` | `Bg(gpui.Hex("#1e293b"))` or `Bg(gpui.Rgb(0x1e293b))` |
@@ -162,6 +163,7 @@ The palette is Tailwind CSS v3.4's default palette. It has 22 families (slate, g
 - **Borders**: `border`, `border-t|r|b|l|x|y` (1px), `border-<n>`, `border-[3px]`, `border-t-[3px]`, `border-solid`, `border-dashed`.
 - **Radii**: `rounded` and `rounded-t|r|b|l|tl|tr|br|bl` (0.25rem), `rounded-none|xs|sm|md|lg|xl|2xl|3xl|full`, `rounded-[10px]`, `rounded-tl-[10px]`.
 - **Shadows and rings**: `shadow` (v3's default), `shadow-2xs` … `shadow-2xl`, `shadow-none`, `shadow-inner`, `ring` (3px), `ring-<n>`, `ring-[3px]`, `inset-ring` (1px), `inset-ring-<n>`, `inset-ring-[3px]`.
+- **Outlines** (ticket 48): `outline` (1px solid), `outline-<n>`, `outline-[3px]`, `outline-offset-<n>`, `outline-offset-[3px]`, `outline-<color>`, `outline-none` (also the default focus ring's opt-out — a focused, focus-visible element draws Chrome's ring otherwise), `outline-dashed`. The outline paints above the content and never affects layout; negative offsets have no class (call `.OutlineOffset(-3)`).
 - **Typography**: `text-xs` … `text-9xl`, `text-[13px]`, `font-thin` … `font-black`, `font-[550]`, `leading-none|tight|snug|normal|relaxed|loose`, `leading-<n>` (n/4 rem), `leading-[1.4]` (a multiple of the font size), `leading-[20px]`, `tracking-[0.5px]`, `line-clamp-<n>`, `text-wrap`, `text-nowrap`.
 - **Opacity**: `opacity-<0..100>`, `opacity-[.35]`, `opacity-[35%]`.
 - **Flex and grid**: `flex-grow`, `flex-shrink`, `grid-cols-<n>`, `grid-rows-<n>`, `col-span-<n>`, `row-span-<n>`, `col-start-<n>`, `col-end-<n>`, `row-start-<n>`, `row-end-<n>`.
@@ -189,7 +191,7 @@ A rejected class is skipped, the rest of the string still applies, and the reaso
 | `fixed` | Use `absolute` inside a `relative` ancestor that fills the window, or `gpui.Deferred` / `gpui.Anchored` for overlays. |
 | `sticky`, `static` | Not supported. Elements are relative unless absolute. |
 | `inline-block`, `inline-grid`, `table*`, `contents`, `flow-root`, `list-item` | Use `flex`, `grid`, `block`, `inline` or `inline-flex`. |
-| `outline-*` | GPUI draws no focus outline. Drop it, and use `ring-*` for a visible focus ring. |
+| `outline-solid`, `outline-dotted`, `outline-double`, `outline-hidden` | Only `outline`, `outline-<n>`, `outline-offset-<n>`, `outline-<color>`, `outline-none` and `outline-dashed` are supported: the native scene's border records are solid or dashed only (a recorded limitation, ticket 48). Negative outline offsets have no class; call `.OutlineOffset(-3)`. |
 | `ring-offset-*`, `ring-inset` | Not supported. Use `inset-ring-*` for an inset ring. |
 | `bg-gradient-*` | Tailwind v4 renamed it: write `bg-linear-to-r from-… to-…`. |
 | `via-*`, `via-none` | A middle stop makes three, and the scene record carries exactly two stops (ticket 52, the R16 gradient redesign). |

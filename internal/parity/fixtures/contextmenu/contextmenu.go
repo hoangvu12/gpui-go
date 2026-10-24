@@ -314,6 +314,11 @@ func menuViewOf(firstID string, boxCount int, focusable, prevent, mouseKinds boo
 			}
 			if handle, ok := handles[id]; ok && focusable {
 				box = box.
+					// The page pins outline: none on the focusable
+					// boxes; the port has a default focus ring now
+					// (ticket 48), so the view carries the pin's
+					// twin.
+					OutlineNone().
 					TrackFocus(handle).
 					Focus(func(s gpui.StyleRefinement) gpui.StyleRefinement {
 						focusBg := uint32(focusColor)

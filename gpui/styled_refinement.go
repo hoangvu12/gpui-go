@@ -153,6 +153,14 @@ type StyleRefinement struct {
 	InsetRingWidth Optional[float32]
 	InsetRingColor Optional[RingColor]
 
+	// The outline fields (CSS css-ui-4 §outline, browser-core ticket
+	// 48), flattened outline.width/.color/.style/.offset like the
+	// ring's.
+	OutlineWidth  Optional[float32]
+	OutlineColor  Optional[RingColor]
+	OutlineStyle  Optional[OutlineStyleKind]
+	OutlineOffset Optional[float32]
+
 	Filter         Optional[[]Filter]
 	BackdropFilter Optional[[]Filter]
 
@@ -329,6 +337,10 @@ func (s *Style) refineBoxed(r *StyleRefinement, boxes *styleBoxes) {
 	refineValue(&s.Ring.Color, r.RingColor)
 	refineValue(&s.InsetRing.Width, r.InsetRingWidth)
 	refineValue(&s.InsetRing.Color, r.InsetRingColor)
+	refineValue(&s.Outline.Width, r.OutlineWidth)
+	refineValue(&s.Outline.Color, r.OutlineColor)
+	refineValue(&s.Outline.Kind, r.OutlineStyle)
+	refineValue(&s.Outline.Offset, r.OutlineOffset)
 	if filters, ok := r.Filter.Get(); ok {
 		s.Filter = slices.Clone(filters)
 	}
@@ -424,6 +436,10 @@ func (r *StyleRefinement) Refine(other *StyleRefinement) {
 	mergeOptional(&r.RingColor, other.RingColor)
 	mergeOptional(&r.InsetRingWidth, other.InsetRingWidth)
 	mergeOptional(&r.InsetRingColor, other.InsetRingColor)
+	mergeOptional(&r.OutlineWidth, other.OutlineWidth)
+	mergeOptional(&r.OutlineColor, other.OutlineColor)
+	mergeOptional(&r.OutlineStyle, other.OutlineStyle)
+	mergeOptional(&r.OutlineOffset, other.OutlineOffset)
 	if filters, ok := other.Filter.Get(); ok {
 		r.Filter = Some(slices.Clone(filters))
 	}

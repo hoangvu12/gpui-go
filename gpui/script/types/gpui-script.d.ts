@@ -369,6 +369,7 @@ type ColorPrefix =
 	"bg-" |
 	"border-" |
 	"inset-ring-" |
+	"outline-" |
 	"ring-" |
 	"text-";
 
@@ -718,6 +719,11 @@ type CoreClass =
 	"opacity-90" |
 	"opacity-95" |
 	"ordinal" |
+	"outline" |
+	"outline-[0]" |
+	"outline-dashed" |
+	"outline-none" |
+	"outline-offset-[0]" |
 	"overflow-auto" |
 	"overflow-clip" |
 	"overflow-hidden" |
@@ -990,6 +996,10 @@ type CoreClass =
 	`ring-[${number}px]` |
 	`inset-ring-${number}` |
 	`inset-ring-[${number}px]` |
+	`outline-${number}` |
+	`outline-[${number}px]` |
+	`outline-offset-${number}` |
+	`outline-offset-[${number}px]` |
 	`${"grayscale" | "sepia" | "invert"}${"" | "-0" | "-none" | `-[${number}]` | `-[${number}%]`}` |
 	`-${"grayscale" | "sepia" | "invert"}${"" | "-0" | "-none" | `-[${number}]` | `-[${number}%]`}` |
 	`${"brightness" | "contrast" | "saturate"}-${"0" | "100" | "105" | "110" | "125" | "150" | "200" | "50" | "75" | "90" | "95"}` |
@@ -1366,6 +1376,11 @@ type Class =
 	"opacity-90" |
 	"opacity-95" |
 	"ordinal" |
+	"outline" |
+	"outline-[0]" |
+	"outline-dashed" |
+	"outline-none" |
+	"outline-offset-[0]" |
 	"overflow-auto" |
 	"overflow-clip" |
 	"overflow-hidden" |
@@ -1638,6 +1653,10 @@ type Class =
 	`ring-[${number}px]` |
 	`inset-ring-${number}` |
 	`inset-ring-[${number}px]` |
+	`outline-${number}` |
+	`outline-[${number}px]` |
+	`outline-offset-${number}` |
+	`outline-offset-[${number}px]` |
 	`${"grayscale" | "sepia" | "invert"}${"" | "-0" | "-none" | `-[${number}]` | `-[${number}%]`}` |
 	`-${"grayscale" | "sepia" | "invert"}${"" | "-0" | "-none" | `-[${number}]` | `-[${number}%]`}` |
 	`${"brightness" | "contrast" | "saturate"}-${"0" | "100" | "105" | "110" | "125" | "150" | "200" | "50" | "75" | "90" | "95"}` |

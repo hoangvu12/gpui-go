@@ -706,6 +706,49 @@ func (s *Styled[Self]) BorderDashedGap[_ lazy](gapPerBorderWidth float32) Self {
 	return s.self
 }
 
+// ---- Outline (CSS css-ui-4 §outline; browser-core ticket 48) ----
+
+// Outline sets the outline width with a solid style (outline: <width>
+// solid): a frame painted above the element's content, outset by the
+// offset (OutlineOffset).
+func (s *Styled[Self]) Outline[_ lazy](width float32) Self {
+	st := s.StyleMut()
+	st.OutlineWidth = Some(width)
+	st.OutlineStyle = Some(OutlineSolid)
+	return s.self
+}
+
+// OutlineColor sets the outline colour (outline-color; currentColor
+// when left out).
+func (s *Styled[Self]) OutlineColor[F IntoBackground](fill F) Self {
+	s.StyleMut().OutlineColor = Some(RingColorOf(BackgroundOf(fill)))
+	return s.self
+}
+
+// OutlineOffset sets the outline offset (outline-offset): the gap
+// between the border edge and the outline; a negative value draws the
+// outline inside the border box.
+func (s *Styled[Self]) OutlineOffset[_ lazy](offset float32) Self {
+	s.StyleMut().OutlineOffset = Some(offset)
+	return s.self
+}
+
+// OutlineDashed sets the outline style to dashed (outline-style:
+// dashed; the native scene's dashed border pattern).
+func (s *Styled[Self]) OutlineDashed[_ lazy]() Self {
+	s.StyleMut().OutlineStyle = Some(OutlineDashed)
+	return s.self
+}
+
+// OutlineNone sets the outline style to none (outline-style: none) —
+// the default focus ring's per-element opt-out: a focused
+// focus-visible element draws no ring with it, like Chrome's
+// outline-none.
+func (s *Styled[Self]) OutlineNone[_ lazy]() Self {
+	s.StyleMut().OutlineStyle = Some(OutlineNone)
+	return s.self
+}
+
 // ---- Text (styled.rs:679-908) ----
 
 // TextColor sets the text color, cascading to children (styled.rs:679).

@@ -396,6 +396,10 @@ func TabView(prevent bool) func(log *parity.EventLog, w *gpui.Window, app *gpui.
 				Size(gpui.Px(tabBoxWidth), gpui.Px(tabBoxHeight)).
 				Bg(gpui.Rgb(boxBackground)).
 				TrackFocus(handle).
+				// The pages pin outline: none on the focusable boxes;
+				// the port has a default focus ring now (ticket 48),
+				// so the view carries the pin's twin.
+				OutlineNone().
 				Focus(func(s gpui.StyleRefinement) gpui.StyleRefinement {
 					s.Background = gpui.Some(gpui.BackgroundOf(gpui.Rgb(focusColor)))
 					return s
@@ -537,6 +541,10 @@ func ScrollView(prevent bool) func(log *parity.EventLog, w *gpui.Window, app *gp
 			Size(gpui.Px(scrollerWidth), gpui.Px(targetHeight)).
 			Bg(gpui.Rgb(targetColor)).
 			TrackFocus(focusTarget).
+			// The pages pin outline: none on the focusable boxes; the
+			// port has a default focus ring now (ticket 48), so the
+			// view carries the pin's twin.
+			OutlineNone().
 			OnClick(log.Click("target")).
 			OnKeyDown(log.KeyDown("target")).
 			OnKeyUp(log.KeyUp("target"))
@@ -647,6 +655,10 @@ func ActivateView(prevent bool) func(log *parity.EventLog, w *gpui.Window, app *
 			Size(gpui.Px(120), gpui.Px(60)).
 			Bg(gpui.Rgb(0xfda4af)).
 			TrackFocus(focus).
+			// The pages pin outline: none on the focusable boxes; the
+			// port has a default focus ring now (ticket 48), so the
+			// view carries the pin's twin.
+			OutlineNone().
 			Focus(func(s gpui.StyleRefinement) gpui.StyleRefinement {
 				s.Background = gpui.Some(gpui.BackgroundOf(gpui.Rgb(focusColor)))
 				return s
@@ -746,6 +758,10 @@ func BindingOrderView(browserOrder bool) func(log *parity.EventLog, w *gpui.Wind
 			Size(gpui.Px(tabBoxWidth), gpui.Px(tabBoxHeight)).
 			Bg(gpui.Rgb(boxBackground)).
 			TrackFocus(focusA).
+			// The pages pin outline: none on the focusable boxes; the
+			// port has a default focus ring now (ticket 48), so the
+			// view carries the pin's twin.
+			OutlineNone().
 			Focus(func(s gpui.StyleRefinement) gpui.StyleRefinement {
 				s.Background = gpui.Some(gpui.BackgroundOf(gpui.Rgb(focusColor)))
 				return s

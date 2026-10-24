@@ -532,6 +532,10 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.Opacity90()
 	case "opacity-95":
 		b.Opacity95()
+	case "outline-dashed":
+		b.OutlineDashed()
+	case "outline-none":
+		b.OutlineNone()
 	case "overflow-hidden":
 		b.OverflowHidden()
 	case "overflow-x-hidden":
@@ -859,4 +863,4 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 }
 
 // methodClassCount is the number of classes applyMethodClass knows.
-const methodClassCount = 423
+const methodClassCount = 425

@@ -634,6 +634,9 @@ func specialClass(b *StyleBuilder, u string) (bool, string) {
 		b.Ring(3)
 	case "inset-ring":
 		b.InsetRing(1)
+	case "outline":
+		// Tailwind v4's outline: outline: 1px solid.
+		b.Outline(1)
 	case "flex-grow":
 		b.FlexGrow(1)
 	case "flex-shrink":
@@ -985,8 +988,34 @@ func numericVariantFeatures(u string) []FontFeature {
 
 // borderClass applies border widths, radii and ring widths beyond the
 // generated scale: border-13, border-[3px], border-t-[3px],
-// rounded-[10px], rounded-tl-[10px], ring-3, inset-ring-[3px].
+// rounded-[10px], rounded-tl-[10px], ring-3, inset-ring-[3px], plus
+// the outline utilities' lengths: outline-3, outline-[3px],
+// outline-offset-2 and outline-offset-[3px].
 func borderClass(b *StyleBuilder, u string) (bool, string) {
+	// outline-offset-<n> comes first: outline-offset-2 must not fall
+	// into the outline-<n> width arm below.
+	if rest, ok := strings.CutPrefix(u, "outline-offset-"); ok {
+		width, ok := borderWidth(rest)
+		if !ok {
+			return false, "" // a color or another family
+		}
+		if width.Kind != AbsoluteLengthPx {
+			return true, "outline offsets are pixels, like outline-offset-[3px]"
+		}
+		b.OutlineOffset(width.Value)
+		return true, ""
+	}
+	if rest, ok := strings.CutPrefix(u, "outline-"); ok {
+		width, ok := borderWidth(rest)
+		if !ok {
+			return false, "" // a color: colorClass
+		}
+		if width.Kind != AbsoluteLengthPx {
+			return true, "outline widths are pixels, like outline-[3px]"
+		}
+		b.Outline(width.Value)
+		return true, ""
+	}
 	for _, ring := range []struct {
 		prefix string
 		set    func(px float32)
@@ -1602,7 +1631,7 @@ var unsupportedClasses = []struct {
 	{[]string{"inline-table", "table", "list-item"}, "this display type is not supported; use flex, grid, block, inline, inline-flex, inline-block, inline-grid, contents or flow-root"},
 	{[]string{"text-justify"}, "justified text is not supported"},
 	{[]string{"no-underline"}, "no-underline is not supported; leave underline out, or call .TextDecorationNone()"},
-	{[]string{"outline"}, "GPUI draws no focus outline, so outline-* has no effect; drop it (ring-* draws a visible focus ring)"},
+	{[]string{"outline-solid", "outline-dotted", "outline-double", "outline-hidden"}, "only outline, outline-<n>, outline-offset-<n>, outline-<color>, outline-none and outline-dashed are supported (the scene's border records are solid and dashed only; outline-hidden has no port spelling — outline-none is the plain opt-out)"},
 	{[]string{"ring-offset"}, "ring offsets are not supported"},
 	{[]string{"ring-inset"}, "use inset-ring-* for an inset ring"},
 	{[]string{"bg-gradient"}, "Tailwind v4 renamed bg-gradient-* to bg-linear-*; write bg-linear-to-r from-… to-…"},
@@ -1652,9 +1681,11 @@ var colorProps = []struct {
 	{"border-", func(st *StyleRefinement, c Hsla) { st.BorderColor = Some(SolidBackground(c)) }},
 	{"ring-", func(st *StyleRefinement, c Hsla) { st.RingColor = Some(RingColorOf(SolidBackground(c))) }},
 	{"inset-ring-", func(st *StyleRefinement, c Hsla) { st.InsetRingColor = Some(RingColorOf(SolidBackground(c))) }},
+	{"outline-", func(st *StyleRefinement, c Hsla) { st.OutlineColor = Some(RingColorOf(SolidBackground(c))) }},
 }
 
-// colorClass applies bg-, text-, border-, ring- and inset-ring- colors.
+// colorClass applies bg-, text-, border-, ring-, inset-ring- and
+// outline- colors.
 func colorClass(b *StyleBuilder, u string) (bool, string) {
 	for _, p := range colorProps {
 		value, ok := strings.CutPrefix(u, p.prefix)

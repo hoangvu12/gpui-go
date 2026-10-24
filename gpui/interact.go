@@ -1258,6 +1258,28 @@ func (d *DivElement) computeStyleInternal(hitbox *Hitbox, es *InteractiveElement
 		}
 	}
 
+	// The default focus ring (browser-core ticket 48): the CSS
+	// initial outline-style: auto is the UA :focus-visible rule's ring
+	// (html.css:1701-1703, `:focus-visible { outline: auto 1px
+	// -webkit-focus-ring-color }`): it materializes — becomes the
+	// focus ring kind, which the paint path draws as the single-stroke
+	// default ring — on a focused element whose focus passes the
+	// :focus-visible test (the same focusVisibleMatches the
+	// FocusVisible refinement uses: a click focus draws nothing), and
+	// drops to none everywhere else, so an author outline (or
+	// outline-none) wins the way author styles override the UA sheet.
+	// The text-input arm (Chromium always shows the ring on text entry)
+	// and the accessibility override stay future work, like the
+	// :focus-visible test's own.
+	if style.Outline.Kind == OutlineAuto {
+		focused := d.focusHandle != nil && (*d.focusHandle).IsFocused(w) && focusVisibleMatches(w)
+		if focused {
+			style.Outline.Kind = OutlineFocusRing
+		} else {
+			style.Outline.Kind = OutlineNone
+		}
+	}
+
 	// The forced-colours pass (browser-core 29) runs last, like
 	// Chromium's adjuster after the cascade (style_adjuster.cc:1326-
 	// 1327): the fully resolved style maps onto the system palette when

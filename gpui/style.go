@@ -1049,6 +1049,15 @@ type Style struct {
 	// InsetRing is the solid ring painted inside the element
 	// (style.rs:370).
 	InsetRing RingStyle
+	// Outline is the element's outline — CSS css-ui-4 §outline
+	// (browser-core ticket 48): a frame painted ABOVE the content
+	// (Chromium's outline phase runs after the foreground,
+	// paint_phase.h:46-47), unlike the pin's rings, which paint with
+	// the background. The zero value is the CSS initial outline-style:
+	// auto, which the :focus-visible UA rule materializes as Chrome's
+	// default focus ring (see interact.go's computeStyleInternal);
+	// outline-style: none opts out.
+	Outline OutlineStyle
 	// Filter applies to the element's own content (style.rs:373).
 	Filter []Filter
 	// BackdropFilter applies to the content behind the element
@@ -1129,12 +1138,17 @@ func DefaultStyle() Style {
 		// fade, no background or border color, solid border with the
 		// scene's default dash pattern, zero radii, no shadows, rings or
 		// filters, an empty text refinement, no cursor and no opacity.
+		// The outline default is the CSS initial value pair —
+		// outline-style: auto with the medium width (css-ui-4: auto is
+		// the style's initial value, and only the :focus-visible UA rule
+		// materializes it, interact.go's computeStyleInternal).
 		Visibility:         VisibilityVisible,
 		OverflowFade:       AbsoluteLengthEdges{Top: zeroAbs, Right: zeroAbs, Bottom: zeroAbs, Left: zeroAbs},
 		BorderStyle:        BorderStyleSolid,
 		BorderDashedLength: DefaultBorderDashedLength,
 		BorderDashedGap:    DefaultBorderDashedGap,
 		CornerRadii:        AbsoluteLengthCorners{TopLeft: zeroAbs, TopRight: zeroAbs, BottomRight: zeroAbs, BottomLeft: zeroAbs},
+		Outline:            OutlineStyle{Kind: OutlineAuto, Width: DefaultOutlineWidth},
 	}
 }
 
@@ -1386,6 +1400,293 @@ func (r RingStyle) insetShadow(current Hsla) (BoxShadow, bool) {
 		return BoxShadow{}, false
 	}
 	return NewBoxShadow(0, 0, r.Color.resolve(current)).WithSpreadRadius(r.Width).WithInset(), true
+}
+
+// ---------------------------------------------------------------------------
+// The outline (CSS css-ui-4 §outline; browser-core ticket 48)
+// ---------------------------------------------------------------------------
+
+// OutlineStyleKind is the outline style (css-ui-4 §outline-style). The
+// port carries the kinds its paint path covers: the native scene's
+// border records are solid and dashed only (the pinned scene.rs:
+// "0 = solid, 1 = dashed"), so dotted, double, groove, ridge, inset
+// and outset have no spelling — a recorded limitation (see the
+// ticket's Answer). Auto is the focus ring.
+type OutlineStyleKind uint8
+
+const (
+	// OutlineAuto is outline-style: auto — the CSS initial value
+	// (css-ui-4): "not authored". It never paints by itself; the div's
+	// style computation materializes it as the focus ring on a focused
+	// :focus-visible element — the UA rule :focus-visible { outline:
+	// auto 1px -webkit-focus-ring-color } (html.css:1701-1703) — and
+	// drops it to none everywhere else (interact.go's
+	// computeStyleInternal). Elements that paint a Style without that
+	// computation (img, surface, svg) carry Auto untouched and draw
+	// nothing.
+	OutlineAuto OutlineStyleKind = iota
+	// OutlineNone is outline-style: none: no outline ever — the
+	// outline-none opt-out of the default focus ring.
+	OutlineNone
+	// OutlineSolid is outline-style: solid.
+	OutlineSolid
+	// OutlineDashed is outline-style: dashed.
+	OutlineDashed
+	// OutlineFocusRing is the materialized default focus ring: the
+	// UA rule's auto outline on a focused, focus-visible element,
+	// set only by the div's computeStyleInternal. The ring ignores
+	// the style's width (like Chromium's hardcoded
+	// FocusRingStrokeWidth).
+	OutlineFocusRing
+)
+
+// String returns the CSS spelling.
+func (k OutlineStyleKind) String() string {
+	switch k {
+	case OutlineAuto:
+		return "auto"
+	case OutlineNone:
+		return "none"
+	case OutlineSolid:
+		return "solid"
+	case OutlineDashed:
+		return "dashed"
+	case OutlineFocusRing:
+		return "auto (focus ring)"
+	default:
+		return "unknown"
+	}
+}
+
+// DefaultOutlineWidth is outline-width's medium: 3 logical pixels
+// (the medium border width).
+const DefaultOutlineWidth float32 = 3.0
+
+// The default focus ring's numbers (Chromium outline_painter.cc @
+// 0d4dcd4f, Windows):
+//
+//   - focusRingStroke 3 (FocusRingStrokeWidth:40-47, zoom 1), the
+//     corner-radius floor; the painted stroke is the outer third, 2px
+//     (FocusRingOuterStrokeWidth:51-53) — the width the recorded
+//     stable Chrome 155 draws (one 2px stroke centred on the border
+//     box, 1px inside and 1px outside);
+//   - the default colour #101010: -webkit-focus-ring-color as the
+//     recorded Chrome 155 resolves it (the browser's
+//     renderer-preference focus_ring_color, web_view_impl.cc:3836 →
+//     LayoutTheme::SetCustomFocusRingColor; the in-tree default is
+//     0xFFE59700, renderer_preferences.h:45 — the amber of the
+//     newer two-tone ring, recorded as the port's divergence toward
+//     upstream main, not ported while the recorded stable draws the
+//     single stroke).
+const (
+	focusRingStroke float32 = 3.0
+	focusRingWidth  float32 = 2.0
+	// defaultFocusRingColor is the recorded Chrome's resolved
+	// -webkit-focus-ring-color.
+	defaultFocusRingColor = 0x101010
+)
+
+// OutlineStyle is the CSS outline (css-ui-4 §outline): the width,
+// style, colour and offset of a frame painted above the element's
+// content. Logical pixels, like the pin's rings.
+type OutlineStyle struct {
+	// Kind is the outline style (outline-style).
+	Kind OutlineStyleKind
+	// Width in logical pixels (outline-width); the auto focus ring
+	// ignores it.
+	Width float32
+	// Color is the outline colour (outline-color): currentColor when
+	// not explicit — except on the auto focus ring, whose default is
+	// the theme's focus ring colour (#101010, the recorded Chrome's
+	// -webkit-focus-ring-color).
+	Color RingColor
+	// Offset in logical pixels (outline-offset): the gap between the
+	// border edge and the outline; negative draws it inside the
+	// border box (clamped per direction at half the size, css-ui-4
+	// §outline-offset, Chromium AdjustedOutlineOffset).
+	Offset float32
+}
+
+// paintQuads returns the outline's paint: the solid or dashed frame
+// quad, the materialized focus ring quad, or nil — the unmaterialized
+// auto kind (the CSS initial value, "not authored") paints nothing.
+// radii are the element's resolved corner radii, current is the
+// current colour, and borderWidths the element's resolved border
+// widths (the focus ring insets itself onto a border).
+func (o OutlineStyle) paintQuads(bounds Bounds, radii Corners, current Hsla, borderWidths Edges) []PaintQuad {
+	switch o.Kind {
+	case OutlineSolid, OutlineDashed:
+		quad, ok := o.frameQuad(bounds, radii, current)
+		if !ok {
+			return nil
+		}
+		return []PaintQuad{quad}
+	case OutlineFocusRing:
+		return o.focusRingQuads(bounds, radii, borderWidths)
+	default:
+		return nil
+	}
+}
+
+// frameQuad is the solid or dashed outline: one border-frame quad
+// whose ink is the CSS band [offset, offset+width] around the border
+// box. Quad borders paint inward, so the quad is the border box
+// outset by offset+width with the radii grown by the same — the
+// outerQuad geometry (ComplexOutlinePainter fills between the outer
+// path outset offset+width and the inner path outset offset,
+// outline_painter.cc:449-524, the radii from ComputeCornerRadii:
+// 208-215). A negative offset is clamped per direction at half the
+// box so the shape never collapses (AdjustedOutlineOffset:
+// 75-79). The radii follow the element's corners grown by
+// offset+width, with a zero corner kept sharp (FloatRoundedRect::
+// Radii::Outset, float_rounded_rect.cc: "Zero widths and heights of
+// radii are kept zero so that sharp corners are still sharp") — a
+// square element's outline is square, unlike the focus ring's 3px
+// default rounding.
+func (o OutlineStyle) frameQuad(bounds Bounds, radii Corners, current Hsla) (PaintQuad, bool) {
+	if !(o.Width > 0) {
+		return PaintQuad{}, false
+	}
+	offV, offH := adjustedOutlineOffsets(bounds.Size, o.Offset)
+	style := BorderStyleSolid
+	if o.Kind == OutlineDashed {
+		style = BorderStyleDashed
+	}
+	grown := addCorners(radii, o.Offset+o.Width)
+	grown = Corners{
+		TopLeft:     sharpAware(grown.TopLeft, radii.TopLeft),
+		TopRight:    sharpAware(grown.TopRight, radii.TopRight),
+		BottomRight: sharpAware(grown.BottomRight, radii.BottomRight),
+		BottomLeft:  sharpAware(grown.BottomLeft, radii.BottomLeft),
+	}
+	quad := outlineFrameQuad(bounds, offV+o.Width, offH+o.Width, o.Width,
+		grown, o.Color.resolve(current), style)
+	quad.CornerRadii = quad.CornerRadii.ConstrainRadiiForQuadSize(quad.Bounds.Size)
+	return quad, true
+}
+
+// sharpAware clamps a grown corner radius at zero when the element's
+// own corner is sharp (FloatRoundedRect::Radii::Outset's zero
+// preservation).
+func sharpAware(grown, own float32) float32 {
+	if own <= 0 || grown < 0 {
+		return 0
+	}
+	return grown
+}
+
+// focusRingQuads is the materialized default focus ring (Chromium
+// PaintFocusRing, outline_painter.cc): one width-2 border frame —
+// the outer third of the 3px focus ring stroke — centred on the
+// border box outset by the offset, so the band is [offset-1,
+// offset+1]: 1px inside the border edge and 1px outside. The offset
+// is the outline's own minus 1 when the element has a border at
+// least 1px wide, so the ring hugs it (FocusRingOffset:60-73); the
+// corner radii follow the element's radius plus the offset with a
+// 3px floor (GetFocusRingCornerRadii:764-781,
+// DefaultFocusRingCornerRadius:759-761 — square elements still get
+// the 3px rounding, unlike solid outlines).
+//
+// Divergence, recorded toward the record: Chromium main (the
+// research checkout, 158) paints TWO strokes there — the outline
+// colour over a scheme-dependent outer colour (the two-tone refresh,
+// PaintFocusRing:878-916, light #E59700 under white) — but the
+// recorded stable Chrome 155 draws the single stroke, so the port
+// does too; re-record when the recorder's Chrome updates past the
+// refresh. The colour is the outline colour (the UA rule's
+// -webkit-focus-ring-color — #101010 as this Chrome resolves it,
+// web_view_impl.cc:3836's renderer-preference override) unless the
+// author set one.
+func (o OutlineStyle) focusRingQuads(bounds Bounds, radii Corners, borderWidths Edges) []PaintQuad {
+	// FocusRingOffset: the outline offset pulled 1px onto a border
+	// every side has at least 1px of.
+	offset := o.Offset
+	if borderWidths.Top >= 1 && borderWidths.Right >= 1 && borderWidths.Bottom >= 1 && borderWidths.Left >= 1 {
+		offset -= 1
+	}
+	// The ring radii: the element's radii grown by the RAW outline
+	// offset, each floored at the 3px stroke.
+	ringRadii := Corners{
+		TopLeft:     max32(radii.TopLeft+o.Offset, focusRingStroke),
+		TopRight:    max32(radii.TopRight+o.Offset, focusRingStroke),
+		BottomRight: max32(radii.BottomRight+o.Offset, focusRingStroke),
+		BottomLeft:  max32(radii.BottomLeft+o.Offset, focusRingStroke),
+	}
+	color := SolidBackground(Rgb(defaultFocusRingColor))
+	if o.Color.Explicit {
+		color = o.Color.Color
+	}
+	// The stroke centres on the border box outset by the offset; quad
+	// borders paint inward, so the quad is dilated by half the 2px
+	// stroke and its radii grow with it.
+	quad := outlineFrameQuad(bounds, offset+focusRingWidth/2, offset+focusRingWidth/2,
+		focusRingWidth, addCorners(ringRadii, focusRingWidth/2), color, BorderStyleSolid)
+	quad.CornerRadii = quad.CornerRadii.ConstrainRadiiForQuadSize(quad.Bounds.Size)
+	return []PaintQuad{quad}
+}
+
+// inkOutset is the outline's outside extent (OutlineOutsetExtent,
+// outline_painter.cc:1073-1082) — the focus ring's border-adjusted
+// offset plus the half stroke outside it, a solid or dashed
+// outline's offset plus width floored at zero — which feeds the
+// filter group's ink bounds like the ring's width does (the outline
+// extent grows VisualOverflowRect, layout_box.cc:3485-3492). The
+// unmaterialized auto kind paints nothing and contributes nothing.
+func (o OutlineStyle) inkOutset(borderWidths Edges) float32 {
+	switch o.Kind {
+	case OutlineFocusRing:
+		offset := o.Offset
+		if borderWidths.Top >= 1 && borderWidths.Right >= 1 && borderWidths.Bottom >= 1 && borderWidths.Left >= 1 {
+			offset -= 1
+		}
+		return max32(offset+focusRingWidth/2, 0)
+	case OutlineSolid, OutlineDashed:
+		return max32(o.Offset+o.Width, 0)
+	default:
+		return 0
+	}
+}
+
+// adjustedOutlineOffsets clamps a negative outline offset per
+// direction at half the box (Chromium AdjustedOutlineOffset,
+// outline_painter.cc:75-79: max(offset, -height/2) and
+// max(offset, -width/2), css-ui-4 §outline-offset's "a negative
+// outline-offset should not cause the rendered outline shape to
+// become smaller than…" rule).
+func adjustedOutlineOffsets(size Size, offset float32) (vertical, horizontal float32) {
+	vertical = max32(offset, -size.Height/2)
+	horizontal = max32(offset, -size.Width/2)
+	return vertical, horizontal
+}
+
+// outlineFrameQuad builds one outline frame: a border quad of the
+// given width painting inward from bounds outset by the per-axis
+// dilations, with the given (already computed) corner radii — the
+// RingStyle.outerQuad geometry.
+func outlineFrameQuad(bounds Bounds, dilationY, dilationX, width float32, radii Corners, border Background, style BorderStyle) PaintQuad {
+	return PaintQuad{
+		Bounds: Bounds{
+			Origin: Point{X: bounds.Origin.X - dilationX, Y: bounds.Origin.Y - dilationY},
+			Size:   Size{Width: bounds.Size.Width + 2*dilationX, Height: bounds.Size.Height + 2*dilationY},
+		},
+		CornerRadii:        radii,
+		Background:         SolidBackground(TransparentBlack()),
+		BorderWidths:       Edges{Top: width, Right: width, Bottom: width, Left: width},
+		BorderColor:        border,
+		BorderStyle:        style,
+		BorderDashedLength: DefaultBorderDashedLength,
+		BorderDashedGap:    DefaultBorderDashedGap,
+	}
+}
+
+// addCorners adds v to every corner radius.
+func addCorners(c Corners, v float32) Corners {
+	return Corners{
+		TopLeft:     c.TopLeft + v,
+		TopRight:    c.TopRight + v,
+		BottomRight: c.BottomRight + v,
+		BottomLeft:  c.BottomLeft + v,
+	}
 }
 
 // TextOverflowKind selects the truncation position (style.rs:534-547).

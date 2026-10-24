@@ -1,0 +1,26 @@
+{
+  "name": "outline-dashed",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T10:19:35Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "dashed": {
+      "x": 24,
+      "y": 24,
+      "width": 200,
+      "height": 100
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

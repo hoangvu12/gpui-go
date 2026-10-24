@@ -2506,6 +2506,25 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 				BorderDashedGap:    s.BorderDashedGap,
 			}, smoothing, currentFrame(w).paint), "border")
 		}
+
+		// The outline (CSS css-ui-4 §outline, browser-core ticket 48):
+		// the element's last decoration, painted ABOVE the content —
+		// Chromium's outline phase runs after the foreground
+		// (paint_phase.h:46-47, "outlines are painted over the
+		// foreground") — inside the filter group with the shadows and
+		// the ring (the filter's reference box is the layer's visual
+		// overflow, which the outline extent feeds: OutlineOutsetExtent,
+		// outline_painter.cc:1073-1082, through VisualOverflowRect,
+		// layout_box.cc:3485-3492, and LocalBoundingBox,
+		// paint_layer.cc:2199-2205). The focus-ring kind here is the
+		// materialized :focus-visible ring (interact.go's
+		// computeStyleInternal); an unfocused element never carries it.
+		if quads := s.Outline.paintQuads(bounds, radii, currentColor, s.BorderWidths.ToPixels(rem)); len(quads) > 0 {
+			paint := currentFrame(w)
+			for _, quad := range quads {
+				mustPaint(paint.scene.PaintQuad(quad, smoothing, paint.paint), "outline")
+			}
+		}
 	}
 
 	if len(s.Filter) == 0 {
@@ -2565,6 +2584,15 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 		ink.Right = max32(ink.Right, s.Ring.Width)
 		ink.Bottom = max32(ink.Bottom, s.Ring.Width)
 		ink.Left = max32(ink.Left, s.Ring.Width)
+	}
+	// The outline's extent feeds the same ink bounds (the outline
+	// grows VisualOverflowRect like the shadow ink,
+	// outline_painter.cc:1073-1082).
+	if outline := s.Outline.inkOutset(s.BorderWidths.ToPixels(rem)); outline > 0 {
+		ink.Top = max32(ink.Top, outline)
+		ink.Right = max32(ink.Right, outline)
+		ink.Bottom = max32(ink.Bottom, outline)
+		ink.Left = max32(ink.Left, outline)
 	}
 	groupBounds := Bounds{
 		Origin: Point{X: bounds.Origin.X - ink.Left, Y: bounds.Origin.Y - ink.Top},
