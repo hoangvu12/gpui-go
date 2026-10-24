@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 27
 Triage: ready-for-agent
@@ -22,6 +22,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged b2ebd56 into main. Conflicts in the harness (fixture.go, recorder.go, the harness guide) with 12's KeyDown/KeyUp steps were resolved by keeping both. Both step kinds are wired in the recorder and the replay, and the stale "virtual-time budget" comments on Wait now say "seek". Build, vet and gofmt are clean. With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./gpui/, ./base (the motion aliases), ./internal/parity/... (the transition fixtures plus 12's activation fixtures), authorspec, inspectorspec, richtextspec and ./examples/.... Citation spot-checked: css_animations.cc:2890-2912 (the reversing-shortening rule).
 
 ## Answer
 
