@@ -147,7 +147,7 @@ func newDropFixture(t *testing.T, title string) *dropFixture {
 	var surface *dropSurface
 	window, err := app.OpenWindowView(gpui.WindowOptions{
 		Title:     title,
-		Bounds:    gpui.Bounds{Origin: gpui.Point{X: 40, Y: 40}, Size: gpui.Size{Width: 320, Height: 220}},
+		Bounds:    gpui.Bounds{Origin: gpui.Point{X: requestedOrigin, Y: requestedOrigin}, Size: gpui.Size{Width: 320, Height: 220}},
 		Show:      true,
 		Resizable: true,
 		OnFileDrop: func(event gpui.FileDropEvent) {
@@ -164,7 +164,7 @@ func newDropFixture(t *testing.T, title string) *dropFixture {
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		bounds, err := window.Bounds()
-		if err == nil && bounds.Origin.X >= 30 && bounds.Origin.Y >= 30 {
+		if err == nil && bounds.Origin.X >= requestedOrigin-10 && bounds.Origin.Y >= requestedOrigin-10 {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -201,6 +201,27 @@ func expectedClientPoint(t *testing.T, w *gpui.Window, x, y int32) gpui.Point {
 	}
 }
 
+// requestedOrigin is the logical origin newDropFixture asks for.
+const requestedOrigin = 40
+
+// screen maps a screen point written for a window at its requested
+// origin onto the window's actual position. Under go test gpui parks
+// windows off the desktop (gpui/testwindows_windows.go), so the drag
+// points follow the window rather than assume where it opened.
+func (f *dropFixture) screen(x, y int32) (int32, int32) {
+	bounds, err := f.window.Bounds()
+	if err != nil {
+		panic(fmt.Sprintf("dropspec: window bounds: %v", err))
+	}
+	scale, err := f.window.ScaleFactor()
+	if err != nil || scale <= 0 {
+		scale = 1
+	}
+	dx := int32(bounds.Origin.X*scale) - int32(requestedOrigin*scale)
+	dy := int32(bounds.Origin.Y*scale) - int32(requestedOrigin*scale)
+	return x + dx, y + dy
+}
+
 func requirePointsClose(t *testing.T, name string, got, want gpui.Point) {
 	t.Helper()
 	dx, dy := got.X-want.X, got.Y-want.Y
@@ -233,7 +254,7 @@ const (
 func TestDropLifecycleTranscriptAgainstPinnedSemantics(t *testing.T) {
 	f := newDropFixture(t, "dropspec transcript")
 
-	screenX, screenY := int32(150), int32(110)
+	screenX, screenY := f.screen(150, 110)
 	paths := []string{`C:\dropspec-a.txt`, `C:\dropspec-b.txt`}
 
 	// DragEnter: COPY effect, Entered at the converted position with
@@ -251,7 +272,7 @@ func TestDropLifecycleTranscriptAgainstPinnedSemantics(t *testing.T) {
 	}
 
 	// DragOver: COPY effect, Pending at the converted position.
-	overX, overY := int32(170), int32(130)
+	overX, overY := f.screen(170, 130)
 	if effect := f.driver.DragOver(overX, overY); effect != effectCopy {
 		t.Fatalf("DragOver effect = %d, want DROPEFFECT_COPY (window.rs:1285)", effect)
 	}
@@ -304,9 +325,10 @@ func TestDropLifecycleTranscriptAgainstPinnedSemantics(t *testing.T) {
 // leave still enters (the platform drag did not end).
 func TestLeaveCancelDropSemantics(t *testing.T) {
 	f := newDropFixture(t, "dropspec leave-cancel-drop")
+	sx, sy := f.screen(150, 110)
 
 	paths := []string{`C:\dropspec-leave.txt`}
-	if effect := f.driver.DragEnter(paths, 150, 110); effect != effectCopy {
+	if effect := f.driver.DragEnter(paths, sx, sy); effect != effectCopy {
 		t.Fatalf("DragEnter effect = %d, want COPY", effect)
 	}
 	if !f.app.HasActiveDrag() {
@@ -336,7 +358,7 @@ func TestLeaveCancelDropSemantics(t *testing.T) {
 	f.rec.mu.Lock()
 	droppedBefore := len(f.rec.dropped)
 	f.rec.mu.Unlock()
-	if effect := f.driver.Drop(paths, 150, 110); effect != effectCopy {
+	if effect := f.driver.Drop(paths, sx, sy); effect != effectCopy {
 		t.Fatalf("Drop effect = %d, want COPY (the target's negotiation is unconditional)", effect)
 	}
 	f.rec.mu.Lock()
@@ -347,10 +369,10 @@ func TestLeaveCancelDropSemantics(t *testing.T) {
 	}
 
 	// A fresh drag still enters: the leave did not end the session.
-	if effect := f.driver.DragEnter(paths, 150, 110); effect != effectCopy {
+	if effect := f.driver.DragEnter(paths, sx, sy); effect != effectCopy {
 		t.Fatalf("DragEnter after a leave effect = %d, want COPY", effect)
 	}
-	if effect := f.driver.Drop(paths, 150, 110); effect != effectCopy {
+	if effect := f.driver.Drop(paths, sx, sy); effect != effectCopy {
 		t.Fatalf("Drop effect = %d, want COPY", effect)
 	}
 	var secondPayloads []gpui.ExternalPaths
@@ -373,6 +395,7 @@ func TestLeaveCancelDropSemantics(t *testing.T) {
 // focus-transfer listener div.rs paint_mouse_listeners registers).
 func TestPointerRoutingThroughElementTree(t *testing.T) {
 	f := newDropFixture(t, "dropspec element routing")
+	sx, sy := f.screen(150, 110)
 
 	if focused := f.window.Focused(); focused.Ok {
 		t.Fatal("no element starts focused")
@@ -381,7 +404,7 @@ func TestPointerRoutingThroughElementTree(t *testing.T) {
 	// Entered: the translated MouseMove reaches the element's move
 	// listener through the hit test (the drag position must hover the
 	// full-window hitbox).
-	if effect := f.driver.DragEnter([]string{`C:\dropspec-routing.txt`}, 150, 110); effect != effectCopy {
+	if effect := f.driver.DragEnter([]string{`C:\dropspec-routing.txt`}, sx, sy); effect != effectCopy {
 		t.Fatalf("DragEnter effect = %d, want COPY", effect)
 	}
 	f.rec.mu.Lock()
@@ -438,6 +461,7 @@ func TestScrollDispatchThroughElementTree(t *testing.T) {
 // the platform drag session; an unrelated window's Ended does not.
 func TestPlatformDragBookkeepingMatchesPin(t *testing.T) {
 	f := newDropFixture(t, "dropspec bookkeeping")
+	sx, sy := f.screen(150, 110)
 	app, window := f.app, f.window
 
 	// Hand a drag to the platform (hand_active_drag_to_platform).
@@ -455,7 +479,7 @@ func TestPlatformDragBookkeepingMatchesPin(t *testing.T) {
 
 	// The source window's Entered restores it (restore_platform_drag):
 	// the drag becomes active again.
-	if effect := f.driver.DragEnter([]string{`C:\dropspec-restore.txt`}, 150, 110); effect != effectCopy {
+	if effect := f.driver.DragEnter([]string{`C:\dropspec-restore.txt`}, sx, sy); effect != effectCopy {
 		t.Fatalf("DragEnter effect = %d, want COPY", effect)
 	}
 	if !app.HasActiveDrag() {
@@ -476,7 +500,7 @@ func TestPlatformDragBookkeepingMatchesPin(t *testing.T) {
 
 	// Entered again restores; Ended ends the platform session
 	// (end_platform_drag) and clears the drag.
-	if effect := f.driver.DragEnter([]string{`C:\dropspec-restore.txt`}, 150, 110); effect != effectCopy {
+	if effect := f.driver.DragEnter([]string{`C:\dropspec-restore.txt`}, sx, sy); effect != effectCopy {
 		t.Fatalf("DragEnter effect = %d, want COPY", effect)
 	}
 	if !app.HasActiveDrag() {

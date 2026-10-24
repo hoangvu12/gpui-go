@@ -1550,7 +1550,10 @@ func (e *listenerElement) Prepaint(global *gpui.GlobalElementID, inspector *gpui
 	box := w.InsertHitbox(bounds, gpui.HitboxNormal)
 	w.InsertInspectorHitbox(box, inspector)
 	w.OnMouseEvent(func(event any, phase gpui.DispatchPhase, w *gpui.Window, app *gpui.App) {
-		if phase == gpui.DispatchBubble {
+		// Only the move counts: the hover boundary sweep (browser-core
+		// ticket 10) also walks the listeners with the pointer-enter
+		// events before the move itself.
+		if _, isMove := event.(*gpui.MouseMoveEvent); isMove && phase == gpui.DispatchBubble {
 			*e.runs++
 		}
 	})

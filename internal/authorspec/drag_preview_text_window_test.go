@@ -7,9 +7,8 @@ package authorspec
 // a drag preview view whose card carries a text child shows the text
 // INSIDE the preview card, following the cursor, verified in a surface
 // readback (glyph pixels inside the preview's debug-selector bounds).
-// The drag is driven by synthetic WM_MOUSEMOVE/WM_LBUTTONDOWN messages
-// through SendMessageW on the host thread (the win32input corpus's
-// delivery shape; no real mouse is moved), the frame is drawn by the
+// The drag is driven through the window's input dispatch on the host
+// thread (no real mouse is moved), the frame is drawn by the
 // real frame loop, and the readback renders the window's last drawn
 // scene through the public RenderScene + ReadPixels pair with the
 // window's glyph atlas — the consumer present loop's own path.
@@ -20,11 +19,6 @@ import (
 	"time"
 
 	"github.com/hoangvu12/gpui-go/gpui"
-)
-
-const (
-	previewWMMouseMove   = 0x0200 // WM_MOUSEMOVE
-	previewWMLButtonDown = 0x0201 // WM_LBUTTONDOWN
 )
 
 // previewCardView is the drag preview: a light card with one text
@@ -124,18 +118,22 @@ func TestDragPreviewTextPaintsInsideCardOnRealWindow(t *testing.T) {
 
 	// Start the drag: hover, press, the threshold-crossing move that
 	// starts it (the drag's cursor offset is the start position), then a
-	// follow-up move that carries the preview to (100, 80). Synthetic
-	// messages from this goroutine run the window procedure on the host
-	// thread (SendMessageW semantics).
-	hwnd := window.Handle().Hwnd()
-	lparam := func(x, y int16) uintptr {
-		return uintptr(uint16(x)) | uintptr(uint16(y))<<16
+	// follow-up move that carries the preview to (100, 80). The events go
+	// through the window's input dispatch on the host thread, not
+	// synthetic WM_MOUSEMOVE messages: a WM_MOUSEMOVE arms the real
+	// leave tracking (TrackMouseEvent), and with the real cursor away
+	// from the window (under go test it opens off the desktop) Windows
+	// answers with WM_MOUSELEAVE, whose exit moves the tracked pointer
+	// off the window and the preview with it (browser-core ticket 10).
+	left := gpui.MouseButtonLeft
+	dispatch := func(event any) {
+		sync(func() { window.DispatchInput(event, app) })
 	}
-	selfProcSend.Call(hwnd, previewWMMouseMove, 0, lparam(10, 10))
-	selfProcSend.Call(hwnd, previewWMLButtonDown, selfMKLButton, lparam(10, 10))
-	selfProcSend.Call(hwnd, previewWMMouseMove, selfMKLButton, lparam(11, 10))   // inside the threshold
-	selfProcSend.Call(hwnd, previewWMMouseMove, selfMKLButton, lparam(120, 100)) // starts the drag
-	selfProcSend.Call(hwnd, previewWMMouseMove, selfMKLButton, lparam(220, 180)) // carries the preview
+	dispatch(&gpui.MouseMoveEvent{Position: gpui.Point{X: 10, Y: 10}})
+	dispatch(&gpui.MouseDownEvent{Button: left, Position: gpui.Point{X: 10, Y: 10}, ClickCount: 1})
+	dispatch(&gpui.MouseMoveEvent{Position: gpui.Point{X: 11, Y: 10}, PressedButton: &left})   // inside the threshold
+	dispatch(&gpui.MouseMoveEvent{Position: gpui.Point{X: 120, Y: 100}, PressedButton: &left}) // starts the drag
+	dispatch(&gpui.MouseMoveEvent{Position: gpui.Point{X: 220, Y: 180}, PressedButton: &left}) // carries the preview
 
 	// Wait for a completed frame whose preview card sits at mouse -
 	// cursor offset = (100, 80).
