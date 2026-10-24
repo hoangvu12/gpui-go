@@ -123,8 +123,10 @@ func RecordFixture(f Fixture) error {
 	}
 	defer func() { _ = page.close() }()
 	// The viewport and device pixel ratio must match the gpui test
-	// window's (logical size, the harness's fixed scale factor).
-	if err := page.setDeviceMetrics(int(f.Window.Width+0.5), int(f.Window.Height+0.5), DeviceScaleFactor); err != nil {
+	// window's (logical size, the fixture's scale factor — the harness
+	// default 2.0 unless the fixture overrides it).
+	scale := FixtureScale(f)
+	if err := page.setDeviceMetrics(int(f.Window.Width+0.5), int(f.Window.Height+0.5), scale); err != nil {
 		return err
 	}
 	// The fixture's emulated media features apply before the page loads,
@@ -138,7 +140,7 @@ func RecordFixture(f Fixture) error {
 	if err := page.navigate("file:///" + filepath.ToSlash(pagePath)); err != nil {
 		return err
 	}
-	if err := page.awaitReady(int(f.Window.Width+0.5), int(f.Window.Height+0.5), DeviceScaleFactor); err != nil {
+	if err := page.awaitReady(int(f.Window.Width+0.5), int(f.Window.Height+0.5), scale); err != nil {
 		return err
 	}
 	if _, err := page.evaluate(instrumentScript(f.EventKinds)); err != nil {
@@ -213,7 +215,7 @@ func RecordFixture(f Fixture) error {
 		Chrome:            browser.version,
 		RecordedAt:        time.Now().UTC().Format(time.RFC3339),
 		Viewport:          f.Window,
-		DeviceScaleFactor: float64(DeviceScaleFactor),
+		DeviceScaleFactor: float64(scale),
 		Boxes:             boxes,
 		Events:            events,
 		Computed:          computed,
@@ -556,6 +558,18 @@ func (p *cdpPage) dispatchStep(step Step) error {
 			return "advanced";
 		})()`, step.Ms)); err != nil {
 			return fmt.Errorf("advancing the page's animations by %dms: %w", step.Ms, err)
+		}
+		return nil
+	case StepScript:
+		// The page half of a scripted state change (browser-core 46):
+		// evaluate the expression synchronously on the settled page —
+		// the Go half (Step.Run) makes the same change on the replay side
+		// (replay.go's applyStep). The record's two-frame settle below
+		// then captures whatever the change did (Chrome's scroll
+		// anchoring runs at the next layout, which the settle's frames
+		// deliver).
+		if _, err := p.evaluate(step.Script); err != nil {
+			return fmt.Errorf("running the page script: %w", err)
 		}
 		return nil
 	default:

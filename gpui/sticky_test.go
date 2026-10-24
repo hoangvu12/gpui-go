@@ -511,7 +511,14 @@ func (l *stickyHookList) Prepaint(global *GlobalElementID, inspector *InspectorE
 	WithContentMaskVoid(w, l.listStyle.OverflowMask(bounds, RemSize(w)), func(w *Window) {
 		box := w.InsertHitbox(bounds, HitboxNormal)
 		state.hitbox = &box
-		scrollOffset := layout.scroll.clamp(bounds, &l.listStyle, contentSize, w)
+		// The hook list's own virtualized extent as a scroller with no
+		// padding: the pin's range arithmetic (the test's list has no
+		// layout node to read record facts from).
+		scrollMax := Point{
+			X: max32(roundToTwoDecimals(contentSize.Width-bounds.Size.Width), 0),
+			Y: max32(roundToTwoDecimals(contentSize.Height-bounds.Size.Height), 0),
+		}
+		scrollOffset := layout.scroll.clamp(bounds, &l.listStyle, scrollMax, w)
 		state.scrollOffset = scrollOffset
 		WithStickyScrollContainer(w, &l.listStyle, bounds, layout.scroll.maxOffset, scrollOffset, func(w *Window) struct{} {
 			for i := 0; i < l.sections; i++ {

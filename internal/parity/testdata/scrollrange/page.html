@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: flex-start;
+	}
+	#scroller {
+		box-sizing: border-box;
+		width: 240px;
+		height: 300px;
+		margin-left: 20px;
+		margin-top: 20px;
+		display: flex;
+		flex-direction: column;
+		overflow-y: scroll;
+		/* The port draws no scrollbars and reserves no gutter. */
+		scrollbar-width: none;
+		padding-top: 10%;
+		padding-bottom: 24px;
+		background: #f1f5f9;
+	}
+	#scroller > div {
+		flex-shrink: 0;
+		box-sizing: border-box;
+		width: 240px;
+	}
+	#focus {
+		height: 40px;
+		background: #fca5a5;
+		outline: none;
+	}
+	#nested {
+		height: 60px;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		background: #93c5fd;
+	}
+	#tall {
+		/* Overflows the nested box: the descendant's overflow must
+		   extend the scroller's range. */
+		width: 120px;
+		height: 200px;
+		flex-shrink: 0;
+		background: #2563eb;
+	}
+	#spacer {
+		height: 100px;
+		background: #e2e8f0;
+	}
+	#last {
+		height: 50px;
+		margin-bottom: 40px;
+		background: #16a34a;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div id="scroller" data-id="scroller">
+		<div id="focus" data-id="focus" tabindex="0"></div>
+		<div id="nested" data-id="nested">
+			<div id="tall" data-id="tall"></div>
+		</div>
+		<div id="spacer" data-id="spacer"></div>
+		<div id="last" data-id="last"></div>
+	</div>
+</body>
+</html>

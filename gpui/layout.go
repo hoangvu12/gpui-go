@@ -91,6 +91,40 @@ func roundStrokeToDevicePixel(logical, scaleFactor float32) float32 {
 	return rounded
 }
 
+// clampLineWidth is Chromium's computed border-width rule
+// (StyleBuilderConverter::ClampLineWidth, core/css/resolver/
+// style_builder_converter.cc:1971-1987): the computed width is an
+// integer of CSS px — anything strictly between 0 and 1 becomes 1
+// (a sub-pixel hairline keeps one pixel), anything else floors
+// (negatives floor away, then clamp up as hairlines). Verified
+// against Chrome 155: a 1px border at device scale 1.75 insets the
+// content box by exactly 1 CSS px and paints as an antialiased
+// 1.75-device-px stroke; a 0.5px hairline at 100% insets 1 CSS px and
+// paints 1 device px (browser-core ticket 07).
+func clampLineWidth(logical float32) float32 {
+	if logical > 0.0 && logical < 1.0 {
+		return 1.0
+	}
+	if logical < 0.0 {
+		// A negative width is a floor(-v)-magnitude hairline: floor to
+		// zero and keep it at zero (Chromium's ClampLineWidth floors a
+		// negative to 0; the pin's Edges<AbsoluteLength> has no negative
+		// widths to forward in practice).
+		return 0.0
+	}
+	return floor32(logical)
+}
+
+// clampLineWidthToDevice converts one border width to the layout
+// record's device value: Chromium's CSS-px floor first (the computed
+// border width is an integer of CSS px), then the scale conversion
+// with NO further rounding — the layout inset is the floored CSS
+// width exactly, like Chrome's LayoutUnit layout at any device scale
+// (browser-core ticket 07).
+func clampLineWidthToDevice(logical, scaleFactor float32) float32 {
+	return clampLineWidth(logical) * scaleFactor
+}
+
 // ceil32 is an f32 ceil (math.Ceil in float64 is exact for f32 inputs).
 func ceil32(v float32) float32 { return float32(math.Ceil(float64(v))) }
 
@@ -372,13 +406,27 @@ func styleToRecord(s *Style, ctx *LayoutContext) native.LayoutStyleRecord {
 
 	rec.Margin = lengthEdgesToRecord(s.Margin, remSize, scaleFactor)
 	rec.Padding = paddingToRecord(s.Padding, s.Size, remSize, scaleFactor)
-	// Border widths are always present and always stroke-snapped (the
-	// reference's Edges<AbsoluteLength> defaults to zero, which the
-	// stroke rule keeps zero).
-	rec.BorderTop = math.Float32bits(roundStrokeToDevicePixel(s.BorderWidths.Top.ToPixels(remSize), scaleFactor))
-	rec.BorderRight = math.Float32bits(roundStrokeToDevicePixel(s.BorderWidths.Right.ToPixels(remSize), scaleFactor))
-	rec.BorderBottom = math.Float32bits(roundStrokeToDevicePixel(s.BorderWidths.Bottom.ToPixels(remSize), scaleFactor))
-	rec.BorderLeft = math.Float32bits(roundStrokeToDevicePixel(s.BorderWidths.Left.ToPixels(remSize), scaleFactor))
+	// Border widths follow Chromium's computed-style rule (browser-core
+	// ticket 07): the computed width is an INTEGER of CSS px — floor,
+	// with any width strictly between 0 and 1 clamping up to 1
+	// (StyleBuilderConverter::ConvertBorderWidth -> ClampLineWidth,
+	// core/css/resolver/style_builder_converter.cc:1971-1987; the layout
+	// consumes the integers as-is, core/layout/length_utils.cc:1478-1485
+	// ComputeBordersInternal). The device value is the floored CSS
+	// width × the scale factor, unrounded — a 1px border at 175% lays
+	// out at exactly 1 CSS px (1.75 device), which the measured record
+	// confirms (Chrome 155's getBoundingClientRect insets the content
+	// by 1, and the painted strip is an antialiased 1.75 device px, not
+	// a floored 1). The pin's round_stroke_to_device_pixel rule would
+	// have made that border 2 device px of layout inset, which diverges
+	// from Chrome at every fractional scale; it survives for the PAINT
+	// (paint.go snapBorderWidths), where the hard-edged strip needs a
+	// whole device thickness and rounding is the closest approximation
+	// of Chrome's antialiased stroke.
+	rec.BorderTop = math.Float32bits(clampLineWidthToDevice(s.BorderWidths.Top.ToPixels(remSize), scaleFactor))
+	rec.BorderRight = math.Float32bits(clampLineWidthToDevice(s.BorderWidths.Right.ToPixels(remSize), scaleFactor))
+	rec.BorderBottom = math.Float32bits(clampLineWidthToDevice(s.BorderWidths.Bottom.ToPixels(remSize), scaleFactor))
+	rec.BorderLeft = math.Float32bits(clampLineWidthToDevice(s.BorderWidths.Left.ToPixels(remSize), scaleFactor))
 
 	if s.AlignItems != nil {
 		rec.AlignItemsPresent = 1
@@ -568,6 +616,24 @@ type LayoutEngine struct {
 	// reference TaffyLayoutEngine::display_and_position) for the inline
 	// collector's classification.
 	displayPositions map[LayoutID]displayPositionRecord
+	// nodeMargins records each node's authored margin edges (browser-core
+	// ticket 07: the scroll range's trailing-margin extension — Taffy's
+	// content size stops at the child border boxes, where Chromium's
+	// inflow bounds include the end margins). Filled only while the
+	// window requested it (anchor paths below), frame-scoped like the
+	// display records.
+	nodeMargins map[LayoutID]LengthEdges
+	// nodePaths records each node's element id path key (browser-core
+	// tickets 07/46: the scroll-anchoring walk identifies the anchor node
+	// across frames by its element path). Filled only while the window
+	// requested anchoring bookkeeping.
+	nodePaths map[LayoutID]string
+	// anchorBookkeepingRequested reports whether any scroller of this
+	// engine's window saved a scroll anchor or a trailing-margin
+	// extension, so the next frame's request walk records node margins
+	// and paths (the maps above). It is toggled by the scroll slice
+	// (scroll_element.go), not by the engine itself.
+	anchorBookkeepingRequested bool
 }
 
 // NewLayoutEngine creates a fresh layout engine backed by the embedded
@@ -594,6 +660,8 @@ func NewLayoutEngine() (*LayoutEngine, error) {
 		inlineFragments:      make(map[LayoutID][]Bounds),
 		verticalAligns:       make(map[LayoutID]VerticalAlign),
 		displayPositions:     make(map[LayoutID]displayPositionRecord),
+		nodeMargins:          make(map[LayoutID]LengthEdges),
+		nodePaths:            make(map[LayoutID]string),
 	}, nil
 }
 
@@ -646,6 +714,27 @@ func (e *LayoutEngine) recordInlineStyleState(id LayoutID, style *Style) {
 		e.verticalAligns[id] = style.VerticalAlign
 	}
 	e.displayPositions[id] = displayPositionRecord{display: style.Display, position: style.Position}
+	// browser-core 07: the authored margins ride along (the scroll range's
+	// trailing-margin extension reads them at prepaint — Taffy's content
+	// size stops at the child border boxes).
+	e.nodeMargins[id] = style.Margin
+}
+
+// RequestAnchorBookkeeping turns on the node-path records of the
+// request walk (browser-core 46: the scroll-anchoring walk identifies
+// its anchor node across frames by the element id path, and the paths
+// cost one small string per node per frame — so only windows whose
+// scrollers actually saved a scroll anchor pay for them). The margins
+// are always recorded (a map insert with a struct value, like the
+// display records).
+func (e *LayoutEngine) RequestAnchorBookkeeping() {
+	e.anchorBookkeepingRequested = true
+}
+
+// anchorPathOf returns the node's recorded element id path key ("
+// when the walk did not record it).
+func (e *LayoutEngine) anchorPathOf(id LayoutID) string {
+	return e.nodePaths[id]
 }
 
 // displayPositionRecord is the display/position pair of one node
@@ -1041,6 +1130,214 @@ func (e *LayoutEngine) resetInlineState() {
 	e.inlineFragments = make(map[LayoutID][]Bounds)
 	e.verticalAligns = make(map[LayoutID]VerticalAlign)
 	e.displayPositions = make(map[LayoutID]displayPositionRecord)
+	// The node bookkeeping of the scroll slice (browser-core 07/46) is
+	// frame-scoped with the tree: the margins always refill during the
+	// request walk, the paths while anchoring bookkeeping is on.
+	e.nodeMargins = make(map[LayoutID]LengthEdges)
+	e.nodePaths = make(map[LayoutID]string)
+}
+
+// ---------------------------------------------------------------------------
+// The scroll slice's record-derived facts (browser-core ticket 07)
+// ---------------------------------------------------------------------------
+
+// ScrollLayoutFacts is one scroll container node's record-derived facts
+// (browser-core ticket 07), in logical pixels:
+//
+//   - ContentSize: Taffy's Layout::content_size — the extent of the
+//     descendants' boxes, their visible overflow and the container's
+//     END padding (taffy 0.13 compute/block.rs:701-707 and
+//     compute/flexbox.rs:2231-2236 add the end padding to the inflow
+//     union, exactly the CSS scrollable-overflow rule Chromium's
+//     ScrollableOverflowCalculator::Result applies
+//     core/layout/scrollable_overflow_calculator.cc:100-118).
+//   - MaxOffset: the scroll range per axis — Taffy's
+//     Layout::scroll_width/scroll_height (tree/layout.rs:331-348: the
+//     content size less the padding box, plus the scrollbar
+//     reservation, floored at zero) extended by the in-flow children's
+//     trailing margins (Chromium's inflow bounds carry the end margins
+//     into the scrollable overflow, core/layout/box_fragment_builder.
+//     cc:321-357 with the negative-end-margin clamp; Taffy's content
+//     size stops at the border boxes).
+//   - Padding: the node's resolved padding, exactly the values Taffy
+//     laid the box out with — every edge's percentage resolved against
+//     the CONTAINING BLOCK's width (taffy compute/leaf.rs:19-21,
+//     compute/flexbox.rs:446-447; CSS box model), so the Go side stops
+//     re-resolving vertical padding percentages against the scroller's
+//     own height.
+type ScrollLayoutFacts struct {
+	ContentSize Size
+	MaxOffset   Point
+	Padding     Edges
+}
+
+// ScrollLayoutFacts reads one node's layout record and computes the
+// scroll facts (browser-core ticket 07). The node must have been laid
+// out (the frame's compute ran). The trailing-margin extension reads
+// the in-flow children's recorded margins: display:none children are
+// skipped (they have no layout), absolute children are skipped
+// (out-of-flow children never move the inflow bounds — the same rule
+// the fragment builder applies), and percentage margins resolve
+// against the scroller's content width like Taffy's own resolution.
+func (e *LayoutEngine) ScrollLayoutFacts(ctx *LayoutContext, id LayoutID) (ScrollLayoutFacts, error) {
+	if err := e.checkBusy("ScrollLayoutFacts"); err != nil {
+		return ScrollLayoutFacts{}, err
+	}
+	if ctx == nil {
+		return ScrollLayoutFacts{}, fmt.Errorf("gpui: ScrollLayoutFacts requires a layout context")
+	}
+	if err := e.checkID(id, "ScrollLayoutFacts"); err != nil {
+		return ScrollLayoutFacts{}, err
+	}
+	record, err := e.native.NodeLayout(id.node)
+	if err != nil {
+		return ScrollLayoutFacts{}, fmt.Errorf("gpui: ScrollLayoutFacts: %w", err)
+	}
+	scale := ctx.ScaleFactor()
+	// Taffy's Layout::scroll_width/scroll_height, in device pixels:
+	// the content size less the padding box (size - borders), plus the
+	// scrollbar reservation (an axis's classic scrollbar eats port
+	// space), floored at zero.
+	maxX := maxZero32(record.ContentW + min32(record.ScrollbarW, record.SizeW) - record.SizeW + record.BorderLeft + record.BorderRight)
+	maxY := maxZero32(record.ContentH + min32(record.ScrollbarH, record.SizeH) - record.SizeH + record.BorderTop + record.BorderBottom)
+	// The trailing-margin extension: how much the in-flow children's
+	// end margins push the farthest border box past the border-box union
+	// Taffy measured. Percentage margins resolve against the scroller's
+	// content width (Taffy's node_inner_size basis).
+	contentWidth := (record.SizeW - record.BorderLeft - record.BorderRight - record.PaddingLeft - record.PaddingRight - record.ScrollbarW) / scale
+	marginExtX, marginExtY := e.scrollTrailingMargins(id, contentWidth, ctx)
+	maxX += marginExtX
+	maxY += marginExtY
+	return ScrollLayoutFacts{
+		ContentSize: Size{Width: record.ContentW / scale, Height: record.ContentH / scale},
+		MaxOffset: Point{
+			X: roundToTwoDecimals(maxX / scale),
+			Y: roundToTwoDecimals(maxY / scale),
+		},
+		Padding: Edges{
+			Top:    record.PaddingTop / scale,
+			Right:  record.PaddingRight / scale,
+			Bottom: record.PaddingBottom / scale,
+			Left:   record.PaddingLeft / scale,
+		},
+	}, nil
+}
+
+// scrollTrailingMargins measures the in-flow children's end margins'
+// extension of the scrollable far edges (device pixels): the difference
+// between the far border box (plus its clamped end margin) union and
+// the plain union Taffy's content size already carries. Negative end
+// margins clamp at zero (Chromium's rule: "for the margin furthest away
+// we disallow negative margins", box_fragment_builder.cc:341-353).
+func (e *LayoutEngine) scrollTrailingMargins(id LayoutID, contentWidth float32, ctx *LayoutContext) (float32, float32) {
+	count, err := e.native.NodeChildCount(id.node)
+	if err != nil || count == 0 {
+		return 0, 0
+	}
+	farX, farY := float32(-1.0), float32(-1.0)
+	marginedX, marginedY := float32(-1.0), float32(-1.0)
+	rem := ctx.RemSize()
+	scale := ctx.ScaleFactor()
+	for i := uint32(0); i < count; i++ {
+		childHandle, err := e.native.NodeChild(id.node, i)
+		if err != nil {
+			continue
+		}
+		child := LayoutID{engine: e, node: childHandle, generation: id.generation}
+		// Out-of-flow children never move the inflow bounds; hidden
+		// children have no layout at all.
+		if record, ok := e.displayPositions[child]; ok {
+			if record.display == DisplayNone || record.position == PositionAbsolute {
+				continue
+			}
+		}
+		childLayout, err := e.native.NodeLayout(childHandle)
+		if err != nil {
+			continue
+		}
+		// The child's far border-box edge, relative to the scroller's
+		// border box (its own overflow rides along through the child's
+		// content size, as in Taffy's contribution).
+		childFarX := childLayout.LocationX + max32(childLayout.SizeW, childLayout.ContentW)
+		childFarY := childLayout.LocationY + max32(childLayout.SizeH, childLayout.ContentH)
+		margins, ok := e.nodeMargins[child]
+		if !ok {
+			farX = max32(farX, childFarX)
+			farY = max32(farY, childFarY)
+			continue
+		}
+		endX := maxZero32(resolveRecordedMargin(margins.Right, contentWidth, rem, scale))
+		endY := maxZero32(resolveRecordedMargin(margins.Bottom, contentWidth, rem, scale))
+		farX = max32(farX, childFarX)
+		farY = max32(farY, childFarY)
+		marginedX = max32(marginedX, childFarX+endX)
+		marginedY = max32(marginedY, childFarY+endY)
+	}
+	return maxZero32(marginedX - farX), maxZero32(marginedY - farY)
+}
+
+// resolveRecordedMargin resolves one recorded margin edge to device
+// pixels: definite pixels and rems through the context, fractions
+// against the given basis (the scroller's content width), auto as zero
+// (the flex algorithm resolved the start margin into the child's
+// location; the end auto margin's share is not observable from the
+// record — a documented approximation).
+func resolveRecordedMargin(l Length, basis, rem, scale float32) float32 {
+	if l.Auto {
+		return 0
+	}
+	switch l.Definite.Kind {
+	case DefiniteLengthPx:
+		return l.Definite.Value * scale
+	case DefiniteLengthRem:
+		return l.Definite.Value * rem * scale
+	case DefiniteLengthFraction:
+		return l.Definite.Value * basis * scale
+	default:
+		return 0
+	}
+}
+
+// ResolvedPadding returns one node's layout-record padding, resolved to
+// logical pixels (browser-core 07): exactly the values Taffy laid the
+// box out with — every edge's percentage against the containing
+// block's width (compute/leaf.rs:19-21, compute/flexbox.rs:446-447) —
+// so style-side arithmetic matches the layout instead of re-resolving
+// vertical padding against the element's own height.
+func (e *LayoutEngine) ResolvedPadding(ctx *LayoutContext, id LayoutID) (Edges, error) {
+	if err := e.checkBusy("ResolvedPadding"); err != nil {
+		return Edges{}, err
+	}
+	if ctx == nil {
+		return Edges{}, fmt.Errorf("gpui: ResolvedPadding requires a layout context")
+	}
+	if err := e.checkID(id, "ResolvedPadding"); err != nil {
+		return Edges{}, err
+	}
+	record, err := e.native.NodeLayout(id.node)
+	if err != nil {
+		return Edges{}, fmt.Errorf("gpui: ResolvedPadding: %w", err)
+	}
+	scale := ctx.ScaleFactor()
+	return Edges{
+		Top:    record.PaddingTop / scale,
+		Right:  record.PaddingRight / scale,
+		Bottom: record.PaddingBottom / scale,
+		Left:   record.PaddingLeft / scale,
+	}, nil
+}
+
+// recordPaddingOf reads one node's record-resolved padding (logical
+// px), panicking on engine failure like the bounds queries (the
+// callers treat it as infallible layout data).
+func recordPaddingOf(w *Window, id LayoutID) Edges {
+	ds := drawState(w)
+	ctx := layoutContextOf(w)
+	padding, err := ds.engine.ResolvedPadding(&ctx, id)
+	if err != nil {
+		panic("gpui: record padding: " + err.Error())
+	}
+	return padding
 }
 
 // ---------------------------------------------------------------------------

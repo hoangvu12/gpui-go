@@ -181,5 +181,26 @@ func requestLayoutNode(w *Window, own *containingBlockScope, style Style, childr
 		attached = append(attached, own.deferred...)
 		own.deferred = nil
 	}
-	return ds.engine.RequestLayout(&ctx, style, attached...)
+	id, err := ds.engine.RequestLayout(&ctx, style, attached...)
+	if err != nil {
+		return id, err
+	}
+	// The anchoring bookkeeping (browser-core 46): every node requested
+	// through the container seam records its element id path while the
+	// window's engine has the walk on.
+	if id.engine.anchorBookkeepingRequested {
+		id.engine.nodePaths[id] = (&GlobalElementID{Path: currentElementIDs(w)}).key()
+	}
+	return id, nil
+}
+
+// recordAnchorPath records a node requested through a non-container
+// seam (the measured leaves): the anchoring walk needs those paths too
+// (browser-core 46).
+func recordAnchorPath(w *Window, id LayoutID, err error) (LayoutID, error) {
+	if err != nil || !id.engine.anchorBookkeepingRequested {
+		return id, err
+	}
+	id.engine.nodePaths[id] = (&GlobalElementID{Path: currentElementIDs(w)}).key()
+	return id, nil
 }

@@ -1467,6 +1467,24 @@ func (s *Style) TextStyle() *TextStyleRefinement {
 // clipped the mask spans the border-inset x range and the full bounds
 // height, and vice versa (the CSS overflow-value computation that
 // turns that pair into auto is spec ticket V2's, not this one's). The
+// borderEdges returns the style's border widths clamp-lined to
+// Chromium's computed rule (browser-core ticket 07: the width is an
+// integer of CSS px, with sub-pixel hairlines kept at one —
+// StyleBuilderConverter::ClampLineWidth, style_builder_converter.cc:
+// 1971-1987). This is the border geometry the layout laid the box out
+// with, so every style-side arithmetic that must agree with the layout
+// (the overflow mask, the content box, the sticky scrollport, the
+// scrollbar tracks) resolves through it instead of the raw authored
+// widths.
+func (s *Style) borderEdges(remSize float32) Edges {
+	return Edges{
+		Top:    clampLineWidth(s.BorderWidths.Top.ToPixels(remSize)),
+		Right:  clampLineWidth(s.BorderWidths.Right.ToPixels(remSize)),
+		Bottom: clampLineWidth(s.BorderWidths.Bottom.ToPixels(remSize)),
+		Left:   clampLineWidth(s.BorderWidths.Left.ToPixels(remSize)),
+	}
+}
+
 // pinned fade distances are not carried (the port's content mask has
 // no fade component).
 func (s *Style) OverflowMask(bounds Bounds, remSize float32) *Bounds {
@@ -1477,10 +1495,11 @@ func (s *Style) OverflowMask(bounds Bounds, remSize float32) *Bounds {
 	}
 	minX, minY := bounds.Origin.X, bounds.Origin.Y
 	maxX, maxY := bounds.Right(), bounds.Bottom()
-	minX += s.BorderWidths.Left.ToPixels(remSize)
-	maxX -= s.BorderWidths.Right.ToPixels(remSize)
-	minY += s.BorderWidths.Top.ToPixels(remSize)
-	maxY -= s.BorderWidths.Bottom.ToPixels(remSize)
+	borders := s.borderEdges(remSize)
+	minX += borders.Left
+	maxX -= borders.Right
+	minY += borders.Top
+	maxY -= borders.Bottom
 	var mask Bounds
 	switch {
 	case xVisible && !yVisible:
@@ -1504,7 +1523,7 @@ func (s *Style) OverflowMask(bounds Bounds, remSize float32) *Bounds {
 // the px and rem padding an object-fit style uses; the layout engine
 // resolves layout-time percentages itself).
 func (s *Style) ContentBox(bounds Bounds, remSize float32) Bounds {
-	borders := s.BorderWidths.ToPixels(remSize)
+	borders := s.borderEdges(remSize)
 	insets := Edges{
 		Top:    borders.Top + definiteEdgePixels(s.Padding.Top, bounds.Size.Width, remSize),
 		Right:  borders.Right + definiteEdgePixels(s.Padding.Right, bounds.Size.Width, remSize),

@@ -75,6 +75,15 @@ const (
 	// replay advances the test application's virtual clock and delivers
 	// one animation frame (browser-core ticket 44).
 	StepWait StepKind = "wait"
+	// StepScript runs a fixture-side page script (browser-core ticket
+	// 46): the recorder evaluates Script (a JavaScript expression) on
+	// the page and the replay calls Run (a Go function) with the event
+	// log, the test window and its application — the two halves of a
+	// scripted state change neither input nor time can express (rows
+	// inserted above the scrolled viewport). Run must leave both sides
+	// in the same state the page's script leaves the page in, and
+	// refresh the window when the view must redraw.
+	StepScript StepKind = "script"
 )
 
 // MouseButton names, shared by the recorder and the replay.
@@ -101,6 +110,15 @@ type Step struct {
 	// Numpad1, key "1" and the numpad location). Empty means the code
 	// is derived from the key (browser-core 13).
 	Code string
+	// Script is the JavaScript expression a StepScript step evaluates
+	// on the recorded page (the state change's page half). It must be
+	// side-effecting and synchronous; its return value is ignored.
+	Script string
+	// Run is the Go half of a StepScript step: the state change on the
+	// replay side, called with the fixture's event log, the test window
+	// and its application. It should mutate the fixture's view state —
+	// keyed like the view's other per-run state — and refresh the window.
+	Run func(log *EventLog, w *gpui.Window, app *gpui.App)
 }
 
 // Move returns a pointer-move step to (x, y).
@@ -137,6 +155,21 @@ func KeyUp(keystroke string) Step { return Step{Kind: StepKeyUp, Key: keystroke}
 // time on both sides (browser-core ticket 44).
 func Wait(ms int64) Step { return Step{Kind: StepWait, Ms: ms} }
 
+// Script returns a page-script step (browser-core ticket 46): the
+// recorder evaluates script (a JavaScript expression) on the settled
+// page — before the record's two-frame settle — and the replay calls
+// run with the event log, the test window and its application. The
+// two halves must make the same state change (rows inserted above the
+// viewport, a class toggled by a timer's callback): the step exists
+// for state changes neither the input vocabulary nor the clock can
+// express. run must be idempotent across the replays of one fixture
+// (TestFixtures and the tolerance check run the steps twice — key the
+// state like the view's other per-run data, on the event log or the
+// window).
+func Script(script string, run func(log *EventLog, w *gpui.Window, app *gpui.App)) Step {
+	return Step{Kind: StepScript, Script: script, Run: run}
+}
+
 // KeyCode returns a keystroke step with an explicit physical DOM code
 // (browser-core 13): the keystroke's key and modifiers parse as usual
 // and both sides carry the code — the Chrome side sends it to
@@ -145,6 +178,17 @@ func Wait(ms int64) Step { return Step{Kind: StepWait, Ms: ms} }
 // numpad: KeyCode("1", "Numpad1") types the numpad's 1).
 func KeyCode(keystroke, code string) Step {
 	return Step{Kind: StepKey, Key: keystroke, Code: code}
+}
+
+// FixtureScale returns the fixture's device pixel ratio: the fixture's
+// own Scale when it sets one, else the harness default (2.0). Both the
+// recorder and the replay resolve through this, so a fixture's record
+// and its replay always run at the same ratio.
+func FixtureScale(f Fixture) float32 {
+	if f.Scale > 0 {
+		return f.Scale
+	}
+	return DeviceScaleFactor
 }
 
 // PixelTolerance is a fixture's provisional Tier C gate. Every number
@@ -194,6 +238,14 @@ type Fixture struct {
 	HTML string
 	// Window is the page's and the gpui test window's logical size.
 	Window Size
+	// Scale is the fixture's device pixel ratio, overriding the harness
+	// default of 2.0 when non-zero: the recorder forces Chrome to it and
+	// the replay opens the test window at it (browser-core ticket 07: the
+	// border fixtures record at fractional ratios, where the device-pixel
+	// rounding rules differ). The window's device extent (logical × Scale)
+	// must still fit the capture budget; boxes compare in logical pixels
+	// exactly as at the default scale.
+	Scale float32
 	// View builds the gpui-go view of the page. It receives the event
 	// log the harness's instrumented handlers append to; the returned
 	// element tree becomes the test window's root. The element ids
@@ -564,6 +616,10 @@ func validate(f Fixture) error {
 	for _, step := range f.Steps {
 		switch step.Kind {
 		case StepMove, StepDown, StepUp, StepClick, StepKey, StepKeyDown, StepKeyUp, StepWait:
+		case StepScript:
+			if step.Script == "" || step.Run == nil {
+				return fmt.Errorf("parity: fixture %q: a script step needs both its page script and its Go half", f.Name)
+			}
 		default:
 			return fmt.Errorf("parity: fixture %q: unknown step kind %q", f.Name, step.Kind)
 		}

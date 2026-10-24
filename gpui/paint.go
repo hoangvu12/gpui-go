@@ -429,13 +429,21 @@ func snapStroke(value float32, scale float32) float32 {
 	return roundStrokeToDevicePixel(value, scale)
 }
 
-// snapBorderWidths snaps each border edge with the stroke rule.
+// snapBorderWidths snaps each border edge for painting (browser-core
+// ticket 07): Chromium's computed-style floor first (clampLineWidth -
+// the border is an integer of CSS px, with sub-pixel hairlines keeping
+// one pixel; style_builder_converter.cc:1971-1987), then the pinned
+// stroke rule for the device conversion - the hard-edged strip the
+// renderer draws needs a whole device thickness, and rounding is the
+// closest approximation of Chrome's antialiased stroke (a 1px border
+// at 175% paints 2 device px here, against Chrome's AA'd 1.75; the
+// LAYOUT inset stays the exact 1 CSS px either way).
 func snapBorderWidths(edges Edges, scale float32) Edges {
 	return Edges{
-		Top:    snapStroke(edges.Top, scale),
-		Right:  snapStroke(edges.Right, scale),
-		Bottom: snapStroke(edges.Bottom, scale),
-		Left:   snapStroke(edges.Left, scale),
+		Top:    snapStroke(clampLineWidth(edges.Top), scale),
+		Right:  snapStroke(clampLineWidth(edges.Right), scale),
+		Bottom: snapStroke(clampLineWidth(edges.Bottom), scale),
+		Left:   snapStroke(clampLineWidth(edges.Left), scale),
 	}
 }
 

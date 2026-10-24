@@ -127,6 +127,11 @@ type uniformListFrameState struct {
 	items []uniformListItem
 	// itemHeight is the measured item pitch.
 	itemHeight float32
+	// layoutID is the list's own layout node (browser-core 07: the
+	// prepaint reads the node's record-resolved padding, so percentage
+	// padding follows the layout's basis — the containing block's
+	// width — instead of the list's own height).
+	layoutID LayoutID
 }
 
 // uniformListPrepaintState is the list's prepaint state (the pinned
@@ -257,6 +262,7 @@ func (u *UniformListElement) RequestLayout(global *GlobalElementID, inspector *I
 	if err != nil {
 		panic(fmt.Sprintf("gpui: uniform list request_layout: %v", err))
 	}
+	state.layoutID = layoutID
 	return layoutID, state
 }
 
@@ -269,13 +275,12 @@ func (u *UniformListElement) RequestLayout(global *GlobalElementID, inspector *I
 func (u *UniformListElement) Prepaint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *uniformListFrameState, w *Window, app *App) uniformListPrepaintState {
 	style := u.style
 	rem := RemSize(w)
-	border := style.BorderWidths.ToPixels(rem)
-	padding := Edges{
-		Top:    resolveDefiniteListLength(style.Padding.Top, bounds.Size.Height, rem),
-		Right:  resolveDefiniteListLength(style.Padding.Right, bounds.Size.Width, rem),
-		Bottom: resolveDefiniteListLength(style.Padding.Bottom, bounds.Size.Height, rem),
-		Left:   resolveDefiniteListLength(style.Padding.Left, bounds.Size.Width, rem),
-	}
+	border := style.borderEdges(rem)
+	// The list's padding reads its node's record-resolved values
+	// (browser-core 07): the percentages resolve against the containing
+	// block's width exactly as Taffy laid them out, not the list's own
+	// height.
+	padding := recordPaddingOf(w, layout.layoutID)
 	paddedBounds := fromCorners(
 		Point{X: bounds.Origin.X + border.Left + padding.Left, Y: bounds.Origin.Y + border.Top + padding.Top},
 		Point{X: bounds.Right() - (border.Right + padding.Right), Y: bounds.Bottom() - (border.Bottom + padding.Bottom)},
@@ -294,7 +299,14 @@ func (u *UniformListElement) Prepaint(global *GlobalElementID, inspector *Inspec
 	WithContentMaskVoid(w, style.OverflowMask(bounds, rem), func(w *Window) {
 		box := w.InsertHitbox(bounds, HitboxNormal)
 		state.hitbox = &box
-		scrollOffset := u.scroll.clamp(bounds, &style, contentSize, w)
+		// The uniform list's range is its own virtualized extent (pitch x
+		// count — the layout record carries no such thing for a measured
+		// leaf), on the record-resolved padding (browser-core 07).
+		scrollMax := Point{
+			X: max32(roundToTwoDecimals(contentSize.Width+padding.Left+padding.Right-bounds.Size.Width), 0),
+			Y: max32(roundToTwoDecimals(contentSize.Height+padding.Top+padding.Bottom-bounds.Size.Height), 0),
+		}
+		scrollOffset := u.scroll.clamp(bounds, &style, scrollMax, w)
 
 		if u.count == 0 {
 			return

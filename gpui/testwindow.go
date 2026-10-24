@@ -43,8 +43,21 @@ import (
 // hostless lease (Bounds errors, Alive reports false) while the element
 // runtime draws real frames.
 func NewTestWindow(app *App, size Size) *Window {
+	return NewTestWindowAtScale(app, size, TestScaleFactor)
+}
+
+// NewTestWindowAtScale opens a deterministic headless test window like
+// NewTestWindow with a non-default scale factor (browser-core ticket 07:
+// the parity fixtures record Chrome at fractional device pixel ratios
+// and replay at the same ratio; the reference test window is fixed at
+// 2.0, so the harness pins its own). Everything else keeps the test
+// window's profile: rem 16 and the deterministic text system.
+func NewTestWindowAtScale(app *App, size Size, scale float32) *Window {
 	if app == nil {
-		panic("gpui: NewTestWindow requires an application")
+		panic("gpui: NewTestWindowAtScale requires an application")
+	}
+	if scale <= 0 {
+		panic("gpui: NewTestWindowAtScale requires a positive scale factor")
 	}
 	var window *Window
 	app.Update(func(app *App) {
@@ -66,7 +79,7 @@ func NewTestWindow(app *App, size Size) *Window {
 	ds := drawState(window)
 	ds.testWindow = true
 	ds.viewport = size
-	ds.scale = TestScaleFactor
+	ds.scale = scale
 	ds.rem = DefaultRemSize
 	ds.text = &testTextSystem{}
 	return window
