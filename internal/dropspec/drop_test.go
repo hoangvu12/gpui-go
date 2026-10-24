@@ -354,12 +354,16 @@ func TestLeaveCancelDropSemantics(t *testing.T) {
 	}
 
 	// A drop with no active drag (the platform drag ended): the Submit
-	// event still dispatches, but no element receives a payload.
+	// event still dispatches, but no element receives a payload. The
+	// effect is NONE: nothing accepts a drag that is not happening —
+	// browser-core ticket 16's rule (the OLE answers follow the drag
+	// session's acceptance; the pin's unconditional COPY was the
+	// recorded divergence, spec story 56).
 	f.rec.mu.Lock()
 	droppedBefore := len(f.rec.dropped)
 	f.rec.mu.Unlock()
-	if effect := f.driver.Drop(paths, sx, sy); effect != effectCopy {
-		t.Fatalf("Drop effect = %d, want COPY (the target's negotiation is unconditional)", effect)
+	if effect := f.driver.Drop(paths, sx, sy); effect != effectNone {
+		t.Fatalf("Drop effect = %d, want DROPEFFECT_NONE (the drag left; no target accepts it)", effect)
 	}
 	f.rec.mu.Lock()
 	droppedAfter := len(f.rec.dropped)
@@ -529,4 +533,163 @@ func handDragToPlatformForTest(app *gpui.App, sourceWindow gpui.WindowID) bool {
 // endPlatformDragForTest ends the platform-owned session.
 func endPlatformDragForTest(app *gpui.App, sourceWindow gpui.WindowID) bool {
 	return app.EndPlatformDrag(sourceWindow)
+}
+
+// ---------------------------------------------------------------------------
+// The OLE drop-effect negotiation (browser-core ticket 16)
+// ---------------------------------------------------------------------------
+
+// partialDropSurface is the negotiation fixture's root view: a plain
+// full-size root (no drop listeners — the non-accepting region) with
+// an accepting element covering the top half (the drop listener the
+// pin's CanDrop model accepts through).
+type partialDropSurface struct {
+	rec *dropRecorder
+}
+
+// EntityID implements gpui.View: stateless recipe.
+func (v *partialDropSurface) EntityID() (gpui.EntityID, bool) { return 0, false }
+
+// RenderOnce implements gpui.View.
+func (v *partialDropSurface) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
+	rec := v.rec
+	root := gpui.Div().ID("root").SizeFull().Flex().FlexCol()
+	accepting := gpui.OnDrop(gpui.Div().ID("accepting").Size(gpui.Px(320), gpui.Px(110)), func(paths *gpui.ExternalPaths, event *gpui.MouseUpEvent, w *gpui.Window, app *gpui.App) {
+		rec.mu.Lock()
+		rec.dropped = append(rec.dropped, *paths)
+		rec.mu.Unlock()
+	})
+	plain := gpui.Div().ID("plain").Size(gpui.Px(320), gpui.Px(110))
+	element, err := gpui.TryIntoElement(root.Child(accepting).Child(plain))
+	if err != nil {
+		panic(fmt.Sprintf("dropspec: surface conversion: %v", err))
+	}
+	return element
+}
+
+// newPartialDropFixture boots the negotiation fixture: a host, app and
+// shown window whose view accepts drops only on its top half, with a
+// completed frame drawn before the driver runs (the negotiation reads
+// the rendered frame's element tree under the cursor).
+func newPartialDropFixture(t *testing.T) *dropFixture {
+	t.Helper()
+	host := gpui.NewHost()
+	if err := host.Start(); err != nil {
+		t.Fatalf("host start failed: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := host.Stop(); err != nil {
+			t.Errorf("host stop failed: %v", err)
+		}
+	})
+	app := gpui.NewApp()
+	if err := app.Attach(host); err != nil {
+		t.Fatalf("app attach failed: %v", err)
+	}
+	rec := &dropRecorder{}
+	var surface *partialDropSurface
+	window, err := app.OpenWindowView(gpui.WindowOptions{
+		Title:  "dropspec ole negotiation",
+		Bounds: gpui.Bounds{Origin: gpui.Point{X: requestedOrigin, Y: requestedOrigin}, Size: gpui.Size{Width: 320, Height: 220}},
+		Show:   true,
+		OnFileDrop: func(event gpui.FileDropEvent) {
+			rec.record(event)
+		},
+	}, func(w *gpui.Window, app *gpui.App) gpui.View {
+		surface = &partialDropSurface{rec: rec}
+		return surface
+	})
+	if err != nil {
+		t.Fatalf("OpenWindowView failed: %v — this session is expected to create real windows", err)
+	}
+	// Wait for the window to settle at its requested position AND for
+	// a completed frame (the acceptance query hit-tests the rendered
+	// frame; without a frame every position answers none).
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		bounds, err := window.Bounds()
+		settled := err == nil && bounds.Origin.X >= requestedOrigin-10 && bounds.Origin.Y >= requestedOrigin-10
+		if settled && gpui.LastDrawnScene(window) != nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if gpui.LastDrawnScene(window) == nil {
+		t.Fatal("the negotiation fixture needs a drawn frame before the drag drives it")
+	}
+	driver := window.Handle().FileDropDriver()
+	if driver == nil {
+		t.Fatalf("FileDropDriver: the window has no registered drop target")
+	}
+	return &dropFixture{host: host, app: app, window: window, rec: rec, driver: driver}
+}
+
+// TestOLEDragOverNegotiatesNoneOverNonAcceptingTarget is browser-core
+// ticket 16's OLE half: the IDropTarget::DragEnter/DragOver/Drop
+// effects follow the drag session's acceptance — the element tree
+// under the cursor — so files dragged from other apps report
+// DROPEFFECT_NONE over elements that will not accept them (the pin
+// negotiated COPY unconditionally, the recorded divergence of spec
+// story 56):
+//
+//   - DragEnter over the accepting element: COPY.
+//   - DragOver over the plain (non-accepting) region: NONE.
+//   - DragOver back over the accepting element: COPY.
+//   - Drop over the plain region: NONE, and no payload delivers; the
+//     FileDrop transcript keeps flowing (Entered/Pending/Submit).
+func TestOLEDragOverNegotiatesNoneOverNonAcceptingTarget(t *testing.T) {
+	f := newPartialDropFixture(t)
+	paths := []string{`C:\dropspec-negotiate.txt`}
+
+	// DragEnter over the accepting element (the top half): COPY.
+	sx, sy := f.screen(160, 55)
+	if effect := f.driver.DragEnter(paths, sx, sy); effect != effectCopy {
+		t.Fatalf("DragEnter over the accepting element effect = %d, want DROPEFFECT_COPY", effect)
+	}
+	// DragOver over the plain region (the bottom half): NONE — the OS
+	// cursor tells the truth over elements that will not accept the
+	// files.
+	nx, ny := f.screen(160, 165)
+	if effect := f.driver.DragOver(nx, ny); effect != effectNone {
+		t.Fatalf("DragOver over the non-accepting region effect = %d, want DROPEFFECT_NONE (the drag session's acceptance)", effect)
+	}
+	// DragOver back over the accepting element: COPY again.
+	ax, ay := f.screen(160, 55)
+	if effect := f.driver.DragOver(ax, ay); effect != effectCopy {
+		t.Fatalf("DragOver over the accepting element effect = %d, want DROPEFFECT_COPY", effect)
+	}
+	// The FileDrop transcript kept flowing through the negotiation.
+	events := f.rec.snapshot()
+	if len(events) != 3 || events[0].kind != gpui.FileDropEntered ||
+		events[1].kind != gpui.FileDropPending || events[2].kind != gpui.FileDropPending {
+		t.Fatalf("transcript = %q, want Entered Pending Pending", f.rec.transcript())
+	}
+	_ = events
+
+	// One more DragOver over the plain region (the OLE loop updates
+	// the position before the drop; the drop lands where the last
+	// dragover was — Chromium's drag_target_).
+	nx2, ny2 := f.screen(160, 165)
+	if effect := f.driver.DragOver(nx2, ny2); effect != effectNone {
+		t.Fatalf("the second DragOver over the non-accepting region effect = %d, want DROPEFFECT_NONE", effect)
+	}
+
+	// Drop over the plain region: NONE, no payload.
+	f.rec.mu.Lock()
+	droppedBefore := len(f.rec.dropped)
+	f.rec.mu.Unlock()
+	px, py := f.screen(160, 165)
+	if effect := f.driver.Drop(paths, px, py); effect != effectNone {
+		t.Fatalf("Drop over the non-accepting region effect = %d, want DROPEFFECT_NONE", effect)
+	}
+	f.rec.mu.Lock()
+	droppedAfter := len(f.rec.dropped)
+	f.rec.mu.Unlock()
+	if droppedAfter != droppedBefore {
+		t.Fatalf("a drop over the non-accepting region delivered a payload (drop count %d -> %d)", droppedBefore, droppedAfter)
+	}
+	events = f.rec.snapshot()
+	if len(events) != 5 || events[4].kind != gpui.FileDropSubmit {
+		t.Fatalf("after Drop transcript = %q, want Entered Pending Pending Pending Submit", f.rec.transcript())
+	}
 }

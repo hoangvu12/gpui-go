@@ -1147,8 +1147,12 @@ type hostWindow struct {
 	// member).
 	dm *directManipulationHandler
 	// onFileDrop receives the OLE drop target's file-drop events
-	// (handle_drag_drop's synchronous input callback delivery).
-	onFileDrop func(event FileDropEvent)
+	// (handle_drag_drop's synchronous input callback delivery) and
+	// returns the drop effect the dispatch negotiated for the event, in
+	// DROPEFFECT units — the browser-core ticket 16 answer the OLE
+	// callbacks report to the drag loop (App.OpenWindow installs the
+	// wrapper; 0 when none is installed).
+	onFileDrop func(event FileDropEvent) uint32
 	// onGesture receives the Direct Manipulation events (drain_events
 	// through the input callback: *ScrollWheelEvent / *PinchEvent).
 	onGesture func(event any)
@@ -2317,7 +2321,7 @@ func (h *Host) openWindowOnHostThread(opts WindowOptions) (WindowHandle, error) 
 	w.onKeyboardLayoutChange = opts.OnKeyboardLayoutChange
 	w.onAppearanceChanged = opts.OnAppearanceChanged
 	w.onHoverStatusChange = opts.OnHoverStatusChange
-	w.onFileDrop = opts.OnFileDrop
+	w.onFileDrop = opts.fileDropAnswer
 	w.onGesture = opts.OnGesture
 	w.onMouseInput = opts.OnMouseInput
 	w.minSize = opts.MinSize

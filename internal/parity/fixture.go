@@ -96,6 +96,14 @@ const (
 	// in the same state the page's script leaves the page in, and
 	// refresh the window when the view must redraw.
 	StepScript StepKind = "script"
+	// StepCancelDrag cancels an in-progress drag (browser-core ticket
+	// 16): the recorder drives CDP Input.cancelDragging — the browser
+	// half of the user pressing Escape mid-drag (the OS drag loop ends
+	// with DRAGDROP_S_CANCEL, DragTargetDragLeave + DragSourceEndedAt
+	// with none) — and the replay dispatches one Escape KeyDown, which
+	// the drag machinery consumes before any listener. Both halves
+	// fire dragleave on the current target and dragend with no drop.
+	StepCancelDrag StepKind = "canceldrag"
 )
 
 // MouseButton names, shared by the recorder and the replay.
@@ -204,6 +212,17 @@ func ImeCommit(text string) Step { return Step{Kind: StepImeCommit, Text: text} 
 // window).
 func Script(script string, run func(log *EventLog, w *gpui.Window, app *gpui.App)) Step {
 	return Step{Kind: StepScript, Script: script, Run: run}
+}
+
+// CancelDrag returns a drag-cancel step (browser-core ticket 16): the
+// user pressed Escape mid-drag. The recorder drives CDP
+// Input.cancelDragging (the browser's twin of the OS drag loop ending
+// with DRAGDROP_S_CANCEL) and the replay dispatches one Escape
+// KeyDown, which the drag machinery consumes before any listener —
+// both halves fire dragleave on the current target and dragend with
+// no drop, and no key entries.
+func CancelDrag() Step {
+	return Step{Kind: StepCancelDrag}
 }
 
 // KeyCode returns a keystroke step with an explicit physical DOM code
@@ -422,6 +441,12 @@ type EventRecord struct {
 	// mutation, "insertFromPaste" for a paste, "insertText" for typed
 	// text; "" for the other kinds) — browser-core ticket 26.
 	InputType string `json:"inputType,omitempty"`
+	// Effect is the event's dropEffect for the drag-and-drop kinds
+	// (browser-core ticket 16: "none", "copy", "move" or "link" — the
+	// negotiated operation of dragenter, dragover, dragleave, drop and
+	// dragend entries; "" for dragstart and drag, which carry no
+	// effect, and for the other kinds).
+	Effect string `json:"effect,omitempty"`
 }
 
 // EventLog is the fixture-side event recorder the View's handlers
@@ -436,6 +461,9 @@ type EventLog struct {
 	// focusIDs maps the tracked focus handles to element ids for the
 	// Focus field of key entries (TrackFocus).
 	focusIDs map[uint64]string
+	// dragPending holds the drag entries awaiting their event's final
+	// state (browser-core ticket 16; see FinalizeDragEntries).
+	dragPending []dragPendingEntry
 }
 
 // Events returns the recorded transcript.
@@ -626,6 +654,117 @@ func (l *EventLog) AppendBeforeInput(target, inputType, data string) {
 	})
 }
 
+// ---------------------------------------------------------------------------
+// The drag-and-drop kinds (browser-core ticket 16)
+// ---------------------------------------------------------------------------
+
+// dragPendingEntry is one drag entry awaiting its event's final state:
+// the entry's index and a reader of the event's post-dispatch
+// default-prevented flag and dropEffect (the recorder reads the same
+// final state out of the page's event object, so a later listener's
+// preventDefault or dropEffect assignment lands in the entry).
+type dragPendingEntry struct {
+	index int
+	read  func() (prevented bool, effect string)
+}
+
+// appendDrag records one drag entry, registering it for the
+// post-dispatch finalize (FinalizeDragEntries).
+func (l *EventLog) appendDrag(kind, target, effect string, read func() (bool, string)) {
+	l.entries = append(l.entries, EventRecord{Kind: kind, Target: target, Effect: effect})
+	l.dragPending = append(l.dragPending, dragPendingEntry{index: len(l.entries) - 1, read: read})
+}
+
+// DragStart returns an OnDragStart handler that records a
+// "dragstart" on target (browser-core ticket 16: the DOM dragstart,
+// on the drag source's chain, before the drag begins — a prevented
+// dragstart cancels the drag).
+func (l *EventLog) DragStart(target string) func(*gpui.DragStartEvent, *gpui.Window, *gpui.App) {
+	return func(e *gpui.DragStartEvent, _ *gpui.Window, _ *gpui.App) {
+		l.appendDrag("dragstart", target, "", func() (bool, string) {
+			return e.DefaultPrevented(), ""
+		})
+	}
+}
+
+// DragSource returns an OnDragEvent handler that records a "drag" on
+// target (the DOM drag event, on the drag source's chain, per
+// drag-loop update).
+func (l *EventLog) DragSource(target string) func(*gpui.DragEvent, *gpui.Window, *gpui.App) {
+	return func(e *gpui.DragEvent, _ *gpui.Window, _ *gpui.App) {
+		l.appendDrag("drag", target, "", func() (bool, string) {
+			return e.DefaultPrevented(), ""
+		})
+	}
+}
+
+// DragEnter returns an OnDragEnter handler that records a
+// "dragenter" on target with the event's dropEffect (the final state
+// — a listener's assignment lands in the entry).
+func (l *EventLog) DragEnter(target string) func(*gpui.DragEnterEvent, *gpui.Window, *gpui.App) {
+	return func(e *gpui.DragEnterEvent, _ *gpui.Window, _ *gpui.App) {
+		l.appendDrag("dragenter", target, e.DropEffect.String(), func() (bool, string) {
+			return e.DefaultPrevented(), e.DropEffect.String()
+		})
+	}
+}
+
+// DragOver returns an OnDragOverEvent handler that records a
+// "dragover" on target with the event's final dropEffect.
+func (l *EventLog) DragOver(target string) func(*gpui.DragOverEvent, *gpui.Window, *gpui.App) {
+	return func(e *gpui.DragOverEvent, _ *gpui.Window, _ *gpui.App) {
+		l.appendDrag("dragover", target, e.DropEffect.String(), func() (bool, string) {
+			return e.DefaultPrevented(), e.DropEffect.String()
+		})
+	}
+}
+
+// DragLeave returns an OnDragLeave handler that records a
+// "dragleave" on target (the effect is always none).
+func (l *EventLog) DragLeave(target string) func(*gpui.DragLeaveEvent, *gpui.Window, *gpui.App) {
+	return func(e *gpui.DragLeaveEvent, _ *gpui.Window, _ *gpui.App) {
+		l.appendDrag("dragleave", target, e.DropEffect.String(), func() (bool, string) {
+			return e.DefaultPrevented(), e.DropEffect.String()
+		})
+	}
+}
+
+// Drop returns an OnDropEvent handler that records a "drop" on
+// target with the negotiated dropEffect.
+func (l *EventLog) Drop(target string) func(*gpui.DropEvent, *gpui.Window, *gpui.App) {
+	return func(e *gpui.DropEvent, _ *gpui.Window, _ *gpui.App) {
+		l.appendDrag("drop", target, e.DropEffect.String(), func() (bool, string) {
+			return e.DefaultPrevented(), e.DropEffect.String()
+		})
+	}
+}
+
+// DragEnd returns an OnDragEnd handler that records a "dragend" on
+// target with the drag's final dropEffect.
+func (l *EventLog) DragEnd(target string) func(*gpui.DragEndEvent, *gpui.Window, *gpui.App) {
+	return func(e *gpui.DragEndEvent, _ *gpui.Window, _ *gpui.App) {
+		l.appendDrag("dragend", target, e.DropEffect.String(), func() (bool, string) {
+			return e.DefaultPrevented(), e.DropEffect.String()
+		})
+	}
+}
+
+// FinalizeDragEntries settles every pending drag entry with its
+// event's post-dispatch state: the default-prevented flag and the
+// dropEffect (the drag events' dispatches run inside the platform
+// events' dispatches, so the per-step marking cannot see them; the
+// events themselves carry the final state, like the page's event
+// objects the recorder reads at the end). Replay calls this after
+// the steps.
+func (l *EventLog) FinalizeDragEntries() {
+	for _, pending := range l.dragPending {
+		prevented, effect := pending.read()
+		l.entries[pending.index].DefaultPrevented = prevented
+		l.entries[pending.index].Effect = effect
+	}
+	l.dragPending = nil
+}
+
 // domKeyOf maps the pinned keystroke key name onto the DOM key name
 // the recorder reads from e.key ("tab" → "Tab", "space" → " ",
 // "arrowdown" → "ArrowDown"); single characters pass through.
@@ -761,6 +900,19 @@ var eventKindVocabulary = map[string]bool{
 	"paste":       true,
 	"beforeinput": true,
 	"select":      true,
+	// The drag-and-drop kinds of browser-core ticket 16: the DOM drag
+	// sequence, dispatched by the drag session (gpui/dragevent.go);
+	// dragenter, dragover, dragleave, drop and dragend entries carry
+	// the negotiated dropEffect, and every drag entry carries its
+	// event's final default-prevented state (a cancelled dragover or
+	// dragenter is the target's acceptance).
+	"dragstart": true,
+	"drag":      true,
+	"dragenter": true,
+	"dragover":  true,
+	"dragleave": true,
+	"drop":      true,
+	"dragend":   true,
 }
 
 // validate checks a fixture's invariants at record and replay time,
@@ -780,7 +932,7 @@ func validate(f Fixture) error {
 	}
 	for _, step := range f.Steps {
 		switch step.Kind {
-		case StepMove, StepDown, StepUp, StepClick, StepKey, StepKeyDown, StepKeyUp, StepWait, StepImeSet, StepImeCommit:
+		case StepMove, StepDown, StepUp, StepClick, StepKey, StepKeyDown, StepKeyUp, StepWait, StepImeSet, StepImeCommit, StepCancelDrag:
 		case StepScript:
 			if step.Script == "" || step.Run == nil {
 				return fmt.Errorf("parity: fixture %q: a script step needs both its page script and its Go half", f.Name)

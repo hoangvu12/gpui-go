@@ -213,7 +213,16 @@ type WindowOptions struct {
 	// window-relative logical positions — the pin's input callback
 	// FileDrop arm, delivered synchronously on the host thread from
 	// the IDropTarget calls, including inside OLE's modal drag loop).
+	// App.OpenWindow always installs its own dispatch wrapper (the
+	// events route through Window.DispatchInput), so this hook is an
+	// observer that runs first.
 	OnFileDrop func(event FileDropEvent)
+	// fileDropAnswer is the installed dispatch wrapper's host-side
+	// form (browser-core ticket 16): it returns the drop effect the
+	// drag session negotiated for the event, the answer the OLE
+	// IDropTarget callbacks report to the drag loop. Set by
+	// App.OpenWindow; never set by user code (unexported).
+	fileDropAnswer func(event FileDropEvent) uint32
 	// OnGesture receives the Direct Manipulation events (ticket24:
 	// *ScrollWheelEvent and *PinchEvent with gesture phases, drained at
 	// the window's paint entry).
@@ -887,8 +896,14 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 		// dispatch_event's translation arm — Entered/Pending become
 		// synthetic mouse moves, Submit a mouse up, Exited/Ended ride the
 		// mouse listener path). An optional user hook observes first.
+		// Browser-core ticket 16: the wrapper returns the drop effect the
+		// drag session negotiated for the event (the dragenter/dragover
+		// dispatch under the position), which the OLE IDropTarget
+		// callbacks report to the drag loop — COPY only over a target
+		// that accepts the drag, NONE otherwise.
 		userFileDrop := opts.OnFileDrop
-		hostOpts.OnFileDrop = func(event FileDropEvent) {
+		hostOpts.fileDropAnswer = func(event FileDropEvent) uint32 {
+			var answer uint32
 			a.Update(func(a *App) {
 				if userFileDrop != nil {
 					userFileDrop(event)
@@ -896,8 +911,11 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 				// The pointer form matches the mouse-family pointer events
 				// dispatchInput routes.
 				window.dispatchInput(&event, a)
+				answer = window.oleDropEffectAnswer()
 			})
+			return answer
 		}
+		hostOpts.OnFileDrop = nil
 		// The gesture callback routes Direct Manipulation events through
 		// the same dispatch (the pin's input callback ScrollWheel/Pinch
 		// arms).

@@ -155,6 +155,55 @@ func (i *Interactive[Self]) OnDragMove[T any](f func(*DragMoveEvent[T], *Window,
 	return i.self
 }
 
+// OnDragStart binds a DOM dragstart listener to the inner div
+// (DivElement.OnDragStart, browser-core ticket 16).
+func (i *Interactive[Self]) OnDragStart[_ lazy](f func(*DragStartEvent, *Window, *App)) Self {
+	i.Interactivity().OnDragStart(f)
+	return i.self
+}
+
+// OnDragEvent binds a DOM drag listener to the inner div
+// (DivElement.OnDragEvent, browser-core ticket 16).
+func (i *Interactive[Self]) OnDragEvent[_ lazy](f func(*DragEvent, *Window, *App)) Self {
+	i.Interactivity().OnDragEvent(f)
+	return i.self
+}
+
+// OnDragEnter binds a DOM dragenter listener to the inner div
+// (DivElement.OnDragEnter, browser-core ticket 16).
+func (i *Interactive[Self]) OnDragEnter[_ lazy](f func(*DragEnterEvent, *Window, *App)) Self {
+	i.Interactivity().OnDragEnter(f)
+	return i.self
+}
+
+// OnDragOverEvent binds a DOM dragover listener to the inner div
+// (DivElement.OnDragOverEvent, browser-core ticket 16).
+func (i *Interactive[Self]) OnDragOverEvent[_ lazy](f func(*DragOverEvent, *Window, *App)) Self {
+	i.Interactivity().OnDragOverEvent(f)
+	return i.self
+}
+
+// OnDragLeave binds a DOM dragleave listener to the inner div
+// (DivElement.OnDragLeave, browser-core ticket 16).
+func (i *Interactive[Self]) OnDragLeave[_ lazy](f func(*DragLeaveEvent, *Window, *App)) Self {
+	i.Interactivity().OnDragLeave(f)
+	return i.self
+}
+
+// OnDropEvent binds a DOM drop listener to the inner div
+// (DivElement.OnDropEvent, browser-core ticket 16).
+func (i *Interactive[Self]) OnDropEvent[_ lazy](f func(*DropEvent, *Window, *App)) Self {
+	i.Interactivity().OnDropEvent(f)
+	return i.self
+}
+
+// OnDragEnd binds a DOM dragend listener to the inner div
+// (DivElement.OnDragEnd, browser-core ticket 16).
+func (i *Interactive[Self]) OnDragEnd[_ lazy](f func(*DragEndEvent, *Window, *App)) Self {
+	i.Interactivity().OnDragEnd(f)
+	return i.self
+}
+
 // OnDropAlt attaches a DropListener for drags of type T to the inner div
 // (DivElement.OnDropAlt, div.rs:1415).
 func (i *Interactive[Self]) OnDropAlt[T any](listener DropListener[T]) Self {

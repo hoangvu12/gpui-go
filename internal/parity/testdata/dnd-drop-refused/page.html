@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 480px;
+		height: 360px;
+		display: flex;
+		flex-direction: column;
+		font: 16px/1.618 "Segoe UI", system-ui, sans-serif;
+	}
+	#source {
+		box-sizing: border-box;
+		width: 480px;
+		height: 40px;
+		background: #e2e8f0;
+	}
+	#targets {
+		display: flex;
+		width: 480px;
+		height: 320px;
+	}
+	#t1, #t2, #t3 {
+		box-sizing: border-box;
+		width: 160px;
+		height: 320px;
+		background: #f1f5f9;
+	}
+	#t1.dropped, #t3.dropped {
+		background: #86efac;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div id="source" data-id="source" draggable="true"></div>
+	<div id="targets">
+		<div id="t1" data-id="t1"></div>
+		<div id="t2" data-id="t2"></div>
+		<div id="t3" data-id="t3"></div>
+	</div>
+	<script>
+		document.getElementById("t1").addEventListener("dragover", function (e) {
+			e.preventDefault();
+		});
+		document.getElementById("t3").addEventListener("dragover", function (e) {
+			e.preventDefault();
+			e.dataTransfer.dropEffect = "move";
+		});
+		document.getElementById("t1").addEventListener("drop", function (e) {
+			this.classList.add("dropped");
+		});
+		document.getElementById("t3").addEventListener("drop", function (e) {
+			this.classList.add("dropped");
+		});
+	</script>
+</body>
+</html>

@@ -326,6 +326,14 @@ func (w *Window) isWindowActiveCached() bool {
 func (w *Window) activationChanged(active bool, app *App) {
 	fs := focusState(w)
 	fs.inactive = !active
+	// Browser-core ticket 16: window deactivation cancels an active
+	// drag (the system drag ends when the window loses activation): the
+	// cancel fires dragleave on the current target and dragend on the
+	// source, with no drop.
+	if !active {
+		w.cancelDragSession(app)
+		app.cancelActiveDrag()
+	}
 	app.Update(func(a *App) {
 		if fs.activationObservers != nil {
 			a.deliverSubs(fs.activationObservers, nil, 0, w)

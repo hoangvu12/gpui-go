@@ -820,6 +820,20 @@ func (w *Window) DispatchKeyEvent(event any, cx AppContext) bool {
 }
 
 func (w *Window) dispatchKeyEvent(event any, app *App) (propagate bool) {
+	// Browser-core ticket 16: an active drag consumes the Escape key
+	// before anything else — the system drag loop owns the keyboard
+	// during a drag (the OLE loop's QueryContinueDrag answers
+	// DRAGDROP_S_CANCEL on the escape flag; the renderer never sees the
+	// key). The drag machinery cancels the session (drag on the source,
+	// dragleave on the target, dragend with no drop) and swallows the
+	// event: no listener, binding or default action runs — which keeps
+	// this composing with the close-watcher Escape default action
+	// (ticket 22: an active drag wins, a default action runs only when
+	// no drag is active).
+	if consumeDragCancelKey(w, event, app) {
+		app.propagateEvent = false
+		return false
+	}
 	// dispatch_event's head runs for keyboard events too
 	// (window.rs:5746-5760; Base ticket 34): a key down switches the input
 	// modality to the keyboard (refreshing the window for focus-visible

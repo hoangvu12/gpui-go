@@ -1,0 +1,237 @@
+{
+  "name": "dnd-across",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T13:48:30Z",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 360
+    },
+    "source": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 40
+    },
+    "t1": {
+      "x": 0,
+      "y": 40,
+      "width": 160,
+      "height": 320
+    },
+    "t2": {
+      "x": 160,
+      "y": 40,
+      "width": 160,
+      "height": 320
+    },
+    "t3": {
+      "x": 320,
+      "y": 40,
+      "width": 160,
+      "height": 320
+    }
+  },
+  "events": [
+    {
+      "kind": "mousedown",
+      "target": "source",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "dragstart",
+      "target": "source",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "dragstart",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "drag",
+      "target": "source",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "drag",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "dragenter",
+      "target": "t1",
+      "defaultPrevented": false,
+      "effect": "copy"
+    },
+    {
+      "kind": "dragenter",
+      "target": "root",
+      "defaultPrevented": false,
+      "effect": "copy"
+    },
+    {
+      "kind": "dragover",
+      "target": "t1",
+      "defaultPrevented": true,
+      "effect": "copy"
+    },
+    {
+      "kind": "dragover",
+      "target": "root",
+      "defaultPrevented": true,
+      "effect": "copy"
+    },
+    {
+      "kind": "drag",
+      "target": "source",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "drag",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "dragover",
+      "target": "t1",
+      "defaultPrevented": true,
+      "effect": "copy"
+    },
+    {
+      "kind": "dragover",
+      "target": "root",
+      "defaultPrevented": true,
+      "effect": "copy"
+    },
+    {
+      "kind": "drag",
+      "target": "source",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "drag",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "dragenter",
+      "target": "t2",
+      "defaultPrevented": false,
+      "effect": "none"
+    },
+    {
+      "kind": "dragenter",
+      "target": "root",
+      "defaultPrevented": false,
+      "effect": "none"
+    },
+    {
+      "kind": "dragleave",
+      "target": "t1",
+      "defaultPrevented": false,
+      "effect": "none"
+    },
+    {
+      "kind": "dragleave",
+      "target": "root",
+      "defaultPrevented": false,
+      "effect": "none"
+    },
+    {
+      "kind": "dragover",
+      "target": "t2",
+      "defaultPrevented": false,
+      "effect": "copy"
+    },
+    {
+      "kind": "dragover",
+      "target": "root",
+      "defaultPrevented": false,
+      "effect": "copy"
+    },
+    {
+      "kind": "drag",
+      "target": "source",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "drag",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "dragenter",
+      "target": "t3",
+      "defaultPrevented": false,
+      "effect": "none"
+    },
+    {
+      "kind": "dragenter",
+      "target": "root",
+      "defaultPrevented": false,
+      "effect": "none"
+    },
+    {
+      "kind": "dragleave",
+      "target": "t2",
+      "defaultPrevented": false,
+      "effect": "none"
+    },
+    {
+      "kind": "dragleave",
+      "target": "root",
+      "defaultPrevented": false,
+      "effect": "none"
+    },
+    {
+      "kind": "dragover",
+      "target": "t3",
+      "defaultPrevented": true,
+      "effect": "move"
+    },
+    {
+      "kind": "dragover",
+      "target": "root",
+      "defaultPrevented": true,
+      "effect": "move"
+    },
+    {
+      "kind": "drop",
+      "target": "t3",
+      "defaultPrevented": false,
+      "effect": "move"
+    },
+    {
+      "kind": "drop",
+      "target": "root",
+      "defaultPrevented": false,
+      "effect": "move"
+    },
+    {
+      "kind": "dragend",
+      "target": "source",
+      "defaultPrevented": false,
+      "effect": "move"
+    },
+    {
+      "kind": "dragend",
+      "target": "root",
+      "defaultPrevented": false,
+      "effect": "move"
+    }
+  ],
+  "screenshot": "chrome.png"
+}

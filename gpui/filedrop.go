@@ -178,11 +178,24 @@ type AnyDrag struct {
 	CursorOffset Point
 	// CursorStyle is the drag cursor style when set.
 	CursorStyle *CursorStyle
+	// EffectAllowed is the drag's allowed-operation mask, the DOM
+	// effectAllowed (browser-core ticket 16): the dragenter/dragover
+	// events' default dropEffect derives from it, the negotiated effect
+	// is masked against it, and a dragstart listener may narrow it. The
+	// zero value means every effect is allowed — the DOM
+	// "uninitialized" (data_transfer.cc
+	// ConvertEffectAllowedToDragOperationsMask maps it to
+	// kDragOperationEvery).
+	EffectAllowed DragEffects
 	// externalPayloadSource produces the platform drag payload when an
 	// internal drag is promoted to a native one (AnyDrag's
 	// external_payload_source; nil means the drag cannot leave the
 	// window through the platform).
 	externalPayloadSource func(w *Window, app *App) *ExternalDragPayload
+	// sourcePath is the drag source's global element path (set by the
+	// OnDrag threshold arm; browser-core ticket 16 — the source events'
+	// dispatch chain).
+	sourcePath string
 }
 
 // HasActiveDrag reports whether a drag is in progress
@@ -494,6 +507,12 @@ func (w *Window) dispatchInput(event any, app *App) DispatchEventResult {
 // translation (window.rs:5804-5855): the external file drag becomes
 // internal drag state plus synthetic mouse events; Exited/Ended keep
 // their FileDrop shape (and refresh the window, matching the pin).
+// Browser-core ticket 16: the drag events ride the synthetic events —
+// the Entered arm begins the drag session (dragenter/dragover fire on
+// the elements under the position, like any drag), the Pending arm
+// updates it, the Submit arm's synthetic up ends it with the drop,
+// and Exited/Ended cancel it (dragleave; no dragend — the source is
+// another application).
 func (w *Window) translateFileDrop(event *FileDropEvent, app *App) any {
 	is := inputState(w)
 	switch event.Kind {
@@ -507,6 +526,7 @@ func (w *Window) translateFileDrop(event *FileDropEvent, app *App) any {
 				CursorOffset: event.Position,
 			}
 		}
+		w.beginExternalDragSession(app)
 		left := MouseButtonLeft
 		return &MouseMoveEvent{
 			Position:      event.Position,
@@ -542,11 +562,16 @@ func (w *Window) translateFileDrop(event *FileDropEvent, app *App) any {
 		if !app.handRestoredDragToPlatform(w.ID()) {
 			app.activeDrag = nil
 		}
+		// The drag left the window: dragleave on the current target
+		// (Chromium's DragExited → CancelDragAndDrop), then the session
+		// ends with no dragend — the source is another application.
+		w.cancelDragSession(app)
 		w.requestRefresh()
 		return event
 
 	case FileDropEnded:
 		app.endPlatformDrag(w.ID())
+		w.endDragSessionQuietly()
 		w.requestRefresh()
 		return event
 	}

@@ -994,6 +994,10 @@ type DivElement struct {
 	// groupDragOverStyles are the type-keyed group drag-over styles
 	// (div.rs group_drag_over_styles; GroupDragOver).
 	groupDragOverStyles []typedGroupStyle
+	// dragEvents are the DOM drag-event listeners of browser-core
+	// ticket 16 (dragevent.go: dragstart, drag, dragenter, dragover,
+	// dragleave, drop and dragend, dispatched by the drag session).
+	dragEvents dragEventListeners
 	// hitboxBehavior is this element's hitbox occlusion behavior (div.rs
 	// Interactivity hitbox behavior; Normal by default).
 	hitboxBehavior HitboxBehavior

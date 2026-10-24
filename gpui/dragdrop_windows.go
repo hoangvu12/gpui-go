@@ -372,11 +372,18 @@ func (t *oleDropTarget) liveWindow() *hostWindow {
 
 // deliver routes one file-drop event into the window's input callback
 // (handle_drag_drop: the callback runs synchronously, taken and
-// restored around the call).
-func (t *oleDropTarget) deliver(w *hostWindow, event FileDropEvent) {
-	if w.onFileDrop != nil {
-		w.onFileDrop(event)
+// restored around the call) and returns the drop effect the drag
+// session negotiated for it, in DROPEFFECT units — the browser-core
+// ticket 16 answer the OLE callbacks report to the drag loop: COPY
+// over a target that accepts the drag (an element under the cursor
+// whose drop listeners or dragover listeners take it), NONE
+// otherwise, so the OS cursor tells the truth over elements that
+// will not accept the files.
+func (t *oleDropTarget) deliver(w *hostWindow, event FileDropEvent) uint32 {
+	if w.onFileDrop == nil {
+		return dropEffectNone
 	}
+	return w.onFileDrop(event)
 }
 
 // logicalWindowPoint converts a client device-pixel point to
@@ -436,6 +443,31 @@ func dataObjectGetCFHDROP(h *Host, data *comIFace) (paths ExternalPaths, ok bool
 	})
 	procReleaseStgMedium.Call(uintptr(unsafe.Pointer(&medium)))
 	return ExternalPaths(collected), true
+}
+
+// oleDropEffectAnswer is the effect the window's drag session
+// negotiated, in Win32 DROPEFFECT units — the answer the OLE drop
+// target's DragEnter/DragOver/Drop callbacks report to the drag loop
+// (the pin's file drag negotiated COPY unconditionally; the
+// browser-core ticket 16 rule is the acceptance: COPY when a target
+// under the cursor accepts the drag, NONE otherwise, so the OS cursor
+// tells the truth over elements that will not accept the files). It
+// is read by the logical window's file-drop wrapper after the event
+// dispatch (window.go) and returned through the host callback.
+func (w *Window) oleDropEffectAnswer() uint32 {
+	s := dragSessionOf(w)
+	if s.active {
+		if s.accepted {
+			return dropEffectCopy
+		}
+		return dropEffectNone
+	}
+	// The session has ended (the drop ran): its final effect answers
+	// the Drop call.
+	if s.finalEffect != DragEffectNone {
+		return dropEffectCopy
+	}
+	return dropEffectNone
 }
 
 // ---------------------------------------------------------------------------
@@ -537,6 +569,12 @@ func dropTargetDragEnter(self uintptr, pdataobj unsafe.Pointer, grfKeyState uint
 
 	// The pin: QueryGetData(&config) == S_OK negotiates COPY and reads
 	// the paths; anything else negotiates NONE without an event.
+	// Browser-core ticket 16: the effect is the drag session's answer —
+	// the dispatch of the Entered event (the dragenter/dragover events
+	// on the elements under the cursor) negotiates whether any target
+	// accepts the file drag, so the OS cursor shows COPY only over a
+	// target that would take the drop (the pin's unconditional COPY was
+	// the recorded divergence, spec story 56).
 	if dataObjectHasFormat(data, configPtr()) {
 		effect = dropEffectCopy
 		paths, ok := dataObjectGetCFHDROP(target.host, data)
@@ -548,7 +586,7 @@ func dropTargetDragEnter(self uintptr, pdataobj unsafe.Pointer, grfKeyState uint
 		}
 		clientX, clientY, _ := screenToClientPoint(w.hwnd, screen.x, screen.y)
 		position := w.logicalWindowPoint(clientX, clientY)
-		target.deliver(w, NewFileDropEntered(position, paths))
+		effect = target.deliver(w, NewFileDropEntered(position, paths))
 	} else {
 		effect = dropEffectNone
 	}
@@ -585,12 +623,19 @@ func dropTargetDragOver(self, grfKeyState uintptr, packedPT uintptr, pdweffect u
 	var effect uint32 = dropEffectCopy
 	screen := unpackPointl(packedPT)
 
-	// helper DragOver first (screen position), then the conversion.
-	target.helperDragOver(screen.x, screen.y, effect)
-
+	// The effect is the drag session's answer for this position (the
+	// Pending event's dispatch fires the dragover events and negotiates
+	// the acceptance, so the OS cursor tells the truth over elements
+	// that will not accept the files — browser-core ticket 16): the
+	// delivery runs before the helper call because the answer comes
+	// from it (the pin computed COPY unconditionally and called the
+	// helper first; the negotiation needs the dispatch).
 	clientX, clientY, _ := screenToClientPoint(w.hwnd, screen.x, screen.y)
 	position := w.logicalWindowPoint(clientX, clientY)
-	target.deliver(w, NewFileDropPending(position))
+	effect = target.deliver(w, NewFileDropPending(position))
+
+	// helper DragOver with the negotiated effect (screen position).
+	target.helperDragOver(screen.x, screen.y, effect)
 
 	*(*uint32)(pdweffect) = effect
 	return sOK
@@ -642,11 +687,16 @@ func dropTargetDrop(self uintptr, pdataobj unsafe.Pointer, grfKeyState uintptr, 
 	screen := unpackPointl(packedPT)
 	data := (*comIFace)(pdataobj)
 
-	target.helperDrop(data, screen.x, screen.y, effect)
-
 	clientX, clientY, _ := screenToClientPoint(w.hwnd, screen.x, screen.y)
 	position := w.logicalWindowPoint(clientX, clientY)
-	target.deliver(w, NewFileDropSubmit(position))
+	// The effect is the drag session's answer: the Submit event's
+	// synthetic up ends the drag (the drop event fires only on an
+	// accepting target), so the OLE loop sees COPY only when the drop
+	// landed (browser-core ticket 16).
+	effect = target.deliver(w, NewFileDropSubmit(position))
+
+	// helper Drop with the negotiated effect (screen position).
+	target.helperDrop(data, screen.x, screen.y, effect)
 
 	*(*uint32)(pdweffect) = effect
 	return sOK

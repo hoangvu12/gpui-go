@@ -69,6 +69,26 @@ new fixtures. The implementation lives in `internal/parity`:
   page), so the editing fixtures record through the Windows alternates the renderer
   does deliver (Ctrl+Insert, Shift+Delete, Shift+Insert — the same editing commands);
   the letter bindings are pinned by gpui's unit tests.
+  The drag-and-drop kinds are `dragstart`, `drag`, `dragenter`, `dragover`,
+  `dragleave`, `drop` and `dragend` (browser-core ticket 16): dragenter, dragover,
+  dragleave, drop and dragend entries carry the event's final `dropEffect`
+  ("none", "copy", "move", "link" — the negotiated operation; a listener's
+  assignment lands in the entry), and every drag entry carries its event's final
+  default-prevented state (`defaultPrevented: true` is the target's acceptance —
+  the recorder reads the page event's `dataTransfer` after the dispatch, so the
+  port's drag events carry their final state and the replay settles the entries
+  at the end through `log.FinalizeDragEntries`, since the drag dispatches run
+  inside the platform events' dispatches and the per-step marking cannot see
+  them). A drag entry's effect on a change move reads the shared-DataTransfer
+  rule: a dragenter that fired with a dragleave reads "none" (the leave resets
+  the transfer). Headless Chrome records an internal drag with plain CDP mouse
+  events — the browser's drag controller simulates the drag loop for CDP input
+  (`input_handler.cc` HandleMouseEvent) — and `parity.CancelDrag()` is the
+  Escape step: the recorder drives `Input.cancelDragging` (the OS drag loop's
+  DRAGDROP_S_CANCEL twin) and the replay dispatches one Escape keydown that the
+  drag machinery consumes, so neither half records key entries
+  (`fixtures/dnd` is the fixture set: the drag across three targets, the refused
+  drop, and the Escape cancel).
 - **Tier C — pixels, approximately.** The replay's final frame is rendered offscreen at
   device resolution and compared with the recorded Chrome screenshot under the fixture's
   provisional `PixelTolerance` (mean channel diff and hot-pixel fraction, image-wide and
@@ -673,3 +693,25 @@ whose pages pin `outline: none` gained the pin's port twin (`.OutlineNone()`)
 with no record change, and dashed, dotted, double and the rest beyond solid
 stay unportable through the scene's two border styles (a recorded
 limitation).
+Ticket 16 (the full drag-and-drop sequence, stories 55/56) added the DOM drag
+events around the pin's drag machinery (`gpui/dragevent.go`): a per-window drag
+session drives `dragstart` (a prevented one cancels the start), `drag`,
+`dragenter`/`dragleave` (on the hit chain, enter before leave),
+`dragover` (with the effectAllowed-derived default dropEffect, settable by the
+listener and masked against the source's `AnyDrag.EffectAllowed`), `drop` (an
+accepting target only) and `dragend` (the final effect), in Chromium's order —
+the drag fires before every enter/leave/over, the enter+over pair fires at the
+drag's start, and the move after a target change fires dragover alone; a
+release over a non-accepting target is the cancel sequence (drag, dragleave,
+dragend-none, no drop). Escape is consumed by the drag machinery before any
+listener, binding or default action (the OLE drag loop owns the keyboard), and
+window deactivation cancels the same way. The OLE IDropTarget's
+DragEnter/DragOver/Drop effects now follow the session's acceptance — COPY only
+over a target that takes the drop (a drop listener or a cancelled dragover),
+NONE over elements that will not accept the files (the pin's unconditional COPY
+was the recorded divergence). The events are the DOM-style builders
+`OnDragStart`, `OnDragEvent` (the DOM drag; `OnDrag` is the pin's source
+builder), `OnDragEnter`, `OnDragOverEvent` (the pin's `OnDragOver` is the
+drag-over style), `OnDragLeave`, `OnDropEvent` (the pin's `OnDrop` is the
+value delivery) and `OnDragEnd`. `fixtures/dnd` is the fixture set
+(`dnd-across`, `dnd-drop-refused`, `dnd-escape`).

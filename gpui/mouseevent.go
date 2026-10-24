@@ -1100,6 +1100,14 @@ func (w *Window) dispatchMouseEvent(event any, app *App) {
 
 	listeners := append([]mouseListener(nil), fs.rendered.mouseListeners...)
 
+	// Browser-core ticket 16: the drag tail's up/cancel arms need the
+	// drag state as it was when the dispatch began — a drop listener's
+	// StopDrag runs during the bubble traversal below, and the DOM
+	// drop/dragend still fire after it (PerformDragAndDrop runs after
+	// the up's listeners). The move arm re-reads the state after the
+	// traversal (the drag starts mid-bubble).
+	dragBeforeListeners := app.HasActiveDrag()
+
 	// Capture phase, events bubble from back to front: registration
 	// order is parents-first, so capture runs outside-in.
 	for _, listener := range listeners {
@@ -1124,14 +1132,36 @@ func (w *Window) dispatchMouseEvent(event any, app *App) {
 	// ends the drag (a drop listener's StopDrag ran first when a drop
 	// landed). Browser-core ticket 11: the cancel arm mirrors
 	// Chromium's pointercancel, which ends the drag when the stream is
-	// suppressed (:1316-1321).
+	// suppressed (:1316-1321). Browser-core ticket 16: the moves drive
+	// the DOM drag sequence (drag, dragenter, dragleave, dragover, in
+	// Chromium's order — event_handler.cc:1375-1478) and the up ends it
+	// (drop on an accepting target, then dragend with the final
+	// effect; PerformDragAndDrop + DragSourceEndedAt); the cancels
+	// fire dragleave and dragend with no drop (CancelDragAndDrop). The
+	// move arm consults the drag state AFTER the traversal (the drag
+	// starts mid-bubble — its first update is this move's tail), while
+	// the up/cancel arms need it as it was BEFORE the traversal (a
+	// drop listener's StopDrag runs mid-bubble and the DOM drop/dragend
+	// still fire after it).
 	dragAtDispatch := app.HasActiveDrag()
-	if app.HasActiveDrag() {
-		switch event.(type) {
+	if dragAtDispatch || dragBeforeListeners {
+		switch e := event.(type) {
 		case *MouseMoveEvent:
+			if dragAtDispatch {
+				w.updateDragSession(e, app)
+			}
 			w.requestRefresh()
-		case *MouseUpEvent, *PointerCancelEvent:
-			app.cancelActiveDrag()
+		case *MouseUpEvent:
+			if dragBeforeListeners {
+				w.endDragSessionFromUp(e, app)
+				app.cancelActiveDrag()
+			}
+			w.requestRefresh()
+		case *PointerCancelEvent:
+			if dragBeforeListeners {
+				w.cancelDragSession(app)
+				app.cancelActiveDrag()
+			}
 			w.requestRefresh()
 		}
 	}
