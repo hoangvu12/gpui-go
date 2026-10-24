@@ -1166,15 +1166,16 @@ func (st *listStateInner) autoscrollOffset(requested Bounds, itemIx int, itemOri
 // registration order) the items' wheel listeners run first and can stop
 // the list from scrolling; then paint each visible item at its origin
 // under the content mask. The listener coalesces the frame's deltas
-// (ScrollDelta::coalesce), converts lines at the pinned 20px — pages
-// resolve against the list's own visible size (browser-core ticket 02) —
-// and applies the accumulated delta to the frame's scroll top through
-// the eagerly clamping scroll body. Browser-core ticket 15: the
-// listener joins the window's wheel latching (wheel_scroll.go) with the
-// list's scroll state as the gesture's identity — the innermost
-// scroller that can consume claims the gesture, and the latched list
-// keeps the gesture (no chaining mid-gesture) until the 500ms
-// latching transaction ends.
+// (ScrollDelta::coalesce), converts line deltas at Chromium's 100/3 px
+// per line — browser-core ticket 15, spec D10, where the pin used a
+// fixed 20px (R:list.rs:1629) — and pages resolve against the list's
+// own visible size (browser-core ticket 02), applying the accumulated
+// delta to the frame's scroll top through the eagerly clamping scroll
+// body. Browser-core ticket 15: the listener joins the window's wheel
+// latching (wheel_scroll.go) with the list's scroll state as the
+// gesture's identity — the innermost scroller that can consume claims
+// the gesture, and the latched list keeps the gesture (no chaining
+// mid-gesture) until the 500ms latching transaction ends.
 func (l *ListElement) Paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *struct{}, prepaint *listPrepaintState, w *Window, app *App) {
 	if prepaint.hitbox != nil {
 		notify := currentViewNotifier(w)
@@ -1190,7 +1191,9 @@ func (l *ListElement) Paint(global *GlobalElementID, inspector *InspectorElement
 				return
 			}
 			accumulated = coalesceScrollDelta(accumulated, e.Delta)
-			delta := accumulated.PixelDeltaFor(20, bounds.Size)
+			// browser-core 15 (D10): line deltas resolve at Chrome's
+			// kScrollbarPixelsPerLine (100/3 px per line), not the pin's 20.
+			delta := accumulated.PixelDeltaFor(wheelPixelsPerLine, bounds.Size)
 			// browser-core 15: the latch decides whether the list takes
 			// the event (the eager clamp answers can-consume at the list's
 			// current top).

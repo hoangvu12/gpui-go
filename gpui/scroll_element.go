@@ -14,10 +14,12 @@ package gpui
 //     deltas, the restrict_scroll_to_axis gesture filter, the
 //     cross-axis remap and the concurrent-scroll arbitration, applied
 //     UNCLAMPED to the offset cell (R:div.rs:3816-3879) — the clamp is
-//     the next prepaint's;
-//   - Style::scroll_mask (R:style.rs:857-871), Window::line_height
-//     (R:window.rs:2983-2985) and ScrollDelta::coalesce
-//     (R:interactive.rs:621-661), which the list's wheel listener uses.
+//     the next prepaint's; the line-granularity step is Chromium's
+//     100/3 px per line (browser-core ticket 15, spec D10 — the pin
+//     used the text line height, R:window.rs:2983-2985);
+//   - Style::scroll_mask (R:style.rs:857-871) and
+//     ScrollDelta::coalesce (R:interactive.rs:621-661), which the
+//     list's wheel listener uses.
 //
 // R: = reference/ce-source/crates/gpui/src (pin 254b5dbd).
 
@@ -196,7 +198,9 @@ func (s *elementScroll) clamp(bounds Bounds, style *Style, maxOffset Point, w *W
 
 // paintListener is R:div.rs:3816-3879 paint_scroll_listener: one bubble
 // wheel listener gated on the hitbox's should_handle_scroll. The delta is
-// the event's pixel delta at the window line height; under
+// the event's pixel delta — line-granularity deltas convert at
+// Chromium's 100/3 px per line (browser-core ticket 15, spec D10; the
+// pin used the window's text line height, R:div.rs:3828); under
 // restrict_scroll_to_axis a precise delta passes the gesture filter; an
 // axis that does not scroll takes nothing, a scrolling axis with no
 // delta of its own takes the other axis's delta unless scrolling is
@@ -228,7 +232,6 @@ func (s *elementScroll) paintListener(hitbox Hitbox, style *Style, w *Window) {
 	allowConcurrent := style.AllowConcurrentScroll
 	restrict := style.RestrictScrollToAxis
 	overscrollX, overscrollY := style.OverscrollBehaviorX, style.OverscrollBehaviorY
-	lineHeight := windowLineHeight(w)
 	box := hitbox
 	notify := currentViewNotifier(w)
 	w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
@@ -237,7 +240,9 @@ func (s *elementScroll) paintListener(hitbox Hitbox, style *Style, w *Window) {
 			return
 		}
 		old := *offset
-		delta := e.Delta.PixelDeltaFor(lineHeight, box.Bounds.Size)
+		// browser-core 15 (D10): line deltas resolve at Chrome's
+		// kScrollbarPixelsPerLine, not the text line height.
+		delta := e.Delta.PixelDeltaFor(wheelPixelsPerLine, box.Bounds.Size)
 		if restrict && e.Delta.Precise() && ongoing != nil {
 			ongoing.Filter(&delta, e.TouchPhase, app)
 		}
@@ -299,14 +304,19 @@ func (s *elementScroll) canConsumeWheelDelta(deltaX, deltaY float32) bool {
 	return next != current
 }
 
-// windowLineHeight is R:window.rs:2983-2985 Window::line_height: the
-// current text style's line height in pixels, rounded
-// (R:style.rs:719-721 line_height_in_pixels).
-func windowLineHeight(w *Window) float32 {
-	style := WindowTextStyle(w)
-	rem := RemSize(w)
-	return float32(math.Round(float64(style.LineHeightPixels(style.FontSizePixels(rem), rem))))
-}
+// wheelPixelsPerLine is Chromium's kScrollbarPixelsPerLine
+// (ui/events/blink/web_input_event_builders_win.cc:331 — "100 px per
+// three lines (the default scroll amount is three lines per wheel
+// tick)", applied by the Windows wheel builder at :335: the
+// ticks×lines scroll amount is multiplied by it before becoming the
+// event's pixel delta): 100/3 px per line, so one notch at the default
+// three lines per notch (SPI_GETWHEELSCROLLLINES) is 100 px. The
+// wheel's line-granularity deltas convert through it — browser-core
+// ticket 15, spec D10, a divergence from the pin, whose div listener
+// used the window's text line height (R:div.rs:3828,
+// R:window.rs:2983-2985) and whose list used a pinned 20px
+// (R:list.rs:1629).
+const wheelPixelsPerLine float32 = 100.0 / 3.0
 
 // scrollMaskOf is R:style.rs:857-871 Style::scroll_mask: the content mask
 // of a list-like scroll container — the vertical axis always clips, the

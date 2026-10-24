@@ -4,9 +4,11 @@ package gpui
 // pinned scroll tests (R: = reference/ce-source/crates/gpui/src, pin
 // 254b5dbd). Every test drives a test window (scale 2, rem 16) with
 // synthetic dispatched ScrollWheelEvents; nothing touches the real mouse.
-// The window line height is round(16 * golden ratio) = 26px, so one wheel
-// line is 26px for the div and the uniform list (R:div.rs:3828,
-// R:window.rs:2983) and the pinned 20px for the list (R:list.rs:1629).
+// One wheel LINE is Chromium's kScrollbarPixelsPerLine = 100/3 px
+// (browser-core ticket 15, spec D10; ui/events/blink/
+// web_input_event_builders_win.cc:331, applied at :335) — the pin used
+// the window's 26px text line height for the div (R:div.rs:3828) and a
+// fixed 20px for the list (R:list.rs:1629), both replaced.
 //
 // Each transcript step records the offset the observer saw INSIDE the
 // dispatch (an ancestor's bubble listener runs after the scroller's —
@@ -312,11 +314,14 @@ func TestScrollDivWheelTranscript(t *testing.T) {
 		rec.add("%s frame=%s content.y=%g", s.name, pt(handle.Offset()), bounds.Origin.Y)
 	}
 	wantScrollSteps(t, "div wheel", rec.take(), []string{
-		"dispatch=(0,-26)", "lines(0,-1) frame=(0,-26) content.y=-26",
-		"dispatch=(0,-526)", "pixels(0,-500) frame=(0,-200) content.y=-200",
+		// One line is 100/3 px: the line steps land on the float32
+		// arithmetic of wheelPixelsPerLine (99.999996 for a 3-line notch,
+		// the same rounding Chrome's own float32 builder produces).
+		"dispatch=(0,-33.333332)", "lines(0,-1) frame=(0,-33.333332) content.y=-33.5",
+		"dispatch=(0,-533.3333)", "pixels(0,-500) frame=(0,-200) content.y=-200",
 		"dispatch=(0,-150)", "pixels(0,50) frame=(0,-150) content.y=-150",
 		"dispatch=(0,-180)", "pixels(-30,0) frame=(0,-180) content.y=-180",
-		"dispatch=(0,2420)", "lines(0,100) frame=(0,0) content.y=0",
+		"dispatch=(0,3153.3333)", "lines(0,100) frame=(0,0) content.y=0",
 		"dispatch=(0,0)", "outside pixels(0,-40) frame=(0,0) content.y=0",
 	})
 
@@ -439,7 +444,7 @@ func TestScrollDivTouchPhaseAxisLockTranscript(t *testing.T) {
 		"moved(-2,-3)=(-13,-13)",
 		"moved(-4,-3)=(-13,-16)",
 		"after 28ms moved(-4,-3)=(-17,-16)",
-		"lines(-1,0) unfiltered=(-43,-16)",
+		"lines(-1,0) unfiltered=(-50.333332,-16)",
 	})
 }
 
@@ -464,9 +469,9 @@ func TestScrollDivConcurrentScrollArbitration(t *testing.T) {
 			f.wheel(50, 50, delta, TouchPhaseMoved)
 			rec.add("%s", pt(handle.Offset()))
 		}
-		want := []string{"(0,-20)", "(-20,-20)", "(-46,-20)"}
+		want := []string{"(0,-20)", "(-20,-20)", "(-53.333332,-20)"}
 		if concurrent {
-			want = []string{"(-10,-20)", "(-30,-30)", "(-56,-30)"}
+			want = []string{"(-10,-20)", "(-30,-30)", "(-63.333332,-30)"}
 		}
 		wantScrollSteps(t, fmt.Sprintf("concurrent=%v", concurrent), rec.take(), want)
 	}
@@ -689,10 +694,10 @@ func TestScrollUniformListWheelTranscript(t *testing.T) {
 	}
 	wantScrollSteps(t, "uniform wheel", rec.take(), []string{
 		"dispatch=(0,-30)", "pixels(0,-30) frame=(0,-30) first=1",
-		"dispatch=(0,-82)", "lines(0,-2) frame=(0,-82) first=4",
-		"dispatch=(0,-122)", "pixels(-40,0) frame=(0,-122) first=6",
-		"dispatch=(0,-5122)", "pixels(0,-5000) frame=(0,-1900) first=95",
-		"dispatch=(0,-1874)", "lines(0,1) frame=(0,-1874) first=93",
+		"dispatch=(0,-96.666664)", "lines(0,-2) frame=(0,-96.666664) first=4",
+		"dispatch=(0,-136.66666)", "pixels(-40,0) frame=(0,-136.66666) first=6",
+		"dispatch=(0,-5136.6665)", "pixels(0,-5000) frame=(0,-1900) first=95",
+		"dispatch=(0,-1866.6666)", "lines(0,1) frame=(0,-1866.6666) first=93",
 	})
 	f.wheel(100, 50, ScrollDeltaPixels(0, -100), TouchPhaseMoved)
 	if atEnd, ok := handle.IsScrolledToEnd(); !ok || !atEnd {
@@ -772,7 +777,8 @@ func listRows(height float32) func(ix int, w *Window, app *App) AnyElement {
 // listener clamps EAGERLY (the observer sees the clamped logical top
 // inside the dispatch), coalesces the deltas of one frame onto the
 // frame's scroll top (two events before a redraw add; an opposite sign
-// restarts), converts lines at 20px, and fires the scroll handler with
+// restarts), converts lines at Chromium's 100/3 px per line
+// (browser-core 15, D10), and fires the scroll handler with
 // the frame's visible range. The list measures all items so the scroll
 // range covers the 200px content (an unmeasured item contributes nothing,
 // R:list.rs:1672-1686).
@@ -809,7 +815,7 @@ func TestScrollListWheelTranscript(t *testing.T) {
 		"handler range=4..10", "dispatch=(5,0)", "handler range=4..10", "dispatch=(4,0)", "frame=(4,0)",
 		"handler range=4..9", "dispatch=(5,0)", "frame=(5,0)",
 		"handler range=5..10", "dispatch=(5,0)", "frame=(5,0)",
-		"handler range=5..10", "dispatch=(3,0)", "handler range=5..10", "dispatch=(4,5)", "frame=(4,5)",
+		"handler range=5..10", "dispatch=(1,13.333336)", "handler range=5..10", "dispatch=(4,5)", "frame=(4,5)",
 	})
 	if max := state.MaxOffsetForScrollbar(); max != (Point{Y: 100}) {
 		t.Fatalf("max offset for scrollbar = %v, want (0,100)", max)

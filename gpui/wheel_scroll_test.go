@@ -350,3 +350,43 @@ func TestWheelScrollLatchingExhaustedInnerStartsOuter(t *testing.T) {
 		t.Fatalf("outer offset: %v, want -80 (the outer latches when the inner cannot consume)", outer.Offset())
 	}
 }
+
+// TestWheelLineStepIsChromesPixelsPerLine pins the D10 wheel step: one
+// wheel line is Chromium's kScrollbarPixelsPerLine = 100/3 CSS px
+// (ui/events/blink/web_input_event_builders_win.cc:331, applied at :335
+// by the Windows wheel builder: the notch's ticks x lines are multiplied
+// by it before becoming the event's pixel delta) — so the default one
+// notch of three lines (SPI_GETWHEELSCROLLLINES) scrolls 100 px, where
+// the pin used the window's 26px text line height for the div
+// (R:div.rs:3828) and a fixed 20px for the list (R:list.rs:1629). The
+// 3-line notch lands at float32(100/3)*3 = 99.999996 — the same
+// rounding Chrome's own float32 builder produces.
+func TestWheelLineStepIsChromesPixelsPerLine(t *testing.T) {
+	notch := -(wheelPixelsPerLine * 3) // one notch of 3 lines, downward
+
+	// The div scroller: a 3-line notch moves the offset by the notch.
+	handle := NewScrollHandle()
+	f := newScrollFixture(t, Size{Width: 400, Height: 300}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
+		return divScroller(handle, 100, 1200, func(d *DivElement) *DivElement { return d.OverflowYScroll() }).IntoElement()
+	})
+	if handle.MaxOffset() != (Point{Y: 1100}) {
+		t.Fatalf("max offset = %v, want (0,1100)", handle.MaxOffset())
+	}
+	f.wheel(50, 50, ScrollDeltaLines(0, -3), TouchPhaseMoved)
+	if handle.Offset() != (Point{Y: notch}) {
+		t.Fatalf("div offset after one 3-line notch = %v, want %v (100/3 px per line, D10)", handle.Offset(), notch)
+	}
+
+	// The uniform list: the same notch advances the scroll top.
+	listHandle := NewUniformListScrollHandle()
+	g := newScrollFixture(t, Size{Width: 200, Height: 100}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
+		return Div().ID("list-example").SizeFull().Child(
+			UniformList(listHandle, 100, func(start, end int, w *Window, app *App) []AnyElement {
+				return uniformItems(start, end)
+			}).SizeFull()).IntoElement()
+	})
+	g.wheel(100, 50, ScrollDeltaLines(0, -3), TouchPhaseMoved)
+	if offset := listHandle.Offset(); offset != (Point{Y: notch}) {
+		t.Fatalf("list offset after one 3-line notch = %v, want %v (100/3 px per line, D10)", offset, notch)
+	}
+}
