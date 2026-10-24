@@ -10,12 +10,11 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - **Resolved (23 of 76; orchestrator 7's "22" was a miscount, it was 21):** 01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 13, 25, 27, 31, 33, 39 (rev 15, DLL 8b944eae), 40, 41, 47, 49 (the R16 design, approved), 62, 64, 65. Each has a verification comment, and the map's Decisions list a gist of each. Orchestrator 8 verified and merged 33 (position: static opt-in), then 25 (anchored to an element). The merges had no conflicts, and the required packages pass on main.
 - **Known flake:** `gpui` TestWin32TranslateKeyDownCarriesCodeAndLocation reads the live Shift key, so it fails while the user types. Re-run it.
 - **Open follow-up from 33+25:** Anchored, Deferred and custom containers don't call `RequestContainerLayout`, so a `Static()` div inside them defers its absolute children past the overlay (opt-in only; for 76).
-- **No workers running.** Claimed, not yet delegated: 29, 30. Ask the user before adding load (the PC froze earlier on 2026-10-24).
-- **Waiting on the user:** rev 15.1, a small native rebuild:
-  - the text-run fields and baseline for 42/43
-  - the italic shear from 08
-  - the extension-uniform upload bug: draw.rs:2327/2330 `&[*uniforms]` copies a reference, so colour filters are no-ops (41) and the backdrop crop is most likely broken by it too (04)
-  The alternative is to fold it into R16; rev 16 (54) needs its own approval.
+- **Running (3 workers, started 2026-10-24; they report to this chat, 08b88b23):**
+  - 29 forced colours: chat 9aa71094, worktree `gpui-go-wt-core-29`, branch `core/29-forced-colors`
+  - 30 spellcheck: chat 2445c465, worktree `gpui-go-wt-core-30`, branch `core/30-spellcheck`
+  - 77 rev 15.1 native rebuild (the user approved it on 2026-10-24: "ok try that"): chat 4a073277, worktree `gpui-go-wt-core-77`, branch `core/77-r15-1`. It covers the uniform-upload fix (unskip the filters fixtures, re-register shadow-backdrop), the italic shear set to -0.25, and the text-run fields and baseline as best effort, with each blocker recorded. Cargo runs with `-j 6`.
+- The user said the PC can take more workers ("yea go ahead"). Ramp up gradually.
 - **Rules:** as in orchestrator 7's block below and the handoff doc. Run `go clean -cache` after each round of merges.
 
 **ORCHESTRATOR 7 STATUS (2026-10-24). History now.** This was Roboco chat d209bee2 (Claude Code, Opus 5.5). It took over from orchestrator 6 (chat 3d6efd46; handoff doc `%TEMP%\gpui-go-handoff-orchestrator7.md`).
