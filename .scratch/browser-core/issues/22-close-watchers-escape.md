@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 8 (Claude Code)
+Status: resolved
+Assignee: orchestrator 9 (Claude Code)
 Blocked by: 09, 21
 Triage: ready-for-agent
 
@@ -23,6 +23,8 @@ Every behaviour check is a browser-parity harness fixture (an HTML page recorded
 ## Comments
 
 - 2026-10-25, worker (core/22-35-escape-fixed): implemented test-first, headless only, one commit. The fixture records surfaced two harness facts (both now documented in docs/browser-parity-harness.md): the recorder's CDP key commands do not pump the renderer's task loop (mouse commands do), so key-driven popover toggles stay queued in Chrome and coalesce — the closewatcher fixtures insert listener-less pointer moves as task-loop pumps so both sides deliver the toggles at the same positions; and the port's occluding popover hitbox cuts the mouse propagation chain at the popover, so the fixtures narrow the root to `data-events="keydown"` (the DOM's body would see the bubbled mouse events — recorded as a divergence for ticket 12's follow-ups). Status left as claimed for the orchestrator's verification.
+
+- 2026-10-24, orchestrator 9 (verification): merged cf2b1ac+175b083 as e845d10, together with 35. The conflicts were only in the harness guide and class_generated.go (kept both sides, then regenerated). Spot check: `WatcherStack::EscapeKeyHandler` → `Signal()` (only on an undefaulted, trusted Escape with an enabled watcher) and `RequestClose`/`CancelEventCanBeCancelable` match close_watcher.cc. In this checkout they sit at :154-173 and :243-254, about 40 lines before the worker's cited numbers. On the merged tree, closewatcher-hint and closewatcher-prevented failed Tier C because the branch predates 48's default focus ring; 9c6aef8 adds `.OutlineNone()` to the invokers. The touched packages and ./internal/parity/... then pass. Resolved.
 
 ## Answer
 

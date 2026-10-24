@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 8 (Claude Code)
+Status: resolved
+Assignee: orchestrator 9 (Claude Code)
 Blocked by: 33, 21
 Triage: ready-for-agent
 
@@ -22,6 +22,8 @@ Every behaviour check is a browser-parity harness fixture (an HTML page recorded
 ## Comments
 
 - 2026-10-25, worker (core/22-35-escape-fixed): implemented test-first, headless only, one commit (ticket 22 is the other half of the bundle, cf2b1ac). The Chrome record matched the predicted geometry exactly (fixed-a (140,60) through the 120px scroll, fixed-b (300,300) out of the relative+static chain, fixed-c (470,150) over the later sibling). Status left as claimed for the orchestrator's verification.
+
+- 2026-10-24, orchestrator 9 (verification): merged with 22 as e845d10. Spot check: `ContainerForFixedPosition` → `CanContainFixedPositionObjects` (layout_object.cc:1885-1892) matches. fixed-window passes Tier A and C on the merged tree, and the touched packages and ./internal/parity/... pass. Resolved.
 
 ## Answer
 

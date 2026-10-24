@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 8 (Claude Code)
+Status: resolved
+Assignee: orchestrator 9 (Claude Code)
 Blocked by: 09
 Triage: ready-for-agent
 
@@ -23,6 +23,8 @@ Every behaviour check is a browser-parity harness fixture (an HTML page recorded
 ## Comments
 
 - 2026-10-24, orchestrator 9 (verification): merged 0f3b3a2 as 3b808b8. The conflicts were only in the fixture import lists and the harness guide (kept both sides); class_generated.go and the TSX types were regenerated. Spot check: `FindNodeToLatch` (cc/input/input_handler.cc:2341) and the 500 ms `mouse_wheel_end_dispatch_timeout` match. On the merged tree, keyboard-contain failed Tier C because the branch predates 48's default focus ring; 4b67c7b adds the `.OutlineNone()` twins, and ./internal/parity/... and ./gpui/ now pass. The D10 line step (100/3 px per line) is still missing: Lines deltas use the text line height (scroll_element.go) or 20 (listelement.go). Sent back to the worker.
+
+- 2026-10-24, orchestrator 9 (verification, follow-up): cdfe5eb (merged as a8f843a) adds the D10 line step. A Lines wheel delta converts at kScrollbarPixelsPerLine = 100/3 px per line in both the div scroller and the list; I checked it against ui/events/blink/web_input_event_builders_win.cc:331-335. On the merged tree (with 22+35), ./gpui/, ./internal/parity/..., ./base, ./examples/zterm, ./internal/layoutspec, ./internal/focusspec, ./internal/tsxgen and ./gpui/script/types pass. Resolved.
 
 ## Answer
 
