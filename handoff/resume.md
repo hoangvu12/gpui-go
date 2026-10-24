@@ -10,7 +10,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - **Resolved (22 of 76):** 01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 13, 27, 31, 39 (rev 15, DLL 8b944eae), 40, 41, 47, 49 (the R16 design, approved), 62, 64, 65. Each has a verification comment, and the map's Decisions list a gist of each.
 - **Off-screen test windows: merged** (e3e3476). Under `go test`, real windows open at +(20000, 20000), and so do SetBounds and synthetic WM_DPICHANGED rectangles. Switches: `GPUI_TEST_ONSCREEN=1` shows them; `GPUI_TEST_REPORT_ONSCREEN=1` logs any test window on a monitor; `GPUI_REAL_INPUT_TESTS=1` turns it off. The full suite on the off-screen branch had no window on a monitor. The two maximize tests are behind `realinput.Require`. Fixed along the way: dropspec's drag points follow the window, authorspec's drag preview dispatches input directly, and inspectorspec counts only the move (since 10's hover sweeps).
 - **Full suite** (`go test -p 1 ./... -count=1`, off-screen): 65 packages ok. The only failure left is portfixture TestFx0004 (the system font count went from 94 to 95). clipspec's PowerShell clipboard test failed once with "Requested Clipboard operation did not succeed" (the clipboard was held by something else); it passed on the next run.
-- **Claimed, not yet delegated:** 25, 29, 30, 33. The user reported the PC freezing; another Claude session was running parallel cargo/wasmtime builds. Start workers gradually.
+- **Running** (notices come to this chat): 25 (chat 7a5ffa3e, `gpui-go-wt-core-25`) and 33 (chat b36a6943, `gpui-go-wt-core-33`).
+- **Claimed, not yet delegated:** 29, 30. The user reported the PC freezing; another Claude session was running parallel cargo/wasmtime builds. Start workers gradually.
 - **Waiting on the user:** the native follow-up rebuild, rev 15.1:
   - the text-run fields and baseline for 42/43
   - the italic shear from 08
