@@ -1,0 +1,63 @@
+{
+  "name": "plugin-slot",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T12:08:34Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "greeting": {
+      "x": 220,
+      "y": 160,
+      "width": 200,
+      "height": 80
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "slot": {
+      "x": 204,
+      "y": 144,
+      "width": 232,
+      "height": 112
+    }
+  },
+  "events": [
+    {
+      "kind": "mousedown",
+      "target": "greeting",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "slot",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "greeting",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "slot",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    }
+  ],
+  "screenshot": "chrome.png"
+}

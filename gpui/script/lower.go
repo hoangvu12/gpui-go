@@ -29,6 +29,9 @@ func (h *Host) Element() gpui.AnyElement {
 
 // lower builds one element of the tree (fresh each frame, like any
 // Render; the tree itself is only replaced by a load or re-describe).
+// A node's handlers dispatch through the host that built it, so a
+// plugin's nodes run in the plugin's runtime even though they lower
+// with the app's tree.
 func (h *Host) lower(n *Node) *gpui.DivElement {
 	d := gpui.Div()
 	if n.ID != "" {
@@ -41,17 +44,18 @@ func (h *Host) lower(n *Node) *gpui.DivElement {
 		d = d.Class(n.Class)
 	}
 	d = n.Style.apply(d)
+	owner := n.dispatchOwner(h)
 	if n.OnClick != nil {
 		fn := n.OnClick
 		d = d.OnClick(func(e *gpui.ClickEvent, _ *gpui.Window, _ *gpui.App) {
 			up := e.Mouse.Up
-			h.dispatch(fn, h.eventObject(domButton(up.Button), up.Position.X, up.Position.Y, up.Modifiers))
+			owner.dispatch(fn, owner.eventObject(domButton(up.Button), up.Position.X, up.Position.Y, up.Modifiers))
 		})
 	}
 	if n.OnMouseDown != nil {
 		fn := n.OnMouseDown
 		d = d.OnMouseDown(gpui.MouseButtonLeft, func(e *gpui.MouseDownEvent, _ *gpui.Window, _ *gpui.App) {
-			h.dispatch(fn, h.eventObject(domButton(e.Button), e.Position.X, e.Position.Y, e.Modifiers))
+			owner.dispatch(fn, owner.eventObject(domButton(e.Button), e.Position.X, e.Position.Y, e.Modifiers))
 		})
 	}
 	h.appendChildren(d, n.Children)
@@ -59,7 +63,9 @@ func (h *Host) lower(n *Node) *gpui.DivElement {
 }
 
 // appendChildren lowers children into d; a fragment's children lower
-// as their parent's direct children (spliced, no wrapper).
+// as their parent's direct children (spliced, no wrapper), and a
+// placeholder (a failed plugin's contribution) lowers as the slot's
+// in-flow error box.
 func (h *Host) appendChildren(d *gpui.DivElement, nodes []*Node) {
 	for _, c := range nodes {
 		switch c.kind {
@@ -67,6 +73,8 @@ func (h *Host) appendChildren(d *gpui.DivElement, nodes []*Node) {
 			d = d.Child(c.Text)
 		case nodeFragment:
 			h.appendChildren(d, c.Children)
+		case nodePlaceholder:
+			d = d.Child(placeholderElement(c.Text))
 		default:
 			d = d.Child(h.lower(c))
 		}

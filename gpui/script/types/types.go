@@ -18,7 +18,9 @@ import (
 )
 
 // dts is the generated ambient declaration file: the elements, style
-// properties, events, globals and Tailwind classes the engine accepts.
+// properties, events, globals and Tailwind classes the engine accepts,
+// plus the plugin surface (ticket 67: the slot element's SlotProps
+// and the PluginManifest a plugin bundle exports).
 //
 //go:embed gpui-script.d.ts
 var dts string

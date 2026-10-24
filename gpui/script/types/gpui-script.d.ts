@@ -10,11 +10,17 @@
 // drift in either direction (internal/tsxgen). Type-check a view with
 // cmd/tsxcheck (tsc), and reload-type-check with script.WithTypeCheck.
 //
-// The entry module exports a function component named App:
+// An app's entry module exports a function component named App:
 //
 //	export function App() {
 //		return <div className="flex items-center gap-2">Hello!</div>;
 //	}
+//
+// A plugin bundle instead exports a `plugin` manifest naming the slots
+// it fills (ticket 67; the PluginManifest interface below):
+//
+//	export function Main() { return <div>...</div>; }
+//	export const plugin: PluginManifest = { slots: { main: Main } };
 
 type Spacing =
 	"full" |
@@ -1707,7 +1713,9 @@ type Class =
 	`${string}!`;
 
 // The host elements: div and text (a text run), plus Fragment, whose
-// children lower as their parent's direct children (no wrapper).
+// children lower as their parent's direct children (no wrapper), and
+// slot — the plugin seam: a container whose children the slot
+// registry owns (ticket 67).
 interface HostElement {}
 
 declare namespace JSX {
@@ -1715,6 +1723,7 @@ declare namespace JSX {
 	interface IntrinsicElements {
 		Fragment: HostProps;
 		div: HostProps;
+		slot: SlotProps;
 		text: HostProps;
 	}
 }
@@ -1727,6 +1736,37 @@ interface HostProps {
 	onClick?: (event: MouseEvent) => void;
 	onMouseDown?: (event: MouseEvent) => void;
 	style?: CSSProperties;
+}
+
+// The slot element (the app side of plugins): a div-like container
+// whose children the slot registry owns — the plugins registered for
+// its name contribute them, in registration order; its JSX children
+// are the fallback shown while no plugin fills it (a web component's
+// slot).
+interface SlotProps extends HostProps {
+	/** The slot's name: which plugins' contributions fill it. */
+	name: string;
+}
+
+// A slot component receives the name of the slot instance it fills.
+interface PluginSlotProps {
+	/** The name of the slot this component was called for. */
+	slot: string;
+}
+
+// A slot component: called once per (re)load and per re-describe, it
+// describes that slot's content (an element tree, like App).
+interface SlotComponent {
+	(props: PluginSlotProps): HostElement;
+}
+
+// The manifest a plugin bundle exports as its entry: the slots it
+// fills, by name, and the component describing each. The app grants
+// what the plugin may reach (script.Slots' Grants); a plugin reaching
+// past its grants gets a named error.
+interface PluginManifest {
+	/** The slots this plugin contributes to, keyed by slot name. */
+	slots: Record<string, SlotComponent>;
 }
 
 // The event object handlers receive (DOM-shaped: the mouse button as
