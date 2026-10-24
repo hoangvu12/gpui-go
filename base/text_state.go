@@ -43,9 +43,22 @@ const maxCoalescedUpdatesPerParse = 64
 // thread (U:text/state.rs:42-44).
 const maxSyncFullReplaceBytes = 4 * 1024
 
-// textInit binds the TextView copy and select-all keys
-// (U:text/state.rs:48-59, U:text/mod.rs:30-32). Init (lib.go) joins it
-// with this ticket.
+// textInit binds the TextView keys (U:text/state.rs:48-59, U:text/mod.rs:30-32).
+// Init (lib.go) joins it with this ticket.
+//
+// browser-core 73: the !mac copy row (U:text/state.rs:53, 59) is deleted
+// — the core's copy command (browser-core 26) runs from the keydown's
+// default-action arm on the window selection's stand-in handler
+// (gpui/text_selection_copy.go, browser-core 19) when nothing editable
+// is focused, which is exactly the TextView's copy (the recorded
+// divergence: the text is now copied untrimmed, Chrome's rule, where
+// the old handler trimmed it). Select-all stays bound everywhere: the
+// core's select-all is an editable-only command (the window selection
+// stand-in wires Copy only, browser-core 19's limitation — static-text
+// select-all is not wired in the core), so the TextView's own binding
+// and OnAction listener remain the feature. On macOS the cmd-c row
+// stays bound (the core's key table carries only the !Mac rows,
+// editing_behavior.cc:168-178).
 func textInit(app *gpui.App) {
 	ctx := textViewContext
 	if textIsMacOS() {
@@ -56,7 +69,6 @@ func textInit(app *gpui.App) {
 		return
 	}
 	app.BindKeys(
-		gpui.NewKeyBinding("ctrl-c", CopyAction.Box(Copy{}), &ctx),
 		gpui.NewKeyBinding("ctrl-a", SelectAllAction.Box(SelectAll{}), &ctx),
 	)
 }

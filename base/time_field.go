@@ -69,6 +69,17 @@ func (t NaiveTime) String() string { return fmt.Sprintf("%02d:%02d:%02d", t.hour
 const timeFieldContext = "TimeField"
 
 // timeFieldInit binds the time field keys (U:time_field.rs:20-31).
+//
+// browser-core 73: the tab/shift-tab rows stay — Chrome's date/time
+// input keeps Tab walking its segments: every subfield is a focusable
+// shadow element (DateTimeFieldElement::SupportsFocus,
+// date_time_field_element.cc:232-238), so the sequential focus order
+// the default Tab handler follows runs segment to segment and out of
+// the control after the last one — exactly onNextColumn/onPrevColumn's
+// walk, whose boundary propagates the key so the core's Tab default
+// action moves focus out (the last segment's rule). The left/right
+// rows are the field's own segment moves (DefaultKeyboardEventHandler,
+// date_time_field_element.cc:77-110).
 func timeFieldInit(app *gpui.App) {
 	ctx := timeFieldContext
 	app.BindKeys(

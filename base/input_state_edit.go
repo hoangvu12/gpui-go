@@ -1365,3 +1365,84 @@ func (h *inputElementHandler[M]) SetSelectedTextRange(gpui.UTF16Range, *gpui.Win
 func (h *inputElementHandler[M]) TextLengthUTF16(*gpui.Window, *gpui.App) (int, bool) {
 	return 0, false
 }
+
+// ---------------------------------------------------------------------------
+// gpui.EditActionHandler (browser-core tickets 26 and 73)
+// ---------------------------------------------------------------------------
+
+// inputElementHandler implements gpui.EditActionHandler, so the core's
+// editing commands — Copy, Cut, Paste and SelectAll, dispatched from
+// the keydown's default-action arm on Chrome's Windows key table
+// (gpui/edit_action.go, browser-core 26) — run on Base's inputs and
+// editors without their own key bindings (inputInit's !mac letter rows
+// are deleted). The handler runs the upstream command bodies itself —
+// copy and cut join every non-empty selection one per line, cut is one
+// atomic undo transaction, paste distributes one line per selection
+// and a masked input neither copies nor deletes — and returns
+// prevented (true) so the core's default write/mutation is skipped:
+// the DOM shape of an element whose own default handling owns the
+// clipboard exchange (a copy event listener that calls preventDefault
+// after writing event.clipboardData itself). The key stays consumed
+// either way (DefaultHandled, exactly the old binding's contract).
+
+// Copy implements gpui.EditActionHandler: the upstream copy (s.copy),
+// the multi-selection join. Always prevented — a masked input must
+// keep its value out of the core's single-selection write too.
+func (h *inputElementHandler[M]) Copy(w *gpui.Window, app *gpui.App) bool {
+	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
+		s.copy(&Copy{}, w, cx)
+	})
+	return true
+}
+
+// Cut implements gpui.EditActionHandler: the upstream cut (s.cut), the
+// write and the atomic delete. Always prevented — the deletion is the
+// input's own (the undo intent), not the core's ReplaceTextInRange.
+func (h *inputElementHandler[M]) Cut(w *gpui.Window, app *gpui.App) bool {
+	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
+		s.cut(&Cut{}, w, cx)
+	})
+	return true
+}
+
+// Paste implements gpui.EditActionHandler: the upstream insertion
+// (s.insertClipboard) of the item the core already read — the old
+// paste's own read moved here (the command reads once and hands the
+// item to the event, clipboard_commands.cc:466-540). A nil item (the
+// unreadable clipboard the read degrades to) inserts nothing, the old
+// paste's read-failure None. Always prevented — the insertion is the
+// input's own (the line-per-selection distribution), not the core's.
+func (h *inputElementHandler[M]) Paste(item *gpui.ClipboardItem, w *gpui.Window, app *gpui.App) bool {
+	if item != nil {
+		h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
+			if s.IsEditable() {
+				s.insertClipboard(*item, w, cx)
+			}
+		})
+	}
+	return true
+}
+
+// BeforeInput implements gpui.EditActionHandler: always prevented —
+// Copy/Cut/Paste above run the input's own mutations, so the core's
+// default mutations (deleteByCut, insertFromPaste) never run (the
+// method is unreachable in practice: the core only calls it from its
+// own cut/paste flows, which the prevented returns above exit first).
+func (h *inputElementHandler[M]) BeforeInput(string, string, *gpui.Window, *gpui.App) bool {
+	return true
+}
+
+// Select implements gpui.EditActionHandler: a no-op. Base's InputEvent
+// surface carries no select event (Change/PressEnter/Focus/Blur), and
+// SelectAll below already notifies.
+func (h *inputElementHandler[M]) Select(*gpui.Window, *gpui.App) {}
+
+// SelectAll implements gpui.EditActionHandler: the input's whole-text
+// selection move (s.SelectAll, U:input/base/state.rs:2948-2953) — the
+// SelectAll command's own selection move, the pin's body the core
+// delegates to the handler (gpui/edit_action.go's select-all arm).
+func (h *inputElementHandler[M]) SelectAll(w *gpui.Window, app *gpui.App) {
+	h.update(w, app, func(s *InputBaseState[M], w *gpui.Window, cx *gpui.Context[InputBaseState[M]]) {
+		s.SelectAll(w, cx)
+	})
+}

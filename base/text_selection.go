@@ -6,9 +6,12 @@ package base
 // and the copy action are core behaviours). This file re-exports the
 // model's public surface under the names Base's callers and the upstream
 // port used, so every Base component built on it — SelectableText, the
-// TextView selection adapter, the Root's copy binding — keeps compiling
+// TextView selection adapter, the Root's copy handler — keeps compiling
 // and behaving exactly as before: the type aliases are the core types,
-// and the functions delegate.
+// and the functions delegate. (browser-core 73: the Root's copy
+// KEYSTROKE binding is gone off macOS — the core's copy command owns
+// the key — but the Root's OnAction handler and everything else here
+// stay.)
 //
 // Base also installs its own multi-click boundaries over the core's seam
 // (text_boundary.go below): the upstream word and line rules

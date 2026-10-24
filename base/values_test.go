@@ -172,6 +172,22 @@ func TestComponentTraitsFocusRingAPICarriesStateWithoutVisuals(t *testing.T) {
 	}
 }
 
+// browser-core 48/73: FocusRing(false) maps onto the core's outline
+// opt-out, and FocusRing(true) leaves the outline at the default (the
+// core's auto kind — the default focus ring on a focus-visible
+// element). The trait stays state-only; this pins the visual layer's
+// mapping helper.
+func TestComponentTraitsFocusRingOutlineOptsTheCoreRingOut(t *testing.T) {
+	disabled := FocusRingOutline(gpui.Div(), false)
+	if style, ok := disabled.StyleMut().OutlineStyle.Get(); !ok || style != gpui.OutlineNone {
+		t.Fatalf("FocusRing(false) outline style = %v, %v; want none", style, ok)
+	}
+	enabled := FocusRingOutline(gpui.Div().TrackFocus(gpui.FocusHandle{}), true)
+	if _, ok := enabled.StyleMut().OutlineStyle.Get(); ok {
+		t.Fatal("FocusRing(true) pinned an outline style; want the default auto kind")
+	}
+}
+
 // U:actions.rs:34-38
 func TestActionsConfirmKeepsItsSecondaryPayload(t *testing.T) {
 	if !(Confirm{Secondary: true}).Secondary || (Confirm{Secondary: false}).Secondary {

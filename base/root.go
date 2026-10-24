@@ -4,18 +4,28 @@ package base
 //
 // Go adaptations and deviations:
 //
-//   - The copy binding's #[cfg(target_os = "macos")] pair
-//     (U:root.rs:17-21) is a runtime.GOOS check, as in inputInit.
-//   - on_action_copy (U:root.rs:264-273) writes through App.WriteClipboard,
-//     which reports failures the pinned write_to_clipboard only logs; the
-//     error is dropped like the input's copy (input_state_edit.go).
+//   - browser-core 73: the !mac root copy binding (U:root.rs:17-21) is
+//     gone — the core's copy command (browser-core 26) runs from the
+//     keydown's default-action arm on the window selection's stand-in
+//     handler (gpui/text_selection_copy.go), so ctrl-c copies the
+//     window selection with nothing editable focused. The macOS cmd-c
+//     row stays bound (the core's key table carries only the !Mac
+//     rows, editing_behavior.cc:168-178), and on_action_copy (and the
+//     Root's OnAction listener) stays for programmatic dispatch of the
+//     aliased action: the write is the window selection's text — now
+//     untrimmed, the core's Chrome rule (the selection is copied
+//     exactly), where the pinned U:root.rs:264-273 trimmed it.
 //   - install_window_hit_test_forwarder (U:root.rs:148-149) is macOS-only.
 //   - browser-core ticket 72: the Root's Tab and Shift-Tab bindings and
 //     the focus-trap cycling (U:root.rs:194-262) are gone with the focus
 //     trap (focus_trap.rs, deleted): Tab is the core's default action
 //     (browser-core 14 — ticket 22's Escape rule and 23's modal inertness
 //     both reach it), and a modal dialog's inert outside keeps Tab inside
-//     the dialog, the browser's answer to the trap.
+//     the dialog, the browser's answer to the trap. The ticket-73 survey
+//     of what else binds Tab found only the input/editor's indent rows
+//     (input_state.go, the tab-capture rule) and the time field's
+//     segment rows (time_field.go) — dock, lists and the other widgets
+//     bind none, so the core's default action drives them.
 
 import (
 	"reflect"
@@ -29,16 +39,17 @@ import (
 const rootContext = "Root"
 
 // rootInit binds the root keys (U:root.rs:14-23): the platform's copy
-// keystroke for input::Copy. Tab and Shift-Tab are not bound — the
-// core's Tab default action owns focus movement (browser-core 14).
+// keystroke for input::Copy on macOS only (browser-core 73: off macOS
+// the core's copy command owns the keystroke, so nothing is bound).
+// Tab and Shift-Tab are not bound — the core's Tab default action owns
+// focus movement (browser-core 14).
 func rootInit(app *gpui.App) {
-	ctx := rootContext
-	copyKeys := "ctrl-c"
-	if runtime.GOOS == "darwin" {
-		copyKeys = "cmd-c"
+	if runtime.GOOS != "darwin" {
+		return
 	}
+	ctx := rootContext
 	app.BindKeys(
-		gpui.NewKeyBinding(copyKeys, CopyAction.Box(Copy{}), &ctx),
+		gpui.NewKeyBinding("cmd-c", CopyAction.Box(Copy{}), &ctx),
 	)
 }
 
@@ -241,9 +252,13 @@ func RootUpdate[R any](w *gpui.Window, app *gpui.App, f func(root *Root, w *gpui
 	})
 }
 
-// onActionCopy copies the window's text selection (U:root.rs:264-273): the
-// selected text, trimmed, goes to the clipboard; with nothing selected the
-// action propagates.
+// onActionCopy copies the window's text selection (U:root.rs:264-273):
+// the selected text goes to the clipboard; with nothing selected the
+// action propagates. The keystroke no longer dispatches it on !mac
+// (the core's copy command does, untrimmed — see the file header); an
+// app that binds or dispatches the aliased edit::Copy action still
+// runs this handler. The write's error is dropped like the pinned
+// write_to_clipboard, which logs it.
 func (r *Root) onActionCopy(_ *Copy, w *gpui.Window, cx *gpui.Context[Root]) {
 	text := strings.TrimSpace(TextSelectionSelectedText(w, cx.App()))
 	if text == "" {
