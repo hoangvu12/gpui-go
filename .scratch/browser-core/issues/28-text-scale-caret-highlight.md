@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 27
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged eb52d42 into main with no conflicts. Build, vet and gofmt are clean. With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./gpui/, ./base, ./internal/parity/..., richtextspec, authorspec, inspectorspec, winhostspec and examples/zterm. Checked: `ds.rem` is otherwise only set at test-window creation, so `frameRemSize` overrides no app setting. Hostless test apps get scale 1, so existing fixtures are unchanged. The scale is cached per preference version (no host call per frame). A changed preference record now triggers RefreshWindows even without an app observer. Citation spot-checked: frame_caret.cc:186-190 (a zero blink interval starts no timer; the caret stays visible). Behaviour note: apps on PCs with a Windows text size other than 100% now get a scaled rem by default (D11); `SetRemFollowsSystemTextScale(false)` opts out.
 
 ## Answer
 
