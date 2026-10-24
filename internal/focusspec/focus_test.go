@@ -556,13 +556,15 @@ func TestFocusReleaseDuringDispatch(t *testing.T) {
 		t.Fatal("focus survived the in-dispatch release")
 	}
 
-	// The next dispatch routes to the window root node only (no element
-	// holds focus): no element listeners observe it, exactly like the
-	// reference's root-only dispatch path.
+	// The next dispatch has no focused element: like a key event with
+	// focus on the body, it reaches the root element's listeners
+	// (browser-core ticket 14, divergence toward Chrome; the pin
+	// dispatched to the window root node only, so no element listener
+	// observed it).
 	window.DispatchKeyEvent(&gpui.KeyDownEvent{
 		Keystroke: gpui.MustParseKeystroke("t"),
 	}, app)
-	requireTranscript(t, transcript, "release", "root-keydown:r")
+	requireTranscript(t, transcript, "release", "root-keydown:r", "root-keydown:t")
 }
 
 // releaseView releases its own focus handle during its key listener.
@@ -589,8 +591,14 @@ func (v *releaseView) Render(w *gpui.Window, cx *gpui.Context[releaseView]) gpui
 		IntoElement()
 }
 
-// TestTabTraversalOrder checks focus_next/focus_prev: document order,
-// tab indices, group nesting, non-tab-stop skipping and wraparound.
+// TestTabTraversalOrder checks focus_next/focus_prev under the HTML
+// sequential order (browser-core ticket 14, spec D4; divergence toward
+// Chrome from the pin's wrapping, index-sorted cycle): a negative tab
+// index is never reached, the zero bucket runs in tree order with the
+// tab group after its zero-ranked siblings, non-tab-stops are skipped,
+// and the cycle does not wrap: Tab past the last stop blurs (Chrome
+// passes focus out of the document) and the next Tab starts again from
+// the first stop.
 func TestTabTraversalOrder(t *testing.T) {
 	if testing.Short() {
 		t.Skip("tab traversal draws through the native layout services")
@@ -603,7 +611,7 @@ func TestTabTraversalOrder(t *testing.T) {
 	b := gpui.NewFocusHandle(window).TabStop(true)
 	// c is focusable but not a tab stop: traversal skips it.
 	c := gpui.NewFocusHandle(window).TabStop(false)
-	// d sorts before a through a negative tab index.
+	// d has a negative tab index: Tab never reaches it (D4).
 	d := gpui.NewFocusHandle(window).TabStop(true).TabIndex(-1)
 	// e and f live inside their own group, after everything else.
 	e := gpui.NewFocusHandle(window).TabStop(true)
@@ -616,51 +624,45 @@ func TestTabTraversalOrder(t *testing.T) {
 		t.Fatalf("DrawWindowFrame: %v", err)
 	}
 
-	// From nothing: the first tab stop in order is d (index -1 sorts
-	// first), then a, b (c skipped), then e, f.
-	window.FocusNext()
-	if got := window.Focused(); !got.Ok || got.Handle.ID() != d.ID() {
-		t.Fatalf("first focus-next = %+v, want d", got)
+	step := func(next bool, want *gpui.FocusHandle, what string) {
+		t.Helper()
+		if next {
+			window.FocusNext()
+		} else {
+			window.FocusPrev()
+		}
+		got := window.Focused()
+		if want == nil {
+			if got.Ok {
+				t.Fatalf("%s = %+v, want no focus (the pass-out)", what, got)
+			}
+			return
+		}
+		if !got.Ok || got.Handle.ID() != want.ID() {
+			t.Fatalf("%s = %+v, want %d", what, got, want.ID())
+		}
 	}
-	window.FocusNext()
-	if got := window.Focused(); !got.Ok || got.Handle.ID() != a.ID() {
-		t.Fatalf("second focus-next = %+v, want a", got)
-	}
-	// From a: b (c is skipped).
-	window.FocusNext()
-	if got := window.Focused(); !got.Ok || got.Handle.ID() != b.ID() {
-		t.Fatalf("third focus-next = %+v, want b (c skipped)", got)
-	}
-	// The full cycle continues b -> e (c skipped) -> f -> wrap to d.
-	window.FocusNext()
-	if got := window.Focused(); !got.Ok || got.Handle.ID() != e.ID() {
-		t.Fatalf("fourth focus-next = %+v, want e", got)
-	}
-	window.FocusNext()
-	if got := window.Focused(); !got.Ok || got.Handle.ID() != f.ID() {
-		t.Fatalf("fifth focus-next = %+v, want f", got)
-	}
-	window.FocusNext()
-	if got := window.Focused(); !got.Ok || got.Handle.ID() != d.ID() {
-		t.Fatalf("wrapped focus-next = %+v, want d", got)
-	}
-	// Backwards from d wraps to the last stop (f).
-	window.FocusPrev()
-	if got := window.Focused(); !got.Ok || got.Handle.ID() != f.ID() {
-		t.Fatalf("wrapped focus-prev = %+v, want f", got)
-	}
-	// e is f's predecessor.
-	window.FocusPrev()
-	if got := window.Focused(); !got.Ok || got.Handle.ID() != e.ID() {
-		t.Fatalf("focus-prev from f = %+v, want e", got)
-	}
-	// Focusing the non-tab-stop c and traversing lands on the next
-	// stop after it.
+
+	// From nothing: a, b (c skipped, d never reached), then the group's
+	// e, f; past f the focus passes out, and the next Tab restarts at a.
+	step(true, &a, "first focus-next")
+	step(true, &b, "second focus-next")
+	step(true, &e, "third focus-next (c and d skipped)")
+	step(true, &f, "fourth focus-next")
+	step(true, nil, "focus-next past the last stop")
+	step(true, &a, "focus-next from no focus")
+	// Backwards from the first stop passes out; from no focus Shift+Tab
+	// lands on the last stop, then walks back.
+	step(false, nil, "focus-prev before the first stop")
+	step(false, &f, "focus-prev from no focus")
+	step(false, &e, "focus-prev from f")
+	// Focusing the non-tab-stop c and traversing lands on the next stop
+	// after it in tree order; from the excluded d (first in the tree)
+	// the next stop in tree order is a.
 	window.Focus(c)
-	window.FocusNext()
-	if got := window.Focused(); !got.Ok || got.Handle.ID() != e.ID() {
-		t.Fatalf("focus-next from the non-stop c = %+v, want e", got)
-	}
+	step(true, &e, "focus-next from the non-stop c")
+	window.Focus(d)
+	step(true, &a, "focus-next from the negative-index d")
 }
 
 func focusedID(w *gpui.Window) *uint64 {

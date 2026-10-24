@@ -50,7 +50,9 @@ func TestOrderFailsWhenTabIndexesAreFlattened(t *testing.T) {
 	if err == nil {
 		t.Fatal("the DOM-order view passed Tier B against the D4-ranked record (the tab order must follow the tabindex ranking)")
 	}
-	if !strings.Contains(err.Error(), "recorded keyup:p1, replayed keyup:z2") {
+	// The diff line spells each entry with its fields (key, code,
+	// focus, isComposing since ticket 18); match the two targets only.
+	if msg := err.Error(); !strings.Contains(msg, "recorded keyup:p1 ") || !strings.Contains(msg, "replayed keyup:z2 ") {
 		t.Fatalf("the transcript diff does not name the first ranked move:\n%v", err)
 	}
 	t.Logf("Tier B fails as it should:\n%v", err)

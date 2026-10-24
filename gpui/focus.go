@@ -1057,9 +1057,13 @@ func (t *TabStopMap) insertOrdered(node tabStopNode) {
 }
 
 // BeginGroup begins a tab group with the given index (TabStopMap::begin_group).
+// The group's path segment takes the same htmlTabRank as an inserted
+// handle's (browser-core 14): a raw 0 would sort a default group
+// (tab index 0) before every zero-bucket sibling, which rank at
+// tabZeroRank.
 func (t *TabStopMap) BeginGroup(tabIndex int64) {
 	t.insertionHistory = append(t.insertionHistory, TabStopOperation{Kind: TabStopGroup, GroupIndex: tabIndex})
-	t.currentPath = append(t.currentPath, tabIndex)
+	t.currentPath = append(t.currentPath, htmlTabRank(tabIndex))
 }
 
 // EndGroup ends the current tab group (TabStopMap::end_group).
