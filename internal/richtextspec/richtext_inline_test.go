@@ -23,8 +23,10 @@ import (
 // records shifted by the plain text's 28.8px advance. Row geometry
 // (scale 2, 16px, test layout_inline): row height 26, baseline 23.4
 // (align_inline_boxes over ascent 16.4 / descent -4.4 with half leading
-// 7); the background quad spans the row height, the underline sits at
-// baseline + descent * 0.618 and the strikethrough at baseline - ascent
+// 7); the background quad spans the row height, the underline sits 1px
+// below the baseline (Chrome's offset, browser-core 06's recorded
+// divergence from the pin's baseline + descent * 0.618) and the
+// strikethrough at baseline - ascent
 // * 0.5.
 func TestInlineStyledTextRunDecorationsTranscript(t *testing.T) {
 	gray := gpui.Hsla{H: 0, S: 0, L: 0.5, A: 1}
@@ -82,8 +84,8 @@ func TestInlineStyledTextRunDecorationsTranscript(t *testing.T) {
 	}
 	baseline := float32(23.4)
 	if !near(under.Bounds.Origin.X, 57.6*scale, 1) || !near(under.Bounds.Size.Width, 28.8*scale, 1) ||
-		!near(under.Bounds.Origin.Y, (baseline+(-4.4)*0.618)*scale, 1) {
-		t.Errorf("underline bounds = %v, want x 57.6, width 28.8, y baseline + descent*0.618 (logical, scale 2)", under.Bounds)
+		!near(under.Bounds.Origin.Y, (baseline+1)*scale, 1) {
+		t.Errorf("underline bounds = %v, want x 57.6, width 28.8, y baseline + 1 (Chrome's offset for a 1px underline; logical, scale 2)", under.Bounds)
 	}
 	if !near(strike.Bounds.Origin.X, 86.4*scale, 1) || !near(strike.Bounds.Size.Width, 28.8*scale, 1) ||
 		!near(strike.Bounds.Origin.Y, (baseline-16.4*0.5)*scale, 1) || strike.Wavy {

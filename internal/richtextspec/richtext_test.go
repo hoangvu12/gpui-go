@@ -429,8 +429,9 @@ func quadsColored(t *testing.T, scene *gpui.Scene, color gpui.Hsla) []gpui.Quad 
 // underline and strikethrough records (R:text_system/line.rs:421-464 per
 // fragment; the port per run rectangle). Geometry at scale 2, 16px:
 // em 9.6, line height pixel_snap(16 * phi) = 26, ascent 16.4, descent
-// -4.4, baseline 23.4; underline at baseline + descent * 0.618 and the
-// derived strikethrough at baseline - ascent * 0.5 (rich_paint.go).
+// -4.4, baseline 23.4; underline 1px below the baseline (Chrome's max(1, ceil(thickness/2))
+// offset, browser-core 06's recorded divergence from the pin's
+// baseline + descent * 0.618) and the derived strikethrough at baseline - ascent * 0.5 (rich_paint.go).
 func TestStyledTextRunDecorationsTranscript(t *testing.T) {
 	gray := gpui.Hsla{H: 0, S: 0, L: 0.5, A: 1}
 	_, _, _, scene := openStyled(t, func(v *styledView) gpui.AnyElement {
@@ -484,8 +485,8 @@ func TestStyledTextRunDecorationsTranscript(t *testing.T) {
 	}
 	baseline := float32(23.4)
 	if !near(under.Bounds.Origin.X, 28.8*scale, 1) || !near(under.Bounds.Size.Width, 28.8*scale, 1) ||
-		!near(under.Bounds.Origin.Y, (baseline+(-4.4)*0.618)*scale, 1) {
-		t.Errorf("underline bounds = %v, want x 28.8, width 28.8, y baseline + descent*0.618 (logical, scale 2)", under.Bounds)
+		!near(under.Bounds.Origin.Y, (baseline+1)*scale, 1) {
+		t.Errorf("underline bounds = %v, want x 28.8, width 28.8, y baseline + 1 (Chrome's offset for a 1px underline; logical, scale 2)", under.Bounds)
 	}
 	if !near(strike.Bounds.Origin.X, 57.6*scale, 1) || !near(strike.Bounds.Size.Width, 28.8*scale, 1) ||
 		!near(strike.Bounds.Origin.Y, (baseline-16.4*0.5)*scale, 1) || strike.Wavy {
