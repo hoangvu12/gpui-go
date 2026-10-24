@@ -10,8 +10,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - **Resolved (25 of 76; orchestrator 7's "22" was a miscount, it was 21):** 01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 13, 25, 27, 29, 30, 31, 33, 39 (rev 15, DLL 8b944eae), 40, 41, 47, 49 (the R16 design, approved), 62, 64, 65. Each has a verification comment, and the map's Decisions list a gist of each. Orchestrator 8 verified and merged 33 (position: static opt-in), then 25 (anchored to an element). The merges had no conflicts, and the required packages pass on main.
 - **Known flake:** `gpui` TestWin32TranslateKeyDownCarriesCodeAndLocation reads the live Shift key, so it fails while the user types. Re-run it.
 - **Open follow-up from 33+25:** Anchored, Deferred and custom containers don't call `RequestContainerLayout`, so a `Static()` div inside them defers its absolute children past the overlay (opt-in only; for 76).
-- **Running (3 workers, started 2026-10-24; they report to this chat, 08b88b23):**
 - 29 forced colours and 30 spellcheck: merged and resolved. Watch authorspec TestRealTwoWindowCounterSharedModel (a rare reentrancy panic, seen once; then 19/19).
+- **Running (they report to this chat, 08b88b23):**
   - 77 rev 15.1 native rebuild (the user approved it on 2026-10-24: "ok try that"): chat 4a073277, worktree `gpui-go-wt-core-77`, branch `core/77-r15-1`. It covers the uniform-upload fix (unskip the filters fixtures, re-register shadow-backdrop), the italic shear set to -0.25, and the text-run fields and baseline as best effort, with each blocker recorded. Cargo runs with `-j 6`.
 - The user said the PC can take more workers ("yea go ahead"). Ramp up gradually.
 - **Rules:** as in orchestrator 7's block below and the handoff doc. Run `go clean -cache` after each round of merges.
