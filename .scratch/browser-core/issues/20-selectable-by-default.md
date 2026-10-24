@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 9 (Claude Code)
 Blocked by: 19
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-25, orchestrator 9 (verification): merged dfdb7c7 as 32f6251 (no conflicts; the branch predates 23+24). Regenerating the classes and TSX types after the merge produced no drift. Spot check: `SelectAutoCursor` → `ShouldShowIBeamForNode` (event_handler.cc:563, :839-843) and html.css's `user-select: none` on button-type inputs (:847-850) match. The full broad batch set passed on the merged tree except spellspec `TestSpellcheckWorkerRunsPinnedToItsOwnThread`, which bisects to the 16 merge (23954c2), not to 20; it's sent back to 16's worker. Cost noted for the perf track: an idle selectable text costs ~21 allocations per frame (down from 53); the frame-overhead probe reads 0.25 ms. Resolved.
 
 ## Answer
 
