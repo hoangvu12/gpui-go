@@ -15,7 +15,7 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
   - 21 top layer and light dismiss: chat b63f097d, worktree `gpui-go-wt-core-21`, branch `core/21-top-layer`
   - 38 white-space collapse, tab size and em letter spacing: chat b73bd8de, worktree `gpui-go-wt-core-38`, branch `core/38-whitespace`
   - 07+46 (bundle: scroll range and pixel rounding, scroll anchoring): chat 7958ce99, worktree `gpui-go-wt-core-07`, branch `core/07-46-scroll`
-  - 66 TSX dev command: chat 1e366d5f, worktree `gpui-go-wt-core-66`, branch `core/66-tsx-dev`
+  - 66 TSX dev command: chat 1e366d5f, worktree `gpui-go-wt-core-66`, branch `core/66-tsx-dev`. Finished at b156646 and was sent back: the window drifts by the Bounds/SetBounds frame offset on every Go restart, and the no-tsc message repeats on every reload.
   - 18 IME composition events: chat fcce3b22, worktree `gpui-go-wt-core-18`, branch `core/18-ime-composition`
 - The user asked for more speed (2026-10-24, "speed things uppppp"). 5 workers are running, with GOFLAGS=-p=4 and targeted tests.
 - **Rules:** as in orchestrator 7's block below and the handoff doc, with these changes from the user (2026-10-24):
