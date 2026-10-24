@@ -45,7 +45,7 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
   - Never touch the `gpui-go` main checkout.
   - Never `taskkill` go.exe globally; it kills other sessions' runs.
 - 37 (line-height: normal) changes the default line height repo-wide, so run it nearly alone, like 68.
-- Empty worktree folders that Windows still locks: gpui-go-wt-core-06, -41, -65, -r15, -zterm-bold. Retry `rm -rf` later.
+- Worktree folders: all leftovers were removed on 2026-10-24. A stuck Roboco `git diff` on a deleted worktree can hold a folder; stop only that PID (find it by command line).
 
 Workers leave tickets claimed. The orchestrator verifies each branch, merges it and then resolves the ticket.
 
