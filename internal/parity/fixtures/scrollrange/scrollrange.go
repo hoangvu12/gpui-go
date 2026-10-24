@@ -374,6 +374,10 @@ func RangeView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElemen
 			Size(gpui.Px(scrollerW), gpui.Px(focusH)).
 			FlexShrink0().
 			TrackFocus(focus).
+			// The page pins outline: none on the focused element; the port has a
+			// default focus ring since ticket 48, so the view carries the pin's
+			// twin.
+			OutlineNone().
 			Bg(gpui.Rgb(focusBg))).
 		Child(gpui.Div().
 			ID("nested").
@@ -465,6 +469,10 @@ func WrongPaddingBasisView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gp
 			Size(gpui.Px(scrollerW), gpui.Px(focusH)).
 			FlexShrink0().
 			TrackFocus(focusOf(log, w)).
+			// The page pins outline: none on the focused element; the port has a
+			// default focus ring since ticket 48, so the view carries the pin's
+			// twin.
+			OutlineNone().
 			Bg(gpui.Rgb(focusBg))).
 		Child(gpui.Div().
 			ID("nested").
