@@ -1,0 +1,36 @@
+{
+  "name": "userselect-none",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T17:25:59Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "text": {
+      "x": 130,
+      "y": 187.5,
+      "width": 380,
+      "height": 25
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png",
+  "computed": {
+    "anchor": "0",
+    "anchorNode": "",
+    "cursor": "auto",
+    "focus": "0",
+    "focusNode": "",
+    "text": "",
+    "userSelect": "none",
+    "wash": "#0078d4"
+  }
+}

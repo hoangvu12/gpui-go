@@ -865,6 +865,32 @@ func (s *Styled[Self]) OutlineNone[_ lazy]() Self {
 	return s.self
 }
 
+// ---- User select (CSS UI 4 §user-select; browser-core ticket 20) ----
+
+// UserSelect sets the user-select property, cascading to children
+// (CSS UI 4 §user-select; browser-core ticket 20, spec D7): None opts
+// the element's subtree out of text selection — the way Chrome's UA
+// stylesheet does for buttons and form controls (html.css:850, :904) —
+// Text re-enables it under a None, and Auto (the CSS initial value)
+// resolves from the ancestors, selectable unless a None ancestor
+// forbids it.
+func (s *Styled[Self]) UserSelect[_ lazy](value UserSelect) Self {
+	s.TextStyleMut().UserSelect = Some(value)
+	return s.self
+}
+
+// SelectNone sets user-select: none (Tailwind select-none): the
+// element's subtree starts no text selection.
+func (s *Styled[Self]) SelectNone[_ lazy]() Self { return s.UserSelect(UserSelectNone) }
+
+// SelectText sets user-select: text (Tailwind select-text): the
+// element's text is selectable, overriding an inherited none.
+func (s *Styled[Self]) SelectText[_ lazy]() Self { return s.UserSelect(UserSelectText) }
+
+// SelectAuto sets user-select: auto (Tailwind select-auto): the CSS
+// initial value — selection resolves from the ancestors.
+func (s *Styled[Self]) SelectAuto[_ lazy]() Self { return s.UserSelect(UserSelectAuto) }
+
 // ---- Text (styled.rs:679-908) ----
 
 // TextColor sets the text color, cascading to children (styled.rs:679).

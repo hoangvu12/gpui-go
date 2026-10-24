@@ -147,7 +147,10 @@ func (t *Toggle) render(w *gpui.Window, app *gpui.App) *gpui.DivElement {
 		// Button's neutral control geometry (U:toggle.rs:174-180).
 		Flex().
 		ItemsCenter().
-		JustifyCenter().
+		JustifyCenter(). // A control, like the UA stylesheet's button rule
+		// (user-select: none, html.css:850/:904; browser-core 20's
+		// default-on selection opts it back out).
+		SelectNone().
 		LineHeight(gpui.Fraction(1)).
 		AriaToggled(toggledOf(pressed))
 	if t.accessibilityLabel != nil {

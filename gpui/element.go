@@ -885,9 +885,12 @@ func Empty() AnyElement { return CustomElement[struct{}, struct{}](&emptyElement
 
 // Text returns a text element displaying the given string (the
 // reference Text/SharedString element; the string-child convenience
-// conversion).
+// conversion). Browser-core 20 (spec D7): the text joins the window's
+// selection by default — drag, double and triple click select it —
+// and shows the automatic I-beam while user-select allows selection;
+// UserSelect(None) on an ancestor opts the subtree out.
 func Text(text string) AnyElement {
-	return CustomElement[stringLayoutState, struct{}](&textElement{text: text})
+	return CustomElement[stringLayoutState, Hitbox](&textElement{text: text})
 }
 
 // OwnRecipe wraps a third-party recipe with an explicit single-use
@@ -1014,6 +1017,17 @@ type windowDrawState struct {
 	// engine is the window's layout engine (the reference keeps one
 	// TaffyLayoutEngine per window and clears it every frame).
 	engine *LayoutEngine
+	// userSelectionState is the window's selection state, acquired once
+	// into the window's scope (browser-core 20): installWindowTextSelection
+	// resolves it through this handle, so the acquisition's lease count
+	// stays one for the window's lifetime.
+	userSelectionState WeakEntity[windowSelectionState]
+	// userSelectParticipants are the automatic selection participants'
+	// handles, indexed by the paint-order slot (browser-core 20): the
+	// handle for slot i is created once and lives for the window — the
+	// entities are owned by the window's scope — so the per-frame lookup
+	// is an array index with no allocation.
+	userSelectParticipants []TextSelectionHandle
 	// root is the window's root view (window.rs root: AnyView).
 	root View
 	// elementStates is the retained element state, keyed by the global
@@ -1244,6 +1258,28 @@ type frameDrawState struct {
 	// Some — including an empty list — means the element's content
 	// lives inside a parent paragraph; nil means standalone).
 	currentInlineFragments []Bounds
+	// userSelectSlot is this frame's paint-order counter of the
+	// user-select text participants (browser-core 20): the slot part of
+	// the keyed identity each auto-registered text's participant lives
+	// under. Paint order within a frame is document order for a static
+	// tree, so the slot is stable across frames.
+	userSelectSlot uint64
+	// userSelectPending collects the frame's automatic registrations
+	// (browser-core 20): the flush at the frame's effect flush applies
+	// them all in one window-state update, before any input dispatch —
+	// an idle frame costs no per-text entity update.
+	userSelectPending []userSelectRegistration
+	// userSelectBand is the window rectangle the live selection's
+	// endpoints span (browser-core 20), recorded at the frame's head:
+	// only the texts it can touch read their participant snapshot and
+	// paint the wash. None while nothing is selected.
+	userSelectBand Optional[Bounds]
+	// userSelectSuppressed is the open WithUserSelectSuppressed depth
+	// (browser-core 20): the subtree prepainting/painting under it — a
+	// drag preview snapshot, the inspector UI, an inline flow's object
+	// fragments — is not part of the window's plain-text document, so
+	// its texts never join the selection.
+	userSelectSuppressed int
 	// renderedViews is the rendered-view stack
 	// (window.rendered_entity_stack).
 	renderedViews []EntityID

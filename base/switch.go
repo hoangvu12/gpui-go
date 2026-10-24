@@ -285,6 +285,10 @@ func (s *Switch) render(w *gpui.Window, app *gpui.App) *gpui.DivElement {
 
 	d := TestSupport(s.base).
 		Role(gpui.RoleSwitch).
+		// A form control, like the UA stylesheet's opt-outs
+		// (user-select: none, html.css:850/:904; browser-core 20's
+		// default-on selection opts it back out).
+		SelectNone().
 		AriaToggled(toggledOf(checked))
 	if s.accessibilityLabel != nil {
 		d.AriaLabel(*s.accessibilityLabel)

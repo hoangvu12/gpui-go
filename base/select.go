@@ -170,7 +170,11 @@ func (s *Select) render(*gpui.Window, *gpui.App) *gpui.DivElement {
 		}
 	}
 
-	d := s.base.Role(gpui.RoleComboBox).AriaExpanded(open)
+	// The closed select's trigger is a control, like the UA
+	// stylesheet's select rule (user-select: none, html.css:2191; a
+	// browser-core 20 default-on selection opts it back out). The open
+	// popup's items opt out the same way (the list below).
+	d := s.base.SelectNone().Role(gpui.RoleComboBox).AriaExpanded(open)
 	if s.accessibilityLabel != nil {
 		d.AriaLabel(*s.accessibilityLabel)
 	}

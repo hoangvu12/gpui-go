@@ -95,8 +95,11 @@ func TestFixturesMatchChromesSelectionRanges(t *testing.T) {
 
 // TestWrongViewWithoutTheLayerFailsTheSelectionComparison is the
 // deliberately-wrong view (the ticket's one): the view renders the same
-// selectable text but mounts no TextSelectionLayer, so the window's
-// selection model never engages — no range, no highlight. The range
+// selectable text but opts the text out with user-select: none
+// (.SelectNone(), the new opt-out since browser-core 20 made selection
+// default-on — the old form, dropping the TextSelectionLayer, no longer
+// defeats the model because every window installs the gestures itself),
+// so nothing is ever selected — no range, no highlight. The range
 // comparison fails (nothing selected where the record selected a range)
 // and Tier C fails with it (the highlight is missing); Tier A (the boxes
 // are the same tree) and Tier B (no instrumented events) still pass,
@@ -115,7 +118,7 @@ func TestWrongViewWithoutTheLayerFailsTheSelectionComparison(t *testing.T) {
 
 	// The selection comparison fails: nothing was selected.
 	if _, ok := selection.LastCapture().Range(); ok {
-		t.Fatal("the wrong view selected a range without the TextSelectionLayer")
+		t.Fatal("the wrong view selected a range despite user-select: none")
 	}
 	if want := loadRecordedSelection(t, fixture); want.text != "" {
 		t.Logf("the record selected %q; the wrong view selected nothing", want.text)
@@ -137,8 +140,8 @@ func TestWrongViewWithoutTheLayerFailsTheSelectionComparison(t *testing.T) {
 	}
 }
 
-// wrongViewWithoutLayer renders the word fixture's tree without the
-// TextSelectionLayer.
+// wrongViewWithoutLayer renders the word fixture's tree with the text
+// opted out of selection (user-select: none).
 func wrongViewWithoutLayer(_ *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.AnyElement {
 	handle, ok := wrongHandles[w]
 	if !ok {
@@ -160,6 +163,7 @@ func wrongViewWithoutLayer(_ *parity.EventLog, w *gpui.Window, app *gpui.App) gp
 			ID("text").
 			DebugSelector("text").
 			W(gpui.Px(380)).
+			SelectNone().
 			Child(gpui.SelectableTextWithHandle("text", handle, "one latte, three"))).
 		IntoElement()
 }

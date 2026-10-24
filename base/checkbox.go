@@ -240,7 +240,11 @@ func (c *Checkbox) render(w *gpui.Window, app *gpui.App) *gpui.DivElement {
 	style := c.resolvedStyle()
 	onChange := c.onChange
 
-	d := TestSupport(c.base)
+	d := TestSupport(c.base).
+		// A form control, like the UA stylesheet's opt-outs
+		// (user-select: none, html.css:850/:904; browser-core 20's
+		// default-on selection opts it back out).
+		SelectNone()
 	if role, ok := c.role.Resolve(func() gpui.Role { return gpui.RoleCheckBox }); ok {
 		d.Role(role)
 	}

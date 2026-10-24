@@ -70,6 +70,7 @@ A class and its style method have the same name:
 | `shadow-md`, `ring-2` | `ShadowMd()`, `Ring2()` |
 | `opacity-50` | `Opacity50()` |
 | `cursor-pointer`, `cursor-not-allowed` | `CursorPointer()`, `CursorNotAllowed()` |
+| `select-none`, `select-text`, `select-auto` | `SelectNone()`, `SelectText()`, `SelectAuto()` (user-select, ticket 20: text is selectable by default) |
 | `bg-slate-800`, `text-white`, `border-red-500`, `ring-blue-500` | `Bg(tw.Slate800)`, `TextColor(tw.White)`, `BorderColor(tw.Red500)`, `RingColor(tw.Blue500)` |
 | `bg-black/50` | `Bg(tw.Black.Alpha(0.5))` |
 | `w-[84px]`, `w-[50%]`, `p-[3px]`, `-mt-[4px]` | `W(gpui.Px(84))`, `W(gpui.Fraction(0.5))`, `P(gpui.Px(3))`, `Mt(gpui.Px(-4))` |
@@ -186,7 +187,6 @@ A rejected class is skipped, the rest of the string still applies, and the reaso
 | `translate-*`, `rotate-*`, `scale-*`, `skew-*`, `origin-*`, `transform` | There are no CSS transforms. Position with margins or insets. |
 | `space-x-*`, `space-y-*` | Use `gap-*` on the flex parent. |
 | `divide-*` | Give each child after the first a `border-t` (or `border-l`), or put separator elements between them. |
-| `select-*` | Text in a div is not selectable. Drop it. |
 | `pointer-events-*` | Not supported. |
 | `fixed` | Use `absolute` inside a `relative` ancestor that fills the window, or `gpui.Deferred` / `gpui.Anchored` for overlays. |
 | `sticky`, `static` | Not supported. Elements are relative unless absolute. |

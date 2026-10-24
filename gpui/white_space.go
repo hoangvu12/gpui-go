@@ -643,15 +643,16 @@ func collapseStyledRuns(text string, runs []TextRun, mode WhiteSpace) (string, [
 // covering runs under a white-space mode (the Text leaf and
 // StyledText's element paths, browser-core 38): the mode's collapse
 // over the whole text, then the runs remapped onto the display text.
+// collapseElementTextWithMap is the same fold returning the byte map
+// (browser-core 20: the Text leaf's selection participant answers its
+// geometry queries in SOURCE offsets through it).
 func collapseElementText(text string, runs []TextRun, mode WhiteSpace) (string, []TextRun) {
-	if !mode.whiteSpaceCollapsesSpaces() && !mode.whiteSpacePreservesSpaces() {
-		return text, runs
-	}
-	display, m := collapseWhiteSpace(text, mode)
-	if m == nil {
-		return text, runs
-	}
-	return display, remapRunsThroughCollapse(runs, m, len(display))
+	display, runs, _ := collapseElementTextWithMap(text, runs, mode)
+	return display, runs
+}
+
+func collapseElementTextWithMap(text string, runs []TextRun, mode WhiteSpace) (string, []TextRun, *collapseMap) {
+	return collapseStyledRuns(text, runs, mode)
 }
 
 // collapseParagraphDocument folds a collected inline document in

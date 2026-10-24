@@ -1237,7 +1237,11 @@ func prepaintInspectorElement(w *Window, app *App, viewport Size) AnyElement {
 		Width:  DefiniteAvailableSpace(size.Width),
 		Height: DefiniteAvailableSpace(size.Height),
 	}
-	element.PrepaintAsRoot(origin, available, w, app)
+	// Browser-core 20: the inspector overlay draws under selection
+	// suppression — it is a debugging snapshot, not app content.
+	WithUserSelectSuppressedVoid(w, func(w *Window) {
+		element.PrepaintAsRoot(origin, available, w, app)
+	})
 	return element
 }
 
@@ -1247,7 +1251,9 @@ func paintInspectorElement(w *Window, app *App, element AnyElement) {
 	if element.obj == nil {
 		return
 	}
-	element.Paint(w, app)
+	WithUserSelectSuppressedVoid(w, func(w *Window) {
+		element.Paint(w, app)
+	})
 }
 
 // paintInspectorHighlight paints the hovered inspector hitbox's

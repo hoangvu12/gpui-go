@@ -10,7 +10,10 @@ package gpui
 // behaviour: the model, the platform-highlight painting and the copy
 // action); Base re-exports the public surface as aliases
 // (base/text_selection.go) and installs its upstream word/line
-// boundaries over the seam (base/text_boundary.go).
+// boundaries over the seam (base/text_boundary.go). Browser-core
+// ticket 20 (spec D7) made the selection default-on: the window
+// installs the state and gestures itself (user_select.go), plain Text
+// elements register participants, and the layer is a compat no-op.
 //
 // The ticket's own additions on top of the upstream port, with their
 // Chromium citations: the multi-click boundaries go through a seam whose
@@ -27,13 +30,11 @@ package gpui
 //
 //   - Ownership. Entities need an owner scope in the Go core
 //     (NewEntity). NewTextSelectionHandle takes one; the window
-//     selection state is owned by the scope that acquires it: the
-//     TextSelectionLayer retains it through a keyed holder entity
-//     (Window.UseKeyedState), whose dependent scope holds the lease, so
-//     the state is released when the layer stops drawing or its window
-//     closes, as Rust drops the retained Entity. State acquired outside the
-//     layer (ObserveTouchSelection, the tests' ensure) is owned by the
-//     window's scope.
+//     selection state is owned by the window's scope — browser-core 20
+//     installs it for every window at the head of the frame draw
+//     (user_select.go installWindowTextSelection), so the state lives
+//     as long as the window, where ticket 19's TextSelectionLayer
+//     retained it through a keyed holder while the layer drew.
 //   - Hitbox's content mask is unexported here. A registration records
 //     the window's content mask when it is registered (the mask its
 //     participant inserted the hitbox under); one registered directly on
@@ -233,6 +234,13 @@ type TextSelectionRegistration struct {
 	selfScroll     bool
 	selectionEdges Optional[[2]Bounds]
 	rendered       Optional[WeakEntity[textSelectionRenderedMarker]]
+	// runs are the laid-out runs the participant paints this frame
+	// (browser-core 20): the automatic registration carries them here —
+	// the window state already holds the registration, so the gesture
+	// hit-testing and the copy projection read them without an entity
+	// update per text per frame. Nil for participants that report their
+	// runs through the handle (SelectableText's paint, U:842-845).
+	runs []TextSelectionRun
 	// contentMask is the content mask the participant registered under
 	// (Hitbox::content_mask; see the file comment).
 	contentMask Optional[Bounds]
@@ -302,6 +310,22 @@ func (r TextSelectionRegistration) WithTextBounds(bounds []Bounds) TextSelection
 	r.textBounds = bounds
 	return r
 }
+
+// WithRuns sets the laid-out runs this participant paints this frame
+// (browser-core 20): the registration carries them, so the model's
+// gesture hit-testing and the copy projection read the geometry without
+// the handle's per-frame entity updates — the automatic registration's
+// cost shape. A participant that reports runs through the handle
+// (SelectableText's UpdateRuns) leaves them nil and the reads fall back
+// to the handle's retained runs.
+func (r TextSelectionRegistration) WithRuns(runs []TextSelectionRun) TextSelectionRegistration {
+	r.runs = runs
+	return r
+}
+
+// Runs is the laid-out runs this participant registered for the frame
+// (nil when the participant reports them through the handle).
+func (r TextSelectionRegistration) Runs() []TextSelectionRun { return r.runs }
 
 // WithSelectionEdges sets where the participant painted the two ends of
 // its selection, in window coordinates; the touch handles are drawn there
@@ -706,16 +730,67 @@ func (s *selectableTextState) focus(w *Window, app *App) {
 	}
 }
 
-// copyItem is U:text_selection.rs:769-778.
-func (s *selectableTextState) copyItem(documentOrder uint64) (textSelectionCopyItem, bool) {
+// copyItem is U:text_selection.rs:769-778. Browser-core 20: an absent
+// projection cache (the snapshot changed since the last paint — the
+// copy command can run mid-gesture, between frames) re-projects over
+// the passed runs instead of falling back to the whole text, so the
+// window's selected text reads the selection the gestures actually
+// made. runs is the participant's current geometry (the registration's
+// runs, else the handle's — windowSelectionState.runsOf).
+func (s *selectableTextState) copyItem(documentOrder uint64, runs []TextSelectionRun, fromRegistration bool) (textSelectionCopyItem, bool) {
 	if !s.snapshot.IsSome() && !s.localSelection {
 		return textSelectionCopyItem{}, false
 	}
 	fallback, ok := s.projectedCopyText.Get()
 	if !ok {
-		fallback = s.fallbackCopyText
+		// The automatic registration's runs live on the registration
+		// itself, refreshed every frame — project on demand, so a copy
+		// mid-gesture, between frames, reads the selection the gestures
+		// made. The handle-reported runs (SelectableText) keep the pin's
+		// staleness: their projection cache is refreshed by the paint,
+		// and an invalidated one falls back to the fallback copy text.
+		if fromRegistration && len(runs) > 0 {
+			fallback = projectedTextOfRuns(s.snapshot, runs)
+		} else {
+			fallback = s.fallbackCopyText
+		}
 	}
 	return textSelectionCopyItem{documentOrder: documentOrder, callback: s.copy, fallback: fallback}, true
+}
+
+// projectedTextOf assembles the selected text of the participant's
+// CURRENT snapshot over its retained runs (the paint path's updateRuns
+// cache, computed on demand — ProjectedText's body).
+func projectedTextOf(s *selectableTextState) string {
+	return projectedTextOfRuns(s.snapshot, s.runs)
+}
+
+// projectedTextOfRuns assembles the selected text of a snapshot over
+// runs (the copy path's on-demand projection, browser-core 20).
+func projectedTextOfRuns(snapshot Optional[TextSelectionSnapshot], runs []TextSelectionRun) string {
+	states := projectTextSelectionRanges(snapshot, runs)
+	type selectedRun struct {
+		order uint64
+		index int
+		text  string
+	}
+	var selected []selectedRun
+	for i, run := range runs {
+		if r, ok := states.ranges[i].Get(); ok {
+			selected = append(selected, selectedRun{run.documentOrder, i, run.text[r.Start:r.End]})
+		}
+	}
+	sort.SliceStable(selected, func(i, j int) bool {
+		if selected[i].order != selected[j].order {
+			return selected[i].order < selected[j].order
+		}
+		return selected[i].index < selected[j].index
+	})
+	var b strings.Builder
+	for _, run := range selected {
+		b.WriteString(run.text)
+	}
+	return b.String()
 }
 
 // ---------------------------------------------------------------------------
@@ -851,38 +926,13 @@ func (h TextSelectionHandle) ProjectedRanges(app *App) []Optional[TextRange] {
 // harness's selection read (browser-core 19), which samples the
 // projection directly rather than through the paint-refreshed cache.
 func (h TextSelectionHandle) ProjectedText(app *App) string {
-	type result struct {
-		text string
-	}
-	out, err := h.entity.Downgrade().TryRead(app, func(s *selectableTextState, _ *App) result {
-		states := projectTextSelectionRanges(s.snapshot, s.runs)
-		type selectedRun struct {
-			order uint64
-			index int
-			text  string
-		}
-		var selected []selectedRun
-		for i, run := range s.runs {
-			if r, ok := states.ranges[i].Get(); ok {
-				selected = append(selected, selectedRun{run.documentOrder, i, run.text[r.Start:r.End]})
-			}
-		}
-		sort.SliceStable(selected, func(i, j int) bool {
-			if selected[i].order != selected[j].order {
-				return selected[i].order < selected[j].order
-			}
-			return selected[i].index < selected[j].index
-		})
-		var b strings.Builder
-		for _, run := range selected {
-			b.WriteString(run.text)
-		}
-		return result{text: b.String()}
+	out, err := h.entity.Downgrade().TryRead(app, func(s *selectableTextState, _ *App) string {
+		return projectedTextOf(s)
 	})
 	if err != nil {
 		return ""
 	}
-	return out.text
+	return out
 }
 
 // SetHitTestRuns retains geometry for word hit testing; rich text
@@ -1372,6 +1422,21 @@ func (s *windowSelectionState) scheduleFinishFrame() bool {
 // registerParticipant registers this frame's geometry for a participant
 // (U:text_selection.rs:1259-1302).
 func (s *windowSelectionState) registerParticipant(selection TextSelectionHandle, registration *TextSelectionRegistration, app *App) {
+	// The idle guard (browser-core 20): while nothing is selected and no
+	// gesture runs, the prune/publish walk — O(participants) per
+	// registration — is a no-op (every snapshot is already none); skip
+	// it so a frame of n plain texts costs n registrations, not n².
+	if s.idle() {
+		if s.participants == nil {
+			s.participants = map[EntityID]participantRegistration{}
+		}
+		s.participants[selection.EntityID()] = participantRegistration{
+			participant:  selection.entity.Downgrade(),
+			registration: registration,
+			generation:   s.frameGeneration,
+		}
+		return
+	}
 	s.pruneDeadParticipants()
 	id := selection.EntityID()
 	previous, hadPrevious := s.participants[id]
@@ -1489,13 +1554,18 @@ func (s *windowSelectionState) touchChanged(app *App) {
 	})
 }
 
-// copyItems is U:text_selection.rs:1387-1397.
+// copyItems is U:text_selection.rs:1387-1397. Browser-core 20: the
+// item's fallback projection runs over the participant's current runs
+// (the registration's when it carries them, else the handle's —
+// runsOf), so a copy mid-gesture, between frames, reads the selection
+// the gestures made.
 func (s *windowSelectionState) copyItems(app *App) []textSelectionCopyItem {
 	var items []textSelectionCopyItem
 	for _, registration := range s.participants {
 		order := registration.registration.documentOrder
+		runs, fromRegistration := s.runsOf(registration.participant, app)
 		item, err := registration.participant.TryRead(app, func(p *selectableTextState, _ *App) Optional[textSelectionCopyItem] {
-			if item, ok := p.copyItem(order); ok {
+			if item, ok := p.copyItem(order, runs, fromRegistration); ok {
 				return Some(item)
 			}
 			return Optional[textSelectionCopyItem]{}
@@ -1512,6 +1582,25 @@ func (s *windowSelectionState) selectedText(app *App) string {
 	return resolveTextSelectionCopyItems(s.copyItems(app), app)
 }
 
+// runsOf resolves a participant's current runs: the registration's
+// runs (the automatic registration carries them — browser-core 20), or,
+// when the registration carries none, the handle's retained runs
+// (SelectableText's UpdateRuns geometry, U:842-845). Call OUTSIDE the
+// participant's own entity update: the entity read falls back to the
+// handle, and re-entering it from inside its closure would trip the
+// reentry guard.
+func (s *windowSelectionState) runsOf(participant WeakEntity[selectableTextState], app *App) ([]TextSelectionRun, bool) {
+	if registration, ok := s.participants[participant.EntityID()]; ok {
+		if len(registration.registration.runs) > 0 {
+			return registration.registration.runs, true
+		}
+	}
+	runs, _ := participant.TryRead(app, func(p *selectableTextState, _ *App) []TextSelectionRun {
+		return p.runs
+	})
+	return runs, false
+}
+
 // selectsText reports whether the endpoints take in at least one
 // character of some participant's painted text
 // (U:text_selection.rs:1404-1421).
@@ -1520,8 +1609,9 @@ func (s *windowSelectionState) selectsText(app *App) bool {
 		return false
 	}
 	for _, registration := range s.participants {
+		runs, _ := s.runsOf(registration.participant, app)
 		selects, err := registration.participant.TryRead(app, func(p *selectableTextState, _ *App) bool {
-			for _, r := range projectTextSelectionRanges(p.snapshot, p.runs).ranges {
+			for _, r := range projectTextSelectionRanges(p.snapshot, runs).ranges {
 				if value, ok := r.Get(); ok && value.Start < value.End {
 					return true
 				}
@@ -1767,12 +1857,13 @@ func (s *windowSelectionState) selectAllTouched(app *App) {
 	}
 	// From the participant's text runs, not its painted line bounds: those
 	// are clipped to the viewport.
+	runs, _ := s.runsOf(participant, app)
 	found, err := participant.TryRead(app, func(p *selectableTextState, _ *App) ends {
-		if len(p.runs) == 0 {
+		if len(runs) == 0 {
 			return ends{}
 		}
-		first, last := p.runs[0], p.runs[0]
-		for _, run := range p.runs[1:] {
+		first, last := runs[0], runs[0]
+		for _, run := range runs[1:] {
 			if run.documentOrder < first.documentOrder {
 				first = run
 			}
@@ -1913,6 +2004,7 @@ func (s *windowSelectionState) selectAt(position Point, clickCount int, w *Windo
 	if !ok || !participant.IsUpgradable() {
 		return
 	}
+	runs, _ := s.runsOf(participant, app)
 	type found struct {
 		anchor, cursor Point
 		rng            TextRange
@@ -1922,11 +2014,11 @@ func (s *windowSelectionState) selectAt(position Point, clickCount int, w *Windo
 		ok             bool
 	}
 	points, err := participant.TryRead(app, func(p *selectableTextState, _ *App) found {
-		anchor, cursor, rng, ok := textSelectionPointsForMultiClick(p.runs, position, clickCount)
+		anchor, cursor, rng, ok := textSelectionPointsForMultiClick(runs, position, clickCount)
 		out := found{anchor: anchor, cursor: cursor, rng: rng, resolver: p.contentKeyResolver, ok: ok}
-		for i := range p.runs {
-			if p.runs[i].bounds.Contains(position) {
-				out.run, out.hasRun = p.runs[i], true
+		for i := range runs {
+			if runs[i].bounds.Contains(position) {
+				out.run, out.hasRun = runs[i], true
 				break
 			}
 		}
@@ -2095,11 +2187,12 @@ func (s *windowSelectionState) updateGranularityEndpoints(hit *selectionEndpoint
 		rangeAt TextRange
 		ok      bool
 	}
+	runs, _ := s.runsOf(anchorParticipant, app)
 	segmentAt := func(point Point) segment {
 		run, err := anchorParticipant.TryRead(app, func(p *selectableTextState, _ *App) *TextSelectionRun {
-			for i := range p.runs {
-				if p.runs[i].bounds.Contains(point) {
-					return &p.runs[i]
+			for i := range runs {
+				if runs[i].bounds.Contains(point) {
+					return &runs[i]
 				}
 			}
 			return nil
@@ -2117,9 +2210,25 @@ func (s *windowSelectionState) updateGranularityEndpoints(hit *selectionEndpoint
 		}
 		return segment{run: run, rangeAt: r, ok: true}
 	}
-	// The anchor word is the stored range; its run is the stored run.
-	anchorRun := anchor.run
-	if anchorRun.layout == nil || len(anchorRun.text) != anchorRun.layout.Len() || anchor.rng.Start >= anchor.rng.End {
+	// The anchor word is the stored range; its RUN resolves against the
+	// participant's CURRENT runs (browser-core 20): a frame painted while
+	// the press is held — the drag's own repaints — replaces the
+	// participant's runs, and the stored run copy's layout pointer then
+	// identifies nothing; the anchor word's positions live in the
+	// participant's current geometry, exactly like Chromium's
+	// ExtendSelectionAsDirectional reads the selection's stored positions
+	// against the current layout (selection_controller.cc:316-375).
+	anchorRun, err := anchorParticipant.TryRead(app, func(p *selectableTextState, _ *App) *TextSelectionRun {
+		for i := range runs {
+			run := &runs[i]
+			if run.documentOrder == anchor.run.documentOrder &&
+				anchor.rng.End <= len(run.text) && len(run.text) == run.layout.Len() {
+				return run
+			}
+		}
+		return nil
+	})
+	if err != nil || anchorRun == nil || anchorRun.layout == nil || anchor.rng.Start >= anchor.rng.End {
 		return
 	}
 	hitSegment := segmentAt(position)
@@ -2127,12 +2236,13 @@ func (s *windowSelectionState) updateGranularityEndpoints(hit *selectionEndpoint
 		return
 	}
 	// Forward or backward: the run order first (the document order of the
-	// two runs), then the ranges inside a shared run. The stored anchor
-	// run is a copy, so sameness is by identity of layout, bounds and
-	// order.
-	sameRun := hitSegment.run.layout == anchorRun.layout &&
-		hitSegment.run.bounds == anchorRun.bounds &&
-		hitSegment.run.documentOrder == anchorRun.documentOrder
+	// two runs), then the ranges inside a shared run. Both runs come from
+	// the participant's current run slice, so sameness is identity of the
+	// run itself.
+	sameRun := hitSegment.run == anchorRun ||
+		(hitSegment.run.layout == anchorRun.layout &&
+			hitSegment.run.bounds == anchorRun.bounds &&
+			hitSegment.run.documentOrder == anchorRun.documentOrder)
 	forward := true
 	if sameRun {
 		forward = hitSegment.rangeAt.Start >= anchor.rng.End
@@ -2261,6 +2371,18 @@ func (s *windowSelectionState) publishSnapshots(app *App) {
 			p.setSnapshot(participantSnapshot, cx)
 		})
 	}
+}
+
+// idle reports whether no selection exists and no gesture is running
+// (browser-core 20's cost guard): with plain text registering by
+// default, a frame with many texts registers many participants, and
+// the per-registration publish/prune would walk them all — O(n²) per
+// idle frame. While idle the publishes are no-ops anyway (every
+// participant's snapshot is already none), so registration and the
+// frame sweep skip them; the first gesture mutation un-idles the state
+// and every mutation path publishes as before.
+func (s *windowSelectionState) idle() bool {
+	return s.anchor == nil && s.cursor == nil && !s.touch.active
 }
 
 // coverageFor is U:text_selection.rs:2025-2044.
@@ -2804,17 +2926,16 @@ func (m *textSelectionScopeMarker) Paint(_ *GlobalElementID, _ *InspectorElement
 	})
 }
 
-// TextSelectionLayer is a zero-sized root layer that enables text
-// selection for a window (U:text_selection.rs:2416-2420). Mount one as the
-// root's first child; its stable "window-text-selection" identity retains
-// the window-local selection state across frames.
+// TextSelectionLayer is a zero-sized root layer that enabled text
+// selection for a window (U:text_selection.rs:2416-2420). Browser-core
+// ticket 20 (spec D7) made it redundant: installWindowTextSelection
+// (user_select.go) gives every window the selection state and gestures
+// at the head of its frame draw, so text selects with no opt-in. The
+// element remains in the API for compatibility — it still reserves
+// its (empty) layout node so existing trees lay out identically — but
+// its phases no longer install anything: the layer's own install
+// would duplicate the window's listeners.
 type TextSelectionLayer struct{}
-
-// textSelectionRetainer is the keyed holder whose dependent scope owns the
-// window selection state for the layer (see the file comment).
-type textSelectionRetainer struct {
-	state WeakEntity[windowSelectionState]
-}
 
 // IntoElement implements IntoElement.
 func (l TextSelectionLayer) IntoElement() AnyElement {
@@ -2838,44 +2959,65 @@ func (l *TextSelectionLayer) RequestLayout(_ *GlobalElementID, _ *InspectorEleme
 	return id, struct{}{}
 }
 
-// Prepaint begins the selection frame and retains the window state
-// (U:text_selection.rs:2544-2564). Automatic participant order is paint
-// order within this frame.
+// Prepaint is inert as an installer (browser-core 20): the window
+// installs the selection gestures itself at the head of its frame draw
+// (installWindowTextSelection). The layer still ensures the state
+// exists — a tree that mounts it expects the window to carry selection
+// state the way it did before the automatic install (the state is
+// created lazily otherwise, by the first participant).
 func (l *TextSelectionLayer) Prepaint(_ *GlobalElementID, _ *InspectorElementID, _ Bounds, _ *struct{}, w *Window, app *App) WeakEntity[windowSelectionState] {
-
-	beginSelectionFrame(app)
-	state := retainTextSelectionState(w, app)
-	// The handles and the menu register again as they paint this frame.
-	_ = state.TryUpdate(app, func(s *windowSelectionState, _ *Context[windowSelectionState]) { s.touch.beginFrame() })
-	return state
+	return ensureUserSelectState(w, app)
 }
 
-// Paint installs the window's selection gestures
-// (U:text_selection.rs:2566-2577).
+// Paint is inert (browser-core 20): the window installs the selection
+// gestures itself (installWindowTextSelection), before any element
+// registers its own listeners — the layer's own install would
+// duplicate them.
 func (l *TextSelectionLayer) Paint(_ *GlobalElementID, _ *InspectorElementID, _ Bounds, _ *struct{}, state *WeakEntity[windowSelectionState], w *Window, app *App) {
-	paintTextSelection(*state, w, app)
+	_ = state
 }
 
-// retainTextSelectionState is U:text_selection.rs:2580-2600.
-func retainTextSelectionState(w *Window, app *App) WeakEntity[windowSelectionState] {
-	windowID := w.ID()
-	holder := w.UseKeyedState(NameElementID("state"), app, func(_ *Window, cx *Context[textSelectionRetainer]) textSelectionRetainer {
-		return textSelectionRetainer{state: textSelectionStateAcquire(windowID, app, cx.Scope())}
-	})
-	state := holder.Read(app, func(r *textSelectionRetainer, _ *App) WeakEntity[windowSelectionState] {
-		return r.state
-	})
-	textSelectionRegistry(app).states[windowID] = state
-	return state
+// textSelectionSweepPlan is paintTextSelection's scheduling answer:
+// whether the window has anything to sweep this frame and whether the
+// sweep's deferred effect was newly scheduled (browser-core 20).
+type textSelectionSweepPlan struct {
+	needs     bool
+	scheduled bool
+}
+
+// textSelectionPressPrepare is the mousedown capture arm's answer: the
+// clear handlers the prepare collected and whether a selection existed
+// to clear (browser-core 20's gated refresh).
+type textSelectionPressPrepare struct {
+	handlers []textSelectionClearHandler
+	had      bool
 }
 
 // paintTextSelection schedules the post-frame sweep and installs the
-// window's mouse listeners (U:text_selection.rs:2602-2767).
+// window's mouse listeners (U:text_selection.rs:2602-2767). Browser-
+// core 20: the sweep's deferred effect runs only when the window has
+// something to sweep — participants or a live gesture; a window with
+// no selectable text queues no per-frame effect, so its flushes draw
+// no extra frames (the automatic install otherwise hits every
+// window).
 func paintTextSelection(state WeakEntity[windowSelectionState], w *Window, app *App) {
-	schedule, _ := state.TryUpdateWith(app, func(s *windowSelectionState, _ *Context[windowSelectionState]) bool {
-		return s.scheduleFinishFrame()
+	if state.app != nil {
+		paintTextSelectionSweep(state, w, app)
+	}
+	paintTextSelectionListeners(w, app)
+}
+
+// paintTextSelectionSweep schedules the post-frame sweep (the head of
+// paintTextSelection, skipped for a window whose state does not exist
+// yet — browser-core 20).
+func paintTextSelectionSweep(state WeakEntity[windowSelectionState], w *Window, app *App) {
+	sweep, _ := state.TryUpdateWith(app, func(s *windowSelectionState, _ *Context[windowSelectionState]) textSelectionSweepPlan {
+		if needs := len(s.participants) > 0 || !s.idle(); !needs {
+			return textSelectionSweepPlan{}
+		}
+		return textSelectionSweepPlan{needs: true, scheduled: s.scheduleFinishFrame()}
 	})
-	if schedule {
+	if sweep.needs && sweep.scheduled {
 		w.Defer(app, func(w *Window, app *App) {
 			handlers, err := state.TryUpdateWith(app, func(s *windowSelectionState, cx *Context[windowSelectionState]) []textSelectionClearHandler {
 				return s.finishFrame(cx.App())
@@ -2906,10 +3048,25 @@ func paintTextSelection(state WeakEntity[windowSelectionState], w *Window, app *
 			}
 		})
 	}
+}
 
+// paintTextSelectionListeners installs the window's selection mouse
+// listeners (U:text_selection.rs:2602-2767's listener half): each
+// resolves the window's state per event, so a window whose state does
+// not exist yet (no selectable text has painted) stays inert and the
+// listeners activate the moment the first text creates it.
+func paintTextSelectionListeners(w *Window, app *App) {
 	w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
 		ev, ok := event.(*MouseDownEvent)
-		if !ok || ev.Button != MouseButtonLeft || !state.IsUpgradable() {
+		if !ok || ev.Button != MouseButtonLeft {
+			return
+		}
+		// Browser-core 20: the state is resolved per event — a window
+		// whose selectable text has not created it yet (the lazy
+		// acquisition, user_select.go) stays inert, and the listeners
+		// activate the moment it exists.
+		state, ok := textSelectionStateExisting(w, app)
+		if !ok {
 			return
 		}
 		// A press on a handle or on the edit menu acts on the selection; it
@@ -2922,14 +3079,27 @@ func paintTextSelection(state WeakEntity[windowSelectionState], w *Window, app *
 		case phase == DispatchCapture:
 
 			ResetTextSelectionSuppression(app)
-			handlers, _ := state.TryUpdateWith(app, func(s *windowSelectionState, cx *Context[windowSelectionState]) []textSelectionClearHandler {
+			prepared, _ := state.TryUpdateWith(app, func(s *windowSelectionState, cx *Context[windowSelectionState]) textSelectionPressPrepare {
 				if s.mouseDownPrepared {
-					return nil
+					return textSelectionPressPrepare{}
 				}
 				s.mouseDownPrepared = true
-				return s.prepareForMouseDown(ev.ClickCount == 1 && ev.Modifiers.Shift, cx.App())
+				return textSelectionPressPrepare{
+					handlers: s.prepareForMouseDown(ev.ClickCount == 1 && ev.Modifiers.Shift, cx.App()),
+					had:      !s.idle(),
+				}
 			})
+			handlers, hadSelection := prepared.handlers, prepared.had
 			dispatchTextSelectionClearHandlers(handlers, app)
+			// A press that cleared a selection repaints it away (browser-
+			// core 20: the auto path has no subscriber to refresh the
+			// window — Base's TextView refreshes through
+			// RefreshWindowOnChange — so the gesture arms refresh
+			// themselves; Chrome repaints on selection change). A press
+			// over nothing selectable clears nothing and stays quiet.
+			if hadSelection || len(handlers) > 0 {
+				w.requestRefresh()
+			}
 		case ev.ClickCount == 1:
 			if IsTextSelectionSuppressed(app) {
 				_ = state.TryUpdate(app, func(s *windowSelectionState, _ *Context[windowSelectionState]) { s.pendingExtensionAnchor = nil })
@@ -2941,6 +3111,7 @@ func paintTextSelection(state WeakEntity[windowSelectionState], w *Window, app *
 				}
 			})
 			textSelectionResolveContentKeys(state, app)
+			w.requestRefresh()
 		case ev.ClickCount >= 2:
 			if IsTextSelectionSuppressed(app) {
 				return
@@ -2955,6 +3126,7 @@ func paintTextSelection(state WeakEntity[windowSelectionState], w *Window, app *
 				}
 			})
 			textSelectionResolveContentKeys(state, app)
+			w.requestRefresh()
 		}
 	})
 
@@ -2963,6 +3135,10 @@ func paintTextSelection(state WeakEntity[windowSelectionState], w *Window, app *
 	w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
 		ev, ok := event.(*MouseMoveEvent)
 		if !ok || phase != DispatchBubble || ev.PressedButton == nil || *ev.PressedButton != MouseButtonLeft {
+			return
+		}
+		state, ok := textSelectionStateExisting(w, app)
+		if !ok {
 			return
 		}
 		dragging, err := state.TryRead(app, func(s *windowSelectionState, _ *App) bool { return s.touch.drag.IsSome() })
@@ -2974,9 +3150,13 @@ func paintTextSelection(state WeakEntity[windowSelectionState], w *Window, app *
 		})
 		textSelectionResolveContentKeys(state, app)
 	})
-	w.OnMouseEvent(func(event any, phase DispatchPhase, _ *Window, app *App) {
+	w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
 		ev, ok := event.(*MouseUpEvent)
 		if !ok || phase != DispatchBubble || ev.Button != MouseButtonLeft {
+			return
+		}
+		state, ok := textSelectionStateExisting(w, app)
+		if !ok {
 			return
 		}
 		_ = state.TryUpdate(app, func(s *windowSelectionState, cx *Context[windowSelectionState]) { s.endEdgeDrag(cx.App()) })
@@ -2984,22 +3164,37 @@ func paintTextSelection(state WeakEntity[windowSelectionState], w *Window, app *
 
 	w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
 		ev, ok := event.(*MouseMoveEvent)
-		if !ok || phase != DispatchBubble || !state.IsUpgradable() {
+		if !ok || phase != DispatchBubble {
 			return
 		}
-		_ = state.TryUpdate(app, func(s *windowSelectionState, cx *Context[windowSelectionState]) {
+		state, ok := textSelectionStateExisting(w, app)
+		if !ok {
+			return
+		}
+		selecting, _ := state.TryUpdateWith(app, func(s *windowSelectionState, cx *Context[windowSelectionState]) bool {
 			// A handle drag maps the pointer through the handle's offset;
 			// the raw pointer must not fight it.
 			if s.touch.drag.IsSome() {
-				return
+				return true
 			}
 			s.updateInWindow(ev.Position, w, cx)
+			return s.isSelecting
 		})
 		textSelectionResolveContentKeys(state, app)
+		// A drag in progress repaints its moving wash (browser-core 20,
+		// the auto path's own refresh; Chrome repaints the selection as
+		// it extends).
+		if selecting {
+			w.requestRefresh()
+		}
 	})
 
-	w.OnMouseEvent(func(event any, phase DispatchPhase, _ *Window, app *App) {
+	w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
 		if _, ok := event.(*MouseUpEvent); !ok || phase != DispatchBubble {
+			return
+		}
+		state, ok := textSelectionStateExisting(w, app)
+		if !ok {
 			return
 		}
 		_ = state.TryUpdate(app, func(s *windowSelectionState, cx *Context[windowSelectionState]) {
@@ -3010,7 +3205,11 @@ func paintTextSelection(state WeakEntity[windowSelectionState], w *Window, app *
 
 	w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
 		ev, ok := event.(*ScrollWheelEvent)
-		if !ok || !state.IsUpgradable() {
+		if !ok {
+			return
+		}
+		state, ok := textSelectionStateExisting(w, app)
+		if !ok {
 			return
 		}
 		// On capture, before a scroll container can stop the event: one

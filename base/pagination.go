@@ -163,7 +163,10 @@ func (p *Pagination) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
 }
 
 func (p *Pagination) render(_ *gpui.Window, _ *gpui.App) *gpui.DivElement {
-	d := p.base.Role(gpui.RoleNavigation).AriaLabel(p.accessibilityLabel).Extend(p.TakeChildren())
+	// The bar's items are buttons, like the UA stylesheet's button
+	// rule (user-select: none, html.css:850/:904; browser-core 20's
+	// default-on selection opts them back out through inheritance).
+	d := p.base.SelectNone().Role(gpui.RoleNavigation).AriaLabel(p.accessibilityLabel).Extend(p.TakeChildren())
 	style := p.Style()
 	return StyledExtOf(d).RefineStyle(&style)
 }
