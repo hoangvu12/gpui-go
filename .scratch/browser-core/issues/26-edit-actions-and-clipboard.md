@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 09
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged 4422cf9 into main (batch with 21 and 07+46). Harness conflicts with 21's toggle `state` were resolved by keeping both (EventRecord, instrumentation, transcript). With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./gpui/, ./internal/parity/..., layoutspec, clipspec, ./base, focusspec, imespec, actionspec, winhostspec, authorspec, inspectorspec, dropspec, richtextspec, spellspec, tsxgen, ./gpui/script/..., ./examples/... and ./cmd/.... Build, vet and gofmt are clean, and the TSX types are unchanged. Citation spot-checked: editing_behavior.cc:168-178 (Ctrl+Insert/Shift+Insert/Shift+Delete and Ctrl+C/V/X/A). The clipspec tests restore the user's clipboard (a TestMain guard), and OpenClipboard retries 5x5 ms.
 
 ## Answer
 

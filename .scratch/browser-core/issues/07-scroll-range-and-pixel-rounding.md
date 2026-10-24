@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 01
 Triage: ready-for-agent
@@ -15,12 +15,14 @@ Triage: ready-for-agent
 
 **Status:** ready-for-agent
 
-- [ ] Fixtures: nested overflowing content with a bottom margin scrolled to the end; padding-top in percent; 1px border at 175% scale; a 0.5px hairline at 100%.
-- [ ] Scroll extents and boxes match Chrome exactly.
+- [x] Fixtures: nested overflowing content with a bottom margin scrolled to the end; padding-top in percent; 1px border at 175% scale; a 0.5px hairline at 100%.
+- [x] Scroll extents and boxes match Chrome exactly.
 
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged 23915ef into main (batch with 21 and 26). Harness conflicts with 18's ImeSet/ImeCommit were resolved by keeping both, including the step-validation switch with the StepScript check. With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./gpui/, ./internal/parity/..., layoutspec, clipspec, ./base, focusspec, imespec, actionspec, winhostspec, authorspec, inspectorspec, dropspec, richtextspec, spellspec, tsxgen, ./gpui/script/..., ./examples/... and ./cmd/.... Build, vet and gofmt are clean, and the TSX types are unchanged. Citation spot-checked: style_builder_converter.cc:1971-1987 (border widths floor in CSS px, and a sub-1 width keeps 1). Note: the ticket text's "floored to device pixels" was a misreading; Chromium floors CSS px, as measured at 1.75x.
 
 ## Answer
 

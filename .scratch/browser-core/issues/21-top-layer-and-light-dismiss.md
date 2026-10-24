@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 14
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged db01f36 into main (batch with 07+46 and 26). Harness conflicts with 18's composition fields were resolved by keeping both: the `state` field in the EventRecord, the transcript script and the readable diff. With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./gpui/, ./internal/parity/..., layoutspec, clipspec, ./base, focusspec, imespec, actionspec, winhostspec, authorspec, inspectorspec, dropspec, richtextspec, spellspec, tsxgen, ./gpui/script/..., ./examples/... and ./cmd/.... Build, vet and gofmt are clean, and the TSX types are unchanged. Citation spot-checked: mouse_event_manager.cc:262-267 (light dismiss for a connected click pair). The Base nested-popover fault test (`TestPopoverClickInsideNestedChildKeepsTheParentOpen`) failed first and passes now. 33's Anchored containing-block gap is closed (Anchored uses RequestContainerLayout).
 
 ## Answer
 

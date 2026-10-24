@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 01
 Triage: ready-for-agent
@@ -15,11 +15,13 @@ Triage: ready-for-agent
 
 **Status:** ready-for-agent
 
-- [ ] Fixtures inserting rows above the viewport match Chrome's resulting scroll offsets.
+- [x] Fixtures inserting rows above the viewport match Chrome's resulting scroll offsets.
 
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged 7136a79 into main with 07 (same branch). With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./gpui/, ./internal/parity/..., layoutspec, clipspec, ./base, focusspec, imespec, actionspec, winhostspec, authorspec, inspectorspec, dropspec, richtextspec, spellspec, tsxgen, ./gpui/script/..., ./examples/... and ./cmd/.... Build, vet and gofmt are clean, and the TSX types are unchanged. Watch: the anchor walk is O(subtree) per scrolled scroller per frame.
 
 ## Answer
 
