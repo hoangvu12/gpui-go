@@ -574,7 +574,7 @@ func invokerBox(log *parity.EventLog, id string, x, y float32, focus gpui.FocusH
 		Absolute().Top(gpui.Px(y)).Left(gpui.Px(x)).
 		W(gpui.Px(invokerW)).H(gpui.Px(invokerH)).
 		Bg(gpui.Rgb(invokerBlue)).
-		TrackFocus(focus).
+		TrackFocus(focus).OutlineNone().
 		OnMouseDown(gpui.MouseButtonLeft, log.MouseDown(id)).
 		OnMouseUp(gpui.MouseButtonLeft, log.MouseUp(id)).
 		OnClick(func(e *gpui.ClickEvent, w *gpui.Window, app *gpui.App) {
@@ -591,7 +591,7 @@ func anchorBox(log *parity.EventLog, state *cwState) *gpui.DivElement {
 		Absolute().Top(gpui.Px(anchorY)).Left(gpui.Px(anchorX)).
 		W(gpui.Px(invokerW)).H(gpui.Px(invokerH)).
 		Bg(gpui.Rgb(anchorGray)).
-		TrackFocus(state.focusAnchor).
+		TrackFocus(state.focusAnchor).OutlineNone().
 		OnKeyDown(log.KeyDown("anchor"))
 }
 
