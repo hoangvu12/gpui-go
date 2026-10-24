@@ -7,10 +7,13 @@ import (
 	"github.com/hoangvu12/gpui-go/gpui"
 )
 
-// sheet.rs tests (4/4 ported, U:sheet.rs:169-270).
+// sheet.rs tests (4/4 ported, U:sheet.rs:169-270), moved onto the core
+// modal (browser-core ticket 72): Escape is the modal's close watcher
+// and an overlay press is the closedby=any light dismiss — both run the
+// sheet's close steps through the entry's toggle.
 
 // sheetHarness is U:sheet.rs:175-225 Harness plus harness().
-func sheetHarness(t *testing.T, closable bool, cutoff *float32, focusFirst bool) (*gpui.VisualTestContext, *[]string) {
+func sheetHarness(t *testing.T, closable bool, focusFirst bool) (*gpui.VisualTestContext, *[]string) {
 	t.Helper()
 	ta := gpui.NewTestApp()
 	ta.Update(ovInit)
@@ -22,11 +25,8 @@ func sheetHarness(t *testing.T, closable bool, cutoff *float32, focusFirst bool)
 			OverlayClosable(closable).
 			RequestClose(func(*gpui.Window, *gpui.App) { *events = append(*events, "request") }).
 			OnClose(func(*gpui.ClickEvent, *gpui.Window, *gpui.App) { *events = append(*events, "closed") }).
-			Overlay(gpui.Div().Absolute().Inset0().Occlude()).
+			Overlay(gpui.Div().Absolute().Inset0()).
 			Surface(gpui.Div().Absolute().Right0().Top0().HFull().W(gpui.Px(80)).Occlude())
-		if cutoff != nil {
-			sheet.DismissBeforeY(*cutoff)
-		}
 		return gpui.OwnRecipe(sheet)
 	})
 	if focusFirst {
@@ -36,33 +36,36 @@ func sheetHarness(t *testing.T, closable bool, cutoff *float32, focusFirst bool)
 	return cx, events
 }
 
-// U:sheet.rs:227-232
+// U:sheet.rs:227-232: an overlay press light-dismisses the modal
+// (closedby=any) and the entry's toggle runs the sheet's close steps.
 func TestSheetOverlayCloseRequestsThenNotifies(t *testing.T) {
-	cx, events := sheetHarness(t, true, nil, true)
+	cx, events := sheetHarness(t, true, true)
 	cx.SimulateClick(ovPoint(20, 20), gpui.NoModifiers())
+	cx.RunUntilParked()
 	if !slices.Equal(*events, []string{"request", "closed"}) {
 		t.Fatalf("events = %v", *events)
 	}
 }
 
-// U:sheet.rs:234-239
+// U:sheet.rs:234-239: with OverlayClosable(false) the closedby policy
+// is closerequest — an outside press is inert and requests nothing.
 func TestSheetNonClosableOverlayDoesNotRequestClose(t *testing.T) {
-	cx, events := sheetHarness(t, false, nil, true)
+	cx, events := sheetHarness(t, false, true)
 	cx.SimulateClick(ovPoint(20, 20), gpui.NoModifiers())
+	cx.RunUntilParked()
 	if len(*events) != 0 {
 		t.Fatalf("events = %v", *events)
 	}
 }
 
-// U:sheet.rs:241-247
-func TestSheetEscapeUsesTheSameCloseOrderAndRegistersFocusTrap(t *testing.T) {
-	cx, events := sheetHarness(t, true, nil, true)
-	var ok bool
-	cx.Update(func(w *gpui.Window, app *gpui.App) { _, ok = ActiveFocusTrap(w, app) })
-	if !ok {
-		t.Fatal("the sheet registered no active focus trap")
-	}
-	cx.DispatchAction(CancelAction.Box(Cancel{}))
+// U:sheet.rs:241-247: Escape uses the same close order. browser-core
+// ticket 72: the Escape key itself (no action dispatch — the binding is
+// gone) signals the modal's close watcher, whose toggle runs the close
+// steps; the focus trap is gone with the modal's inert outside.
+func TestSheetEscapeUsesTheSameCloseOrder(t *testing.T) {
+	cx, events := sheetHarness(t, true, true)
+	cx.SimulateKeystrokes("escape")
+	cx.RunUntilParked()
 	if !slices.Equal(*events, []string{"request", "closed"}) {
 		t.Fatalf("events = %v", *events)
 	}
@@ -126,15 +129,14 @@ func TestSheetInsideAScrollAreaIsClippedUnlessDeferred(t *testing.T) {
 	}
 }
 
-// U:sheet.rs:249-269
-func TestSheetPointerAboveTheDismissCutoffIsIgnored(t *testing.T) {
-	cutoff := float32(50)
-	cx, events := sheetHarness(t, true, &cutoff, false)
+// Go-own, browser-core ticket 72: the DismissBeforeY cutoff is gone
+// with the overlay's own press listener — Chrome's closedby=any light
+// dismiss has no positional rule, so every press outside the surface
+// closes the sheet wherever it lands.
+func TestSheetEveryOverlayPressClosesWhereverItLands(t *testing.T) {
+	cx, events := sheetHarness(t, true, false)
 	cx.SimulateClick(ovPoint(20, 20), gpui.NoModifiers())
-	if len(*events) != 0 {
-		t.Fatalf("events above the cutoff = %v", *events)
-	}
-	cx.SimulateClick(ovPoint(20, 80), gpui.NoModifiers())
+	cx.RunUntilParked()
 	if !slices.Equal(*events, []string{"request", "closed"}) {
 		t.Fatalf("events = %v", *events)
 	}

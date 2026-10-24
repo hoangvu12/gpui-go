@@ -8,7 +8,9 @@ import "github.com/hoangvu12/gpui-go/gpui"
 // comboboxContext is the Combobox key context (U:combobox.rs:14).
 const comboboxContext = "Combobox"
 
-// comboboxInit binds the combobox keys (U:combobox.rs:16-28).
+// comboboxInit binds the combobox keys (U:combobox.rs:16-28). Escape
+// is not bound: the open state's close watcher owns it (browser-core
+// ticket 72 — the Select's picker watcher, see select.go).
 func comboboxInit(app *gpui.App) {
 	ctx := comboboxContext
 	app.BindKeys(
@@ -16,7 +18,6 @@ func comboboxInit(app *gpui.App) {
 		gpui.NewKeyBinding("down", SelectDownAction.Box(SelectDown{}), &ctx),
 		gpui.NewKeyBinding("enter", ConfirmAction.Box(Confirm{Secondary: false}), &ctx),
 		gpui.NewKeyBinding("secondary-enter", ConfirmAction.Box(Confirm{Secondary: true}), &ctx),
-		gpui.NewKeyBinding("escape", CancelAction.Box(Cancel{}), &ctx),
 	)
 }
 

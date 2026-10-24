@@ -4,43 +4,14 @@ package base
 //
 // Deviation: the text_view_state_stack (U:global_state.rs:23, 96-98) holds
 // TextView entities and joins with the TextView ticket (28).
-
-import (
-	"weak"
-
-	"github.com/hoangvu12/gpui-go/gpui"
-)
-
-// deferredToken is the liveness cell behind a DeferredPopover (the Rust
-// Rc<()>). It is padded past the tiny-allocator size so a dropped token
-// is collected on its own.
-type deferredToken struct {
-	released bool
-	_        [16]byte
-}
-
-// DeferredPopover holds the deferred interaction context open for as long
-// as it is alive (U:global_state.rs:11-16). It is handed out by
-// GlobalStateRegisterDeferredPopover.
 //
-// Go adaptation: Rust closes the context when the token drops. Go has no
-// drop, so Release closes it deterministically; a token that becomes
-// unreachable without Release still closes once the garbage collector
-// reclaims it (the registry only holds weak pointers), which keeps the
-// upstream guarantee that popup state collected without ever closing
-// cannot leave the context open for the rest of the session.
-type DeferredPopover struct {
-	token *deferredToken
-}
+// browser-core ticket 72: the deferred-popover liveness list is deleted
+// — the top-layer entry's own registration (gpui/toplayer.go) is the
+// popup's liveness, and the entry's frame-end reconciliation closes what
+// stopped rendering, which is what the list's tokens approximated
+// (U:global_state.rs:11-16, 121-149).
 
-// Release closes this registration (Rust: drop the token). Releasing
-// twice is a no-op.
-func (p *DeferredPopover) Release() {
-	if p != nil && p.token != nil {
-		p.token.released = true
-		p.token = nil
-	}
-}
+import "github.com/hoangvu12/gpui-go/gpui"
 
 // GlobalState is the application-wide state shared by Base behaviors
 // (U:global_state.rs:18-30). The global is stored as *GlobalState. The
@@ -50,8 +21,7 @@ func (p *DeferredPopover) Release() {
 // gpui/text_selection_globals.go — the functions below delegate there so
 // one flag serves the core model and Base's controls).
 type GlobalState struct {
-	appMenus         []gpui.Menu
-	deferredPopovers []weak.Pointer[deferredToken]
+	appMenus []gpui.Menu
 }
 
 // newGlobalState returns the initial state (U:global_state.rs:33-42;
@@ -126,39 +96,3 @@ func (s *GlobalState) AppMenus() []gpui.Menu { return s.appMenus }
 
 // SetAppMenus replaces the application menus (U:global_state.rs:116-119).
 func (s *GlobalState) SetAppMenus(menus []gpui.Menu) { s.appMenus = menus }
-
-// GlobalStateIsInDeferredContext reports whether any deferred popup
-// currently owns an open interaction context (U:global_state.rs:121-128).
-func GlobalStateIsInDeferredContext(app *gpui.App) bool {
-	for _, popover := range GlobalStateGlobal(app).deferredPopovers {
-		if deferredAlive(popover) {
-			return true
-		}
-	}
-	return false
-}
-
-// GlobalStateRegisterDeferredPopover registers an open deferred popup,
-// which stays registered for as long as the returned token is held
-// (U:global_state.rs:130-149). A token rather than an identifier, because
-// popup state is routinely dropped without ever being closed; a
-// registration that outlived its popup would leave the application
-// believing a popup is open forever.
-func GlobalStateRegisterDeferredPopover(app *gpui.App) *DeferredPopover {
-	token := &deferredToken{}
-	s := GlobalStateGlobalMut(app)
-	live := s.deferredPopovers[:0]
-	for _, popover := range s.deferredPopovers {
-		if deferredAlive(popover) {
-			live = append(live, popover)
-		}
-	}
-	s.deferredPopovers = append(live, weak.Make(token))
-	return &DeferredPopover{token: token}
-}
-
-// deferredAlive is the Weak::strong_count() > 0 check.
-func deferredAlive(p weak.Pointer[deferredToken]) bool {
-	token := p.Value()
-	return token != nil && !token.released
-}

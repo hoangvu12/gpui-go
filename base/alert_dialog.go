@@ -122,12 +122,23 @@ func (t *AlertDialogTrigger) RenderOnce(*gpui.Window, *gpui.App) gpui.AnyElement
 
 // alertDispatchElement renders a wrapper dispatching action on click
 // (the alert_close_part! render, U:alert_dialog.rs:130-139, and
-// AlertDialogAction, U:alert_dialog.rs:180-190).
-func alertDispatchElement(id string, action gpui.BoxedAction, style gpui.StyleRefinement, children []gpui.AnyElement) gpui.AnyElement {
+// AlertDialogAction, U:alert_dialog.rs:180-190). browser-core ticket
+// 72: the wrapper dispatches from its own tracked focus node
+// (DialogClose's anchor pattern, dialog.go dialogCloseAnchor) rather
+// than the app's focused node — the modal host no longer takes the
+// click's mouse focus (a viewport-sized tracking hitbox would block
+// the closedby=any light dismiss), so the app's focused element
+// cannot be assumed to sit on the dialog's dispatch path. The anchor
+// is zero-size and never hovered: it takes no focus of its own and
+// does not enter the Tab order, but it sits inside this dialog's
+// dispatch path.
+func alertDispatchElement(id string, action gpui.BoxedAction, style gpui.StyleRefinement, children []gpui.AnyElement, w *gpui.Window, app *gpui.App) gpui.AnyElement {
+	anchor := overlayKeyedFocusHandle(gpui.NameElementID(id), w, app)
 	d := gpui.Div().Block().
 		ID(id).
+		Child(gpui.Div().Block().Absolute().Size0().TrackFocus(anchor)).
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, app *gpui.App) {
-			w.DispatchBoxed(action.Clone(), app)
+			anchor.DispatchAction(action.Clone(), w, app)
 		})
 	d.Extend(children)
 	return StyledExtOf(d).RefineStyle(&style).IntoElement()
@@ -148,8 +159,8 @@ func NewAlertDialogClose() *AlertDialogClose {
 }
 
 // RenderOnce implements gpui.RenderOnce.
-func (c *AlertDialogClose) RenderOnce(*gpui.Window, *gpui.App) gpui.AnyElement {
-	return alertDispatchElement("alert-dialog-close", CancelAction.Box(Cancel{}), c.Style(), c.TakeChildren())
+func (c *AlertDialogClose) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
+	return alertDispatchElement("alert-dialog-close", CancelAction.Box(Cancel{}), c.Style(), c.TakeChildren(), w, app)
 }
 
 // AlertDialogCancel is a wrapper dispatching Cancel when clicked
@@ -167,8 +178,8 @@ func NewAlertDialogCancel() *AlertDialogCancel {
 }
 
 // RenderOnce implements gpui.RenderOnce.
-func (c *AlertDialogCancel) RenderOnce(*gpui.Window, *gpui.App) gpui.AnyElement {
-	return alertDispatchElement("alert-dialog-cancel", CancelAction.Box(Cancel{}), c.Style(), c.TakeChildren())
+func (c *AlertDialogCancel) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
+	return alertDispatchElement("alert-dialog-cancel", CancelAction.Box(Cancel{}), c.Style(), c.TakeChildren(), w, app)
 }
 
 // AlertDialogAction is a wrapper dispatching the alert dialog's Confirm
@@ -186,8 +197,8 @@ func NewAlertDialogAction() *AlertDialogAction {
 }
 
 // RenderOnce implements gpui.RenderOnce (U:alert_dialog.rs:180-190).
-func (a *AlertDialogAction) RenderOnce(*gpui.Window, *gpui.App) gpui.AnyElement {
-	return alertDispatchElement("alert-dialog-action", ConfirmAction.Box(Confirm{Secondary: false}), a.Style(), a.TakeChildren())
+func (a *AlertDialogAction) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
+	return alertDispatchElement("alert-dialog-action", ConfirmAction.Box(Confirm{Secondary: false}), a.Style(), a.TakeChildren(), w, app)
 }
 
 // AlertDialog is the alert-dialog specialization of the Base modal host
@@ -239,16 +250,10 @@ func (a *AlertDialog) Popup(element any) *AlertDialog {
 }
 
 // CloseOnEscape sets whether the keyboard actions apply
-// (U:alert_dialog.rs:226-229).
+// (U:alert_dialog.rs:226-229): the closedby policy's keyboard half —
+// false is closedby=none (neither Escape nor a press outside closes).
 func (a *AlertDialog) CloseOnEscape(value bool) *AlertDialog {
 	a.dialog.CloseOnEscape(value)
-	return a
-}
-
-// DismissBelowY ignores backdrop presses above y
-// (U:alert_dialog.rs:230-233).
-func (a *AlertDialog) DismissBelowY(value float32) *AlertDialog {
-	a.dialog.DismissBelowY(value)
 	return a
 }
 

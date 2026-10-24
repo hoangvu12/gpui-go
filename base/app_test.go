@@ -1,7 +1,6 @@
 package base
 
 import (
-	"runtime"
 	"testing"
 
 	"github.com/hoangvu12/gpui-go/gpui"
@@ -14,7 +13,9 @@ import (
 // pinned SystemPreferences record), so there is no Base-side preference
 // application left to test.
 
-// U:global_state.rs:156-173
+// U:global_state.rs:156-173. The deferred-context assertions are
+// gone with the liveness list (browser-core ticket 72: the top-layer
+// entry's registration is the popup's liveness).
 func TestGlobalStateInitializationIsIdempotentAndSuppressionCanBeReset(t *testing.T) {
 	ta := gpui.NewTestApp()
 	ta.Update(func(app *gpui.App) {
@@ -28,69 +29,6 @@ func TestGlobalStateInitializationIsIdempotentAndSuppressionCanBeReset(t *testin
 		GlobalStateResetTextSelectionSuppression(app)
 		if GlobalStateIsTextSelectionSuppressed(app) {
 			t.Fatal("suppression not reset")
-		}
-
-		if GlobalStateIsInDeferredContext(app) {
-			t.Fatal("deferred context open before any registration")
-		}
-		popover := GlobalStateRegisterDeferredPopover(app)
-		if !GlobalStateIsInDeferredContext(app) {
-			t.Fatal("registration did not open the deferred context")
-		}
-		popover.Release() // drop(popover)
-		if GlobalStateIsInDeferredContext(app) {
-			t.Fatal("release did not close the deferred context")
-		}
-	})
-}
-
-// U:global_state.rs:175-199
-func TestGlobalStateADroppedRegistrationClosesTheDeferredContext(t *testing.T) {
-	ta := gpui.NewTestApp()
-	ta.Update(func(app *gpui.App) {
-		GlobalStateInit(app)
-
-		outer := GlobalStateRegisterDeferredPopover(app)
-		{
-			inner := GlobalStateRegisterDeferredPopover(app)
-			if !GlobalStateIsInDeferredContext(app) {
-				t.Fatal("not in deferred context")
-			}
-			inner.Release() // the inner scope ends
-		}
-		if !GlobalStateIsInDeferredContext(app) {
-			t.Fatal("the outer registration closed with the inner one")
-		}
-
-		outer.Release()
-		if GlobalStateIsInDeferredContext(app) {
-			t.Fatal("still in deferred context")
-		}
-
-		// Registering again must not resurrect the collected ones.
-		popover := GlobalStateRegisterDeferredPopover(app)
-		if n := len(GlobalStateGlobal(app).deferredPopovers); n != 1 {
-			t.Fatalf("registrations = %d, want 1", n)
-		}
-		popover.Release()
-		if GlobalStateIsInDeferredContext(app) {
-			t.Fatal("still in deferred context")
-		}
-	})
-}
-
-// Go-own: a token dropped without Release closes the context once it is
-// collected (the Rc-drop guarantee, U:global_state.rs:130-140).
-func TestGlobalStateAnUnreleasedTokenClosesWhenCollected(t *testing.T) {
-	ta := gpui.NewTestApp()
-	ta.Update(func(app *gpui.App) {
-		GlobalStateInit(app)
-		func() {
-			_ = GlobalStateRegisterDeferredPopover(app) // never released
-		}()
-		runtime.GC()
-		if GlobalStateIsInDeferredContext(app) {
-			t.Fatal("a collected token kept the deferred context open")
 		}
 	})
 }

@@ -14,8 +14,20 @@ package base
 //     under crates.io gpui 0.2.2 (the pin defaults to Flex,
 //     R:style.rs:1024-1027), so it is built with Block() before the
 //     caller's style refines over it; a caller's Flex() still wins.
+//   - Positioning (browser-core ticket 72): the placement is the core's
+//     element-anchored Anchored (gpui.Anchored().AnchorBounds over the
+//     measured trigger cell, the corner anchors mapped onto side and
+//     alignment, the offset onto the gap, AnchorShift as the only
+//     fallback — the corner rule clamps without flipping — and the
+//     window margin), replacing Base's own positioner element
+//     (positioner.go, deleted): every anchored surface in Base now
+//     resolves through the same core rule as CSS anchor positioning.
 
-import "github.com/hoangvu12/gpui-go/gpui"
+import (
+	"fmt"
+
+	"github.com/hoangvu12/gpui-go/gpui"
+)
 
 // popupWindowMargin is the distance kept between a popup and the window
 // edge (U:popup.rs:11-12).
@@ -24,6 +36,22 @@ const popupWindowMargin float32 = 8
 // PopupPriority is the deferred paint priority of interactive surfaces
 // that must appear above dialogs (U:popup.rs:14-15 POPUP_PRIORITY).
 const PopupPriority = 100
+
+// ResolvedPosition is the bounds a popup resolved to, and the side it
+// ended up on (U:positioner.rs:48-56; the positioner element is gone,
+// the type is the popup host's placement report).
+type ResolvedPosition struct {
+	// Bounds are the final popup bounds in window coordinates.
+	Bounds gpui.Bounds
+	// Placement is the side the popup was placed on (the side the
+	// corner anchor maps onto).
+	Placement gpui.Optional[Placement]
+}
+
+// edgesAll is Edges::all over logical pixels.
+func edgesAll(value float32) gpui.Edges {
+	return gpui.Edges{Top: value, Right: value, Bottom: value, Left: value}
+}
 
 // popupAnchorState is the keyed trigger measurement (U:popup.rs:17-21).
 type popupAnchorState struct {
@@ -117,30 +145,6 @@ func PopupResolvedCorner(anchor gpui.Anchor, triggerBounds gpui.Bounds) gpui.Poi
 	return triggerBounds.Origin
 }
 
-// popupAnchorPosition matches the popup's anchor to the opposite edge of
-// the measured trigger (U:popup.rs:102-114 anchor_position).
-func popupAnchorPosition(anchor gpui.Anchor, trigger gpui.Bounds, offset float32) gpui.Point {
-	add := func(p gpui.Point, dx, dy float32) gpui.Point { return gpui.Point{X: p.X + dx, Y: p.Y + dy} }
-	switch anchor {
-	case gpui.AnchorTopLeft:
-		return add(trigger.BottomLeft(), 0, offset)
-	case gpui.AnchorTopCenter:
-		return add(trigger.BottomCenter(), 0, offset)
-	case gpui.AnchorTopRight:
-		return add(trigger.BottomRight(), 0, offset)
-	case gpui.AnchorBottomLeft:
-		return add(trigger.Origin, 0, -offset)
-	case gpui.AnchorBottomCenter:
-		return add(trigger.TopCenter(), 0, -offset)
-	case gpui.AnchorBottomRight:
-		return add(trigger.TopRight(), 0, -offset)
-	case gpui.AnchorLeftCenter:
-		return add(trigger.RightCenter(), offset, 0)
-	}
-	// RightCenter.
-	return add(trigger.LeftCenter(), -offset, 0)
-}
-
 // RenderOnce implements gpui.RenderOnce (U:popup.rs:130-201): the root
 // measures the trigger with a full-size canvas; once the trigger has
 // been captured, the content renders deferred at PopupPriority, at the
@@ -155,12 +159,9 @@ func (p *Popup) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
 	offset := p.offset
 	triggerBounds := new(gpui.Bounds)
 	*triggerBounds = snapshot.bounds
-	position := new(gpui.Point)
-	*position = popupAnchorPosition(anchor, snapshot.bounds, offset)
 
 	measure := gpui.Canvas(func(bounds gpui.Bounds, w *gpui.Window, app *gpui.App) struct{} {
 		*triggerBounds = bounds
-		*position = popupAnchorPosition(anchor, bounds, offset)
 		first := state.UpdateWith(app, func(s *popupAnchorState, _ *gpui.Context[popupAnchorState]) bool {
 			first := !s.captured
 			s.bounds = bounds
@@ -179,16 +180,86 @@ func (p *Popup) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
 	if p.content == nil || !snapshot.captured {
 		return root.IntoElement()
 	}
-	positioner := PositionerCorner(anchor, *position).trackedCornerPosition(position)
+	// The core's element-anchored placement (browser-core ticket 72): the
+	// measured trigger cell is the anchor, the corner anchor maps onto a
+	// side and alignment, the offset onto the gap, and AnchorShift — the
+	// positioner's clamp — is the only fallback, so a corner-anchored
+	// popup never flips (U:popup.rs:95-109). The host blocks the mouse
+	// over the placed box, so no caller has to remember: what a popup
+	// covers belongs to the popup.
+	anchored := gpui.Anchored().
+		AnchorBounds(triggerBounds).
+		Side(popupAnchorSide(anchor)).
+		Align(popupAnchorAlign(anchor)).
+		Gap(offset).
+		TryFallbacks(gpui.AnchorShift).
+		Margin(edgesAll(popupWindowMargin)).
+		Occlude()
 	if callback := p.onPosition; callback != nil {
-		positioner.OnPosition(func(resolved ResolvedPosition) { callback(resolved, *triggerBounds) })
+		placement := popupAnchorPlacement(anchor)
+		anchored.OnResolved(func(bounds gpui.Bounds) {
+			callback(ResolvedPosition{Bounds: bounds, Placement: gpui.Some(placement)}, *triggerBounds)
+		})
 	}
 	return root.Child(gpui.Deferred(
-		positioner.
-			Margin(popupWindowMargin).
-			// The host blocks the mouse, so no caller has to remember:
-			// what a popup covers belongs to the popup.
-			Occlude().
-			Child(*p.content),
+		anchored.Child(*p.content),
 	).Priority(PopupPriority)).IntoElement()
+}
+
+// popupAnchorSide maps a corner anchor onto the side the popup is
+// placed on: the popup's anchored corner sits against the opposite
+// edge of the trigger (U:popup.rs:102-114 anchor_position —
+// AnchorTopLeft places the popup's top-left at the trigger's
+// bottom-left, so the popup sits BELOW the trigger, start-aligned).
+func popupAnchorSide(anchor gpui.Anchor) gpui.AnchorSide {
+	switch anchor {
+	case gpui.AnchorTopLeft, gpui.AnchorTopCenter, gpui.AnchorTopRight:
+		return gpui.AnchorSideBottom
+	case gpui.AnchorBottomLeft, gpui.AnchorBottomCenter, gpui.AnchorBottomRight:
+		return gpui.AnchorSideTop
+	case gpui.AnchorLeftCenter:
+		return gpui.AnchorSideRight
+	}
+	// RightCenter.
+	return gpui.AnchorSideLeft
+}
+
+// popupAnchorAlign maps a corner anchor onto the alignment along the
+// side (the corner's cross-axis position: Left/Start, Center, Right/End).
+func popupAnchorAlign(anchor gpui.Anchor) gpui.AnchorAlign {
+	switch anchor {
+	case gpui.AnchorTopLeft, gpui.AnchorBottomLeft:
+		return gpui.AnchorAlignStart
+	case gpui.AnchorTopCenter, gpui.AnchorBottomCenter, gpui.AnchorLeftCenter, gpui.AnchorRightCenter:
+		return gpui.AnchorAlignCenter
+	}
+	// TopRight | BottomRight.
+	return gpui.AnchorAlignEnd
+}
+
+// popupAnchorPlacement maps a corner anchor onto the reported
+// placement (the side the popup sits on).
+func popupAnchorPlacement(anchor gpui.Anchor) Placement {
+	switch anchor {
+	case gpui.AnchorTopLeft, gpui.AnchorTopCenter, gpui.AnchorTopRight:
+		return PlacementBottom
+	case gpui.AnchorBottomLeft, gpui.AnchorBottomCenter, gpui.AnchorBottomRight:
+		return PlacementTop
+	case gpui.AnchorLeftCenter:
+		return PlacementRight
+	}
+	// RightCenter.
+	return PlacementLeft
+}
+
+// overlayIntoElement converts one child-position value (an element,
+// IntoElement, string, view or recipe) into an AnyElement, panicking
+// with the owner's name on invalid input (the `impl IntoElement`
+// parameters of the overlay builders).
+func overlayIntoElement(owner string, value any) gpui.AnyElement {
+	element, err := gpui.TryIntoElement(value)
+	if err != nil {
+		panic(fmt.Sprintf("base: %s: %v", owner, err))
+	}
+	return element
 }

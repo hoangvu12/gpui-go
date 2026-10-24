@@ -300,9 +300,11 @@ func (v *tabView) Render(*gpui.Window, *gpui.Context[tabView]) gpui.AnyElement {
 		IntoElement()
 }
 
-// Go-own: Tab and Shift-Tab move focus through the root key bindings, and
-// an active focus trap keeps focus inside (U:root.rs:194-262).
-func TestRootTabNavigationAndFocusTrapCycling(t *testing.T) {
+// Go-own: Tab and Shift-Tab move focus through the core's default
+// action (browser-core 14 — the Root's Tab bindings and the focus trap
+// are gone, ticket 72: the browser's Tab is a default action, and a
+// modal dialog's inert outside is the trap's replacement).
+func TestRootTabNavigationUsesTheCoreDefaultAction(t *testing.T) {
 	ta := gpui.NewTestApp()
 	app := ta.App()
 	ta.Update(func(app *gpui.App) { Init(app) })
@@ -334,27 +336,11 @@ func TestRootTabNavigationAndFocusTrapCycling(t *testing.T) {
 		t.Fatal("shift-tab did not move focus back")
 	}
 
-	// Without a trap, tab from b reaches c outside the container.
+	// Tab from b reaches c outside the container: the document order
+	// rules, no container keeps focus inside.
 	cx.Update(func(w *gpui.Window, _ *gpui.App) { w.Focus(b) })
 	cx.SimulateKeystrokes("tab")
 	if focused() != c.ID() {
 		t.Fatal("tab from b did not reach c")
-	}
-
-	// With the container as the active trap (the focus_trap.rs lookup,
-	// ticket 16), tabbing out of b cycles back to a.
-	saved := activeFocusTrap
-	defer func() { activeFocusTrap = saved }()
-	activeFocusTrap = func(w *gpui.Window, _ *gpui.App) (gpui.FocusHandle, bool) {
-		return container, container.ContainsFocused(w)
-	}
-	cx.Update(func(w *gpui.Window, _ *gpui.App) { w.Focus(b) })
-	cx.SimulateKeystrokes("tab")
-	if focused() != a.ID() {
-		t.Fatalf("tab out of the trap landed on %d, want a (%d)", focused(), a.ID())
-	}
-	cx.SimulateKeystrokes("shift-tab")
-	if focused() != b.ID() {
-		t.Fatalf("shift-tab out of the trap landed on %d, want b (%d)", focused(), b.ID())
 	}
 }

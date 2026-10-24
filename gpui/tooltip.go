@@ -352,6 +352,18 @@ func prepaintTooltipHook(d *DivElement, global *GlobalElementID, bounds Bounds, 
 	rec.invoker = ""
 	if d.elementID != nil && d.elementID.Kind == ElementIDName {
 		rec.invoker = d.elementID.Name
+		// browser-core ticket 72: the invoker also records its bounds
+		// into the frame's anchor registry, so custom TooltipView content
+		// can place itself with Anchored().AnchorTo(<the invoker's id>) —
+		// the default look reads the record's own bounds cell, but the
+		// builder's content has no cell. Recording here (turning the
+		// window's tracking on and writing the in-flight frame's registry)
+		// resolves the name on the FIRST frame the tooltip renders, not
+		// one frame late: the window renders the tooltip's top-layer
+		// element after the app tree's prepaints, so the registry entry is
+		// already there when the content's Anchored looks it up.
+		requestAnchorTracking(w)
+		recordAnchorBounds(w, d.elementID.Name, bounds, ContentMask(w))
 	}
 	rec.focusID = 0
 	if d.focusHandle != nil {
