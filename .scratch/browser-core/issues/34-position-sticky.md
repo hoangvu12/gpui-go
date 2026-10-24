@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 01
 Triage: ready-for-agent
@@ -20,6 +20,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged c14b1e8 into main on top of 12, with no conflicts. Build, vet and gofmt are clean. With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./gpui/, ./internal/parity/... (the 5 sticky fixtures), layoutspec, ./base, authorspec, inspectorspec and examples/zterm. Without sticky nothing changes: `stickyChildrenLast` returns the same slice when no child is sticky (no allocation), and the flow-box registry fills only when the frame requested a sticky element. Citation checked: page/scrolling/sticky_position_scrolling_constraints.cc:65+ (PerAxisData::ComputeOffset, the ancestor-sticky adjustments, left/top override right/bottom). Noted limitation: a sticky child's key-dispatch and hitbox order follows the paint reorder, unlike Chromium's DOM order.
 
 - 2026-10-25, worker (core/34-sticky): implemented, test-first (the unit expectations and the fixture pages were written from Chromium's constraint math before the prepaint pass ran; the Chrome records confirmed the predicted boxes). The offset applies at prepaint only — the scroll offset cell is the only input that changes, never the layout (the record zeroes the sticky insets; sticky maps onto in-flow Relative). One scoped paint-order rule: a sticky child paints (and inserts its hitbox) after its in-flow siblings (css2.1 Appendix E step 8 — a positioned element rides above in-flow content), without which the pinned header is covered by the content scrolling under it.
 
