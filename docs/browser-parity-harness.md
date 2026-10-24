@@ -27,12 +27,20 @@ new fixtures. The implementation lives in `internal/parity`:
   fixture's `EventKinds`; the view's handlers append to an `EventLog`. Kinds, targets,
   order (including bubble order: target first, then ancestors) and the final
   `defaultPrevented` state must match exactly. The vocabulary is `mousedown`, `mouseup`,
-  `click` and the pointer boundary events `pointerenter`/`pointerleave` (browser-core
-  ticket 10): the boundary kinds arrive in Chromium's order — leave events innermost
+  `click`, the pointer boundary events `pointerenter`/`pointerleave` (browser-core
+  ticket 10) and the pointer events `pointerdown`, `pointermove`, `pointerup`,
+  `gotpointercapture` and `lostpointercapture` (browser-core ticket 11); the boundary kinds arrive
+  in Chromium's order — leave events innermost
   (child) first, enter events outermost (parent) first, all before the move that caused
   them — and a `Move` step to a point outside the viewport is the DOM-visible half of
   "the pointer left the window" (it fires the leave on the whole hovered chain); the
-  WM_MOUSELEAVE half is covered by gpui's own window tests.
+  WM_MOUSELEAVE half is covered by gpui's own window tests. While an element holds
+  the pointer capture, the pointer kinds follow Chromium's capture rules
+  (pointer_event_manager.cc): `gotpointercapture` fires when the pending capture
+  processes at the next pointer event (before that event, bubbling from the captured
+  element), the moves target the captured chain alone, and the release fires
+  `lostpointercapture` after the ups with the boundary events settling after it
+  (`fixtures/capture` is the fixture).
   The key kinds are `keydown` and `keyup` (browser-core ticket 09): key entries also carry the
   event's key (`e.key`, DOM key names — `Tab`, ` `, `ArrowDown`), the physical code and
   location (`e.code`/`e.location`, browser-core ticket 13 — `BracketRight`, `Numpad1`
@@ -114,17 +122,17 @@ new fixtures. The implementation lives in `internal/parity`:
    handlers need it) and `.DebugSelector("<id>")` (the bounds key) with the same string.
    `BoxIDs` lists the compared ones; `EventKinds` lists the event kinds the page binds and
    the view logs (`log.MouseDown("box")`, `log.Click("box")`,
-   `log.PointerEnter("box")`, `log.PointerLeave("box")` — one helper per kind). The
-   pointer boundary kinds need the element ids: the retained hover state that diffs
-   enter/leave across frames keys on them.
-   the view logs (`log.MouseDown("box")`, `log.Click("box")`, `log.KeyDown("box")`,
-   `log.KeyUp("box")`, `log.KeyDownPreventDefault("box")` — one helper per kind; the key
-   helpers record the event's key, physical code and location and the focus field, and
-   the preventing one also calls
-   `Window.PreventDefault`). An element may narrow its bound kinds with a
-   `data-events="keydown,keyup"` attribute (a comma-separated subset of `EventKinds` —
-   the instrumentation honours it on the page side, and the view simply registers only
-   the matching handlers).
+   `log.PointerEnter("box")`, `log.PointerLeave("box")`, the pointer kinds of
+   ticket 11 — `log.PointerDown("box")`, `log.PointerMove("box")`,
+   `log.PointerUp("box")`, `log.GotPointerCapture("box")`,
+   `log.LostPointerCapture("box")` — and `log.KeyDown("box")`, `log.KeyUp("box")`,
+   `log.KeyDownPreventDefault("box")`; one helper per kind). The key helpers record the
+   event's key, physical code and location and the focus field, and the preventing one
+   also calls `Window.PreventDefault`. The pointer boundary kinds need the element ids:
+   the retained hover state that diffs enter/leave across frames keys on them. An
+   element may narrow its bound kinds with a `data-events="keydown,keyup"` attribute (a
+   comma-separated subset of `EventKinds` — the instrumentation honours it on the page
+   side, and the view simply registers only the matching handlers).
 
 4. **The input script is one vocabulary.** Steps are logical (CSS-pixel) positions:
    `parity.Move/Down/Up/Click/Key`. The recorder dispatches them to Chrome as trusted
@@ -330,3 +338,13 @@ code field and the keycode fixtures landed (`fixtures/keycode`).
   match the platform — so a key fixture must not press Shift with a letter and expect
   the DOM `key` name (the `keycode` fixtures use shifted punctuation instead; the
   shift-folding of letters would be a separate ticket).
+ticket 11 (pointer capture) added the pointer-event and capture transcript kinds
+(`fixtures/capture`), the capture retargeting behind the existing
+`Window.CapturePointer` API (pending capture, got/lost callbacks, a clean cancel on
+WM_CAPTURECHANGED) and the element-local position
+(`MouseDownEvent`/`MouseUpEvent`/`MouseMoveEvent.LocalPosition`). The capture fixture
+still avoids instrumenting `click`: the pin fires its click inside the up's listener
+traversal (click before mouseup) where the browser delivers pointerup,
+lostpointercapture, click — the same input-bundle (D12) divergence as the tracer's
+un-instrumented `mouseup`, and the capture ticket's own order (lost after the ups,
+boundary settling last) is covered by the transcript's other kinds.

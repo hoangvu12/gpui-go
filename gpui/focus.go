@@ -129,6 +129,12 @@ type renderedFrame struct {
 	tabStops       *TabStopMap
 	mouseListeners []mouseListener
 	hitboxes       []*hitboxRecord
+	// hitboxStack is the transient stack of hitboxes whose subtrees are
+	// prepainting (browser-core ticket 11): each hitbox records the top
+	// of this stack as its parent, which is how the capture chain
+	// resolves an element's hitbox ancestors. It is empty outside
+	// prepaint (withHitboxSubtree pushes and pops around the subtree).
+	hitboxStack []*hitboxRecord
 	// windowControlHitboxes are the frame's window control areas in
 	// insertion order (window.rs:1109 Frame::window_control_hitboxes).
 	windowControlHitboxes []windowControlHitbox

@@ -333,19 +333,27 @@ func (h *Hitbox) ID() HitboxID { return HitboxID(h.id) }
 
 // IsHovered reports whether the hitbox with this identity is hovered
 // (window.rs:887-897 HitboxId::is_hovered, without the pin's keyboard
-// suppression): true when it captured the pointer, otherwise the
-// window's last hit-test answer. Browser-core ticket 10 (spec D12:
-// hover survives typing) removed the early-false on the keyboard
-// modality — Chromium's :hover never clears on key input (the only
-// keyboard hook into hover styling is :focus-visible, which reads the
-// modality through FocusVisible instead) — a deliberate divergence
-// toward the browser under D0.
+// suppression): the window's last hit-test answer, which browser-core
+// ticket 11 retargets while an element holds the pointer capture (the
+// capture chain, Chromium's GetEffectiveTargetForPointerEvent:
+// pointer_event_manager.cc:232-239) — so the captured element and its
+// ancestors report hovered wherever the pointer is, and every other
+// element does not. An id-only capture (the hitbox's element had no
+// id) keeps the pin's exact-id early-true. Browser-core ticket 10
+// (spec D12: hover survives typing) removed the early-false on the
+// keyboard modality — Chromium's :hover never clears on key input (the
+// only keyboard hook into hover styling is :focus-visible, which
+// reads the modality through FocusVisible instead) — a deliberate
+// divergence toward the browser under D0.
 func (id HitboxID) IsHovered(w *Window) bool {
 	if w == nil {
 		return false
 	}
 	is := inputState(w)
-	if is.capturedHitbox == uint64(id) {
+	if is.activePointerCapture.hitboxID == uint64(id) && is.activePointerCapture.path == "" {
+		// Pin compat (window.rs:889-891): the pin's captured hitbox is
+		// always hovered. A resolved capture answers from the retargeted
+		// hit test instead.
 		return true
 	}
 	return is.mouseHitTest.contains(uint64(id))
@@ -360,7 +368,7 @@ func (id HitboxID) isHoveredIgnoringLastInput(w *Window) bool {
 		return false
 	}
 	is := inputState(w)
-	if is.capturedHitbox == uint64(id) {
+	if is.activePointerCapture.hitboxID == uint64(id) && is.activePointerCapture.path == "" {
 		return true
 	}
 	return is.mouseHitTest.contains(uint64(id))
@@ -391,10 +399,25 @@ func (h *Hitbox) ShouldHandleScroll(w *Window) bool {
 }
 
 // hitboxRecord is the frame's stored hitbox (window.rs
-// Frame::hitboxes entries).
+// Frame::hitboxes entries). Browser-core ticket 11 added the capture
+// retargeting's ancestry: parent is the enclosing hitbox at insertion
+// (the frame's hitbox stack, pushed while the hitbox's subtree
+// prepaints), and ownerPath is the owning element's GlobalElementID
+// key — both stable identities for the hitbox within the frame, so a
+// pointer capture set in one frame can retarget the hit test in the
+// next.
 type hitboxRecord struct {
 	// box is the hitbox value (id, bounds, mask, behavior).
 	box Hitbox
+	// parent is the hitbox whose subtree prepainted this one, or nil at
+	// the tree top: the capture chain walks it (the DOM propagation
+	// path of the captured element's events).
+	parent *hitboxRecord
+	// ownerPath is the owning element's GlobalElementID key (the
+	// element-id stack at insertion; an id-less element shares its
+	// nearest id'd ancestor's path, so only id'd elements own a
+	// distinguishing path).
+	ownerPath string
 }
 
 // contains is Hitbox::contains.
@@ -524,10 +547,21 @@ type windowInputState struct {
 	// lastInputWasKeyboard caches the keyboard modality answer
 	// (Window::last_input_was_keyboard).
 	lastInputWasKeyboard bool
-	// capturedHitbox is the hitbox that captured the pointer, or 0
-	// (window.rs:1330 captured_hitbox; set by Window.CapturePointer,
-	// interact.go, and auto-released on mouse up here).
-	capturedHitbox uint64
+	// capturedHitbox is replaced by activePointerCapture (browser-core
+	// ticket 11): the pin's captured_hitbox (window.rs:1330) survives as
+	// its hitboxID half, with the element path that keeps the capture
+	// alive across frames.
+	//
+	// activePointerCapture is the effective pointer capture (the spec's
+	// pointer capture target override), pendingPointerCapture the
+	// requested one (the pending override: equal values mean no pending
+	// change, the zero value a pending release), and
+	// pointerButtonsPressed the tracked held buttons (the
+	// dispatch-side twin of the host's mouseButtonsHeld; Chromium's
+	// IsActiveButtonsState).
+	activePointerCapture  pointerCapture
+	pendingPointerCapture pointerCapture
+	pointerButtonsPressed uint8
 	// nextHitboxID assigns hitbox identities (window.rs
 	// next_hitbox_id).
 	nextHitboxID uint64
@@ -581,8 +615,19 @@ func (w *Window) OnMouseEvent(f func(event any, phase DispatchPhase, w *Window, 
 // InsertHitbox inserts a hitbox for the frame under construction
 // (window.rs Window::insert_hitbox): the bounds plus the content mask
 // active at insertion. The returned hitbox's hover answers read the
-// window's tracked mouse state at dispatch time.
+// window's tracked mouse state at dispatch time. The record keeps the
+// enclosing hitbox and the owning element's id path (browser-core
+// ticket 11's capture chain); the caller wraps its subtree's prepaint
+// in withHitboxSubtree so descendants record this hitbox as their
+// parent (div.go's prepaint and the list element).
 func (w *Window) InsertHitbox(bounds Bounds, behavior HitboxBehavior) Hitbox {
+	return w.insertHitboxRecord(bounds, behavior).box
+}
+
+// insertHitboxRecord is InsertHitbox's record-returning core: the
+// element prepaints use the record to wrap their subtree
+// (withHitboxSubtree).
+func (w *Window) insertHitboxRecord(bounds Bounds, behavior HitboxBehavior) *hitboxRecord {
 	if w == nil {
 		panic("gpui: InsertHitbox requires a live window")
 	}
@@ -598,8 +643,37 @@ func (w *Window) InsertHitbox(bounds Bounds, behavior HitboxBehavior) Hitbox {
 		contentMask: currentContentMask(w),
 		behavior:    behavior,
 	}
-	fs.next.hitboxes = append(fs.next.hitboxes, &hitboxRecord{box: box})
-	return box
+	record := &hitboxRecord{
+		box:       box,
+		parent:    hitboxStackTop(fs.next),
+		ownerPath: (&GlobalElementID{Path: currentElementIDs(w)}).key(),
+	}
+	fs.next.hitboxes = append(fs.next.hitboxes, record)
+	return record
+}
+
+// withHitboxSubtree runs f with record on the frame's hitbox stack, so
+// the hitboxes f's subtree inserts record record as their parent (the
+// capture chain's ancestry, browser-core ticket 11). A nil record (the
+// element inserted no hitbox) is a plain call.
+func (w *Window) withHitboxSubtree(record *hitboxRecord, f func()) {
+	if record == nil {
+		f()
+		return
+	}
+	fs := focusState(w)
+	fs.next.hitboxStack = append(fs.next.hitboxStack, record)
+	defer func() { fs.next.hitboxStack = fs.next.hitboxStack[:len(fs.next.hitboxStack)-1] }()
+	f()
+}
+
+// hitboxStackTop returns the frame's innermost hitbox whose subtree is
+// prepainting.
+func hitboxStackTop(frame *renderedFrame) *hitboxRecord {
+	if frame == nil || len(frame.hitboxStack) == 0 {
+		return nil
+	}
+	return frame.hitboxStack[len(frame.hitboxStack)-1]
 }
 
 // currentContentMask returns the content mask active in the frame
@@ -644,18 +718,44 @@ func (w *Window) TrackedMousePosition() Point {
 }
 
 // dispatchMouseEvent is the port of window.rs:6081-6136
-// dispatch_mouse_event: recompute the hit test and, when it changed,
-// reset the platform cursor from the rendered frame's cursor requests
-// (window.rs:6083-6086), then run the rendered frame's mouse listeners —
-// capture in registration order, bubble in reverse — stopping at
-// propagation breaks, and finish with the active-drag bookkeeping
-// (refresh on move, cancel on up) and the pointer-capture auto-release
-// on mouse up.
+// dispatch_mouse_event, extended by browser-core ticket 11 (spec D12)
+// with the pointer-capture rules Chromium's PointerEventManager
+// implements (pointer_event_manager.cc, cited inline): recompute the
+// effective hit test — positional, or the capture chain while an
+// element holds the pointer capture — and, when it changed, reset the
+// platform cursor from the rendered frame's cursor requests, then run
+// the rendered frame's mouse listeners — capture in registration
+// order, bubble in reverse — stopping at propagation breaks, and
+// finish with the active-drag bookkeeping (refresh on move, cancel on
+// up) and the pointer-capture release on mouse up (the up tail).
 func (w *Window) dispatchMouseEvent(event any, app *App) {
 	fs := focusState(w)
 	is := inputState(w)
+
+	// A move with no button held releases the capture before the move's
+	// own processing (pointer_event_manager.cc:1144-1149: "This is for
+	// when the mouse is released outside of the page"). The tracked
+	// held-button set answers "no button held" (the event's own pressed
+	// button, when set, counts as held too).
+	if move, isMove := event.(*MouseMoveEvent); isMove &&
+		is.activePointerCapture != (pointerCapture{}) &&
+		is.pointerButtonsPressed == 0 && move.PressedButton == nil {
+		is.pendingPointerCapture = (pointerCapture{})
+		w.processPendingPointerCapture(event, app)
+	}
+
+	// The pending pointer capture processes before every event, before
+	// the boundary events and the event itself (the spec's process
+	// pending pointer capture steps; Chromium's
+	// ProcessCaptureAndPositionOfPointerEvent runs them first, :1357).
+	w.processPendingPointerCapture(event, app)
+
+	// The effective hit test: positional at the tracked mouse, or the
+	// capture chain (GetEffectiveTargetForPointerEvent :232-239 — the
+	// event target, and the element under the pointer, is the capture
+	// target while captured).
 	if fs.rendered != nil {
-		if hit := fs.rendered.hitTestAt(is.mousePosition); !hit.equal(&is.mouseHitTest) {
+		if hit := w.currentHitTest(fs.rendered); !hit.equal(&is.mouseHitTest) {
 			is.mouseHitTest = hit
 			w.resetCursorStyle(app)
 		}
@@ -674,7 +774,11 @@ func (w *Window) dispatchMouseEvent(event any, app *App) {
 	// the enter/leave sweeps before the move's own listeners, matching
 	// Chromium's order - the boundary events precede the move
 	// (pointer_event_manager.cc:1353-1365, boundary_event_dispatcher.
-	// cc:190-214).
+	// cc:190-214). While a capture is active the sweeps run against the
+	// retargeted hit test, so the captured chain reports no transitions
+	// as the pointer moves outside it - exactly Chrome's boundary
+	// behaviour under capture (SetElementUnderPointer tracks the capture
+	// target, :1362).
 	switch e := event.(type) {
 	case *MouseMoveEvent:
 		w.dispatchHoverBoundaryEvents(e.Position, e.Modifiers, app)
@@ -709,20 +813,53 @@ func (w *Window) dispatchMouseEvent(event any, app *App) {
 	}
 
 	// The active drag follows the mouse: a move refreshes the window so
-	// the drag preview can track the cursor; an up ends the drag (a
-	// drop listener's StopDrag ran first when a drop landed).
+	// the drag preview can track the cursor; an up or a pointer cancel
+	// ends the drag (a drop listener's StopDrag ran first when a drop
+	// landed). Browser-core ticket 11: the cancel arm mirrors
+	// Chromium's pointercancel, which ends the drag when the stream is
+	// suppressed (:1316-1321).
 	if app.HasActiveDrag() {
-		if _, isMove := event.(*MouseMoveEvent); isMove {
+		switch event.(type) {
+		case *MouseMoveEvent:
 			w.requestRefresh()
-		} else if _, isUp := event.(*MouseUpEvent); isUp {
+		case *MouseUpEvent, *PointerCancelEvent:
 			app.cancelActiveDrag()
 			w.requestRefresh()
 		}
 	}
 
-	// Auto-release pointer capture on mouse up.
-	if _, isUp := event.(*MouseUpEvent); isUp && is.capturedHitbox != 0 {
-		is.capturedHitbox = 0
+	// The pointerup tail (browser-core ticket 11): the implicit release
+	// — "immediately after firing the pointerup … clear the pending
+	// pointer capture target override … and then run process pending
+	// pointer capture steps to fire lostpointercapture if necessary"
+	// (spec) — then the release hit test and the boundary events
+	// (Chromium re-hit-tests on the release, :1268-1281, and settles the
+	// element under the pointer after the click, :1300-1313, which is
+	// where the captured element's pointerleave and the new target's
+	// pointerenter come from). The port fires the click inside the up's
+	// listener traversal above, so its order against lostpointercapture
+	// is the pin's (click first) where the browser's is lost first — a
+	// recorded divergence owned by the input bundle (D12).
+	if up, isUp := event.(*MouseUpEvent); isUp && is.activePointerCapture != (pointerCapture{}) {
+		is.pendingPointerCapture = (pointerCapture{})
+		w.processPendingPointerCapture(up, app)
+		if fs.rendered != nil {
+			if hit := fs.rendered.hitTestAt(is.mousePosition); !hit.equal(&is.mouseHitTest) {
+				is.mouseHitTest = hit
+				w.resetCursorStyle(app)
+			}
+		}
+		w.dispatchHoverBoundaryEvents(up.Position, up.Modifiers, app)
+	}
+
+	// The pointercancel tail: the release fires lostpointercapture but
+	// no boundary events ("Don't send boundary events in this case as it
+	// is a little tricky", pointer_event_manager.cc:1316-1321); the
+	// pending presses were cleared by the listener arms above, and the
+	// hit test reverts to positional at the next dispatch or paint.
+	if _, isCancel := event.(*PointerCancelEvent); isCancel && is.activePointerCapture != (pointerCapture{}) {
+		is.pendingPointerCapture = (pointerCapture{})
+		w.processPendingPointerCapture(event, app)
 	}
 }
 

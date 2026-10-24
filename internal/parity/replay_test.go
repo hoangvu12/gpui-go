@@ -7,6 +7,7 @@ import (
 
 	"github.com/hoangvu12/gpui-go/internal/parity"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/boxpaint"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/capture"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/filters"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/gradient"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/hover"

@@ -657,6 +657,10 @@ func endDispatchFrame(w *Window) {
 	}
 	fs.renderedInputHandlers = fs.frameInputHandlers
 	fs.frameInputHandlers = nil
+	// The hitbox stack is drained by its pops; clear it defensively so a
+	// recovered mid-prepaint panic cannot leak stack entries into the
+	// rendered frame's capture-chain resolution (browser-core ticket 11).
+	fs.next.hitboxStack = nil
 	fs.rendered = fs.next
 	fs.next = nil
 }

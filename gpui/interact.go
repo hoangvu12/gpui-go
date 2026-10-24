@@ -519,7 +519,10 @@ func withHiddenPrepaint(w *Window, hidden bool, f func()) {
 // pinned draw computes it between prepaint and paint, window.rs:3459,
 // so paint-time hover styles and listener setup see the new frame's
 // hitboxes). The port's draw path does not run that step, so the first
-// div paint of a frame runs it.
+// div paint of a frame runs it. Browser-core ticket 11: the effective
+// hit test is the capture chain while a pointer capture is active
+// (pointercapture.go currentHitTest), so the captured element keeps
+// its hover styles wherever the pointer is.
 func ensurePaintHitTest(w *Window) {
 	fs := focusState(w)
 	if fs.next == nil {
@@ -531,7 +534,7 @@ func ensurePaintHitTest(w *Window) {
 	}
 	st.paintHitTestFrame = fs.next
 	is := inputState(w)
-	is.mouseHitTest = fs.next.hitTestAt(is.mousePosition)
+	is.mouseHitTest = w.currentHitTest(fs.next)
 }
 
 // hasActivePrompt is window.rs:6748 Window::has_active_prompt. The port
@@ -551,24 +554,11 @@ func currentViewNotifier(w *Window) func(*Window, *App) {
 }
 
 // ---------------------------------------------------------------------------
-// Pointer capture (window.rs:3092-3110)
+// Pointer capture (window.rs:3092-3110): the API lives in
+// pointercapture.go, which ports the browser's pending-capture
+// semantics (browser-core ticket 11, spec D12) over the pin's
+// capture_pointer / release_pointer / captured_hitbox entry points.
 // ---------------------------------------------------------------------------
-
-// CapturePointer captures the pointer for the hitbox (window.rs:3098
-// capture_pointer): while captured, the hitbox reports hovered
-// regardless of hit testing, so drags continue outside its bounds. The
-// capture is released on the next mouse up.
-func (w *Window) CapturePointer(id HitboxID) { inputState(w).capturedHitbox = uint64(id) }
-
-// ReleasePointer releases any active pointer capture (window.rs:3103).
-func (w *Window) ReleasePointer() { inputState(w).capturedHitbox = 0 }
-
-// CapturedHitbox returns the hitbox that captured the pointer, if any
-// (window.rs:3108).
-func (w *Window) CapturedHitbox() (HitboxID, bool) {
-	id := inputState(w).capturedHitbox
-	return HitboxID(id), id != 0
-}
 
 // ---------------------------------------------------------------------------
 // Cursor styles (window.rs:1200-1213, 3844-3862, 5684-5693)
@@ -1018,6 +1008,36 @@ func (d *DivElement) OnPointerLeave(f func(*PointerLeaveEvent, *Window, *App)) *
 	return d
 }
 
+// OnGotPointerCapture binds a listener to the DOM gotpointercapture
+// event of this element: it fires when the element receives the
+// pointer capture (a CapturePointer request on its hitbox), at the
+// start of the first pointer event dispatched after the request, and
+// it bubbles — ancestors that bind it receive it after the captured
+// element (browser-core ticket 11, spec D12; Chromium
+// pointer_event_manager.cc:1397-1402, gotpointercapture bubbles —
+// core/events/pointer_event_factory.cc:287-296). While the capture
+// holds, this element (and its ancestors) alone receive pointer
+// events, wherever the pointer is; CapturePointer's caller is
+// typically this element's own OnMouseDown listener.
+func (d *DivElement) OnGotPointerCapture(f func(*GotPointerCaptureEvent, *Window, *App)) *DivElement {
+	requireListener("OnGotPointerCapture", f == nil)
+	d.gotPointerCaptureListeners = append(d.gotPointerCaptureListeners, f)
+	return d
+}
+
+// OnLostPointerCapture binds a listener to the DOM lostpointercapture
+// event of this element: it fires when the element loses the pointer
+// capture — after the pointerup that implicitly released it, when
+// another element takes the capture, or on a pointer cancel
+// (WM_CAPTURECHANGED: another window took the mouse capture). It
+// bubbles like the got event (browser-core ticket 11, spec D12;
+// Chromium pointer_event_manager.cc:1387-1393).
+func (d *DivElement) OnLostPointerCapture(f func(*LostPointerCaptureEvent, *Window, *App)) *DivElement {
+	requireListener("OnLostPointerCapture", f == nil)
+	d.lostPointerCaptureListeners = append(d.lostPointerCaptureListeners, f)
+	return d
+}
+
 // OnDrag makes this element a drag source for value: once the left
 // button pressed over it moves past the drag threshold, the
 // constructor builds the drag preview view (given the value and the
@@ -1075,6 +1095,8 @@ func (d *DivElement) shouldInsertHitbox(style *Style, w *Window) bool {
 		len(d.hoverListeners) > 0 ||
 		len(d.pointerEnterListeners) > 0 ||
 		len(d.pointerLeaveListeners) > 0 ||
+		len(d.gotPointerCaptureListeners) > 0 ||
+		len(d.lostPointerCaptureListeners) > 0 ||
 		len(d.mouseUpListeners) > 0 ||
 		len(d.mouseDownListeners) > 0 ||
 		len(d.mouseMoveListeners) > 0 ||
@@ -1427,8 +1449,20 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, es *InteractiveElementSt
 		hasAuxClickListeners := len(auxClickListeners) > 0
 
 		// A hovered left press (any press with aux-click listeners)
-		// becomes the pending mouse down (div.rs:3467-3480).
+		// becomes the pending mouse down (div.rs:3467-3480). Browser-core
+		// ticket 11: a pointer cancel (WM_CAPTURECHANGED — another window
+		// took the mouse capture mid-press) drops the pending press in the
+		// capture phase, so the release that never arrives leaves no
+		// button stuck and no click fires later (Chromium's pointercancel
+		// ends the press sequence).
 		w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
+			if _, isCancel := event.(*PointerCancelEvent); isCancel {
+				if phase == DispatchCapture && pending.event != nil {
+					pending.event = nil
+					w.requestRefresh()
+				}
+				return
+			}
 			down, isDown := event.(*MouseDownEvent)
 			if !isDown {
 				return
@@ -1561,11 +1595,26 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, es *InteractiveElementSt
 	// DOM pointerenter/pointerleave sweeps drive them (hoverboundary.go).
 	d.paintBoundaryListeners(hitbox, es, w, app)
 
+	// The pointer-capture listeners (browser-core ticket 11): the
+	// gotpointercapture/lostpointercapture sweeps drive them
+	// (pointercapture.go).
+	d.paintCaptureListeners(hitbox, w, app)
+
 	// The pressed state (div.rs:3725-3762): both handlers bind
 	// unconditionally because the mouse up may arrive before a frame
-	// renders.
+	// renders. Browser-core ticket 11: a pointer cancel clears the
+	// pressed state the same way (Chromium's pointercancel ends the
+	// activation), so a press whose up went to another window leaves no
+	// active style stuck.
 	active := es.clicked()
 	w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
+		if _, isCancel := event.(*PointerCancelEvent); isCancel {
+			if phase == DispatchCapture && active.isClicked() {
+				*active = ElementClickedState{}
+				w.requestRefresh()
+			}
+			return
+		}
 		if _, isUp := event.(*MouseUpEvent); !isUp {
 			return
 		}

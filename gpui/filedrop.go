@@ -413,9 +413,34 @@ func (w *Window) dispatchInput(event any, app *App) DispatchEventResult {
 	case *MouseDownEvent:
 		is.mousePosition = e.Position
 		is.modifiers = e.Modifiers
+		// Browser-core ticket 11: track the held buttons (the
+		// dispatch-side twin of the host's mouseButtonsHeld): the
+		// pointer capture accepts requests only while a button is held
+		// (Chromium's IsActiveButtonsState, pointer_event_manager.cc:
+		// 1440-1447) and a move with no button held releases the capture
+		// (:1144-1149).
+		if bit := pointerButtonBit(e.Button); bit != 0 {
+			is.pointerButtonsPressed |= bit
+		}
 	case *MouseUpEvent:
 		is.mousePosition = e.Position
 		is.modifiers = e.Modifiers
+		if bit := pointerButtonBit(e.Button); bit != 0 {
+			is.pointerButtonsPressed &^= bit
+		}
+	case *PointerCancelEvent:
+		// Browser-core ticket 11: the pointer stream was cancelled
+		// (WM_CAPTURECHANGED — another window took the mouse capture;
+		// hoverboundary-style best-effort position from the Windows
+		// message that reports no coordinates) and no release will
+		// arrive, so every tracked button drops now — otherwise a stale
+		// held bit would keep the element capture alive and the host's
+		// own capture release (desktop_input_windows.go) from running.
+		if e.Position == (Point{}) {
+			e.Position = is.mousePosition
+		}
+		is.modifiers = e.Modifiers
+		is.pointerButtonsPressed = 0
 	case *MouseExitEvent:
 		// The pointer left the window (browser-core ticket 10, spec
 		// D12): the event carries the last known position (the Windows
