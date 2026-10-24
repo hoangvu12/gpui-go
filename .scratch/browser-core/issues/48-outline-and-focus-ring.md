@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: worker 48 (branch core/48-outline-focus-ring)
 Blocked by: 12
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged 1e8e0e6 into main after 38. Conflicts: the generated class table (regenerated with tailwindgen: 428 classes), the Tailwind doc and the fixture lists. The merged run failed editkeys/editkeys-paste (26) and scrollrange (07) on pixels: those pages pin `outline: none`, but they landed after 48 branched, so their views lacked the `.OutlineNone()` twin. I added it, and they pass. With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./gpui/, ./internal/parity/..., textspec, layoutspec, buildcostspec, ./base, focusspec, richtextspec, authorspec, inspectorspec, dropspec, imespec, clipspec, tsxgen, ./gpui/script/... and ./examples/.... Build, vet and gofmt are clean, and the classes and TSX types were regenerated (428 method classes). Base has no focus ring of its own (its `FocusRing` trait is not painted), so Base controls now show Chrome's default ring on keyboard focus with no double ring. Ticket 73 should map Base's `FocusRing(false)` onto `OutlineNone`. The ring follows the recorded Chrome 155 (a single 2px #101010 stroke), not main's two-tone ring.
 
 ## Answer
 

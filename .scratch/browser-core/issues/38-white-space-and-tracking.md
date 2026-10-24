@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 01
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged d4ea518 into main (batch with 48). Only the harness guide conflicted. With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./gpui/, ./internal/parity/..., textspec, layoutspec, buildcostspec, ./base, focusspec, richtextspec, authorspec, inspectorspec, dropspec, imespec, clipspec, tsxgen, ./gpui/script/... and ./examples/.... Build, vet and gofmt are clean, and the classes and TSX types were regenerated (428 method classes). Behaviour note: Base's TextView/SelectableText/flow fragments pin pre-wrap/pre (verbatim, as before), so Base text is unchanged; core Text/StyledText/paragraphs now collapse whitespace like CSS. Watch: Base's flow measures tabs with the pin's stops but renders the 8-space browser stops.
 
 ## Answer
 
