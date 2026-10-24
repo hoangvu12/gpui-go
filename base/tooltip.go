@@ -260,7 +260,7 @@ func (o *TooltipOverlay) Render(w *gpui.Window, cx *gpui.Context[TooltipOverlay]
 		}
 	}
 	rendered := o.renderer(view, transition, w, cx.App())
-	positioner := NewTooltipPositioner(content.triggerBounds)
+	positioner := NewTooltipPositioner(&content.triggerBounds)
 	if placement, ok := content.preferredPlacement.Get(); ok {
 		positioner.Placement(placement)
 	}
@@ -269,35 +269,80 @@ func (o *TooltipOverlay) Render(w *gpui.Window, cx *gpui.Context[TooltipOverlay]
 
 // TooltipPositioner is an unstyled tooltip positioner with
 // viewport-aware flipping and clamping (U:tooltip.rs:250-279): a
-// tooltip-named view of Positioner's side placement. It adds no element
-// of its own; the shared positioner is what gets rendered.
+// tooltip-named view of the core's element-anchored Anchored side
+// placement (browser-core ticket 25 moved the positioner's side
+// strategy into gpui.Anchored — position-anchor, the side/align
+// placement, the flip fallback and the shift clamp — so every anchored
+// surface in Base resolves its position through the same core rule as
+// the browser's CSS anchor positioning). It adds no element of its
+// own; the core Anchored is what gets rendered.
 type TooltipPositioner struct {
-	positioner *Positioner
+	anchored *gpui.AnchoredElement
 }
 
-// NewTooltipPositioner positions beside triggerBounds with the tooltip
-// window margin (U:tooltip.rs:257-259).
-func NewTooltipPositioner(triggerBounds gpui.Bounds) *TooltipPositioner {
-	return &TooltipPositioner{positioner: PositionerSide(triggerBounds).Margin(tooltipWindowMargin)}
+// NewTooltipPositioner positions beside the tracked trigger bounds
+// with the tooltip window margin (U:tooltip.rs:257-259): top side by
+// default, center-aligned, flipping to the opposite side when the
+// preferred one does not fit and shifting into the viewport otherwise
+// (the positioner's flip-then-clamp). The side-axis flip tactic is
+// picked per side — flip-block flips a vertical side and flip-inline a
+// horizontal one (CSS's tactics mirror across the anchor's midlines,
+// so the tactic that flips the side depends on the side's axis).
+func NewTooltipPositioner(triggerBounds *gpui.Bounds) *TooltipPositioner {
+	return &TooltipPositioner{anchored: gpui.Anchored().
+		AnchorBounds(triggerBounds).
+		Side(gpui.AnchorSideTop).
+		Align(gpui.AnchorAlignCenter).
+		TryFallbacks(gpui.AnchorFlipBlock, gpui.AnchorShift).
+		Margin(edgesAll(tooltipWindowMargin))}
 }
 
 // Placement sets the preferred side (U:tooltip.rs:261-264).
 func (t *TooltipPositioner) Placement(placement Placement) *TooltipPositioner {
-	t.positioner.Placement(placement)
+	t.anchored = t.anchored.Side(anchorSideOf(placement)).TryFallbacks(anchorSideFlip(placement), gpui.AnchorShift)
 	return t
 }
 
 // Extend appends children (U:tooltip.rs:267-271).
-func (t *TooltipPositioner) Extend(elements []gpui.AnyElement) { t.positioner.Extend(elements) }
+func (t *TooltipPositioner) Extend(elements []gpui.AnyElement) {
+	for _, element := range elements {
+		t.anchored.Child(element)
+	}
+}
 
 // Child adds one child (ParentElement::child).
 func (t *TooltipPositioner) Child(value any) *TooltipPositioner {
-	t.positioner.Child(value)
+	t.anchored.Child(value)
 	return t
 }
 
-// IntoElement renders the shared positioner (U:tooltip.rs:273-279).
-func (t *TooltipPositioner) IntoElement() gpui.AnyElement { return t.positioner.IntoElement() }
+// IntoElement renders the core Anchored (U:tooltip.rs:273-279).
+func (t *TooltipPositioner) IntoElement() gpui.AnyElement { return t.anchored.IntoElement() }
+
+// anchorSideOf maps the placement onto the anchored side.
+func anchorSideOf(placement Placement) gpui.AnchorSide {
+	switch placement {
+	case PlacementBottom:
+		return gpui.AnchorSideBottom
+	case PlacementLeft:
+		return gpui.AnchorSideLeft
+	case PlacementRight:
+		return gpui.AnchorSideRight
+	}
+	return gpui.AnchorSideTop
+}
+
+// anchorSideFlip returns the flip tactic that flips the side the
+// placement sits on: flip-block on a vertical side, flip-inline on a
+// horizontal one (the CSS tactics mirror across the anchor's
+// midlines).
+func anchorSideFlip(placement Placement) gpui.AnchorFallback {
+	switch placement {
+	case PlacementLeft, PlacementRight:
+		return gpui.AnchorFlipInline
+	}
+	return gpui.AnchorFlipBlock
+}
 
 // overlayDelay is a pending delayed update of an overlay state: the
 // background timer and the foreground continuation awaiting it (the

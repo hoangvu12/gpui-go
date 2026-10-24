@@ -224,6 +224,7 @@ func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawSt
 		}()
 		ds.draws++
 		ds.lastDebugBounds = frame.debugBounds
+		ds.lastAnchorBounds = frame.anchorBounds
 		// The replaced scene is freed (gpui-perf ticket 07): this frame's
 		// cached views replayed from it during the draw (view_cache.go
 		// reusePaint), which has finished, and every reader takes the

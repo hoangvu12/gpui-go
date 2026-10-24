@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		position: relative;
+	}
+	#scroller {
+		position: absolute;
+		left: 20px;
+		top: 40px;
+		width: 200px;
+		height: 300px;
+		overflow-y: scroll;
+		/* The port draws no scrollbars and reserves no gutter
+		   (browser-core ticket 36 owns scrollbar gutter). */
+		scrollbar-width: none;
+		background: #e2e8f0;
+	}
+	#content {
+		width: 200px;
+		height: 800px;
+		display: flex;
+		flex-direction: column;
+	}
+	#spacer {
+		height: 200px;
+	}
+	#anchor {
+		width: 120px;
+		height: 40px;
+		background: #2563eb;
+		anchor-name: --a;
+		outline: none;
+	}
+	#popup {
+		position: fixed;
+		position-anchor: --a;
+		/* 8px below the anchor, center-aligned; the fixed element
+		   follows the scroller (anchor_position_scroll_data) and hides
+		   while the anchor is clipped. */
+		top: calc(anchor(bottom) + 8px);
+		left: calc(anchor(center) - 50px);
+		width: 100px;
+		height: 50px;
+		background: #16a34a;
+		position-visibility: anchors-visible;
+	}
+</style>
+</head>
+<body>
+	<div id="scroller" data-id="scroller">
+		<div id="content" data-id="content">
+			<div id="spacer"></div>
+			<!-- tabindex on the element (not CSS): the click focuses it, so
+			     ArrowDown scrolls its scroller on both sides. -->
+			<div id="anchor" data-id="anchor" tabindex="0"></div>
+		</div>
+	</div>
+	<div id="popup" data-id="popup"></div>
+</body>
+</html>

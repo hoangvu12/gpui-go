@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		position: relative;
+	}
+	.anchor {
+		position: absolute;
+		width: 120px;
+		height: 40px;
+		background: #2563eb;
+	}
+	#anchor-flip {
+		left: 40px;
+		top: 360px;
+		anchor-name: --flip;
+	}
+	#anchor-ctl {
+		left: 200px;
+		top: 100px;
+		anchor-name: --ctl;
+	}
+	.p {
+		position: fixed;
+		width: 100px;
+		height: 60px;
+	}
+	/* 8px below the anchor, start-aligned; the anchor's bottom edge is
+	   the window's, so the base placement overflows and flip-block is
+	   tried: the popup lands 8px above the anchor's top. */
+	#p-flip {
+		position-anchor: --flip;
+		top: calc(anchor(bottom) + 8px);
+		left: anchor(left);
+		position-try-fallbacks: flip-block;
+		background: #16a34a;
+	}
+	/* The control: room to spare below, the base placement stands. */
+	#p-ctl {
+		position-anchor: --ctl;
+		top: calc(anchor(bottom) + 8px);
+		left: anchor(left);
+		background: #0d9488;
+	}
+</style>
+</head>
+<body>
+	<div class="anchor" id="anchor-flip" data-id="anchor-flip"></div>
+	<div class="p" id="p-flip" data-id="p-flip"></div>
+	<div class="anchor" id="anchor-ctl" data-id="anchor-ctl"></div>
+	<div class="p" id="p-ctl" data-id="p-ctl"></div>
+</body>
+</html>

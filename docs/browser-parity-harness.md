@@ -308,6 +308,14 @@ code field and the keycode fixtures landed (`fixtures/keycode`).
 
 ## Recorder details worth knowing
 
+- **The record settles before it is read**: after the scripted steps, the
+  recorder waits two animation frames before reading the transcript, the boxes
+  and the screenshot, so the state a record captures is the settled post-input
+  state — the last input's rendering work (a scroll's compositor update, an
+  anchored element's recalculation, an intersection observer's
+  `position-visibility` delivery) has landed, exactly like the replay, whose
+  boxes come from a fully parked final frame (ticket 25 found the un-settled
+  read capturing a scroll one key behind).
 - **Smooth scrolling is disabled in the recorder's Chrome**
   (`--disable-smooth-scrolling`): with it on, keyboard scrolls land as
   compositor-driven animated offsets at nondeterministic times
