@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: none
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise. A browser-parity fixture is not applicable here (the ticket notes Chrome's spelling markers need Chrome's own dictionaries); the checks are the service/spec tests below.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged f6bb71d into main. The merge had no conflicts. `go build ./...`, `go vet` and `gofmt -l` are clean. `go test -p 1 -count=1` passes for ./gpui/, ./internal/parity/..., ./base, ./internal/spellspec, richtextspec, authorspec, inspectorspec, dropspec and examples/zterm. The timing test and the real en-US checker pass 5/5 (`-count=5`). I read the diff: the core service is new files, plus a lazy App field and a retire step in Shutdown. The Base input hook returns early when spellcheck is off, so inputs that don't opt in pay nothing and their highlight composition is unchanged. Citations checked through `git show HEAD:` in the sparse Chromium checkout (the files are in the object store, not the working tree): windows_spell_checker.cc:40-48 (BackgroundHelper, same COM runner) and :158-184 (STA assert, CLSCTX_INPROC_SERVER|CLSCTX_LOCAL_SERVER), and layout_theme.cc:413-416 (red marker). Note: the input hook lives in Base, which moves to its own repo in 75.
 
 ## Answer
 

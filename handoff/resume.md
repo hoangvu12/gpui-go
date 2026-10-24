@@ -7,12 +7,12 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 ## ACTIVE EFFORT (2026-10-23): recreate zgui's terminal app ("zterm") on gpui-go
 
 **ORCHESTRATOR 8 STATUS (2026-10-24). CURRENT.** Claude Code, Opus 5.5. It took over from orchestrator 7 (Roboco chat d209bee2; handoff doc `%TEMP%\gpui-go-handoff-orchestrator8.md`, which still holds the rules, the rev 15.1 list, why workers are slow, and the frontier).
-- **Resolved (23 of 76; orchestrator 7's "22" was a miscount, it was 21):** 01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 13, 25, 27, 31, 33, 39 (rev 15, DLL 8b944eae), 40, 41, 47, 49 (the R16 design, approved), 62, 64, 65. Each has a verification comment, and the map's Decisions list a gist of each. Orchestrator 8 verified and merged 33 (position: static opt-in), then 25 (anchored to an element). The merges had no conflicts, and the required packages pass on main.
+- **Resolved (24 of 76; orchestrator 7's "22" was a miscount, it was 21):** 01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 13, 25, 27, 30, 31, 33, 39 (rev 15, DLL 8b944eae), 40, 41, 47, 49 (the R16 design, approved), 62, 64, 65. Each has a verification comment, and the map's Decisions list a gist of each. Orchestrator 8 verified and merged 33 (position: static opt-in), then 25 (anchored to an element). The merges had no conflicts, and the required packages pass on main.
 - **Known flake:** `gpui` TestWin32TranslateKeyDownCarriesCodeAndLocation reads the live Shift key, so it fails while the user types. Re-run it.
 - **Open follow-up from 33+25:** Anchored, Deferred and custom containers don't call `RequestContainerLayout`, so a `Static()` div inside them defers its absolute children past the overlay (opt-in only; for 76).
 - **Running (3 workers, started 2026-10-24; they report to this chat, 08b88b23):**
-  - 29 forced colours: chat 9aa71094, worktree `gpui-go-wt-core-29`, branch `core/29-forced-colors`
-  - 30 spellcheck: chat 2445c465, worktree `gpui-go-wt-core-30`, branch `core/30-spellcheck`
+  - 29 forced colours: chat 9aa71094, worktree `gpui-go-wt-core-29`, branch `core/29-forced-colors`. It finished at 3a66d14 and was sent back: resolve the forced-colours state once per frame (it called runForegroundSync per element per phase) and document the app-level opt-out.
+- 30 spellcheck: merged and resolved (f6bb71d).
   - 77 rev 15.1 native rebuild (the user approved it on 2026-10-24: "ok try that"): chat 4a073277, worktree `gpui-go-wt-core-77`, branch `core/77-r15-1`. It covers the uniform-upload fix (unskip the filters fixtures, re-register shadow-backdrop), the italic shear set to -0.25, and the text-run fields and baseline as best effort, with each blocker recorded. Cargo runs with `-j 6`.
 - The user said the PC can take more workers ("yea go ahead"). Ramp up gradually.
 - **Rules:** as in orchestrator 7's block below and the handoff doc. Run `go clean -cache` after each round of merges.
