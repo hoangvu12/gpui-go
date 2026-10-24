@@ -40,6 +40,24 @@ fx-0004 trace records no `is_emoji` flags and no raster output), so the
 text-geometry gate stays green while FontIds and metrics stay identical
 (same store, same interning).
 
+## The synthetic-italic shear (rev 15.1, the recorded divergence)
+
+The pinned face creation maps Fontique's italic synthesis onto
+`DWRITE_FONT_SIMULATIONS_OBLIQUE` (`font_rasterizer.rs:652-714` at the
+pin). Rev 15.1 (browser-core ticket 77) diverges: the face is created
+upright and the raster transform carries an exact −0.25 x-shear
+(`glyph.rs` `synthetic_italic_shear` / `raster_transform`, driven by
+the synthesis flag only). Chrome shears a family without an italic
+face by exactly −1/4 (Skia `setSkewX(-SK_Scalar1/4)`,
+`platform/fonts/win/font_platform_data_win.cc:37-38`, Chromium
+0d4dcd4f) — raster-only, advances from the upright face — while
+DirectWrite's oblique angle measured −0.3399 (34% steeper; the 08
+italic probe, which now gates −0.2500 on both sides). The shear rides
+`create_glyph_analysis` and `rasterize_colr`'s transforms (all three
+raster paths), pivots on the glyph-run baseline, and leaves the
+subpixel baseline origin, shaping, advances, the glyph-cache keys (the
+FontId carries the synthesis) and real italic faces untouched.
+
 ## Formats supported (the pin's honest surface)
 
 * `AlphaMask` (tag 0) — one coverage byte per pixel; grayscale mode

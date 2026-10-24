@@ -153,6 +153,11 @@ pub const MAX_FONT_SIZE: f32 = 4096.0;
 /// finite and > 0).
 pub const MAX_SCALE: f32 = 128.0;
 
+/// The synthetic-italic shear Chrome applies to a family without an
+/// italic face: Skia's `setSkewX(-SK_Scalar1/4)` (rev 15.1,
+/// browser-core ticket 77 — see `synthetic_italic_shear`).
+pub const SYNTHETIC_ITALIC_SHEAR: f32 = -0.25;
+
 /// Glyph service status codes (mirrored in internal/native/glyph.go).
 pub mod glyph_status {
     /// Success.
@@ -834,6 +839,7 @@ impl DirectWriteGlyphRasterizer {
         font_face: &IDWriteFontFace3,
         params: &RenderGlyphParams,
         mode: GlyphRenderMode,
+        italic_shear: f32,
     ) -> Result<GlyphAnalysis> {
         let glyph_id =
             [u16::try_from(params.glyph_id.0).context("DirectWrite glyph IDs are 16-bit")?];
@@ -851,7 +857,7 @@ impl DirectWriteGlyphRasterizer {
             bidiLevel: 0,
         };
 
-        let transform = raster_transform(params.scale_factor);
+        let transform = raster_transform(params.scale_factor, italic_shear);
         let baseline = baseline_origin(params);
         let mut rendering_mode = DWRITE_RENDERING_MODE1::default();
         let mut grid_fit_mode = DWRITE_GRID_FIT_MODE::default();
@@ -917,8 +923,9 @@ impl DirectWriteGlyphRasterizer {
         font_face: &IDWriteFontFace3,
         params: &RenderGlyphParams,
         mode: GlyphRenderMode,
+        italic_shear: f32,
     ) -> Result<RasterizedGlyph> {
-        let glyph = self.create_glyph_analysis(font_face, params, mode)?;
+        let glyph = self.create_glyph_analysis(font_face, params, mode, italic_shear)?;
         let Some((bounds, width, height)) = convert_bounds(glyph.bounds)? else {
             return Ok(RasterizedGlyph::empty(mode.rasterized_format()));
         };
@@ -977,6 +984,7 @@ impl DirectWriteGlyphRasterizer {
         &self,
         font_face: &IDWriteFontFace3,
         params: &RenderGlyphParams,
+        italic_shear: f32,
     ) -> Result<RasterizedGlyph> {
         let current_color = prepared_color(params.raster_style)?;
         let glyph_id = [u16::try_from(params.glyph_id.0)?];
@@ -994,7 +1002,7 @@ impl DirectWriteGlyphRasterizer {
             bidiLevel: 0,
         };
 
-        let transform = raster_transform(params.scale_factor);
+        let transform = raster_transform(params.scale_factor, italic_shear);
         let baseline = baseline_origin(params);
         let enumerate = || unsafe {
             self.factory.TranslateColorGlyphRun(
@@ -1249,21 +1257,29 @@ impl GlyphRasterizer for DirectWriteGlyphRasterizer {
         }
 
         let font_face = self.native_face(&face)?;
+        // rev 15.1: the exact −0.25 synthetic-italic shear (Chrome's
+        // setSkewX(-1/4)) rides the raster transform, replacing the
+        // DirectWrite oblique simulation (see `synthetic_italic_shear`).
+        let italic_shear = synthetic_italic_shear(&face);
         match color_kind {
-            Some(ColorGlyphKind::ColrV0) => self.rasterize_colr(&font_face, params),
+            Some(ColorGlyphKind::ColrV0) => self.rasterize_colr(&font_face, params, italic_shear),
             Some(ColorGlyphKind::Svg) | None
                 if params.raster_style.mode == GlyphRenderMode::Color =>
             {
                 let color = prepared_color(params.raster_style)?;
-                let glyph =
-                    self.create_glyph_analysis(&font_face, params, GlyphRenderMode::Grayscale)?;
+                let glyph = self.create_glyph_analysis(
+                    &font_face,
+                    params,
+                    GlyphRenderMode::Grayscale,
+                    italic_shear,
+                )?;
                 let Some((bounds, width, height)) = convert_bounds(glyph.bounds)? else {
                     return Ok(RasterizedGlyph::empty(RasterizedGlyphFormat::BgraColor));
                 };
 
                 self.rasterize_native_monochrome_color(glyph, bounds, width, height, color)
             }
-            _ => self.rasterize_mask(&font_face, params, params.raster_style.mode),
+            _ => self.rasterize_mask(&font_face, params, params.raster_style.mode, italic_shear),
         }
     }
 
@@ -1304,9 +1320,16 @@ impl NativeFace {
             simulations |= DWRITE_FONT_SIMULATIONS_BOLD;
         }
 
-        if face.synthesis.skew_degrees.is_some() {
-            simulations |= DWRITE_FONT_SIMULATIONS_OBLIQUE;
-        }
+        // rev 15.1 (browser-core ticket 77): Fontique's italic synthesis no
+        // longer maps onto DWRITE_FONT_SIMULATIONS_OBLIQUE. DirectWrite's own
+        // oblique angle shears by a measured −0.34, but Chrome shears a family
+        // without an italic face by exactly −0.25 (Skia `setSkewX(-1/4)`,
+        // platform/fonts/win/font_platform_data_win.cc:37-38, Chromium
+        // 0d4dcd4f — the 08 italic probe measured Chrome −0.2500 vs the
+        // simulation's −0.3399). The exact −0.25 shear is applied in the
+        // raster transform instead (see `synthetic_italic_shear`), so the
+        // face is created upright here and every analysis path — mask,
+        // monochrome color and COLRv0 — shears identically.
 
         let native_face = if face.variations.is_empty() {
             let reference =
@@ -1370,12 +1393,38 @@ fn convert_bounds(bounds: RECT) -> Result<Option<(Bounds<DevicePixels>, i32, i32
     )))
 }
 
-/// The pinned raster transform (font_rasterizer.rs:740-749).
-fn raster_transform(scale_factor: f32) -> DWRITE_MATRIX {
+/// The synthetic-italic shear Chrome applies to a family without an
+/// italic face: exactly −0.25 (Skia `setSkewX(-SK_Scalar1/4)`, applied at
+/// raster time — platform/fonts/win/font_platform_data_win.cc:37-38,
+/// Chromium 0d4dcd4f). The shear is driven by Fontique's synthesis FLAG
+/// only: Fontique reports 14° (tan 14° = 0.2493), but Chrome's own
+/// constant is 1/4 exactly, and the ticket pins Chrome. Advances are
+/// unaffected (Chrome's faux italic is raster-only — the glyph metrics
+/// come from the upright face), so shaping, the glyph cache keys (the
+/// FontId already carries the synthesis) and the paint positioning are
+/// unchanged; only the rasterized mask shears.
+///
+/// rev 15.1 (browser-core ticket 77, the 08 fix): replaces the
+/// DWRITE_FONT_SIMULATIONS_OBLIQUE mapping, which sheared by DirectWrite's
+/// own oblique angle (a measured −0.3399, 34% steeper than Chrome).
+fn synthetic_italic_shear(face: &RasterFace<'_>) -> f32 {
+    if face.synthesis.skew_degrees.is_some() {
+        SYNTHETIC_ITALIC_SHEAR
+    } else {
+        0.0
+    }
+}
+
+/// The pinned raster transform (font_rasterizer.rs:740-749), plus the
+/// rev 15.1 synthetic-italic shear: `m21` shears x by `shear * y` in
+/// pre-transform units, so the device-space slope is exactly `shear`
+/// (the uniform scale maps both axes). The shear pivots on the
+/// baseline (y = 0 in the glyph-run space), like Skia's pre-skew.
+fn raster_transform(scale_factor: f32, italic_shear: f32) -> DWRITE_MATRIX {
     DWRITE_MATRIX {
         m11: scale_factor,
         m12: 0.0,
-        m21: 0.0,
+        m21: italic_shear * scale_factor,
         m22: scale_factor,
         dx: 0.0,
         dy: 0.0,

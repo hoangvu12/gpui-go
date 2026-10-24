@@ -144,6 +144,36 @@ func TestItalicSlant(t *testing.T) {
 			gpuiFit.Shear, gpuiFit.AngleDeg, gpuiFit.Rows, gpuiFit.Residual, gpuiFit.BottomX-gpuiFit.TopX)
 	}
 
+	// rev 15.1 (ticket 77): the shear gate. Chrome's synthetic italic is
+	// the constant -1/4 (Skia setSkewX(-SK_Scalar1/4)); the record is
+	// fixed, so the Chrome side pins it to four decimals. gpui-go now
+	// applies the SAME constant in the raster transform (glyph.rs
+	// synthetic_italic_shear, replacing the DirectWrite oblique
+	// simulation that measured -0.3399 in rev 15), so the synthetic row
+	// must measure -0.25 on both sides, the upright control 0, and the
+	// real-italic control (a genuine italic face — no synthesis) must
+	// keep matching Chrome.
+	fits := make(map[string]slantFit)
+	gfits := make(map[string]slantFit)
+	for _, row := range rows {
+		box := record.Boxes[row.id]
+		rect := parity.ROIOfDevice(box, parity.DeviceScaleFactor, chrome.Bounds().Dx(), chrome.Bounds().Dy())
+		fits[row.id] = fitSlant(chrome, rect, row.fg, row.bg)
+		gfits[row.id] = fitSlant(gpuiImg, rect, row.fg, row.bg)
+	}
+	if c := fits["tahoma-italic"].Shear; c < -0.26 || c > -0.24 {
+		t.Errorf("chrome tahoma-italic shear = %.4f, want -0.25 (Skia's constant; the record changed?)", c)
+	}
+	if g := gfits["tahoma-italic"].Shear; g < -0.27 || g > -0.23 {
+		t.Errorf("gpui tahoma-italic shear = %.4f, want -0.25 (rev 15.1 applies Chrome's exact -1/4 shear; -0.34 means the DirectWrite oblique simulation returned)", g)
+	}
+	if g := gfits["tahoma-upright"].Shear; g < -0.01 || g > 0.01 {
+		t.Errorf("gpui tahoma-upright shear = %.4f, want 0 (upright control)", g)
+	}
+	if d := gfits["segoe-italic"].Shear - fits["segoe-italic"].Shear; d < -0.02 || d > 0.02 {
+		t.Errorf("segoe-italic (a real italic face) shears differ: gpui %.4f vs chrome %.4f — the fix must not touch real italic faces", gfits["segoe-italic"].Shear, fits["segoe-italic"].Shear)
+	}
+
 	// The report's crop: the three rows, Chrome above gpui-go, at 4x
 	// for the slant to read at a glance.
 	var chromeCrop, gpuiCrop *image.RGBA

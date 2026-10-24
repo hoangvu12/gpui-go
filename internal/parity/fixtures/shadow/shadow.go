@@ -248,14 +248,16 @@ var BackdropFixture = parity.Fixture{
 	View:   BackdropView,
 	BoxIDs: []string{"backdrop-stage", "backdrop-panel"},
 	Tolerance: parity.PixelTolerance{
-		// Provisional; the pixel comparison is blocked on the native
-		// rev-15 backdrop blur bug (see the fixture's comment and
-		// shadow_test.go's blocked test) -- the values are placeholders
-		// until the native fix lands, then recalibrate from the measured
-		// correct-view statistics.
-		MaxMeanChannelDiff:    0.5,
-		MaxROIMeanChannelDiff: 4.0,
-		MaxHotPixelFraction:   0.05,
+		// Measured against the rev-15.1 DLL (ef337ad3…): whole mean
+		// 0.3562 / hot 0.00000, both ROIs (backdrop-panel,
+		// backdrop-stage) 0.3562 / 0.00000 — every pixel within the
+		// 32-per-channel hot bar (a smooth sub-threshold sigma-shape
+		// difference, not a wrong blur). The gates sit at 2x the
+		// measured stats; the deliberately-wrong half-radius view
+		// fails them (shadow_test.go).
+		MaxMeanChannelDiff:    0.75,
+		MaxROIMeanChannelDiff: 0.75,
+		MaxHotPixelFraction:   0.01,
 	},
 }
 
@@ -264,16 +266,16 @@ func init() {
 	parity.Register(SpreadFixture)
 	parity.Register(OrderFixture)
 	parity.Register(FilterFixture)
-	// BackdropFixture is NOT registered: its record and view are
-	// checked in and ready, but the rev-15 native backdrop blur is
-	// broken (the crop path's composite samples the window-sized blur
-	// texture with crop-relative coordinates, so a partial-region
-	// backdrop renders its blurred input zoomed, and even a
-	// full-viewport backdrop shows an un-blurred, neighbor-averaged
-	// input — reproducible with cmd/parityrecord's record and the
-	// shadow package's blocked test). Native code is out of this
-	// ticket's scope; re-register the fixture when the native fix
-	// lands (the record lives in testdata/shadow-backdrop).
+	// Registered since the rev-15.1 native rebuild (browser-core
+	// ticket 77): the backdrop-crop cbuffer upload was the same
+	// ticket-41 reference bug (draw.rs's backdrop-crop uniform read
+	// zeros, so the mirror fold sampled a constant point), and the
+	// fix makes the full-viewport panel's blur match Chrome (the
+	// partial-region crop path's composite geometry is still off —
+	// see the fixture's comment — but this fixture's panel covers the
+	// whole window, where the crop region IS the window and the
+	// mapping is exact).
+	parity.Register(BackdropFixture)
 }
 
 // ---------------------------------------------------------------------------

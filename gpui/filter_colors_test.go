@@ -259,17 +259,25 @@ func TestComposeColorMatrixAppliesFirstFirst(t *testing.T) {
 }
 
 func TestComposeFilterChain(t *testing.T) {
-	// A matrix-only chain composes in order; identity filters drop; the
-	// blur composes by quadrature.
+	// A matrix-only chain carries one slot per function in order;
+	// identity filters drop; the blur composes by quadrature.
 	sepia, _ := Sepia(1).colorMatrix()
 	hue, _ := HueRotate(90).colorMatrix()
 	chain := composeFilterChain([]Filter{Sepia(1), HueRotate(90), Grayscale(0), Invert(0)})
-	if chain.BlurRadius != 0 || chain.ColorMatrixCount != 1 {
-		t.Fatalf("chain = %+v, want matrix-only", chain)
+	if chain.BlurRadius != 0 || chain.ColorMatrixCount != 2 {
+		t.Fatalf("chain = %+v, want two matrix slots", chain)
 	}
-	want := composeColorMatrix(sepia, hue)
-	if chain.ColorMatrix != want {
-		t.Errorf("composed matrix:\n got %v\nwant %v", chain.ColorMatrix, want)
+	var slots [2][20]float32
+	copy(slots[0][:], chain.ColorMatrix[0:20])
+	copy(slots[1][:], chain.ColorMatrix[20:40])
+	if slots[0] != sepia || slots[1] != hue {
+		t.Errorf("chain slots = %v, want sepia then hue-rotate UNcomposed (rev 15.1: the per-function clamp lives between them)", slots)
+	}
+	// The COMPOSED matrix (what rev 15 carried) would differ — the
+	// order-sensitivity the per-function slots preserve.
+	composed := composeColorMatrix(sepia, hue)
+	if slots[1] == composed && composed != hue {
+		t.Errorf("the chain was composed into one matrix; rev 15.1 carries them per function")
 	}
 
 	// blur(3) blur(4) = sqrt(3² + 4²) = 5.
@@ -284,8 +292,10 @@ func TestComposeFilterChain(t *testing.T) {
 		t.Errorf("mixed chain = %+v, want blur 3 and a matrix", mixed)
 	}
 	invert, _ := Invert(1).colorMatrix()
-	if mixed.ColorMatrix != invert {
-		t.Errorf("mixed chain matrix = %v, want invert's", mixed.ColorMatrix)
+	var mixedSlot [20]float32
+	copy(mixedSlot[:], mixed.ColorMatrix[0:20])
+	if mixedSlot != invert {
+		t.Errorf("mixed chain matrix = %v, want invert's", mixedSlot)
 	}
 
 	// An all-identity chain is empty (paints inline).

@@ -55,8 +55,12 @@ const (
 // Version 2 added the three sprite primitive classes (ticket10);
 // version 3 (ticket16) added the path primitive class, the path dump
 // and the pinned-PathBuilder tessellation entry; version 4 (gpui-perf
-// ticket 05) appended the insert_batch entry (scene_batch.go).
-const sceneServiceVersion uint32 = 4
+// ticket 05) appended the insert_batch entry (scene_batch.go);
+// version 5 (rev 15.1, browser-core ticket 77) grew the filter record
+// to 780 bytes (8 filters per chain, one matrix slot per colour
+// function with the per-function clamp — the native side's scene.rs
+// doc has the full note).
+const sceneServiceVersion uint32 = 5
 
 func sceneStatusName(code int32) string {
 	switch code {
@@ -475,33 +479,37 @@ type SceneFilterRecord struct {
 	ContentMask     SceneBounds
 	CornerRadii     [4]uint32
 	CornerSmoothing uint32
-	BlurRadii       [4]uint32
+	BlurRadii       [8]uint32
 	FilterCount     uint32
 	Opacity         uint32
 	IsStart         uint32 // boundary: 1 start, 0 end; backdrops pass 0
 	// FilterTags carries the per-filter kind for the first FilterCount
 	// entries: 0 = blur, 1 = colour matrix. Entries at and beyond
 	// FilterCount must be zero.
-	FilterTags [4]uint32
-	// ColorMatrix is the composed row-major 4x5 colour matrix, 20 f32
-	// bits (row 0 in [0..5], the fifth column the additive offset); the
-	// composition of the chain's matrix filters in order. All zeros
-	// with ColorMatrixCount 0.
-	ColorMatrix [20]uint32
+	FilterTags [8]uint32
+	// ColorMatrix carries the chain's colour matrices, one 20-word slot
+	// per matrix filter in chain order (rev 15.1, browser-core ticket
+	// 77): slot i is ColorMatrix[20*i : 20*i+20], a row-major 4x5 matrix
+	// (f32 bits; row 0 in [0..5], the fifth column the additive offset)
+	// — the matrix of the i-th colour function itself, NOT a composed
+	// product: Chrome clamps each function's output to [0,1] before the
+	// next applies, which one linear map cannot express. Slots at and
+	// beyond ColorMatrixCount must be zero.
+	ColorMatrix [160]uint32
 	// ColorMatrixCount is how many of the chain's filters are colour
 	// matrices (must equal the tag-1 entry count).
 	ColorMatrixCount uint32
 	RecordSize       uint32
 }
 
-// ColorMatrixRows returns the composed matrix as four rows of five
-// floats — row i is ColorMatrix[5*i : 5*i+5] with the last entry the
-// additive offset.
-func (r SceneFilterRecord) ColorMatrixRows() [4][5]float32 {
+// ColorMatrixRows returns the i-th matrix slot as four rows of five
+// floats — row r is ColorMatrix[20*i+5*r : 20*i+5*r+5] with the last
+// entry the additive offset.
+func (r SceneFilterRecord) ColorMatrixRows(i int) [4][5]float32 {
 	var rows [4][5]float32
 	for row := 0; row < 4; row++ {
 		for col := 0; col < 5; col++ {
-			rows[row][col] = math.Float32frombits(r.ColorMatrix[5*row+col])
+			rows[row][col] = math.Float32frombits(r.ColorMatrix[20*i+5*row+col])
 		}
 	}
 	return rows

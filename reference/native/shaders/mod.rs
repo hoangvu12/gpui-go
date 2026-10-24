@@ -45,11 +45,24 @@
 //!    contrast, invert, saturate, hue-rotate, opacity) can be expressed.
 //!    CSS (filter-effects-1 §FilterProperty) applies each colour
 //!    function as a 4×5 matrix over non-premultiplied RGBA; the patched
-//!    composite pass carries one composed matrix in `BlurUniforms` (the
-//!    ABI's filter record composes consecutive matrix filters in chain
-//!    order — matrix multiplication is associative over the chain) and
-//!    applies it to the unpremultiplied sampled color before
-//!    re-premultiplying, after any blur.
+//!    composite pass carries the chain's matrices — one 4×5 entry per
+//!    colour function — in `BlurUniforms`'s extension cbuffer and
+//!    applies them in chain order, each followed by the [0,1] clamp.
+//!    **rev 15.1 (browser-core ticket 77): the per-function entries and
+//!    clamps replaced rev 15's single composed matrix.** Chrome does not
+//!    compose a chain into one linear map: each function's output is
+//!    rasterized 8-bit before the next applies, clamping every channel
+//!    to [0,1] (measured against the filters-chain record: hue-rotate
+//!    (90deg) sepia(1) on pure red reads (70,62,48) = sepia·clamp
+//!    (hue·red) in Chrome, while the composed matrix gives (42,38,29);
+//!    the fixture's mean channel diff was 15.4667). A chain longer than
+//!    the record's capacity composes its excess into the last entry —
+//!    the ABI record documents that cap — and a blur interleaved
+//!    between colour functions still composes with the other blurs
+//!    (gaussians commute; the clamp between a blur and a matrix does
+//!    not, which stays the recorded approximation). The application is
+//!    after any blur, on the unpremultiplied sampled color, then
+//!    re-premultiplied.
 
 #![allow(dead_code, unused_assignments, unused_imports)]
 

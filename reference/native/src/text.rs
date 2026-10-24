@@ -200,6 +200,11 @@ pub const MAX_FONT_NAMES_BYTES: u32 = 1 << 20;
 /// faces and font collections).
 pub const MAX_FONT_BYTES: u32 = 64 << 20;
 
+/// CSS text-wrap tag: nowrap (the run-record values are 0 wrap, 1 nowrap,
+/// 2 balance, 3 pretty, 4 stable; rev 15.1 drives the nowrap one — see
+/// `nowrap_requested`).
+const TEXT_WRAP_NOWRAP: u32 = 1;
+
 /// Text service status codes. 0 is success; negative values are
 /// caller/argument errors; 100+ are internal failures.
 pub mod text_status {
@@ -400,8 +405,10 @@ pub struct GpuiGoTextRunRecord {
     /// 2 break-word.
     pub overflow_wrap: u32,
     /// CSS text-wrap: 0 wrap, 1 nowrap, 2 balance, 3 pretty, 4 stable.
-    /// `balance`/`pretty`/`stable` are Go-side algorithms (bisection);
-    /// the tag crosses the ABI for the styling layer.
+    /// rev 15.1: `nowrap` drives the wrap policy (the service suppresses
+    /// the soft-wrap constraint); `balance`/`pretty`/`stable` are Go-side
+    /// algorithms (bisection) — the tag crosses the ABI for the styling
+    /// layer.
     pub text_wrap: u32,
     /// Byte offset of the locale (a BCP 47 language tag) in the strings
     /// buffer; with `locale_len` 0 the run has no locale.
@@ -1709,6 +1716,22 @@ fn text_font_metrics_body(
     text_status::OK
 }
 
+/// rev 15.1 (browser-core ticket 77): CSS `text-wrap: nowrap` drives
+/// behaviour through the existing pinned request — the layout does not
+/// soft-wrap when any run carries the tag, exactly like passing no wrap
+/// width. This is the one rev-15 browser text field the pinned public
+/// request can express (wrap_width: Option); see TEXT_ABI.md for the
+/// fields that stay blocked behind the pinned adapter's private Parley
+/// state. Document-level, matching CSS's block-level text-wrap: the
+/// pinned `TextLayoutRequest` carries one wrap constraint for the whole
+/// document, so a per-run wrap policy is not expressible without the
+/// same adapter change that blocks word-break.
+fn nowrap_requested(run_records: &[GpuiGoTextRunRecord]) -> bool {
+    run_records
+        .iter()
+        .any(|record| record.text_wrap == TEXT_WRAP_NOWRAP)
+}
+
 /// The shaping core shared by `text_shape` and `text_layout`: calls the
 /// pinned `layout_text` and registers every resolved fragment font.
 fn shape_document(
@@ -1841,6 +1864,11 @@ fn text_shape_body(
 
         let mut state = lock_global();
         let stack = ensure_stack(&mut state);
+        // rev 15.1: text-wrap: nowrap suppresses the soft-wrap constraint
+        // (CSS text-wrap is a wrap policy on the whole document; the
+        // layout summary reports the ACTIVE constraint, so the echo says
+        // no wrap while the run records still carry the nowrap tag).
+        let wrap_width = wrap_width.filter(|_| !nowrap_requested(run_records));
         let layout = match shape_document(
             &mut state,
             &stack,
@@ -1922,8 +1950,13 @@ fn text_layout_body(
     };
     let text = shaping.text.clone();
     let runs = shaping.runs.clone();
+    let run_records = shaping.run_records.clone();
     let font_size = shaping.font_size;
     let stack = ensure_stack(&mut state);
+    // rev 15.1: nowrap suppresses any re-shaped wrap constraint too
+    // (text_layout re-shapes the SAME runs; their text-wrap tag still
+    // governs).
+    let wrap_width = wrap_width.filter(|_| !nowrap_requested(&run_records));
     let layout = match shape_document(
         &mut state,
         &stack,

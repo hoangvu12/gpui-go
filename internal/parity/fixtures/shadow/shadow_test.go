@@ -127,33 +127,39 @@ func TestFilterSigmaIsHalfRadiusFailsOnlyThePixelComparison(t *testing.T) {
 	}
 }
 
-// TestBackdropFixtureBlockedOnNativeBackdropBlur pins what the
-// backdrop fixture CAN check today: the boxes (Tier A) match Chrome
-// exactly, and the pixel comparison fails because the rev-15 native
-// backdrop blur is broken — the crop path's composite samples the
-// window-sized blur texture with crop-relative coordinates
-// (renderer/draw.rs dx_blur_and_composite builds
-// BlurUniforms::composite(..., blur_size, source_size) with
-// source_size = the crop's total, while the blurred result lives in
-// the window-sized ping texture), so a partial-region backdrop renders
-// its blurred input zoomed, and a full-viewport backdrop (whose crop
-// region IS the window) still shows a neighbor-averaged un-blurred
-// input. Native code is out of this ticket's scope: this test skips
-// with that reason until the native fix lands, then it becomes the
-// fixture's gate (re-register the fixture in shadow.go's init to run
-// it in TestFixtures).
-func TestBackdropFixtureBlockedOnNativeBackdropBlur(t *testing.T) {
+// TestBackdropSigmaIsHalfRadiusFailsOnlyThePixelComparison checks the
+// backdrop fixture's discrimination (active since the rev-15.1 native
+// rebuild, browser-core ticket 77): the half-sigma view (the pin's
+// texel conversion without the half-resolution factor) fails Tier C
+// in the panel's ROI while the boxes (Tier A) are unchanged, and the
+// correct view matches Chrome within the tolerance first (0.3562 mean
+// channel diff, no hot pixels — the uniform sub-threshold sigma-shape
+// residual the fixture's comment records). Under rev 15 the
+// backdrop-crop cbuffer upload was the ticket-41 reference bug (the
+// mirror fold sampled a constant point) and even the correct view
+// failed; the fixture was unregistered until this rebuild.
+func TestBackdropSigmaIsHalfRadiusFailsOnlyThePixelComparison(t *testing.T) {
 	fixture := shadow.BackdropFixture
 	record, replay := run(t, fixture, shadow.BackdropView)
 	if err := parity.CompareBoxes(record, replay); err != nil {
 		t.Fatalf("the backdrop boxes must still match: %v", err)
 	}
+	if err := parity.ComparePixels(record, replay, fixture.Tolerance); err != nil {
+		t.Fatalf("the correct backdrop view must match Chrome within the tolerance: %v", err)
+	}
+
+	record, replay = run(t, fixture, shadow.BackdropSigmaIsHalfRadius)
 	err := parity.ComparePixels(record, replay, fixture.Tolerance)
 	if err == nil {
-		t.Log("the backdrop pixel comparison passes: the native backdrop blur is fixed — re-register the fixture in TestFixtures")
-		return
+		t.Fatal("the σ = half-radius view (the pin's backdrop blur scale) passed the Tier C pixel comparison")
 	}
-	t.Skipf("blocked on the native rev-15 backdrop blur (not this ticket's Go-side σ conversion, which the record-level test pins): %v", err)
+	if !strings.Contains(err.Error(), "backdrop-panel: mean channel diff") {
+		t.Fatalf("the pixel diff is not readable:\n%v", err)
+	}
+	t.Logf("Tier C fails as it should:\n%v", err)
+	if err := parity.CompareBoxes(record, replay); err != nil {
+		t.Errorf("halving the backdrop sigma must not move any box: %v", err)
+	}
 }
 
 // The correct views' end-to-end replay is TestFixtures in

@@ -47,33 +47,16 @@ import (
 	"github.com/hoangvu12/gpui-go/internal/parity"
 )
 
-// nativeMatrixBlocked is the documented Tier C blocker for the three
-// colour-filter fixtures (filters-colors, filters-chain,
-// filters-image): native rev 15 (the pinned DLL 8b944eae…, built from
-// this committed source) never applies the composed colour matrix on
-// GPU. The Go side is verified end-to-end — the scene records carry
-// the matrix, the plan compiles one isolated group per chain — and the
-// vendored composite shader reads COLOR_MATRIX_LOCALS (cb5) correctly
-// (its DXBC is in the DLL, matrix math and the enabled conditional
-// disassembled); the runtime writes the cbuffer through
-// reference/native/src/renderer/draw.rs's update_buffer call at
-// dx_blur_pass (`&[*uniforms]`, draw.rs:2327): `*uniforms` is a
-// &&CompositeExtensionsUniforms there, so the slice's element type is
-// the reference (8 bytes) and only the pointer value is copied into
-// the 112-byte cbuffer — the shader's `enabled` (offset 88) reads zero
-// and every colour function is a no-op. The backdrop-crop uniform
-// (draw.rs:2330) has the same shape. Diagnosed on this branch by
-// disassembling the DLL's DXBC, by an instrumented local rebuild
-// (never committed) that proved the shader runs and cb5 binds, and by
-// the marker experiment: with the cbuffer actually written
-// (`&[**uniforms]`), grayscale(1) on a red panel reads (54, 54, 54) on
-// the real GPU. The fix is a native change (two dereferences) plus an
-// artifact rebuild — not this ticket's to make — so these fixtures
-// skip Tier C (SkipPixels) until that rebuild lands; their Tier A box
-// comparisons still run, and the Chrome records and views are checked
-// in ready. The follow-up native rebuild also unskips the
-// discriminator tests in filters_test.go.
-const nativeMatrixBlocked = "native rev 15 (DLL 8b944eae…) never applies the composed colour matrix: dx_blur_pass writes the composite-extensions cbuffer through `&[*uniforms]` whose element type is the reference (8 bytes, not the 112-byte struct), so the shader's COLOR_MATRIX_LOCALS reads zeros (reference/native/src/renderer/draw.rs:2327; the backdrop-crop uniform at :2330 has the same bug) — needs a native fix + rebuild, then remove this flag"
+// rev 15.1 (browser-core ticket 77) note: the three colour-filter
+// fixtures' Tier C comparisons are ACTIVE. The rev-15 blocker —
+// dx_blur_pass wrote the composite-extensions cbuffer through
+// `&[*uniforms]` whose element type was the reference (8 bytes, not
+// the 112-byte struct), so COLOR_MATRIX_LOCALS read zeros and every
+// colour function was a GPU no-op — was fixed in the rev-15.1 native
+// rebuild (`&[**uniforms]`, reference/native/src/renderer/draw.rs, the
+// ticket-41 diagnosis); the same fix un-breaks the backdrop-crop
+// uniform (ticket 04's shadow-backdrop). The tolerances were measured
+// against the rev-15.1 DLL (13cfb285…).
 
 // The numbers shared by every page and its gpui view (the harness's
 // discipline: both sides are built from one set of constants).
@@ -176,14 +159,15 @@ var ColorsFixture = parity.Fixture{
 		"control", "grayscale", "sepia", "invert",
 		"brightness", "contrast", "saturate", "hue-rotate",
 	},
-	SkipPixels: nativeMatrixBlocked,
 	Tolerance: parity.PixelTolerance{
-		// Provisional, set for the day the native blocker clears at
-		// ~2x the boxpaint class (the swatches are flat colored boxes:
-		// the filters are pure per-pixel colour maps, so the expected
-		// residual is rasterization noise). Blocked today — see
-		// SkipPixels; these numbers cannot be measured against Chrome
-		// until the native fix lands.
+		// Measured against the rev-15.1 DLL (13cfb285… then
+		// ef337ad3…, the per-function matrix payload): the whole
+		// image and every swatch ROI measure 0.0000 / 0.00000 —
+		// pixel-exact vs Chrome (the swatches are flat colored boxes:
+		// the filters are pure per-pixel colour maps over exact
+		// colors). The gates stay near zero so any matrix or upload
+		// regression fails immediately; the wrong views measure whole
+		// means in the tens (filters_test.go).
 		MaxMeanChannelDiff:    0.02,
 		MaxROIMeanChannelDiff: 0.1,
 		MaxHotPixelFraction:   0.002,
@@ -344,16 +328,19 @@ func filteredSwatch(id string, filters []gpui.Filter) *gpui.DivElement {
 // hue-rotate(90deg) beside hue-rotate(90deg) sepia(1) (order matters
 // for matrix composition), around a control.
 var ChainFixture = parity.Fixture{
-	Name:       "filters-chain",
-	Window:     parity.Size{Width: windowWidth, Height: windowHeight},
-	HTML:       chainPage,
-	View:       ChainView,
-	BoxIDs:     []string{"chain-control", "sepia-hue", "hue-sepia"},
-	SkipPixels: nativeMatrixBlocked,
+	Name:   "filters-chain",
+	Window: parity.Size{Width: windowWidth, Height: windowHeight},
+	HTML:   chainPage,
+	View:   ChainView,
+	BoxIDs: []string{"chain-control", "sepia-hue", "hue-sepia"},
 	Tolerance: parity.PixelTolerance{
-		// Provisional, set for the day the native blocker clears (the
-		// same flat-swatch class as filters-colors). Blocked today — see
-		// SkipPixels.
+		// Measured against the rev-15.1 DLL: whole 0.0000 / 0.00000,
+		// every ROI 0.0000 / 0.00000 — pixel-exact vs Chrome. This is
+		// the fixture that pins the per-function clamp (rev 15's one
+		// composed matrix measured a 15.4667 mean / 0.2 hot on the
+		// hue-sepia cell — Chrome clamps each function's output to
+		// [0,1] before the next applies); the near-zero gates make any
+		// return to composition, or a wrong order, fail loudly.
 		MaxMeanChannelDiff:    0.02,
 		MaxROIMeanChannelDiff: 0.1,
 		MaxHotPixelFraction:   0.002,
@@ -461,19 +448,21 @@ func chainRoot(control, sepiaHue, hueSepia []gpui.Filter) gpui.AnyElement {
 // hue-rotate(90deg) on img elements around a control — the sprite path
 // through the filter group.
 var ImageFixture = parity.Fixture{
-	Name:       "filters-image",
-	Window:     parity.Size{Width: windowWidth, Height: windowHeight},
-	View:       ImageView,
-	BoxIDs:     []string{"img-control", "img-grayscale", "img-hue-rotate"},
-	SkipPixels: nativeMatrixBlocked,
+	Name:   "filters-image",
+	Window: parity.Size{Width: windowWidth, Height: windowHeight},
+	View:   ImageView,
+	BoxIDs: []string{"img-control", "img-grayscale", "img-hue-rotate"},
 	Tolerance: parity.PixelTolerance{
-		// Provisional, set for the day the native blocker clears at
-		// ~2x the boxpaint-objectfit class (the image resampling the
-		// object-fit fixture measured, plus the colour map). Blocked
-		// today — see SkipPixels.
-		MaxMeanChannelDiff:    0.25,
-		MaxROIMeanChannelDiff: 2.5,
-		MaxHotPixelFraction:   0.04,
+		// Measured against the rev-15.1 DLL: whole 0.0493 / 0.00096;
+		// ROIs img-control 2.1740 / 0.04094, img-grayscale 1.2747 /
+		// 0.02042, img-hue-rotate 1.8084 / 0.04083 (the same image
+		// resampling class the object-position fixture measured — the
+		// pinned bilinear sampler vs Chrome's upsampling; the colour
+		// map itself is exact, as filters-colors proves). The gates sit
+		// at 2x the measured stats.
+		MaxMeanChannelDiff:    0.1,
+		MaxROIMeanChannelDiff: 4.5,
+		MaxHotPixelFraction:   0.09,
 	},
 }
 

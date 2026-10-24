@@ -617,7 +617,7 @@ func edgesValue(bits [4]uint32) Edges {
 	}
 }
 
-func filterRecordOf(order uint32, bounds, mask Bounds, radii Corners, smoothing, blur float32, matrix [20]float32, matrixCount uint32, opacity float32, isStart bool) native.SceneFilterRecord {
+func filterRecordOf(order uint32, bounds, mask Bounds, radii Corners, smoothing, blur float32, matrix [160]float32, matrixCount uint32, opacity float32, isStart bool) native.SceneFilterRecord {
 	rec := native.NewSceneFilterRecord()
 	rec.Order = order
 	rec.Bounds = sceneBoundsRecord(bounds)
@@ -630,27 +630,34 @@ func filterRecordOf(order uint32, bounds, mask Bounds, radii Corners, smoothing,
 	if isStart {
 		rec.IsStart = 1
 	}
-	// The composed chain's payload (rev 15): one blur entry and one
-	// composed colour-matrix entry, in chain order. The blur goes first
-	// (the draw path blurs, then the composite applies the matrix), and
-	// the matrix entry's blur slot stays zero — the record's validation
-	// demands that.
+	// The chain's payload (rev 15.1): one blur entry and one matrix
+	// entry PER colour function, in chain order. The blur goes first
+	// (the draw path blurs, then the composite applies the matrices
+	// with the per-function clamps), and a matrix entry's blur slot
+	// stays zero — the record's validation demands that.
 	count := 0
 	if blur > 0 {
 		rec.BlurRadii[0] = math.Float32bits(blur)
 		rec.FilterTags[0] = 0
 		count = 1
 	}
-	if matrixCount > 0 {
+	for slot := 0; slot < int(matrixCount); slot++ {
 		rec.FilterTags[count] = 1
 		count++
-		for i, value := range matrix {
-			rec.ColorMatrix[i] = math.Float32bits(value)
-		}
-		rec.ColorMatrixCount = 1
+		copy(rec.ColorMatrix[20*slot:20*(slot+1)], bitsOf(matrix[20*slot:20*(slot+1)]))
 	}
+	rec.ColorMatrixCount = matrixCount
 	rec.FilterCount = uint32(count)
 	return rec
+}
+
+// bitsOf packs one matrix slot's floats as f32 bits.
+func bitsOf(values []float32) []uint32 {
+	bits := make([]uint32, len(values))
+	for i, value := range values {
+		bits[i] = math.Float32bits(value)
+	}
+	return bits
 }
 
 func backdropValue(rec native.SceneFilterRecord) BackdropFilter {
@@ -682,10 +689,10 @@ func boundaryValue(rec native.SceneFilterRecord) FilterBoundary {
 	}
 }
 
-// colorMatrixValue unpacks the record's composed matrix payload into
-// floats (nil-of-a-sort: all zeros when the count is zero).
-func colorMatrixValue(rec native.SceneFilterRecord) [20]float32 {
-	var matrix [20]float32
+// colorMatrixValue unpacks the record's per-function matrix slots into
+// floats (all zeros when the count is zero).
+func colorMatrixValue(rec native.SceneFilterRecord) [160]float32 {
+	var matrix [160]float32
 	for i, bits := range rec.ColorMatrix {
 		matrix[i] = math.Float32frombits(bits)
 	}

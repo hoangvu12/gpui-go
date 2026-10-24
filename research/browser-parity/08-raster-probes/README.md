@@ -20,7 +20,7 @@ gates live in `internal/parity` (`TestFixtures`) as three new fixtures:
 | Question | Answer | Key numbers |
 |---|---|---|
 | **R17: does the text gamma/contrast shader need porting to Skia's preblend?** | **NO — skip R17** | Mean ink (total text darkness) matches Chrome within **0.95–1.005** across dark/light/grey × 12/16/24/32 px in the like-with-like (ClearType) comparison, and within 0.90–1.00 in every other pairing; per-pixel text differences stay under the harness's "hot pixel" bar (whole-image hot fraction ≤ 0.0076); coverage histograms agree per bucket to ~0.003 of the cell. |
-| **Does synthetic italic slant need a fix?** | **YES** | Chrome shears a family without an italic face by exactly **−0.250** (−14.03°, Skia's `setSkewX(-1/4)`); gpui-go's DirectWrite oblique simulation shears by **−0.340** (−18.77°) — **34% steeper**, 16.3 px vs 12.0 px of lean over the same stems. Root cause: `reference/native/src/glyph.rs` maps Fontique's italic synthesis onto `DWRITE_FONT_SIMULATIONS_OBLIQUE` instead of applying the shear Fontique computed (14°, which would match Chrome). |
+| **Does synthetic italic slant need a fix?** | **YES — FIXED in rev 15.1 (ticket 77)** | Chrome shears a family without an italic face by exactly **−0.250** (−14.03°, Skia's `setSkewX(-1/4)`); gpui-go's DirectWrite oblique simulation sheared by **−0.340** (−18.77°) — **34% steeper**, 16.3 px vs 12.0 px of lean over the same stems. Root cause: `reference/native/src/glyph.rs` mapped Fontique's italic synthesis onto `DWRITE_FONT_SIMULATIONS_OBLIQUE` instead of applying Chrome's exact −1/4. **Rev 15.1 replaced the simulation with the exact −0.25 x-shear in the raster transform (`glyph.rs` `synthetic_italic_shear`); the probe now measures −0.2500 on both sides (§6).** |
 
 ---
 
@@ -234,15 +234,17 @@ same source gpui reads — so the two track each other even more closely there.
 Correct-view statistics (the numbers the fixture tolerances are set from, at 2×
 headroom per the guide): `textpaint-raster` whole mean 0.4470 / hot 0.00554, worst ROI
 (light-32) 1.5235 / 0.02205; `textpaint-raster-gray` whole 0.5858 / 0.00758, worst ROI
-(light-24) 1.7428 / 0.02502; `textpaint-italic` whole 0.3460 / 0.00494, worst ROI
-(tahoma-italic) 1.7671 / 0.02340. The deliberately-wrong views (1.5× font size in the
+(light-24) 1.7428 / 0.02502; `textpaint-italic` (rev 15.1, after the −0.25 shear fix)
+whole 0.2165 / 0.00328, worst ROI (tahoma-italic) 0.6882 / 0.00964 (rev 15, with the
+−0.34 oblique: 0.3460 / 0.00494 and 1.7671 / 0.02340). The deliberately-wrong views
+(1.5× font size in the
 same fixed cells; dense M stems in the italic rows) measure raster whole
-4.0068–4.0197 / worst ROI 16.1440 and italic whole 1.5690 / worst ROI 6.5492 / hot
-0.08277 — past every gate with real margin (`textpaint_test.go`). One honest limit: a
+4.0068–4.0197 / worst ROI 16.1440 and italic whole 1.573 / worst ROI 5.918 — past
+every gate with real margin (`textpaint_test.go`). One honest limit: a
 defect that only *removes* the synthetic slant (rendering Tahoma-italic upright)
-measures whole 0.721 — just under the 0.75 gate — because the italic rows' ink is
-sparse and the correct-view LCD noise is high; under the harness's 2× headroom rule
-the pixel gate cannot both admit the current view and catch that. The slant probe
+now measures past the re-recorded 0.45 gate too (the rev-15 note said 0.721 sat
+just under the old 0.75 gate; the tighter post-fix tolerance catches it), and the
+slant probe
 (§6), not Tier C, is the detector for it.
 
 The whole-image means (0.35–0.59) are dominated by ClearType fringe *phase* — when two
@@ -279,7 +281,9 @@ Fixture `textpaint-italic`: Tahoma (Regular + Bold only, no italic face) upright
 lowercase l's at 32 px. Measurement: the per-row ink centroid's least-squares shear
 (49 ink rows per row, RMS residual ≤ 0.02 px on the synthetic rows):
 
-| row | Chrome shear | gpui shear | dx over the stems |
+**REV 15 (the finding, before the fix):**
+
+| row | Chrome shear | gpui shear (rev 15) | dx over the stems |
 |---|---|---|---|
 | tahoma-upright (control) | **−0.0000** (−0.00°) | **0.0000** (0.00°) | 0.0 / 0.0 px |
 | tahoma-italic (synthetic) | **−0.2500** (−14.03°) | **−0.3399** (−18.77°) | 12.0 vs 16.3 px |
@@ -287,20 +291,39 @@ lowercase l's at 32 px. Measurement: the per-row ink centroid's least-squares sh
 
 Chrome's measured −0.2500 is Skia's `setSkewX(−SK_Scalar1/4)` to four decimals — the
 measurement method is validated by the two controls (upright 0, real-italic identical
-on both sides). gpui's −0.3399 is DirectWrite's oblique simulation angle: the native
-face creation turns Fontique's italic synthesis into
-`DWRITE_FONT_SIMULATIONS_OBLIQUE` (`reference/native/src/glyph.rs:1301-1309`) and
-discards the angle Fontique computed — 14° (`fontique-0.11.1/src/font.rs:108-118`),
-which would have matched Chrome. So gpui's faux italics lean **34% more** than every
+on both sides). gpui's −0.3399 was DirectWrite's oblique simulation angle: the native
+face creation turned Fontique's italic synthesis into
+`DWRITE_FONT_SIMULATIONS_OBLIQUE` (`reference/native/src/glyph.rs`, rev 15) and
+discarded the angle Fontique computed — 14° (`fontique-0.11.1/src/font.rs:108-118`),
+which would have matched Chrome. So gpui's faux italics leaned **34% more** than every
 browser's, visible at any size (captures: `captures/textpaint-italic.png`, and
 `captures/textpaint-italic-4x.png` at 4×).
 
-**Fix shape (for the owning ticket, not done here):** in the native raster path, apply
-the shear Fontique reports (`face.synthesis.skew_degrees`) as a transform on the glyph
-run / outline — as Skia does — instead of (or in addition to) the DirectWrite oblique
-simulation; the same rebuild can carry the 48-device-px grayscale rule. It is a native
-S change (one rebuild), recorded as a divergence toward CSS per D0, with this fixture
-becoming the gate (its tolerance will need re-recording when the fix lands).
+**REV 15.1 (browser-core ticket 77 — the fix, measured on the rebuilt DLL):**
+
+| row | Chrome shear | gpui shear (rev 15.1) | dx over the stems |
+|---|---|---|---|
+| tahoma-upright (control) | **−0.0000** (−0.00°) | **0.0000** (0.00°) | 0.0 / 0.0 px |
+| tahoma-italic (synthetic) | **−0.2500** (−14.03°) | **−0.2500** (−14.04°) | 12.0 vs 12.0 px |
+| segoe-italic (real face, control) | **−0.1684** (−9.56°) | **−0.1685** (−9.56°) | 7.7 vs 7.8 px |
+
+The fix: `reference/native/src/glyph.rs` no longer maps Fontique's italic synthesis
+onto `DWRITE_FONT_SIMULATIONS_OBLIQUE`; the raster transform carries the exact −0.25
+x-shear (`synthetic_italic_shear` / `raster_transform`, driven by the synthesis FLAG
+only — the constant is Chrome's `setSkewX(-SK_Scalar1/4)`
+`platform/fonts/win/font_platform_data_win.cc:37-38`, not Fontique's 14°
+(tan 14° = 0.2493)). The shear pivots on the glyph-run baseline and scales with the
+raster scale factor (the device-space slope is exactly −0.25 at every size, and the
+subpixel baseline origin is unaffected). Advances, shaping and the glyph cache keys
+are unchanged — Chrome's faux italic is raster-only (the glyph metrics come from the
+upright face), and the FontId already carries the synthesis. All three raster paths
+(mask, monochrome color, COLRv0) ride the same transform. `italic_test.go` now gates
+the shear (the synthetic row must measure −0.25 on both sides, the controls 0 and
+Chrome-identical), and the `textpaint-italic` fixture's Tier C re-recorded: whole
+mean 0.3460 → **0.2165**, hot 0.00494 → **0.00328**, worst ROI (tahoma-italic)
+1.7671 → **0.6882** — the fixture moved toward Chrome, exactly as predicted
+("its tolerance will need re-recording when the fix lands": the gates now sit at
+0.45 / 1.4 / 0.02, 2× the new stats).
 
 ## 7. Why R17 is a NO
 

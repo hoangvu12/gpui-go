@@ -46,8 +46,18 @@ const (
 	// from weight 600 over a face below 600), gradient scene backgrounds,
 	// colour-matrix filters, the drop-shadow border-box clip-out, the
 	// backdrop mirror crop, a point sampler, browser text run fields and
-	// the layout flow-root/justify/track-list/baseline fields.
-	nativeRevision uint32 = 15
+	// the layout flow-root/justify/track-list/baseline fields. The
+	// browser-core ticket 77 rebuild (rev 15.1) bumped it to 151 — the
+	// integer ENCODING of the point release "15.1": the field is a u32
+	// equality-compared by the ABI table, the manifest and these Go
+	// constants, so a fractional value is unrepresentable, and taking 16
+	// would consume the number the R16 plan reserves (ticket 54 "rebuilt
+	// as native rev 16"). The rebuild: the extension-cbuffer upload fix
+	// (ticket 41's &[*uniforms] reference bug made colour filters and the
+	// backdrop crop GPU no-ops), the synthetic italic shears by Chrome's
+	// exact -0.25 instead of DirectWrite's oblique angle, and text-wrap:
+	// nowrap drives the wrap policy.
+	nativeRevision uint32 = 151
 	// maxBufferLen mirrors GPUI_GO_MAX_BUFFER_LEN.
 	maxBufferLen = 4096
 	// maxTextLen mirrors the text service's MAX_TEXT_BYTES (1 MiB text

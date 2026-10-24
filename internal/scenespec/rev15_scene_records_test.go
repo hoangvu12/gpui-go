@@ -151,15 +151,16 @@ func TestGradientBackgroundValidationRejectsMalformedRecords(t *testing.T) {
 }
 
 // TestColorMatrixFilterRecordRoundTrips: a filter chain of blur plus one
-// composed colour matrix inserts as a boundary and a backdrop, finishes,
-// dumps with the matrix intact, and the plan compiles the boundary into
-// begin/end commands with the backdrop batch present.
+// colour-matrix slot (rev 15.1: one per function, uncomposed) inserts as
+// a boundary and a backdrop, finishes, dumps with the matrix intact, and
+// the plan compiles the boundary into begin/end commands with the
+// backdrop batch present.
 func TestColorMatrixFilterRecordRoundTrips(t *testing.T) {
 	sc := nativeScene(t)
 	matrix := native.SceneFilterRecord{}
 	// grayscale(1): the CSS luminance weights (filter-effects-1
 	// §funcdef-filter-grayscale).
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 160; i++ {
 		matrix.ColorMatrix[i] = math.Float32bits(0)
 	}
 	matrix.ColorMatrix[0] = math.Float32bits(0.2126)
@@ -173,8 +174,8 @@ func TestColorMatrixFilterRecordRoundTrips(t *testing.T) {
 	start.ContentMask = native.SceneBoundsOf(0, 0, 1000, 1000)
 	start.IsStart = 1
 	start.FilterCount = 2
-	start.FilterTags = [4]uint32{0, 1}
-	start.BlurRadii = [4]uint32{math.Float32bits(6), 0, 0, 0}
+	start.FilterTags = [8]uint32{0, 1}
+	start.BlurRadii = [8]uint32{math.Float32bits(6), 0, 0, 0, 0, 0, 0, 0}
 	start.ColorMatrix = matrix.ColorMatrix
 	start.ColorMatrixCount = 1
 	start.Opacity = math.Float32bits(1)
@@ -204,10 +205,10 @@ func TestColorMatrixFilterRecordRoundTrips(t *testing.T) {
 	if boundaries[0].ColorMatrix != matrix.ColorMatrix {
 		t.Fatalf("colour matrix did not round-trip:\n got %v\nwant %v", boundaries[0].ColorMatrix, matrix.ColorMatrix)
 	}
-	if boundaries[0].FilterTags != [4]uint32{0, 1, 0, 0} || boundaries[0].ColorMatrixCount != 1 {
+	if boundaries[0].FilterTags != [8]uint32{0, 1, 0, 0, 0, 0, 0, 0} || boundaries[0].ColorMatrixCount != 1 {
 		t.Fatalf("filter tags/count did not round-trip: %+v", boundaries[0])
 	}
-	if got := boundaries[0].ColorMatrixRows(); got[0] != [5]float32{0.2126, 0, 0, 0, 0} {
+	if got := boundaries[0].ColorMatrixRows(0); got[0] != [5]float32{0.2126, 0, 0, 0, 0} {
 		t.Fatalf("ColorMatrixRows row 0 = %v", got[0])
 	}
 	backdrops, err := sc.DumpBackdrops()
@@ -250,8 +251,8 @@ func TestColorMatrixFilterValidationRejectsMalformedRecords(t *testing.T) {
 		rec.Bounds = native.SceneBoundsOf(0, 0, 40, 40)
 		rec.ContentMask = native.SceneBoundsOf(0, 0, 1000, 1000)
 		rec.FilterCount = 2
-		rec.FilterTags = [4]uint32{0, 1, 0, 0}
-		rec.BlurRadii = [4]uint32{math.Float32bits(6), 0, 0, 0}
+		rec.FilterTags = [8]uint32{0, 1, 0, 0, 0, 0, 0, 0}
+		rec.BlurRadii = [8]uint32{math.Float32bits(6), 0, 0, 0, 0, 0, 0, 0}
 		rec.ColorMatrix[15] = math.Float32bits(1)
 		rec.ColorMatrix[19] = math.Float32bits(1)
 		rec.ColorMatrixCount = 1
@@ -269,8 +270,16 @@ func TestColorMatrixFilterValidationRejectsMalformedRecords(t *testing.T) {
 			r.ColorMatrix[3] = math.Float32bits(float32(math.Inf(-1)))
 		}},
 		{"zero matrix count carries payload", func(r *native.SceneFilterRecord) {
-			r.FilterTags = [4]uint32{0, 0, 0, 0}
+			r.FilterTags = [8]uint32{0, 0, 0, 0, 0, 0, 0, 0}
 			r.ColorMatrixCount = 0
+		}},
+		{"matrix slot beyond the count nonzero", func(r *native.SceneFilterRecord) {
+			// Two tag-1 entries (count 2) carry slots 0 and 1; a nonzero
+			// word in slot 2 (words [40..60)) is rejected.
+			r.FilterCount = 3
+			r.FilterTags = [8]uint32{0, 1, 1, 0, 0, 0, 0, 0}
+			r.ColorMatrixCount = 2
+			r.ColorMatrix[40] = math.Float32bits(1)
 		}},
 		{"unknown filter tag", func(r *native.SceneFilterRecord) { r.FilterTags[0] = 2 }},
 		{"unused filter tag nonzero", func(r *native.SceneFilterRecord) { r.FilterTags[2] = 1 }},
