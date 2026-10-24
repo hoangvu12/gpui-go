@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 63, 64
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged 8029809 into main; only the fixture import lists conflicted. Outside the TSX layer, the diff touches the ADR 0003 addendum (memory isolation: a time budget only, in process; a plugin process is future work) and the harness lists. Build, vet and gofmt are clean, and `go generate ./gpui/script/types` is unchanged. With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./internal/tsxgen/, ./internal/parity/... (plugin-slot), ./cmd/... and ./examples/...; ./gpui/script/ passes apart from 62's `TestFrameOverheadIsUnder1msAtTheProbeSize`. Under the current load (5 workers, 40-90 ms frames) its paired overhead reads -0.2 to 1.3 ms. The pre-merge commit, run in a temporary worktree under the same load, reads 0.6 to 1.3 ms and also fails, so the failure is load noise, not 67.
 
 ## Answer
 
