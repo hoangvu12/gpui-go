@@ -7,15 +7,14 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 ## ACTIVE EFFORT (2026-10-23): recreate zgui's terminal app ("zterm") on gpui-go
 
 **ORCHESTRATOR 8 STATUS (2026-10-24). CURRENT.** Claude Code, Opus 5.5. It took over from orchestrator 7 (Roboco chat d209bee2; handoff doc `%TEMP%\gpui-go-handoff-orchestrator8.md`, which still holds the rules, the rev 15.1 list, why workers are slow, and the frontier).
-- **Resolved (32 of 77; orchestrator 7's "22" was a miscount, it was 21):** 01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 12, 13, 25, 27, 28, 29, 30, 31, 33, 34, 36, 77 (rev 15.1 = native revision 151, DLL ef337ad3), 39 (rev 15, DLL 8b944eae), 40, 41, 44, 47, 49 (the R16 design, approved), 62, 63, 64, 65. Each has a verification comment, and the map's Decisions list a gist of each. Orchestrator 8 verified and merged 33 (position: static opt-in), then 25 (anchored to an element). The merges had no conflicts, and the required packages pass on main.
-- **Known flake:** `gpui` TestWin32TranslateKeyDownCarriesCodeAndLocation reads the live Shift key, so it fails while the user types. Re-run it.
+- **Resolved (33 of 77; orchestrator 7's "22" was a miscount, it was 21):** 01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 12, 13, 25, 27, 28, 29, 30, 31, 32, 33, 34, 36, 77 (rev 15.1 = native revision 151, DLL ef337ad3), 39 (rev 15, DLL 8b944eae), 40, 41, 44, 47, 49 (the R16 design, approved), 62, 63, 64, 65. Each has a verification comment, and the map's Decisions list a gist of each. Orchestrator 8 verified and merged 33 (position: static opt-in), then 25 (anchored to an element). The merges had no conflicts, and the required packages pass on main.
+- **Known flakes:** `gpui` TestWin32TranslateKeyDownCarriesCodeAndLocation (it reads the live Shift key; fails while the user types), TestFrameLoopPreferredFrameIntervalDrawsEveryOtherVblank and TestSystemNotificationResponseDrain (load-sensitive), and authorspec TestRealTwoWindowCounterSharedModel (rare). Re-run them.
 - **Open follow-up from 33+25:** Anchored, Deferred and custom containers don't call `RequestContainerLayout`, so a `Static()` div inside them defers its absolute children past the overlay (opt-in only; for 76).
 - 29 forced colours, 30 spellcheck and 77 (rev 15.1) are merged and resolved. 77 left open: the partial-region backdrop crop zoom (fold into R16), and the 42/43 text fields, which are blocked behind the pinned Parley/Taffy seams (per-field plans in TEXT_ABI.md/LAYOUT_ABI.md). Watch authorspec TestRealTwoWindowCounterSharedModel (a rare reentrancy panic, seen once; then 19/19).
 - **Running (they report to this chat, 08b88b23):**
   - 07+46 (bundle: scroll range and pixel rounding, scroll anchoring): chat 7958ce99, worktree `gpui-go-wt-core-07`, branch `core/07-46-scroll`
   - 66 TSX dev command: chat 1e366d5f, worktree `gpui-go-wt-core-66`, branch `core/66-tsx-dev`
   - 18 IME composition events: chat fcce3b22, worktree `gpui-go-wt-core-18`, branch `core/18-ime-composition`
-  - 32 text min-content wraps: chat 5cc53414, worktree `gpui-go-wt-core-32`, branch `core/32-min-content-wrap`
   - 14+17 (bundle: Tab navigation/inert, context-menu event): chat 51681da8, worktree `gpui-go-wt-core-14`, branch `core/14-17-tab-contextmenu`
 - The user asked for more speed (2026-10-24, "speed things uppppp"). 5 workers are running, with GOFLAGS=-p=4 and targeted tests.
 - **Rules:** as in orchestrator 7's block below and the handoff doc, with these changes from the user (2026-10-24):

@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 8 (Claude Code)
 Blocked by: 01
 Triage: ready-for-agent
@@ -22,6 +22,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 8 (verification): merged 82703e2 into main with no conflicts. Build, vet and gofmt are clean. With GOFLAGS=-p=4, `go test -p 1 -count=1` passes for ./internal/parity/... (mincontent-wrap; every existing fixture unchanged), layoutspec, textspec, ./base, richtextspec, authorspec, examples/zterm and tsxgen. `./gpui/` failed once on TestFrameLoopPreferredFrameIntervalDrawsEveryOtherVblank (the load-sensitive vblank ratio, also seen by 28 and 36), then passed 5/5 isolated plus a full package run. The handle-bound tests pass 5/5. Citation checked: inline_node.cc:2314-2323 (min-content = lines laid out at 0 available inline size). Watch: the measure cache now holds separate min-content and max-content shapes, so flex rows may shape text twice; that matters for the >128-distinct-text handle cap noted in the resume Build speed section.
 
 ## Answer
 
