@@ -250,7 +250,7 @@ func innerRows(w *gpui.Window, focusHandle *gpui.FocusHandle) []gpui.AnyElement 
 		if i == rowCnt-1 {
 			row = row.Bg(gpui.Rgb(lastRowBg))
 			if focusHandle != nil {
-				row = row.TrackFocus(*focusHandle)
+				row = row.TrackFocus(*focusHandle).OutlineNone()
 			}
 		}
 		rows = append(rows, row.IntoElement())
@@ -605,7 +605,7 @@ func KeyboardTargetView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.
 				FlexShrink0().
 				Bg(gpui.Rgb(rowBg))
 			if prefix == "l" && i == 0 {
-				row = row.TrackFocus(focus).Bg(gpui.Rgb(focusBg))
+				row = row.TrackFocus(focus).OutlineNone().Bg(gpui.Rgb(focusBg))
 			}
 			out = append(out, row.IntoElement())
 		}
