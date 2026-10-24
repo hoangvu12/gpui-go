@@ -12,6 +12,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - **Open follow-up from 33+25:** Anchored, Deferred and custom containers don't call `RequestContainerLayout`, so a `Static()` div inside them defers its absolute children past the overlay (opt-in only; for 76).
 - 29 forced colours and 30 spellcheck: merged and resolved. Watch authorspec TestRealTwoWindowCounterSharedModel (a rare reentrancy panic, seen once; then 19/19).
 - **Running (they report to this chat, 08b88b23):**
+  - 12 click/activation/focus-visible: chat 10746939, worktree `gpui-go-wt-core-12`, branch `core/12-click-focus-visible`
+  - 34 position: sticky: chat 4fed7233, worktree `gpui-go-wt-core-34`, branch `core/34-sticky`
   - 77 rev 15.1 native rebuild (the user approved it on 2026-10-24: "ok try that"): chat 4a073277, worktree `gpui-go-wt-core-77`, branch `core/77-r15-1`. It covers the uniform-upload fix (unskip the filters fixtures, re-register shadow-backdrop), the italic shear set to -0.25, and the text-run fields and baseline as best effort, with each blocker recorded. Cargo runs with `-j 6`.
 - The user said the PC can take more workers ("yea go ahead"). Ramp up gradually.
 - **Rules:** as in orchestrator 7's block below and the handoff doc. Run `go clean -cache` after each round of merges.
