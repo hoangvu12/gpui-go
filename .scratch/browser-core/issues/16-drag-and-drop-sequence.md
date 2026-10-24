@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 8 (Claude Code)
+Status: resolved
+Assignee: orchestrator 9 (Claude Code)
 Blocked by: 09, 10, 11
 Triage: ready-for-agent
 
@@ -23,6 +23,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-24, orchestrator 9 (verification): merged fcde1bd as 23954c2. The harness conflicts were with 15's Wheel and 19's click counts; I kept all three. StepCancelDrag is wired in the validation, the recorder and the replay. Spot check: the default dropEffect from effectAllowed (`DefaultOperationForDrag`, drag_controller.cc:870-889) matches. On the merged tree, ./gpui/, ./internal/parity/..., ./internal/dropspec, ./internal/inspectorspec, ./base, ./examples/zterm and ./cmd/parityrecord pass. authorspec failed once on the known `TestRealTwoWindowCounterSharedModel` reentrancy panic, then passed 5/5 and as a whole package. Follow-up (not done): examples/zterm/drag.go's two workarounds can now be removed. Resolved.
 
 ## Answer
 
