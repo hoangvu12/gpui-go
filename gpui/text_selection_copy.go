@@ -11,9 +11,12 @@ package gpui
 // surface, a documented limitation — the DOM copy event targets the body,
 // and the port's EditActionHandler seam is per focused input).
 //
-// Base keeps its own CopyAction binding on its Root (U:root.rs:264-273),
-// which wins over this default through the binding position, so a Base
-// application's copy path is unchanged.
+// browser-core 73: Base no longer keeps its own CopyAction binding on
+// its Root (U:root.rs:264-273 deleted) — this default owns the copy
+// keystroke in a Base application too, so the copy is untrimmed where
+// the Root's handler trimmed it (Chrome's rule: the selection is copied
+// exactly). The Root's OnAction handler stays for programmatic dispatch
+// of the aliased edit::Copy.
 
 // windowSelectionEditHandler is the EditActionHandler the copy command
 // dispatches to when the focused element accepts no text input and the

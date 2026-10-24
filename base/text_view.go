@@ -407,6 +407,12 @@ func (v *TextView) RequestLayout(_ *gpui.GlobalElementID, _ *gpui.InspectorEleme
 		cap := textStyle.LineHeightPixels(textStyle.FontSizePixels(rem), rem) * float32(*maxLines)
 		el = el.MaxH(gpui.Px(cap)).OverflowHidden()
 	}
+	// browser-core 73: the copy keystroke no longer dispatches this
+	// listener off macOS (textInit's !mac copy row is deleted — the
+	// core's copy command owns the key, untrimmed). The listener stays
+	// for the action dispatches that remain: an app-bound key or a
+	// programmatic DispatchAction of the aliased edit::Copy, and macOS's
+	// cmd-c binding.
 	el = el.OnAction(CopyAction, func(_ *Copy, w *gpui.Window, app *gpui.App) {
 		var text string
 		if textSelectionSelectedText != nil {

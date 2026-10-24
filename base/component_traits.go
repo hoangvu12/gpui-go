@@ -72,9 +72,41 @@ type Disableable[Self any] interface {
 // FocusableExt is a component exposing whether its UI layer should draw a
 // focus ring (U:component_traits.rs:43-50). It carries state only:
 // focus-ring geometry and presentation belong to the visual layer.
+//
+// browser-core 48/73: the core now paints the default :focus-visible
+// ring on every focused element (Chrome's UA rule, gpui/interact.go's
+// auto→focus-ring resolution), and Base paints no ring of its own, so
+// an enabled FocusRing means exactly "let the core's ring draw". A
+// visual layer that paints its own ring must opt the focusable element
+// out with FocusRingOutline (below) — the core's OutlineNone — or the
+// two rings double-draw.
 type FocusableExt[Self any] interface {
 	FocusRing(enabled bool) Self
 	IsFocusRingEnabled() bool
+}
+
+// FocusRingOutline maps the FocusableExt focus-ring state onto the
+// core's outline rule (browser-core 48, per 48's verification note;
+// ticket 73): FocusRing(false) pins outline-style none on the styled
+// focusable element, so the core's default :focus-visible ring never
+// draws on a component that opted its ring off or paints its own; an
+// enabled ring leaves the outline at the default (auto — the core
+// resolves it to the focus ring on a focused focus-visible element,
+// nothing on a click-focused one, the focus origin rule of
+// browser-core 12). Call it from the component's visual layer with the
+// component's IsFocusRingEnabled():
+//
+//	FocusRingOutline(gpui.Div().TrackFocus(focus), control.IsFocusRingEnabled())
+//
+// No Base component implements the trait today (the upstream port's
+// FocusRing was never painted), so every Base control shows the core's
+// ring; the helper is the seam a future component with its own ring
+// uses to keep the two from double-drawing.
+func FocusRingOutline[S StyledElement[S]](element S, enabled bool) S {
+	if !enabled {
+		element.StyleBase().OutlineNone()
+	}
+	return element
 }
 
 // CollapsibleTrait is component_traits::Collapsible, an element or

@@ -120,8 +120,6 @@ type (
 	AddCursorAbove struct{}
 	// AddCursorBelow adds a cursor one row down.
 	AddCursorBelow struct{}
-	// SelectAll selects the whole text.
-	SelectAll struct{}
 	// SelectToStartOfLine extends the selection to the line start.
 	SelectToStartOfLine struct{}
 	// SelectToEndOfLine extends the selection to the line end.
@@ -136,12 +134,6 @@ type (
 	SelectToNextWordEnd struct{}
 	// ShowCharacterPalette shows the platform character palette.
 	ShowCharacterPalette struct{}
-	// Copy copies the selection.
-	Copy struct{}
-	// Cut cuts the selection.
-	Cut struct{}
-	// Paste pastes the clipboard.
-	Paste struct{}
 	// Undo undoes the last change.
 	Undo struct{}
 	// Redo redoes the last undone change.
@@ -193,7 +185,6 @@ var (
 	MovePageDownAction              = gpui.DefineUnitAction[MovePageDown]("input::MovePageDown")
 	AddCursorAboveAction            = gpui.DefineUnitAction[AddCursorAbove]("input::AddCursorAbove")
 	AddCursorBelowAction            = gpui.DefineUnitAction[AddCursorBelow]("input::AddCursorBelow")
-	SelectAllAction                 = gpui.DefineUnitAction[SelectAll]("input::SelectAll")
 	SelectToStartOfLineAction       = gpui.DefineUnitAction[SelectToStartOfLine]("input::SelectToStartOfLine")
 	SelectToEndOfLineAction         = gpui.DefineUnitAction[SelectToEndOfLine]("input::SelectToEndOfLine")
 	SelectToStartAction             = gpui.DefineUnitAction[SelectToStart]("input::SelectToStart")
@@ -201,9 +192,6 @@ var (
 	SelectToPreviousWordStartAction = gpui.DefineUnitAction[SelectToPreviousWordStart]("input::SelectToPreviousWordStart")
 	SelectToNextWordEndAction       = gpui.DefineUnitAction[SelectToNextWordEnd]("input::SelectToNextWordEnd")
 	ShowCharacterPaletteAction      = gpui.DefineUnitAction[ShowCharacterPalette]("input::ShowCharacterPalette")
-	CopyAction                      = gpui.DefineUnitAction[Copy]("input::Copy")
-	CutAction                       = gpui.DefineUnitAction[Cut]("input::Cut")
-	PasteAction                     = gpui.DefineUnitAction[Paste]("input::Paste")
 	UndoAction                      = gpui.DefineUnitAction[Undo]("input::Undo")
 	RedoAction                      = gpui.DefineUnitAction[Redo]("input::Redo")
 	MoveToStartOfLineAction         = gpui.DefineUnitAction[MoveToStartOfLine]("input::MoveToStartOfLine")
@@ -217,6 +205,43 @@ var (
 	SearchAction                    = gpui.DefineUnitAction[Search]("input::Search")
 	ReplaceAction                   = gpui.DefineUnitAction[Replace]("input::Replace")
 	GoToDefinitionAction            = gpui.DefineUnitAction[GoToDefinition]("input::GoToDefinition")
+)
+
+// The editing actions of the actions!(input, [...]) list — Copy, Cut,
+// Paste and SelectAll (U:input/base/state.rs:100-108) — are the core's
+// edit actions (browser-core tickets 26 and 73): the payload types are
+// gpui's and the descriptors are gpui's edit::Copy/Cut/Paste/SelectAll
+// (gpui/edit_action.go), so Base's inputs and editors take the commands
+// from the core's default-action arm (inputElementHandler implements
+// gpui.EditActionHandler) instead of their own key bindings. The names
+// are aliases, so base.Copy{} and base.CopyAction keep compiling; the
+// action's registered name changes from input::Copy to the core's
+// edit::Copy (an app matching by name string sees the new one). Base's
+// OnAction listeners stay on the aliased descriptors for programmatic
+// dispatch (an app-bound key or DispatchAction still runs the input's
+// own handler), and the macOS cmd rows stay bound in inputInit below —
+// the core's key table carries only the !Mac rows (editing_behavior.cc:
+// 168-178), so on darwin the bindings remain Base's.
+type (
+	// Copy copies the selection (the core edit::Copy payload).
+	Copy = gpui.Copy
+	// Cut cuts the selection (the core edit::Cut payload).
+	Cut = gpui.Cut
+	// Paste pastes the clipboard (the core edit::Paste payload).
+	Paste = gpui.Paste
+	// SelectAll selects the whole text (the core edit::SelectAll
+	// payload).
+	SelectAll = gpui.SelectAll
+)
+
+// CopyAction, CutAction, PasteAction and SelectAllAction are the core's
+// edit action descriptors (edit::Copy, edit::Cut, edit::Paste and
+// edit::SelectAll).
+var (
+	CopyAction      = gpui.CopyAction
+	CutAction       = gpui.CutAction
+	PasteAction     = gpui.PasteAction
+	SelectAllAction = gpui.SelectAllAction
 )
 
 // InputEventKind is the InputEvent variant (U:input/base/state.rs:122-128).
@@ -256,6 +281,28 @@ const inputContext = "Input"
 
 // inputInit binds the input keys (U:input/base/state.rs:132-305). The
 // platform cfgs are runtime.GOOS checks.
+//
+// browser-core 73: the !mac copy/cut/paste/select-all letter rows
+// (U:input/base/state.rs:243-250) are deleted — the core's editing keys
+// (browser-core 26, Chrome's Windows key table, editing_behavior.cc:
+// 168-178) run the commands from the keydown's default-action arm on
+// the input handler's gpui.EditActionHandler surface
+// (inputElementHandler, input_state_edit.go), and they also add the
+// Windows alternates (Ctrl+Insert copy, Shift+Insert paste) the
+// upstream list never bound. The macOS cmd rows stay: the core's table
+// carries only the !Mac rows, so on darwin the bindings remain Base's.
+//
+// Tab and Shift-Tab stay bound (U:input/base/state.rs:194-195): only a
+// multi-line editor registers the IndentInline/OutdentInline handlers
+// (Render's IsMultiLine arm), so Tab inserts a tab character in the
+// editor — the textarea in tab-capture mode, the rule a code editor
+// follows — while in a single-line input the unhandled action
+// propagates and the core's Tab default action (browser-core 14) moves
+// focus, the plain textarea's rule: the editor does not consume a
+// text-insertion Tab at key-down (editor_key_bindings.cc:62-68 — "Tab
+// that changes focus" falls through; the insertion belongs to the
+// keypress arm), and the frame's keydown chain then routes the key to
+// DefaultTabEventHandler (keyboard_event_manager.cc:454).
 func inputInit(app *gpui.App) {
 	ctx := inputContext
 	macos := runtime.GOOS == "darwin"
@@ -324,13 +371,9 @@ func inputInit(app *gpui.App) {
 	bind(!macos, "ctrl-shift-right", SelectToNextWordEndAction.Box(SelectToNextWordEnd{}))
 	bind(macos, "ctrl-cmd-space", ShowCharacterPaletteAction.Box(ShowCharacterPalette{}))
 	bind(macos, "cmd-a", SelectAllAction.Box(SelectAll{}))
-	bind(!macos, "ctrl-a", SelectAllAction.Box(SelectAll{}))
 	bind(macos, "cmd-c", CopyAction.Box(Copy{}))
-	bind(!macos, "ctrl-c", CopyAction.Box(Copy{}))
 	bind(macos, "cmd-x", CutAction.Box(Cut{}))
-	bind(!macos, "ctrl-x", CutAction.Box(Cut{}))
 	bind(macos, "cmd-v", PasteAction.Box(Paste{}))
-	bind(!macos, "ctrl-v", PasteAction.Box(Paste{}))
 	bind(macos, "ctrl-a", MoveHomeAction.Box(MoveHome{}))
 	bind(macos, "cmd-left", MoveHomeAction.Box(MoveHome{}))
 	bind(macos, "ctrl-e", MoveEndAction.Box(MoveEnd{}))
