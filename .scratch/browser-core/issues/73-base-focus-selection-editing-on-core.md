@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 9 (Claude Code)
+Status: resolved
+Assignee: orchestrator 9 (Claude Code); verified by orchestrator 10
 Blocked by: 14, 20, 26, 28
 Triage: ready-for-agent
 
@@ -20,6 +20,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-25, orchestrator 10: verified and merged (283bc58). No conflicts. The broad batch set on the merged tree (with 45): 62 packages ok. clipspec failed 3 tests under clipboard contention (another process held the OS clipboard) and passed when re-run alone. gpui/script TestFrameOverheadIsUnder1msAtTheProbeSize failed at 1.18 ms (the known load flake). Spot-check: editor_key_bindings.cc:67-76 (raw keydown leaves text-inserting commands such as a tab-inserting Tab to keypress) and date_time_field_element.cc:232-238 (the subfields are focusable) match 0d4dcd4f.
 
 ## Answer
 
