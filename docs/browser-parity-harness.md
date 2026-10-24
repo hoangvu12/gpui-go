@@ -143,7 +143,12 @@ new fixtures. The implementation lives in `internal/parity`:
    `"j"`) and the replay dispatches a `KeyDownEvent` then a `KeyUpEvent` through the
    platform dispatch — bindings, key listeners and the core default actions
    (browser-core ticket 09) all run, and a default action between the halves is visible
-   in the keyup entries' focus field.
+   in the keyup entries' focus field. `parity.KeyDown("<keystroke>")` and
+   `parity.KeyUp("<keystroke>")` (browser-core ticket 12) are the halves alone: the
+   recorder sends one CDP event and the replay dispatches one platform event, so a
+   fixture can hold a key down at the record's settle — the Space-held `:active`
+   fixture (`fixtures/activation`) is the use — or put something between the halves of
+   a press.
 
    A key step produces the keystroke the platform reports (browser-core ticket 13): the
    replay parses the keystroke and normalizes it with
@@ -154,6 +159,13 @@ new fixtures. The implementation lives in `internal/parity`:
    `parity.KeyCode("1", "Numpad1")` spells a physical key the keystroke syntax
    cannot: the key and modifiers parse as usual, both sides carry the code, and the
    location follows it (`Numpad1` at 3, the numpad).
+
+   The key kinds cover the activation and focus-visible rules (browser-core
+   ticket 12, `fixtures/activation`): an Enter full press records the activation click
+   between the keydown and keyup entries (the DOM keypress — the recorder types `"\r"`
+   so the keypress exists), a Space `KeyDown`-only step records the held `:active`
+   state at the settle, and the focus-visible fixtures pair a click step with key
+   steps to prove the focus-origin rule.
 
 5. **The view function re-runs every frame** (like any `Render`): build the tree fresh on
    each call, keep mutable state outside (the `EventLog` is passed in; anything else goes
@@ -294,22 +306,6 @@ screen. `GPUI_REAL_INPUT_TESTS` is never set by anything here.
 These are gpui-go (pin) behaviours that differ from the browser; the fixtures avoid them
 until the owning spec tickets land, and each should get a fixture the day it is fixed:
 
-- **`OnClick` fires before the `OnMouseUp` listeners** during the up dispatch (the DOM
-  delivers `mouseup` before `click`). The tracer instruments `mousedown` and `click`
-  only. Owned by the input bundle (spec D12).
-- **A mouse down on a focusable element reports `defaultPrevented`** — the pin's focus
-  transfer always calls `Window.PreventDefault` after focusing (interact.go, the
-  div.rs:3279 rule that a focusable parent must not steal focus), where Chrome leaves
-  the mousedown unprevented. The keyorder fixtures bind no `mousedown` listeners; owned
-  by the input bundle (spec D12).
-- **A keyboard activation click does not bubble** to ancestors (the pin calls only the
-  focused element's own click listeners; Chrome dispatches a full bubbling click). The
-  activation fixture's root binds `data-events="keydown,keyup"` so its click is not
-  instrumented; owned by the click/activation ticket (spec D12).
-- **Enter activates on keyup, not keypress** (the pin; Chrome clicks at keypress, so
-  the recorder's Enter — which sends no CDP `text` — produces no keypress and no click
-  at all). The activation fixture uses Space, whose keyup click both sides deliver;
-  the Enter timing is the activation ticket's (spec D12).
 - **No default focus ring** — Chrome's `:focus-visible` `outline: auto` has no port
   equivalent yet, so the keyorder pages pin `outline: none` on focusable elements (the
   outline ticket, spec story 42, owns the port's ring).
@@ -329,7 +325,43 @@ sticking at the window edge — and added `OnPointerEnter`/`OnPointerLeave` plus
 `pointerenter`/`pointerleave` transcript kinds (`fixtures/hover` is the fixture);
 ticket 13 (key code and location, with Shift kept) made the port's key events carry
 the DOM's key/code/location pair, so the keyorder fixtures were re-recorded with the
-code field and the keycode fixtures landed (`fixtures/keycode`).
+code field and the keycode fixtures landed (`fixtures/keycode`); and ticket 12 (click,
+activation and focus-visible, D12) closed four of this list's divergences at once, with
+`fixtures/activation` as the fixtures:
+
+- **`OnClick` fires before the `OnMouseUp` listeners** during the up dispatch (the DOM
+  delivers `mouseup` before `click`). FIXED by ticket 12: the click now fires after
+  the whole up dispatch (and after `lostpointercapture` under a capture), at the
+  common ancestor of the press and release targets —
+  `activation-click-ancestor` instruments `mousedown`, `mouseup` and `click`
+  together, so the transcript pins the browser's order. The tracer still instruments
+  `mousedown` and `click` only (a fixture's shape is its own choice).
+- **A mouse down on a focusable element reports `defaultPrevented`** — the pin's focus
+  transfer always called `Window.PreventDefault` after focusing (interact.go, the
+  div.rs:3279 rule that a focusable parent must not steal focus), where Chrome leaves
+  the mousedown unprevented. FIXED by ticket 12: the innermost-wins signal between
+  focusable elements is a window-internal flag now, and the focus is recorded as a
+  mouse-origin focus — `activation-enter` and the `focus-visible-*` fixtures instrument
+  `mousedown`, and both sides report it unprevented. The keyorder fixtures still bind
+  no `mousedown` listeners (their pages predate the fix; their records stay valid).
+- **A keyboard activation click does not bubble** to ancestors (the pin called only the
+  focused element's own click listeners; Chrome dispatches a full bubbling click).
+  FIXED by ticket 12: the activation click now walks the focused element's whole
+  ancestor path — `activation-enter` and `activation-space-release` instrument root's
+  click and both clicks bubble. The keyorder-activate fixture's root still binds
+  `data-events="keydown,keyup"` (its record was made that way; the shape stays).
+- **Enter activates on keyup, not keypress** (the pin; Chrome clicks at keypress, so
+  an Enter without CDP `text` produces no keypress and no click at all). FIXED by
+  ticket 12: the recorder types `"\r"` on the Enter keyDown so the keypress exists,
+  and the port's Enter default action fires the click between the keydown and keyup
+  — `activation-enter` is the fixture. Space keeps its own shape (`:active` while
+  held, click at the keyup), pinned by `activation-space-held` and
+  `activation-space-release`.
+
+The click-under-capture order (`pointerup`, `lostpointercapture`, `click`, boundary
+settling) that the capture fixture avoided is also ticket 12's now: the port delivers
+it, and the capture ticket's own tests pin it
+(`TestPointerCaptureRetargetsEventsToTheCapturedChain`).
 
 ## Recorder details worth knowing
 
@@ -371,16 +403,31 @@ code field and the keycode fixtures landed (`fixtures/keycode`).
   match the platform — so a key fixture must not press Shift with a letter and expect
   the DOM `key` name (the `keycode` fixtures use shifted punctuation instead; the
   shift-folding of letters would be a separate ticket).
+- **Enter carries `text: "\r"` on its CDP keyDown** (ticket 12,
+  `cdpKeyEvents`): `Input.dispatchKeyEvent` only generates the keypress — the event
+  the DOM's Enter activation rides (`html_element.cc:4318-4324`, between keydown and
+  keyup) — when the keyDown's text is non-empty
+  (`keyboard_event_manager.cc:384-386`), and a real Enter press types `"\r"`. Without
+  it, a recorded Enter produces no keypress and no activation at all; with it, the
+  activation-enter record carries the click between the keydown and keyup entries.
 ticket 11 (pointer capture) added the pointer-event and capture transcript kinds
 (`fixtures/capture`), the capture retargeting behind the existing
 `Window.CapturePointer` API (pending capture, got/lost callbacks, a clean cancel on
 WM_CAPTURECHANGED) and the element-local position
 (`MouseDownEvent`/`MouseUpEvent`/`MouseMoveEvent.LocalPosition`). The capture fixture
-still avoids instrumenting `click`: the pin fires its click inside the up's listener
-traversal (click before mouseup) where the browser delivers pointerup,
-lostpointercapture, click — the same input-bundle (D12) divergence as the tracer's
-un-instrumented `mouseup`, and the capture ticket's own order (lost after the ups,
-boundary settling last) is covered by the transcript's other kinds.
+still avoids instrumenting `click` (its record predates ticket 12); the
+click-after-lostpointercapture order it avoided is now the port's behaviour, pinned by
+ticket 12's fixtures and the capture ticket's own transcript tests.
+Ticket 12 (click, activation and focus-visible, D12) added the common-ancestor click
+(`gpui/mouseevent.go` `dispatchMouseClick` — the press and release hit-test chains'
+deepest shared element, the captured chain under a pointer capture, fired after the
+up's listeners and the capture release), the keyboard activation defaults
+(`gpui/key_default_action.go` — Enter clicks at the keydown, Space holds `:active`
+through `Active` styles and clicks at the keyup, both bubbling through the focused
+element's path), the mouse-origin focus recording (`gpui/focus.go`
+`focusWithOrigin`) with the unmodified-key `:focus-visible` rule
+(`gpui/interact.go` `focusVisibleMatches`), and the key half-press steps
+(`parity.KeyDown`/`parity.KeyUp`). `fixtures/activation` is the fixture set.
 Ticket 33 (position: static, the opt-in) added `PositionStatic` and the
 containing-block scope walk (`gpui/containingblock.go`): an absolute child of a
 static parent defers to the nearest positioned ancestor and Taffy then places it

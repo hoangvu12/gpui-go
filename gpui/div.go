@@ -1901,7 +1901,15 @@ func (d *DivElement) paint(global *GlobalElementID, inspector *InspectorElementI
 							if d.windowControl != nil {
 								w.InsertWindowControlHitbox(*d.windowControl, *hitbox)
 							}
-							d.paintMouseListeners(*hitbox, es, w, app)
+							// The click registration's path key (browser-core
+							// ticket 12): the global id path — the hitbox's
+							// ownerPath, the identity the up's click dispatch
+							// resolves its target chain by.
+							var clickPath string
+							if global != nil {
+								clickPath = global.key()
+							}
+							d.paintMouseListeners(*hitbox, clickPath, es, w, app)
 							// paint_scroll_listener (div.rs:3081).
 							d.scroll.paintListener(*hitbox, &style, w)
 						}

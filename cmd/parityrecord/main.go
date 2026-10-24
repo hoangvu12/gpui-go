@@ -18,6 +18,7 @@ import (
 	"os"
 
 	"github.com/hoangvu12/gpui-go/internal/parity"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/activation"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/anchor"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/boxpaint"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/capture"

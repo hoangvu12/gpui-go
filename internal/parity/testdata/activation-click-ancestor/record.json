@@ -1,0 +1,79 @@
+{
+  "name": "activation-click-ancestor",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T04:50:22Z",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "a": {
+      "x": 0,
+      "y": 0,
+      "width": 100,
+      "height": 80
+    },
+    "b": {
+      "x": 100,
+      "y": 0,
+      "width": 100,
+      "height": 80
+    },
+    "p": {
+      "x": 0,
+      "y": 0,
+      "width": 260,
+      "height": 120
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 360
+    }
+  },
+  "events": [
+    {
+      "kind": "mousedown",
+      "target": "a",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "p",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "b",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "p",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "p",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    }
+  ],
+  "screenshot": "chrome.png"
+}

@@ -111,6 +111,12 @@ type dispatchNode struct {
 	// the keyboard-scroll default action walks the focused node's
 	// ancestors and scrolls the first container that can take the delta.
 	scrollContainer *keyScrollContainer
+	// clickActivation is the node's click-listener registration
+	// (browser-core ticket 12, key_default_action.go): the keyboard
+	// activation default reads the FOCUSED node's registration (the
+	// activation gate) and fires the listeners of every node on the
+	// focused path — the DOM's bubbling simulated click.
+	clickActivation *nodeClickActivation
 	context         *KeyContext
 	focusID         uint64
 	hasFocusID      bool
@@ -331,6 +337,17 @@ func (t *DispatchTree) OnDefaultKeyAction(callback func(event any, w *Window, ap
 func (t *DispatchTree) SetKeyScrollContainer(container keyScrollContainer) {
 	id := t.activeNodeIDValue()
 	t.nodes[id.Index].scrollContainer = &container
+}
+
+// SetClickActivation registers the active node's click-listener
+// activation (browser-core ticket 12, key_default_action.go): the
+// keyboard activation default walks the focused node's path and fires
+// each node's registered listeners, target-first like a bubbling DOM
+// click. The clicked cell is the element's pressed state — the
+// Space-held :active carrier.
+func (t *DispatchTree) SetClickActivation(activation nodeClickActivation) {
+	id := t.activeNodeIDValue()
+	t.nodes[id.Index].clickActivation = &activation
 }
 
 // OnAction registers an action listener on the active node

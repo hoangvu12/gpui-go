@@ -140,9 +140,21 @@ func TestVisualTestContextKeyboardActivationThroughSimulatedEvents(t *testing.T)
 		t.Fatalf("keyboard clicks = %q, want %q", clicks, want)
 	}
 	clicks = nil
-	cx.SimulateKeystrokes("enter space")
+	// simulate_keystrokes dispatches key downs only; browser-core
+	// ticket 12 (divergence toward Chrome, spec D12) split the pin's
+	// one rule in two: Enter activates at the KEYDOWN (the DOM keypress
+	// rides the platform key event — html_element.cc:4318-4324 — so a
+	// down-only Enter already clicks), while Space only arms at the
+	// keydown and clicks at the keyup it never sees. The pin completed
+	// neither without the keyup; the expectation changed with the
+	// ticket.
+	cx.SimulateKeystrokes("space")
 	if len(clicks) != 0 {
-		t.Fatalf("key-down-only keystrokes clicked: %q", clicks)
+		t.Fatalf("key-down-only space clicked: %q (Space clicks at the keyup)", clicks)
+	}
+	cx.SimulateKeystrokes("enter")
+	if want := []string{"Keyboard"}; !reflect.DeepEqual(clicks, want) {
+		t.Fatalf("key-down-only enter clicks = %q, want %q (Enter clicks at the keydown)", clicks, want)
 	}
 }
 

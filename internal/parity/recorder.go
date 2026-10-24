@@ -515,20 +515,36 @@ func (p *cdpPage) dispatchStep(step Step) error {
 		})
 		return err
 	case StepKey:
-		return p.dispatchKey(step.Key, step.Code)
+		return p.dispatchKey(step.Key, step.Code, keyPressFull)
+	case StepKeyDown:
+		return p.dispatchKey(step.Key, step.Code, keyPressDown)
+	case StepKeyUp:
+		return p.dispatchKey(step.Key, step.Code, keyPressUp)
 	default:
 		return fmt.Errorf("unknown step kind %q", step.Kind)
 	}
 }
 
-// dispatchKey presses and releases one keystroke, using the same
+// keyPressMode selects which half of a keystroke the recorder sends
+// (browser-core ticket 12): a full press (the CDP keyDown+keyUp pair
+// of a StepKey step), or one half alone (a StepKeyDown/StepKeyUp
+// step's single event, so a key can be held at the record's settle).
+type keyPressMode uint8
+
+const (
+	keyPressFull keyPressMode = iota
+	keyPressDown
+	keyPressUp
+)
+
+// dispatchKey presses and/or releases one keystroke, using the same
 // keystroke syntax the gpui replay parses. An explicit physical code
 // (Step.Code, the numpad spelling) overrides the key-derived one, and
 // the keystroke takes the platform's spelling first
 // (gpui.Keystroke.WithSimulatedCode), so the DOM key, code and
 // location the page observes are the ones a real key press of the
 // same physical key reports (browser-core 13).
-func (p *cdpPage) dispatchKey(keystroke, code string) error {
+func (p *cdpPage) dispatchKey(keystroke, code string, mode keyPressMode) error {
 	key, err := gpui.ParseKeystroke(keystroke)
 	if err != nil {
 		return err
@@ -540,6 +556,11 @@ func (p *cdpPage) dispatchKey(keystroke, code string) error {
 	events, err := cdpKeyEvents(key)
 	if err != nil {
 		return err
+	}
+	if mode == keyPressDown {
+		events = events[:1]
+	} else if mode == keyPressUp {
+		events = events[1:]
 	}
 	for _, event := range events {
 		if _, err := p.call("Input.dispatchKeyEvent", event); err != nil {
@@ -601,6 +622,17 @@ func cdpKeyEvents(key gpui.Keystroke) ([]map[string]any, error) {
 	down["type"] = "keyDown"
 	if key.KeyChar != "" && modifiers == 0 {
 		down["text"] = key.KeyChar
+	}
+	// Enter needs its keypress (browser-core ticket 12): the DOM
+	// dispatches the Enter activation click from the '\r' keypress
+	// (html_element.cc:4318-4324 — between the keydown and the keyup),
+	// and Input.dispatchKeyEvent only generates that keypress when the
+	// keyDown carries text (keyboard_event_manager.cc:384-386: empty
+	// text ends the keypress fallthrough). A real Enter press types
+	// '\r', so the recorder spells it the same way — without this, a
+	// recorded Enter produces no keypress and no activation at all.
+	if key.Key == "enter" && modifiers == 0 {
+		down["text"] = "\r"
 	}
 	up := map[string]any{}
 	for k, v := range base {
