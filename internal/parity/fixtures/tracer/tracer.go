@@ -107,11 +107,12 @@ const page = `<!doctype html>
 // centers the padded, bordered box with text. Both elements log
 // mousedown and click — the box is the click's target and the root
 // receives it by bubbling, which both sides deliver in the same order
-// (target first, then ancestors). The mouseup listener is
-// deliberately NOT instrumented: the pin fires OnClick before the
-// OnMouseUp listeners during the up dispatch, where the browser
-// delivers mouseup first — a divergence the input-bundle ticket (spec
-// D12) owns; see docs/browser-parity-harness.md.
+// (target first, then ancestors). The mouseup listener is not
+// instrumented — a shape the fixture chose while the pin still fired
+// OnClick before the OnMouseUp listeners during the up dispatch
+// (browser-core ticket 12 closed that divergence; mouseup-then-click
+// is now pinned by ticket 12's activation fixtures, and this record
+// stays as recorded).
 func View(log *parity.EventLog) gpui.AnyElement {
 	return boxElement(log, boxWidth, boxHeight, boxPadding, true)
 }

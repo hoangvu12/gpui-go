@@ -308,22 +308,19 @@ func (s ElementHoverState) elementIsActive(w *Window) bool {
 // Rc<RefCell<Option<MouseDownEvent>>>).
 type mouseDownCell struct{ event *MouseDownEvent }
 
-// keyboardDownCell is the shared pending-keyboard-down cell: the focus
-// generation an Enter/Space key down was received at (the pinned
-// Rc<RefCell<Option<u64>>>, div.rs:4174-4181).
-type keyboardDownCell struct{ generation *uint64 }
-
 // InteractiveElementState is the per-element retained state of a
 // stateful div (div.rs:4165-4186): the pressed and hovered state, the
-// hover-listener state and the pending mouse / keyboard downs. It is
-// retained across frames under the element's global id.
+// hover-listener state and the pending mouse downs. It is retained
+// across frames under the element's global id. (The pin's pending
+// keyboard-down cell is retired: browser-core ticket 12's keyboard
+// activation arms a window-level focus generation — inputState's
+// pendingKeyboardActivation — instead of the per-element cell.)
 type InteractiveElementState struct {
-	clickedState        *ElementClickedState
-	hoverState          *ElementHoverState
-	hoverListenerState  *bool
-	hoverBoundaryState  *bool
-	pendingMouseDown    *mouseDownCell
-	pendingKeyboardDown *keyboardDownCell
+	clickedState       *ElementClickedState
+	hoverState         *ElementHoverState
+	hoverListenerState *bool
+	hoverBoundaryState *bool
+	pendingMouseDown   *mouseDownCell
 }
 
 // clicked returns the pressed state, creating it (the pinned
@@ -341,15 +338,6 @@ func (s *InteractiveElementState) pendingMouseDownCell() *mouseDownCell {
 		s.pendingMouseDown = &mouseDownCell{}
 	}
 	return s.pendingMouseDown
-}
-
-// pendingKeyboardDownCell returns the pending keyboard-down cell,
-// creating it.
-func (s *InteractiveElementState) pendingKeyboardDownCell() *keyboardDownCell {
-	if s.pendingKeyboardDown == nil {
-		s.pendingKeyboardDown = &keyboardDownCell{}
-	}
-	return s.pendingKeyboardDown
 }
 
 // ---------------------------------------------------------------------------
@@ -457,9 +445,6 @@ func interactStateOf(w *Window) *interactWindowState {
 	return st
 }
 
-// lastInputWasKeyboard is window.rs Window::last_input_was_keyboard.
-func lastInputWasKeyboard(w *Window) bool { return inputState(w).lastInputWasKeyboard }
-
 // lastInputWasTouch is window.rs Window::last_input_was_touch (the
 // Windows port has no touch input source, so it stays false).
 func lastInputWasTouch(w *Window) bool {
@@ -469,25 +454,72 @@ func lastInputWasTouch(w *Window) bool {
 // beginPlatformInputDispatch is the head of window.rs:5739-5760
 // dispatch_event: track the input modality (a key down switches to the
 // keyboard, a mouse move or down to the mouse; other events keep it)
-// and refresh the window when it changed (the focus-visible styles
-// read it — browser-core ticket 10 removed the hover suppression the
-// modality change also refreshed, spec D12), then start propagation
-// and clear the prevent-default flag.
+// and refresh the window when it changed, then start propagation and
+// clear the prevent-default flag. Browser-core ticket 12 (spec D12):
+// the focus-visible state is Chromium's pair — the focus origin
+// (focusWithOrigin) and had_keyboard_event, set here by an unmodified
+// keydown (keyboard_event_manager.cc:354-357: the Ctrl, Alt and Meta
+// modifiers exclude the key — Ctrl+S after a click is not keyboard
+// focus — while Shift is allowed); the modality itself no longer
+// drives any style (hover stopped reading it at ticket 10, the focus
+// ring reads the origin pair). The mousedown focus transfer's
+// innermost-wins flag resets here too (focusTransferClaimed).
 func (w *Window) beginPlatformInputDispatch(event any, app *App) {
 	is := inputState(w)
 	old := is.lastInputModality
+	hadKeyboard := is.hadKeyboardEvent
 	switch event.(type) {
 	case *KeyDownEvent:
 		is.lastInputModality = inputModalityKeyboard
+		if keyDown, ok := event.(*KeyDownEvent); ok &&
+			!keyDown.Keystroke.Modifiers.Control &&
+			!keyDown.Keystroke.Modifiers.Alt &&
+			!keyDown.Keystroke.Modifiers.Platform {
+			is.hadKeyboardEvent = true
+		}
 	case *MouseMoveEvent, *MouseDownEvent:
 		is.lastInputModality = inputModalityMouse
 	}
 	is.lastInputWasKeyboard = is.lastInputModality == inputModalityKeyboard
-	if is.lastInputModality != old {
+	is.focusTransferClaimed = false
+	if is.lastInputModality != old || is.hadKeyboardEvent != hadKeyboard {
 		w.requestRefresh()
 	}
 	app.propagateEvent = true
 	is.defaultPrevented = false
+}
+
+// focusVisibleMatches is Chromium's :focus-visible test for a focused
+// element (browser-core ticket 12; selector_checker.cc:3888-3901
+// MatchesFocusVisiblePseudoClass, bounded to the port's non-text
+// elements): the focus origin is not the mouse (a keyboard or script
+// focus — LastFocusType, document.cc:6068-6070) or an unmodified key
+// has arrived since the last mouse focus (had_keyboard_event). The
+// text-input arm (always show) and the accessibility override stay
+// future work; the mouse-origin clearing of had_keyboard_event is
+// focusWithOrigin's.
+func focusVisibleMatches(w *Window) bool {
+	is := inputState(w)
+	return is.focusOrigin != focusOriginMouse || is.hadKeyboardEvent
+}
+
+// claimFocusTransfer takes the mousedown focus transfer's innermost-
+// wins claim, reporting whether it was already taken (browser-core
+// ticket 12): the innermost focusable element under the press claims
+// the transfer in the bubble phase (the listeners run inside-out), so
+// a focusable ancestor's arm skips — div.rs:3279's rule without the
+// observable preventDefault the pin used for it (Chrome's mousedown
+// on a focusable element stays unprevented; the event's own default
+// action — the focus — is what a listener's preventDefault would
+// suppress). The flag resets at the head of every dispatch
+// (beginPlatformInputDispatch).
+func claimFocusTransfer(w *Window) bool {
+	is := inputState(w)
+	if is.focusTransferClaimed {
+		return true
+	}
+	is.focusTransferClaimed = true
+	return false
 }
 
 // hiddenPrepaintDepth reports how many hidden divs enclose the element
@@ -1132,7 +1164,14 @@ func (d *DivElement) computeStyleInternal(hitbox *Hitbox, es *InteractiveElement
 		if d.focusStyle != nil && handle.IsFocused(w) {
 			style.Refine(d.focusStyle)
 		}
-		if d.focusVisibleStyle != nil && handle.IsFocused(w) && lastInputWasKeyboard(w) {
+		// Browser-core ticket 12 (spec D12): the condition is
+		// Chromium's :focus-visible test (focusVisibleMatches — the
+		// focus origin and the unmodified-key flag,
+		// selector_checker.cc:3888-3901), not the pin's last-keyboard-
+		// input modality (window.rs:5748): a click focus shows no ring,
+		// a Tab focus does, and a modified key (Ctrl+S) after a click
+		// leaves the ring off; a mouse move no longer hides it either.
+		if d.focusVisibleStyle != nil && handle.IsFocused(w) && focusVisibleMatches(w) {
 			style.Refine(d.focusVisibleStyle)
 		}
 	}
@@ -1222,85 +1261,47 @@ func (d *DivElement) paintHoverGroupHandler(w *Window, app *App) {
 	})
 }
 
-// registerDivKeyboardClick is the keyboard activation (div.rs:3512-
-// 3577): while the element's tracked focus handle is focused, an
-// unmodified Enter/Space key down records the window's focus
-// generation, and the matching unmodified Enter/Space key up fires a
-// Keyboard click when no other key event intervened and focus never
-// moved; releasing any other key cancels the pending activation.
-// browser-core 09: both arms run in the default-action phase, after
-// the key listeners (Chromium runs activation from the focused
-// element's default handler — HTMLElement::HandleKeyboardActivation,
-// html_element.cc:4313-4338, invoked by Node::DefaultEventHandler
-// after the listener dispatch), so an ancestor's listener can
-// preventDefault the activation, and a prevented keydown leaves the
-// pending unset so the keyup never clicks. The pin registered them as
-// the focused element's own key listeners (before ancestor listeners);
-// that ordering is the recorded divergence. The registration is
-// focus-gated exactly as the pin's (a focused element only), and
-// suppressed subtrees register nothing.
+// registerDivKeyboardClick registers the element's click listeners on
+// its dispatch node (browser-core ticket 12): the keyboard activation
+// default (key_default_action.go defaultKeyboardActivation) reads them
+// from the FOCUSED node — the gate the pin's focus-gated registration
+// implemented (div.rs:3512-3577) — and fires them through the focused
+// node's whole ancestor path, the DOM's bubbling simulated click
+// (Chromium HTMLElement::HandleKeyboardActivation, html_element.cc:
+// 4314-4338, the button override at html_button_element.cc:285-296;
+// DispatchSimulatedClick's propagation, event_dispatcher.cc:163-187).
+// Every clickable element registers (its node's position in the tree
+// is what the dispatch walks); suppressed subtrees register nothing.
 func registerDivKeyboardClick(w *Window, d *DivElement, hitbox Hitbox, es *InteractiveElementState) {
-	if es == nil || (len(d.clickListeners) == 0 && len(d.auxClickListeners) == 0 && d.dragListener == nil) {
+	if es == nil || (len(d.clickListeners) == 0 && len(d.auxClickListeners) == 0) {
 		return
 	}
-	if d.focusHandle == nil || !d.focusHandle.IsFocused(w) {
-		return
-	}
-	pending := es.pendingKeyboardDownCell()
-	clickListeners := slices.Clone(d.clickListeners)
-	bounds := hitbox.Bounds
 	tree := currentDispatchTree(w)
-	tree.OnDefaultKeyAction(func(event any, w *Window, app *App) {
-		keyDown, isDown := event.(*KeyDownEvent)
-		keyUp, isUp := event.(*KeyUpEvent)
-		switch {
-		case isDown:
-			stroke := keyDown.Keystroke
-			isActivationKey := (stroke.Key == "enter" || stroke.Key == "space") && !stroke.Modifiers.Modified()
-			if isActivationKey {
-				generation := w.FocusGeneration()
-				pending.generation = &generation
-			} else {
-				pending.generation = nil
-			}
-		case isUp:
-			stroke := keyUp.Keystroke
-			var button KeyboardButton
-			isActivation := true
-			switch stroke.Key {
-			case "enter":
-				button = KeyboardButtonEnter
-			case "space":
-				button = KeyboardButtonSpace
-			default:
-				isActivation = false
-			}
-			if isActivation && !stroke.Modifiers.Modified() {
-				generation := pending.generation
-				pending.generation = nil
-				if generation == nil || *generation != w.FocusGeneration() {
-					return
-				}
-				click := ClickEvent{Kind: ClickEventKeyboard, Keyboard: KeyboardClickEvent{Button: button, Bounds: bounds}}
-				for _, listener := range clickListeners {
-					listener(&click, w, app)
-				}
-			} else {
-				// Releasing any other key mid-press means this isn't a clean
-				// activation, so cancel the pending keydown.
-				pending.generation = nil
-			}
-		}
+	tree.SetClickActivation(nodeClickActivation{
+		listeners: slices.Clone(d.clickListeners),
+		clicked:   es.clicked(),
+		bounds:    hitbox.Bounds,
 	})
 }
 
 // paintMouseListeners is div.rs:3253-3764 paint_mouse_listeners, bounded
 // to the port's features (mouse pressure / exit listeners and tooltips
 // are not ported; the keyboard click registers at prepaint,
-// registerDivKeyboardClick).
-func (d *DivElement) paintMouseListeners(hitbox Hitbox, es *InteractiveElementState, w *Window, app *App) {
+// registerDivKeyboardClick). path is the element's global id key (the
+// hitbox's ownerPath — the click dispatch resolves its target chain by
+// it, browser-core ticket 12).
+func (d *DivElement) paintMouseListeners(hitbox Hitbox, path string, es *InteractiveElementState, w *Window, app *App) {
 	// A focusable element transfers focus on a hovered mouse down unless
-	// the default action was prevented (div.rs:3266-3282).
+	// the default action was prevented (div.rs:3266-3282). Browser-core
+	// ticket 12 (spec D12): the innermost-wins signal between focusable
+	// elements is a window-internal flag, not the DOM event's
+	// preventDefault — the pin's PreventDefault call made every
+	// mousedown on a focusable element report default-prevented, where
+	// Chrome's mouse focus (HandleMouseFocus, mouse_event_manager.cc:
+	// 537-636, run after the listeners at event_handler.cc:998-1001)
+	// leaves the event unprevented. The focus is a mouse-origin focus
+	// (focusWithOrigin), so the focus-visible styles stay off until the
+	// next unmodified key.
 	if d.focusHandle != nil {
 		handle := *d.focusHandle
 		box := hitbox
@@ -1308,11 +1309,8 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, es *InteractiveElementSt
 			if _, isDown := event.(*MouseDownEvent); !isDown {
 				return
 			}
-			if phase == DispatchBubble && box.IsHovered(w) && !w.DefaultPrevented() {
-				w.Focus(handle)
-				// If there is a parent that is also focusable, prevent it
-				// from transferring focus because we already did so.
-				w.PreventDefault()
+			if phase == DispatchBubble && box.IsHovered(w) && !w.DefaultPrevented() && !claimFocusTransfer(w) {
+				w.focusWithOrigin(handle, focusOriginMouse)
 			}
 		})
 	}
@@ -1476,6 +1474,13 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, es *InteractiveElementSt
 			if phase == DispatchBubble && (down.Button == MouseButtonLeft || hasAuxClickListeners) && box.IsHovered(w) {
 				pressed := *down
 				pending.event = &pressed
+				// The armed chain entry (browser-core ticket 12): the
+				// window-level click dispatch's press chain gains this
+				// element — the elements whose arms ran, innermost-first
+				// (this is the bubble phase), so a stopped mousedown or a
+				// block-mouse overlay keeps the un-armed ancestors out of
+				// the click's target set.
+				armMouseClick(w, path)
 				w.requestRefresh()
 			}
 		})
@@ -1499,53 +1504,51 @@ func (d *DivElement) paintMouseListeners(hitbox Hitbox, es *InteractiveElementSt
 			if math.Hypot(dx, dy) <= dragThreshold {
 				return
 			}
-			listener := dragListener
+			listenedDrag := dragListener
+			listenedCursor := dragCursorStyle
 			dragListener = nil
 			*clicked = ElementClickedState{}
 			cursorOffset := Point{X: move.Position.X - box.Bounds.Origin.X, Y: move.Position.Y - box.Bounds.Origin.Y}
-			drag := listener(cursorOffset, dragCursorStyle, w, app)
+			drag := listenedDrag(cursorOffset, listenedCursor, w, app)
 			app.StartDrag(drag)
 			pending.event = nil
+			// The drag consumed the press (browser-core ticket 12): its
+			// release never clicks, so the window-level click dispatch's
+			// pending press goes with the per-element one (Chromium's
+			// skip_click_dispatch — a drag's up is not a click's up).
+			inputState(w).pendingMouseClick = nil
+			inputState(w).pressClickChain = nil
 			w.requestRefresh()
 			app.StopPropagation()
 		})
 
-		// The mouse up pairs with the pending down (div.rs:3579-3626): the
-		// capture phase takes the pending down when the element is still
-		// hovered (and drops it otherwise, so an element that moved after
-		// the press is not clicked), the bubble phase fires the click.
-		var capturedMouseDown *MouseDownEvent
+		// The element's click and aux-click listeners register on the
+		// frame under its path key (browser-core ticket 12): the window's
+		// up dispatch fires them on the click's target chain — the common
+		// ancestor of the press and release targets, the captured element
+		// under a pointer capture — after every mouseup listener, the
+		// DOM's order (mouseevent.go dispatchMouseClick; the pin fired
+		// each element's click inside the up's listener traversal, the
+		// recorded click-before-mouseup divergence of spec D12).
+		if len(clickListeners) > 0 || len(auxClickListeners) > 0 {
+			appendClickListenerRegistration(w, clickListenerRegistration{
+				path:     path,
+				click:    clickListeners,
+				auxClick: auxClickListeners,
+			})
+		}
+
+		// The mouse up clears the pending press (div.rs:3579-3599: an
+		// element that moved away after the press is not on the release
+		// chain, so the click dispatch's chain drops it); the window-level
+		// dispatch owns the pairing, the target and the listener firing.
 		w.OnMouseEvent(func(event any, phase DispatchPhase, w *Window, app *App) {
-			up, isUp := event.(*MouseUpEvent)
-			if !isUp {
+			if _, isUp := event.(*MouseUpEvent); !isUp || phase != DispatchCapture {
 				return
 			}
-			switch phase {
-			case DispatchCapture:
-				if pending.event != nil && box.IsHovered(w) {
-					capturedMouseDown = pending.event
-					pending.event = nil
-					w.requestRefresh()
-				} else if pending.event != nil {
-					pending.event = nil
-					w.requestRefresh()
-				}
-			case DispatchBubble:
-				if capturedMouseDown == nil {
-					return
-				}
-				mouseDown := *capturedMouseDown
-				capturedMouseDown = nil
-				click := ClickEvent{Kind: ClickEventMouse, Mouse: MouseClickEvent{Down: mouseDown, Up: *up}}
-				if mouseDown.Button == MouseButtonLeft {
-					for _, listener := range clickListeners {
-						listener(&click, w, app)
-					}
-				} else {
-					for _, listener := range auxClickListeners {
-						listener(&click, w, app)
-					}
-				}
+			if pending.event != nil {
+				pending.event = nil
+				w.requestRefresh()
 			}
 		})
 	}

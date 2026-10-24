@@ -1,0 +1,99 @@
+{
+  "name": "activation-enter",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T04:51:02Z",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "btn": {
+      "x": 0,
+      "y": 0,
+      "width": 120,
+      "height": 60
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 360
+    }
+  },
+  "events": [
+    {
+      "kind": "mousedown",
+      "target": "btn",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "btn",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "btn",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keydown",
+      "target": "btn",
+      "defaultPrevented": false,
+      "key": "Enter",
+      "focus": "btn",
+      "code": "Enter"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Enter",
+      "focus": "btn",
+      "code": "Enter"
+    },
+    {
+      "kind": "click",
+      "target": "btn",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keyup",
+      "target": "btn",
+      "defaultPrevented": false,
+      "key": "Enter",
+      "focus": "btn",
+      "code": "Enter"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "Enter",
+      "focus": "btn",
+      "code": "Enter"
+    }
+  ],
+  "screenshot": "chrome.png"
+}

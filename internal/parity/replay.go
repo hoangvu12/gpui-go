@@ -237,6 +237,28 @@ func applyStep(cx *gpui.VisualTestContext, log *EventLog, step Step) error {
 		before = len(log.entries)
 		result = cx.SimulateEvent(&gpui.KeyUpEvent{Keystroke: key})
 		log.markDefaultPrevented(before, result.DefaultPrevented)
+	case StepKeyDown, StepKeyUp:
+		// One half of a key press (browser-core ticket 12): the
+		// StepKeyDown arm dispatches only the KeyDownEvent and StepKeyUp
+		// only the KeyUpEvent, matching the recorder's single CDP event —
+		// a key can be held at the record's settle (the Space-held
+		// :active fixture) or released after something between the
+		// halves. The keystroke spelling is StepKey's.
+		key, err := gpui.ParseKeystroke(step.Key)
+		if err != nil {
+			return err
+		}
+		if step.Code != "" {
+			key.Code = step.Code
+		}
+		key = key.WithSimulatedCode()
+		event := any(&gpui.KeyUpEvent{Keystroke: key})
+		if step.Kind == StepKeyDown {
+			event = &gpui.KeyDownEvent{Keystroke: key}
+		}
+		before := len(log.entries)
+		result := cx.SimulateEvent(event)
+		log.markDefaultPrevented(before, result.DefaultPrevented)
 	default:
 		return fmt.Errorf("unknown step kind %q", step.Kind)
 	}

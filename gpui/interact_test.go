@@ -174,7 +174,13 @@ func TestInteractMouseClickDispatchTranscript(t *testing.T) {
 	wantTranscript(t, "left down", rec.take(), []string{"p.capture-down", "a.capture-down", "a.down-left", "p.down"})
 	f.draw()
 	f.up(MouseButtonLeft, 12, 12)
-	wantTranscript(t, "left up", rec.take(), []string{"a.capture-up", "a.click(Mouse,1,{12 12})", "a.up"})
+	// Browser-core ticket 12 (divergence toward Chrome, spec D12): the
+	// click fires after every mouseup listener — the DOM's order
+	// (Chromium pointer_event_manager.cc:1283-1296 dispatches the click
+	// after the whole pointerup/mouseup chain) — where the pin fired it
+	// inside the up's listener traversal (click before mouseup). The
+	// expectation changed with the ticket; never silently.
+	wantTranscript(t, "left up", rec.take(), []string{"a.capture-up", "a.up", "a.click(Mouse,1,{12 12})"})
 
 	// A right press and release is an aux click, not a click.
 	f.draw()
@@ -182,7 +188,8 @@ func TestInteractMouseClickDispatchTranscript(t *testing.T) {
 	wantTranscript(t, "right down", rec.take(), []string{"p.capture-down", "a.capture-down", "a.down-right", "p.down"})
 	f.draw()
 	f.up(MouseButtonRight, 10, 10)
-	wantTranscript(t, "right up", rec.take(), []string{"a.capture-up", "a.aux(true)", "a.up"})
+	// The aux click also fires after the up listeners (ticket 12).
+	wantTranscript(t, "right up", rec.take(), []string{"a.capture-up", "a.up", "a.aux(true)"})
 
 	// A press inside released outside the element clicks nothing; the
 	// pending press is dropped (div.rs:3591-3599).
@@ -254,7 +261,17 @@ func keyboardActivation(t *testing.T) (*interactFixture, *[]string, FocusHandle,
 }
 
 // TestInteractKeyboardActivation ports the seven pinned keyboard
-// activation tests (div.rs:5859-5970).
+// activation tests (div.rs:5859-5970), updated where browser-core
+// ticket 12 (spec D12) moved the port toward Chrome: Enter activates
+// at the KEYDOWN (the DOM keypress's timing, html_element.cc:4318-
+// 4324 — the click lands between the halves of the press, before any
+// listener or focus change in between) where the pin paired the
+// keydown with the keyup; Space still arms at the keydown and clicks
+// at the keyup, so the focus-move and intervening-key guards keep
+// their pin meaning for Space. The Enter subtests that asserted the
+// pairing (the focus-move and intervening-key cancels) now hold for
+// Space, with the Enter timing covered by the parity fixture
+// activation-enter.
 func TestInteractKeyboardActivation(t *testing.T) {
 	t.Run("fires_click_on_same_element", func(t *testing.T) {
 		f, clicks, a, _ := keyboardActivation(t)
@@ -265,28 +282,42 @@ func TestInteractKeyboardActivation(t *testing.T) {
 			t.Fatalf("clicks = %v, want [a:Keyboard]", *clicks)
 		}
 	})
-	t.Run("does_not_leak_across_focus_change", func(t *testing.T) {
+	// Enter now fires at the keydown (ticket 12: Chrome's keypress), so
+	// a focus move between the halves cannot retro-cancel it — the
+	// pinned expectation ([], the keyup pairing's guard) became the
+	// Space test below; the Enter timing is the divergence note above.
+	t.Run("enter_fires_before_a_focus_change", func(t *testing.T) {
 		f, clicks, a, b := keyboardActivation(t)
 		f.focusAndDraw(a)
 		f.key(true, "enter")
 		f.focusAndDraw(b)
 		f.key(false, "enter")
-		if len(*clicks) != 0 {
-			t.Fatalf("clicks = %v, want none", *clicks)
+		if !reflect.DeepEqual(*clicks, []string{"a:Keyboard"}) {
+			t.Fatalf("clicks = %v, want [a:Keyboard] (Enter clicks at the keydown, before the focus move)", *clicks)
 		}
 	})
-	t.Run("does_not_leak_when_focus_returns", func(t *testing.T) {
+	t.Run("space_does_not_leak_across_focus_change", func(t *testing.T) {
 		f, clicks, a, b := keyboardActivation(t)
 		f.focusAndDraw(a)
-		f.key(true, "enter")
+		f.key(true, "space")
 		f.focusAndDraw(b)
-		f.focusAndDraw(a)
-		f.key(false, "enter")
+		f.key(false, "space")
 		if len(*clicks) != 0 {
 			t.Fatalf("clicks = %v, want none", *clicks)
 		}
 	})
-	t.Run("cleared_by_intervening_key_release", func(t *testing.T) {
+	t.Run("space_does_not_leak_when_focus_returns", func(t *testing.T) {
+		f, clicks, a, b := keyboardActivation(t)
+		f.focusAndDraw(a)
+		f.key(true, "space")
+		f.focusAndDraw(b)
+		f.focusAndDraw(a)
+		f.key(false, "space")
+		if len(*clicks) != 0 {
+			t.Fatalf("clicks = %v, want none", *clicks)
+		}
+	})
+	t.Run("space_cleared_by_intervening_key_release", func(t *testing.T) {
 		f, clicks, a, _ := keyboardActivation(t)
 		f.focusAndDraw(a)
 		f.key(true, "escape")
@@ -297,23 +328,43 @@ func TestInteractKeyboardActivation(t *testing.T) {
 			t.Fatalf("clicks = %v, want none", *clicks)
 		}
 	})
-	t.Run("does_not_distinguish_space_and_enter", func(t *testing.T) {
+	// Ticket 12 (divergence toward Chrome): Chrome distinguishes the
+	// activation keys — Space arms at the keydown and clicks at its own
+	// keyup, Enter clicks at its keydown — so a mixed press (Space down,
+	// Enter up) clicks nothing (html_element.cc:4314-4338 has an arm
+	// per key). The pin paired any activation keydown with any other's
+	// keyup; the expectation changed with the ticket.
+	t.Run("distinguishes_space_and_enter", func(t *testing.T) {
 		f, clicks, a, _ := keyboardActivation(t)
 		f.focusAndDraw(a)
 		f.key(true, "space")
 		f.key(false, "enter")
-		if !reflect.DeepEqual(*clicks, []string{"a:Keyboard"}) {
-			t.Fatalf("clicks = %v, want [a:Keyboard]", *clicks)
+		if len(*clicks) != 0 {
+			t.Fatalf("clicks = %v, want none (the mixed press clicks nothing, Chrome's per-key arms)", *clicks)
 		}
 	})
-	t.Run("cleared_by_intervening_keydown", func(t *testing.T) {
+	t.Run("space_cleared_by_intervening_keydown", func(t *testing.T) {
+		f, clicks, a, _ := keyboardActivation(t)
+		f.focusAndDraw(a)
+		f.key(true, "space")
+		f.key(true, "a")
+		f.key(false, "space")
+		if len(*clicks) != 0 {
+			t.Fatalf("clicks = %v, want none", *clicks)
+		}
+	})
+	// Enter fires at the keydown (ticket 12: Chrome's keypress follows
+	// the keydown immediately — keyboard_event_manager.cc:330-389 — so
+	// no later key can cancel it); the pin's intervening-keydown cancel
+	// is the Space test above.
+	t.Run("enter_fires_before_an_intervening_keydown", func(t *testing.T) {
 		f, clicks, a, _ := keyboardActivation(t)
 		f.focusAndDraw(a)
 		f.key(true, "enter")
 		f.key(true, "a")
 		f.key(false, "enter")
-		if len(*clicks) != 0 {
-			t.Fatalf("clicks = %v, want none", *clicks)
+		if !reflect.DeepEqual(*clicks, []string{"a:Keyboard"}) {
+			t.Fatalf("clicks = %v, want [a:Keyboard] (Enter clicks at the keydown, before the 'a')", *clicks)
 		}
 	})
 	t.Run("ignores_modified_keys", func(t *testing.T) {
@@ -326,9 +377,10 @@ func TestInteractKeyboardActivation(t *testing.T) {
 		}
 	})
 	// Port extension: a mouse press that focuses the element (its focus
-	// transfer calls PreventDefault, div.rs:3279) must not suppress the
-	// next keyboard activation — the pin resets default_prevented per
-	// dispatched event (window.rs:5760).
+	// transfer claims the innermost-wins flag, div.rs:3279 — ticket 12
+	// made the claim internal, the event stays unprevented) must not
+	// suppress the next keyboard activation — the pin resets
+	// default_prevented per dispatched event (window.rs:5760).
 	t.Run("after_mouse_focus", func(t *testing.T) {
 		f, clicks, a, _ := keyboardActivation(t)
 		f.down(MouseButtonLeft, 10, 10)

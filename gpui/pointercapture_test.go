@@ -191,23 +191,23 @@ func TestPointerCaptureRetargetsEventsToTheCapturedChain(t *testing.T) {
 	})
 
 	// The release outside cap: the up targets the captured chain, the
-	// click goes to the captured chain (Chromium's captured click
-	// target, mouse_event_manager.cc:359-360 — the pin's model clicks
-	// every hovered-chain element that saw the press, which is the
-	// click's bubbling shape), the lostpointercapture fires after the
-	// up's listeners, and the boundary events settle after the release —
-	// leave cap (innermost first), enter other. The per-element
-	// click-before-up order is the pin's known divergence from the
-	// browser's mouseup-before-click (docs/browser-parity-harness.md,
-	// owned by the input bundle, D12) — this ticket only owns the
-	// capture order: the click still targets the captured element, and
-	// lostpointercapture follows the ups.
+	// lostpointercapture fires after the up's listeners, the click goes
+	// to the captured chain (Chromium's captured click target,
+	// mouse_event_manager.cc:359-360) AFTER lostpointercapture
+	// (pointer_event_manager.cc:1283-1296: the release → the pending-
+	// capture processing → the click dispatch), and the boundary events
+	// settle after it all — leave cap (innermost first), enter other.
+	// Browser-core ticket 12 (divergence toward Chrome, spec D12): the
+	// pin fired the click inside the up's listener traversal (click
+	// before mouseup and before lostpointercapture); the port now
+	// matches the browser's order — mouseup, lostpointercapture, click,
+	// boundary events — which is also what the capture-drag-outside
+	// record's order is. The expectation changed with the ticket.
 	f.up(captureOtherX, captureOtherY)
 	wantTranscript(t, "the captured release", f.take(), []string{
-		"click:cap", "up:cap",
-		"click:p", "up:p",
-		"click:root", "up:root",
+		"up:cap", "up:p", "up:root",
 		"lost:cap", "lost:p", "lost:root",
+		"click:cap", "click:p", "click:root",
 		"leave:cap", "enter:other",
 	})
 	if _, ok := f.window.CapturedHitbox(); ok {
@@ -377,7 +377,9 @@ func TestPointerCancelClearsPressesAndDrag(t *testing.T) {
 	})
 
 	// A fresh press works again: the capture is accepted and the click
-	// fires.
+	// fires — after the up listeners and lostpointercapture, the
+	// browser's order (browser-core ticket 12, the divergence note on
+	// the captured release above).
 	f.move(captureCapX, captureCapY)
 	f.take()
 	f.down(captureCapX, captureCapY)
@@ -387,8 +389,9 @@ func TestPointerCancelClearsPressesAndDrag(t *testing.T) {
 		"down:cap", "down:p", "down:root",
 		"got:cap", "got:p", "got:root",
 		"move:cap", "move:p", "move:root",
-		"click:cap", "up:cap", "click:p", "up:p", "click:root", "up:root",
+		"up:cap", "up:p", "up:root",
 		"lost:cap", "lost:p", "lost:root",
+		"click:cap", "click:p", "click:root",
 	})
 }
 

@@ -129,6 +129,14 @@ type renderedFrame struct {
 	tabStops       *TabStopMap
 	mouseListeners []mouseListener
 	hitboxes       []*hitboxRecord
+	// clickListeners are the frame's click registrations (browser-core
+	// ticket 12, spec D12): every id'd element with OnClick/OnAuxClick
+	// listeners registers them under its element path key — the same
+	// identity the hitboxes' ownerPath carries — in paint order
+	// (parents first). The mouse up's click dispatch (mouseevent.go
+	// dispatchMouseClick) resolves the target chain by those keys and
+	// fires the listeners target-first, like a bubbling DOM click.
+	clickListeners []clickListenerRegistration
 	// hitboxStack is the transient stack of hitboxes whose subtrees are
 	// prepainting (browser-core ticket 11): each hitbox records the top
 	// of this stack as its parent, which is how the capture chain
@@ -153,6 +161,22 @@ func (f *renderedFrame) focusPathOf() []uint64 {
 		return nil
 	}
 	return f.dispatchTree.focusPath(f.focus)
+}
+
+// clickListenerRegistration is one element's click and aux-click
+// listeners on the frame (browser-core ticket 12): path is the owning
+// element's GlobalElementID key — the identity the hitboxes'
+// ownerPath and the click chain resolve by. Registered during paint
+// (interact.go paintMouseListeners), consumed by the up's click
+// dispatch (mouseevent.go dispatchMouseClick).
+type clickListenerRegistration struct {
+	// path is the owning element's global id key (the hitbox's
+	// ownerPath).
+	path string
+	// click are the left-button click listeners.
+	click []func(*ClickEvent, *Window, *App)
+	// auxClick are the non-primary-button listeners.
+	auxClick []func(*ClickEvent, *Window, *App)
 }
 
 // focusState returns (creating when absent) the window's focus
@@ -444,8 +468,22 @@ type FocusedResult struct {
 
 // Focus moves focus to the given handle (Window::focus): no-op when
 // focus is disabled or the handle already holds focus; clears pending
-// keystrokes and bumps the focus generation.
+// keystrokes and bumps the focus generation. App code calls this — a
+// script focus in the DOM's terms, which keeps the window's focus
+// origin and keyboard state (browser-core ticket 12).
 func (w *Window) Focus(handle FocusHandle) {
+	w.focusWithOrigin(handle, focusOriginUnset)
+}
+
+// focusWithOrigin moves focus recording the focus origin
+// (browser-core ticket 12, spec D12): mouse (the mouse-down focus
+// transfer), keyboard (the Tab default action) or unset (app code —
+// Chromium's document.cc:6068-6070 ignores kScript/kNone when tracking
+// LastFocusType, so a script focus keeps the document's origin). A
+// mouse-type focus also clears the keyboard-event flag
+// (element.cc:8867-8868), which is what keeps a click's focus from
+// showing the focus-visible ring until the next unmodified key.
+func (w *Window) focusWithOrigin(handle FocusHandle, origin focusOriginKind) {
 	if w == nil {
 		panic("gpui: Focus requires a live window")
 	}
@@ -461,6 +499,17 @@ func (w *Window) Focus(handle FocusHandle) {
 	fs.focused = handle.id
 	fs.focusGeneration++
 	w.clearPendingKeystrokes()
+
+	// The origin bookkeeping (Chromium's LastFocusType and
+	// had_keyboard_event_, selector_checker.cc:3888-3901 reads both).
+	is := inputState(w)
+	switch origin {
+	case focusOriginMouse:
+		is.focusOrigin = focusOriginMouse
+		is.hadKeyboardEvent = false
+	case focusOriginKeyboard:
+		is.focusOrigin = focusOriginKeyboard
+	}
 
 	// The reference refreshes the window (window.rs Window::focus →
 	// refresh): the frame loop redraws it.
@@ -525,7 +574,11 @@ func (w *Window) FocusNext() {
 		focused = &id
 	}
 	if handle, ok := fs.rendered.tabStops.Next(focused, w); ok {
-		w.Focus(handle)
+		// The Tab default action's focus is a keyboard focus
+		// (browser-core ticket 12): the moved-to element shows the
+		// focus-visible styles (Chromium's FocusType::kForward is not
+		// kMouse, so !last_focus_from_mouse holds).
+		w.focusWithOrigin(handle, focusOriginKeyboard)
 	}
 }
 
@@ -548,7 +601,8 @@ func (w *Window) FocusPrev() {
 		focused = &id
 	}
 	if handle, ok := fs.rendered.tabStops.Prev(focused, w); ok {
-		w.Focus(handle)
+		// Shift+Tab is a keyboard focus like Tab (focusOriginKeyboard).
+		w.focusWithOrigin(handle, focusOriginKeyboard)
 	}
 }
 

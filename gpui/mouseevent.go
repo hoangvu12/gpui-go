@@ -512,6 +512,168 @@ func boundsContain(b Bounds, point Point) bool {
 }
 
 // ---------------------------------------------------------------------------
+// The click chain (browser-core ticket 12, spec D12)
+// ---------------------------------------------------------------------------
+
+// chainPathsOf resolves a hit test's mouse path to element paths,
+// innermost first, deduplicated: each hit-test id maps to the frame's
+// hitbox record, whose ownerPath is the owning (or nearest id'd
+// ancestor) element's global id key. Id-less in-between elements
+// share their nearest id'd ancestor's path, so consecutive equal
+// paths collapse — the chain is the sequence of distinct element
+// identities under the pointer, the DOM propagation path's stand-in
+// (the flat-tree walk of event_handling_util.cc:88-90
+// ParentForClickEvent). Only the ids that support mouse count: a
+// block-mouse hitbox (an inert or occluding element) ends the
+// propagation path — the elements behind it never see the click, the
+// same way they never see hover (hitTest.contains,
+// window.rs:887-897's mouse-path half).
+func chainPathsOf(frame *renderedFrame, test hitTest) []string {
+	if frame == nil {
+		return nil
+	}
+	count := test.hoverHitboxCount
+	if count > len(test.orderedIDs) {
+		count = len(test.orderedIDs)
+	}
+	var paths []string
+	seen := map[string]bool{}
+	for _, id := range test.orderedIDs[:count] {
+		var path string
+		for _, record := range frame.hitboxes {
+			if record.box.id == id {
+				path = record.ownerPath
+				break
+			}
+		}
+		if path == "" || seen[path] {
+			continue
+		}
+		seen[path] = true
+		paths = append(paths, path)
+	}
+	return paths
+}
+
+// commonAncestorClickChain computes the click's target chain from the
+// press and release chains (browser-core ticket 12): the deepest
+// element on both chains — Chromium's click target,
+// mouse_event_manager.cc:358-367 `mouse_release_target->CommonAncestor(
+// *mousedown_element_, ParentForClickEvent)` — plus its ancestors, so
+// the click bubbles from the common ancestor to the root. The release
+// chain is walked innermost-first and the first path the press chain
+// also contains is the common ancestor: press on a and release on b
+// (siblings under p) yields [p, root], press and release on the same
+// element yields that element's whole chain. An empty answer (nothing
+// shared, or an empty release chain — the pointer left every hitbox)
+// is no click, like Chromium's null click target.
+func commonAncestorClickChain(frame *renderedFrame, pressPaths []string, release hitTest) []string {
+	if len(pressPaths) == 0 {
+		return nil
+	}
+	releasePaths := chainPathsOf(frame, release)
+	press := map[string]bool{}
+	for _, path := range pressPaths {
+		press[path] = true
+	}
+	for i, path := range releasePaths {
+		if press[path] {
+			return releasePaths[i:]
+		}
+	}
+	return nil
+}
+
+// appendClickListenerRegistration registers one element's click and
+// aux-click listeners on the frame under construction (browser-core
+// ticket 12): the up's click dispatch resolves its target chain by the
+// registration paths. Registered during paint, so the completed frame
+// carries them.
+func appendClickListenerRegistration(w *Window, registration clickListenerRegistration) {
+	fs := focusState(w)
+	if fs.next == nil {
+		return
+	}
+	fs.next.clickListeners = append(fs.next.clickListeners, registration)
+}
+
+// armMouseClick records one element on the press's armed chain
+// (browser-core ticket 12): its mousedown-bubble arm ran while
+// hovered — the element saw the press. The arms run inside-out, so
+// the chain is innermost-first like a propagation path; a stopped
+// mousedown (an inert element's stopPropagation, Base's disabled
+// controls) or a block-mouse overlay keeps the later ancestors from
+// arming, which keeps them out of the click's target set — the pin's
+// per-element pending semantics, carried into the window-level
+// dispatch. The up's dispatchMouseClick computes the common-ancestor
+// target from this chain.
+func armMouseClick(w *Window, path string) {
+	is := inputState(w)
+	is.pressClickChain = append(is.pressClickChain, path)
+}
+
+// dispatchMouseClick synthesizes and dispatches the click of a mouse
+// up (browser-core ticket 12, spec D12): after the up's listeners and
+// the pointer-capture release, before the boundary settling — the
+// DOM's order (pointer_event_manager.cc:1277-1296:
+// ReleasePointerCapture → ProcessPendingPointerCapture →
+// DispatchMouseClickIfNeeded, with the boundary events settling after
+// it at :1299-1313). The click's target chain is the captured
+// element's chain when a pointer capture was active at the up
+// (:1237-1241 captured_click_target — GetEffectiveTargetForPointer-
+// Event before the release), and otherwise the common ancestor of
+// the press and release chains (mouse_event_manager.cc:358-367). The
+// listeners fire target-first then ancestor order, like a bubbling
+// DOM click; skipDrag suppresses the click of an up that ended a drag
+// or dropped one (Chromium's skip_click_dispatch — a drag's release
+// never clicks).
+func (w *Window) dispatchMouseClick(up *MouseUpEvent, capturedChain []string, skipDrag bool, app *App) {
+	fs := focusState(w)
+	is := inputState(w)
+	down := is.pendingMouseClick
+	is.pendingMouseClick = nil
+	pressChain := is.pressClickChain
+	is.pressClickChain = nil
+	if skipDrag || app.HasActiveDrag() {
+		// A drag's release does not click (the drag consumed the press;
+		// a drop listener may also have stopped the drag mid-bubble, in
+		// which case HasActiveDrag already reports false and the
+		// caller's flag covers it).
+		return
+	}
+	if fs.rendered == nil || down == nil {
+		return
+	}
+	chain := capturedChain
+	if chain == nil {
+		chain = commonAncestorClickChain(fs.rendered, pressChain, is.mouseHitTest)
+	}
+	if len(chain) == 0 {
+		return
+	}
+	pressed := *down
+	click := ClickEvent{Kind: ClickEventMouse, Mouse: MouseClickEvent{Down: pressed, Up: *up}}
+	registrations := fs.rendered.clickListeners
+	for _, path := range chain {
+		for i := range registrations {
+			if registrations[i].path != path {
+				continue
+			}
+			if pressed.Button == MouseButtonLeft {
+				for _, listener := range registrations[i].click {
+					listener(&click, w, app)
+				}
+			} else {
+				for _, listener := range registrations[i].auxClick {
+					listener(&click, w, app)
+				}
+			}
+		}
+	}
+	w.requestRefresh()
+}
+
+// ---------------------------------------------------------------------------
 // The window input state (window.rs Window mouse members)
 // ---------------------------------------------------------------------------
 
@@ -522,6 +684,23 @@ const (
 	inputModalityMouse inputModality = iota
 	inputModalityKeyboard
 	inputModalityTouch
+)
+
+// focusOriginKind is the origin of the last user focus move
+// (browser-core ticket 12, spec D12 — Chromium's mojom::blink::FocusType
+// behind document.cc:6068-6070 SetLastFocusType): mouse (the mouse-down
+// focus transfer), keyboard (the Tab default action) or unset (no user
+// focus yet, or the last one came from script, which Chromium does not
+// track — kScript/kNone keep the previous origin). The :focus-visible
+// rule reads it: a mouse focus shows no ring until an unmodified key
+// arrives, a keyboard focus shows it (selector_checker.cc:3888-3901's
+// !last_focus_from_mouse).
+type focusOriginKind uint8
+
+const (
+	focusOriginUnset focusOriginKind = iota
+	focusOriginMouse
+	focusOriginKeyboard
 )
 
 // windowInputState is the window's tracked input state, touched only
@@ -540,13 +719,50 @@ type windowInputState struct {
 	// defaultPrevented is the current dispatch's prevent-default flag
 	// (window.rs default_prevented).
 	defaultPrevented bool
-	// lastInputModality drives the focus-visible styles (the only
-	// hover-adjacent consumer left after browser-core ticket 10 removed
-	// the hover suppression, spec D12).
+	// lastInputModality is the last input's modality (window.rs
+	// InputModality). After browser-core ticket 12 its only remaining
+	// style consumer is gone (hover no longer reads it since ticket 10,
+	// focus-visible reads the origin and keyboard-event flag below); it
+	// stays tracked for window.rs parity.
 	lastInputModality inputModality
 	// lastInputWasKeyboard caches the keyboard modality answer
 	// (Window::last_input_was_keyboard).
 	lastInputWasKeyboard bool
+	// focusOrigin is the origin of the last user focus move
+	// (browser-core ticket 12; see focusOriginKind).
+	focusOrigin focusOriginKind
+	// hadKeyboardEvent is Chromium's document.had_keyboard_event_
+	// (document.h:1152-1155, the :focus-visible flag): an unmodified
+	// keydown sets it (keyboard_event_manager.cc:354-357 — Ctrl, Alt and
+	// Meta exclude the key, Shift does not: Ctrl+S after a click is not
+	// keyboard focus) and a mouse-type focus clears it
+	// (element.cc:8867-8868, through focusWithOrigin).
+	hadKeyboardEvent bool
+	// focusTransferClaimed is the mousedown focus transfer's
+	// innermost-wins signal (browser-core ticket 12): the innermost
+	// focusable element's arm sets it so a focusable ancestor's arm
+	// skips. It replaces the pin's PreventDefault call (interact.go,
+	// div.rs:3279's comment), which reported a default-prevented
+	// mousedown Chrome never delivers — Chrome's mouse-focus runs after
+	// the listeners as their default action and leaves the event
+	// unprevented (event_handler.cc:998-1001 → mouse_event_manager.cc
+	// HandleMouseFocus :537-636). Reset at the head of every dispatch.
+	focusTransferClaimed bool
+	// pendingMouseClick is the press the up's click dispatch pairs with
+	// (browser-core ticket 12): recorded at the mousedown with
+	// pressClickChain, dropped by a drag start or a pointer cancel, and
+	// consumed by dispatchMouseClick at the up.
+	pendingMouseClick *MouseDownEvent
+	// pressClickChain is the press hit-test chain's element paths
+	// (innermost first, deduplicated — hitbox ownerPaths): the click
+	// target is the common ancestor of this chain and the release chain
+	// (mouse_event_manager.cc:358-367 CommonAncestor).
+	pressClickChain []string
+	// pendingKeyboardActivation is the focus generation at an
+	// unmodified Space keydown (browser-core ticket 12: the armed
+	// activation — the keyup clicks only when the generation still
+	// matches, so a focus move or an intervening key disarms it).
+	pendingKeyboardActivation *uint64
 	// capturedHitbox is replaced by activePointerCapture (browser-core
 	// ticket 11): the pin's captured_hitbox (window.rs:1330) survives as
 	// its hitboxID half, with the element path that keeps the capture
@@ -760,6 +976,19 @@ func (w *Window) dispatchMouseEvent(event any, app *App) {
 			w.resetCursorStyle(app)
 		}
 	}
+	// The press records its event (browser-core ticket 12): the up's
+	// click dispatch pairs this press with the release. The press CHAIN
+	// is not recorded here — it is the armed chain (the elements whose
+	// mousedown-bubble arms ran, interact.go armMouseClick: innermost-
+	// first, exactly the elements that saw the press, so a stopped
+	// mousedown or a block-mouse overlay leaves the un-armed ancestors
+	// out of the click's target set, like the pin's per-element pending
+	// state).
+	if down, isDown := event.(*MouseDownEvent); isDown {
+		pressed := *down
+		is.pendingMouseClick = &pressed
+		is.pressClickChain = nil
+	}
 	// Inspector picking replaces the normal mouse dispatch while active
 	// (window.rs:6088-6092: handle_inspector_mouse_event after the hit
 	// test; all other mouse handling is skipped when it reports
@@ -818,6 +1047,7 @@ func (w *Window) dispatchMouseEvent(event any, app *App) {
 	// landed). Browser-core ticket 11: the cancel arm mirrors
 	// Chromium's pointercancel, which ends the drag when the stream is
 	// suppressed (:1316-1321).
+	dragAtDispatch := app.HasActiveDrag()
 	if app.HasActiveDrag() {
 		switch event.(type) {
 		case *MouseMoveEvent:
@@ -828,28 +1058,42 @@ func (w *Window) dispatchMouseEvent(event any, app *App) {
 		}
 	}
 
-	// The pointerup tail (browser-core ticket 11): the implicit release
-	// — "immediately after firing the pointerup … clear the pending
-	// pointer capture target override … and then run process pending
-	// pointer capture steps to fire lostpointercapture if necessary"
-	// (spec) — then the release hit test and the boundary events
+	// The pointerup tail (browser-core ticket 11, re-ordered by
+	// browser-core ticket 12 to Chromium's pointer_event_manager.cc:
+	// 1272-1313): the implicit capture release — "immediately after
+	// firing the pointerup … clear the pending pointer capture target
+	// override … and then run process pending pointer capture steps to
+	// fire lostpointercapture if necessary" (spec) — then the click
+	// (DispatchMouseClickIfNeeded :1283-1296, after lostpointercapture,
+	// before the boundary settling — the pin fired its click inside
+	// the up's listener traversal, before mouseup listeners higher up
+	// and before lostpointercapture; the recorded divergence is closed
+	// by spec D12), then the release hit test and the boundary events
 	// (Chromium re-hit-tests on the release, :1268-1281, and settles the
-	// element under the pointer after the click, :1300-1313, which is
+	// element under the pointer after the click, :1299-1313, which is
 	// where the captured element's pointerleave and the new target's
-	// pointerenter come from). The port fires the click inside the up's
-	// listener traversal above, so its order against lostpointercapture
-	// is the pin's (click first) where the browser's is lost first — a
-	// recorded divergence owned by the input bundle (D12).
-	if up, isUp := event.(*MouseUpEvent); isUp && is.activePointerCapture != (pointerCapture{}) {
-		is.pendingPointerCapture = (pointerCapture{})
-		w.processPendingPointerCapture(up, app)
-		if fs.rendered != nil {
-			if hit := fs.rendered.hitTestAt(is.mousePosition); !hit.equal(&is.mouseHitTest) {
-				is.mouseHitTest = hit
-				w.resetCursorStyle(app)
-			}
+	// pointerenter come from). The click's release chain is the
+	// effective hit test at the up — the pre-release capture chain when
+	// captured (Chromium computes click_mouse_target and
+	// captured_click_target before releasing, :1231-1241).
+	if up, isUp := event.(*MouseUpEvent); isUp {
+		hadCapture := is.activePointerCapture != (pointerCapture{})
+		var capturedChain []string
+		if hadCapture {
+			capturedChain = chainPathsOf(fs.rendered, is.mouseHitTest)
+			is.pendingPointerCapture = (pointerCapture{})
+			w.processPendingPointerCapture(up, app)
 		}
-		w.dispatchHoverBoundaryEvents(up.Position, up.Modifiers, app)
+		w.dispatchMouseClick(up, capturedChain, dragAtDispatch, app)
+		if hadCapture {
+			if fs.rendered != nil {
+				if hit := fs.rendered.hitTestAt(is.mousePosition); !hit.equal(&is.mouseHitTest) {
+					is.mouseHitTest = hit
+					w.resetCursorStyle(app)
+				}
+			}
+			w.dispatchHoverBoundaryEvents(up.Position, up.Modifiers, app)
+		}
 	}
 
 	// The pointercancel tail: the release fires lostpointercapture but
@@ -857,9 +1101,17 @@ func (w *Window) dispatchMouseEvent(event any, app *App) {
 	// is a little tricky", pointer_event_manager.cc:1316-1321); the
 	// pending presses were cleared by the listener arms above, and the
 	// hit test reverts to positional at the next dispatch or paint.
-	if _, isCancel := event.(*PointerCancelEvent); isCancel && is.activePointerCapture != (pointerCapture{}) {
-		is.pendingPointerCapture = (pointerCapture{})
-		w.processPendingPointerCapture(event, app)
+	// Browser-core ticket 12: a cancelled press never releases, so the
+	// pending click goes with it (Chromium's pointercancel ends the
+	// click sequence too).
+	if _, isCancel := event.(*PointerCancelEvent); isCancel {
+		is.pendingMouseClick = nil
+		is.pressClickChain = nil
+		is.pendingKeyboardActivation = nil
+		if is.activePointerCapture != (pointerCapture{}) {
+			is.pendingPointerCapture = (pointerCapture{})
+			w.processPendingPointerCapture(event, app)
+		}
 	}
 }
 

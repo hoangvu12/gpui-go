@@ -295,12 +295,13 @@ func TestWin32CaptureChangedCancelsCleanlyOnOffscreenWindow(t *testing.T) {
 	f.send(wmMouseMove, mkLButton, f.at(50, 50))
 	f.wantLog("the fresh capture", "got:button")
 	f.send(wmLButtonUp, 0, f.at(50, 50))
-	// The click fires inside the up's listener traversal and the
-	// lostpointercapture in the up's tail, so the port's order is click
-	// before lost where the browser delivers pointerup, lost, click —
-	// the pin's known click order, owned by the input bundle (D12); the
-	// capture order this ticket owns (lost after the ups) holds.
-	f.wantLog("the fresh click", "click:button", "lost:button")
+	// Browser-core ticket 12 (divergence toward Chrome, spec D12): the
+	// click now fires after the up's listeners AND after the capture
+	// release — pointerup, lostpointercapture, click,
+	// pointer_event_manager.cc:1283-1296 — where the pin fired the
+	// click inside the up's listener traversal (click before lost).
+	// The expectation changed with the ticket.
+	f.wantLog("the fresh click", "lost:button", "click:button")
 	if got := f.osCapture(); got != 0 {
 		t.Fatalf("OS capture after the fresh release = %#x, want none", got)
 	}

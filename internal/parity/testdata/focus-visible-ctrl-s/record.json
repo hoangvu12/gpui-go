@@ -1,0 +1,89 @@
+{
+  "name": "focus-visible-ctrl-s",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T04:51:08Z",
+  "viewport": {
+    "width": 480,
+    "height": 360
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "box": {
+      "x": 0,
+      "y": 0,
+      "width": 120,
+      "height": 60
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 360
+    }
+  },
+  "events": [
+    {
+      "kind": "mousedown",
+      "target": "box",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "box",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mouseup",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "box",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "keydown",
+      "target": "box",
+      "defaultPrevented": false,
+      "key": "s",
+      "focus": "box",
+      "code": "KeyS"
+    },
+    {
+      "kind": "keydown",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "s",
+      "focus": "box",
+      "code": "KeyS"
+    },
+    {
+      "kind": "keyup",
+      "target": "box",
+      "defaultPrevented": false,
+      "key": "s",
+      "focus": "box",
+      "code": "KeyS"
+    },
+    {
+      "kind": "keyup",
+      "target": "root",
+      "defaultPrevented": false,
+      "key": "s",
+      "focus": "box",
+      "code": "KeyS"
+    }
+  ],
+  "screenshot": "chrome.png"
+}

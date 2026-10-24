@@ -59,6 +59,16 @@ const (
 	// StepKey presses and releases one keystroke ("a", "enter",
 	// "ctrl-a", the pinned keystroke syntax).
 	StepKey StepKind = "key"
+	// StepKeyDown presses one keystroke without releasing it
+	// (browser-core ticket 12): the recorder sends only the CDP keyDown
+	// and the replay dispatches only the KeyDownEvent, so a fixture can
+	// record a key held down at the settle — the Space-held :active
+	// fixture is the use.
+	StepKeyDown StepKind = "keydown"
+	// StepKeyUp releases a keystroke a StepKeyDown pressed (browser-core
+	// ticket 12). The pair spells one full press across steps when a
+	// fixture needs something between the halves.
+	StepKeyUp StepKind = "keyup"
 )
 
 // MouseButton names, shared by the recorder and the replay.
@@ -103,6 +113,15 @@ func Click(x, y float32) Step { return Step{Kind: StepClick, X: x, Y: y, Button:
 
 // Key returns a keystroke step.
 func Key(keystroke string) Step { return Step{Kind: StepKey, Key: keystroke} }
+
+// KeyDown returns a keystroke half-press step: the key goes down and
+// stays down (browser-core ticket 12 — the recorder sends one CDP
+// keyDown, the replay one KeyDownEvent; pair with KeyUp).
+func KeyDown(keystroke string) Step { return Step{Kind: StepKeyDown, Key: keystroke} }
+
+// KeyUp returns the release half of a KeyDown step (browser-core
+// ticket 12).
+func KeyUp(keystroke string) Step { return Step{Kind: StepKeyUp, Key: keystroke} }
 
 // KeyCode returns a keystroke step with an explicit physical DOM code
 // (browser-core 13): the keystroke's key and modifiers parse as usual
@@ -530,7 +549,7 @@ func validate(f Fixture) error {
 	}
 	for _, step := range f.Steps {
 		switch step.Kind {
-		case StepMove, StepDown, StepUp, StepClick, StepKey:
+		case StepMove, StepDown, StepUp, StepClick, StepKey, StepKeyDown, StepKeyUp:
 		default:
 			return fmt.Errorf("parity: fixture %q: unknown step kind %q", f.Name, step.Kind)
 		}

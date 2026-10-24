@@ -158,6 +158,20 @@ func (w *Window) runKeyDefaultActions(event any, app *App) bool {
 		return true
 	}
 
+	// The keyboard activation default (browser-core ticket 12, spec
+	// D12): Enter clicks between the keydown and keyup (the keypress's
+	// default — Chromium html_element.cc:4318-4324, the keypress the
+	// platform key event carries as its follow-up), Space arms at the
+	// keydown (the focused element's pressed state — :active while
+	// held, html_element.cc:4318-4321) and clicks at the keyup
+	// (:4326-4331, after the keyup listeners, the default-action
+	// position). The click dispatches through the focused node's whole
+	// path — the DOM's bubbling simulated click — where the pin called
+	// only the focused element's own listeners.
+	if w.defaultKeyboardActivation(event, app) {
+		return true
+	}
+
 	switch e := event.(type) {
 	case *KeyDownEvent:
 		if w.defaultKeyboardScroll(e, app) {
@@ -168,6 +182,141 @@ func (w *Window) runKeyDefaultActions(event any, app *App) bool {
 		return false
 	}
 	return false
+}
+
+// nodeClickActivation is one element's keyboard-activation registration
+// on its dispatch node (browser-core ticket 12): the click listeners
+// the activation fires, the element's pressed-state cell (the
+// Space-held :active carrier) and the bounds the KeyboardClickEvent
+// reports.
+type nodeClickActivation struct {
+	// listeners are the element's OnClick listeners (left-button clicks;
+	// keyboard activation is Enter/Space only).
+	listeners []func(*ClickEvent, *Window, *App)
+	// clicked is the element's pressed state (InteractiveElementState's
+	// clicked cell — the Active style's carrier).
+	clicked *ElementClickedState
+	// bounds are the element's prepaint hitbox bounds.
+	bounds Bounds
+}
+
+// defaultKeyboardActivation is the keyboard activation default action
+// (browser-core ticket 12; Chromium HTMLElement::HandleKeyboardActivation
+// html_element.cc:4314-4338, the button override html_button_element.cc:
+// 285-296). It runs from the default-action position (after the key
+// listeners, suppressed by a prevented event) on the FOCUSED node's
+// registration — the pin's focus gate. Enter fires the click
+// immediately (the keypress between the halves of the press); Space
+// arms at the keydown — setting the focused element's pressed state,
+// the :active-while-held rule — and fires the click at the keyup when
+// the armed generation still matches (a focus move or an intervening
+// key disarms it, the pin's guard). Any other key down or up disarms a
+// pending Space (the pin's intervening-key rule — a divergence from
+// Chrome's always-active SetActive kept deliberately: mixed-key
+// presses stay unclicked). It reports whether the key was consumed by
+// the activation logic (Chromium's SetDefaultHandled semantics).
+func (w *Window) defaultKeyboardActivation(event any, app *App) bool {
+	fs := focusState(w)
+	is := inputState(w)
+	tree := fs.renderedDispatchTree()
+	path, nodeID := w.focusDispatchPath()
+	node := tree.Node(nodeID)
+	activation := node.clickActivation
+
+	switch e := event.(type) {
+	case *KeyDownEvent:
+		stroke := e.Keystroke
+		unmodifiedEnter := stroke.Key == "enter" && !stroke.Modifiers.Modified()
+		unmodifiedSpace := stroke.Key == "space" && !stroke.Modifiers.Modified()
+		if activation != nil && (unmodifiedEnter || unmodifiedSpace) {
+			if unmodifiedEnter {
+				// Enter activates at the keypress (html_element.cc:4318-
+				// 4324's '\r' arm) — the follow-up event of the keydown,
+				// so between the two halves of the full press. A prevented
+				// keydown already returned above (the keypress never
+				// happens when the keydown was canceled,
+				// keyboard_event_manager.cc:367-369).
+				w.dispatchKeyboardClick(path, nodeID, KeyboardButtonEnter, app)
+			} else {
+				// Space arms (html_element.cc:4318-4321: SetActive, no
+				// default handling — the keydown stays unprevented and
+				// unconsumed by this arm alone; the return true below
+				// marks the press consumed so the keyboard-scroll default
+				// does not also take it, the keypress ' ' arm's job in
+				// Chromium, html_element.cc:4325-4329).
+				generation := w.FocusGeneration()
+				is.pendingKeyboardActivation = &generation
+				if activation.clicked != nil && !activation.clicked.Element {
+					activation.clicked.Element = true
+					w.requestRefresh()
+				}
+			}
+			return true
+		}
+		// Any other key down cancels a pending Space activation (the
+		// pin's intervening-keydown rule).
+		is.pendingKeyboardActivation = nil
+		return false
+	case *KeyUpEvent:
+		stroke := e.Keystroke
+		if activation != nil && stroke.Key == "space" && !stroke.Modifiers.Modified() {
+			generation := is.pendingKeyboardActivation
+			is.pendingKeyboardActivation = nil
+			armed := generation != nil && *generation == w.FocusGeneration()
+			// The pressed state clears with the key (Chrome's simulated
+			// click resets it, event_dispatcher.cc:184-186; the state also
+			// clears when the keyup lands on a different focused element —
+			// the cell below is the keyup's, and the armed check already
+			// refuses the click).
+			if activation.clicked != nil && activation.clicked.Element {
+				activation.clicked.Element = false
+				w.requestRefresh()
+			}
+			if armed {
+				w.dispatchKeyboardClick(path, nodeID, KeyboardButtonSpace, app)
+			}
+			// The keyup is default-handled whether or not the click fired
+			// (html_element.cc:4330-4331: SetDefaultHandled after the
+			// click decision).
+			return true
+		}
+		// Releasing any other key cancels a pending activation (the
+		// pin's intervening-key rule).
+		is.pendingKeyboardActivation = nil
+		return false
+	}
+	return false
+}
+
+// dispatchKeyboardClick fires the keyboard activation click through
+// the focused node's path (browser-core ticket 12): the focused
+// element's listeners first, then each ancestor's — the DOM's
+// simulated click bubbles (Chromium DispatchSimulatedClick,
+// event_dispatcher.cc:163-187; the pin called only the focused
+// element's own listeners, the recorded no-bubbling divergence of
+// spec D12). All listeners share one ClickEvent whose bounds are the
+// focused element's, like the DOM event's single target.
+func (w *Window) dispatchKeyboardClick(path []DispatchNodeID, nodeID DispatchNodeID, button KeyboardButton, app *App) {
+	tree := focusState(w).renderedDispatchTree()
+	node := tree.Node(nodeID)
+	if node == nil || node.clickActivation == nil {
+		return
+	}
+	click := ClickEvent{
+		Kind:     ClickEventKeyboard,
+		Keyboard: KeyboardClickEvent{Button: button, Bounds: node.clickActivation.bounds},
+	}
+	// The path is root-first; the click walks it focused-first.
+	for i := len(path) - 1; i >= 0; i-- {
+		ancestor := tree.Node(path[i])
+		if ancestor == nil || ancestor.clickActivation == nil {
+			continue
+		}
+		for _, listener := range ancestor.clickActivation.listeners {
+			listener(&click, w, app)
+		}
+	}
+	w.requestRefresh()
 }
 
 // defaultKeyboardScroll is the navigation-key default action

@@ -27,12 +27,13 @@
 // where they appear; docs/browser-parity-harness.md documents the
 // harness extension (keydown/keyup kinds, the key and focus fields,
 // data-events, the key step's down+up pair). The fixtures bind no
-// mousedown listeners: the pin's mouse-down focus transfer always
-// calls Window.PreventDefault (interact.go, div.rs:3279's rule that a
-// focusable parent must not steal focus), so a mousedown entry's
-// default-prevented state cannot match Chrome's today — the divergence
-// is recorded in the harness guide's known divergences (browser-core
-// ticket 12 owns the mouse-focus rules).
+// mousedown listeners — a choice the pages made while the pin's
+// mouse-down focus transfer still reported defaultPrevented
+// (browser-core ticket 12 fixed that: the transfer's innermost-wins
+// signal is window-internal now and the mousedown stays unprevented;
+// ticket 12's activation fixtures instrument mousedown to pin it).
+// The records stay valid either way: nothing here keys on the
+// mousedown's default-prevented state.
 package keyorder
 
 import (
@@ -558,11 +559,12 @@ func ScrollView(prevent bool) func(log *parity.EventLog, w *gpui.Window, app *gp
 // activatePage is the activation fixtures' page: a real button (the
 // DOM element with activation behavior; a plain div would not activate
 // on Space) styled to match an empty gpui div. The root carries
-// data-events="keydown,keyup": the port does not yet bubble keyboard
-// activation clicks to ancestors (the pin calls only the element's own
-// click listeners; browser-core ticket 12 owns click bubbling), so the
-// page does not log the root's click while the mouse click still logs
-// through the button.
+// data-events="keydown,keyup": the page's shape predates browser-core
+// ticket 12 (the keyboard activation click did not bubble then, so the
+// root's click was not instrumented); the click now bubbles on both
+// sides, and ticket 12's activation fixtures instrument it — this
+// record stays as recorded, and the shape keeps matching because the
+// view also binds no root click listener.
 func activatePage(prevent bool) string {
 	preventScript := ""
 	if prevent {
