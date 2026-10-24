@@ -80,42 +80,42 @@ type presenceState struct {
 // (U:motion/presence.rs:48-125). A first sample of a present element
 // enters from 0; reduced motion and a zero duration resolve at once.
 func (p Presence) Sample(w *gpui.Window, cx *gpui.App) PresenceSample {
-	key := gpui.NamedChildElementID(p.id.id, "__presence")
+	key := gpui.NamedChildElementID(p.id.Key(), "__presence")
 	now := cx.Now()
 	var target float32
 	if p.present {
 		target = 1
 	}
 	state := w.UseKeyedState[presenceState](key, cx, func(*gpui.Window, *gpui.Context[presenceState]) presenceState {
-		return presenceState{from: 0, target: target, startedAt: now, reversingFactor: 1, duration: p.transition.duration}
+		return presenceState{from: 0, target: target, startedAt: now, reversingFactor: 1, duration: p.transition.Duration()}
 	})
 	snapshot := state.Read(cx, func(s *presenceState, _ *gpui.App) presenceState { return *s })
 
-	if cx.ReduceMotion() || p.transition.duration == 0 {
+	if cx.ReduceMotion() || p.transition.Duration() == 0 {
 		if snapshot.from != target || snapshot.target != target {
 			state.Update(cx, func(s *presenceState, _ *gpui.Context[presenceState]) {
 				s.from = target
 				s.target = target
 				s.startedAt = now
 				s.reversingFactor = 1
-				s.duration = p.transition.duration
+				s.duration = p.transition.Duration()
 			})
 		}
 		return stablePresenceSample(p.present)
 	}
 
 	elapsed := satSubDuration(now, snapshot.startedAt)
-	progress, status := p.transition.progress(elapsed, snapshot.duration)
-	sampled := lerp32(snapshot.from, snapshot.target, p.transition.sample(progress))
+	progress, status := p.transition.Progress(elapsed, snapshot.duration)
+	sampled := lerp32(snapshot.from, snapshot.target, p.transition.Sample(progress))
 
 	if snapshot.target != target {
 		reversing := target == snapshot.from
 		reversingFactor := float32(1)
 		if reversing {
 			reversingFactor = clamp32(
-				float32(p.transition.sample(progress)*snapshot.reversingFactor)+(1-snapshot.reversingFactor), 0, 1)
+				float32(p.transition.Sample(progress)*snapshot.reversingFactor)+(1-snapshot.reversingFactor), 0, 1)
 		}
-		duration := mulF32(p.transition.duration, reversingFactor)
+		duration := mulF32(p.transition.Duration(), reversingFactor)
 		state.Update(cx, func(s *presenceState, _ *gpui.Context[presenceState]) {
 			s.from = sampled
 			s.target = target
@@ -123,13 +123,13 @@ func (p Presence) Sample(w *gpui.Window, cx *gpui.App) PresenceSample {
 			s.reversingFactor = reversingFactor
 			s.duration = duration
 		})
-		initial, initialStatus := p.transition.progress(0, duration)
-		progress, status = lerp32(sampled, target, p.transition.sample(initial)), initialStatus
+		initial, initialStatus := p.transition.Progress(0, duration)
+		progress, status = lerp32(sampled, target, p.transition.Sample(initial)), initialStatus
 	} else {
 		progress = sampled
 	}
 
-	if status.active() {
+	if status.IsActive() {
 		gpui.RequestAnimationFrame(w)
 	}
 

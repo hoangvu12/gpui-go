@@ -1,11 +1,16 @@
-package base
+package gpui
 
-// CSS-like animation timing (U:motion/timing.rs): a signed delay, an
+// CSS-like animation timing (U:motion/timing.rs; moved from
+// base/motion_timing.go by browser-core ticket 44): a signed delay, an
 // iteration count, a playback direction and an easing sampled at an
 // elapsed time.
 //
-// Go adaptation: Duration is time.Duration (int64 nanoseconds) where Rust
-// uses u128 nanosecond arithmetic; durations are expected non-negative.
+// Go adaptations:
+//   - Duration is time.Duration (int64 nanoseconds) where Rust uses u128
+//     nanosecond arithmetic; durations are expected non-negative.
+//   - The pin's MotionPhase is TimingPhase here: the name MotionPhase is
+//     the pinned duration-motion's phase (animation.go), and one package
+//     cannot carry both.
 
 import (
 	"math"
@@ -95,19 +100,20 @@ const (
 	PlaybackDirectionAlternateReverse
 )
 
-// MotionPhase is the phase a timing sample falls in
-// (U:motion/timing.rs:57-62).
-type MotionPhase uint8
+// TimingPhase is the phase a timing sample falls in
+// (U:motion/timing.rs:57-62; the pin's MotionPhase, renamed for the
+// package's own animation.go MotionPhase).
+type TimingPhase uint8
 
 const (
-	MotionPhaseBefore MotionPhase = iota
-	MotionPhaseActive
-	MotionPhaseAfter
+	TimingPhaseBefore TimingPhase = iota
+	TimingPhaseActive
+	TimingPhaseAfter
 )
 
 // TimingSample is a sampled timing (U:motion/timing.rs:64-71).
 type TimingSample struct {
-	Phase            MotionPhase
+	Phase            TimingPhase
 	DirectedProgress float32
 	Iteration        uint64
 	Active           bool
@@ -162,7 +168,7 @@ func (t Timing) Sample(elapsed time.Duration) TimingSample {
 	active, ok := t.delay.activeElapsed(elapsed)
 	if !ok {
 		return TimingSample{
-			Phase:            MotionPhaseBefore,
+			Phase:            TimingPhaseBefore,
 			DirectedProgress: t.easing.Sample(t.directed(0, 0)),
 		}
 	}
@@ -193,7 +199,7 @@ func (t Timing) Sample(elapsed time.Duration) TimingSample {
 	iterationNanos := elapsedNanos % durationNanos
 	progress := float64(iterationNanos) / float64(durationNanos)
 	return TimingSample{
-		Phase:            MotionPhaseActive,
+		Phase:            TimingPhaseActive,
 		DirectedProgress: t.easing.Sample(t.directed(iteration, float32(progress))),
 		Iteration:        iteration,
 		Active:           true,
@@ -207,7 +213,7 @@ func (t Timing) afterSample(count uint64) TimingSample {
 		iteration--
 	}
 	return TimingSample{
-		Phase:            MotionPhaseAfter,
+		Phase:            TimingPhaseAfter,
 		DirectedProgress: t.easing.Sample(t.directed(iteration, 1)),
 		Iteration:        iteration,
 		Finished:         true,

@@ -146,7 +146,9 @@ func RecordFixture(f Fixture) error {
 	}
 
 	// The scripted input sequence, dispatched as trusted input (full
-	// browser hit testing, exactly what a user's mouse would do).
+	// browser hit testing, exactly what a user's mouse would do). A wait
+	// step advances the page's current animations deterministically by
+	// its milliseconds (see dispatchStep).
 	for i, step := range ExpandSteps(f.Steps) {
 		if err := page.dispatchStep(step); err != nil {
 			return fmt.Errorf("input step %d (%v): %w", i+1, step, err)
@@ -160,7 +162,9 @@ func RecordFixture(f Fixture) error {
 	// position-visibility: anchors-visible) has landed, exactly like the
 	// replay, whose boxes come from a fully parked, drawn final frame
 	// (ticket 25 found the un-settled read capturing a scroll one key
-	// behind).
+	// behind). The wait steps leave the page's animations paused, which
+	// the settle's frames do not move; they only let the renderer commit
+	// the paused state.
 	if _, err := page.call("Runtime.evaluate", map[string]any{
 		"expression":    "new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(1))))",
 		"awaitPromise":  true,
@@ -516,6 +520,40 @@ func (p *cdpPage) dispatchStep(step Step) error {
 		return err
 	case StepKey:
 		return p.dispatchKey(step.Key, step.Code)
+	case StepWait:
+		if step.Ms <= 0 {
+			return fmt.Errorf("a wait step must advance a positive number of milliseconds")
+		}
+		// Commit the pending style change first: a synchronous style read
+		// forces the style recalc (and so the transition creation) the
+		// input step's listener triggered, so the transitions exist
+		// before time advances under them.
+		if _, err := p.evaluate("document.body.offsetWidth; getComputedStyle(document.body).color; 'committed'"); err != nil {
+			return fmt.Errorf("committing the pending style change: %w", err)
+		}
+		// Advance and freeze: every animation the page now runs pauses
+		// and its currentTime advances by exactly the step's
+		// milliseconds (the Web Animations seek — the deterministic clock
+		// this harness uses, since a virtual-time budget does not drive
+		// the CSS transition timeline in --headless=new: the transitions
+		// created by a style change sit unstarted at currentTime 0 until
+		// a frame runs, and no frames are produced during a budget, so
+		// the seek is the only reliable sample). A later wait step seeks
+		// the then-current animations, so a transition a later input step
+		// started begins at 0 again, and a mid-flight interruption reads
+		// the paused progress, which the browser's own reversing rule
+		// then consumes. The boxes, computed styles and the screenshot
+		// below all sample the paused state.
+		if _, err := p.evaluate(fmt.Sprintf(`(() => {
+			for (const a of document.getAnimations({subtree: true})) {
+				a.pause();
+				a.currentTime = (a.currentTime == null ? 0 : a.currentTime) + %d;
+			}
+			return "advanced";
+		})()`, step.Ms)); err != nil {
+			return fmt.Errorf("advancing the page's animations by %dms: %w", step.Ms, err)
+		}
+		return nil
 	default:
 		return fmt.Errorf("unknown step kind %q", step.Kind)
 	}

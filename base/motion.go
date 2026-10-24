@@ -1,10 +1,17 @@
 package base
 
-// The motion system (U:motion.rs): value transitions, keyframe playback
-// and springs keyed by element state, sampled at the application clock and
-// requesting animation frames while they move. Every function honors the
-// reduced-motion flag (App.ReduceMotion, see reduce_motion.go) by adopting
-// its target at once.
+// The motion system's Base half (U:motion.rs). browser-core ticket 44
+// moved the timing, easing and keyframe-interpolation engine — the
+// Transition policy with CSS's reversing rule, the keyed value
+// transitions and keyframe playback — into the core (gpui/motion.go,
+// gpui/motion_easing.go, gpui/motion_timing.go, gpui/motion_keyframes.go
+// and the bezier solver from base/animation.go); this file keeps Base's
+// public surface as aliases over the moved engine plus the parts the
+// research split assigns to components: the springs (research/
+// browser-parity README, "Presence, stagger, sequence, reveal, springs
+// as tokens → Components") and the MotionTransform presentation bundle.
+// The move is behaviour-preserving: every alias names the same code
+// Base shipped before, and Base's own tests keep passing unchanged.
 //
 // Core seams (R: = reference/ce-source/crates/gpui/src):
 //
@@ -44,43 +51,212 @@ import (
 )
 
 // defaultSpringEpsilon matches GPUI's own default spring settling
-// tolerance (U:motion.rs:29-30).
+// tolerance (U:motion.rs:29-30; the engine's copy is private to the
+// core).
 const defaultSpringEpsilon float32 = 0.001
 
-// Interpolate is a value that can be interpolated between two
-// application-owned targets (U:motion.rs:32-35).
-type Interpolate[T any] interface {
-	Interpolate(target T, progress float32) T
+// ---------------------------------------------------------------------------
+// The moved engine, aliased (no behaviour change)
+// ---------------------------------------------------------------------------
+
+// The engine's public types are the core's types now; the aliases keep
+// Base's names, methods and constructors resolving to the identical
+// implementations.
+type (
+	// Easing is gpui.Easing (U:motion/easing.rs).
+	Easing = gpui.Easing
+	// StepPosition is gpui.StepPosition.
+	StepPosition = gpui.StepPosition
+	// LinearStop is gpui.LinearStop.
+	LinearStop = gpui.LinearStop
+	// EasingError is gpui.EasingError.
+	EasingError = gpui.EasingError
+	// SignedDuration is gpui.SignedDuration (U:motion/timing.rs).
+	SignedDuration = gpui.SignedDuration
+	// IterationCount is gpui.IterationCount.
+	IterationCount = gpui.IterationCount
+	// PlaybackDirection is gpui.PlaybackDirection.
+	PlaybackDirection = gpui.PlaybackDirection
+	// TimingSample is gpui.TimingSample.
+	TimingSample = gpui.TimingSample
+	// Timing is gpui.Timing (U:motion/timing.rs).
+	Timing = gpui.Timing
+	// TransitionID is gpui.TransitionID (U:motion.rs:178-180).
+	TransitionID = gpui.TransitionID
+	// MotionStatus is gpui.MotionStatus (U:motion.rs:243-249).
+	MotionStatus = gpui.MotionStatus
+	// Transition is gpui.Transition, the CSS-like timing policy
+	// (U:motion.rs:103-113).
+	Transition = gpui.Transition
+	// Interpolate is gpui.Interpolate (U:motion.rs:32-35).
+	Interpolate[T any] = gpui.Interpolate[T]
+	// Lerp is gpui.Lerp (U:animation.rs:91-94).
+	Lerp[T any] = gpui.Lerp[T]
+	// Keyframe is gpui.Keyframe (U:motion/keyframes.rs:5-25).
+	Keyframe[T any] = gpui.Keyframe[T]
+	// Keyframes is gpui.Keyframes (U:motion/keyframes.rs:36-39).
+	Keyframes[T any] = gpui.Keyframes[T]
+	// Discrete is gpui.Discrete (U:motion/keyframes.rs:106-111).
+	Discrete[T any] = gpui.Discrete[T]
+	// KeyframeError is gpui.KeyframeError.
+	KeyframeError = gpui.KeyframeError
+	// DiscreteError is gpui.DiscreteError.
+	DiscreteError = gpui.DiscreteError
+	// MotionValue is gpui.MotionValue (U:motion.rs:251-255).
+	MotionValue[T any] = gpui.MotionValue[T]
+)
+
+// MotionPhase is gpui.TimingPhase (U:motion/timing.rs:57-62; the timing
+// half of the moved engine). The core's own MotionPhase is the pinned
+// duration-motion's phase (gpui/animation.go), so the timing phase was
+// renamed when it moved into the core; the alias keeps Base's name.
+type MotionPhase = gpui.TimingPhase
+
+// The timing phase constants (Base's MotionPhase* names).
+const (
+	MotionPhaseBefore = gpui.TimingPhaseBefore
+	MotionPhaseActive = gpui.TimingPhaseActive
+	MotionPhaseAfter  = gpui.TimingPhaseAfter
+)
+
+// The easing constructors and constants.
+var (
+	EasingLinear      = gpui.EasingLinear
+	EasingEase        = gpui.EasingEase
+	EasingEaseIn      = gpui.EasingEaseIn
+	EasingEaseOut     = gpui.EasingEaseOut
+	EasingEaseInOut   = gpui.EasingEaseInOut
+	EasingCustom      = gpui.EasingCustom
+	DefaultEasing     = gpui.DefaultEasing
+	EasingCubicBezier = gpui.EasingCubicBezier
+	EasingSteps       = gpui.EasingSteps
+	EasingLinearStops = gpui.EasingLinearStops
+
+	// The easing error constants.
+	EasingErrorInvalidBezierX            = gpui.EasingErrorInvalidBezierX
+	EasingErrorInvalidBezierControlPoint = gpui.EasingErrorInvalidBezierControlPoint
+	EasingErrorInvalidStepCount          = gpui.EasingErrorInvalidStepCount
+	EasingErrorInvalidLinearStops        = gpui.EasingErrorInvalidLinearStops
+
+	// The step-position constants.
+	StepPositionJumpStart = gpui.StepPositionJumpStart
+	StepPositionJumpEnd   = gpui.StepPositionJumpEnd
+	StepPositionJumpNone  = gpui.StepPositionJumpNone
+	StepPositionJumpBoth  = gpui.StepPositionJumpBoth
+
+	// NewLinearStop and LinearStopAt are the stop constructors.
+	NewLinearStop = gpui.NewLinearStop
+	LinearStopAt  = gpui.LinearStopAt
+
+	// CubicBezier is the CSS cubic-bezier solver (moved to the core with
+	// the easing engine; U:animation.rs:9-63).
+	CubicBezier = gpui.CubicBezier
+	// EaseOutCubic is the cubic ease-out (U:animation.rs:67-71), the
+	// moved engine's default transition ease.
+	EaseOutCubic = gpui.EaseOutCubic
+
+	// SignedDuration constructors and constants.
+	SignedDurationZero     = gpui.SignedDurationZero
+	SignedDurationPositive = gpui.SignedDurationPositive
+	SignedDurationNegative = gpui.SignedDurationNegative
+	DefaultSignedDuration  = gpui.DefaultSignedDuration
+
+	// IterationCount constructors.
+	IterationCountFinite   = gpui.IterationCountFinite
+	IterationCountInfinite = gpui.IterationCountInfinite
+	DefaultIterationCount  = gpui.DefaultIterationCount
+
+	// PlaybackDirection constants.
+	PlaybackDirectionNormal           = gpui.PlaybackDirectionNormal
+	PlaybackDirectionReverse          = gpui.PlaybackDirectionReverse
+	PlaybackDirectionAlternate        = gpui.PlaybackDirectionAlternate
+	PlaybackDirectionAlternateReverse = gpui.PlaybackDirectionAlternateReverse
+
+	// NewTiming is the one-iteration timing constructor.
+	NewTiming = gpui.NewTiming
+
+	// NewTransition eases out (cubic) over duration without delay
+	// (U:motion.rs:116-122).
+	NewTransition = gpui.NewTransition
+
+	// MotionStatus constants.
+	MotionStatusIdle     = gpui.MotionStatusIdle
+	MotionStatusDelayed  = gpui.MotionStatusDelayed
+	MotionStatusRunning  = gpui.MotionStatusRunning
+	MotionStatusFinished = gpui.MotionStatusFinished
+
+	// KeyframeError and DiscreteError constants.
+	KeyframeErrorTooFewFrames        = gpui.KeyframeErrorTooFewFrames
+	KeyframeErrorOffsetNotFinite     = gpui.KeyframeErrorOffsetNotFinite
+	KeyframeErrorOffsetOutOfRange    = gpui.KeyframeErrorOffsetOutOfRange
+	KeyframeErrorOffsetsNotMonotonic = gpui.KeyframeErrorOffsetsNotMonotonic
+	KeyframeErrorMissingEndpoint     = gpui.KeyframeErrorMissingEndpoint
+	DiscreteErrorInvalidSwitchPoint  = gpui.DiscreteErrorInvalidSwitchPoint
+)
+
+// TransitionIDOf converts id into a TransitionID (U:motion.rs:182-216).
+func TransitionIDOf[I gpui.IntoTransitionID](id I) TransitionID { return gpui.TransitionIDOf(id) }
+
+// TransitionIDWithChannel names one channel of an element
+// (U:motion.rs:224-232).
+func TransitionIDWithChannel[I gpui.IntoTransitionID](id I, channel string) TransitionID {
+	return gpui.TransitionIDWithChannel(id, channel)
 }
+
+// IntoTransitionID is what converts into a TransitionID: Base's spelling
+// over the core's set (which includes Base's TransitionID alias).
+type IntoTransitionID = gpui.IntoTransitionID
+
+// LerpValue interpolates from toward target by t, the Lerp trait method
+// for any T (U:animation.rs:96+); the core implementation, moved by
+// ticket 44.
+func LerpValue[T any](from, target T, t float32) T { return gpui.LerpValue(from, target, t) }
 
 // InterpolateValue interpolates from toward target by progress, the
-// Interpolate trait method for any T (U:motion.rs:37-59): gpui.Size and
-// gpui.Bounds interpolate channel by channel, a T implementing
-// Interpolate[T] uses its method, and every Lerp type (see LerpValue)
-// interpolates through Lerp. Any other T panics.
+// Interpolate trait method for any T (U:motion.rs:37-59); the core
+// implementation, moved by ticket 44.
 func InterpolateValue[T any](from, target T, progress float32) T {
-	switch f := any(from).(type) {
-	case gpui.Size:
-		return any(interpolateSize(f, any(target).(gpui.Size), progress)).(T)
-	case gpui.Bounds:
-		to := any(target).(gpui.Bounds)
-		return any(gpui.Bounds{
-			Origin: LerpValue(f.Origin, to.Origin, progress),
-			Size:   interpolateSize(f.Size, to.Size, progress),
-		}).(T)
-	case Interpolate[T]:
-		return f.Interpolate(target, progress)
-	}
-	return LerpValue(from, target, progress)
+	return gpui.InterpolateValue(from, target, progress)
 }
 
-// interpolateSize is `impl Interpolate for Size<Pixels>` (U:motion.rs:43-50).
-func interpolateSize(from, to gpui.Size, progress float32) gpui.Size {
-	return gpui.Size{
-		Width:  lerp32(from.Width, to.Width, progress),
-		Height: lerp32(from.Height, to.Height, progress),
-	}
+// KeyframesTryNew validates a keyframe track (U:motion/keyframes.rs:42-68).
+func KeyframesTryNew[T any](frames ...Keyframe[T]) (Keyframes[T], error) {
+	return gpui.KeyframesTryNew(frames...)
 }
+
+// NewKeyframe is a linearly eased frame (U:motion/keyframes.rs:13-19).
+func NewKeyframe[T any](offset float32, value T) Keyframe[T] {
+	return gpui.NewKeyframe(offset, value)
+}
+
+// NewDiscrete is the halfway discrete switch (U:motion/keyframes.rs:114-120).
+func NewDiscrete[T any](from, to T) Discrete[T] { return gpui.NewDiscrete(from, to) }
+
+// MotionTransition returns the current value for a CSS-like transition
+// toward target (U:motion.rs:257-276 `transition`; renamed, see the file
+// comment). State is keyed by id; the first value is adopted immediately,
+// later target changes transition from the value sampled at that instant.
+func MotionTransition[I IntoTransitionID, T comparable](id I, target T, policy Transition, w *gpui.Window, cx *gpui.App) T {
+	return gpui.MotionTransition[I, T](id, target, policy, w, cx)
+}
+
+// TransitionWithStatus is MotionTransition with the transition's status
+// (U:motion.rs:278-358). A reversal toward the value the transition
+// started from shortens the return by the progress made (CSS's
+// reversing rule).
+func TransitionWithStatus[I IntoTransitionID, T comparable](id I, target T, policy Transition, w *gpui.Window, cx *gpui.App) MotionValue[T] {
+	return gpui.TransitionWithStatus[I, T](id, target, policy, w, cx)
+}
+
+// AnimateKeyframes samples a keyed keyframe playback and requests frames
+// while it is active (U:motion.rs:365-407).
+func AnimateKeyframes[I IntoTransitionID, T any](id I, keyframes Keyframes[T], timing Timing, w *gpui.Window, cx *gpui.App) MotionValue[T] {
+	return gpui.AnimateKeyframes[I, T](id, keyframes, timing, w, cx)
+}
+
+// ---------------------------------------------------------------------------
+// MotionTransform (stays in Base: a presentation value bundle)
+// ---------------------------------------------------------------------------
 
 // MotionTransform is a presentation-neutral bundle for coordinated paint
 // transforms (U:motion.rs:61-68).
@@ -113,326 +289,9 @@ func (m MotionTransform) Interpolate(target MotionTransform, progress float32) M
 	}
 }
 
-// Transition is a CSS-like timing policy for a target-value transition
-// (U:motion.rs:103-113). Unlike EffectTransition it never chooses a
-// visual property for the caller.
-type Transition struct {
-	duration time.Duration
-	delay    SignedDuration
-	easing   Easing
-}
-
-// NewTransition eases out (cubic) over duration without delay
-// (U:motion.rs:116-122).
-func NewTransition(duration time.Duration) Transition {
-	return Transition{duration: duration, easing: EasingCustom(EaseOutCubic)}
-}
-
-// Delay sets the delay: a time.Duration is a positive delay
-// (U:motion.rs:124-127 with `From<Duration> for SignedDuration`, :172-176).
-func (t Transition) Delay[D time.Duration | SignedDuration](delay D) Transition {
-	switch v := any(delay).(type) {
-	case time.Duration:
-		t.delay = SignedDurationPositive(v)
-	case SignedDuration:
-		t.delay = v
-	}
-	return t
-}
-
-// Ease sets a custom easing function (U:motion.rs:129-132).
-func (t Transition) Ease(easing func(float32) float32) Transition {
-	t.easing = EasingCustom(easing)
-	return t
-}
-
-// Easing sets the easing policy (U:motion.rs:134-137).
-func (t Transition) Easing(easing Easing) Transition {
-	t.easing = easing
-	return t
-}
-
-// sample eases progress (U:motion.rs:139-141).
-func (t Transition) sample(progress float32) float32 { return t.easing.Sample(progress) }
-
-// curve is the easing curve, for a caller that samples one timeline at
-// several offsets, such as a staggered plot appear (U:motion.rs:143-147).
-func (t Transition) curve() Easing { return t.easing }
-
-// progress is U:motion.rs:149-160.
-func (t Transition) progress(elapsed, duration time.Duration) (float32, MotionStatus) {
-	active, ok := t.delay.activeElapsed(elapsed)
-	if !ok {
-		return 0, MotionStatusDelayed
-	}
-	if duration == 0 || active >= duration {
-		return 1, MotionStatusFinished
-	}
-	return secsF32(active) / secsF32(duration), MotionStatusRunning
-}
-
-// finishesAfter is the elapsed time at which progress over the
-// transition's own duration first reports Finished (U:motion.rs:162-169).
-func (t Transition) finishesAfter() time.Duration {
-	if t.delay.negative {
-		return satSubDuration(t.duration, t.delay.d)
-	}
-	return satAddDuration(t.delay.d, t.duration)
-}
-
-// secsF32 is Rust's Duration::as_secs_f32: whole seconds plus the
-// nanoseconds over 1e9, in f32.
-func secsF32(d time.Duration) float32 {
-	return float32(d/time.Second) + float32(d%time.Second)/float32(1e9)
-}
-
-// mulF32 scales a duration by a factor (the upstream Duration::mul_f32,
-// U:motion.rs:331, U:motion/presence.rs:91).
-//
-// Deviation: Rust's mul_f32 round-trips through f32 seconds
-// (from_secs_f32(rhs * as_secs_f32())), which turns 100ms * 1.0 into
-// 100.000001ms; on the millisecond scheduler clock that keeps a
-// transition Running at exactly delay + duration, against the upstream
-// tests that expect Finished there (U:motion.rs:964-976, 1637-1649,
-// 1126-1149). The port scales in f64 and rounds to the nanosecond, which
-// is exact for the common factors (1, 1/2, 1/4) and otherwise within a
-// nanosecond of Rust.
-func mulF32(d time.Duration, rhs float32) time.Duration {
-	return time.Duration(math.Round(float64(d) * float64(rhs)))
-}
-
-// TransitionID identifies one independently transitioning value
-// (U:motion.rs:178-180).
-type TransitionID struct {
-	id gpui.ElementID
-}
-
-// IntoTransitionID is what converts into a TransitionID
-// (U:motion.rs:182-216): an element id, a name, a usize (int) or i32
-// integer, or a TransitionID.
-type IntoTransitionID interface {
-	string | gpui.ElementID | int | int32 | TransitionID
-}
-
-// TransitionIDOf converts id (U:motion.rs:182-216: ElementId, &str,
-// String, SharedString, usize and i32 through their ElementId forms,
-// R:window.rs:7716-7756).
-func TransitionIDOf[I IntoTransitionID](id I) TransitionID {
-	switch v := any(id).(type) {
-	case TransitionID:
-		return v
-	case string:
-		return TransitionID{gpui.NameElementID(v)}
-	case gpui.ElementID:
-		return TransitionID{v}
-	case int:
-		return TransitionID{gpui.IntegerElementID(uint64(int64(v)))}
-	case int32:
-		return TransitionID{gpui.IntegerElementID(uint64(int64(v)))}
-	}
-	panic("base: unreachable IntoTransitionID")
-}
-
-// TransitionIDWithChannel names one channel of an element
-// (U:motion.rs:224-232, the `(id, channel)` conversion): the element id
-// labelled by the channel. A TransitionID given as id converts through its
-// element id (ElementID).
-func TransitionIDWithChannel[I IntoTransitionID](id I, channel string) TransitionID {
-	var parent gpui.ElementID
-	if tid, ok := any(id).(TransitionID); ok {
-		parent = tid.ElementID()
-	} else {
-		parent = TransitionIDOf(id).id
-	}
-	return TransitionID{gpui.NamedChildElementID(parent, channel)}
-}
-
-// ElementID is `From<TransitionId> for ElementId` (U:motion.rs:218-222):
-// the transition's state key.
-func (id TransitionID) ElementID() gpui.ElementID {
-	return gpui.NamedChildElementID(id.id, "__base-transition-state")
-}
-
-// Equal is the derived PartialEq (U:motion.rs:179).
-func (id TransitionID) Equal(other TransitionID) bool { return elementIDEqual(id.id, other.id) }
-
-// String renders the identity.
-func (id TransitionID) String() string { return id.id.String() }
-
-func elementIDEqual(a, b gpui.ElementID) bool {
-	if a.Kind != b.Kind || a.Name != b.Name || a.Entity != b.Entity || a.Integer != b.Integer {
-		return false
-	}
-	if a.Parent == nil || b.Parent == nil {
-		return a.Parent == nil && b.Parent == nil
-	}
-	return elementIDEqual(*a.Parent, *b.Parent)
-}
-
-// valueTransition is the keyed state of one transition (U:motion.rs:234-241).
-type valueTransition[T any] struct {
-	from, target    T
-	startedAt       time.Duration
-	reversingFactor float32
-	duration        time.Duration
-}
-
-// MotionStatus is the status of a motion sample (U:motion.rs:243-249).
-type MotionStatus uint8
-
-const (
-	MotionStatusIdle MotionStatus = iota
-	MotionStatusDelayed
-	MotionStatusRunning
-	MotionStatusFinished
-)
-
-// String is the Debug rendering.
-func (s MotionStatus) String() string {
-	switch s {
-	case MotionStatusIdle:
-		return "Idle"
-	case MotionStatusDelayed:
-		return "Delayed"
-	case MotionStatusRunning:
-		return "Running"
-	case MotionStatusFinished:
-		return "Finished"
-	}
-	return fmt.Sprintf("MotionStatus(%d)", uint8(s))
-}
-
-// active reports Delayed or Running, the statuses that request a frame.
-func (s MotionStatus) active() bool {
-	return s == MotionStatusDelayed || s == MotionStatusRunning
-}
-
-// MotionValue is a sampled value and its status (U:motion.rs:251-255).
-type MotionValue[T any] struct {
-	Value  T
-	Status MotionStatus
-}
-
-// MotionTransition returns the current value for a CSS-like transition
-// toward target (U:motion.rs:257-276 `transition`; renamed, see the file
-// comment).
-//
-// State is keyed by id. The first value is adopted immediately; later
-// target changes transition from the value sampled at that instant.
-// Components opt into this function explicitly — base components do not
-// install default motion. Call it while rendering an element, where keyed
-// element state is available. A channel id must identify one value type
-// within that element.
-func MotionTransition[I IntoTransitionID, T comparable](id I, target T, policy Transition, w *gpui.Window, cx *gpui.App) T {
-	return TransitionWithStatus(id, target, policy, w, cx).Value
-}
-
-// TransitionWithStatus is MotionTransition with the transition's status
-// (U:motion.rs:278-358). A reversal toward the value the transition
-// started from shortens the return by the progress made.
-func TransitionWithStatus[I IntoTransitionID, T comparable](id I, target T, policy Transition, w *gpui.Window, cx *gpui.App) MotionValue[T] {
-	key := TransitionIDOf(id).ElementID()
-	now := cx.Now()
-	state := w.UseKeyedState[valueTransition[T]](key, cx, func(*gpui.Window, *gpui.Context[valueTransition[T]]) valueTransition[T] {
-		return valueTransition[T]{
-			from:            target,
-			target:          target,
-			startedAt:       now,
-			reversingFactor: 1,
-			duration:        policy.duration,
-		}
-	})
-	snapshot := state.Read(cx, func(s *valueTransition[T], _ *gpui.App) valueTransition[T] { return *s })
-
-	if cx.ReduceMotion() || policy.duration == 0 {
-		if snapshot.from != target || snapshot.target != target {
-			state.Update(cx, func(s *valueTransition[T], _ *gpui.Context[valueTransition[T]]) {
-				s.from = target
-				s.target = target
-				s.startedAt = now
-				s.reversingFactor = 1
-				s.duration = policy.duration
-			})
-		}
-		return MotionValue[T]{Value: target, Status: MotionStatusFinished}
-	}
-
-	elapsed := satSubDuration(now, snapshot.startedAt)
-	progress, status := policy.progress(elapsed, snapshot.duration)
-	sampled := InterpolateValue(snapshot.from, snapshot.target, policy.sample(progress))
-
-	var value T
-	if snapshot.target != target {
-		reversing := target == snapshot.from
-		reversingFactor := float32(1)
-		if reversing {
-			reversingFactor = clamp32(
-				float32(policy.sample(progress)*snapshot.reversingFactor)+(1-snapshot.reversingFactor), 0, 1)
-		}
-		duration := mulF32(policy.duration, reversingFactor)
-		state.Update(cx, func(s *valueTransition[T], _ *gpui.Context[valueTransition[T]]) {
-			s.from = sampled
-			s.target = target
-			s.startedAt = now
-			s.reversingFactor = reversingFactor
-			s.duration = duration
-		})
-		initialProgress, initialStatus := policy.progress(0, duration)
-		value = InterpolateValue(sampled, target, policy.sample(initialProgress))
-		status = initialStatus
-	} else {
-		value = sampled
-		if snapshot.from == snapshot.target {
-			status = MotionStatusIdle
-		}
-	}
-	if status.active() {
-		gpui.RequestAnimationFrame(w)
-	}
-	return MotionValue[T]{Value: value, Status: status}
-}
-
-// keyframePlayback is the keyed start of a keyframe playback
-// (U:motion.rs:360-363).
-type keyframePlayback struct {
-	startedAt time.Duration
-}
-
-// AnimateKeyframes samples a keyed keyframe playback and requests frames
-// while it is active (U:motion.rs:365-407).
-//
-// The stable id owns the playback's start time. Re-rendering with the
-// same id continues that playback; it does not restart when keyframes or
-// timing is reconstructed. To replay, include an application-owned
-// generation in the id, for example
-// TransitionIDWithChannel(gpui.NamedIntegerElementID("notification-enter", generation), ...).
-func AnimateKeyframes[I IntoTransitionID, T any](id I, keyframes Keyframes[T], timing Timing, w *gpui.Window, cx *gpui.App) MotionValue[T] {
-	key := gpui.NamedChildElementID(TransitionIDOf(id).ElementID(), "__keyframes")
-	now := cx.Now()
-	state := w.UseKeyedState[keyframePlayback](key, cx, func(*gpui.Window, *gpui.Context[keyframePlayback]) keyframePlayback {
-		return keyframePlayback{startedAt: now}
-	})
-	startedAt := state.Read(cx, func(s *keyframePlayback, _ *gpui.App) time.Duration { return s.startedAt })
-
-	if cx.ReduceMotion() {
-		return MotionValue[T]{Value: keyframes.Sample(1), Status: MotionStatusFinished}
-	}
-
-	sample := timing.Sample(satSubDuration(now, startedAt))
-	var status MotionStatus
-	switch sample.Phase {
-	case MotionPhaseBefore:
-		status = MotionStatusDelayed
-	case MotionPhaseActive:
-		status = MotionStatusRunning
-	default:
-		status = MotionStatusFinished
-	}
-	if status.active() {
-		gpui.RequestAnimationFrame(w)
-	}
-	return MotionValue[T]{Value: keyframes.Sample(sample.DirectedProgress), Status: status}
-}
+// ---------------------------------------------------------------------------
+// Springs (stay in Base: the research split's component half)
+// ---------------------------------------------------------------------------
 
 // Spring is a physical spring policy for MotionSpring (U:motion.rs:409-423).
 //
@@ -593,7 +452,7 @@ func MotionSpring[I IntoTransitionID, T SpringValue](id I, target T, policy Spri
 		s.updatedAt = now
 	}
 
-	if cx.ReduceMotion() || !policy.travel || policy.response == 0 {
+	if reduceMotionGate(cx) || !policy.travel || policy.response == 0 {
 		state.Update(cx, settle)
 		return T(targetPosition)
 	}
@@ -617,4 +476,55 @@ func MotionSpring[I IntoTransitionID, T SpringValue](id I, target T, policy Spri
 	})
 	gpui.RequestAnimationFrame(w)
 	return T(stepped.position)
+}
+
+// ---------------------------------------------------------------------------
+// The private helpers Base's remaining files share (the moved engine
+// carries its own copies in the core; these stay so Base's behaviour is
+// byte-identical where the two halves still call them)
+// ---------------------------------------------------------------------------
+
+// reduceMotionGate is Base's reduced-motion gate: App.ReduceMotion plus
+// the core's system-preference reading (ticket 27; the same gate the
+// moved engine applies).
+func reduceMotionGate(cx *gpui.App) bool {
+	return cx.ReduceMotion() || cx.SystemPreferences().ReducedMotion
+}
+
+// finite32 is Rust's f32::is_finite (the engine's copy moved to the
+// core; Base keeps this one for its own remaining files).
+func finite32(v float32) bool {
+	return !math.IsNaN(float64(v)) && !math.IsInf(float64(v), 0)
+}
+
+// in01 reports a value in [0, 1] (the engine's copy moved to the core).
+func in01(v float32) bool { return v >= 0 && v <= 1 }
+
+// secsF32 is Rust's Duration::as_secs_f32 (the engine's copy moved to
+// the core; Base keeps this one for its own remaining files).
+func secsF32(d time.Duration) float32 {
+	return float32(d/time.Second) + float32(d%time.Second)/float32(1e9)
+}
+
+// mulF32 scales a duration by a factor (the engine's copy moved to the
+// core; Base keeps this one for its own remaining files).
+func mulF32(d time.Duration, rhs float32) time.Duration {
+	return time.Duration(math.Round(float64(d) * float64(rhs)))
+}
+
+// satAddDuration and satSubDuration are the saturating duration
+// arithmetic (the engine's copies moved to the core; Base keeps these
+// for its own remaining files).
+func satAddDuration(a, b time.Duration) time.Duration {
+	if b > 0 && a > math.MaxInt64-b {
+		return math.MaxInt64
+	}
+	return a + b
+}
+
+func satSubDuration(a, b time.Duration) time.Duration {
+	if a < b {
+		return 0
+	}
+	return a - b
 }

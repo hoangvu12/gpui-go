@@ -212,6 +212,17 @@ func applyStep(cx *gpui.VisualTestContext, log *EventLog, step Step) error {
 			Position: position, Button: button, ClickCount: 1,
 		})
 		log.markDefaultPrevented(before, result.DefaultPrevented)
+	case StepWait:
+		// Advance the virtual clock by the step's milliseconds, then
+		// deliver one animation frame: the transitions the click steps
+		// started re-sample at the new clock (their frame requests are
+		// the pending callbacks delivered here), the flush draws the
+		// notified view, and the last drawn frame carries the state at
+		// exactly now+ms — the replay side of the recorder's
+		// virtual-time budget (browser-core ticket 44).
+		cx.AdvanceClock(step.Ms)
+		cx.Window().SimulateNextFrame(cx.App())
+		cx.RunUntilParked()
 	case StepKey:
 		// One full key press — key down then key up, the recorder's
 		// keyDown+keyUp pair — through the platform dispatch (bindings,

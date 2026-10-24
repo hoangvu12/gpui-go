@@ -135,7 +135,7 @@ new fixtures. The implementation lives in `internal/parity`:
    side, and the view simply registers only the matching handlers).
 
 4. **The input script is one vocabulary.** Steps are logical (CSS-pixel) positions:
-   `parity.Move/Down/Up/Click/Key`. The recorder dispatches them to Chrome as trusted
+   `parity.Move/Down/Up/Click/Key/Wait`. The recorder dispatches them to Chrome as trusted
    input (full hit testing) and the replay simulates them through the visual test context
    — the exact same coordinates, the exact same expansion (`Click` = move + down + up on
    both sides). `Key("<keystroke>")` is one full press on both sides: the recorder sends
@@ -144,6 +144,18 @@ new fixtures. The implementation lives in `internal/parity`:
    platform dispatch — bindings, key listeners and the core default actions
    (browser-core ticket 09) all run, and a default action between the halves is visible
    in the keyup entries' focus field.
+   `Wait(ms)` advances time deterministically for mid-transition and mid-animation
+   sampling (browser-core ticket 44): the recorder commits the pending style change,
+   then pauses every animation the page runs and advances each one's `currentTime` by
+   exactly the step's milliseconds (the Web Animations seek — a virtual-time budget
+   turned out NOT to drive the CSS transition timeline in `--headless=new`: transitions
+   created by a style change sit unstarted at `currentTime` 0 until a frame runs, and
+   no frames are produced during a budget), and the replay advances the test
+   application's virtual clock (`TestApp.AdvanceClock`) and delivers one animation
+   frame, so the last drawn frame samples the transitions at exactly `now + ms`. A
+   later wait seeks the then-current animations, so a transition a later step started
+   begins at 0 again — mid-flight interruptions (the reversing-shortening rule) read
+   the paused progress. The `fixtures/transition` fixtures are the pattern.
 
    A key step produces the keystroke the platform reports (browser-core ticket 13): the
    replay parses the keystroke and normalizes it with

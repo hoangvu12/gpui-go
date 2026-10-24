@@ -59,6 +59,12 @@ const (
 	// StepKey presses and releases one keystroke ("a", "enter",
 	// "ctrl-a", the pinned keystroke syntax).
 	StepKey StepKind = "key"
+	// StepWait advances time by Ms milliseconds without input: the
+	// recorder advances Chrome's virtual-time budget (deterministic
+	// animations; the sample freezes when the budget expires) and the
+	// replay advances the test application's virtual clock and delivers
+	// one animation frame (browser-core ticket 44).
+	StepWait StepKind = "wait"
 )
 
 // MouseButton names, shared by the recorder and the replay.
@@ -77,6 +83,8 @@ type Step struct {
 	// Key is the keystroke of a StepKey step, in the pinned keystroke
 	// syntax ("a", "enter", "ctrl-shift-]").
 	Key string
+	// Ms is the milliseconds a StepWait step advances time by.
+	Ms int64
 	// Code is the physical DOM code of a StepKey step when the
 	// keystroke syntax cannot spell the physical key: "Numpad1" with
 	// Key "1" drives the numpad's 1 (a real key press reports code
@@ -103,6 +111,12 @@ func Click(x, y float32) Step { return Step{Kind: StepClick, X: x, Y: y, Button:
 
 // Key returns a keystroke step.
 func Key(keystroke string) Step { return Step{Kind: StepKey, Key: keystroke} }
+
+// Wait returns a time-advance step: the recorder grants a virtual-time
+// budget of ms and the replay advances its virtual clock and delivers
+// one animation frame, so mid-transition states are sampled at a fixed
+// time on both sides (browser-core ticket 44).
+func Wait(ms int64) Step { return Step{Kind: StepWait, Ms: ms} }
 
 // KeyCode returns a keystroke step with an explicit physical DOM code
 // (browser-core 13): the keystroke's key and modifiers parse as usual
@@ -530,7 +544,7 @@ func validate(f Fixture) error {
 	}
 	for _, step := range f.Steps {
 		switch step.Kind {
-		case StepMove, StepDown, StepUp, StepClick, StepKey:
+		case StepMove, StepDown, StepUp, StepClick, StepKey, StepWait:
 		default:
 			return fmt.Errorf("parity: fixture %q: unknown step kind %q", f.Name, step.Kind)
 		}
