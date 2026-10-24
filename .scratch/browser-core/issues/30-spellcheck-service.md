@@ -5,7 +5,7 @@ Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
 Status: claimed
-Assignee: orchestrator 7 (Claude Code)
+Assignee: orchestrator 8 (Claude Code)
 Blocked by: none
 Triage: ready-for-agent
 
