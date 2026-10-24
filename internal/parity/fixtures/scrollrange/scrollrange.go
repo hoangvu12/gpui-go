@@ -439,12 +439,19 @@ func borderView(width float32) func(log *parity.EventLog) gpui.AnyElement {
 // fixture for the discrimination test: the scroller's top padding
 // resolved as a fraction of the scroller's OWN height (the pre-ticket
 // pin's basis — 10% of 300 is 30px) instead of the containing block's
-// width (64px). Every content box lands 34px off after the End-key
-// scroll, so the Tier A comparison fails with a readable diff while the
-// root and scroller boxes still match.
+// width (64px), AND the end padding dropped (the pin's element-tree
+// range stopped at the children's border boxes and never included
+// it). The end padding half is what the boxes see: browser-core ticket
+// 15's press-node keyboard scroll scrolls the scroller to its end even
+// when the fixture's click misses the focus row (the wrong basis moves
+// the row), and at the end scroll the top-padding basis cancels — the
+// end padding does not: every content box lands 24px off, so the Tier
+// A comparison fails with a readable diff while the root and scroller
+// boxes still match.
 func WrongPaddingBasisView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElement {
-	// Swap only the scroller's top padding: rebuild the tree with the
-	// resolved-against-height value the pin would have computed.
+	// Swap the scroller's top padding for the resolved-against-height
+	// value the pin would have computed, and drop the end padding the
+	// pin's range never included.
 	root := gpui.Div().
 		ID("root").
 		DebugSelector("root").
@@ -461,7 +468,7 @@ func WrongPaddingBasisView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gp
 		FlexCol().
 		OverflowYScroll().
 		Pt(gpui.Px(padTopPercent * scrollerH)).
-		Pb(gpui.Px(padBottom)).
+		Pb(gpui.Px(0)).
 		Bg(gpui.Rgb(scrollerBg)).
 		Child(gpui.Div().
 			ID("focus").

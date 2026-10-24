@@ -102,6 +102,14 @@ type dispatchNode struct {
 	keyListeners              []keyListener
 	actionListeners           []dispatchActionListener
 	modifiersChangedListeners []modifiersChangedListener
+	// elementPath is the node's element identity — the GlobalElementID
+	// key of the element that pushed this node (browser-core ticket 15):
+	// the same path string the hitbox records carry (ownerPath), so a
+	// node of the current tree can be resolved from a path captured in
+	// an earlier frame (the keyboard scroll's mouse-press start node).
+	// Empty when the node's element has no id (the port resolves the
+	// nearest id'd ancestor's path instead).
+	elementPath string
 	// defaultActions are the core default-action callbacks registered on
 	// this node (browser-core 09, key_default_action.go): the focused
 	// node's activation, invoked by the default-action phase after the
@@ -280,6 +288,41 @@ func (t *DispatchTree) SetFocusID(focusID uint64) {
 func (t *DispatchTree) SetFocusSuppressed() {
 	id := t.activeNodeIDValue()
 	t.nodes[id.Index].focusSuppressed = true
+}
+
+// SetElementPath records the active node's element identity (browser-
+// core ticket 15): the GlobalElementID key of the element that pushed
+// the node — the same path string the hitbox records carry (ownerPath),
+// so a later frame can resolve the node from a path captured before
+// (the keyboard scroll's mouse-press start node). An empty path leaves
+// the node unresolvable (the node's element has no id of its own).
+func (t *DispatchTree) SetElementPath(path string) {
+	if path == "" {
+		return
+	}
+	id := t.activeNodeIDValue()
+	t.nodes[id.Index].elementPath = path
+}
+
+// nodeByPath returns the first node (prepaint order) whose element
+// path is the given GlobalElementID key (browser-core ticket 15): the
+// resolution of a stable element path into the current tree — node
+// indices are only meaningful within one tree, so the press-node
+// bookkeeping stores paths and the keyboard scroll resolves them here.
+// Id-less sibling elements share their nearest id'd ancestor's path,
+// so the match may be an id-less node under that ancestor; the
+// resolution's consumer walks ancestors, which the shared path also
+// shares.
+func (t *DispatchTree) nodeByPath(path string) (DispatchNodeID, bool) {
+	if path == "" {
+		return DispatchNodeID{}, false
+	}
+	for i := range t.nodes {
+		if t.nodes[i].elementPath == path {
+			return DispatchNodeID{Index: i}, true
+		}
+	}
+	return DispatchNodeID{}, false
 }
 
 // SetContextMenu registers the active node's contextmenu listeners

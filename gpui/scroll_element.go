@@ -205,6 +205,15 @@ func (s *elementScroll) clamp(bounds Bounds, style *Style, maxOffset Point, w *W
 // moves unclamped and a change notifies the view that was rendering at
 // registration. A nil receiver registers nothing. Page deltas resolve
 // against the hitbox's own visible size (browser-core ticket 02).
+//
+// browser-core ticket 15: the listener joins the window's wheel
+// latching (wheel_scroll.go) — one gesture scrolls ONE scroller. The
+// bubble order runs the innermost scroller's listener first, so the
+// first scroller that can consume the delta claims the gesture; the
+// latched scroller keeps every later event of the gesture (no
+// chaining mid-gesture), and a scroller whose overscroll-behavior
+// cuts the chain claims even without consuming, ending the walk
+// (Chromium InputHandler::FindNodeToLatch).
 func (s *elementScroll) paintListener(hitbox Hitbox, style *Style, w *Window) {
 	if s == nil {
 		return
@@ -218,6 +227,7 @@ func (s *elementScroll) paintListener(hitbox Hitbox, style *Style, w *Window) {
 	scrollsX, scrollsY := overflowAxisUserScrolls(overflowX), overflowAxisUserScrolls(overflowY)
 	allowConcurrent := style.AllowConcurrentScroll
 	restrict := style.RestrictScrollToAxis
+	overscrollX, overscrollY := style.OverscrollBehaviorX, style.OverscrollBehaviorY
 	lineHeight := windowLineHeight(w)
 	box := hitbox
 	notify := currentViewNotifier(w)
@@ -252,12 +262,41 @@ func (s *elementScroll) paintListener(hitbox Hitbox, style *Style, w *Window) {
 				deltaX = 0
 			}
 		}
+		// browser-core 15: the latch decides whether this scroller takes
+		// the event — the innermost scroller that can consume the delta
+		// claims the gesture (a contain/none scroller claims without
+		// consuming, cutting the chain), and the latched scroller takes
+		// every event of its gesture.
+		canConsume := s.canConsumeWheelDelta(deltaX, deltaY)
+		cuts := (delta.X != 0 && !overscrollX.propagatesScroll()) ||
+			(delta.Y != 0 && !overscrollY.propagatesScroll())
+		if !w.wheelScrollLatchTake(e, offset, canConsume, cuts, app) {
+			return
+		}
 		offset.Y += deltaY
 		offset.X += deltaX
 		if *offset != old {
 			notify(w, app)
 		}
 	})
+}
+
+// canConsumeWheelDelta reports whether this scroller's clamped offset
+// moves by (deltaX, deltaY) — the latch's CanConsumeDelta (cc/input/
+// input_handler.cc:2292-2329: ComputeScrollDelta nonzero means the node
+// can consume). The offset clamps into the frame's range first, so an
+// unclamped pending offset answers for the scroller's real position.
+func (s *elementScroll) canConsumeWheelDelta(deltaX, deltaY float32) bool {
+	if s == nil || s.offset == nil {
+		return false
+	}
+	current := *s.offset
+	current.X = clampF32(current.X, -s.maxOffset.X, 0)
+	current.Y = clampF32(current.Y, -s.maxOffset.Y, 0)
+	next := current
+	next.X = clampF32(next.X+deltaX, -s.maxOffset.X, 0)
+	next.Y = clampF32(next.Y+deltaY, -s.maxOffset.Y, 0)
+	return next != current
 }
 
 // windowLineHeight is R:window.rs:2983-2985 Window::line_height: the

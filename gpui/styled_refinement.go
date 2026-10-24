@@ -88,6 +88,9 @@ type StyleRefinement struct {
 	AllowConcurrentScroll Optional[bool]
 	RestrictScrollToAxis  Optional[bool]
 
+	OverscrollBehaviorX Optional[OverscrollBehavior]
+	OverscrollBehaviorY Optional[OverscrollBehavior]
+
 	Position Optional[Position]
 
 	InsetTop    Optional[Length]
@@ -282,6 +285,8 @@ func (s *Style) refineBoxed(r *StyleRefinement, boxes *styleBoxes) {
 	refineValue(&s.OverflowFade.Left, r.OverflowFadeLeft)
 	refineValue(&s.ScrollbarWidth, r.ScrollbarWidth)
 	refineValue(&s.ScrollbarGutter, r.ScrollbarGutter)
+	refineValue(&s.OverscrollBehaviorX, r.OverscrollBehaviorX)
+	refineValue(&s.OverscrollBehaviorY, r.OverscrollBehaviorY)
 	refineValue(&s.AllowConcurrentScroll, r.AllowConcurrentScroll)
 	refineValue(&s.RestrictScrollToAxis, r.RestrictScrollToAxis)
 	refineValue(&s.Position, r.Position)
@@ -381,6 +386,8 @@ func (r *StyleRefinement) Refine(other *StyleRefinement) {
 	mergeOptional(&r.OverflowFadeLeft, other.OverflowFadeLeft)
 	mergeOptional(&r.ScrollbarWidth, other.ScrollbarWidth)
 	mergeOptional(&r.ScrollbarGutter, other.ScrollbarGutter)
+	mergeOptional(&r.OverscrollBehaviorX, other.OverscrollBehaviorX)
+	mergeOptional(&r.OverscrollBehaviorY, other.OverscrollBehaviorY)
 	mergeOptional(&r.AllowConcurrentScroll, other.AllowConcurrentScroll)
 	mergeOptional(&r.RestrictScrollToAxis, other.RestrictScrollToAxis)
 	mergeOptional(&r.Position, other.Position)

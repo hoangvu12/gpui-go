@@ -459,6 +459,12 @@ func (w *Window) dispatchInput(event any, app *App) DispatchEventResult {
 	case *ScrollWheelEvent:
 		is.mousePosition = e.Position
 		is.modifiers = e.Modifiers
+		// browser-core ticket 15: the wheel event's scroll-latching
+		// transaction opens before the listeners run (the latched
+		// scroller of an ongoing gesture takes the delta; an expired or
+		// broken transaction starts a new one), and the dispatch's end
+		// clears a latch whose scroller did not see the event.
+		w.beginWheelScrollTransaction(e, app)
 	case *PinchEvent:
 		is.mousePosition = e.Position
 		is.modifiers = e.Modifiers
@@ -472,6 +478,13 @@ func (w *Window) dispatchInput(event any, app *App) DispatchEventResult {
 	// untranslated FileDrop Exited/Ended events ride the same path
 	// (FileDropEvent implements MouseEvent in the pin).
 	w.dispatchMouseEvent(translated, app)
+
+	// browser-core ticket 15: the wheel gesture's latch bookkeeping
+	// closes with the dispatch (a latch whose latched scroller did not
+	// run no longer holds the gesture).
+	if wheel, isWheel := translated.(*ScrollWheelEvent); isWheel && wheel != nil {
+		w.finishWheelScrollTransaction()
+	}
 
 	// Must run after the move is dispatched: the platform owns the
 	// gesture afterwards, so this is the last chance for drag

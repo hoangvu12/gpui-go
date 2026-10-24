@@ -1,0 +1,50 @@
+{
+  "name": "keyboard-scroll-target",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-24T13:22:39Z",
+  "viewport": {
+    "width": 320,
+    "height": 240
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "left": {
+      "x": 10,
+      "y": 10,
+      "width": 140,
+      "height": 200
+    },
+    "lrow0": {
+      "x": 10,
+      "y": -70,
+      "width": 140,
+      "height": 40
+    },
+    "lrow1": {
+      "x": 10,
+      "y": -30,
+      "width": 140,
+      "height": 40
+    },
+    "right": {
+      "x": 170,
+      "y": 10,
+      "width": 140,
+      "height": 200
+    },
+    "rrow0": {
+      "x": 170,
+      "y": -70,
+      "width": 140,
+      "height": 40
+    },
+    "rrow2": {
+      "x": 170,
+      "y": 10,
+      "width": 140,
+      "height": 40
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

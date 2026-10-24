@@ -187,12 +187,36 @@ new fixtures. The implementation lives in `internal/parity`:
    exactly the step's milliseconds (the Web Animations seek — a virtual-time budget
    turned out NOT to drive the CSS transition timeline in `--headless=new`: transitions
    created by a style change sit unstarted at `currentTime` 0 until a frame runs, and
-   no frames are produced during a budget), and the replay advances the test
+   no frames are produced during a budget), **then sleeps the same milliseconds of
+   real time** — the animations are already paused and seeked, so the sleep moves
+   nothing the page shows, but wall time passing is what ends the browser's
+   timer-driven input transactions (the wheel's 500ms scroll-latching transaction,
+   browser-core ticket 15) — and the replay advances the test
    application's virtual clock (`TestApp.AdvanceClock`) and delivers one animation
    frame, so the last drawn frame samples the transitions at exactly `now + ms`. A
    later wait seeks the then-current animations, so a transition a later step started
    begins at 0 again — mid-flight interruptions (the reversing-shortening rule) read
    the paused progress. The `fixtures/transition` fixtures are the pattern.
+
+   `parity.Wheel(x, y, deltaX, deltaY)` is the mouse-wheel step (browser-core ticket
+   15): the deltas are logical (CSS) pixels in the platform's `ScrollWheelEvent`
+   convention — **negative deltaY scrolls down** (WebKit's "positive deltaY means
+   scroll up", `ui/events/blink/web_input_event_builders_win.cc:339`) — and the
+   recorder dispatches CDP `Input.dispatchMouseEvent` type `mouseWheel` with them
+   negated (CDP's params carry the DOM's signs; the DevTools input handler negates
+   them back into the WebInputEvent, `input_handler.cc:472-473`), which scrolls the
+   page exactly `|delta|` CSS pixels (measured at the 2.0 device scale). The replay
+   dispatches one `ScrollWheelEvent` with the pixel delta through the platform
+   dispatch, then a zero-delta phase-`Ended` `ScrollWheelEvent` that ends the port's
+   wheel gesture — the pairing mirrors the DevTools handler, which stamps **every**
+   synthetic CDP wheel `kPhaseBegan` (`input_handler.cc:490`), making each CDP wheel a
+   complete gesture of its own (`mouse_wheel_phase_handler.cc`'s
+   `DispatchPendingWheelEndEvent` ends the previous transaction). A run of `Wheel`
+   steps without a `Wait` between them is therefore a run of separate gestures on
+   both sides, one latch each; a `Wait(600)` separates them for the story too. The
+   wheel's latching rules themselves — the innermost scroller that can consume
+   claims the gesture, the 500ms latching transaction, overscroll-behavior
+   containment — are what `fixtures/wheel` records.
 
    A key step produces the keystroke the platform reports (browser-core ticket 13): the
    replay parses the keystroke and normalizes it with
@@ -673,3 +697,18 @@ whose pages pin `outline: none` gained the pin's port twin (`.OutlineNone()`)
 with no record change, and dashed, dotted, double and the rest beyond solid
 stay unportable through the scene's two border styles (a recorded
 limitation).
+
+Ticket 15 (wheel latching, overscroll-behavior and the keyboard scroll target) added
+the `Wheel` step above and `fixtures/wheel`: one wheel gesture latches to the
+innermost scroller that can consume it (the whole delta goes to one scroller — the
+pre-ticket port scrolled nested scrollers together, the ticket's spec risk), the
+latched gesture does not chain when its scroller hits the end, a new gesture after
+the 500ms latching transaction chains to the outer scroller,
+`overscroll-behavior: contain` stops the chaining on both the wheel and the keyboard
+walks, and the keyboard arrows scroll the focused chain — or, with nothing focused,
+the mouse-press node's chain (`LogicalScroll`'s fallback order,
+`core/input/scroll_manager.cc:216-232`). One collateral: ticket 07's
+`scrollrange` discrimination test's wrong view gained the end-padding drop, because
+the press-node keyboard scroll now scrolls the scroller even when the fixture's
+click misses the focusable row (the wrong view's old premise), and the top-padding
+basis cancels at the end scroll — the end padding does not.

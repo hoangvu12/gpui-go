@@ -34,6 +34,7 @@ import (
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/tracer"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/transition"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/tsxslots"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/wheel"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/whitespace"
 )
 

@@ -573,6 +573,70 @@ func ParseScrollbarGutter(s string) (ScrollbarGutter, error) {
 	}
 }
 
+// OverscrollBehavior selects a scroll container's overscroll-behavior
+// on one axis (CSS overscroll-behavior, browser-core ticket 15, spec
+// story 15): auto is the default — a scroller that reaches its end
+// lets the remaining scroll chain to its ancestor scrollers (and
+// allows the user agent's overscroll affordance); contain stops the
+// chaining at this scroller (the affordance may still show); none
+// stops the chaining AND the affordance. The port has no overscroll
+// glow, so contain and none behave identically here; the values stay
+// distinct because the class layer spells both.
+//
+// Chromium: cc/input/overscroll_behavior.h PropagatesX/YScroll (auto
+// propagates, contain/none do not) and InputHandler::FindNodeToLatch's
+// CanPropagate arm (cc/input/input_handler.cc:2336-2338, :2362-2378 —
+// the walk up the scroll tree stops at the first non-propagating
+// scroller, latching to it); the keyboard chain is cut the same way
+// (core/input/scroll_manager.cc RecomputeScrollChain :166-213, behind
+// the stable RespectOverscrollBehaviorForScrollBubbling feature).
+type OverscrollBehavior uint8
+
+const (
+	// OverscrollBehaviorAuto lets the scroll chain continue past this
+	// scroller (the CSS default).
+	OverscrollBehaviorAuto OverscrollBehavior = iota
+	// OverscrollBehaviorContain stops the scroll chain at this
+	// scroller.
+	OverscrollBehaviorContain
+	// OverscrollBehaviorNone stops the scroll chain and the local
+	// overscroll affordance.
+	OverscrollBehaviorNone
+)
+
+// String returns the CSS keyword.
+func (b OverscrollBehavior) String() string {
+	switch b {
+	case OverscrollBehaviorContain:
+		return "Contain"
+	case OverscrollBehaviorNone:
+		return "None"
+	}
+	return "Auto"
+}
+
+// ParseOverscrollBehavior parses a variant name.
+func ParseOverscrollBehavior(s string) (OverscrollBehavior, error) {
+	switch s {
+	case "Auto":
+		return OverscrollBehaviorAuto, nil
+	case "Contain":
+		return OverscrollBehaviorContain, nil
+	case "None":
+		return OverscrollBehaviorNone, nil
+	default:
+		return 0, fmt.Errorf("invalid OverscrollBehavior %q", s)
+	}
+}
+
+// propagatesScroll reports whether this axis' overscroll-behavior
+// lets an unconsumed scroll chain to the ancestor scrollers
+// (cc/input/overscroll_behavior.h PropagatesXScroll/PropagatesYScroll:
+// auto propagates; contain and none do not).
+func (b OverscrollBehavior) propagatesScroll() bool {
+	return b == OverscrollBehaviorAuto
+}
+
 // FlexDirection is the flexbox main axis (reference style.rs; source
 // order Row, Column, RowReverse, ColumnReverse; Row is the default).
 type FlexDirection uint8
@@ -948,6 +1012,12 @@ type Style struct {
 	// container (browser-core 36; default Auto).
 	ScrollbarGutter ScrollbarGutter
 
+	// OverscrollBehaviorX and OverscrollBehaviorY are the scroller's
+	// overscroll-behavior per axis (browser-core 15): whether an
+	// unconsumed scroll chains to the ancestor scrollers. Default Auto.
+	OverscrollBehaviorX OverscrollBehavior
+	OverscrollBehaviorY OverscrollBehavior
+
 	// Inset tweaks the position relative to the layout-defined position
 	// (reference: Edges<Length>, default auto on every edge).
 	Inset LengthEdges
@@ -1114,26 +1184,28 @@ func DefaultStyle() Style {
 	zeroDefinite := DefiniteLength{Kind: DefiniteLengthPx, Value: 0}
 	zeroLen := Length{Definite: zeroDefinite}
 	return Style{
-		Display:         DisplayFlex,
-		Position:        PositionRelative,
-		OverflowX:       OverflowVisible,
-		OverflowY:       OverflowVisible,
-		ScrollbarWidth:  zeroAbs,
-		ScrollbarGutter: ScrollbarGutterAuto,
-		Inset:           LengthEdges{Top: AutoLength(), Right: AutoLength(), Bottom: AutoLength(), Left: AutoLength()},
-		Size:            LengthSize{Width: AutoLength(), Height: AutoLength()},
-		MinSize:         LengthSize{Width: AutoLength(), Height: AutoLength()},
-		MaxSize:         LengthSize{Width: AutoLength(), Height: AutoLength()},
-		Margin:          LengthEdges{Top: zeroLen, Right: zeroLen, Bottom: zeroLen, Left: zeroLen},
-		Padding:         DefiniteLengthEdges{Top: zeroDefinite, Right: zeroDefinite, Bottom: zeroDefinite, Left: zeroDefinite},
-		BorderWidths:    AbsoluteLengthEdges{Top: zeroAbs, Right: zeroAbs, Bottom: zeroAbs, Left: zeroAbs},
-		Gap:             DefiniteLengthSize{Width: zeroDefinite, Height: zeroDefinite},
-		FlexDirection:   FlexDirectionRow,
-		FlexWrap:        FlexWrapNoWrap,
-		FlexBasis:       AutoLength(),
-		FlexGrow:        0.0,
-		FlexShrink:      1.0,
-		VerticalAlign:   VerticalAlignBaseline,
+		Display:             DisplayFlex,
+		Position:            PositionRelative,
+		OverflowX:           OverflowVisible,
+		OverflowY:           OverflowVisible,
+		ScrollbarWidth:      zeroAbs,
+		ScrollbarGutter:     ScrollbarGutterAuto,
+		OverscrollBehaviorX: OverscrollBehaviorAuto,
+		OverscrollBehaviorY: OverscrollBehaviorAuto,
+		Inset:               LengthEdges{Top: AutoLength(), Right: AutoLength(), Bottom: AutoLength(), Left: AutoLength()},
+		Size:                LengthSize{Width: AutoLength(), Height: AutoLength()},
+		MinSize:             LengthSize{Width: AutoLength(), Height: AutoLength()},
+		MaxSize:             LengthSize{Width: AutoLength(), Height: AutoLength()},
+		Margin:              LengthEdges{Top: zeroLen, Right: zeroLen, Bottom: zeroLen, Left: zeroLen},
+		Padding:             DefiniteLengthEdges{Top: zeroDefinite, Right: zeroDefinite, Bottom: zeroDefinite, Left: zeroDefinite},
+		BorderWidths:        AbsoluteLengthEdges{Top: zeroAbs, Right: zeroAbs, Bottom: zeroAbs, Left: zeroAbs},
+		Gap:                 DefiniteLengthSize{Width: zeroDefinite, Height: zeroDefinite},
+		FlexDirection:       FlexDirectionRow,
+		FlexWrap:            FlexWrapNoWrap,
+		FlexBasis:           AutoLength(),
+		FlexGrow:            0.0,
+		FlexShrink:          1.0,
+		VerticalAlign:       VerticalAlignBaseline,
 		// The paint defaults (style.rs:1028-1081): visible, zero overflow
 		// fade, no background or border color, solid border with the
 		// scene's default dash pattern, zero radii, no shadows, rings or

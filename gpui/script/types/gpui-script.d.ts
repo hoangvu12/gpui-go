@@ -745,6 +745,15 @@ type CoreClass =
 	"overflow-y-hidden" |
 	"overflow-y-scroll" |
 	"overflow-y-visible" |
+	"overscroll-auto" |
+	"overscroll-contain" |
+	"overscroll-none" |
+	"overscroll-x-auto" |
+	"overscroll-x-contain" |
+	"overscroll-x-none" |
+	"overscroll-y-auto" |
+	"overscroll-y-contain" |
+	"overscroll-y-none" |
 	"proportional-nums" |
 	"relative" |
 	"rendering-auto" |
@@ -1411,6 +1420,15 @@ type Class =
 	"overflow-y-hidden" |
 	"overflow-y-scroll" |
 	"overflow-y-visible" |
+	"overscroll-auto" |
+	"overscroll-contain" |
+	"overscroll-none" |
+	"overscroll-x-auto" |
+	"overscroll-x-contain" |
+	"overscroll-x-none" |
+	"overscroll-y-auto" |
+	"overscroll-y-contain" |
+	"overscroll-y-none" |
 	"proportional-nums" |
 	"relative" |
 	"rendering-auto" |

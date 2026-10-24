@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 320px;
+		height: 240px;
+		display: flex;
+		align-items: flex-start;
+	}
+	#outer {
+		box-sizing: border-box;
+		width: 220px;
+		height: 200px;
+		margin-left: 10px;
+		margin-top: 10px;
+		display: flex;
+		flex-direction: column;
+		overflow-y: scroll;
+		/* The port draws no scrollbars and reserves no gutter. */
+		scrollbar-width: none;
+		background: #f1f5f9;
+	}
+	#outer > div {
+		flex-shrink: 0;
+	}
+	#inner {
+		box-sizing: border-box;
+		width: 180px;
+		height: 120px;
+		margin-left: 20px;
+		margin-top: 20px;
+		display: flex;
+		flex-direction: column;
+		overflow-y: scroll;
+		scrollbar-width: none;
+		overscroll-behavior: contain;
+		background: #93c5fd;
+	}
+	#inner > div {
+		flex-shrink: 0;
+		box-sizing: border-box;
+		width: 180px;
+		height: 60px;
+		background: #cbd5e1;
+	}
+	#inner > div:last-child {
+		background: #16a34a;
+	}
+	#ospacer {
+		box-sizing: border-box;
+		width: 220px;
+		height: 300px;
+		background: #e2e8f0;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div id="outer" data-id="outer">
+		<div id="inner" data-id="inner">
+			<div data-id="irow0"></div>
+			<div data-id="irow1"></div>
+			<div data-id="irow2"></div>
+			<div data-id="irow3"></div>
+			<div data-id="irow4"></div>
+		</div>
+		<div id="ospacer" data-id="ospacer"></div>
+	</div>
+</body>
+</html>

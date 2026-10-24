@@ -573,6 +573,14 @@ func (p *cdpPage) dispatchStep(step Step) error {
 		})()`, step.Ms)); err != nil {
 			return fmt.Errorf("advancing the page's animations by %dms: %w", step.Ms, err)
 		}
+		// The real-time half (browser-core ticket 15): the animations are
+		// paused and seeked, so sleeping advances nothing the page shows —
+		// but wall time passing is what ends the browser's timer-driven
+		// input transactions (the wheel's 500ms scroll-latching
+		// transaction, mouse_wheel_phase_handler.h:20). The replay's half
+		// advances the test application's virtual clock, which the port's
+		// latch reads the same way.
+		time.Sleep(time.Duration(step.Ms) * time.Millisecond)
 		return nil
 	case StepImeSet:
 		// A composition update (browser-core ticket 18):
@@ -605,6 +613,29 @@ func (p *cdpPage) dispatchStep(step Step) error {
 			return fmt.Errorf("running the page script: %w", err)
 		}
 		return nil
+	case StepWheel:
+		// The wheel event (browser-core 15): Input.dispatchMouseEvent
+		// type mouseWheel with the step's logical-pixel deltas negated —
+		// CDP's params carry the DOM's signs (positive deltaY scrolls
+		// down), the DevTools input handler negates them into the
+		// WebInputEvent whose positive deltaY scrolls UP
+		// (content/browser/devtools/protocol/input_handler.cc:472-473),
+		// and the page scrolls exactly |step.Delta| CSS pixels — the
+		// same logical amount the port's ScrollWheelEvent applies
+		// (measured at the 2.0 device scale: a CDP delta of N scrolls N
+		// CSS px). One CDP wheel is one COMPLETE gesture: the DevTools
+		// handler stamps every synthetic wheel kPhaseBegan
+		// (input_handler.cc:490), which ends any previous latching
+		// transaction (mouse_wheel_phase_handler.cc's DispatchPending
+		// WheelEndEvent), so consecutive Wheel steps are separate
+		// gestures — the replay mirrors that by ending its step's
+		// gesture with a phase-Ended ScrollWheelEvent, and a Wait step's
+		// real-time half ends the browser's own 500ms transaction.
+		_, err := p.call("Input.dispatchMouseEvent", map[string]any{
+			"type": "mouseWheel", "x": step.X, "y": step.Y,
+			"deltaX": -step.DeltaX, "deltaY": -step.DeltaY,
+		})
+		return err
 	default:
 		return fmt.Errorf("unknown step kind %q", step.Kind)
 	}
