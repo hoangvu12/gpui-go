@@ -714,6 +714,7 @@ click misses the focusable row (the wrong view's old premise), and the top-paddi
 basis cancels at the end scroll — the end padding does not.
 as browser-parity wins (Ctrl+Insert copies like Chrome's, where the pin's keymap had
 no binding).
+
 Ticket 22 (close watchers and the Escape default action) added the close-watcher
 stack (`gpui/closewatcher.go` — the DOM CloseWatcher: `NewCloseWatcher`,
 `RequestClose`/`Close`/`Destroy`, `OnCancel` with a preventable
@@ -746,7 +747,7 @@ still sees the bubbled mouse events — the closewatcher pages narrow the root t
 listeners); the recorded divergence stays with ticket 12's follow-ups.
 and the anchor's hitbox record for the mouse-focus default's ancestor
 walk). The discrimination view keeps Tier A passing.
-717i
+
 Ticket 35 (position: fixed) added `PositionFixed` and `Fixed()` (the
 Tailwind `fixed` class left the unsupported list), the containing-block
 rule (`gpui/containingblock.go`'s fixed split: every container defers a
