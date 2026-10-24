@@ -12,6 +12,7 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - **Open follow-up from 33+25:** Anchored, Deferred and custom containers don't call `RequestContainerLayout`, so a `Static()` div inside them defers its absolute children past the overlay (opt-in only; for 76).
 - 29 forced colours, 30 spellcheck and 77 (rev 15.1) are merged and resolved. 77 left open: the partial-region backdrop crop zoom (fold into R16), and the 42/43 text fields, which are blocked behind the pinned Parley/Taffy seams (per-field plans in TEXT_ABI.md/LAYOUT_ABI.md). Watch authorspec TestRealTwoWindowCounterSharedModel (a rare reentrancy panic, seen once; then 19/19).
 - **Running (they report to this chat, 08b88b23):**
+  - 14+17 (bundle: Tab navigation/inert, context-menu event): chat 51681da8, worktree `gpui-go-wt-core-14`, branch `core/14-17-tab-contextmenu`
   - 28 text scale/caret/highlight: chat d3c30c9b, worktree `gpui-go-wt-core-28`, branch `core/28-text-scale-caret`
   - 44 transitions and the core motion engine: chat 8d035ea9, worktree `gpui-go-wt-core-44`, branch `core/44-transitions`
   - 63 TSX surface, .d.ts and check: chat 8d3ffb7a, worktree `gpui-go-wt-core-63`, branch `core/63-tsx-surface`
