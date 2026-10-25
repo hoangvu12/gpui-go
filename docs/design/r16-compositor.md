@@ -194,7 +194,7 @@ These answers were checked against zgui (`%TEMP%\research-src\zgui-head`), gpui-
 
 ## Appendix A: record layouts
 
-All `#[repr(C)]`, u32 words, f32 values as IEEE-754 bits, alignment 4, every record ends with a `record_size` self-check (the ABI's existing convention). Offsets in words. Scene service version bumps to **5**; renderer service to **5**; native revision to **16** at ticket 54.
+All `#[repr(C)]`, u32 words, f32 values as IEEE-754 bits, alignment 4, every record ends with a `record_size` self-check (the ABI's existing convention). Offsets in words. **The design's "scene service v5" became version 6** (ticket 77's 780-byte filter record had already taken 5; ticket 50 recorded the renumber); the renderer service is **5**; the native revision stays **151** until ticket 54 sets **16**.
 
 ### A.1 `GpuiGoSceneEffectRecord` — the effect group marker (new primitive class 10)
 

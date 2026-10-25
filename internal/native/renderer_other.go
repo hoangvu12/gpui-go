@@ -37,6 +37,10 @@ func callRendererSurfaceInfo(fn uintptr, surface uint64, out *SurfaceInfo) (int3
 	return 0, hostSupported()
 }
 
+func callRendererSurfaceDebugStats(fn uintptr, surface uint64, out *DebugStatsRecord) (int32, error) {
+	return 0, hostSupported()
+}
+
 func callRendererSurfacePresent(
 	fn uintptr,
 	surface uint64,

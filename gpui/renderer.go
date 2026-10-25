@@ -798,6 +798,14 @@ func (s *Surface) Info() (native.SurfaceInfo, error) {
 	return s.renderer.svc.Info(s.handle)
 }
 
+// DebugStats returns the per-surface renderer debug stats (rev 16,
+// browser-core ticket 50): the group-target pool observability (the
+// retained target count, the committed bytes and the cumulative
+// overflow counter of the groups the pool budget demoted to inline).
+func (s *Surface) DebugStats() (native.DebugStatsRecord, error) {
+	return s.renderer.svc.DebugStats(s.handle)
+}
+
 // Mode returns the composition mode the surface was created with.
 func (s *Surface) Mode() native.SurfaceMode { return s.mode }
 

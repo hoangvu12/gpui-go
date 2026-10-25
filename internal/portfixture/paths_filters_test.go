@@ -54,12 +54,32 @@ func TestFx0007PathsFiltersMatchesRecordedReference(t *testing.T) {
 		t.Skipf("recorded reference trace not present (%v); run conformance/cmd/recordreference after building the reference harness", err)
 	}
 
-	result := conformance.CompareTraces(reference, trace)
+	// rev 16 (browser-core ticket 50): the recorded reference still
+	// carries the PINNED plan (MAX_FILTER_GROUP_DEPTH = 2 - the third
+	// nested group of the nested-filters-depth3 case is INLINE and the
+	// scene-meta's totals count two isolated groups). The R16 plan has
+	// NO depth cap: every matched group isolates, so the third group's
+	// begin/end commands carry `isolated` with target index 2 and the
+	// meta reports 3 - the ticket's documented, intentional divergence
+	// ("Depth > 2 changes on purpose; that divergence is the point of
+	// the ticket", the R16 design's 3.1 bit-exactness note). These six
+	// fields are the ONLY accepted difference; everything else must
+	// still match the pin exactly.
+	accepted := []conformance.FieldDivergence{
+		{Seq: 187, Field: "target", Note: "the depth-3 group isolates (the pin renders it inline)"},
+		{Seq: 187, Field: "targetIndex", Note: "the depth-3 group takes pool slot 2"},
+		{Seq: 191, Field: "target", Note: "the depth-3 group's end composites"},
+		{Seq: 191, Field: "targetIndex", Note: "the depth-3 group's pool slot 2"},
+		{Seq: 201, Field: "isolatedFilterCount", Note: "three isolated filter groups (the pin caps at two)"},
+		{Seq: 201, Field: "isolatedTargetCount", Note: "the pool high-water mark is three (the pin caps at two)"},
+	}
+	result := conformance.CompareTracesWithDivergences(reference, trace, accepted)
 	if !result.Equal {
 		t.Fatalf("paths-filters trace mismatch:\n%s", result.Diff)
 	}
-	if result.Diff != "" {
-		t.Fatalf("equal comparison must report an empty diff, got %q", result.Diff)
+	if len(result.Divergences) != len(accepted) {
+		t.Fatalf("expected exactly the %d documented R16 divergences, got %d: %v",
+			len(accepted), len(result.Divergences), result.Divergences)
 	}
 	if got, want := len(trace.Events), len(reference.Events); got != want {
 		t.Errorf("event count = %d, want %d", got, want)
@@ -146,11 +166,11 @@ func TestFx0007PathsFiltersBehavioralFacts(t *testing.T) {
 		t.Errorf("paths-fill-stroke usesPathTarget = %d, want 1", got)
 	}
 
-	// Case 2: the nested filter plan — two isolated targets, the third
-	// group inline (MAX_FILTER_GROUP_DEPTH = 2), one backdrop, one
-	// surface.
-	if got := lastMeta["nested-filters-depth3"]["isolatedTargetCount"]; got != 2 {
-		t.Errorf("nested-filters-depth3 isolatedTargetCount = %d, want 2 (depth-3 group renders inline)", got)
+	// Case 2: the nested filter plan - rev 16 (browser-core ticket 50)
+	// removed the depth cap, so all THREE groups isolate (the pre-R16
+	// third group rendered inline); one backdrop, one surface.
+	if got := lastMeta["nested-filters-depth3"]["isolatedTargetCount"]; got != 3 {
+		t.Errorf("nested-filters-depth3 isolatedTargetCount = %d, want 3 (rev 16: no depth cap)", got)
 	}
 	if got := lastMeta["nested-filters-depth3"]["boundaryCount"]; got != 6 {
 		t.Errorf("nested-filters-depth3 boundaryCount = %d, want 6", got)

@@ -1505,9 +1505,24 @@ mod tests {
             stopped: AtomicBool::new(false),
             dropped: AtomicU32::new(0),
         });
+        // A stand-in COM pointer for the queue test: a real IUnknown
+        // object (its vtable's first slot is Release, exactly what Drop
+        // exercises) transmuted into the texture type - the queue never
+        // calls any D3D11-specific method in this test (rev 16, ticket
+        // 50: the pre-existing test-only compile error -
+        // ID3D11Texture2D has no Default in the windows crate).
+        #[windows::core::implement(windows::Win32::System::Com::IAgileObject)]
+        struct NullTexture;
+        impl windows::Win32::System::Com::IAgileObject_Impl for NullTexture_Impl {}
+        let null_texture: ID3D11Texture2D = unsafe {
+            core::mem::transmute::<
+                windows::Win32::System::Com::IAgileObject,
+                ID3D11Texture2D,
+            >(NullTexture.into())
+        };
         for i in 0..(MAX_PENDING_CAPTURE_FRAMES + 4) {
             enqueue_pending(&shared, PendingFrame {
-                texture: ID3D11Texture2D::default(),
+                texture: null_texture.clone(),
                 width: i,
                 height: i,
                 content_width: 0,
@@ -1528,6 +1543,9 @@ mod tests {
 
     #[test]
     fn panic_probe_reports_containment() {
-        assert_eq!(capture_panic_probe(), capture_status::ERR_PANIC);
+        // The export is unsafe (an extern "system" fn); the test-only
+        // call needed an unsafe block (rev 16, ticket 50: the
+        // pre-existing test-only compile error).
+        assert_eq!(unsafe { capture_panic_probe() }, capture_status::ERR_PANIC);
     }
 }

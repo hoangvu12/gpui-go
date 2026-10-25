@@ -103,6 +103,14 @@ func callSceneInsertPath(fn uintptr, scene uint64, rec *ScenePathRecord, vertice
 	return 0, hostSupported()
 }
 
+func callSceneInsertEffect(fn uintptr, scene uint64, rec *SceneEffectRecord) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callSceneEffectDump(fn uintptr, scene uint64, records uintptr, capacity uint32, outCount *uint32) (int32, error) {
+	return 0, hostSupported()
+}
+
 func callScenePathDump(
 	fn uintptr,
 	scene uint64,

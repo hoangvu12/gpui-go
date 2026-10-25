@@ -138,16 +138,40 @@ mod source {
         pub size: Vec2f,
     }
 
+    // rev 16 (browser-core ticket 50): the mask's fade edges in the
+    // ABI's word order (left, top, right, bottom) - the record is the
+    // instance layout, so the struct mirrors it exactly.
+    #[repr(C)]
+    #[derive(Clone, Copy, Wgsl)]
+    pub struct MaskFade {
+        pub left: f32,
+        pub top: f32,
+        pub right: f32,
+        pub bottom: f32,
+    }
+
+    // rev 16 (browser-core ticket 50): the extended content mask - the
+    // pin's bounds + per-edge fade ramp, plus the rounded-clip corner
+    // radii and smoothing. This struct IS the ABI record
+    // `GpuiGoSceneContentMask` (52 bytes): the vendored quad/shadow
+    // pipelines' instance layout mirrors the ABI record field for
+    // field, so the draw path uploads the records directly.
     #[repr(C)]
     #[derive(Clone, Copy, Wgsl)]
     pub struct ContentMask {
         pub bounds: Bounds,
-        pub fade_out: Edges,
+        pub fade_out: MaskFade,
+        pub corner_radii: Corners,
+        pub corner_smoothing: f32,
     }
 
     impl ContentMask {
-        /// The mask's coverage at the given window-space position: 1 inside,
-        /// 0 outside, and a linear ramp to 0 across each edge's fade distance.
+        /// The mask's coverage at the given window-space position: 1
+        /// inside, 0 outside, a linear ramp to 0 across each edge's
+        /// fade distance, and - rev 16 - the rounded-corner clip when
+        /// the mask carries radii (the rounded-rectangle SDF the quad
+        /// pipeline already computes; the INNERMOST radii apply inline,
+        /// ancestors' rounded clips become effect groups).
         pub fn alpha(content_mask: ContentMask, position: Vec2f) -> f32 {
             let bounds = content_mask.bounds;
             let fade = content_mask.fade_out;
@@ -163,6 +187,13 @@ mod source {
             }
             if fade.bottom > 0.0 {
                 alpha *= saturate((bounds.origin.y + bounds.size.y - position.y) / fade.bottom);
+            }
+            if !Corners::is_zero(content_mask.corner_radii) {
+                alpha *= antialiased_coverage(rounded_rectangle_signed_distance(
+                    position,
+                    bounds,
+                    content_mask.corner_radii,
+                ));
             }
             alpha
         }

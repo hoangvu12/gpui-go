@@ -156,7 +156,7 @@ func (k *SceneKernel) InsertQuad(q Quad) error {
 	}
 	rec := native.NewSceneQuadRecord()
 	rec.Bounds = sceneBoundsRecord(q.Bounds)
-	rec.ContentMask = sceneBoundsRecord(q.ContentMask)
+	rec.ContentMask = sceneContentMaskRecord(q.ContentMask)
 	rec.Background = sceneBackgroundRecord(q.Background, q.Bounds)
 	rec.BorderColor = sceneBackgroundRecord(q.BorderColor, q.Bounds)
 	for i, radius := range [4]float32{q.CornerRadii.TopLeft, q.CornerRadii.TopRight, q.CornerRadii.BottomRight, q.CornerRadii.BottomLeft} {
@@ -188,7 +188,7 @@ func (k *SceneKernel) InsertShadow(sh Shadow) error {
 	rec := native.NewSceneShadowRecord()
 	rec.BlurRadius = math.Float32bits(sh.BlurRadius)
 	rec.Bounds = sceneBoundsRecord(sh.Bounds)
-	rec.ContentMask = sceneBoundsRecord(sh.ContentMask)
+	rec.ContentMask = sceneContentMaskRecord(sh.ContentMask)
 	rec.Color = sceneBackgroundRecord(sh.Color, sh.Bounds)
 	rec.ElementBounds = sceneBoundsRecord(sh.ElementBounds)
 	for i, radius := range [4]float32{sh.CornerRadii.TopLeft, sh.CornerRadii.TopRight, sh.CornerRadii.BottomRight, sh.CornerRadii.BottomLeft} {
@@ -219,7 +219,7 @@ func (k *SceneKernel) InsertUnderline(u Underline) error {
 	rec := native.NewSceneUnderlineRecord()
 	rec.Padding = u.Padding
 	rec.Bounds = sceneBoundsRecord(u.Bounds)
-	rec.ContentMask = sceneBoundsRecord(u.ContentMask)
+	rec.ContentMask = sceneContentMaskRecord(u.ContentMask)
 	rec.Color = sceneColorRecord(u.Color)
 	rec.Thickness = math.Float32bits(u.Thickness)
 	if u.Wavy {
@@ -263,6 +263,42 @@ func (k *SceneKernel) InsertFilterBoundary(b FilterBoundary) error {
 	return nil
 }
 
+// InsertEffect inserts an effect-group marker record (rev 16,
+// browser-core ticket 50). Order must be zero; the kernel assigns it.
+// The record's flags decide start/end; a group start over the native
+// MAX_SCENE_GROUPS bound (1024, shared with the filter boundaries)
+// fails with the typed limit error.
+func (k *SceneKernel) InsertEffect(e EffectGroup) error {
+	if err := k.checkLive("InsertEffect"); err != nil {
+		return err
+	}
+	if e.Order != 0 {
+		return fmt.Errorf("gpui: scene insert effect: record order must be zero, got %d (the kernel assigns the draw order)", e.Order)
+	}
+	rec := effectRecordOf(e)
+	if err := k.scene.InsertEffect(&rec); err != nil {
+		return fmt.Errorf("gpui: scene insert effect: %w", err)
+	}
+	return nil
+}
+
+// EffectBoundaries returns the finished scene's effect-group markers in
+// draw order (start before end at equal orders; rev 16).
+func (k *SceneKernel) EffectBoundaries() ([]EffectGroup, error) {
+	if err := k.checkLive("EffectBoundaries"); err != nil {
+		return nil, err
+	}
+	records, err := k.scene.EffectDump()
+	if err != nil {
+		return nil, fmt.Errorf("gpui: scene effect dump: %w", err)
+	}
+	out := make([]EffectGroup, 0, len(records))
+	for _, rec := range records {
+		out = append(out, effectGroupOf(rec))
+	}
+	return out, nil
+}
+
 // InsertSurface inserts a surface record with its paired opacity.
 func (k *SceneKernel) InsertSurface(bounds, contentMask Bounds, source SurfaceSourceTag, opacity float32) error {
 	if err := k.checkLive("InsertSurface"); err != nil {
@@ -270,7 +306,7 @@ func (k *SceneKernel) InsertSurface(bounds, contentMask Bounds, source SurfaceSo
 	}
 	rec := native.NewSceneSurfaceRecord()
 	rec.Bounds = sceneBoundsRecord(bounds)
-	rec.ContentMask = sceneBoundsRecord(contentMask)
+	rec.ContentMask = sceneContentMaskRecord(contentMask)
 	rec.SourceTag = uint32(source)
 	if err := k.scene.InsertSurface(&rec, opacity); err != nil {
 		return fmt.Errorf("gpui: scene insert surface: %w", err)
@@ -317,7 +353,7 @@ func (k *SceneKernel) Quads() ([]Quad, error) {
 		out[i] = Quad{
 			Order:           rec.Order,
 			Bounds:          sceneBoundsValue(rec.Bounds),
-			ContentMask:     sceneBoundsValue(rec.ContentMask),
+			ContentMask:     sceneContentMaskValue(rec.ContentMask),
 			Background:      sceneBackgroundValue(rec.Background),
 			BorderColor:     sceneBackgroundValue(rec.BorderColor),
 			BorderStyle:     BorderStyle(rec.BorderStyle),
@@ -347,7 +383,7 @@ func (k *SceneKernel) Shadows() ([]Shadow, error) {
 			Order:              rec.Order,
 			BlurRadius:         math.Float32frombits(rec.BlurRadius),
 			Bounds:             sceneBoundsValue(rec.Bounds),
-			ContentMask:        sceneBoundsValue(rec.ContentMask),
+			ContentMask:        sceneContentMaskValue(rec.ContentMask),
 			Color:              sceneBackgroundValue(rec.Color),
 			ElementBounds:      sceneBoundsValue(rec.ElementBounds),
 			ElementCornerRadii: cornersValue(rec.ElementCornerRadii),
@@ -374,7 +410,7 @@ func (k *SceneKernel) Underlines() ([]Underline, error) {
 			Order:       rec.Order,
 			Padding:     rec.Padding,
 			Bounds:      sceneBoundsValue(rec.Bounds),
-			ContentMask: sceneBoundsValue(rec.ContentMask),
+			ContentMask: sceneContentMaskValue(rec.ContentMask),
 			Color:       sceneColorValue(rec.Color),
 			Thickness:   math.Float32frombits(rec.Thickness),
 			Wavy:        rec.Wavy == 1,
@@ -432,7 +468,7 @@ func (k *SceneKernel) Surfaces() ([]SurfaceRecord, []float32, error) {
 		out[i] = SurfaceRecord{
 			Order:       rec.Order,
 			Bounds:      sceneBoundsValue(rec.Bounds),
-			ContentMask: sceneBoundsValue(rec.ContentMask),
+			ContentMask: sceneContentMaskValue(rec.ContentMask),
 			Source:      SurfaceSourceTag(rec.SourceTag),
 		}
 		if rec.SourceTag == uint32(SurfaceSourceCaptureFrame) {
@@ -531,9 +567,76 @@ func sceneBoundsRecord(b Bounds) native.SceneBounds {
 	return native.SceneBoundsOf(b.Origin.X, b.Origin.Y, b.Size.Width, b.Size.Height)
 }
 
+// sceneContentMaskRecord packs a rect-only (zero fade, zero radii)
+// content mask: the exact pre-R16 behaviour, the encoding every
+// existing Go paint path uses. The Go styling that authors mask radii
+// and fades (Style.OverflowMask, the mask-intersection rules) is
+// browser-core ticket 55.
+func sceneContentMaskRecord(b Bounds) native.SceneContentMask {
+	return native.SceneContentMaskOf(b.Origin.X, b.Origin.Y, b.Size.Width, b.Size.Height)
+}
+
+// sceneContentMaskValue unpacks a rect-only mask (the radii and fades
+// are zero from every Go-authored record this revision).
+func sceneContentMaskValue(rec native.SceneContentMask) Bounds {
+	return sceneBoundsValue(rec.Bounds)
+}
+
 func sceneBoundsValue(rec native.SceneBounds) Bounds {
 	x, y, w, h := rec.Rect()
 	return Bounds{Origin: Point{X: x, Y: y}, Size: Size{Width: w, Height: h}}
+}
+
+// effectRecordOf packs an EffectGroup into the ABI record.
+func effectRecordOf(e EffectGroup) native.SceneEffectRecord {
+	rec := native.NewSceneEffectRecord()
+	rec.Order = e.Order
+	rec.Bounds = sceneBoundsRecord(e.Bounds)
+	rec.ContentMask = sceneBoundsRecord(e.ContentMask)
+	rec.Opacity = math.Float32bits(e.Opacity)
+	for i, radius := range [4]float32{e.CornerRadii.TopLeft, e.CornerRadii.TopRight, e.CornerRadii.BottomRight, e.CornerRadii.BottomLeft} {
+		rec.CornerRadii[i] = math.Float32bits(radius)
+	}
+	rec.CornerSmoothing = math.Float32bits(e.CornerSmoothing)
+	flags := uint32(0)
+	if e.IsStart {
+		flags |= native.SceneEffectFlagIsStart
+	}
+	if e.HasOpacity {
+		flags |= native.SceneEffectFlagHasOpacity
+	}
+	if e.ClipToBounds {
+		flags |= native.SceneEffectFlagClipToBounds
+	}
+	if e.RoundedClipOnly {
+		flags |= native.SceneEffectFlagRoundedClipOnly
+	}
+	rec.Flags = flags
+	return rec
+}
+
+// effectGroupOf unpacks an ABI effect record (the Go-authored fields
+// this revision: order, bounds, mask, radii, smoothing, opacity and the
+// wired flags).
+func effectGroupOf(rec native.SceneEffectRecord) EffectGroup {
+	flags := rec.Flags
+	return EffectGroup{
+		Order:           rec.Order,
+		IsStart:         flags&native.SceneEffectFlagIsStart != 0,
+		HasOpacity:      flags&native.SceneEffectFlagHasOpacity != 0,
+		ClipToBounds:    flags&native.SceneEffectFlagClipToBounds != 0,
+		RoundedClipOnly: flags&native.SceneEffectFlagRoundedClipOnly != 0,
+		Bounds:          sceneBoundsValue(rec.Bounds),
+		ContentMask:     sceneBoundsValue(rec.ContentMask),
+		Opacity:         math.Float32frombits(rec.Opacity),
+		CornerRadii: Corners{
+			TopLeft:     math.Float32frombits(rec.CornerRadii[0]),
+			TopRight:    math.Float32frombits(rec.CornerRadii[1]),
+			BottomRight: math.Float32frombits(rec.CornerRadii[2]),
+			BottomLeft:  math.Float32frombits(rec.CornerRadii[3]),
+		},
+		CornerSmoothing: math.Float32frombits(rec.CornerSmoothing),
+	}
 }
 
 func sceneColorRecord(c Hsla) native.SceneColor {
@@ -621,7 +724,7 @@ func filterRecordOf(order uint32, bounds, mask Bounds, radii Corners, smoothing,
 	rec := native.NewSceneFilterRecord()
 	rec.Order = order
 	rec.Bounds = sceneBoundsRecord(bounds)
-	rec.ContentMask = sceneBoundsRecord(mask)
+	rec.ContentMask = sceneContentMaskRecord(mask)
 	for i, radius := range [4]float32{radii.TopLeft, radii.TopRight, radii.BottomRight, radii.BottomLeft} {
 		rec.CornerRadii[i] = math.Float32bits(radius)
 	}
@@ -664,7 +767,7 @@ func backdropValue(rec native.SceneFilterRecord) BackdropFilter {
 	return BackdropFilter{
 		Order:            rec.Order,
 		Bounds:           sceneBoundsValue(rec.Bounds),
-		ContentMask:      sceneBoundsValue(rec.ContentMask),
+		ContentMask:      sceneContentMaskValue(rec.ContentMask),
 		CornerRadii:      cornersValue(rec.CornerRadii),
 		CornerSmoothing:  math.Float32frombits(rec.CornerSmoothing),
 		BlurRadius:       math.Float32frombits(rec.BlurRadii[0]),
@@ -678,7 +781,7 @@ func boundaryValue(rec native.SceneFilterRecord) FilterBoundary {
 	return FilterBoundary{
 		Order:            rec.Order,
 		Bounds:           sceneBoundsValue(rec.Bounds),
-		ContentMask:      sceneBoundsValue(rec.ContentMask),
+		ContentMask:      sceneContentMaskValue(rec.ContentMask),
 		CornerRadii:      cornersValue(rec.CornerRadii),
 		CornerSmoothing:  math.Float32frombits(rec.CornerSmoothing),
 		BlurRadius:       math.Float32frombits(rec.BlurRadii[0]),

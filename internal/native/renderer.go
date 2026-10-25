@@ -65,8 +65,11 @@ const (
 // Version 2 (ticket16) added the scene drawing entries and the draw
 // scalars; version 4 (gpui-perf ticket 05) made every swap chain
 // frame-latency waitable (maximum latency 1) and appended the
-// surface_frame_latency_handle entry.
-const rendererServiceVersion uint32 = 4
+// surface_frame_latency_handle entry; version 5 (rev 16, browser-core
+// ticket 50) appended surface_debug_stats and its record - the
+// per-surface group-target pool observability (the design's
+// "renderer service v5").
+const rendererServiceVersion uint32 = 5
 
 func rendererStatusName(code int32) string {
 	switch code {
@@ -303,6 +306,23 @@ type RetireRecord struct {
 	RecordSize          uint32
 }
 
+// DebugStatsRecord mirrors GpuiGoDebugStatsRecord (rev 16, browser-core
+// ticket 50; 16 bytes, alignment 4): the per-surface group-target pool
+// observability. The record is extensible - ticket 53's stats entry
+// appends the state-bind count, the tessellation-cache hit rate and
+// the damage fraction (with another version bump).
+type DebugStatsRecord struct {
+	// PoolTargetCount is the retained group targets.
+	PoolTargetCount uint32
+	// PoolBytes is the pool's committed bytes (the targets plus their
+	// half-res blur scratch; saturating at u32 max).
+	PoolBytes uint32
+	// PoolOverflowCount is the CUMULATIVE count of groups the budget
+	// demoted to inline (never reset).
+	PoolOverflowCount uint32
+	RecordSize        uint32
+}
+
 // DeviceInfoRecord mirrors GpuiGoDeviceInfoRecord (64 bytes, alignment 8).
 // The three identity strings are UTF-8, packed contiguously in the order
 // adapter description, driver name, driver version, addressed by the
@@ -371,18 +391,22 @@ type rendererTable struct {
 	deviceMarkDrawable   uintptr
 	// surfaceLatencyHandle is surface_frame_latency_handle (version 4).
 	surfaceLatencyHandle uintptr
-	serviceVersion       uint32
-	sizeOfTable          uint32
-	alignOfTable         uint32
-	sizeOfSurfaceInfo    uint32
-	sizeOfSubmission     uint32
-	sizeOfRetire         uint32
-	sizeOfDeviceInfo     uint32
-	sizeOfDeviceState    uint32
-	sizeOfRebuildRecord  uint32
-	maxPending           uint32
-	maxInstanceBuffer    uint32
-	pathMultisample      uint32
+	// surfaceDebugStats is renderer_surface_debug_stats (version 5,
+	// rev 16: the group-target pool observability).
+	surfaceDebugStats   uintptr
+	serviceVersion      uint32
+	sizeOfTable         uint32
+	alignOfTable        uint32
+	sizeOfSurfaceInfo   uint32
+	sizeOfSubmission    uint32
+	sizeOfRetire        uint32
+	sizeOfDeviceInfo    uint32
+	sizeOfDeviceState   uint32
+	sizeOfRebuildRecord uint32
+	maxPending          uint32
+	maxInstanceBuffer   uint32
+	pathMultisample     uint32
+	sizeOfDebugStats    uint32
 }
 
 // rendererTableFromSlot reinterprets a reserved-slot word (the address of
@@ -427,6 +451,12 @@ func validateRendererTable(t *rendererTable, path string) error {
 	}
 	if t.pathMultisample == 0 {
 		return &CapabilityError{Path: path, Detail: "renderer path_multisample_count is zero"}
+	}
+	if t.sizeOfDebugStats != uint32(unsafe.Sizeof(DebugStatsRecord{})) {
+		return abi("renderer size_of_debug_stats", fmt.Sprint(unsafe.Sizeof(DebugStatsRecord{})), fmt.Sprint(t.sizeOfDebugStats))
+	}
+	if t.surfaceDebugStats == 0 {
+		return &CapabilityError{Path: path, Detail: "renderer table slot surface_debug_stats is null"}
 	}
 	slots := [...]uintptr{
 		t.surfaceCreate, t.surfaceResize, t.surfaceInfo, t.surfacePresent,
@@ -581,6 +611,32 @@ func (s *RendererService) Info(surface SurfaceHandle) (SurfaceInfo, error) {
 		}
 	}
 	return info, nil
+}
+
+// DebugStats returns the per-surface renderer debug stats (rev 16,
+// browser-core ticket 50): the group-target pool observability - the
+// retained target count, the committed bytes and the CUMULATIVE
+// overflow counter (every group the pool budget demoted to inline).
+func (s *RendererService) DebugStats(surface SurfaceHandle) (DebugStatsRecord, error) {
+	if s.lib.released.Load() {
+		return DebugStatsRecord{}, ErrClosed
+	}
+	var stats DebugStatsRecord
+	code, err := callRendererSurfaceDebugStats(s.table.surfaceDebugStats, uint64(surface), &stats)
+	if err != nil {
+		return DebugStatsRecord{}, err
+	}
+	if code != rendererStatusOK {
+		return DebugStatsRecord{}, rendererStatusError(code, "renderer_surface_debug_stats")
+	}
+	if stats.RecordSize != uint32(unsafe.Sizeof(DebugStatsRecord{})) {
+		return DebugStatsRecord{}, &ABIError{
+			Field:    "debug stats record_size",
+			Expected: fmt.Sprint(unsafe.Sizeof(DebugStatsRecord{})),
+			Actual:   fmt.Sprint(stats.RecordSize),
+		}
+	}
+	return stats, nil
 }
 
 // PresentClear submits one clear+present frame and returns the tracked

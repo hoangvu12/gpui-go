@@ -159,8 +159,13 @@ use windows::Win32::System::LibraryLoader::LoadLibraryA;
 /// (gpui-perf ticket 05) creates every swap chain with
 /// `DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT` and maximum frame
 /// latency 1, and appends `surface_frame_latency_handle` (17 pointers,
-/// table size 184).
-pub const GPUI_GO_RENDERER_SERVICE_VERSION: u32 = 4;
+/// table size 184). Version 5 (rev 16, browser-core ticket 50) appends
+/// `surface_debug_stats` and its record: the per-surface group-target
+/// pool observability (retained target count, committed bytes and the
+/// CUMULATIVE pool-overflow counter - the design's "over the budget a
+/// group renders inline, observably" decision; 18 pointers, table size
+/// 192). The design's "renderer service v5" is this version.
+pub const GPUI_GO_RENDERER_SERVICE_VERSION: u32 = 5;
 
 /// The swap-chain flags of every surface (gpui-perf ticket 05): the
 /// frame-latency waitable object. The pin creates its swap chains with
@@ -400,6 +405,39 @@ const _: () = assert!(std::mem::align_of::<GpuiGoDeviceStateRecord>() == 4);
 /// [`renderer_status::ERR_STALE_HANDLE`]) — the safe abort of the
 /// release path: the backend guarantees no further use of the old
 /// device, so the in-flight markers cannot complete.
+/// The per-surface renderer debug stats (rev 16, ticket 50): the group
+/// target pool observability. The record is extensible - ticket 53's
+/// stats entry appends the state-bind count, the tessellation-cache hit
+/// rate and the damage fraction (with another version bump); this
+/// revision reports the pool alone. 16 bytes, alignment 4.
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub struct GpuiGoDebugStatsRecord {
+    /// Retained group targets (the pool's live entry count).
+    pub pool_target_count: u32,
+    /// The pool's committed bytes (the targets plus their half-res
+    /// blur scratch; saturating at u32::MAX).
+    pub pool_bytes: u32,
+    /// The CUMULATIVE pool-overflow count: every group the budget
+    /// demoted to inline (never reset; the "over the cap renders
+    /// inline, observably" counter).
+    pub pool_overflow_count: u32,
+    /// `size_of::<GpuiGoDebugStatsRecord>()` self-check.
+    pub record_size: u32,
+}
+
+impl GpuiGoDebugStatsRecord {
+    /// A stats record with the self-check field set.
+    fn with_self_check(stats: (u32, u32, u32)) -> Self {
+        GpuiGoDebugStatsRecord {
+            pool_target_count: stats.0,
+            pool_bytes: stats.1,
+            pool_overflow_count: stats.2,
+            record_size: std::mem::size_of::<GpuiGoDebugStatsRecord>() as u32,
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct GpuiGoRebuildRecord {
@@ -480,7 +518,7 @@ const _: () = assert!(std::mem::size_of::<GpuiGoRetireRecord>() == 20);
 const _: () = assert!(std::mem::align_of::<GpuiGoRetireRecord>() == 4);
 const _: () = assert!(std::mem::size_of::<GpuiGoDeviceInfoRecord>() == 64);
 const _: () = assert!(std::mem::align_of::<GpuiGoDeviceInfoRecord>() == 8);
-const _: () = assert!(std::mem::size_of::<GpuiGoRendererTable>() == 184);
+const _: () = assert!(std::mem::size_of::<GpuiGoRendererTable>() == 200);
 const _: () = assert!(std::mem::align_of::<GpuiGoRendererTable>() == 8);
 
 // ---------------------------------------------------------------------------
@@ -1343,6 +1381,11 @@ pub struct GpuiGoRendererTable {
     /// outside every renderer lock and closes it.
     pub surface_frame_latency_handle:
         Option<unsafe extern "system" fn(surface: u64, out_handle: *mut u64) -> i32>,
+    /// `renderer_surface_debug_stats` (version 5, rev 16 ticket 50): the
+    /// per-surface group-target pool observability (retained targets,
+    /// committed bytes, the cumulative overflow counter).
+    pub surface_debug_stats:
+        Option<unsafe extern "system" fn(surface: u64, out: *mut GpuiGoDebugStatsRecord) -> i32>,
     /// Renderer ABI version (see [`GPUI_GO_RENDERER_SERVICE_VERSION`]).
     pub service_version: u32,
     /// `size_of::<GpuiGoRendererTable>()` self-check.
@@ -1370,6 +1413,8 @@ pub struct GpuiGoRendererTable {
     /// [`PATH_MULTISAMPLE_COUNT`] — the path MSAA sample count (the
     /// pin's, mirrored for the Go side).
     pub path_multisample_count: u32,
+    /// `size_of::<GpuiGoDebugStatsRecord>()` self-check (rev 16).
+    pub size_of_debug_stats: u32,
 }
 
 pub(crate) static RENDERER_TABLE: GpuiGoRendererTable = GpuiGoRendererTable {
@@ -1390,6 +1435,7 @@ pub(crate) static RENDERER_TABLE: GpuiGoRendererTable = GpuiGoRendererTable {
     device_rebuild: Some(renderer_device_rebuild),
     device_mark_drawable: Some(renderer_device_mark_drawable),
     surface_frame_latency_handle: Some(renderer_surface_frame_latency_handle),
+    surface_debug_stats: Some(renderer_surface_debug_stats),
     service_version: GPUI_GO_RENDERER_SERVICE_VERSION,
     size_of_table: std::mem::size_of::<GpuiGoRendererTable>() as u32,
     align_of_table: std::mem::align_of::<GpuiGoRendererTable>() as u32,
@@ -1402,6 +1448,7 @@ pub(crate) static RENDERER_TABLE: GpuiGoRendererTable = GpuiGoRendererTable {
     max_pending_submissions: MAX_PENDING_SUBMISSIONS,
     max_instance_buffer_bytes: MAX_INSTANCE_BUFFER_SIZE as u32,
     path_multisample_count: PATH_MULTISAMPLE_COUNT,
+    size_of_debug_stats: std::mem::size_of::<GpuiGoDebugStatsRecord>() as u32,
 };
 
 // ---------------------------------------------------------------------------
@@ -1686,6 +1733,26 @@ fn surface_info_body(surface: u64, out: *mut GpuiGoSurfaceInfoRecord) -> i32 {
             record_size: std::mem::size_of::<GpuiGoSurfaceInfoRecord>() as u32,
         };
     }
+    renderer_status::OK
+}
+
+/// `renderer_surface_debug_stats` (rev 16, ticket 50): the per-surface
+/// group-target pool observability - the retained target count, the
+/// committed bytes and the CUMULATIVE overflow counter (the budget's
+/// "renders inline, observably" contract). Read under the renderer
+/// global lock like every surface query.
+fn surface_debug_stats_body(surface: u64, out: *mut GpuiGoDebugStatsRecord) -> i32 {
+    if out.is_null() {
+        return renderer_status::ERR_NULL_ARG;
+    }
+    let (slot_index, slot_generation) = surface_handle_parts(surface);
+    let state = lock_global();
+    let surface = match resolve_slot(&state, slot_index, slot_generation) {
+        Ok(surface) => surface,
+        Err(code) => return code,
+    };
+    let stats = surface.draw_targets.group_pool.stats();
+    unsafe { *out = GpuiGoDebugStatsRecord::with_self_check(stats) };
     renderer_status::OK
 }
 
@@ -2118,6 +2185,20 @@ unsafe extern "system" fn renderer_surface_info(
     out: *mut GpuiGoSurfaceInfoRecord,
 ) -> i32 {
     let outcome = catch_unwind(AssertUnwindSafe(|| surface_info_body(surface, out)));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            renderer_status::ERR_PANIC
+        }
+    }
+}
+
+unsafe extern "system" fn renderer_surface_debug_stats(
+    surface: u64,
+    out: *mut GpuiGoDebugStatsRecord,
+) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| surface_debug_stats_body(surface, out)));
     match outcome {
         Ok(code) => code,
         Err(payload) => {

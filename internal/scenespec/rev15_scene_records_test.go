@@ -44,7 +44,7 @@ func nativeScene(t *testing.T) *native.Scene {
 func gradientQuad() native.SceneQuadRecord {
 	rec := native.NewSceneQuadRecord()
 	rec.Bounds = native.SceneBoundsOf(10, 10, 100, 50)
-	rec.ContentMask = native.SceneBoundsOf(0, 0, 1000, 1000)
+	rec.ContentMask = native.SceneContentMaskOf(0, 0, 1000, 1000)
 	rec.Background = native.SceneGradientBackground(
 		90,
 		native.HslaF{H: 0, S: 1, L: 0.5, A: 1}, 0,
@@ -171,7 +171,7 @@ func TestColorMatrixFilterRecordRoundTrips(t *testing.T) {
 
 	start := native.NewSceneFilterRecord()
 	start.Bounds = native.SceneBoundsOf(0, 0, 40, 40)
-	start.ContentMask = native.SceneBoundsOf(0, 0, 1000, 1000)
+	start.ContentMask = native.SceneContentMaskOf(0, 0, 1000, 1000)
 	start.IsStart = 1
 	start.FilterCount = 2
 	start.FilterTags = [8]uint32{0, 1}
@@ -249,7 +249,7 @@ func TestColorMatrixFilterValidationRejectsMalformedRecords(t *testing.T) {
 	validBlurMatrix := func() native.SceneFilterRecord {
 		rec := native.NewSceneFilterRecord()
 		rec.Bounds = native.SceneBoundsOf(0, 0, 40, 40)
-		rec.ContentMask = native.SceneBoundsOf(0, 0, 1000, 1000)
+		rec.ContentMask = native.SceneContentMaskOf(0, 0, 1000, 1000)
 		rec.FilterCount = 2
 		rec.FilterTags = [8]uint32{0, 1, 0, 0, 0, 0, 0, 0}
 		rec.BlurRadii = [8]uint32{math.Float32bits(6), 0, 0, 0, 0, 0, 0, 0}
@@ -306,7 +306,7 @@ func TestPixelatedSpriteFlagSplitsBatches(t *testing.T) {
 	sprite := func(x float32, pixelated uint32) native.SceneSpriteRecord {
 		rec := native.NewSceneSpriteRecord()
 		rec.Bounds = native.SceneBoundsOf(x, 5, 8, 8)
-		rec.ContentMask = native.SceneBoundsOf(0, 0, 1000, 1000)
+		rec.ContentMask = native.SceneContentMaskOf(0, 0, 1000, 1000)
 		rec.Tile = native.SceneTileRecord{TextureKind: native.SceneSpriteTextureMonochrome, BoundsW: 8, BoundsH: 8}
 		rec.Pixelated = pixelated
 		return rec
@@ -360,7 +360,7 @@ func TestPixelatedSpriteFlagSplitsBatches(t *testing.T) {
 	// corner smoothing).
 	poly := native.NewScenePolychromeSpriteRecord()
 	poly.Bounds = native.SceneBoundsOf(50, 5, 8, 8)
-	poly.ContentMask = native.SceneBoundsOf(0, 0, 1000, 1000)
+	poly.ContentMask = native.SceneContentMaskOf(0, 0, 1000, 1000)
 	poly.Tile = native.SceneTileRecord{TextureKind: native.SceneSpriteTexturePolychrome, BoundsW: 8, BoundsH: 8}
 	poly.Pixelated = 1
 	if err := sc.InsertPolychromeSprite(&poly); err != nil {

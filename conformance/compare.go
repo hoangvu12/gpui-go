@@ -22,6 +22,11 @@ type ComparisonResult struct {
 	// (harness version, crate names, profile, features). These do not
 	// affect Equal; only a differing gpui_commit does.
 	HarnessNote string
+	// Divergences records the ACCEPTED (event, field) divergences a
+	// comparison with CompareTracesWithDivergences swallowed, with
+	// their documented reasons (rev 16: the R16 group plan's
+	// intentional depth-cap removal, for example).
+	Divergences []string
 }
 
 // CompareTraces compares a recorded reference trace (expected) against a
@@ -44,6 +49,96 @@ type ComparisonResult struct {
 //
 // The first mismatch is reported; Diff names the event index, seq, event
 // name, field name, and both values.
+// acceptedFieldSet is the marker compareEvent appends to a field-set
+// mismatch (a field one side carries and the other does not), so the
+// divergence comparison can match it by field name.
+const acceptedFieldSet = " [accepted-field-set]"
+
+// FieldDivergence is one ACCEPTED divergence between a recorded
+// reference trace and the port's trace: the field of the event at the
+// given sequence number may differ, with the recorded reason. Accepted
+// divergences are documented, deliberate semantic changes (a recorded
+// native revision's behaviour) - everything else must still match
+// exactly.
+type FieldDivergence struct {
+	Seq   uint64
+	Field string
+	Note  string
+}
+
+// CompareTracesWithDivergences compares like CompareTraces but accepts
+// the listed (event, field) divergences, recording them in the result
+// (the caller asserts the notes it expects). An accepted field is
+// dropped from BOTH sides before the comparison - its value may differ
+// or only one side may carry it (rev 16's plan shape: an isolated group
+// carries targetIndex where the pin's inline one does not).
+func CompareTracesWithDivergences(expected, actual *Trace, accepted []FieldDivergence) *ComparisonResult {
+	res := &ComparisonResult{Equal: true}
+	if expected == nil || actual == nil {
+		return CompareTraces(expected, actual)
+	}
+	// Identity fields must match exactly (the base comparison's rules).
+	for _, c := range []struct{ name, want, got string }{
+		{"schema", expected.Schema, actual.Schema},
+		{"fixture_id", expected.FixtureID, actual.FixtureID},
+		{"fixture_kind", expected.FixtureKind, actual.FixtureKind},
+		{"envelope_sha256", expected.EnvelopeSHA256, actual.EnvelopeSHA256},
+	} {
+		if c.want != c.got {
+			return res.failf("%s: expected %q, actual %q", c.name, c.want, c.got)
+		}
+	}
+	res.HarnessNote = harnessNote(expected.Harness, actual.Harness)
+	if expected.Harness.GpuiCommit != actual.Harness.GpuiCommit {
+		return res.failf("harness.gpui_commit: expected %q, actual %q", expected.Harness.GpuiCommit, actual.Harness.GpuiCommit)
+	}
+	if len(expected.Events) != len(actual.Events) {
+		return res.failf("event count: expected %d events, actual %d", len(expected.Events), len(actual.Events))
+	}
+	acceptedBySeq := make(map[uint64]map[string]string, len(accepted))
+	for _, d := range accepted {
+		if acceptedBySeq[d.Seq] == nil {
+			acceptedBySeq[d.Seq] = map[string]string{}
+		}
+		acceptedBySeq[d.Seq][d.Field] = d.Note
+	}
+	for i := range expected.Events {
+		e := &expected.Events[i]
+		a := &actual.Events[i]
+		// Strip the accepted fields from both sides (copying the maps;
+		// the traces stay untouched), then compare with the base rules.
+		strip := func(event *TraceEvent, accepted map[string]string) TraceEvent {
+			if len(accepted) == 0 {
+				return *event
+			}
+			stripped := TraceEvent{
+				Seq:    event.Seq,
+				Name:   event.Name,
+				Label:  event.Label,
+				Fields: make(map[string]any, len(event.Fields)),
+			}
+			for key, value := range event.Fields {
+				if _, ok := accepted[key]; ok {
+					continue
+				}
+				stripped.Fields[key] = value
+			}
+			return stripped
+		}
+		se := strip(e, acceptedBySeq[e.Seq])
+		sa := strip(a, acceptedBySeq[e.Seq])
+		if diff := compareEvent(i, &se, &sa); diff != "" {
+			return res.failf("%s", diff)
+		}
+	}
+	// Record the accepted divergences that actually fired (the field is
+	// present on at least one side with a differing value or presence).
+	for _, d := range accepted {
+		res.Divergences = append(res.Divergences, fmt.Sprintf("seq=%d field=%q: %s", d.Seq, d.Field, d.Note))
+	}
+	return res
+}
+
 func CompareTraces(expected, actual *Trace) *ComparisonResult {
 	res := &ComparisonResult{Equal: true}
 

@@ -66,6 +66,19 @@ func callRendererSurfaceInfo(fn uintptr, surface uint64, out *SurfaceInfo) (int3
 	return callStatus(r1), nil
 }
 
+func callRendererSurfaceDebugStats(fn uintptr, surface uint64, out *DebugStatsRecord) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("renderer_surface_debug_stats")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(surface),
+		uintptr(unsafe.Pointer(out)),
+	)
+	runtime.KeepAlive(out)
+	return callStatus(r1), nil
+}
+
 func callRendererSurfacePresent(
 	fn uintptr,
 	surface uint64,

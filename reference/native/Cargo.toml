@@ -177,6 +177,16 @@ naga = { version = "24.0.0", features = [
 ] }
 wgsl-rs = { git = "https://github.com/schell/wgsl-rs", rev = "b2de16a1b81e67d76bc265c296184f882864badb", default-features = false, features = ["validation"] }
 
+# Rev 16 (browser-core ticket 50): windows-core is declared as a
+# dev-dependency so the capture queue test's `implement` macro (a real
+# IUnknown stand-in for the queue-drop test - the pre-existing
+# test-only compile error) can reference `windows_core::` paths. It
+# resolves to the SAME 0.62.2 version the `windows` dependency already
+# pulls in (no new version enters the graph; it is test-only and adds
+# nothing to the shipped artifact).
+[dev-dependencies]
+windows-core = "0.62.2"
+
 [target.'cfg(windows)'.build-dependencies]
 windows = { version = "0.62.2", features = [
     "Win32_Foundation",

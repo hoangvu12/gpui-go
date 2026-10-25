@@ -179,6 +179,36 @@ func callSceneDump(
 	return callStatus(r1), nil
 }
 
+// callSceneInsertEffect invokes scene_insert_effect (rev 16).
+func callSceneInsertEffect(fn uintptr, scene uint64, rec *SceneEffectRecord) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_insert_effect")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(scene),
+		uintptr(unsafe.Pointer(rec)),
+	)
+	runtime.KeepAlive(rec)
+	return callStatus(r1), nil
+}
+
+// callSceneEffectDump invokes scene_effect_dump (rev 16).
+func callSceneEffectDump(fn uintptr, scene uint64, records uintptr, capacity uint32, outCount *uint32) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_effect_dump")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(scene),
+		records,
+		uintptr(capacity),
+		uintptr(unsafe.Pointer(outCount)),
+	)
+	runtime.KeepAlive(outCount)
+	return callStatus(r1), nil
+}
+
 func callScenePlanDump(
 	fn uintptr,
 	scene uint64,

@@ -172,6 +172,46 @@ type FilterBoundary struct {
 	IsStart bool
 }
 
+// EffectGroup is an effect-group marker (rev 16, browser-core ticket
+// 50): the Chromium effect-node payload the R16 group mechanism
+// carries. A matched start/end pair brackets the group's subtree; the
+// plan compiles it into begin/end effect commands sharing ONE group
+// stack with the R15 filter boundaries. This revision wires group
+// opacity (the isolated composite with the blur passes skipped - a
+// pure-opacity group over exactly one primitive folds into a
+// per-primitive multiply instead, Chromium's "at least two layers draw
+// content" rule) and the rounded clip (ClipToBounds/RoundedClipOnly:
+// the composite clips to the group's rounded bounds). The transform,
+// blend, mask and property-node fields exist on the ABI record and are
+// wired by tickets 51/52; the Go STYLING that emits groups
+// (WithElementOpacity's group path, Style.OverflowMask radii) is
+// ticket 55.
+type EffectGroup struct {
+	Order uint32
+	// IsStart opens the group; false closes it. Start and end must
+	// carry the same snapshot.
+	IsStart bool
+	// HasOpacity composites the subtree once at Opacity.
+	HasOpacity bool
+	// ClipToBounds clips the composite to the group's (rounded) bounds
+	// (CSS overflow; 0 lets content bleed past, like content filters).
+	ClipToBounds bool
+	// RoundedClipOnly marks a group that exists only to clip its subtree
+	// to the rounded bounds (a nested rounded clip: the child clips
+	// itself, so the ancestor's rrect needs the isolated composite).
+	RoundedClipOnly bool
+	// Bounds of the group, device pixels.
+	Bounds Bounds
+	// ContentMask is the group's rectangular clip, device pixels.
+	ContentMask Bounds
+	// Opacity in [0, 1] (used when HasOpacity is set).
+	Opacity float32
+	// CornerRadii of the group's rounded clip.
+	CornerRadii Corners
+	// CornerSmoothing in [0, 1].
+	CornerSmoothing float32
+}
+
 // ---------------------------------------------------------------------------
 // Plan types (the pinned plan.rs)
 // ---------------------------------------------------------------------------
@@ -415,6 +455,30 @@ func (s *Scene) InsertBackdropFilter(f BackdropFilter) error {
 // with_filter_layer snapshots once); unmatched starts render inline.
 func (s *Scene) InsertFilterBoundary(b FilterBoundary) error {
 	return s.kernel.InsertFilterBoundary(b)
+}
+
+// BeginEffectGroup inserts the start marker of an effect group (rev
+// 16, ticket 50). The group's bounds, mask, radii and opacity bracket
+// the subtree painted between the pair; the plan isolates the group
+// (or folds it into a per-primitive multiply when the subtree is
+// exactly one primitive and the group is pure opacity).
+func (s *Scene) BeginEffectGroup(g EffectGroup) error {
+	g.IsStart = true
+	return s.kernel.InsertEffect(g)
+}
+
+// EndEffectGroup closes the innermost effect group with the SAME
+// snapshot as its begin (the caller re-supplies the parameters,
+// mirroring the filter-group rule).
+func (s *Scene) EndEffectGroup(g EffectGroup) error {
+	g.IsStart = false
+	return s.kernel.InsertEffect(g)
+}
+
+// EffectGroups returns the finished scene's effect-group markers in
+// draw order (start before end at equal orders).
+func (s *Scene) EffectGroups() ([]EffectGroup, error) {
+	return s.kernel.EffectBoundaries()
 }
 
 // SurfaceSourceTag tags a painted surface's source kind (payload; 0 is

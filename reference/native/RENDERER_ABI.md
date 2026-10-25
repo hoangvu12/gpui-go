@@ -1,5 +1,34 @@
 # gpui-go native renderer service ABI (v2)
 
+**Renderer service version 5 (rev 16, browser-core ticket 50, native
+revision 151 - ticket 54 bumps the revision):** the R16 group machinery.
+The design's "renderer service v5" is this version. The table appends
+`surface_debug_stats` after `surface_frame_latency_handle` (18 function
+pointers, table size 200) with its record `GpuiGoDebugStatsRecord` (16
+bytes: `pool_target_count`, `pool_bytes`, `pool_overflow_count`,
+`record_size`) - the per-surface group-target pool observability the
+R16 design requires ("over the budget a group renders inline,
+observably"). The draw path grows the R16 composite: groups composite through
+POOLED targets with no depth cap (the pool is retained across frames,
+pruned of entries no group used, capped at 64 targets / 256 MB per
+surface with the inline demotion above), effect groups composite
+through the explicit no-blur `composite_group` path (opacity +
+rounded clip), and the backdrop crop carries its own crop-sized
+half-resolution blur pair (ticket 77's partial-region backdrop zoom
+fix - a full-window backdrop keeps identical sizes and pixels).
+
+**Recorded deviation (ticket 50):** the pool's buckets are
+WINDOW-SIZED this revision, not bounds-sized. The bounds-sized
+bucketing (256-px quantization, the offset-viewport plumbing and the
+region-relative composite) landed structurally, but the small-bucket
+path has a pinned-sprite-pipeline issue this ticket did not resolve
+(the polychrome sprite batch draws nothing into a target smaller than
+the window; the vendored quad/shadow pipelines work). Tickets 51/52 -
+the transform work that needs local-space targets anyway - finish the
+sizing. Until then every bucket = the window: exactly the R15
+group-target shape, so all R15 fixtures stay pixel-identical by
+construction.
+
 **Renderer service version 4 (gpui-perf ticket 05, native revision 13):**
 every swap chain (both modes, and the device-loss rebuild) is created
 with `DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT` (and
@@ -131,15 +160,16 @@ rule); polling resolves its real state.
 ## Service table
 
 Reserved slot 2 holds the address of the static `#[repr(C)
-GpuiGoRendererTable` (128 bytes, alignment 8): 11 function pointers,
-then 10 self-check scalars — `service_version` (2), `size_of_table`,
-`align_of_table`, `size_of_surface_info`, `size_of_submission_state`,
+GpuiGoRendererTable`: 18 function pointers then 13 self-check scalars —
+`service_version` (5 since rev 16), `size_of_table` (200),
+`align_of_table` (8), `size_of_surface_info`, `size_of_submission_state`,
 `size_of_retire_record`, `size_of_device_info`,
 `max_pending_submissions` (64), `max_instance_buffer_bytes` (256 MB,
 the pin's instance-buffer ceiling), `path_multisample_count` (4, the
-pin's MSAA path sample count). The Go loader copies the table out of
-DLL memory, validates every size/alignment against its mirrors and
-rejects null function slots before any call.
+pin's MSAA path sample count), `size_of_debug_stats` (16, rev 16). The
+Go loader copies the table out of DLL memory, validates every
+size/alignment against its mirrors and rejects null function slots
+before any call.
 
 ```c
 i32 renderer_surface_create(u64 hwnd, u32 mode /* 0 dcomp-premultiplied, 1 hwnd-alpha-ignore */,
@@ -164,7 +194,15 @@ i32 renderer_surface_render_scene(u64 surface, u64 scene,          // ticket16: 
                                   u32 appearance, u64 atlas);      // (the readback test path)
 i32 renderer_surface_read_pixels(u64 surface, u8* out_bytes,       // ticket16: staging readback
                                  u32 capacity, u32* out_needed);    // (BGRA->RGBA swapped)
+i32 renderer_surface_debug_stats(u64 surface,                      // version 5, rev 16: the group
+                                 GpuiGoDebugStatsRecord* out);     // target pool observability
 ```
+
+`GpuiGoDebugStatsRecord` (16 bytes, alignment 4):
+`pool_target_count` (the retained group targets), `pool_bytes` (the
+committed bytes, targets plus their half-res blur scratch),
+`pool_overflow_count` (the CUMULATIVE count of groups the budget
+demoted to inline - never reset), `record_size`.
 
 ### The scene draw entries (ticket16)
 

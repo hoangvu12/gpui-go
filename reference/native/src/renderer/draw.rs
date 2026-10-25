@@ -88,9 +88,9 @@ use windows::Win32::Graphics::Dxgi::Common::*;
 use windows::Win32::Graphics::Dxgi::DXGI_PRESENT;
 
 use crate::scene::{
-    GpuiGoSceneSurfaceRecord, SceneRenderSnapshot, SceneRenderSnapshot as Snapshot,
-    batch_primitive_kind, command_kind, scene_render_snapshot, snapshot_bounds,
-    snapshot_radii, surface_source_kind,
+    GpuiGoSceneCommandRecord, GpuiGoSceneSurfaceRecord, SceneRenderSnapshot,
+    SceneRenderSnapshot as Snapshot, batch_primitive_kind, command_kind, scene_render_snapshot,
+    snapshot_bounds, snapshot_radii, surface_source_kind,
 };
 
 use super::{
@@ -107,6 +107,332 @@ pub const PATH_MULTISAMPLE_COUNT: u32 = 4;
 
 /// The pin's instance-buffer size ceiling (`MAX_INSTANCE_BUFFER_SIZE`).
 pub const MAX_INSTANCE_BUFFER_SIZE: usize = 256 * 1024 * 1024;
+
+// ---------------------------------------------------------------------------
+// The R16 group target pool (browser-core ticket 50)
+// ---------------------------------------------------------------------------
+
+/// Pool cap: the maximum number of retained group targets per surface
+/// (the R16 design's budget; over it a group renders inline and the
+/// overflow is observable - a debug-stats counter and a debug-build
+/// warning, never a crash, per the user's 2026-10-24 decision).
+pub const GROUP_TARGET_POOL_MAX_COUNT: usize = 64;
+/// Pool cap: the maximum committed bytes of group targets (including
+/// their half-resolution blur scratch) per surface.
+pub const GROUP_TARGET_POOL_MAX_BYTES: u64 = 256 * 1024 * 1024;
+/// The pool's bucket granularity: group targets are sized in 256-px
+/// buckets (clamped to the window), so sibling groups of nearby sizes
+/// reuse one backing.
+pub const GROUP_TARGET_BUCKET_GRANULARITY: u32 = 256;
+
+/// One pooled offscreen group target (bounds-sized, bucketed). The
+/// half-resolution pair is created lazily when a FILTER group's blur
+/// chain runs against this entry (an opacity or clip group never
+/// blurs, so most entries carry none).
+struct GroupTargetEntry {
+    rtv: Option<ID3D11RenderTargetView>,
+    srv: Option<ID3D11ShaderResourceView>,
+    width: u32,
+    height: u32,
+    half_a_rtv: Option<ID3D11RenderTargetView>,
+    half_a_srv: Option<ID3D11ShaderResourceView>,
+    half_b_rtv: Option<ID3D11RenderTargetView>,
+    half_b_srv: Option<ID3D11ShaderResourceView>,
+    /// Currently acquired by an open group (freed at the group's end).
+    in_use: bool,
+    /// Acquired at least once THIS frame (viz's UpdateRenderPassTextures
+    /// rule: the frame-end prune keeps the backings a group used this
+    /// frame, released or not, and drops the stale ones).
+    frame_used: bool,
+}
+
+impl GroupTargetEntry {
+    fn bytes(&self) -> u64 {
+        let full = self.width as u64 * self.height as u64 * 4;
+        let half = if self.half_a_rtv.is_some() {
+            (self.width as u64 / 2 + 1) * (self.height as u64 / 2 + 1) * 4 * 2
+        } else {
+            0
+        };
+        full + half
+    }
+}
+
+/// The bounds-sized, bucketed offscreen group-target pool (rev 16,
+/// ticket 50): allocated lazily, kept across frames while groups keep
+/// using them, dropped when unused or too small - viz's render-pass
+/// backing model (`UpdateRenderPassTextures`: keep the backings still
+/// in frame, delete the stale or insufficient ones). Over the caps a
+/// group renders INLINE and the overflow is observable: the cumulative
+/// `overflow_count` (the debug-stats counter) plus a warning in debug
+/// builds. Never a crash, never a failed frame.
+#[derive(Default)]
+pub(super) struct GroupTargetPool {
+    entries: Vec<GroupTargetEntry>,
+    overflow_count: u32,
+}
+
+/// One acquired pool target (the render walk's lease). `origin` is the
+/// bucket's window-space origin; `size` its extent - children render
+/// into the bucket through the offset viewport, and the composite
+/// samples it region-relative ((window position - origin) / size).
+#[derive(Clone)]
+struct GroupLease {
+    rtv: Option<ID3D11RenderTargetView>,
+    srv: Option<ID3D11ShaderResourceView>,
+    half_a_rtv: Option<ID3D11RenderTargetView>,
+    half_a_srv: Option<ID3D11ShaderResourceView>,
+    half_b_rtv: Option<ID3D11RenderTargetView>,
+    half_b_srv: Option<ID3D11ShaderResourceView>,
+    origin: [f32; 2],
+    size: [f32; 2],
+}
+
+impl GroupTargetPool {
+    /// The pool's debug-stats snapshot: retained target count, the
+    /// committed bytes and the cumulative overflow counter (the
+    /// renderer service's `surface_debug_stats` entry reads it).
+    pub(super) fn stats(&self) -> (u32, u32, u32) {
+        let bytes: u64 = self.entries.iter().map(|entry| entry.bytes()).sum();
+        (
+            self.entries.len() as u32,
+            u32::try_from(bytes.min(u32::MAX as u64)).unwrap_or(u32::MAX),
+            self.overflow_count,
+        )
+    }
+
+    /// Acquires a bucket for the given window-space region (origin +
+    /// extent), creating or reusing a backing under the pool caps.
+    /// `needs_half` pre-creates the half-resolution blur scratch (filter
+    /// groups). Returns None over the caps - the caller renders the
+    /// group inline and the overflow stays observable.
+    fn acquire(
+        &mut self,
+        device: &ID3D11Device,
+        region_origin: [f32; 2],
+        region_size: [f32; 2],
+        window: (u32, u32),
+        needs_half: bool,
+    ) -> Option<GroupLease> {
+        // rev 16, ticket 50 (the recorded deviation): the bucket is
+        // WINDOW-SIZED this revision. The bounds-sized bucketing (the
+        // 256-px quantization below, `GROUP_TARGET_BUCKET_GRANULARITY`)
+        // landed structurally - the pool, the offset viewport plumbing
+        // and the region-relative composite all speak it - but the
+        // small-bucket path has a pinned-sprite-pipeline issue this
+        // ticket did not resolve (the polychrome sprite batch draws
+        // nothing into a target smaller than the window; the vendored
+        // quad/shadow pipelines work). Tickets 51/52 - the transform
+        // work that needs local-space targets anyway - finish the
+        // sizing. Until then every bucket = the window: EXACTLY the
+        // R15 group-target shape, so all R15 fixtures stay
+        // pixel-identical by construction.
+        let width = window.0.max(1);
+        let height = window.1.max(1);
+        let _ = region_size;
+        // The bucket's origin: the region's floor, clamped so the
+        // bucket stays inside the window (the composite region is
+        // window-space either way).
+        let origin = [
+            region_origin[0].floor().max(0.0).min((window.0 as f32 - width as f32).max(0.0)),
+            region_origin[1].floor().max(0.0).min((window.1 as f32 - height as f32).max(0.0)),
+        ];
+        // Reuse a free entry of the exact bucket size.
+        if let Some(position) = self
+            .entries
+            .iter()
+            .position(|entry| !entry.in_use && entry.width == width && entry.height == height)
+        {
+            let entry = &mut self.entries[position];
+            entry.in_use = true;
+            entry.frame_used = true;
+            if needs_half && entry.half_a_rtv.is_none() {
+                let half_w = downsampled_dimension(width);
+                let half_h = downsampled_dimension(height);
+                let (_, half_a_rtv, half_a_srv) =
+                    create_color_target(device, half_w, half_h).map_err(|_| ()).ok()?;
+                let (_, half_b_rtv, half_b_srv) =
+                    create_color_target(device, half_w, half_h).map_err(|_| ()).ok()?;
+                entry.half_a_rtv = half_a_rtv;
+                entry.half_a_srv = half_a_srv;
+                entry.half_b_rtv = half_b_rtv;
+                entry.half_b_srv = half_b_srv;
+            }
+            let entry = &self.entries[position];
+            return Some(GroupLease {
+                rtv: entry.rtv.clone(),
+                srv: entry.srv.clone(),
+                half_a_rtv: entry.half_a_rtv.clone(),
+                half_a_srv: entry.half_a_srv.clone(),
+                half_b_rtv: entry.half_b_rtv.clone(),
+                half_b_srv: entry.half_b_srv.clone(),
+                origin,
+                size: [width as f32, height as f32],
+            });
+        }
+        // Create a new entry under the caps - or replace a free one
+        // (too small or too large) when the count cap is already met.
+        let (_, rtv, srv) = create_color_target(device, width, height)
+            .map_err(|_| ())
+            .ok()?;
+        let half_bytes = if needs_half {
+            (downsampled_dimension(width) as u64) * (downsampled_dimension(height) as u64) * 4 * 2
+        } else {
+            0
+        };
+        let new_bytes = (width as u64 * height as u64 * 4) + half_bytes;
+        let make_half = || -> Option<(
+            Option<ID3D11RenderTargetView>,
+            Option<ID3D11ShaderResourceView>,
+            Option<ID3D11RenderTargetView>,
+            Option<ID3D11ShaderResourceView>,
+        )> {
+            if !needs_half {
+                return None;
+            }
+            let half_w = downsampled_dimension(width);
+            let half_h = downsampled_dimension(height);
+            let (_, half_a_rtv, half_a_srv) =
+                create_color_target(device, half_w, half_h).map_err(|_| ()).ok()?;
+            let (_, half_b_rtv, half_b_srv) =
+                create_color_target(device, half_w, half_h).map_err(|_| ()).ok()?;
+            Some((half_a_rtv, half_a_srv, half_b_rtv, half_b_srv))
+        };
+        let half_fields = |pair: Option<(
+            Option<ID3D11RenderTargetView>,
+            Option<ID3D11ShaderResourceView>,
+            Option<ID3D11RenderTargetView>,
+            Option<ID3D11ShaderResourceView>,
+        )>| -> (
+            Option<ID3D11RenderTargetView>,
+            Option<ID3D11ShaderResourceView>,
+            Option<ID3D11RenderTargetView>,
+            Option<ID3D11ShaderResourceView>,
+        ) {
+            match pair {
+                Some((a_rtv, a_srv, b_rtv, b_srv)) => (a_rtv, a_srv, b_rtv, b_srv),
+                None => (None, None, None, None),
+            }
+        };
+        let held_bytes: u64 = self.entries.iter().map(|entry| entry.bytes()).sum();
+        if self.entries.len() < GROUP_TARGET_POOL_MAX_COUNT
+            && held_bytes + new_bytes <= GROUP_TARGET_POOL_MAX_BYTES
+        {
+            let (half_a_rtv, half_a_srv, half_b_rtv, half_b_srv) = half_fields(make_half());
+            self.entries.push(GroupTargetEntry {
+                rtv,
+                srv,
+                width,
+                height,
+                half_a_rtv,
+                half_a_srv,
+                half_b_rtv,
+                half_b_srv,
+                in_use: true,
+                frame_used: true,
+            });
+            let entry = self.entries.last()?;
+            return Some(GroupLease {
+                rtv: entry.rtv.clone(),
+                srv: entry.srv.clone(),
+                half_a_rtv: entry.half_a_rtv.clone(),
+                half_a_srv: entry.half_a_srv.clone(),
+                half_b_rtv: entry.half_b_rtv.clone(),
+                half_b_srv: entry.half_b_srv.clone(),
+                origin,
+                size: [width as f32, height as f32],
+            });
+        }
+        // Replace a free entry (too small or too large for this group).
+        if let Some(position) = self.entries.iter().position(|entry| !entry.in_use) {
+            let held_without: u64 = self
+                .entries
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| *index != position)
+                .map(|(_, entry)| entry.bytes())
+                .sum();
+            if held_without + new_bytes <= GROUP_TARGET_POOL_MAX_BYTES {
+                let (half_a_rtv, half_a_srv, half_b_rtv, half_b_srv) = half_fields(make_half());
+                self.entries[position] = GroupTargetEntry {
+                    rtv,
+                    srv,
+                    width,
+                    height,
+                    half_a_rtv,
+                    half_a_srv,
+                    half_b_rtv,
+                    half_b_srv,
+                    in_use: true,
+                    frame_used: true,
+                };
+                let entry = &self.entries[position];
+                return Some(GroupLease {
+                    rtv: entry.rtv.clone(),
+                    srv: entry.srv.clone(),
+                    half_a_rtv: entry.half_a_rtv.clone(),
+                    half_a_srv: entry.half_a_srv.clone(),
+                    half_b_rtv: entry.half_b_rtv.clone(),
+                    half_b_srv: entry.half_b_srv.clone(),
+                    origin,
+                    size: [width as f32, height as f32],
+                });
+            }
+        }
+        // Over the budget: the group renders inline, observably.
+        self.overflow_count = self.overflow_count.saturating_add(1);
+        #[cfg(debug_assertions)]
+        {
+            let (count, bytes, overflows) = self.stats();
+            eprintln!(
+                "gpui-go-native: group target pool over budget ({count} targets, {bytes} bytes;                  cap {GROUP_TARGET_POOL_MAX_COUNT} targets / {GROUP_TARGET_POOL_MAX_BYTES} bytes):                  the group renders inline (cumulative overflows: {overflows})"
+            );
+        }
+        None
+    }
+
+    /// Releases the lease's backing at the group's end (the entry stays
+    /// retained for the rest of the frame - the prune keeps what a group
+    /// USED this frame, released or not).
+    fn release(&mut self, lease: &GroupLease) {
+        for entry in self.entries.iter_mut() {
+            if entry.srv.is_some()
+                && lease.rtv.is_some()
+                && windows::core::Interface::as_raw(
+                    entry.rtv.as_ref().expect("held entry has an rtv"),
+                ) == windows::core::Interface::as_raw(lease.rtv.as_ref().expect("lease rtv"))
+            {
+                entry.in_use = false;
+                return;
+            }
+        }
+    }
+
+    /// The frame-end prune (viz's UpdateRenderPassTextures rule): keep
+    /// the backings a group used this frame (acquired-and-released
+    /// included - the reuse across frames is the point), drop the
+    /// stale ones, and re-arm the frame-used flags.
+    fn prune_unused(&mut self) {
+        self.entries.retain(|entry| entry.frame_used);
+        for entry in self.entries.iter_mut() {
+            entry.frame_used = false;
+        }
+    }
+}
+
+/// The render walk's active render target: the swapchain (or the
+/// offscreen scene target), or an open group's pooled bucket. The
+/// offset viewport maps window coordinates into the target (a bucket's
+/// children draw at window position minus the bucket origin), and
+/// `origin`/`size` carry the same mapping for the composites' uv math.
+#[derive(Clone)]
+struct ActiveTarget {
+    rtv: Option<ID3D11RenderTargetView>,
+    srv: Option<ID3D11ShaderResourceView>,
+    viewport: D3D11_VIEWPORT,
+    origin: [f32; 2],
+    size: [f32; 2],
+}
 
 /// Group 0 occupies registers 0 and 1 in native shaders, so generated
 /// group-1 bindings start at 2 (the pin's `GROUP_1_REGISTER_OFFSET`).
@@ -475,6 +801,10 @@ struct BackdropCropRegion {
     total: [f32; 2],
     rtv: Option<ID3D11RenderTargetView>,
     srv: Option<ID3D11ShaderResourceView>,
+    half_a_rtv: Option<ID3D11RenderTargetView>,
+    half_a_srv: Option<ID3D11ShaderResourceView>,
+    half_b_rtv: Option<ID3D11RenderTargetView>,
+    half_b_srv: Option<ID3D11ShaderResourceView>,
 }
 
 // ---------------------------------------------------------------------------
@@ -792,11 +1122,15 @@ pub(super) struct DrawPipelines {
 
 impl DrawPipelines {
     fn new(device: &ID3D11Device) -> Result<Self, i32> {
+        // rev 16 (ticket 50): the quad and shadow pipelines' instance
+        // stride is the ABI RECORD's size - the vendored shader structs
+        // mirror `GpuiGoSceneQuadRecord`/`GpuiGoSceneShadowRecord` field
+        // for field, and the draw path uploads the records directly.
         let shadow_pipeline = InstancePipeline::new(
             device,
             "shadow_pipeline",
             ShaderModule::Shadow,
-            std::mem::size_of::<gpui::Shadow>(),
+            std::mem::size_of::<crate::scene::GpuiGoSceneShadowRecord>(),
             4,
             create_blend_state(device)?,
         )?
@@ -805,7 +1139,7 @@ impl DrawPipelines {
             device,
             "quad_pipeline",
             ShaderModule::Quad,
-            std::mem::size_of::<gpui::Quad>(),
+            std::mem::size_of::<crate::scene::GpuiGoSceneQuadRecord>(),
             64,
             create_blend_state(device)?,
         )?
@@ -983,10 +1317,12 @@ impl PathResources {
     }
 }
 
-/// The pin's `BlurResources`: the offscreen scene color, the
-/// half-resolution ping/pong scratch, and one isolated group target per
-/// nesting depth (up to `MAX_FILTER_GROUP_DEPTH`; deeper groups render
-/// inline).
+/// The pin's `BlurResources`, reshaped in rev 16 (ticket 50): the
+/// offscreen scene color and the half-resolution ping/pong scratch
+/// remain; the per-depth full-window group targets are GONE (the
+/// bounds-sized, bucketed `GroupTargetPool` replaces them - every
+/// matched group of either kind gets an isolated pool target, with no
+/// depth cap).
 pub(super) struct BlurResources {
     scene_color_rtv: Option<ID3D11RenderTargetView>,
     scene_color_srv: Option<ID3D11ShaderResourceView>,
@@ -994,24 +1330,15 @@ pub(super) struct BlurResources {
     ping_srv: Option<ID3D11ShaderResourceView>,
     pong_rtv: Option<ID3D11RenderTargetView>,
     pong_srv: Option<ID3D11ShaderResourceView>,
-    group_rtvs: Vec<Option<ID3D11RenderTargetView>>,
-    group_srvs: Vec<Option<ID3D11ShaderResourceView>>,
 }
 
 impl BlurResources {
-    fn new(device: &ID3D11Device, width: u32, height: u32, isolated_target_count: usize) -> Result<Self, i32> {
+    fn new(device: &ID3D11Device, width: u32, height: u32) -> Result<Self, i32> {
         let half_w = downsampled_dimension(width);
         let half_h = downsampled_dimension(height);
         let (_, scene_color_rtv, scene_color_srv) = create_color_target(device, width, height)?;
         let (_, ping_rtv, ping_srv) = create_color_target(device, half_w, half_h)?;
         let (_, pong_rtv, pong_srv) = create_color_target(device, half_w, half_h)?;
-        let mut group_rtvs = Vec::with_capacity(isolated_target_count);
-        let mut group_srvs = Vec::with_capacity(isolated_target_count);
-        for _ in 0..isolated_target_count {
-            let (_, rtv, srv) = create_color_target(device, width, height)?;
-            group_rtvs.push(rtv);
-            group_srvs.push(srv);
-        }
         Ok(Self {
             scene_color_rtv,
             scene_color_srv,
@@ -1019,24 +1346,7 @@ impl BlurResources {
             ping_srv,
             pong_rtv,
             pong_srv,
-            group_rtvs,
-            group_srvs,
         })
-    }
-
-    fn ensure_isolated_targets(
-        &mut self,
-        device: &ID3D11Device,
-        width: u32,
-        height: u32,
-        isolated_target_count: usize,
-    ) -> Result<(), i32> {
-        while self.group_rtvs.len() < isolated_target_count {
-            let (_, rtv, srv) = create_color_target(device, width, height)?;
-            self.group_rtvs.push(rtv);
-            self.group_srvs.push(srv);
-        }
-        Ok(())
     }
 }
 
@@ -1049,15 +1359,28 @@ struct BackdropCropTarget {
     srv: Option<Option<ID3D11ShaderResourceView>>,
     width: u32,
     height: u32,
+    /// The crop's half-resolution blur scratch PAIR (created with the
+    /// crop; the same size rule as the rev-15 window ping/pong, but
+    /// relative to the CROP so the downsample/gaussian/composite chain
+    /// is consistent - two textures, the chain ping-pongs between
+    /// them).
+    half_a_rtv: Option<ID3D11RenderTargetView>,
+    half_a_srv: Option<ID3D11ShaderResourceView>,
+    half_b_rtv: Option<ID3D11RenderTargetView>,
+    half_b_srv: Option<ID3D11ShaderResourceView>,
 }
 
 /// The per-surface, size-dependent draw targets (dropped on resize like
-/// the pin's `recreate_resources`).
+/// the pin's `recreate_resources` - the pool with them, exactly the
+/// design's "resize drops and rebuilds the pool" rule).
 #[derive(Default)]
 pub(super) struct DrawTargets {
     pub(super) path: Option<PathResources>,
     pub(super) blur: Option<BlurResources>,
     pub(super) backdrop_crop: Option<BackdropCropTarget>,
+    /// The R16 group target pool (rev 16, ticket 50): bounds-sized,
+    /// bucketed, kept across frames while groups keep using it.
+    pub(super) group_pool: GroupTargetPool,
 }
 
 // ---------------------------------------------------------------------------
@@ -1559,43 +1882,54 @@ fn render_scene(
     let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
     let swapchain_rtv = surface_state.render_target_view.clone();
     let viewport = surface_state.viewport;
+    let window = (surface_state.width, surface_state.height);
 
     pre_draw(&ctx, &draw.globals, &viewport, &swapchain_rtv, appearance)?;
     upload_scene_buffers(&device, &ctx, draw, snapshot)?;
 
     // Only route through the offscreen scene texture when the scene
-    // contains blur filters; otherwise render straight to the swapchain
-    // exactly as before.
+    // contains backdrop filters or content-filter groups (R15's rule);
+    // effect groups render through the pooled bucket targets directly,
+    // so a group-only scene stays on the swapchain path.
     let use_offscreen = snapshot.requirements.uses_offscreen_target != 0;
     if snapshot.requirements.uses_path_target != 0 {
         ensure_path_resources(state, slot_index, slot_generation, &device)?;
     }
-    let isolated_target_count = snapshot.requirements.isolated_target_count as usize;
     if use_offscreen {
-        ensure_blur_resources(state, slot_index, slot_generation, &device, isolated_target_count)?;
+        ensure_blur_resources(state, slot_index, slot_generation, &device)?;
     }
 
-    // Clone the views we need (AddRef) so the loop can rebind render
-    // targets without borrow tangles.
-    let (scene_rtv, scene_srv, group_rtvs, group_srvs) = {
+    let (scene_rtv, scene_srv) = {
         let surface_state = resolve_slot(state, slot_index, slot_generation)?;
         match surface_state.draw_targets.blur.as_ref() {
-            Some(blur) => (
-                blur.scene_color_rtv.clone(),
-                blur.scene_color_srv.clone(),
-                blur.group_rtvs.clone(),
-                blur.group_srvs.clone(),
-            ),
+            Some(blur) => (blur.scene_color_rtv.clone(), blur.scene_color_srv.clone()),
             None => {
                 if use_offscreen {
                     return Err(renderer_status::ERR_DEVICE);
                 }
-                (None, None, Vec::new(), Vec::new())
+                (None, None)
             }
         }
     };
 
+    // The pre-pass over the command stream: every ISOLATED effect
+    // group's content extent (the union of its span's primitive bounds
+    // and its nested groups' composite extents - the bucket and the
+    // composite quad for a group that does not clip).
+    let group_extents = group_content_extents(snapshot);
+
     let mut active_render_target: Option<ID3D11RenderTargetView>;
+    let base = ActiveTarget {
+        rtv: if use_offscreen {
+            scene_rtv.clone()
+        } else {
+            swapchain_rtv.clone()
+        },
+        srv: if use_offscreen { scene_srv.clone() } else { None },
+        viewport,
+        origin: [0.0, 0.0],
+        size: [window.0 as f32, window.1 as f32],
+    };
     if use_offscreen {
         unsafe {
             if let Some(rtv) = scene_rtv.as_ref() {
@@ -1609,20 +1943,20 @@ fn render_scene(
         active_render_target = swapchain_rtv.clone();
     }
 
-    // Current target for the main scene + a parent stack for
-    // content-filter groups.
-    let mut current_rtv = active_render_target.clone();
-    let mut current_srv = if use_offscreen {
-        scene_srv.clone()
-    } else {
-        None
-    };
-    let mut filter_stack: Vec<(
-        Option<ID3D11RenderTargetView>,
-        Option<ID3D11ShaderResourceView>,
-    )> = Vec::new();
+    let mut current = base.clone();
 
-    let frame = FrameBindings {
+    // The shared group stack (rev 16, ticket 50): one entry per open
+    // group of EITHER kind - the parent target to restore and the
+    // pooled lease (None when the group renders inline: an inline
+    // command from the plan, or the pool budget demoted an isolated
+    // group). The END arm reads the kind from its own command.
+    struct GroupFrame {
+        parent: ActiveTarget,
+        lease: Option<GroupLease>,
+    }
+    let mut group_stack: Vec<GroupFrame> = Vec::new();
+
+    let mut frame = FrameBindings {
         device_context: &ctx,
         viewport,
         globals: draw.globals.clone(),
@@ -1729,18 +2063,21 @@ fn render_scene(
                     )?;
                 }
                 batch_primitive_kind::SURFACES => {
+                    // The current target's viewport (a group bucket's
+                    // offset viewport when the surface draws inside an
+                    // open group; the surface viewport otherwise).
                     draw_surfaces(
                         state,
                         draw,
                         &frame,
-                        &viewport,
+                        &frame.viewport,
                         &snapshot.surfaces[range.clone()],
                         &snapshot.surface_opacities[range.clone()],
                     )?;
                     // Restore the current target for subsequent batches
                     // (the pinned loop's post-draw rebinding).
                     unsafe {
-                        ctx.OMSetRenderTargets(Some(slice::from_ref(&current_rtv)), None);
+                        ctx.OMSetRenderTargets(Some(slice::from_ref(&current.rtv)), None);
                     }
                 }
                 batch_primitive_kind::BACKDROP_FILTERS => {
@@ -1751,78 +2088,216 @@ fn render_scene(
                             slot_index,
                             slot_generation,
                             &frame,
-                            &current_srv,
-                            &current_rtv,
+                            &current,
                             filter,
                             // Backdrops clip to the rounded rect and
-                            // crop their input to the element (rev 15).
+                            // crop their input to the element (rev 15),
+                            // drawing into the CURRENT target.
                             true,
                         )?;
                     }
                     // Restore the current target for subsequent batches.
                     unsafe {
-                        ctx.OMSetRenderTargets(Some(slice::from_ref(&current_rtv)), None);
+                        ctx.OMSetRenderTargets(Some(slice::from_ref(&current.rtv)), None);
                     }
                 }
                 _ => {
-                    // The filter-boundary tag never appears as a batch
-                    // command (the plan compiles boundaries into
-                    // begin/end commands).
+                    // The marker tags never appear as a batch command
+                    // (the plan compiles them into begin/end commands).
                 }
             }
-        } else if command.command_kind == command_kind::BEGIN_FILTER
+        } else if (command.command_kind == command_kind::BEGIN_FILTER
+            || command.command_kind == command_kind::BEGIN_EFFECT)
             && command.filter_target == 1
         {
-            // BeginFilter { target: Isolated(index) }: redirect rendering
-            // into the group target.
-            let index = command.target_index as usize;
-            if index >= group_rtvs.len() {
-                return Err(renderer_status::ERR_DEVICE);
-            }
-            filter_stack.push((current_rtv.clone(), current_srv.clone()));
-            current_rtv = group_rtvs[index].clone();
-            current_srv = group_srvs[index].clone();
-            active_render_target = current_rtv.clone();
-            unsafe {
-                if let Some(rtv) = current_rtv.as_ref() {
-                    ctx.ClearRenderTargetView(rtv, &[0.0; 4]);
-                    let bound = Some(rtv.clone());
-                    ctx.OMSetRenderTargets(Some(slice::from_ref(&bound)), None);
+            // An isolated group begins: acquire a pooled bucket for its
+            // region, redirect the walk into it through the offset
+            // viewport, and clear it. A pool overflow demotes the group
+            // to inline (the children keep drawing into the current
+            // target, un-grouped - observably: the debug-stats counter
+            // and a debug-build warning already fired in the pool).
+            let is_filter = command.command_kind == command_kind::BEGIN_FILTER;
+            let record_bounds = if is_filter {
+                snapshot
+                    .boundaries
+                    .get(command.boundary_index as usize)
+                    .map(|record| (record.bounds, record.max_blur_radius()))
+                    .ok_or(renderer_status::ERR_BAD_VALUE)?
+            } else {
+                snapshot
+                    .effects
+                    .get(command.boundary_index as usize)
+                    .map(|record| (record.bounds, 0.0))
+                    .ok_or(renderer_status::ERR_BAD_VALUE)?
+            };
+            let record = record_bounds.0;
+            let blur_radius = record_bounds.1;
+            // The group's bucket region: filter groups dilate by the
+            // blur chain's reach (the composite region; content outside
+            // is never composited, exactly as R15); effect groups use
+            // the clip bounds when they clip (content outside the rrect
+            // is dropped - CSS overflow) or the content extent when
+            // they do not (nothing is lost).
+            let clip_to_bounds = !is_filter
+                && (snapshot.effects[command.boundary_index as usize].flags
+                    & (crate::scene::effect_flags::CLIP_TO_BOUNDS
+                        | crate::scene::effect_flags::ROUNDED_CLIP_ONLY))
+                    != 0;
+            let region = if is_filter || clip_to_bounds {
+                let dilation = GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * blur_radius;
+                [
+                    f32::from_bits(record.x) - dilation,
+                    f32::from_bits(record.y) - dilation,
+                    f32::from_bits(record.w) + 2.0 * dilation,
+                    f32::from_bits(record.h) + 2.0 * dilation,
+                ]
+            } else {
+                group_extents
+                    .iter()
+                    .find(|(index, _)| *index == command_index(snapshot, command))
+                    .map(|(_, extent)| *extent)
+                    .unwrap_or([
+                        f32::from_bits(record.x),
+                        f32::from_bits(record.y),
+                        f32::from_bits(record.w),
+                        f32::from_bits(record.h),
+                    ])
+            };
+            let needs_half = is_filter && BlurKernel::for_radius(blur_radius).is_some();
+            let lease = {
+                let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
+                surface_state.draw_targets.group_pool.acquire(
+                    &device,
+                    [region[0], region[1]],
+                    [region[2], region[3]],
+                    window,
+                    needs_half,
+                )
+            };
+            match lease {
+                Some(lease) => {
+                    group_stack.push(GroupFrame {
+                        parent: current.clone(),
+                        lease: Some(lease.clone()),
+                    });
+                    current = ActiveTarget {
+                        rtv: lease.rtv.clone(),
+                        srv: lease.srv.clone(),
+                        viewport: D3D11_VIEWPORT {
+                            // The offset viewport: a window position p
+                            // rasterizes to bucket pixel p - origin
+                            // (pixels outside the bucket are dropped,
+                            // exactly the content the composite never
+                            // draws).
+                            TopLeftX: -lease.origin[0],
+                            TopLeftY: -lease.origin[1],
+                            Width: window.0 as f32,
+                            Height: window.1 as f32,
+                            MinDepth: 0.0,
+                            MaxDepth: 1.0,
+                        },
+                        origin: lease.origin,
+                        size: lease.size,
+                    };
+                    active_render_target = current.rtv.clone();
+                    frame.viewport = current.viewport;
+                    unsafe {
+                        if let Some(rtv) = current.rtv.as_ref() {
+                            ctx.ClearRenderTargetView(rtv, &[0.0; 4]);
+                            let bound = Some(rtv.clone());
+                            ctx.OMSetRenderTargets(Some(slice::from_ref(&bound)), None);
+                            ctx.RSSetViewports(Some(slice::from_ref(&current.viewport)));
+                        }
+                    }
+                }
+                None => {
+                    // The pool demoted the group to inline: no target
+                    // switch, nothing to clear; the end command is a
+                    // no-op for the walk (the overflow is already
+                    // observable through the debug stats).
+                    group_stack.push(GroupFrame {
+                        parent: current.clone(),
+                        lease: None,
+                    });
                 }
             }
-        } else if command.command_kind == command_kind::END_FILTER
+        } else if (command.command_kind == command_kind::END_FILTER
+            || command.command_kind == command_kind::END_EFFECT)
             && command.filter_target == 1
         {
-            // EndFilter { target: Isolated(_) }: composite the group into
-            // its parent.
-            let boundary = snapshot
-                .boundaries
-                .get(command.boundary_index as usize)
-                .ok_or(renderer_status::ERR_BAD_VALUE)?;
-            let (parent_rtv, parent_srv) = filter_stack
+            // An isolated group ends: composite the bucket into the
+            // parent under the group's parameters, then restore the
+            // parent target and viewport. An inline (or demoted) group
+            // frame only restores - the pinned plan's inline arms draw
+            // nothing.
+            let entry = group_stack
                 .pop()
                 .ok_or(renderer_status::ERR_DEVICE)?;
-            dx_blur_and_composite(
-                state,
-                draw,
-                slot_index,
-                slot_generation,
-                &frame,
-                &current_srv,
-                &parent_rtv,
-                boundary,
-                // Content (`filter`) bleeds past its bounds.
-                false,
-            )?;
-            current_rtv = parent_rtv;
-            current_srv = parent_srv;
-            active_render_target = current_rtv.clone();
+            let parent = entry.parent.clone();
+            match entry.lease {
+                Some(lease) => {
+                    let source = ActiveTarget {
+                        rtv: lease.rtv.clone(),
+                        srv: lease.srv.clone(),
+                        viewport: D3D11_VIEWPORT {
+                            TopLeftX: -lease.origin[0],
+                            TopLeftY: -lease.origin[1],
+                            Width: window.0 as f32,
+                            Height: window.1 as f32,
+                            MinDepth: 0.0,
+                            MaxDepth: 1.0,
+                        },
+                        origin: lease.origin,
+                        size: lease.size,
+                    };
+                    let is_filter = command.command_kind == command_kind::END_FILTER;
+                    if is_filter {
+                        let boundary = snapshot
+                            .boundaries
+                            .get(command.boundary_index as usize)
+                            .ok_or(renderer_status::ERR_BAD_VALUE)?;
+                        composite_filter_group(
+                            state,
+                            draw,
+                            slot_index,
+                            slot_generation,
+                            &frame,
+                            &source,
+                            &parent,
+                            &lease,
+                            boundary,
+                            window,
+                        )?;
+                    } else {
+                        let effect = snapshot
+                            .effects
+                            .get(command.boundary_index as usize)
+                            .ok_or(renderer_status::ERR_BAD_VALUE)?;
+                        composite_effect_group(
+                            state,
+                            draw,
+                            slot_index,
+                            slot_generation,
+                            &frame,
+                            &source,
+                            &parent,
+                            effect,
+                        )?;
+                    }
+                    let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
+                    surface_state.draw_targets.group_pool.release(&lease);
+                }
+                None => {}
+            }
+            current = parent;
+            active_render_target = current.rtv.clone();
+            frame.viewport = current.viewport;
             unsafe {
-                ctx.OMSetRenderTargets(Some(slice::from_ref(&current_rtv)), None);
+                ctx.OMSetRenderTargets(Some(slice::from_ref(&current.rtv)), None);
             }
         }
-        // Inline filter groups and inline begin/end commands draw
-        // nothing (the pinned plan's Inline arms are no-ops).
+        // Inline filter and effect groups and inline begin/end commands
+        // draw nothing (the pinned plan's Inline arms are no-ops).
     }
 
     // The pin's retain_surface_views: after the command loop, keep
@@ -1844,7 +2319,274 @@ fn render_scene(
     unsafe {
         ctx.OMSetRenderTargets(Some(slice::from_ref(&swapchain_rtv)), None);
     }
+    // The frame-end pool prune (viz's UpdateRenderPassTextures rule):
+    // the backings no group used this frame are dropped; the used ones
+    // are retained across frames.
+    {
+        let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
+        surface_state.draw_targets.group_pool.prune_unused();
+    }
     Ok(())
+}
+
+/// The command's index within the snapshot's command stream (the group
+/// extent pre-pass keys on it).
+fn command_index(snapshot: &Snapshot, command: &GpuiGoSceneCommandRecord) -> usize {
+    snapshot
+        .commands
+        .iter()
+        .position(|candidate| std::ptr::eq(candidate, command))
+        .unwrap_or(usize::MAX)
+}
+
+/// The R16 pre-pass: every ISOLATED group's content extent, keyed by
+/// its BEGIN command's index - the union of the primitives in its span
+/// and its nested groups' composite extents (a nested filter group
+/// contributes its dilated record bounds; a nested effect group its
+/// own extent). Effect groups that CLIP use their record bounds
+/// instead (content outside the rrect is dropped), so only the
+/// non-clipping groups consume this table.
+fn group_content_extents(snapshot: &Snapshot) -> Vec<(usize, [f32; 4])> {
+    #[derive(Clone, Copy)]
+    struct Acc {
+        min_x: f32,
+        min_y: f32,
+        max_x: f32,
+        max_y: f32,
+        empty: bool,
+    }
+    impl Acc {
+        fn union_bounds(&mut self, x: f32, y: f32, w: f32, h: f32) {
+            if w <= 0.0 || h <= 0.0 {
+                return;
+            }
+            if self.empty {
+                self.min_x = x;
+                self.min_y = y;
+                self.max_x = x + w;
+                self.max_y = y + h;
+                self.empty = false;
+                return;
+            }
+            self.min_x = self.min_x.min(x);
+            self.min_y = self.min_y.min(y);
+            self.max_x = self.max_x.max(x + w);
+            self.max_y = self.max_y.max(y + h);
+        }
+        fn extent(&self, fallback: [f32; 4]) -> [f32; 4] {
+            if self.empty {
+                fallback
+            } else {
+                [
+                    self.min_x,
+                    self.min_y,
+                    self.max_x - self.min_x,
+                    self.max_y - self.min_y,
+                ]
+            }
+        }
+    }
+    let mut result: Vec<(usize, [f32; 4])> = Vec::new();
+    let mut stack: Vec<(usize, Acc)> = Vec::new();
+    for (index, command) in snapshot.commands.iter().enumerate() {
+        match command.command_kind {
+            command_kind::BATCH => {
+                if let Some(extent) = batch_bounds(snapshot, command) {
+                    if let Some((_, acc)) = stack.last_mut() {
+                        acc.union_bounds(extent[0], extent[1], extent[2], extent[3]);
+                    }
+                }
+            }
+            command_kind::BEGIN_FILTER | command_kind::BEGIN_EFFECT => {
+                if command.filter_target == 1 {
+                    stack.push((
+                        index,
+                        Acc {
+                            min_x: 0.0,
+                            min_y: 0.0,
+                            max_x: 0.0,
+                            max_y: 0.0,
+                            empty: true,
+                        },
+                    ));
+                }
+            }
+            command_kind::END_FILTER | command_kind::END_EFFECT => {
+                if command.filter_target == 1 {
+                    if let Some((begin_index, acc)) = stack.pop() {
+                        let is_filter = command.command_kind == command_kind::END_FILTER;
+                        let record_bounds = if is_filter {
+                            snapshot
+                                .boundaries
+                                .get(command.boundary_index as usize)
+                                .map(|record| {
+                                    let dilation = GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS
+                                        * record.max_blur_radius();
+                                    [
+                                        f32::from_bits(record.bounds.x) - dilation,
+                                        f32::from_bits(record.bounds.y) - dilation,
+                                        f32::from_bits(record.bounds.w) + 2.0 * dilation,
+                                        f32::from_bits(record.bounds.h) + 2.0 * dilation,
+                                    ]
+                                })
+                        } else {
+                            snapshot
+                                .effects
+                                .get(command.boundary_index as usize)
+                                .map(|record| {
+                                    let clips = (record.flags
+                                        & (crate::scene::effect_flags::CLIP_TO_BOUNDS
+                                            | crate::scene::effect_flags::ROUNDED_CLIP_ONLY))
+                                        != 0;
+                                    if clips {
+                                        [
+                                            f32::from_bits(record.bounds.x),
+                                            f32::from_bits(record.bounds.y),
+                                            f32::from_bits(record.bounds.w),
+                                            f32::from_bits(record.bounds.h),
+                                        ]
+                                    } else {
+                                        acc.extent([
+                                            f32::from_bits(record.bounds.x),
+                                            f32::from_bits(record.bounds.y),
+                                            f32::from_bits(record.bounds.w),
+                                            f32::from_bits(record.bounds.h),
+                                        ])
+                                    }
+                                })
+                        };
+                        let extent = match record_bounds {
+                            Some(bounds) => bounds,
+                            None => acc.extent([0.0, 0.0, 0.0, 0.0]),
+                        };
+                        result.push((begin_index, extent));
+                        if let Some((_, parent)) = stack.last_mut() {
+                            parent.union_bounds(extent[0], extent[1], extent[2], extent[3]);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    result
+}
+
+/// One batch command's primitive bounds union (the extent pre-pass).
+fn batch_bounds(snapshot: &Snapshot, command: &GpuiGoSceneCommandRecord) -> Option<[f32; 4]> {
+    let range = command.range_start as usize..command.range_end as usize;
+    let mut min_x = f32::MAX;
+    let mut min_y = f32::MAX;
+    let mut max_x = f32::MIN;
+    let mut max_y = f32::MIN;
+    let mut seen = false;
+    let mut union = |x: f32, y: f32, w: f32, h: f32| {
+        if w <= 0.0 || h <= 0.0 {
+            return;
+        }
+        seen = true;
+        min_x = min_x.min(x);
+        min_y = min_y.min(y);
+        max_x = max_x.max(x + w);
+        max_y = max_y.max(y + h);
+    };
+    match command.primitive_kind {
+        batch_primitive_kind::SHADOWS => {
+            for record in &snapshot.shadows[range] {
+                union(
+                    f32::from_bits(record.bounds.x),
+                    f32::from_bits(record.bounds.y),
+                    f32::from_bits(record.bounds.w),
+                    f32::from_bits(record.bounds.h),
+                );
+            }
+        }
+        batch_primitive_kind::QUADS => {
+            for record in &snapshot.quads[range] {
+                union(
+                    f32::from_bits(record.bounds.x),
+                    f32::from_bits(record.bounds.y),
+                    f32::from_bits(record.bounds.w),
+                    f32::from_bits(record.bounds.h),
+                );
+            }
+        }
+        batch_primitive_kind::UNDERLINES => {
+            for record in &snapshot.underlines[range] {
+                union(
+                    record.bounds.origin.x.0,
+                    record.bounds.origin.y.0,
+                    record.bounds.size.width.0,
+                    record.bounds.size.height.0,
+                );
+            }
+        }
+        batch_primitive_kind::MONOCHROME_SPRITES => {
+            for record in &snapshot.monochrome_sprites[range] {
+                union(
+                    record.bounds.origin.x.0,
+                    record.bounds.origin.y.0,
+                    record.bounds.size.width.0,
+                    record.bounds.size.height.0,
+                );
+            }
+        }
+        batch_primitive_kind::SUBPIXEL_SPRITES => {
+            for record in &snapshot.subpixel_sprites[range] {
+                union(
+                    record.bounds.origin.x.0,
+                    record.bounds.origin.y.0,
+                    record.bounds.size.width.0,
+                    record.bounds.size.height.0,
+                );
+            }
+        }
+        batch_primitive_kind::POLYCHROME_SPRITES => {
+            for record in &snapshot.polychrome_sprites[range] {
+                union(
+                    record.bounds.origin.x.0,
+                    record.bounds.origin.y.0,
+                    record.bounds.size.width.0,
+                    record.bounds.size.height.0,
+                );
+            }
+        }
+        batch_primitive_kind::SURFACES => {
+            for record in &snapshot.surfaces[range] {
+                union(
+                    f32::from_bits(record.bounds.x),
+                    f32::from_bits(record.bounds.y),
+                    f32::from_bits(record.bounds.w),
+                    f32::from_bits(record.bounds.h),
+                );
+            }
+        }
+        batch_primitive_kind::BACKDROP_FILTERS => {
+            for record in &snapshot.backdrops[range] {
+                union(
+                    f32::from_bits(record.bounds.x),
+                    f32::from_bits(record.bounds.y),
+                    f32::from_bits(record.bounds.w),
+                    f32::from_bits(record.bounds.h),
+                );
+            }
+        }
+        batch_primitive_kind::PATHS => {
+            for record in &snapshot.paths[range] {
+                union(
+                    record.clipped_bounds.origin.x.0,
+                    record.clipped_bounds.origin.y.0,
+                    record.clipped_bounds.size.width.0,
+                    record.clipped_bounds.size.height.0,
+                );
+            }
+        }
+        _ => return None,
+    }
+    if !seen {
+        return None;
+    }
+    Some([min_x, min_y, max_x - min_x, max_y - min_y])
 }
 
 /// The pin's `upload_scene_buffers`: upload every non-empty primitive
@@ -1938,28 +2680,14 @@ fn ensure_blur_resources(
     slot_index: usize,
     slot_generation: u32,
     device: &ID3D11Device,
-    isolated_target_count: usize,
 ) -> Result<(), i32> {
     let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
     if surface_state.draw_targets.blur.is_none() {
         let width = surface_state.width;
         let height = surface_state.height;
-        surface_state.draw_targets.blur = Some(BlurResources::new(
-            device,
-            width,
-            height,
-            isolated_target_count,
-        )?);
+        surface_state.draw_targets.blur = Some(BlurResources::new(device, width, height)?);
     }
-    let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
-    let width = surface_state.width;
-    let height = surface_state.height;
-    let blur = surface_state
-        .draw_targets
-        .blur
-        .as_mut()
-        .ok_or(renderer_status::ERR_DEVICE)?;
-    blur.ensure_isolated_targets(device, width, height, isolated_target_count)
+    Ok(())
 }
 
 /// The pin's `draw_paths_to_intermediate`: build the rasterization
@@ -2220,7 +2948,7 @@ fn draw_surfaces(
         let texture_srvs = [Some(texture_srv.clone()), Some(texture_srv.clone())];
 
         let bounds = surface.bounds;
-        let mask = surface.content_mask;
+        let mask = &surface.content_mask;
         let uniforms = SurfaceUniforms {
             bounds: ShaderBounds {
                 origin: vec2f(f32::from_bits(bounds.x), f32::from_bits(bounds.y)),
@@ -2228,17 +2956,28 @@ fn draw_surfaces(
             },
             content_mask: ShaderContentMask {
                 bounds: ShaderBounds {
-                    origin: vec2f(f32::from_bits(mask.x), f32::from_bits(mask.y)),
-                    size: vec2f(f32::from_bits(mask.w), f32::from_bits(mask.h)),
+                    origin: vec2f(
+                        f32::from_bits(mask.bounds.x),
+                        f32::from_bits(mask.bounds.y),
+                    ),
+                    size: vec2f(
+                        f32::from_bits(mask.bounds.w),
+                        f32::from_bits(mask.bounds.h),
+                    ),
                 },
                 // The scene ABI carries hard masks (no fade edges), so
                 // the shader mask's fade is zero — the same value the
                 // ABI's other masked primitives use.
+                // rev 16 (ticket 50): the extended mask's per-edge
+                // fades ride the pinned ContentMask (the pinned
+                // surface shader evaluates them); the radii apply only
+                // in the vendored pipelines this revision (the recorded
+                // gap handed to ticket 52).
                 fade_out: ShaderEdges {
-                    top: 0.0,
-                    right: 0.0,
-                    bottom: 0.0,
-                    left: 0.0,
+                    top: f32::from_bits(mask.fade_out[1]),
+                    right: f32::from_bits(mask.fade_out[2]),
+                    bottom: f32::from_bits(mask.fade_out[3]),
+                    left: f32::from_bits(mask.fade_out[0]),
                 },
             },
             color_format: SurfaceColorFormat::Rgba,
@@ -2417,6 +3156,317 @@ fn dx_blur_pass(
 ///   content just outside the element no longer bleeds into the blur.
 ///   The blurred input is then the crop texture and the composite
 ///   samples it region-relative.
+/// The R16 group composite for content-FILTER groups (rev 16, ticket
+/// 50: `dx_blur_and_composite` generalized off the full-window targets -
+/// the group's pooled bucket is the blur source, the parent target the
+/// destination, the bucket's own half-resolution scratch (or the
+/// window ping/pong when the bucket IS window-sized, preserving R15's
+/// exact scratch) runs the chain, and the composite samples the bucket
+/// region-relative ((window position - bucket origin) / bucket size).
+/// The blur, colour-matrix and clip semantics are R15's, unchanged.
+#[allow(clippy::too_many_arguments)]
+fn composite_filter_group(
+    state: &mut RendererState,
+    draw: &DrawGlobal,
+    slot_index: usize,
+    slot_generation: u32,
+    frame: &FrameBindings<'_>,
+    source: &ActiveTarget,
+    target: &ActiveTarget,
+    lease: &GroupLease,
+    rec: &crate::scene::GpuiGoSceneFilterRecord,
+    window: (u32, u32),
+) -> Result<(), i32> {
+    let bounds = snapshot_bounds(&rec.bounds);
+    let content_mask = snapshot_bounds(&rec.content_mask.bounds);
+    let corner_radii = snapshot_radii(&rec.corner_radii);
+    let corner_smoothing = f32::from_bits(rec.corner_smoothing);
+    let blur_radius = rec.max_blur_radius();
+    let opacity = f32::from_bits(rec.opacity);
+    let blur_source = source.srv.clone();
+    let source_size = source.size;
+    let blur_size = [
+        downsampled_dimension(lease.size[0] as u32) as f32,
+        downsampled_dimension(lease.size[1] as u32) as f32,
+    ];
+    // The blur chain's scratch: the window pair when the bucket is the
+    // whole window (R15's exact textures and sizes), the bucket's own
+    // pair otherwise.
+    let window_pair = {
+        let surface_state = resolve_slot(state, slot_index, slot_generation)?;
+        match surface_state.draw_targets.blur.as_ref() {
+            Some(blur) => Some((
+                blur.ping_rtv.clone(),
+                blur.ping_srv.clone(),
+                blur.pong_rtv.clone(),
+                blur.pong_srv.clone(),
+            )),
+            None => None,
+        }
+    };
+    let bucket_is_window = lease.size[0] as u32 == window.0 && lease.size[1] as u32 == window.1;
+    let needs_blur_chain = BlurKernel::for_radius(blur_radius).is_some();
+    let (ping_rtv, ping_srv, pong_rtv, pong_srv) = if !needs_blur_chain {
+        // A matrix-only chain composites the bucket directly - the
+        // half-resolution scratch is never touched.
+        (None, None, None, None)
+    } else if bucket_is_window {
+        match window_pair {
+            Some(pair) => pair,
+            None => return Err(renderer_status::ERR_DEVICE),
+        }
+    } else {
+        if lease.half_a_rtv.is_none() {
+            return Err(renderer_status::ERR_DEVICE);
+        }
+        (
+            lease.half_a_rtv.clone(),
+            lease.half_a_srv.clone(),
+            lease.half_b_rtv.clone(),
+            lease.half_b_srv.clone(),
+        )
+    };
+
+    // The composite extensions: the chain's per-function colour
+    // matrices (rev 15.1 semantics, unchanged) and the bucket-relative
+    // sampling offset.
+    let mut extensions = CompositeExtensionsUniforms::default();
+    let matrix_count = rec.color_matrix_count.min(COLOR_MATRIX_CAPACITY);
+    if matrix_count > 0 {
+        for entry in 0..matrix_count as usize {
+            let base = entry * 20;
+            let mut row = |index: usize| -> [f32; 4] {
+                [
+                    f32::from_bits(rec.color_matrix[base + index]),
+                    f32::from_bits(rec.color_matrix[base + index + 1]),
+                    f32::from_bits(rec.color_matrix[base + index + 2]),
+                    f32::from_bits(rec.color_matrix[base + index + 3]),
+                ]
+            };
+            extensions.entries[entry].row0 = row(0);
+            extensions.entries[entry].row1 = row(5);
+            extensions.entries[entry].row2 = row(10);
+            extensions.entries[entry].row3 = row(15);
+            extensions.entries[entry].offset = [
+                f32::from_bits(rec.color_matrix[base + 4]),
+                f32::from_bits(rec.color_matrix[base + 9]),
+                f32::from_bits(rec.color_matrix[base + 14]),
+                f32::from_bits(rec.color_matrix[base + 19]),
+            ];
+        }
+        extensions.count = matrix_count;
+    }
+    extensions.sample_offset = lease.origin;
+
+    let half_vp = D3D11_VIEWPORT {
+        TopLeftX: 0.0,
+        TopLeftY: 0.0,
+        Width: blur_size[0],
+        Height: blur_size[1],
+        MinDepth: 0.0,
+        MaxDepth: 1.0,
+    };
+
+    // Downsample source -> ping, then separable gaussian ping -> pong ->
+    // ping. A matrix-only chain (no blur kernel) composites the bucket
+    // directly - and a zero-radius, zero-matrix chain keeps the pinned
+    // early-out (nothing to draw).
+    let composited_srv: Option<ID3D11ShaderResourceView>;
+    let kernel = BlurKernel::for_radius(blur_radius);
+    if let Some(kernel) = kernel {
+        dx_blur_pass(
+            draw,
+            frame,
+            &draw.pipelines.blur_downsample_vertex,
+            &draw.pipelines.blur_downsample_fragment,
+            &draw.pipelines.blur_blend_replace,
+            &ping_rtv,
+            &blur_source,
+            BlurUniforms::downsample(source_size, blur_size),
+            &half_vp,
+            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+            3,
+            true,
+            BlurPassExtras::None,
+        )?;
+        dx_blur_pass(
+            draw,
+            frame,
+            &draw.pipelines.blur_vertex,
+            &draw.pipelines.blur_fragment,
+            &draw.pipelines.blur_blend_replace,
+            &pong_rtv,
+            &ping_srv,
+            BlurUniforms::gaussian(BlurAxis::Horizontal, blur_size, kernel),
+            &half_vp,
+            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+            3,
+            true,
+            BlurPassExtras::None,
+        )?;
+        dx_blur_pass(
+            draw,
+            frame,
+            &draw.pipelines.blur_vertex,
+            &draw.pipelines.blur_fragment,
+            &draw.pipelines.blur_blend_replace,
+            &ping_rtv,
+            &pong_srv,
+            BlurUniforms::gaussian(BlurAxis::Vertical, blur_size, kernel),
+            &half_vp,
+            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+            3,
+            true,
+            BlurPassExtras::None,
+        )?;
+        composited_srv = ping_srv;
+    } else if rec.color_matrix_count > 0 {
+        composited_srv = blur_source;
+    } else {
+        // The pinned early-out (R15 semantics preserved for filter
+        // boundaries): a zero-radius blur chain with no matrix has
+        // nothing to draw.
+        return Ok(());
+    }
+
+    // Content blur bleeds ~3*radius past the box; composite over a
+    // dilated rect (content filters do not clip - R15 semantics).
+    let composite_bounds = bounds.dilate(gpui::ScaledPixels(
+        GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * blur_radius,
+    ));
+    let composite_uniforms = BlurUniforms::composite(
+        composite_bounds,
+        content_mask,
+        corner_radii,
+        corner_smoothing,
+        opacity,
+        FilterCompositeClip::ContentShape,
+        blur_size,
+        source_size,
+    );
+    let (composite_vertex, composite_fragment) = if composite_uniforms.corner_smoothing > 0.0 {
+        (
+            &draw.pipelines.smoothed_blur_composite_vertex,
+            &draw.pipelines.smoothed_blur_composite_fragment,
+        )
+    } else {
+        (
+            &draw.pipelines.blur_composite_vertex,
+            &draw.pipelines.blur_composite_fragment,
+        )
+    };
+    dx_blur_pass(
+        draw,
+        frame,
+        composite_vertex,
+        composite_fragment,
+        &draw.pipelines.blur_blend_composite,
+        &target.rtv,
+        &composited_srv,
+        composite_uniforms,
+        &target.viewport,
+        D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+        4,
+        false,
+        BlurPassExtras::Composite(&extensions),
+    )?;
+    Ok(())
+}
+
+/// The R16 group composite for EFFECT groups (rev 16, ticket 50): the
+/// explicit NO-BLUR composite - one textured quad over the group's
+/// bounds under the group's opacity, rounded clip (when the group
+/// clips: `clip_to_bounds` / `rounded_clip_only`) and rectangular
+/// content mask, sampled from the pooled bucket region-relative. This
+/// is the group-opacity path (the single-primitive case never reaches
+/// it: the plan folds it into a per-primitive multiply).
+#[allow(clippy::too_many_arguments)]
+fn composite_effect_group(
+    _state: &mut RendererState,
+    draw: &DrawGlobal,
+    _slot_index: usize,
+    _slot_generation: u32,
+    frame: &FrameBindings<'_>,
+    source: &ActiveTarget,
+    target: &ActiveTarget,
+    effect: &crate::scene::GpuiGoSceneEffectRecord,
+) -> Result<(), i32> {
+    let clips = (effect.flags
+        & (crate::scene::effect_flags::CLIP_TO_BOUNDS
+            | crate::scene::effect_flags::ROUNDED_CLIP_ONLY))
+        != 0;
+    let (composite_bounds, corner_radii, corner_smoothing, clip) = if clips {
+        // The composite quad is the group's (rounded) bounds; content
+        // outside the rrect is dropped - CSS overflow clipping.
+        (
+            snapshot_bounds(&effect.bounds),
+            snapshot_radii(&effect.corner_radii),
+            f32::from_bits(effect.corner_smoothing),
+            FilterCompositeClip::RoundedBounds,
+        )
+    } else {
+        // No clip: the composite quad covers the whole bucket (the
+        // content extent the walk acquired it for); nothing is lost.
+        (
+            gpui::Bounds {
+                origin: gpui::point(
+                    gpui::ScaledPixels(source.origin[0]),
+                    gpui::ScaledPixels(source.origin[1]),
+                ),
+                size: gpui::Size {
+                    width: gpui::ScaledPixels(source.size[0]),
+                    height: gpui::ScaledPixels(source.size[1]),
+                },
+            },
+            snapshot_radii(&[0, 0, 0, 0]),
+            0.0,
+            FilterCompositeClip::ContentShape,
+        )
+    };
+    let content_mask = snapshot_bounds(&effect.content_mask);
+    let opacity = f32::from_bits(effect.opacity);
+    let mut extensions = CompositeExtensionsUniforms::default();
+    extensions.sample_offset = source.origin;
+
+    let composite_uniforms = BlurUniforms::composite(
+        composite_bounds,
+        content_mask,
+        corner_radii,
+        corner_smoothing,
+        opacity,
+        clip,
+        source.size,
+        source.size,
+    );
+    let (composite_vertex, composite_fragment) = if composite_uniforms.corner_smoothing > 0.0 {
+        (
+            &draw.pipelines.smoothed_blur_composite_vertex,
+            &draw.pipelines.smoothed_blur_composite_fragment,
+        )
+    } else {
+        (
+            &draw.pipelines.blur_composite_vertex,
+            &draw.pipelines.blur_composite_fragment,
+        )
+    };
+    dx_blur_pass(
+        draw,
+        frame,
+        composite_vertex,
+        composite_fragment,
+        &draw.pipelines.blur_blend_composite,
+        &target.rtv,
+        &source.srv,
+        composite_uniforms,
+        &target.viewport,
+        D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+        4,
+        false,
+        BlurPassExtras::Composite(&extensions),
+    )?;
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn dx_blur_and_composite(
     state: &mut RendererState,
@@ -2424,42 +3474,30 @@ fn dx_blur_and_composite(
     slot_index: usize,
     slot_generation: u32,
     frame: &FrameBindings<'_>,
-    source_srv: &Option<ID3D11ShaderResourceView>,
-    target_rtv: &Option<ID3D11RenderTargetView>,
+    // The CURRENT target: the backdrop's blur source AND its composite
+    // destination (rev 16: an ActiveTarget so a backdrop inside an open
+    // group samples and draws the group's bucket with the right
+    // origin/viewport).
+    current: &ActiveTarget,
     rec: &crate::scene::GpuiGoSceneFilterRecord,
-    // Backdrop clips to the rounded rect and crops its input; content
-    // (`filter`) bleeds past its bounds.
+    // Backdrop clips to the rounded rect and crops its input; the
+    // content-filter group path lives in composite_filter_group.
     clip_rounded: bool,
 ) -> Result<(), i32> {
     let bounds = snapshot_bounds(&rec.bounds);
-    let content_mask = snapshot_bounds(&rec.content_mask);
+    let content_mask = snapshot_bounds(&rec.content_mask.bounds);
     let corner_radii = snapshot_radii(&rec.corner_radii);
     let corner_smoothing = f32::from_bits(rec.corner_smoothing);
     let blur_radius = rec.max_blur_radius();
     let opacity = f32::from_bits(rec.opacity);
 
-    let (full_width, full_height, full_vp) = {
-        let surface_state = resolve_slot(state, slot_index, slot_generation)?;
-        (surface_state.width, surface_state.height, surface_state.viewport)
-    };
+    let source_srv = current.srv.clone();
+    let target_rtv = current.rtv.clone();
+    let full_vp = current.viewport;
     let clip = if clip_rounded {
         FilterCompositeClip::RoundedBounds
     } else {
         FilterCompositeClip::ContentShape
-    };
-    let (ping_rtv, ping_srv, pong_rtv, pong_srv) = {
-        let surface_state = resolve_slot(state, slot_index, slot_generation)?;
-        let blur = surface_state
-            .draw_targets
-            .blur
-            .as_ref()
-            .ok_or(renderer_status::ERR_DEVICE)?;
-        (
-            blur.ping_rtv.clone(),
-            blur.ping_srv.clone(),
-            blur.pong_rtv.clone(),
-            blur.pong_srv.clone(),
-        )
     };
 
     // The composite extensions: the chain's per-function colour
@@ -2498,19 +3536,32 @@ fn dx_blur_and_composite(
 
     // The blurred input and the normalization the composite samples
     // against: the full target (the pinned behavior) or the backdrop
-    // crop.
+    // crop. rev 16 (ticket 50, folding in ticket 77's fix): the crop's
+    // blur chain runs on the CROP-SIZED half-resolution pair (the
+    // scratch must match the blur source, or the gaussian's normalized
+    // coordinates zoom a partial-region backdrop's input); the crop's
+    // origin is carried SOURCE-relative (window coordinates minus the
+    // current target's origin) so a backdrop inside an open group
+    // samples the group's bucket correctly.
     let mut blur_source = source_srv.clone();
-    let mut source_size = [full_width as f32, full_height as f32];
+    let mut source_size = current.size;
     let mut blur_size = [
-        downsampled_dimension(full_width) as f32,
-        downsampled_dimension(full_height) as f32,
+        downsampled_dimension(current.size[0] as u32) as f32,
+        downsampled_dimension(current.size[1] as u32) as f32,
     ];
+    let mut ping_rtv: Option<ID3D11RenderTargetView> = None;
+    let mut ping_srv: Option<ID3D11ShaderResourceView> = None;
+    let mut pong_rtv: Option<ID3D11RenderTargetView> = None;
+    let mut pong_srv: Option<ID3D11ShaderResourceView> = None;
     let kernel = BlurKernel::for_radius(blur_radius);
     if clip_rounded {
         let crop = ensure_backdrop_crop(state, slot_index, slot_generation, bounds, blur_radius)?;
         let crop_uniforms = BackdropCropUniforms {
-            origin: crop.origin,
-            source_size: [full_width as f32, full_height as f32],
+            origin: [
+                crop.origin[0] - current.origin[0],
+                crop.origin[1] - current.origin[1],
+            ],
+            source_size: current.size,
             region_size: crop.region,
             margin: crop.margin,
         };
@@ -2523,7 +3574,7 @@ fn dx_blur_and_composite(
             &draw.pipelines.backdrop_crop_fragment,
             &draw.pipelines.blur_blend_replace,
             &crop.rtv,
-            source_srv,
+            &source_srv,
             BlurUniforms::copy(crop.total),
             &D3D11_VIEWPORT {
                 TopLeftX: 0.0,
@@ -2544,6 +3595,10 @@ fn dx_blur_and_composite(
             downsampled_dimension(crop.total[0] as u32) as f32,
             downsampled_dimension(crop.total[1] as u32) as f32,
         ];
+        ping_rtv = crop.half_a_rtv.clone();
+        ping_srv = crop.half_a_srv.clone();
+        pong_rtv = crop.half_b_rtv.clone();
+        pong_srv = crop.half_b_srv.clone();
         // Region-relative sampling: uv = (position - (origin - margin))
         // / total.
         extensions.sample_offset = [
@@ -2562,9 +3617,15 @@ fn dx_blur_and_composite(
 
     // Downsample source -> ping, then separable gaussian ping -> pong ->
     // ping. A matrix-only chain (no blur kernel) composites the source
-    // directly.
+    // directly. rev 16: the half pair comes from the crop (backdrops
+    // always crop), so blur_size and the pair agree.
     let composited_srv: Option<ID3D11ShaderResourceView>;
     if let Some(kernel) = kernel {
+        if ping_rtv.is_none() {
+            // A blurred backdrop without a crop pair cannot run the
+            // chain (the crop always allocates one; defensive).
+            return Err(renderer_status::ERR_DEVICE);
+        }
         dx_blur_pass(
             draw,
             frame,
@@ -2657,7 +3718,7 @@ fn dx_blur_and_composite(
         composite_vertex,
         composite_fragment,
         &draw.pipelines.blur_blend_composite,
-        target_rtv,
+        &target_rtv,
         &composited_srv,
         composite_uniforms,
         &full_vp,
@@ -2717,11 +3778,22 @@ fn ensure_backdrop_crop(
         .is_none_or(|crop| crop.width != total_w || crop.height != total_h);
     if needs_new {
         let (_, rtv, srv) = create_color_target(&device, total_w, total_h)?;
+        // rev 16 (ticket 50, folding in ticket 77's fix): the crop's
+        // own half-resolution blur pair - the gaussian passes' uv math
+        // assumes the scratch matches the blur source's size.
+        let half_w = downsampled_dimension(total_w);
+        let half_h = downsampled_dimension(total_h);
+        let (_, half_a_rtv, half_a_srv) = create_color_target(&device, half_w, half_h)?;
+        let (_, half_b_rtv, half_b_srv) = create_color_target(&device, half_w, half_h)?;
         surface_state.draw_targets.backdrop_crop = Some(BackdropCropTarget {
             rtv: Some(rtv),
             srv: Some(srv),
             width: total_w,
             height: total_h,
+            half_a_rtv,
+            half_a_srv,
+            half_b_rtv,
+            half_b_srv,
         });
     }
     let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
@@ -2737,6 +3809,10 @@ fn ensure_backdrop_crop(
         total: [total_w as f32, total_h as f32],
         rtv: crop.rtv.clone().flatten(),
         srv: crop.srv.clone().flatten(),
+        half_a_rtv: crop.half_a_rtv.clone(),
+        half_a_srv: crop.half_a_srv.clone(),
+        half_b_rtv: crop.half_b_rtv.clone(),
+        half_b_srv: crop.half_b_srv.clone(),
     })
 }
 

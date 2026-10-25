@@ -550,7 +550,7 @@ func (k *SceneKernel) InsertPath(rec *PathRecord) error {
 	}
 	nativeRec := native.NewScenePathRecord()
 	nativeRec.Bounds = sceneBoundsRecord(rec.Bounds)
-	nativeRec.ContentMask = sceneBoundsRecord(rec.ContentMask)
+	nativeRec.ContentMask = sceneContentMaskRecord(rec.ContentMask)
 	nativeRec.Color = sceneBackgroundRecord(rec.Color, rec.Bounds)
 	nativeRec.VertexCount = uint32(len(rec.Vertices))
 	vertices := make([]native.ScenePathVertexRecord, len(rec.Vertices))
@@ -593,7 +593,7 @@ func (k *SceneKernel) Paths() ([]PathRecord, [][]PathVertex, error) {
 		}
 		cursor += int(rec.VertexCount)
 		x, y, w, height := rec.Bounds.Rect()
-		maskX, maskY, maskW, maskH := rec.ContentMask.Rect()
+		maskX, maskY, maskW, maskH := rec.ContentMask.Bounds.Rect()
 		outRecords[i] = PathRecord{
 			Order:       rec.Order,
 			Bounds:      Bounds{Origin: Point{X: x, Y: y}, Size: Size{Width: w, Height: height}},

@@ -128,7 +128,7 @@ func (s *Scene) PaintCaptureSurface(bounds Bounds, frame ScreenCaptureFrame, ctx
 	mask := snappedContentMask(ctx.Mask, ctx.ScaleFactor)
 	rec := native.NewSceneSurfaceRecord()
 	rec.Bounds = sceneBoundsRecord(snappedBounds)
-	rec.ContentMask = sceneBoundsRecord(mask)
+	rec.ContentMask = sceneContentMaskRecord(mask)
 	rec.SourceTag = uint32(SurfaceSourceCaptureFrame)
 	rec.SourceReserved[0] = uint32(frame.Handle)
 	rec.SourceReserved[1] = uint32(frame.Handle >> 32)

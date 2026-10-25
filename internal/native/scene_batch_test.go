@@ -29,20 +29,20 @@ func buildBatchScene(t *testing.T, svc *SceneService, direct bool) *Scene {
 	quad := func(x float32) *SceneQuadRecord {
 		rec := NewSceneQuadRecord()
 		rec.Bounds = SceneBoundsOf(x, 0, 10, 10)
-		rec.ContentMask = SceneBoundsOf(0, 0, 1000, 1000)
+		rec.ContentMask = SceneContentMaskOf(0, 0, 1000, 1000)
 		rec.Background = SceneBackgroundOf(0.5, 1, 0.5, 1)
 		return &rec
 	}
 	sprite := func(x float32, kind uint32) *SceneSpriteRecord {
 		rec := NewSceneSpriteRecord()
 		rec.Bounds = SceneBoundsOf(x, 5, 8, 8)
-		rec.ContentMask = SceneBoundsOf(0, 0, 1000, 1000)
+		rec.ContentMask = SceneContentMaskOf(0, 0, 1000, 1000)
 		rec.Tile = SceneTileRecord{TextureKind: kind, BoundsW: 8, BoundsH: 8}
 		return &rec
 	}
 	surface := NewSceneSurfaceRecord()
 	surface.Bounds = SceneBoundsOf(40, 40, 20, 20)
-	surface.ContentMask = SceneBoundsOf(0, 0, 1000, 1000)
+	surface.ContentMask = SceneContentMaskOf(0, 0, 1000, 1000)
 	layer := SceneBoundsOf(0, 0, 50, 50)
 	for i := 0; i < 600; i++ { // past one flush threshold of sprites
 		x := float32(i % 90)
@@ -185,7 +185,7 @@ func TestSceneBatchErrors(t *testing.T) {
 	// A state error surfaces at the flush: a disposed scene's stream.
 	good := NewSceneQuadRecord()
 	good.Bounds = SceneBoundsOf(0, 0, 4, 4)
-	good.ContentMask = SceneBoundsOf(0, 0, 4, 4)
+	good.ContentMask = SceneContentMaskOf(0, 0, 4, 4)
 	stale, err := svc.CreateScene()
 	if err != nil {
 		t.Fatalf("CreateScene: %v", err)

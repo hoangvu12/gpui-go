@@ -42,12 +42,19 @@ const (
 	sceneBatchPushLayer        uint32 = 9
 	sceneBatchPopLayer         uint32 = 10
 	sceneBatchRaiseOrderFloor  uint32 = 11
+	// sceneBatchEffectStart is the effect-group start marker (rev 16,
+	// ticket 50): the SceneEffectRecord payload with
+	// Flags' IsStart bit forced on.
+	sceneBatchEffectStart uint32 = 12
+	// sceneBatchEffectEnd is the effect-group end marker: the
+	// SceneEffectRecord payload with IsStart forced off.
+	sceneBatchEffectEnd uint32 = 13
 )
 
 var sceneBatchOpNames = [...]string{
 	"quad", "shadow", "underline", "backdrop filter", "filter boundary",
 	"surface", "monochrome sprite", "subpixel sprite", "polychrome sprite",
-	"push layer", "pop layer", "raise order floor",
+	"push layer", "pop layer", "raise order floor", "effect start", "effect end",
 }
 
 // sceneBatchFlushWords bounds one batch (64 KiB, about 500 sprite
@@ -257,6 +264,95 @@ func finiteBits(bits uint32) bool {
 	return !math.IsInf(f, 0) && !math.IsNaN(f)
 }
 
+// checkContentMask validates the extended content mask (rev 16,
+// ticket 50): non-negative finite fades and radii, smoothing in
+// [0, 1]. A zero-everything mask (the pre-R16 shape) always passes.
+func checkContentMask(op string, mask SceneContentMask) error {
+	for _, bits := range mask.FadeOut {
+		f := float64(math.Float32frombits(bits))
+		if math.IsNaN(f) || math.IsInf(f, 0) || f < 0 {
+			return badRecord(op, "content mask fade distance negative or non-finite")
+		}
+	}
+	for _, bits := range mask.CornerRadii {
+		f := float64(math.Float32frombits(bits))
+		if math.IsNaN(f) || math.IsInf(f, 0) || f < 0 {
+			return badRecord(op, "content mask corner radius negative or non-finite")
+		}
+	}
+	smoothing := float64(math.Float32frombits(mask.CornerSmoothing))
+	if math.IsNaN(smoothing) || math.IsInf(smoothing, 0) || smoothing < 0 || smoothing > 1 {
+		return badRecord(op, "content mask corner smoothing out of range")
+	}
+	return nil
+}
+
+// checkEffectRecord validates the effect-group record (rev 16, ticket
+// 50; the design appendix A.1 rules): known flag bits only, an
+// invertible 2x2 when HasTransform is set, the none-kind mask this
+// revision, the property-node id non-zero and paired with a transform
+// or opacity, opacity in [0, 1], finite radii and smoothing in [0, 1].
+func checkEffectRecord(op string, rec *SceneEffectRecord) error {
+	if err := checkCommon(op, rec.RecordSize, unsafe.Sizeof(*rec), rec.Order); err != nil {
+		return err
+	}
+	known := SceneEffectFlagIsStart | SceneEffectFlagHasTransform |
+		SceneEffectFlagHasOpacity | SceneEffectFlagHasBlend |
+		SceneEffectFlagHasMask | SceneEffectFlagPropertyNode |
+		SceneEffectFlagRoundedClipOnly | SceneEffectFlagClipToBounds
+	if rec.Flags&^known != 0 {
+		return badRecord(op, "effect flags carry unknown bits")
+	}
+	if rec.Flags&SceneEffectFlagHasTransform != 0 {
+		m00 := float64(math.Float32frombits(rec.Transform[0]))
+		m01 := float64(math.Float32frombits(rec.Transform[1]))
+		m10 := float64(math.Float32frombits(rec.Transform[2]))
+		m11 := float64(math.Float32frombits(rec.Transform[3]))
+		for _, value := range []float64{m00, m01, m10, m11} {
+			if math.IsNaN(value) || math.IsInf(value, 0) {
+				return badRecord(op, "effect transform is non-finite")
+			}
+		}
+		determinant := m00*m11 - m01*m10
+		if math.IsNaN(determinant) || math.IsInf(determinant, 0) || determinant == 0 {
+			return badRecord(op, "effect transform 2x2 is singular")
+		}
+	}
+	if rec.BlendMode > 16 {
+		return badRecord(op, "effect blend mode out of range")
+	}
+	// This revision requires the none-kind mask (ticket 52 relaxes it).
+	if rec.MaskKind != 0 || rec.MaskReference != 0 || rec.MaskMode != 0 {
+		return badRecord(op, "effect mask source kinds arrive with the mask table (ticket 52)")
+	}
+	if rec.Flags&SceneEffectFlagPropertyNode != 0 {
+		if rec.NodeID == 0 {
+			return badRecord(op, "effect property node requires a non-zero node id")
+		}
+		if rec.Flags&(SceneEffectFlagHasTransform|SceneEffectFlagHasOpacity) == 0 {
+			return badRecord(op, "effect property node requires a transform or an opacity")
+		}
+	}
+	opacity := float64(math.Float32frombits(rec.Opacity))
+	if math.IsNaN(opacity) || math.IsInf(opacity, 0) || opacity < 0 || opacity > 1 {
+		return badRecord(op, "effect opacity out of range")
+	}
+	for _, bits := range rec.CornerRadii {
+		f := float64(math.Float32frombits(bits))
+		if math.IsNaN(f) || math.IsInf(f, 0) || f < 0 {
+			return badRecord(op, "effect corner radius negative or non-finite")
+		}
+	}
+	smoothing := float64(math.Float32frombits(rec.CornerSmoothing))
+	if math.IsNaN(smoothing) || math.IsInf(smoothing, 0) || smoothing < 0 || smoothing > 1 {
+		return badRecord(op, "effect corner smoothing out of range")
+	}
+	if rec.Reserved != 0 {
+		return badRecord(op, "effect reserved word must be zero")
+	}
+	return nil
+}
+
 func checkQuadRecord(rec *SceneQuadRecord) error {
 	const op = "scene_insert_quad"
 	if err := checkCommon(op, rec.RecordSize, unsafe.Sizeof(*rec), rec.Order); err != nil {
@@ -268,7 +364,10 @@ func checkQuadRecord(rec *SceneQuadRecord) error {
 	if err := checkBackground(op, rec.Background); err != nil {
 		return err
 	}
-	return checkBackground(op, rec.BorderColor)
+	if err := checkBackground(op, rec.BorderColor); err != nil {
+		return err
+	}
+	return checkContentMask(op, rec.ContentMask)
 }
 
 func checkShadowRecord(rec *SceneShadowRecord) error {
@@ -279,7 +378,10 @@ func checkShadowRecord(rec *SceneShadowRecord) error {
 	if err := checkBool01(op, rec.Inset); err != nil {
 		return err
 	}
-	return checkBackground(op, rec.Color)
+	if err := checkBackground(op, rec.Color); err != nil {
+		return err
+	}
+	return checkContentMask(op, rec.ContentMask)
 }
 
 func checkUnderlineRecord(rec *SceneUnderlineRecord) error {
@@ -290,7 +392,10 @@ func checkUnderlineRecord(rec *SceneUnderlineRecord) error {
 	if err := checkBool01(op, rec.Wavy); err != nil {
 		return err
 	}
-	return checkColor(op, rec.Color)
+	if err := checkColor(op, rec.Color); err != nil {
+		return err
+	}
+	return checkContentMask(op, rec.ContentMask)
 }
 
 func checkFilterRecord(op string, rec *SceneFilterRecord, maxFilters uint32) error {

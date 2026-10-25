@@ -7,6 +7,51 @@ reserved slot 3 of the bootstrap `GpuiGoAbiTable` (see
 path/draw extension). The Go mirror lives in
 `internal/native/scene.go`.
 
+**Scene service version 6 (rev 16, browser-core ticket 50, native
+revision 151 - ticket 54 bumps the revision):** the R16 group machinery
+lands. The design doc's "scene service v5" became this version 6
+because ticket 77 had already taken 5. Everything below is
+append-only; the pre-R16 record meanings are unchanged and a
+zero-radii, zero-fade mask behaves exactly as the old 16-byte bounds
+mask (group-free scenes render pixel-identically):
+
+- the **effect group** primitive class 10: `GpuiGoSceneEffectRecord`
+  (116 bytes) with `insert_effect` / `effect_dump` (table slots 27/28)
+  and the `insert_batch` op kinds 12/13 (effect start / end, the
+  record payload with `flags.IS_START` forced by the kind); the plan
+  compiles matched pairs into command kinds **3 (begin effect group)**
+  and **4 (end effect group)**, sharing ONE group stack with the R15
+  filter boundaries;
+- every record's **content mask grows from 16 to 52 bytes**
+  (`GpuiGoSceneContentMask`: bounds + per-edge `fade_out` (LEFT, TOP,
+  RIGHT, BOTTOM order) + corner radii + smoothing) - the pin's
+  shader-side mask, finally carried; the innermost rounded clip
+  applies inline in the vendored quad/shadow pipelines and the
+  per-edge fades ride every masked pipeline (quads, shadows, filter
+  records, surfaces, both sprite records, paths - each record grows by
+  the 40-byte mask: quad 236->280, shadow 172->216, underline
+  72->112, filter 780->820, surface 56->96, sprite 124->164,
+  polychrome sprite 104->144, path 116->156; the quad and shadow
+  records also take the PINNED field order plus trailing layout pads
+  because they ARE the vendored pipelines' instance layouts - the HLSL
+  structured-buffer layout aligns the vec2f-bearing fields to 8
+  bytes);
+- `MAX_FILTER_GROUP_DEPTH` (2) is REMOVED: every matched group of
+  either kind gets an isolated pool target slot (the target_index in
+  the begin command; scenes nested at most two deep produce EXACTLY
+  the R15 plan); the new sanity bound `MAX_SCENE_GROUPS` = 1024 counts
+  group START markers of both kinds and returns `ERR_LIMIT` when the
+  start that would exceed it is inserted; the renderer's per-surface
+  group-target pool (64 targets / 256 MB) is the real budget and
+  demotes over-budget groups to inline, observably;
+- the **single-primitive opacity fold**: a pure-opacity effect group
+  whose span holds exactly one primitive and no nested group renders
+  INLINE (the begin/end commands carry `filter_target` 0) and the
+  group's opacity multiplies that primitive's colour at snapshot time
+  (the stored records stay as inserted; dumps read them unchanged);
+- `GpuiGoSceneRequirementsRecord` appends `isolated_effect_count` (44
+  -> 48) and `GpuiGoSceneMetaRecord` appends `effect_count` (56 -> 60).
+
 **Scene service version 5 (rev 15.1, browser-core ticket 77, native
 revision 151):** the filter record grew from 188 to 780 bytes
 (`MAX_SCENE_FILTERS` 4 to 8; `color_matrix` 20 to 160 words, one
@@ -138,20 +183,22 @@ service table's self-check fields before any call.
 | Record | Size | Layout (offsets) |
 |---|---|---|
 | `GpuiGoSceneBounds` | 16 | x @0, y @4, w @8, h @12 (f32 bits) |
+| `GpuiGoSceneContentMask` | 56 | bounds @0 (16), fade_out[4] @16 (left, top, right, bottom, f32 bits; a zero distance leaves that edge opaque), corner_radii[4] @32 (TL, TR, BR, BL, f32 bits), corner_smoothing @48 (f32 bits), mask_padding @52 (must be zero - the mask's HLSL structured-buffer size rounds up to its 8-byte alignment; the record IS the vendored quad/shadow pipelines' instance layout) |
+| `GpuiGoSceneEffectRecord` | 116 | order @0, flags @4 (bit 0 `is_start`, 1 `has_transform`, 2 `has_opacity`, 3 `has_blend`, 4 `has_mask`, 5 `property_node`, 6 `rounded_clip_only`, 7 `clip_to_bounds`), bounds @8, content_mask @24 (a plain 16-byte bounds record - the group's rrect comes from corner_radii/clip_to_bounds), transform[6] @40 (row-major m00, m01, m10, m11, tx, ty, f32 bits), opacity @64 ([0,1] f32 bits), blend_mode @68 (0..16, see the design's A.1), mask_kind @72 (0 none this revision; 1 gradient, 2 atlas tile, 3 coverage arrive with ticket 52), mask_reference @76, mask_mode @80 (0 alpha, 1 luminance), node_id @84 (0 = none), corner_radii[4] @88, corner_smoothing @104, reserved @108 (0), record_size @112 |
 | `GpuiGoSceneColor` | 20 | tag @0 (0 = solid), h @4, s @8, l @12, a @16 (f32 bits; h is degrees/360 in `[0,1]`) |
 | `GpuiGoSceneBackground` | 72 | tag @0 (0 = solid, 1 = linear gradient), color_space @4 (0 = sRGB, 1 = Oklab), h @8, s @12, l @16, a @20, angle @24, stop0_h @28, stop0_s @32, stop0_l @36, stop0_a @40, stop0_percentage @44, stop1_h @48, stop1_s @52, stop1_l @56, stop1_a @60, stop1_percentage @64, reserved @68 (all f32 bits; the stops' percentages are the CSS positions along the gradient line and must differ) |
-| `GpuiGoSceneQuadRecord` | 236 | order @0, bounds @4, content_mask @20, background @36, border_color @108, corner_radii[4] @180, border_widths[4] @196, border_style @212, border_dashed_length @216, border_dashed_gap @220, corner_smoothing @224, padding @228, record_size @232 |
-| `GpuiGoSceneShadowRecord` | 172 | order @0, blur_radius @4, bounds @8, corner_radii[4] @24, content_mask @40, color @56, element_bounds @128, element_corner_radii[4] @144, inset @160, corner_smoothing @164, record_size @168 |
-| `GpuiGoSceneUnderlineRecord` | 72 | order @0, padding @4, bounds @8, content_mask @24, color @40, thickness @60, wavy @64, record_size @68 |
-| `GpuiGoSceneFilterRecord` | 780 | order @0, bounds @4, content_mask @20, corner_radii[4] @36, corner_smoothing @52, blur_radii[8] @56, filter_count @88, opacity @92, is_start @96, filter_tags[8] @100 (per-filter: 0 = blur, 1 = colour matrix; unused entries zero), color_matrix[160] @132 (rev 15.1: one row-major 4x5 matrix slot PER matrix filter in chain order — slot i is words 20i..20i+20, f32 bits; slots at and beyond color_matrix_count zero), color_matrix_count @772 (the tag-1 entry count), record_size @776 |
-| `GpuiGoSceneSurfaceRecord` | 56 | order @0, bounds @4, content_mask @20, source_tag @36, source_reserved[3] @40, record_size @56 |
+| `GpuiGoSceneQuadRecord` | 280 | order @0, border_style @4, border_dashed_length @8, border_dashed_gap @12, bounds @16, content_mask @32 (56 bytes), background @88, border_color @160, corner_radii[4] @232, border_widths[4] @248, corner_smoothing @264, padding @268, layout_padding @272 (zero), record_size @276. The PINNED field order (the vec2f-bearing fields land on 8-byte-aligned offsets - exactly why the pin's order is what it is): the record IS the vendored quad pipeline's instance layout, uploaded directly |
+| `GpuiGoSceneShadowRecord` | 216 | order @0, blur_radius @4, bounds @8, corner_radii[4] @24, content_mask @40 (56 bytes), color @96, element_bounds @168, element_corner_radii[4] @184, inset @200, corner_smoothing @204, layout_padding @208 (zero), record_size @212. The record IS the vendored shadow pipeline's instance layout, uploaded directly |
+| `GpuiGoSceneUnderlineRecord` | 112 | order @0, padding @4, bounds @8, content_mask @24 (56 bytes), color @80, thickness @100, wavy @104, record_size @108 |
+| `GpuiGoSceneFilterRecord` | 820 | order @0, bounds @4, content_mask @20 (56 bytes), corner_radii[4] @76, corner_smoothing @92, blur_radii[8] @96, filter_count @128, opacity @132, is_start @136, filter_tags[8] @140 (per-filter: 0 = blur, 1 = colour matrix; unused entries zero), color_matrix[160] @132 (rev 15.1: one row-major 4x5 matrix slot PER matrix filter in chain order — slot i is words 20i..20i+20, f32 bits; slots at and beyond color_matrix_count zero), color_matrix_count @812 (the tag-1 entry count), record_size @816 |
+| `GpuiGoSceneSurfaceRecord` | 96 | order @0, bounds @4, content_mask @20 (56 bytes), source_tag @76, source_reserved[3] @80, record_size @92 |
 | `GpuiGoSceneTileRecord` | 32 | texture_index @0, texture_kind @4, tile_id @8, padding @12, bounds x/y/w/h @16..32 (the pinned `AtlasTile` sub-record of the sprite records) |
-| `GpuiGoSceneSpriteRecord` | 124 | order @0, padding @4, bounds @8, content_mask @24, color @40, tile @60, transformation[6] @92 (rotation-scale 2x2 then translation, f32 bits), pixelated @116 (0 = bilinear, 1 = point sampling), record_size @120 (the pinned `MonochromeSprite`/`SubpixelSprite` field set) |
-| `GpuiGoScenePolychromeSpriteRecord` | 104 | order @0, grayscale @4, opacity @8, corner_smoothing @12, bounds @16, content_mask @32, corner_radii[4] @48, tile @64, pixelated @96, record_size @100 |
+| `GpuiGoSceneSpriteRecord` | 164 | order @0, padding @4, bounds @8, content_mask @24 (56 bytes), color @80, tile @100, transformation[6] @132 (rotation-scale 2x2 then translation, f32 bits), pixelated @156 (0 = bilinear, 1 = point sampling), record_size @160 (the pinned `MonochromeSprite`/`SubpixelSprite` field set) |
+| `GpuiGoScenePolychromeSpriteRecord` | 144 | order @0, grayscale @4, opacity @8, corner_smoothing @12, bounds @16, content_mask @32 (56 bytes), corner_radii[4] @88, tile @104, pixelated @136, record_size @140 |
 | `GpuiGoSceneCommandRecord` | 56 | command_kind @0, primitive_kind @4, range_start @8, range_end @12, smoothed @16, pixelated @20, texture_index @24, rasterization_vertex_count @28, sprite_count @32, boundary_index @36, closing_boundary_index @40, filter_target @44, target_index @48, record_size @52 |
-| `GpuiGoSceneRequirementsRecord` | 44 | command_count @0, instance_batch_count @4, path_rasterization_vertex_count @8, path_sprite_count @12, surface_count @16, backdrop_filter_count @20, isolated_filter_count @24, isolated_target_count @28, uses_path_target @32, uses_offscreen_target @36, record_size @40 |
-| `GpuiGoSceneMetaRecord` | 56 | op_count @0, layer_push_count @4, quad_count @8, shadow_count @12, underline_count @16, backdrop_count @20, boundary_count @24, surface_count @28, monochrome_sprite_count @32, subpixel_sprite_count @36, polychrome_sprite_count @40, path_count @44, is_finished @48, record_size @52 |
-| `GpuiGoScenePathRecord` | 116 | order @0, bounds @4, content_mask @20, color @36, vertex_count @108, record_size @112 |
+| `GpuiGoSceneRequirementsRecord` | 48 | command_count @0, instance_batch_count @4, path_rasterization_vertex_count @8, path_sprite_count @12, surface_count @16, backdrop_filter_count @20, isolated_filter_count @24, isolated_target_count @28 (the pool high-water mark over BOTH group kinds - a conservative upper bound when the fold patches a begin), uses_path_target @32, uses_offscreen_target @36, record_size @40, isolated_effect_count @44 (rev 16) |
+| `GpuiGoSceneMetaRecord` | 60 | op_count @0, layer_push_count @4, quad_count @8, shadow_count @12, underline_count @16, backdrop_count @20, boundary_count @24, surface_count @28, monochrome_sprite_count @32, subpixel_sprite_count @36, polychrome_sprite_count @40, path_count @44, effect_count @48 (rev 16), is_finished @52, record_size @56 |
+| `GpuiGoScenePathRecord` | 156 | order @0, bounds @4, content_mask @20 (56 bytes), color @76, vertex_count @148, record_size @152 |
 | `GpuiGoScenePathVertexRecord` | 16 | xy_x @0, xy_y @4, st_u @8, st_v @12 (f32 bits) |
 | `GpuiGoPathCommandRecord` | 56 | kind @0, data[12] @4, record_size @52 |
 
@@ -163,11 +210,18 @@ zero-order rule happens only at the external ABI boundary).
 
 Enums: `border_style` 0 solid / 1 dashed; `inset`/`wavy`/`is_start`/the
 `smoothed` command field 0/1; `command_kind` 0 batch / 1 begin-filter /
-2 end-filter; `primitive_kind` 0 shadows, 1 quads, 2 paths, 3
-underlines, 4 monochrome sprites, 5 subpixel sprites, 6 polychrome
-sprites, 7 surfaces, 8 backdrop filters, 9 filter boundary;
-`filter_target` 0 inline / 1 isolated (with the target pool index in
-`target_index`).
+2 end-filter / 3 begin-effect / 4 end-effect (rev 16: the effect
+commands carry the effect record index in `boundary_index`, the closing
+marker's index in `closing_boundary_index`, and the pool target slot in
+`filter_target`/`target_index` like the filter commands);
+`primitive_kind` 0 shadows, 1 quads, 2 paths, 3 underlines, 4
+monochrome sprites, 5 subpixel sprites, 6 polychrome sprites, 7
+surfaces, 8 backdrop filters, 9 filter boundary, 10 effect boundary
+(rev 16; never a batch command - markers compile to begin/end effect
+commands); `filter_target` 0 inline / 1 isolated (with the pool target
+slot in `target_index`; rev 16 assigns nesting slots - sibling groups
+reuse one slot, and scenes nested at most two deep produce exactly the
+R15 plan).
 
 ## Table
 
@@ -204,17 +258,20 @@ returning an i32 status):
 | 24 | `path_dump` | `(u64, *mut GpuiGoScenePathRecord, *mut GpuiGoScenePathVertexRecord, u32 record_capacity, u32 vertex_capacity, *mut u32 out_record_count, *mut u32 out_vertex_count) -> i32` (ticket16) |
 | 25 | `path_script` | `(*const GpuiGoPathCommandRecord, u32 command_count, *const u32 points, u32 word_count, *mut GpuiGoScenePathVertexRecord, u32 vertex_capacity, *mut u32 out_vertex_count, *mut GpuiGoSceneBounds out_bounds) -> i32` (ticket16) |
 | 26 | `insert_batch` | `(u64, *const u32 words, u32 word_count, *mut u32 out_applied) -> i32` (version 4, gpui-perf ticket 05; see above) |
+| 27 | `insert_effect` | `(u64, *const GpuiGoSceneEffectRecord) -> i32` (version 6, rev 16: the effect-group marker insert; the record's `flags.IS_START` decides start/end; the batch ops 12/13 carry the same payload) |
+| 28 | `effect_dump` | `(u64, *mut GpuiGoSceneEffectRecord, u32 capacity, *mut u32 out_count) -> i32` (version 6: the finished scene's effect records with kernel-assigned orders; the plan_dump capacity protocol) |
 
-Self-check scalars: `service_version` (4), `size_of_table` (288),
-`align_of_table` (8), `size_of_quad_record` (132),
-`size_of_shadow_record` (120), `size_of_underline_record` (72),
-`size_of_filter_record` (780), `size_of_surface_record` (56),
-`size_of_monochrome_sprite_record` (120),
-`size_of_polychrome_sprite_record` (100),
-`size_of_command_record` (52), `size_of_requirements_record` (44),
-`size_of_meta_record` (56), `size_of_path_record` (64),
+Self-check scalars: `service_version` (6), `size_of_table` (312),
+`align_of_table` (8), `size_of_quad_record` (280),
+`size_of_shadow_record` (216), `size_of_underline_record` (112),
+`size_of_filter_record` (820), `size_of_surface_record` (96),
+`size_of_monochrome_sprite_record` (164),
+`size_of_polychrome_sprite_record` (144),
+`size_of_command_record` (56), `size_of_requirements_record` (48),
+`size_of_meta_record` (60), `size_of_path_record` (156),
 `size_of_path_vertex_record` (16), `size_of_path_command_record` (56),
-`max_filters` (8).
+`max_filters` (8), `size_of_effect_record` (116),
+`size_of_content_mask` (56), `max_scene_groups` (1024).
 
 ## Handles
 
@@ -236,6 +293,16 @@ required), -8 limit (an insert exceeded a scene capacity bound), 101
 panic contained.
 
 ## Capacity bounds
+
+Rev 16 (ticket 50): `MAX_SCENE_GROUPS` = 1024 bounds the group START
+markers (filter boundaries + effect groups together - one group stack);
+inserting the start that would exceed it returns `ERR_LIMIT`. The
+pinned `MAX_FILTER_GROUP_DEPTH` = 2 is GONE: the plan gives every
+matched group of either kind an isolated pool target, and the
+renderer's per-surface group-target pool (64 targets / 256 MB, see
+RENDERER_ABI.md's `surface_debug_stats`) is the only demotion point. A
+demoted group renders inline (un-grouped, unfiltered), observably: the
+pool's overflow counter and a debug-build warning.
 
 - 262,144 paint operations per scene (the replay address space),
 - 65,536 primitives per class per scene,

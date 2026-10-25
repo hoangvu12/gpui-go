@@ -64,6 +64,31 @@
 //!    after any blur, on the unpremultiplied sampled color, then
 //!    re-premultiplied.
 
+//! # rev 16 (browser-core ticket 50) divergences
+//!
+//! 4. **The extended content mask and the ABI-record instance layout**
+//!    (`common.rs`, `quads.rs`, `shadows.rs`): the mask grows from
+//!    bounds-only (16 bytes) to the pin's full shader shape - bounds,
+//!    per-edge `fade_out` ramp, corner radii, smoothing and one layout
+//!    pad word (56 bytes; the pad exists because the mask's bounds
+//!    member forces 8-byte alignment in the HLSL structured-buffer
+//!    layout, and a struct's size rounds up to its alignment; the fade
+//!    word order is LEFT, TOP, RIGHT, BOTTOM) - and the
+//!    `ContentMask::alpha` clip multiplies in the rounded-rectangle
+//!    SDF when the mask carries radii (the INNERMOST rounded clip,
+//!    inline; ancestor rounded clips become effect groups). The quad
+//!    and shadow instance structs mirror the ABI records field for
+//!    field (`GpuiGoSceneQuadRecord` 280 bytes - the PINNED field
+//!    order, which is the alignment-safe one, plus a trailing layout
+//!    pad; `GpuiGoSceneShadowRecord` 216, same rule), so the draw path
+//!    uploads the scene's records directly as the instance arrays -
+//!    zero per-frame conversion. A zero-radii, zero-fade mask
+//!    evaluates exactly as the pre-R16 bounds-only mask (group-free
+//!    scenes render pixel-identically). The pinned
+//!    underline/sprite/path pipelines keep consuming the pinned DXBC
+//!    blobs (bounds + fade only, no radii) - the recorded gap handed
+//!    to ticket 52's mask work.
+
 #![allow(dead_code, unused_assignments, unused_imports)]
 
 pub mod common;

@@ -101,7 +101,7 @@ use lyon::math::Transform as LyonTransform;
 /// `color_matrix` 20 → 160 words, one slot per colour function with
 /// the [0,1] clamp between — the rev-15 composed payload could not
 /// express Chrome's per-function clamping); no table slots changed.
-pub const GPUI_GO_SCENE_SERVICE_VERSION: u32 = 5;
+pub const GPUI_GO_SCENE_SERVICE_VERSION: u32 = 6;
 
 /// Scene service status codes. 0 is success, negative values are
 /// caller/argument errors, 100+ are internal failures.
@@ -153,9 +153,21 @@ pub const MAX_SCENE_PLAN_COMMANDS: u32 = 262_144;
 /// explicit per-path bound, but the ABI validates every bulk copy).
 pub const MAX_SCENE_PATH_VERTICES: u32 = 1_048_576;
 
-/// Nested content-filter groups with dedicated isolation targets; deeper
-/// groups render inline (pinned `plan.rs::MAX_FILTER_GROUP_DEPTH`).
-pub const MAX_FILTER_GROUP_DEPTH: usize = 2;
+/// **Removed in rev 16 (browser-core ticket 50):** the pinned
+/// `MAX_FILTER_GROUP_DEPTH = 2` cap (deeper groups rendered inline,
+/// unfiltered) is gone - the R16 target pool has no depth cap, every
+/// matched group of either kind (filter boundary or effect group) gets
+/// an isolated pool target, and the renderer's per-surface pool budget
+/// is the only demotion point (a demoted group renders inline,
+/// observably: a debug-stats counter and a debug-build warning). The
+/// ABI sanity bound is now [`MAX_SCENE_GROUPS`].
+
+/// Maximum group START markers (filter boundaries + effect groups) in
+/// one scene - an ABI sanity bound, not a semantic cap (rev 16,
+/// ticket 50). Inserting the start marker that would exceed it
+/// returns [`scene_status::ERR_LIMIT`]; the renderer's per-surface
+/// pool budget is the real cap.
+pub const MAX_SCENE_GROUPS: u32 = 1024;
 
 // ---------------------------------------------------------------------------
 // ABI records
@@ -170,6 +182,61 @@ pub struct GpuiGoSceneBounds {
     pub y: u32,
     pub w: u32,
     pub h: u32,
+}
+
+/// The extended content mask (rev 16, browser-core ticket 50): the pin's
+/// shader-side `ContentMask` (bounds plus the linear per-edge `fade_out`
+/// ramp, `shaders/common.rs`'s `ContentMask::alpha`) finally carried by
+/// the ABI, plus the rounded-clip fields (corner radii and smoothing -
+/// the innermost rounded clip applies INLINE in every vendored pipeline
+/// through the rounded-rectangle SDF; ancestors' rounded clips become
+/// effect groups, see `GpuiGoSceneEffectRecord`). 13 words = 52 bytes,
+/// alignment 4; replaces the 16-byte bounds-only mask in every record
+/// that has one.
+///
+/// `fade_out` word order is LEFT, TOP, RIGHT, BOTTOM (each f32 bits, in
+/// DEVICE pixels): a zero distance leaves that edge fully opaque, and
+/// the ramp runs from the mask bound inward, exactly the pin's
+/// `ContentMask::alpha`. `corner_radii` are top-left, top-right,
+/// bottom-right, bottom-left (f32 bits, device pixels); a zero-radius
+/// mask clips rect-only (the record's pre-R16 behaviour).
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub struct GpuiGoSceneContentMask {
+    /// The clip bounds in device pixels (the rect intersection).
+    pub bounds: GpuiGoSceneBounds,
+    /// Per-edge fade distances: left, top, right, bottom (f32 bits).
+    pub fade_out: [u32; 4],
+    /// Rounded-corner clip radii: top-left, top-right, bottom-right,
+    /// bottom-left (f32 bits).
+    pub corner_radii: [u32; 4],
+    /// Rounded-corner smoothing in [0, 1] (f32 bits); carried for the
+    /// rounded clip (the vendored pipelines evaluate the plain rrect
+    /// SDF this revision; the smoothed-corner SDF rides the record's
+    /// own smoothing where the pipelines already support it).
+    pub corner_smoothing: u32,
+    /// Layout pad (the mask's HLSL structured-buffer struct size rounds
+    /// up to its 8-byte alignment - the mask's bounds member forces
+    /// it); must be zero.
+    pub mask_padding: u32,
+}
+
+impl GpuiGoSceneContentMask {
+    /// The mask's corner radii as f32 (validation and snapshot use).
+    pub fn radii_f32(&self) -> [f32; 4] {
+        [
+            f32::from_bits(self.corner_radii[0]),
+            f32::from_bits(self.corner_radii[1]),
+            f32::from_bits(self.corner_radii[2]),
+            f32::from_bits(self.corner_radii[3]),
+        ]
+    }
+
+    /// True when the mask clips with rounded corners (any non-zero
+    /// radius). A rect-only mask behaves exactly as before rev 16.
+    pub fn is_rounded(&self) -> bool {
+        self.corner_radii.iter().any(|bits| *bits != 0)
+    }
 }
 
 /// Scene color record: `tag` plus the HSL-with-alpha components as f32
@@ -309,12 +376,20 @@ impl GpuiGoSceneBackground {
     }
 }
 
-/// Quad record. Layout (x86-64, `#[repr(C)]`): `order` @0, `bounds` @4,
-/// `content_mask` @20, `background` @36, `border_color` @108,
-/// `corner_radii` @180, `border_widths` @196, `border_style` @212,
-/// `border_dashed_length` @216, `border_dashed_gap` @220,
-/// `corner_smoothing` @224, `padding` @228, `record_size` @232;
-/// size 236, alignment 4.
+/// Quad record. Layout (x86-64, `#[repr(C)]`): `order` @0,
+/// `border_style` @4, `border_dashed_length` @8, `border_dashed_gap`
+/// @12, `bounds` @16, `content_mask` @32 (56 bytes, the rev-16 extended
+/// mask), `background` @88, `border_color` @160, `corner_radii` @232,
+/// `border_widths` @248, `corner_smoothing` @264, `padding` @268,
+/// `layout_padding` @272, `record_size` @276; size 280, alignment 4.
+///
+/// rev 16 (ticket 50): the field order mirrors the PINNED struct - the
+/// draw path uploads this record DIRECTLY as the vendored quad
+/// pipeline's instance array, and the HLSL structured-buffer layout
+/// aligns the vec2f-bearing fields (bounds, the mask's bounds) to 8
+/// bytes; the pin's field order is the alignment-safe one (the
+/// layout_padding/record_size pair pads the tail to the same rounded
+/// size). The pre-R16 field semantics are unchanged.
 ///
 /// `order` mirrors the pinned `Quad::order`: it must be 0 on insert (the
 /// kernel assigns the draw order) and carries the assigned order in
@@ -329,10 +404,18 @@ impl GpuiGoSceneBackground {
 pub struct GpuiGoSceneQuadRecord {
     /// Draw order. Must be 0 on insert; kernel-assigned in dumps.
     pub order: u32,
+    /// 0 = solid, 1 = dashed (pinned `BorderStyle`).
+    pub border_style: u32,
+    /// Dashed border dash length, f32 bits (multiple of border width).
+    pub border_dashed_length: u32,
+    /// Dashed border dash gap, f32 bits.
+    pub border_dashed_gap: u32,
     /// Bounds in device pixels.
     pub bounds: GpuiGoSceneBounds,
-    /// Content mask bounds in device pixels (the clip).
-    pub content_mask: GpuiGoSceneBounds,
+    /// Content mask (the rev-16 extended mask: bounds, per-edge fade
+    /// distances and the rounded-clip radii; a zero-radii, zero-fade
+    /// mask behaves exactly as the pre-R16 bounds-only mask).
+    pub content_mask: GpuiGoSceneContentMask,
     /// Background (solid or a two-stop linear gradient).
     pub background: GpuiGoSceneBackground,
     /// Border (solid or a two-stop linear gradient).
@@ -342,16 +425,13 @@ pub struct GpuiGoSceneQuadRecord {
     pub corner_radii: [u32; 4],
     /// Border widths (top, right, bottom, left), f32 bits, device pixels.
     pub border_widths: [u32; 4],
-    /// 0 = solid, 1 = dashed (pinned `BorderStyle`).
-    pub border_style: u32,
-    /// Dashed border dash length, f32 bits (multiple of border width).
-    pub border_dashed_length: u32,
-    /// Dashed border dash gap, f32 bits.
-    pub border_dashed_gap: u32,
     /// Corner smoothing, f32 bits.
     pub corner_smoothing: u32,
     /// Padding (payload; the pinned field, always 0 from the paint path).
     pub padding: u32,
+    /// Layout pad (the record's HLSL struct size rounds up to its
+    /// 8-byte alignment); must be zero.
+    pub layout_padding: u32,
     /// `size_of::<GpuiGoSceneQuadRecord>()` self-check.
     pub record_size: u32,
 }
@@ -360,26 +440,31 @@ impl Default for GpuiGoSceneQuadRecord {
     fn default() -> Self {
         GpuiGoSceneQuadRecord {
             order: 0,
+            border_style: 0,
+            border_dashed_length: 0,
+            border_dashed_gap: 0,
             bounds: GpuiGoSceneBounds::default(),
-            content_mask: GpuiGoSceneBounds::default(),
+            content_mask: GpuiGoSceneContentMask::default(),
             background: GpuiGoSceneBackground::default(),
             border_color: GpuiGoSceneBackground::default(),
             corner_radii: [0; 4],
             border_widths: [0; 4],
-            border_style: 0,
-            border_dashed_length: 0,
-            border_dashed_gap: 0,
             corner_smoothing: 0,
             padding: 0,
+            layout_padding: 0,
             record_size: core::mem::size_of::<GpuiGoSceneQuadRecord>() as u32,
         }
     }
 }
 
 /// Shadow record. Layout: `order` @0, `blur_radius` @4, `bounds` @8,
-/// `corner_radii` @24, `content_mask` @40, `color` @56, `element_bounds`
-/// @128, `element_corner_radii` @144, `inset` @160, `corner_smoothing`
-/// @164, `record_size` @168; size 172, alignment 4.
+/// `corner_radii` @24, `content_mask` @40 (56 bytes, the rev-16 extended
+/// mask), `color` @96, `element_bounds` @168, `element_corner_radii`
+/// @184, `inset` @200, `corner_smoothing` @204, `layout_padding` @208,
+/// `record_size` @212; size 216, alignment 4. The field order (the
+/// pin's) keeps every vec2-bearing field 8-byte aligned, and the
+/// trailing pad reaches the HLSL structured-buffer size - this record
+/// IS the vendored shadow pipeline's instance layout.
 ///
 /// rev 15 (browser-core ticket 39): `color` is a full background record
 /// (solid or a two-stop gradient), and drop shadows are clipped out of
@@ -397,7 +482,10 @@ pub struct GpuiGoSceneShadowRecord {
     /// Corner radii of the shadow shape, f32 bits.
     pub corner_radii: [u32; 4],
     /// Content mask bounds.
-    pub content_mask: GpuiGoSceneBounds,
+    /// Content mask (the rev-16 extended mask: bounds, per-edge fade
+    /// distances and the rounded-clip radii; a zero-radii, zero-fade
+    /// mask behaves exactly as the pre-R16 bounds-only mask).
+    pub content_mask: GpuiGoSceneContentMask,
     /// Shadow color (solid or a two-stop linear gradient).
     pub color: GpuiGoSceneBackground,
     /// The element's bounds (the shadow's un-dilated frame — the
@@ -409,6 +497,9 @@ pub struct GpuiGoSceneShadowRecord {
     pub inset: u32,
     /// Corner smoothing, f32 bits.
     pub corner_smoothing: u32,
+    /// Layout pad (the record's HLSL struct size rounds up to its
+    /// 8-byte alignment); must be zero.
+    pub layout_padding: u32,
     /// `size_of::<GpuiGoSceneShadowRecord>()` self-check.
     pub record_size: u32,
 }
@@ -420,20 +511,21 @@ impl Default for GpuiGoSceneShadowRecord {
             blur_radius: 0,
             bounds: GpuiGoSceneBounds::default(),
             corner_radii: [0; 4],
-            content_mask: GpuiGoSceneBounds::default(),
+            content_mask: GpuiGoSceneContentMask::default(),
             color: GpuiGoSceneBackground::default(),
             element_bounds: GpuiGoSceneBounds::default(),
             element_corner_radii: [0; 4],
             inset: 0,
             corner_smoothing: 0,
+            layout_padding: 0,
             record_size: core::mem::size_of::<GpuiGoSceneShadowRecord>() as u32,
         }
     }
 }
 
 /// Underline record. Layout: `order` @0, `padding` @4, `bounds` @8,
-/// `content_mask` @24, `color` @40, `thickness` @60, `wavy` @64,
-/// `record_size` @68; size 72, alignment 4.
+/// `content_mask` @24 (52 bytes, the rev-16 extended mask), `color` @76,
+/// `thickness` @96, `wavy` @100, `record_size` @104; size 108, alignment 4.
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct GpuiGoSceneUnderlineRecord {
@@ -444,7 +536,10 @@ pub struct GpuiGoSceneUnderlineRecord {
     /// Bounds in device pixels.
     pub bounds: GpuiGoSceneBounds,
     /// Content mask bounds.
-    pub content_mask: GpuiGoSceneBounds,
+    /// Content mask (the rev-16 extended mask: bounds, per-edge fade
+    /// distances and the rounded-clip radii; a zero-radii, zero-fade
+    /// mask behaves exactly as the pre-R16 bounds-only mask).
+    pub content_mask: GpuiGoSceneContentMask,
     /// Underline color.
     pub color: GpuiGoSceneColor,
     /// Stroke thickness, f32 bits, device pixels.
@@ -461,7 +556,7 @@ impl Default for GpuiGoSceneUnderlineRecord {
             order: 0,
             padding: 0,
             bounds: GpuiGoSceneBounds::default(),
-            content_mask: GpuiGoSceneBounds::default(),
+            content_mask: GpuiGoSceneContentMask::default(),
             color: GpuiGoSceneColor::default(),
             thickness: 0,
             wavy: 0,
@@ -473,10 +568,11 @@ impl Default for GpuiGoSceneUnderlineRecord {
 /// Filter record, shared by backdrop filters and content-filter
 /// boundaries (the pinned `BackdropFilter`/`FilterBoundary` shapes; the
 /// boundary adds `is_start`). Layout: `order` @0, `bounds` @4,
-/// `content_mask` @20, `corner_radii` @36, `corner_smoothing` @52,
-/// `blur_radii` @56, `filter_count` @88, `opacity` @92, `is_start` @96,
-/// `filter_tags` @100, `color_matrix` @132, `color_matrix_count` @772,
-/// `record_size` @776; size 780, alignment 4.
+/// `content_mask` @20 (52 bytes, the rev-16 extended mask),
+/// `corner_radii` @72, `corner_smoothing` @88, `blur_radii` @92,
+/// `filter_count` @124, `opacity` @128, `is_start` @132, `filter_tags`
+/// @136, `color_matrix` @168, `color_matrix_count` @808, `record_size`
+/// @812; size 816, alignment 4.
 ///
 /// Filters are gaussian blurs with radii in device pixels (the pinned
 /// `ScaledFilter::Blur`) or colour-matrix filters (rev 15, browser-core
@@ -504,7 +600,10 @@ pub struct GpuiGoSceneFilterRecord {
     /// Bounds in device pixels.
     pub bounds: GpuiGoSceneBounds,
     /// Content mask bounds.
-    pub content_mask: GpuiGoSceneBounds,
+    /// Content mask (the rev-16 extended mask: bounds, per-edge fade
+    /// distances and the rounded-clip radii; a zero-radii, zero-fade
+    /// mask behaves exactly as the pre-R16 bounds-only mask).
+    pub content_mask: GpuiGoSceneContentMask,
     /// Corner radii, f32 bits.
     pub corner_radii: [u32; 4],
     /// Corner smoothing, f32 bits.
@@ -555,7 +654,7 @@ impl Default for GpuiGoSceneFilterRecord {
         GpuiGoSceneFilterRecord {
             order: 0,
             bounds: GpuiGoSceneBounds::default(),
-            content_mask: GpuiGoSceneBounds::default(),
+            content_mask: GpuiGoSceneContentMask::default(),
             corner_radii: [0; 4],
             corner_smoothing: 0,
             blur_radii: [0; 8],
@@ -582,9 +681,9 @@ pub mod surface_source_kind {
     pub const CAPTURE_FRAME: u32 = 1;
 }
 
-/// Surface record. Layout: `order` @0, `bounds` @4, `content_mask` @20,
-/// `source_tag` @36, `source_reserved` @40, `record_size` @56;
-/// size 56, alignment 4.
+/// Surface record. Layout: `order` @0, `bounds` @4, `content_mask` @20
+/// (52 bytes, the rev-16 extended mask), `source_tag` @72,
+/// `source_reserved` @76, `record_size` @88; size 92, alignment 4.
 ///
 /// The source is opaque payload (tag 0 = the pinned
 /// `SurfaceSource::Unsupported` stand-in used by tests; tag 1 = a
@@ -600,7 +699,10 @@ pub struct GpuiGoSceneSurfaceRecord {
     /// Bounds in device pixels.
     pub bounds: GpuiGoSceneBounds,
     /// Content mask bounds.
-    pub content_mask: GpuiGoSceneBounds,
+    /// Content mask (the rev-16 extended mask: bounds, per-edge fade
+    /// distances and the rounded-clip radii; a zero-radii, zero-fade
+    /// mask behaves exactly as the pre-R16 bounds-only mask).
+    pub content_mask: GpuiGoSceneContentMask,
     /// Source kind tag (payload; 0 = none/unsupported, 1 = a capture
     /// frame handle packed across `source_reserved[0]` (low 32) and
     /// `source_reserved[1]` (high 32)).
@@ -616,7 +718,7 @@ impl Default for GpuiGoSceneSurfaceRecord {
         GpuiGoSceneSurfaceRecord {
             order: 0,
             bounds: GpuiGoSceneBounds::default(),
-            content_mask: GpuiGoSceneBounds::default(),
+            content_mask: GpuiGoSceneContentMask::default(),
             source_tag: 0,
             source_reserved: [0; 3],
             record_size: core::mem::size_of::<GpuiGoSceneSurfaceRecord>() as u32,
@@ -692,9 +794,10 @@ enum SpriteClass {
 /// Monochrome/subpixel sprite record (the pinned `MonochromeSprite` and
 /// `SubpixelSprite`, which share this exact field set:
 /// `crates/gpui/src/scene.rs:1069-1104`). Layout: `order` @0, `padding`
-/// @4, `bounds` @8, `content_mask` @24, `color` @40, `tile` @60,
-/// `transformation` @92 (rotation-scale 2x2 then translation xy, f32
-/// bits), `pixelated` @116, `record_size` @120; size 124, alignment 4.
+/// @4, `bounds` @8, `content_mask` @24 (52 bytes, the rev-16 extended
+/// mask), `color` @76, `tile` @96, `transformation` @128 (rotation-scale
+/// 2x2 then translation xy, f32 bits), `pixelated` @152, `record_size`
+/// @156; size 160, alignment 4.
 ///
 /// rev 15 (browser-core ticket 39): `pixelated` selects nearest-neighbour
 /// sampling for this sprite (CSS `image-rendering: pixelated`); the plan
@@ -709,7 +812,10 @@ pub struct GpuiGoSceneSpriteRecord {
     /// Bounds in device pixels (the sprite's on-screen placement).
     pub bounds: GpuiGoSceneBounds,
     /// Content mask bounds.
-    pub content_mask: GpuiGoSceneBounds,
+    /// Content mask (the rev-16 extended mask: bounds, per-edge fade
+    /// distances and the rounded-clip radii; a zero-radii, zero-fade
+    /// mask behaves exactly as the pre-R16 bounds-only mask).
+    pub content_mask: GpuiGoSceneContentMask,
     /// The mask color (monochrome coverage tint / subpixel blend color).
     pub color: GpuiGoSceneColor,
     /// The atlas tile this sprite samples.
@@ -731,7 +837,7 @@ impl Default for GpuiGoSceneSpriteRecord {
             order: 0,
             padding: 0,
             bounds: GpuiGoSceneBounds::default(),
-            content_mask: GpuiGoSceneBounds::default(),
+            content_mask: GpuiGoSceneContentMask::default(),
             color: GpuiGoSceneColor::default(),
             tile: GpuiGoSceneTileRecord::default(),
             // The pinned `TransformationMatrix::unit()`.
@@ -753,8 +859,9 @@ impl Default for GpuiGoSceneSpriteRecord {
 /// `crates/gpui/src/scene.rs:1107-1121`: no color, no transformation;
 /// grayscale flag, opacity, corner radii and smoothing instead).
 /// Layout: `order` @0, `grayscale` @4, `opacity` @8, `corner_smoothing`
-/// @12, `bounds` @16, `content_mask` @32, `corner_radii` @48, `tile`
-/// @64, `pixelated` @96, `record_size` @100; size 104, alignment 4.
+/// @12, `bounds` @16, `content_mask` @32 (52 bytes, the rev-16 extended
+/// mask), `corner_radii` @84, `tile` @100, `pixelated` @132,
+/// `record_size` @136; size 140, alignment 4.
 ///
 /// rev 15 (browser-core ticket 39): `pixelated` selects nearest-neighbour
 /// sampling for this sprite (CSS `image-rendering: pixelated`); the plan
@@ -773,7 +880,10 @@ pub struct GpuiGoScenePolychromeSpriteRecord {
     /// Bounds in device pixels.
     pub bounds: GpuiGoSceneBounds,
     /// Content mask bounds.
-    pub content_mask: GpuiGoSceneBounds,
+    /// Content mask (the rev-16 extended mask: bounds, per-edge fade
+    /// distances and the rounded-clip radii; a zero-radii, zero-fade
+    /// mask behaves exactly as the pre-R16 bounds-only mask).
+    pub content_mask: GpuiGoSceneContentMask,
     /// Corner radii, f32 bits, device pixels.
     pub corner_radii: [u32; 4],
     /// The atlas tile this sprite samples.
@@ -793,7 +903,7 @@ impl Default for GpuiGoScenePolychromeSpriteRecord {
             opacity: 1.0f32.to_bits(),
             corner_smoothing: 0,
             bounds: GpuiGoSceneBounds::default(),
-            content_mask: GpuiGoSceneBounds::default(),
+            content_mask: GpuiGoSceneContentMask::default(),
             corner_radii: [0; 4],
             tile: GpuiGoSceneTileRecord::default(),
             pixelated: 0,
@@ -924,8 +1034,8 @@ pub struct GpuiGoScenePathVertexRecord {
 /// Path primitive record (the pinned `Path<ScaledPixels>` scene
 /// primitive: the tessellated triangle list plus the record fields the
 /// kernel and renderer consume). Layout: `order` @0, `bounds` @4,
-/// `content_mask` @20, `color` @36, `vertex_count` @108,
-/// `record_size` @112; size 116, alignment 4.
+/// `content_mask` @20 (52 bytes, the rev-16 extended mask), `color` @72,
+/// `vertex_count` @144, `record_size` @148; size 152, alignment 4.
 ///
 /// rev 15 (browser-core ticket 39): `color` is a full background record
 /// (the pinned `Path` holds a `Background`); gradients ride the same
@@ -945,7 +1055,10 @@ pub struct GpuiGoScenePathRecord {
     /// Bounds (the union of the path's triangles), device pixels.
     pub bounds: GpuiGoSceneBounds,
     /// Content mask bounds.
-    pub content_mask: GpuiGoSceneBounds,
+    /// Content mask (the rev-16 extended mask: bounds, per-edge fade
+    /// distances and the rounded-clip radii; a zero-radii, zero-fade
+    /// mask behaves exactly as the pre-R16 bounds-only mask).
+    pub content_mask: GpuiGoSceneContentMask,
     /// Path fill (solid or a two-stop linear gradient).
     pub color: GpuiGoSceneBackground,
     /// The vertex count of the parallel vertex array.
@@ -959,7 +1072,7 @@ impl Default for GpuiGoScenePathRecord {
         GpuiGoScenePathRecord {
             order: 0,
             bounds: GpuiGoSceneBounds::default(),
-            content_mask: GpuiGoSceneBounds::default(),
+            content_mask: GpuiGoSceneContentMask::default(),
             color: GpuiGoSceneBackground::default(),
             vertex_count: 0,
             record_size: core::mem::size_of::<GpuiGoScenePathRecord>() as u32,
@@ -1034,6 +1147,146 @@ impl Default for GpuiGoSceneCommandRecord {
     }
 }
 
+/// Effect-group flag bits of [`GpuiGoSceneEffectRecord::flags`] (rev 16,
+/// ticket 50). Bits 8 and up are reserved (zero).
+pub mod effect_flags {
+    /// 1 = the record opens the group (a start marker); 0 = it closes.
+    pub const IS_START: u32 = 1;
+    /// The group carries a 2x3 transform (ticket 51 wires the matrix
+    /// composite; the record carries and validates the matrix now).
+    pub const HAS_TRANSFORM: u32 = 2;
+    /// The group composites its subtree once at `opacity` (group
+    /// opacity - the R16 core case).
+    pub const HAS_OPACITY: u32 = 4;
+    /// The group composites with `blend_mode` instead of source-over
+    /// (ticket 52 wires the blend).
+    pub const HAS_BLEND: u32 = 8;
+    /// The group composites `dst_in` against the mask source (ticket 52
+    /// wires the mask).
+    pub const HAS_MASK: u32 = 16;
+    /// The group is a property node updatable after finish (ticket 51
+    /// wires `scene_update_property`).
+    pub const PROPERTY_NODE: u32 = 32;
+    /// The group exists only to clip its subtree to the rounded bounds
+    /// (a nested rounded clip - the child clips itself, so the
+    /// ancestor's rrect needs an isolated target).
+    pub const ROUNDED_CLIP_ONLY: u32 = 64;
+    /// The composite clips to the group's rounded `bounds` (masks and
+    /// rounded clips; 0 lets content bleed past the bounds, exactly as
+    /// content filters do today).
+    pub const CLIP_TO_BOUNDS: u32 = 128;
+    /// The mask of every known flag bit (validation).
+    pub const ALL: u32 = IS_START
+        | HAS_TRANSFORM
+        | HAS_OPACITY
+        | HAS_BLEND
+        | HAS_MASK
+        | PROPERTY_NODE
+        | ROUNDED_CLIP_ONLY
+        | CLIP_TO_BOUNDS;
+}
+
+/// Effect-group record (rev 16, browser-core ticket 50; primitive
+/// class 10). One open/close marker pair carries the whole Chromium
+/// effect-node payload: group opacity, the 2x3 transform, blend mode,
+/// mask reference, corner radii and the property-node id. Start and
+/// end records pair through the SAME boundary machinery as content
+/// filter boundaries (start inserts above all prior content, end
+/// raises the order floor), and both kinds share one group stack in
+/// the compiled plan (command kinds 3/4).
+///
+/// This revision wires `has_opacity` (the explicit no-blur
+/// `composite_group` path) and the rounded clip (`clip_to_bounds` /
+/// `rounded_clip_only`, clipped by the rrect at the composite). The
+/// transform, blend, mask and property-node fields are CARRIED and
+/// VALIDATED now and wired by tickets 51/52; a `has_transform` group
+/// composites through the identity matrix this revision.
+///
+/// Layout (x86-64, `#[repr(C)]`): `order` @0, `flags` @4, `bounds` @8,
+/// `content_mask` @24 (a plain 16-byte bounds record - the group clip
+/// is the rrect from `corner_radii`/`clip_to_bounds`; per-edge fades on
+/// a group are expressed as a gradient mask, ticket 52), `transform`
+/// @40 (6 words, row-major `[m00, m01, m10, m11, tx, ty]`), `opacity`
+/// @64, `blend_mode` @68, `mask_kind` @72, `mask_reference` @76,
+/// `mask_mode` @80, `node_id` @84, `corner_radii` @88,
+/// `corner_smoothing` @104, `reserved` @108, `record_size` @112;
+/// size 116, alignment 4.
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct GpuiGoSceneEffectRecord {
+    /// Draw order. Must be 0 on insert; kernel-assigned in dumps.
+    pub order: u32,
+    /// Effect-group flag bits (see [`effect_flags`]).
+    pub flags: u32,
+    /// Group bounds in device pixels (the composite region; the
+    /// rounded-clip region when `clip_to_bounds` is set).
+    pub bounds: GpuiGoSceneBounds,
+    /// The group's own rectangular clip (a plain 16-byte bounds
+    /// record; the rounded shape comes from `corner_radii` +
+    /// `clip_to_bounds`).
+    pub content_mask: GpuiGoSceneBounds,
+    /// The 2x3 transform, row-major `[m00, m01, m10, m11, tx, ty]`, f32
+    /// bits (the sprite matrix shape). Requires an invertible 2x2 when
+    /// `has_transform` is set.
+    pub transform: [u32; 6],
+    /// Group opacity in [0, 1], f32 bits.
+    pub opacity: u32,
+    /// Blend-mode tag: 0 src-over, 1 multiply, 2 screen, 3 overlay,
+    /// 4 darken, 5 lighten, 6 color-dodge, 7 color-burn, 8 hard-light,
+    /// 9 soft-light, 10 difference, 11 exclusion, 12 hue, 13 saturation,
+    /// 14 color, 15 luminosity, 16 plus-lighter.
+    pub blend_mode: u32,
+    /// Mask source kind: 0 none, 1 gradient, 2 atlas tile, 3 coverage
+    /// (this revision requires 0 - the tables arrive with ticket 52).
+    pub mask_kind: u32,
+    /// Mask source reference (gradient table index / atlas tile id /
+    /// coverage index; 0 when `mask_kind` is 0).
+    pub mask_reference: u32,
+    /// Mask mode: 0 alpha, 1 luminance.
+    pub mask_mode: u32,
+    /// Property-node id; 0 = none (requires non-zero when
+    /// `property_node` is set).
+    pub node_id: u32,
+    /// The group's corner radii (top-left, top-right, bottom-right,
+    /// bottom-left), f32 bits, device pixels.
+    pub corner_radii: [u32; 4],
+    /// Corner smoothing in [0, 1], f32 bits.
+    pub corner_smoothing: u32,
+    /// Must be zero.
+    pub reserved: u32,
+    /// `size_of::<GpuiGoSceneEffectRecord>()` self-check.
+    pub record_size: u32,
+}
+
+impl Default for GpuiGoSceneEffectRecord {
+    fn default() -> Self {
+        GpuiGoSceneEffectRecord {
+            order: 0,
+            flags: 0,
+            bounds: GpuiGoSceneBounds::default(),
+            content_mask: GpuiGoSceneBounds::default(),
+            transform: [
+                1.0f32.to_bits(),
+                0.0f32.to_bits(),
+                0.0f32.to_bits(),
+                1.0f32.to_bits(),
+                0.0f32.to_bits(),
+                0.0f32.to_bits(),
+            ],
+            opacity: 1.0f32.to_bits(),
+            blend_mode: 0,
+            mask_kind: 0,
+            mask_reference: 0,
+            mask_mode: 0,
+            node_id: 0,
+            corner_radii: [0; 4],
+            corner_smoothing: 0,
+            reserved: 0,
+            record_size: core::mem::size_of::<GpuiGoSceneEffectRecord>() as u32,
+        }
+    }
+}
+
 /// Scene plan requirements, mirroring the pinned
 /// `ScenePlanRequirements` (all counts are `usize` in the pin; the ABI
 /// carries u32). Layout: 11 u32 fields; size 44, alignment 4.
@@ -1051,6 +1304,11 @@ pub struct GpuiGoSceneRequirementsRecord {
     pub uses_path_target: u32,
     pub uses_offscreen_target: u32,
     pub record_size: u32,
+    /// Isolated effect groups composited (rev 16, ticket 50; appended
+    /// after `record_size` - the size self-check catches old mirrors).
+    /// `isolated_target_count` is the pool high-water mark over BOTH
+    /// group kinds.
+    pub isolated_effect_count: u32,
 }
 
 /// Scene totals for the `scene-meta` observable. Layout: 14 u32 fields;
@@ -1075,6 +1333,9 @@ pub struct GpuiGoSceneMetaRecord {
     pub polychrome_sprite_count: u32,
     /// Path primitive count (ticket16).
     pub path_count: u32,
+    /// Effect-group marker count (rev 16, ticket 50; appended before
+    /// `is_finished` - the size self-check catches old mirrors).
+    pub effect_count: u32,
     /// 1 after `scene_finish`.
     pub is_finished: u32,
     pub record_size: u32,
@@ -1087,35 +1348,39 @@ const _: () = assert!(core::mem::size_of::<GpuiGoSceneColor>() == 20);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneColor>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneBackground>() == 72);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneBackground>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneQuadRecord>() == 236);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneQuadRecord>() == 280);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneQuadRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneShadowRecord>() == 172);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneShadowRecord>() == 216);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneShadowRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneUnderlineRecord>() == 72);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneUnderlineRecord>() == 112);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneUnderlineRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneFilterRecord>() == 780);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneFilterRecord>() == 820);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneFilterRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneSurfaceRecord>() == 56);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneSurfaceRecord>() == 96);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneSurfaceRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneTileRecord>() == 32);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneTileRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneSpriteRecord>() == 124);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneSpriteRecord>() == 164);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneSpriteRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoScenePolychromeSpriteRecord>() == 104);
+const _: () = assert!(core::mem::size_of::<GpuiGoScenePolychromeSpriteRecord>() == 144);
 const _: () = assert!(core::mem::align_of::<GpuiGoScenePolychromeSpriteRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneCommandRecord>() == 56);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneCommandRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneRequirementsRecord>() == 44);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneRequirementsRecord>() == 48);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneRequirementsRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneMetaRecord>() == 56);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneMetaRecord>() == 60);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneMetaRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoScenePathRecord>() == 116);
+const _: () = assert!(core::mem::size_of::<GpuiGoScenePathRecord>() == 156);
 const _: () = assert!(core::mem::align_of::<GpuiGoScenePathRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoScenePathVertexRecord>() == 16);
 const _: () = assert!(core::mem::align_of::<GpuiGoScenePathVertexRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoPathCommandRecord>() == 56);
 const _: () = assert!(core::mem::align_of::<GpuiGoPathCommandRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneTable>() == 288);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneEffectRecord>() == 116);
+const _: () = assert!(core::mem::align_of::<GpuiGoSceneEffectRecord>() == 4);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneContentMask>() == 56);
+const _: () = assert!(core::mem::align_of::<GpuiGoSceneContentMask>() == 4);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneTable>() == 312);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneTable>() == 8);
 
 // ---------------------------------------------------------------------------
@@ -1551,6 +1816,8 @@ enum PaintOp {
     SubpixelSprite(GpuiGoSceneSpriteRecord),
     PolychromeSprite(GpuiGoScenePolychromeSpriteRecord),
     Path(PathData),
+    /// An effect-group marker insert (rev 16, ticket 50).
+    Effect(GpuiGoSceneEffectRecord),
     StartLayer(F32Bounds),
     EndLayer,
 }
@@ -1572,17 +1839,192 @@ struct SceneState {
     subpixel_sprites: Vec<GpuiGoSceneSpriteRecord>,
     polychrome_sprites: Vec<GpuiGoScenePolychromeSpriteRecord>,
     paths: Vec<PathData>,
+    /// Effect-group records (rev 16, ticket 50), sorted by (order,
+    /// !is_start) at finish like the filter boundaries.
+    effects: Vec<GpuiGoSceneEffectRecord>,
+    /// How many group START markers (filter boundaries + effect
+    /// groups) have been inserted - the `MAX_SCENE_GROUPS` sanity
+    /// bound's counter.
+    group_starts: u32,
     plan: ScenePlanState,
     layer_push_count: u32,
     is_finished: bool,
     failed: bool,
 }
 
-/// The compiled plan (the pinned `ScenePlan`).
+/// The compiled plan (the pinned `ScenePlan`, extended in rev 16 with
+/// the single-primitive opacity folds).
 #[derive(Debug, Default, Clone)]
 struct ScenePlanState {
     commands: Vec<GpuiGoSceneCommandRecord>,
     requirements: GpuiGoSceneRequirementsRecord,
+    /// The plan's single-primitive opacity folds (rev 16, ticket 50):
+    /// one entry per folded effect group, applied to the SNAPSHOT's
+    /// record copies at render time (the stored records stay as
+    /// inserted; dumps read them unchanged).
+    folds: Vec<SceneFold>,
+}
+
+/// Which primitive array a fold multiplies (rev 16).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SceneFoldPrimitive {
+    Quad,
+    Shadow,
+    Underline,
+    Path,
+    MonochromeSprite,
+    SubpixelSprite,
+    PolychromeSprite,
+    Surface,
+    Backdrop,
+}
+
+/// One single-primitive opacity fold: multiply the primitive at
+/// `index` of its array by `factor` (rev 16, ticket 50 - the plan's
+/// replacement for isolating a one-primitive opacity group).
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SceneFold {
+    primitive: SceneFoldPrimitive,
+    index: u32,
+    factor: f32,
+}
+
+/// One merged group marker of the plan's shared group stack (rev 16).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct GroupMarker {
+    kind: GroupMarkerKind,
+    index: usize,
+    order: u32,
+    is_start: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GroupMarkerKind {
+    Filter,
+    Effect,
+}
+
+/// One entry of the shared render stack (the pinned filter_stack entry,
+/// extended with the marker kind).
+#[derive(Debug, Clone, Copy)]
+struct RenderStackEntry {
+    kind: GroupMarkerKind,
+    index: usize,
+    target: FilterRenderTarget,
+}
+
+/// Merges the sorted boundary and effect arrays into the marker stream
+/// the BatchIterator emits: (order, PrimitiveKind discriminant) order
+/// with boundaries ahead of effects at an exact key tie (the
+/// BatchIterator's candidate-list order; an exact cross-kind tie is
+/// impossible - the kinds differ).
+fn marker_stream(
+    boundaries: &[GpuiGoSceneFilterRecord],
+    effects: &[GpuiGoSceneEffectRecord],
+) -> Vec<GroupMarker> {
+    fn kind_of_boundary(boundary: &GpuiGoSceneFilterRecord) -> u32 {
+        // FilterBoundaryStart = 0 < EffectGroupStart = 1 < ... <
+        // EffectGroupEnd = 11 < FilterBoundaryEnd = 12 in PrimitiveKind.
+        if boundary.is_start != 0 {
+            0
+        } else {
+            12
+        }
+    }
+    fn kind_of_effect(effect: &GpuiGoSceneEffectRecord) -> u32 {
+        if (effect.flags & effect_flags::IS_START) != 0 {
+            1
+        } else {
+            11
+        }
+    }
+    let mut markers: Vec<GroupMarker> = Vec::with_capacity(boundaries.len() + effects.len());
+    let mut boundary_index = 0usize;
+    let mut effect_index = 0usize;
+    loop {
+        let boundary = boundaries.get(boundary_index);
+        let effect = effects.get(effect_index);
+        let take_boundary = match (boundary, effect) {
+            (None, None) => break,
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            (Some(boundary), Some(effect)) => {
+                let boundary_key = (boundary.order, kind_of_boundary(boundary));
+                let effect_key = (effect.order, kind_of_effect(effect));
+                boundary_key <= effect_key
+            }
+        };
+        if take_boundary {
+            let boundary = boundary.expect("checked");
+            markers.push(GroupMarker {
+                kind: GroupMarkerKind::Filter,
+                index: boundary_index,
+                order: boundary.order,
+                is_start: boundary.is_start != 0,
+            });
+            boundary_index += 1;
+        } else {
+            let effect = effect.expect("checked");
+            markers.push(GroupMarker {
+                kind: GroupMarkerKind::Effect,
+                index: effect_index,
+                order: effect.order,
+                is_start: (effect.flags & effect_flags::IS_START) != 0,
+            });
+            effect_index += 1;
+        }
+    }
+    markers
+}
+
+/// How many primitives one batch command covers (the fold's span
+/// accounting; paths count their records, sprites their range length).
+fn batch_primitive_count(batch: &PrimitiveBatch) -> u32 {
+    match batch {
+        PrimitiveBatch::Shadows { range, .. }
+        | PrimitiveBatch::Quads { range, .. }
+        | PrimitiveBatch::Underlines(range)
+        | PrimitiveBatch::MonochromeSprites { range, .. }
+        | PrimitiveBatch::SubpixelSprites { range, .. }
+        | PrimitiveBatch::PolychromeSprites { range, .. }
+        | PrimitiveBatch::Surfaces(range)
+        | PrimitiveBatch::BackdropFilters(range) => range.len() as u32,
+        PrimitiveBatch::Paths { range, .. } => range.len() as u32,
+        PrimitiveBatch::FilterBoundary(_) | PrimitiveBatch::EffectBoundary(_) => 0,
+    }
+}
+
+/// The single primitive a one-primitive batch covers, when it is one
+/// (the fold's target; None for multi-primitive batches).
+fn batch_single_primitive(batch: &PrimitiveBatch) -> Option<SceneFoldPrimitive> {
+    let (class, len): (SceneFoldPrimitive, usize) = match batch {
+        PrimitiveBatch::Shadows { range, .. } => (SceneFoldPrimitive::Shadow, range.len()),
+        PrimitiveBatch::Quads { range, .. } => (SceneFoldPrimitive::Quad, range.len()),
+        PrimitiveBatch::Underlines(range) => (SceneFoldPrimitive::Underline, range.len()),
+        PrimitiveBatch::MonochromeSprites { range, .. } => {
+            (SceneFoldPrimitive::MonochromeSprite, range.len())
+        }
+        PrimitiveBatch::SubpixelSprites { range, .. } => {
+            (SceneFoldPrimitive::SubpixelSprite, range.len())
+        }
+        PrimitiveBatch::PolychromeSprites { range, .. } => {
+            (SceneFoldPrimitive::PolychromeSprite, range.len())
+        }
+        PrimitiveBatch::Surfaces(range) => (SceneFoldPrimitive::Surface, range.len()),
+        PrimitiveBatch::BackdropFilters(range) => (SceneFoldPrimitive::Backdrop, range.len()),
+        PrimitiveBatch::Paths { range, .. } => (SceneFoldPrimitive::Path, range.len()),
+        PrimitiveBatch::FilterBoundary(_) | PrimitiveBatch::EffectBoundary(_) => {
+            return None
+        }
+    };
+    // The fold also needs the primitive's INDEX; the callers read it
+    // from the emitted batch command's range. Only singleton batches
+    // qualify.
+    if len == 1 {
+        Some(class)
+    } else {
+        None
+    }
 }
 
 impl SceneState {
@@ -1601,6 +2043,8 @@ impl SceneState {
         self.subpixel_sprites.clear();
         self.polychrome_sprites.clear();
         self.paths.clear();
+        self.effects.clear();
+        self.group_starts = 0;
         self.plan.commands.clear();
         self.plan.requirements = GpuiGoSceneRequirementsRecord::default();
         self.layer_push_count = 0;
@@ -1609,7 +2053,9 @@ impl SceneState {
     }
 
     /// The clipped bounds of a primitive record: bounds ∩ content mask,
-    /// with the pinned `Bounds::intersect` arithmetic.
+    /// with the pinned `Bounds::intersect` arithmetic (the mask's
+    /// rounded-corner fields do not enter the rect intersection: the
+    /// innermost rounded clip applies per-pixel in the shader).
     fn clipped_bounds(bounds: &GpuiGoSceneBounds, mask: &GpuiGoSceneBounds) -> F32Bounds {
         let b = bounds.to_f32();
         let m = mask.to_f32();
@@ -1675,17 +2121,17 @@ impl SceneState {
         &mut self,
         bounds: &GpuiGoSceneBounds,
         mask: &GpuiGoSceneBounds,
-        is_filter_boundary: bool,
+        is_group_marker: bool,
     ) -> Result<Option<u32>, i32> {
         let clipped_bounds = Self::clipped_bounds(bounds, mask);
         let clipped_is_empty =
             clipped_bounds.width <= 0.0 || clipped_bounds.height <= 0.0;
 
-        if clipped_is_empty && !is_filter_boundary {
+        if clipped_is_empty && !is_group_marker {
             return Ok(None);
         }
 
-        let order = if is_filter_boundary {
+        let order = if is_group_marker {
             let order_bounds = if clipped_is_empty {
                 bounds.to_f32()
             } else {
@@ -1703,7 +2149,7 @@ impl SceneState {
 
     fn insert_quad(&mut self, mut rec: GpuiGoSceneQuadRecord) -> Result<(), i32> {
         self.check_insert_capacity(self.quads.len())?;
-        let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask, false)? else {
+        let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask.bounds, false)? else {
             return Ok(());
         };
         self.is_finished = false;
@@ -1715,7 +2161,7 @@ impl SceneState {
 
     fn insert_shadow(&mut self, mut rec: GpuiGoSceneShadowRecord) -> Result<(), i32> {
         self.check_insert_capacity(self.shadows.len())?;
-        let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask, false)? else {
+        let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask.bounds, false)? else {
             return Ok(());
         };
         self.is_finished = false;
@@ -1727,7 +2173,7 @@ impl SceneState {
 
     fn insert_underline(&mut self, mut rec: GpuiGoSceneUnderlineRecord) -> Result<(), i32> {
         self.check_insert_capacity(self.underlines.len())?;
-        let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask, false)? else {
+        let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask.bounds, false)? else {
             return Ok(());
         };
         self.is_finished = false;
@@ -1739,7 +2185,7 @@ impl SceneState {
 
     fn insert_backdrop(&mut self, mut rec: GpuiGoSceneFilterRecord) -> Result<(), i32> {
         self.check_insert_capacity(self.backdrops.len())?;
-        let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask, false)? else {
+        let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask.bounds, false)? else {
             return Ok(());
         };
         self.is_finished = false;
@@ -1751,10 +2197,13 @@ impl SceneState {
 
     fn insert_boundary(&mut self, mut rec: GpuiGoSceneFilterRecord) -> Result<(), i32> {
         self.check_insert_capacity(self.boundaries.len())?;
+        if rec.is_start != 0 && self.group_starts >= MAX_SCENE_GROUPS {
+            return Err(scene_status::ERR_LIMIT);
+        }
         // Boundaries are never dropped (matched pairs must survive
         // clipping), so insert_common always yields an order here.
         let order = self
-            .insert_common(&rec.bounds, &rec.content_mask, true)?
+            .insert_common(&rec.bounds, &rec.content_mask.bounds, true)?
             .expect("filter boundaries are never dropped");
         self.is_finished = false;
         rec.order = order;
@@ -1767,8 +2216,47 @@ impl SceneState {
                 .ok_or(scene_status::ERR_BAD_VALUE)?;
             self.bounds_tree.set_order_floor(floor);
         }
+        if rec.is_start != 0 {
+            self.group_starts = self.group_starts.saturating_add(1);
+        }
         self.boundaries.push(rec);
         self.ops.push(PaintOp::Boundary(rec));
+        Ok(())
+    }
+
+    /// Effect-group marker insertion (rev 16, ticket 50): the SAME
+    /// boundary machinery as content-filter boundaries - a start
+    /// marker inserts above all prior content (never dropped, even
+    /// with an empty clipped rect), a closing marker additionally
+    /// raises the order floor above itself so later content cannot
+    /// fall back inside the group's order range. Both kinds share one
+    /// group stack in the compiled plan.
+    fn insert_effect(&mut self, mut rec: GpuiGoSceneEffectRecord) -> Result<(), i32> {
+        self.check_insert_capacity(self.effects.len())?;
+        if (rec.flags & effect_flags::IS_START) != 0
+            && self.group_starts >= MAX_SCENE_GROUPS
+        {
+            return Err(scene_status::ERR_LIMIT);
+        }
+        // Boundaries are never dropped (matched pairs must survive
+        // clipping), so insert_common always yields an order here.
+        let order = self
+            .insert_common(&rec.bounds, &rec.content_mask, true)?
+            .expect("effect-group markers are never dropped");
+        self.is_finished = false;
+        rec.order = order;
+        if (rec.flags & effect_flags::IS_START) == 0 {
+            // A closed group is a draw-order barrier: everything painted
+            // afterwards must sort above the group's end marker.
+            let floor = order
+                .checked_add(1)
+                .ok_or(scene_status::ERR_BAD_VALUE)?;
+            self.bounds_tree.set_order_floor(floor);
+        } else {
+            self.group_starts = self.group_starts.saturating_add(1);
+        }
+        self.effects.push(rec);
+        self.ops.push(PaintOp::Effect(rec));
         Ok(())
     }
 
@@ -1803,7 +2291,7 @@ impl SceneState {
             _ => return Err(scene_status::ERR_BAD_VALUE),
         }
         self.check_insert_capacity(self.surfaces.len())?;
-        let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask, false)? else {
+        let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask.bounds, false)? else {
             return Ok(());
         };
         self.is_finished = false;
@@ -1829,7 +2317,7 @@ impl SceneState {
             SpriteClass::Polychrome => unreachable!("mask sprites only"),
         };
         self.check_insert_capacity(array_len)?;
-        let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask, false)? else {
+        let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask.bounds, false)? else {
             return Ok(());
         };
         self.is_finished = false;
@@ -1855,7 +2343,7 @@ impl SceneState {
         mut rec: GpuiGoScenePolychromeSpriteRecord,
     ) -> Result<(), i32> {
         self.check_insert_capacity(self.polychrome_sprites.len())?;
-        let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask, false)? else {
+        let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask.bounds, false)? else {
             return Ok(());
         };
         self.is_finished = false;
@@ -1874,7 +2362,7 @@ impl SceneState {
         vertices: Vec<GpuiGoScenePathVertexRecord>,
     ) -> Result<(), i32> {
         self.check_insert_capacity(self.paths.len())?;
-        let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask, false)? else {
+        let Some(order) = self.insert_common(&rec.bounds, &rec.content_mask.bounds, false)? else {
             // The pinned behavior: an empty-clipped path disappears (no
             // array entry, no log entry).
             return Ok(());
@@ -1904,6 +2392,7 @@ impl SceneState {
                 }
                 PaintOp::PolychromeSprite(rec) => self.insert_polychrome_sprite(rec)?,
                 PaintOp::Path(data) => self.insert_path(data.rec, data.vertices)?,
+                PaintOp::Effect(rec) => self.insert_effect(rec)?,
                 PaintOp::StartLayer(bounds) => self.push_layer(bounds)?,
                 PaintOp::EndLayer => self.pop_layer()?,
             }
@@ -1940,6 +2429,9 @@ impl SceneState {
         // Paths stable-sort by draw order (the pinned
         // `self.paths.sort_by_key(|path| path.order)`).
         self.paths.sort_by_key(|data| data.rec.order);
+        // Effect markers follow the same rule (start ahead of end at an
+        // equal order; rev 16, ticket 50).
+        self.effects.sort_by_key(|rec| (rec.order, rec.flags & effect_flags::IS_START == 0));
         // Markers normally get distinct, monotonically-increasing orders;
         // the `!is_start` tiebreak only matters for a degenerate empty
         // group whose start and end tie: it keeps the start ahead of the
@@ -1954,76 +2446,276 @@ impl SceneState {
         let mut commands: Vec<GpuiGoSceneCommandRecord> =
             std::mem::take(&mut self.plan.commands);
         commands.clear();
+        let mut folds: Vec<SceneFold> = std::mem::take(&mut self.plan.folds);
+        folds.clear();
         let mut requirements = GpuiGoSceneRequirementsRecord {
             record_size: core::mem::size_of::<GpuiGoSceneRequirementsRecord>() as u32,
             ..Default::default()
         };
 
-        // Matched starts: an end marker pops the most recent unmatched
-        // start (pinned pending_starts).
-        let mut matched_starts = vec![false; self.boundaries.len()];
-        let mut pending_starts: Vec<usize> = Vec::new();
-        for (index, boundary) in self.boundaries.iter().enumerate() {
-            if boundary.is_start != 0 {
-                pending_starts.push(index);
-            } else if let Some(start_index) = pending_starts.pop() {
-                matched_starts[start_index] = true;
+        // The merged marker stream: boundary and effect markers in the
+        // same (order, kind) order the BatchIterator emits them (rev 16,
+        // ticket 50: both kinds share ONE group stack).
+        let markers = marker_stream(&self.boundaries, &self.effects);
+
+        // Matching pre-pass (the pinned pending_starts, extended to two
+        // kinds): an end marker pops the most recent unmatched start and
+        // matches ONLY when the kinds agree; a mismatched end restores
+        // the stack top and stays unmatched (it renders inline, like the
+        // pin's unmatched ends). Malformed interleaved markers are
+        // degenerate by design - well-nested groups composite correctly.
+        let mut matched: Vec<bool> = vec![false; markers.len()];
+        let mut pending: Vec<usize> = Vec::new();
+        for (position, marker) in markers.iter().enumerate() {
+            if marker.is_start {
+                pending.push(position);
+            } else if let Some(start_position) = pending.pop() {
+                if markers[start_position].kind == marker.kind {
+                    matched[start_position] = true;
+                    matched[position] = true;
+                } else {
+                    pending.push(start_position);
+                }
             }
         }
 
-        let mut filter_stack: Vec<(usize, FilterRenderTarget)> = Vec::new();
-        let mut isolated_depth: usize = 0;
+        // The shared render stack (the pinned filter_stack, extended):
+        // every START pushes (matched or not - exactly the pin's
+        // count-balanced walk) and every END pops the top. The pool
+        // target slot is the number of currently open ISOLATED groups -
+        // a depth-based assignment, so sibling groups reuse one slot and
+        // scenes nested at most two deep produce EXACTLY the R15 plan
+        // (target indices 0 and 1). There is no depth cap (rev 16): the
+        // renderer's per-surface pool budget is the only demotion point.
+        let mut render_stack: Vec<RenderStackEntry> = Vec::new();
+        let mut open_isolated: usize = 0;
+
+        // Per open group, the span accounting for the single-primitive
+        // opacity fold: how many primitives and nested markers the span
+        // contains, the span's single primitive, and the begin command's
+        // position (patched back to inline when the fold applies).
+        let mut span_primitives: Vec<u32> = Vec::new();
+        let mut span_markers: Vec<u32> = Vec::new();
+        let mut span_single: Vec<Option<(SceneFoldPrimitive, u32)>> = Vec::new();
+        let mut span_begin_command: Vec<usize> = Vec::new();
 
         for batch in BatchIterator::new(self) {
+            let is_marker = matches!(
+                batch,
+                PrimitiveBatch::FilterBoundary(_) | PrimitiveBatch::EffectBoundary(_)
+            );
+            // A nested marker disqualifies every OUTER group's fold.
+            if is_marker && span_markers.len() > 1 {
+                if let Some(outer) = span_markers.iter_mut().rev().nth(1) {
+                    *outer = outer.saturating_add(1);
+                }
+            }
             match batch {
                 PrimitiveBatch::FilterBoundary(boundary_index) => {
                     let boundary = &self.boundaries[boundary_index];
+                    let position = markers
+                        .iter()
+                        .position(|m| m.kind == GroupMarkerKind::Filter && m.index == boundary_index)
+                        .expect("boundary marker is in the merged stream");
                     if boundary.is_start != 0 {
-                        let target = if matched_starts[boundary_index]
-                            && isolated_depth < MAX_FILTER_GROUP_DEPTH
-                        {
-                            FilterRenderTarget::Isolated(isolated_depth)
+                        let target = if matched[position] {
+                            FilterRenderTarget::Isolated(open_isolated)
                         } else {
                             FilterRenderTarget::Inline
                         };
                         if target.is_isolated() {
-                            isolated_depth += 1;
+                            open_isolated += 1;
                             requirements.uses_offscreen_target = 1;
                             requirements.isolated_target_count =
-                                requirements.isolated_target_count.max(isolated_depth as u32);
+                                requirements.isolated_target_count.max(open_isolated as u32);
                         }
-                        filter_stack.push((boundary_index, target));
+                        render_stack.push(RenderStackEntry {
+                            kind: GroupMarkerKind::Filter,
+                            index: boundary_index,
+                            target,
+                        });
+                        span_primitives.push(0);
+                        span_markers.push(0);
+                        span_single.push(None);
+                        span_begin_command.push(commands.len());
                         commands.push(command_record(
                             command_kind::BEGIN_FILTER,
                             boundary_index,
                             boundary_index,
                             target,
                         ));
-                    } else if let Some((start_index, target)) = filter_stack.pop() {
+                    } else {
+                        let entry = render_stack
+                            .pop()
+                            .filter(|entry| entry.kind == GroupMarkerKind::Filter);
+                        let (start_index, target) = match entry {
+                            Some(entry) => (entry.index, entry.target),
+                            None => {
+                                // An end with no boundary start on the
+                                // stack top: inline (the pinned unmatched
+                                // end - an empty stack emits the marker's
+                                // own index; a kind mismatch keeps the
+                                // deeper group open; malformed interleaved
+                                // markers stay degenerate, never
+                                // misread).
+                                (boundary_index, FilterRenderTarget::Inline)
+                            }
+                        };
                         if target.is_isolated() {
-                            isolated_depth -= 1;
+                            open_isolated -= 1;
                             requirements.isolated_filter_count += 1;
                         }
+                        span_primitives.pop();
+                        span_markers.pop();
+                        span_single.pop();
+                        span_begin_command.pop();
                         commands.push(command_record(
                             command_kind::END_FILTER,
                             start_index,
                             boundary_index,
                             target,
                         ));
-                    } else {
-                        // Unmatched end: the pinned plan emits an inline end
-                        // command (debug_assert in debug builds).
+                    }
+                }
+                PrimitiveBatch::EffectBoundary(effect_index) => {
+                    let effect = &self.effects[effect_index];
+                    let position = markers
+                        .iter()
+                        .position(|m| m.kind == GroupMarkerKind::Effect && m.index == effect_index)
+                        .expect("effect marker is in the merged stream");
+                    let is_start = (effect.flags & effect_flags::IS_START) != 0;
+                    if is_start {
+                        let target = if matched[position] {
+                            FilterRenderTarget::Isolated(open_isolated)
+                        } else {
+                            FilterRenderTarget::Inline
+                        };
+                        if target.is_isolated() {
+                            open_isolated += 1;
+                            requirements.isolated_target_count =
+                                requirements.isolated_target_count.max(open_isolated as u32);
+                        }
+                        render_stack.push(RenderStackEntry {
+                            kind: GroupMarkerKind::Effect,
+                            index: effect_index,
+                            target,
+                        });
+                        span_primitives.push(0);
+                        span_markers.push(0);
+                        span_single.push(None);
+                        span_begin_command.push(commands.len());
                         commands.push(command_record(
-                            command_kind::END_FILTER,
-                            boundary_index,
-                            boundary_index,
-                            FilterRenderTarget::Inline,
+                            command_kind::BEGIN_EFFECT,
+                            effect_index,
+                            effect_index,
+                            target,
                         ));
+                    } else {
+                        let entry = render_stack
+                            .pop()
+                            .filter(|entry| entry.kind == GroupMarkerKind::Effect);
+                        match entry {
+                            Some(entry) => {
+                                let mut target = entry.target;
+                                // The group's parameters are the START
+                                // marker's record (the pair's shared
+                                // snapshot, the pinned with_filter_layer
+                                // rule; the END marker only closes).
+                                let start_effect = &self.effects[entry.index];
+                                // The single-primitive opacity fold
+                                // (Chromium's "at least two layers draw
+                                // content" surface rule,
+                                // property_tree_builder.cc:395-403): a
+                                // pure-opacity effect group whose span
+                                // holds exactly ONE primitive and no
+                                // nested group renders INLINE - the plan
+                                // emits inline begin/end commands and the
+                                // group's opacity multiplies that one
+                                // primitive's colour (the snapshot applies
+                                // the fold; today's per-primitive
+                                // behaviour, which is correct for one
+                                // primitive).
+                                let foldable = (start_effect.flags
+                                    & (effect_flags::HAS_TRANSFORM
+                                        | effect_flags::HAS_BLEND
+                                        | effect_flags::HAS_MASK
+                                        | effect_flags::PROPERTY_NODE
+                                        | effect_flags::ROUNDED_CLIP_ONLY
+                                        | effect_flags::CLIP_TO_BOUNDS))
+                                    == 0
+                                    && span_markers.last().copied() == Some(0)
+                                    && span_primitives.last().copied() == Some(1)
+                                    && span_single.last().is_some_and(|single| single.is_some());
+                                if foldable {
+                                    let primitive = span_single.last().copied().flatten();
+                                    let begin_command = span_begin_command.last().copied();
+                                    if let (Some(primitive), Some(begin_command)) =
+                                        (primitive, begin_command)
+                                    {
+                                        let factor = f32::from_bits(start_effect.opacity);
+                                        folds.push(SceneFold {
+                                            primitive: primitive.0,
+                                            index: primitive.1,
+                                            factor,
+                                        });
+                                        if target.is_isolated() {
+                                            open_isolated -= 1;
+                                        }
+                                        // Patch the begin command back to
+                                        // inline (the group never opens a
+                                        // target).
+                                        target = FilterRenderTarget::Inline;
+                                        if let Some(begin) = commands.get_mut(begin_command) {
+                                            begin.filter_target = 0;
+                                            begin.target_index = 0;
+                                        }
+                                    }
+                                }
+                                if target.is_isolated() {
+                                    open_isolated -= 1;
+                                    requirements.isolated_effect_count += 1;
+                                }
+                                commands.push(command_record(
+                                    command_kind::END_EFFECT,
+                                    entry.index,
+                                    effect_index,
+                                    target,
+                                ));
+                            }
+                            None => {
+                                commands.push(command_record(
+                                    command_kind::END_EFFECT,
+                                    effect_index,
+                                    effect_index,
+                                    FilterRenderTarget::Inline,
+                                ));
+                            }
+                        }
+                        span_primitives.pop();
+                        span_markers.pop();
+                        span_single.pop();
+                        span_begin_command.pop();
                     }
                 }
                 batch => {
+                    // Span accounting for the fold: the innermost open
+                    // group's primitive count and single-primitive
+                    // candidate (class + array index).
+                    if let Some(last) = span_primitives.last_mut() {
+                        *last = last.saturating_add(batch_primitive_count(&batch));
+                    }
+                    let record = batch_command_record(&batch);
+                    let single =
+                        batch_single_primitive(&batch).map(|class| (class, record.range_start));
+                    if let Some(entry) = span_single.last_mut() {
+                        match (*entry, single) {
+                            (None, Some(single)) => *entry = Some(single),
+                            (Some(_), Some(_)) => *entry = None,
+                            _ => {}
+                        }
+                    }
                     include_batch(&mut requirements, &batch);
-                    commands.push(batch_command_record(&batch));
+                    commands.push(record);
                 }
             }
             if commands.len() > MAX_SCENE_PLAN_COMMANDS as usize {
@@ -2033,6 +2725,7 @@ impl SceneState {
 
         requirements.command_count = commands.len() as u32;
         self.plan.commands = commands;
+        self.plan.folds = folds;
         self.plan.requirements = requirements;
         Ok(())
     }
@@ -2071,6 +2764,11 @@ enum PrimitiveKind {
     /// Lowest discriminant: a group-start is emitted before the group's
     /// own content at an equal order.
     FilterBoundaryStart,
+    /// Effect-group start (rev 16): sorts with the filter starts - both
+    /// kinds open a group before its content at an equal order. The
+    /// relative order of the PRE-EXISTING kinds is unchanged, so no
+    /// pre-R16 scene can reorder.
+    EffectGroupStart,
     Shadow,
     Quad,
     Path,
@@ -2080,6 +2778,8 @@ enum PrimitiveKind {
     PolychromeSprite,
     Surface,
     BackdropFilter,
+    /// Effect-group end (rev 16): sorts just under the filter ends.
+    EffectGroupEnd,
     /// Highest discriminant: a group-end is emitted after the group's
     /// content at an equal order.
     FilterBoundaryEnd,
@@ -2099,6 +2799,9 @@ enum PrimitiveBatch {
     Surfaces(std::ops::Range<usize>),
     BackdropFilters(std::ops::Range<usize>),
     FilterBoundary(usize),
+    /// One effect-group marker (rev 16, ticket 50), emitted one at a
+    /// time like the filter boundaries.
+    EffectBoundary(usize),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2118,6 +2821,13 @@ pub(crate) mod command_kind {
     pub const BATCH: u32 = 0;
     pub const BEGIN_FILTER: u32 = 1;
     pub const END_FILTER: u32 = 2;
+    /// Begin effect group (rev 16, ticket 50): the command carries the
+    /// effect record index in `boundary_index` and the pool target slot
+    /// in `target_index` (`filter_target` 1 = isolated).
+    pub const BEGIN_EFFECT: u32 = 3;
+    /// End effect group: `boundary_index` is the opening record's index,
+    /// `closing_boundary_index` the closing marker's.
+    pub const END_EFFECT: u32 = 4;
 }
 
 /// Batch primitive-kind tags of the command record. The sprite tags are
@@ -2134,6 +2844,9 @@ pub(crate) mod batch_primitive_kind {
     pub const SURFACES: u32 = 7;
     pub const BACKDROP_FILTERS: u32 = 8;
     pub const FILTER_BOUNDARY: u32 = 9;
+    /// Effect-group marker (rev 16, ticket 50; never a BATCH command -
+    /// markers compile to begin/end effect commands).
+    pub const EFFECT_BOUNDARY: u32 = 10;
 }
 
 fn has_corner_smoothing(corner_smoothing: u32) -> bool {
@@ -2247,6 +2960,11 @@ fn batch_command_record(batch: &PrimitiveBatch) -> GpuiGoSceneCommandRecord {
             rec.range_start = *index as u32;
             rec.range_end = *index as u32;
         }
+        PrimitiveBatch::EffectBoundary(index) => {
+            rec.primitive_kind = batch_primitive_kind::EFFECT_BOUNDARY;
+            rec.range_start = *index as u32;
+            rec.range_end = *index as u32;
+        }
     }
     rec
 }
@@ -2291,6 +3009,9 @@ fn include_batch(requirements: &mut GpuiGoSceneRequirementsRecord, batch: &Primi
             // Filter boundaries are compiled before requirements are
             // collected (unreachable, kept for the pinned match shape).
         }
+        PrimitiveBatch::EffectBoundary(_) => {
+            // Same rule for effect-group markers (rev 16).
+        }
     }
 }
 
@@ -2322,6 +3043,8 @@ struct BatchIterator<'a> {
     backdrops_cursor: usize,
     boundaries_start: usize,
     boundaries_cursor: usize,
+    effects_start: usize,
+    effects_cursor: usize,
 }
 
 impl<'a> BatchIterator<'a> {
@@ -2348,6 +3071,8 @@ impl<'a> BatchIterator<'a> {
             backdrops_cursor: 0,
             boundaries_start: 0,
             boundaries_cursor: 0,
+            effects_start: 0,
+            effects_cursor: 0,
         }
     }
 
@@ -2376,6 +3101,18 @@ impl<'a> BatchIterator<'a> {
                 },
             )
         });
+        let effects = self.scene.effects.get(self.effects_cursor).map(|r| {
+            (
+                r.order,
+                // Same rule as the filter markers: the start sorts ahead
+                // of the group's content, the end after it (rev 16).
+                if (r.flags & effect_flags::IS_START) != 0 {
+                    PrimitiveKind::EffectGroupStart
+                } else {
+                    PrimitiveKind::EffectGroupEnd
+                },
+            )
+        });
 
         let mut first: Option<(u32, PrimitiveKind)> = None;
         let mut second: Option<(u32, PrimitiveKind)> = None;
@@ -2390,6 +3127,7 @@ impl<'a> BatchIterator<'a> {
             surfaces,
             backdrops,
             boundaries,
+            effects,
         ] {
             let Some(candidate) = candidate else { continue };
             if first.is_none_or(|current| candidate < current) {
@@ -2571,6 +3309,13 @@ impl<'a> Iterator for BatchIterator<'a> {
                 self.boundaries_cursor += 1;
                 self.boundaries_start = index + 1;
                 Some(PrimitiveBatch::FilterBoundary(index))
+            }
+            // Effect markers likewise (rev 16, ticket 50).
+            PrimitiveKind::EffectGroupStart | PrimitiveKind::EffectGroupEnd => {
+                let index = self.effects_start;
+                self.effects_cursor += 1;
+                self.effects_start = index + 1;
+                Some(PrimitiveBatch::EffectBoundary(index))
             }
             // Path batches merge while they stay under the next
             // order/kind limit (the pinned `next_if` condition; no
@@ -2803,6 +3548,93 @@ fn check_bool01(value: u32) -> Result<(), i32> {
     Ok(())
 }
 
+/// The extended content mask's validation (rev 16, ticket 50): the
+/// fade distances and corner radii must be finite and non-negative,
+/// the smoothing in [0, 1]. A zero-everything mask (the pre-R16 shape)
+/// always passes.
+fn check_content_mask(mask: &GpuiGoSceneContentMask) -> Result<(), i32> {
+    for bits in mask.fade_out.iter() {
+        let fade = f32::from_bits(*bits);
+        if !fade.is_finite() || fade < 0.0 {
+            return Err(scene_status::ERR_BAD_VALUE);
+        }
+    }
+    for bits in mask.corner_radii.iter() {
+        let radius = f32::from_bits(*bits);
+        if !radius.is_finite() || radius < 0.0 {
+            return Err(scene_status::ERR_BAD_VALUE);
+        }
+    }
+    let smoothing = f32::from_bits(mask.corner_smoothing);
+    if !smoothing.is_finite() || !(0.0..=1.0).contains(&smoothing) {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    Ok(())
+}
+
+/// The effect-group record's validation (rev 16, ticket 50; the design
+/// appendix A.1 rules): known flag bits only, an invertible 2x2 when
+/// `has_transform` is set, `mask_kind` 0 in this revision (the
+/// gradient/atlas/coverage tables arrive with ticket 52), the
+/// property-node id non-zero and paired with a transform or opacity,
+/// the opacity in [0, 1], finite radii and smoothing in [0, 1].
+fn check_effect(rec: &GpuiGoSceneEffectRecord) -> Result<(), i32> {
+    check_record_size(rec.record_size, core::mem::size_of::<GpuiGoSceneEffectRecord>() as u32)?;
+    if rec.order != 0 {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    if rec.flags & !effect_flags::ALL != 0 {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    if (rec.flags & effect_flags::HAS_TRANSFORM) != 0 {
+        let (m00, m01) = (f32::from_bits(rec.transform[0]), f32::from_bits(rec.transform[1]));
+        let (m10, m11) = (f32::from_bits(rec.transform[2]), f32::from_bits(rec.transform[3]));
+        for value in [m00, m01, m10, m11] {
+            if !value.is_finite() {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+        }
+        let determinant = m00 * m11 - m01 * m10;
+        if !determinant.is_finite() || determinant == 0.0 {
+            return Err(scene_status::ERR_BAD_VALUE);
+        }
+    }
+    if rec.blend_mode > 16 {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    // This revision requires the none-kind mask (ticket 52 relaxes it
+    // when the tables land).
+    if rec.mask_kind != 0 || rec.mask_reference != 0 || rec.mask_mode != 0 {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    if (rec.flags & effect_flags::PROPERTY_NODE) != 0 {
+        if rec.node_id == 0 {
+            return Err(scene_status::ERR_BAD_VALUE);
+        }
+        if (rec.flags & (effect_flags::HAS_TRANSFORM | effect_flags::HAS_OPACITY)) == 0 {
+            return Err(scene_status::ERR_BAD_VALUE);
+        }
+    }
+    let opacity = f32::from_bits(rec.opacity);
+    if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    for bits in rec.corner_radii.iter() {
+        let radius = f32::from_bits(*bits);
+        if !radius.is_finite() || radius < 0.0 {
+            return Err(scene_status::ERR_BAD_VALUE);
+        }
+    }
+    let smoothing = f32::from_bits(rec.corner_smoothing);
+    if !smoothing.is_finite() || !(0.0..=1.0).contains(&smoothing) {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    if rec.reserved != 0 {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    Ok(())
+}
+
 fn check_quad(rec: &GpuiGoSceneQuadRecord) -> Result<(), i32> {
     check_record_size(rec.record_size, core::mem::size_of::<GpuiGoSceneQuadRecord>() as u32)?;
     if rec.order != 0 {
@@ -2813,6 +3645,7 @@ fn check_quad(rec: &GpuiGoSceneQuadRecord) -> Result<(), i32> {
     }
     check_background(&rec.background)?;
     check_background(&rec.border_color)?;
+    check_content_mask(&rec.content_mask)?;
     Ok(())
 }
 
@@ -2823,6 +3656,7 @@ fn check_shadow(rec: &GpuiGoSceneShadowRecord) -> Result<(), i32> {
     }
     check_bool01(rec.inset)?;
     check_background(&rec.color)?;
+    check_content_mask(&rec.content_mask)?;
     Ok(())
 }
 
@@ -2836,6 +3670,7 @@ fn check_underline(rec: &GpuiGoSceneUnderlineRecord) -> Result<(), i32> {
     }
     check_bool01(rec.wavy)?;
     check_color(&rec.color)?;
+    check_content_mask(&rec.content_mask)?;
     Ok(())
 }
 
@@ -2894,6 +3729,7 @@ fn check_filter(rec: &GpuiGoSceneFilterRecord) -> Result<(), i32> {
             return Err(scene_status::ERR_BAD_VALUE);
         }
     }
+    check_content_mask(&rec.content_mask)?;
     Ok(())
 }
 
@@ -2923,6 +3759,7 @@ fn check_surface(rec: &GpuiGoSceneSurfaceRecord) -> Result<(), i32> {
         }
         _ => return Err(scene_status::ERR_BAD_VALUE),
     }
+    check_content_mask(&rec.content_mask)?;
     Ok(())
 }
 
@@ -2942,10 +3779,12 @@ fn check_mask_sprite(rec: &GpuiGoSceneSpriteRecord, class: SpriteClass) -> Resul
             return Err(scene_status::ERR_BAD_VALUE);
         }
     }
-    check_tile(&rec.tile, class)
+    check_tile(&rec.tile, class)?;
+    check_content_mask(&rec.content_mask)
 }
 
-/// Validates a polychrome sprite record.
+/// Validates a polychrome sprite record.    check_content_mask(&rec.content_mask)?;
+
 fn check_polychrome_sprite(rec: &GpuiGoScenePolychromeSpriteRecord) -> Result<(), i32> {
     check_record_size(
         rec.record_size,
@@ -2967,7 +3806,8 @@ fn check_polychrome_sprite(rec: &GpuiGoScenePolychromeSpriteRecord) -> Result<()
             return Err(scene_status::ERR_BAD_VALUE);
         }
     }
-    check_tile(&rec.tile, SpriteClass::Polychrome)
+    check_tile(&rec.tile, SpriteClass::Polychrome)?;
+    check_content_mask(&rec.content_mask)
 }
 
 fn check_tile(tile: &GpuiGoSceneTileRecord, class: SpriteClass) -> Result<(), i32> {
@@ -3158,6 +3998,59 @@ fn scene_insert_boundary_body(handle: u64, rec: *const GpuiGoSceneFilterRecord) 
     }
 }
 
+fn scene_insert_effect_body(handle: u64, rec: *const GpuiGoSceneEffectRecord) -> i32 {
+    if rec.is_null() {
+        return scene_status::ERR_NULL_ARG;
+    }
+    let result = with_scene(handle, |state| {
+        let record = unsafe { *rec };
+        check_effect(&record)?;
+        state.insert_effect(record)?;
+        Ok(())
+    });
+    match result {
+        Ok(()) => scene_status::OK,
+        Err(code) => code,
+    }
+}
+
+/// Dump kinds of `scene_dump` (the effect records travel through the
+/// dedicated `scene_effect_dump` entry instead).
+fn scene_effect_dump_body(
+    handle: u64,
+    records: *mut GpuiGoSceneEffectRecord,
+    capacity: u32,
+    out_count: *mut u32,
+) -> i32 {
+    if out_count.is_null() {
+        return scene_status::ERR_NULL_ARG;
+    }
+    let result = with_scene(handle, |state| {
+        if !state.is_finished {
+            return Err(scene_status::ERR_NOT_FINISHED);
+        }
+        let needed = state.effects.len() as u32;
+        unsafe { *out_count = needed };
+        if needed > capacity {
+            return Err(scene_status::ERR_CAPACITY);
+        }
+        if capacity > 0 && records.is_null() {
+            return Err(scene_status::ERR_NULL_ARG);
+        }
+        if capacity > 0 {
+            let out = unsafe { std::slice::from_raw_parts_mut(records, capacity as usize) };
+            for (slot, effect) in out.iter_mut().zip(state.effects.iter()) {
+                *slot = *effect;
+            }
+        }
+        Ok(())
+    });
+    match result {
+        Ok(()) => scene_status::OK,
+        Err(code) => code,
+    }
+}
+
 fn scene_insert_surface_body(
     handle: u64,
     rec: *const GpuiGoSceneSurfaceRecord,
@@ -3269,6 +4162,12 @@ pub mod batch_op {
     pub const POP_LAYER: u32 = 10;
     /// An order-floor raise (no payload).
     pub const RAISE_ORDER_FLOOR: u32 = 11;
+    /// `GpuiGoSceneEffectRecord` with `flags.IS_START` set (rev 16,
+    /// ticket 50).
+    pub const EFFECT_START: u32 = 12;
+    /// `GpuiGoSceneEffectRecord` with `flags.IS_START` clear (rev 16,
+    /// ticket 50).
+    pub const EFFECT_END: u32 = 13;
 }
 
 /// Reads one record of type `T` from a word payload that must be exactly
@@ -3308,6 +4207,16 @@ fn apply_batch_op(state: &mut SceneState, kind: u32, payload: &[u32]) -> Result<
             let rec: GpuiGoSceneFilterRecord = batch_record(payload)?;
             check_filter(&rec)?;
             state.insert_boundary(rec)
+        }
+        batch_op::EFFECT_START | batch_op::EFFECT_END => {
+            let mut record: GpuiGoSceneEffectRecord = batch_record(payload)?;
+            if kind == batch_op::EFFECT_START {
+                record.flags |= effect_flags::IS_START;
+            } else {
+                record.flags &= !effect_flags::IS_START;
+            }
+            check_effect(&record)?;
+            state.insert_effect(record)
         }
         batch_op::SURFACE => {
             let Some((&opacity_bits, record)) = payload.split_last() else {
@@ -3462,6 +4371,7 @@ fn scene_meta_body(handle: u64, out_meta: *mut GpuiGoSceneMetaRecord) -> i32 {
             subpixel_sprite_count: state.subpixel_sprites.len() as u32,
             polychrome_sprite_count: state.polychrome_sprites.len() as u32,
             path_count: state.paths.len() as u32,
+            effect_count: state.effects.len() as u32,
             is_finished: u32::from(state.is_finished),
             record_size: core::mem::size_of::<GpuiGoSceneMetaRecord>() as u32,
         })
@@ -3717,6 +4627,7 @@ fn check_path(rec: &GpuiGoScenePathRecord, vertex_count: u32) -> Result<(), i32>
     if vertex_count > MAX_SCENE_PATH_VERTICES {
         return Err(scene_status::ERR_BAD_VALUE);
     }
+    check_content_mask(&rec.content_mask)?;
     Ok(())
 }
 
@@ -4167,8 +5078,14 @@ fn scene_path_script_body(
 /// resolves a scene handle through this snapshot; the scene stays pinned
 /// by the caller exactly like the pin's `&Scene` borrow.
 pub(crate) struct SceneRenderSnapshot {
-    pub quads: Vec<gpui::Quad>,
-    pub shadows: Vec<gpui::Shadow>,
+    /// The ABI quad records (rev 16, ticket 50: the vendored quad
+    /// pipelines' instance layout IS this record - bounds, the extended
+    /// content mask, backgrounds, radii, borders - so the draw path
+    /// uploads them directly; the plan's single-primitive opacity folds
+    /// are applied to these copies at snapshot time).
+    pub quads: Vec<GpuiGoSceneQuadRecord>,
+    /// The ABI shadow records (same rule as the quads).
+    pub shadows: Vec<GpuiGoSceneShadowRecord>,
     pub underlines: Vec<gpui::Underline>,
     pub monochrome_sprites: Vec<gpui::MonochromeSprite>,
     pub subpixel_sprites: Vec<gpui::SubpixelSprite>,
@@ -4189,6 +5106,10 @@ pub(crate) struct SceneRenderSnapshot {
     pub backdrops: Vec<GpuiGoSceneFilterRecord>,
     /// The ABI filter-boundary records (same shape as the backdrops).
     pub boundaries: Vec<GpuiGoSceneFilterRecord>,
+    /// The ABI effect-group records (rev 16, ticket 50; the draw path
+    /// reads the bounds, mask, radii, smoothing and opacity from them
+    /// directly - the composite pass's own record).
+    pub effects: Vec<GpuiGoSceneEffectRecord>,
     pub commands: Vec<GpuiGoSceneCommandRecord>,
     pub requirements: GpuiGoSceneRequirementsRecord,
 }
@@ -4203,10 +5124,86 @@ pub(crate) fn snapshot_bounds(bounds: &GpuiGoSceneBounds) -> gpui::Bounds<gpui::
     }
 }
 
-fn snapshot_mask(mask: &GpuiGoSceneBounds) -> gpui::ContentMask<gpui::ScaledPixels> {
+fn snapshot_mask(mask: &GpuiGoSceneContentMask) -> gpui::ContentMask<gpui::ScaledPixels> {
+    // The pinned ContentMask carries the bounds and the per-edge fades
+    // (the pin's shader evaluates them); the extended mask's rounded
+    // clip applies in the VENDORED quad/shadow pipelines, which read
+    // the ABI record directly (the pinned underline/sprite pipelines
+    // clip rect-only this revision - the recorded gap handed to ticket
+    // 52's mask work).
     gpui::ContentMask {
-        bounds: snapshot_bounds(mask),
-        ..Default::default()
+        bounds: snapshot_bounds(&mask.bounds),
+        fade_out: gpui::Edges {
+            top: gpui::ScaledPixels(f32::from_bits(mask.fade_out[1])),
+            right: gpui::ScaledPixels(f32::from_bits(mask.fade_out[2])),
+            bottom: gpui::ScaledPixels(f32::from_bits(mask.fade_out[3])),
+            left: gpui::ScaledPixels(f32::from_bits(mask.fade_out[0])),
+        },
+    }
+}
+
+/// Multiplies a background record's alpha payload by `factor` (the
+/// single-primitive opacity fold; both the solid alpha and the two
+/// gradient stops' alphas).
+fn fold_background(background: &mut GpuiGoSceneBackground, factor: f32) {
+    background.a = (f32::from_bits(background.a) * factor).to_bits();
+    background.stop0_a = (f32::from_bits(background.stop0_a) * factor).to_bits();
+    background.stop1_a = (f32::from_bits(background.stop1_a) * factor).to_bits();
+}
+
+/// The snapshot's fold index: one factor per (primitive class, index),
+/// built from the plan's fold list (rev 16, ticket 50).
+#[derive(Default)]
+struct FoldIndex {
+    quads: Vec<Option<f32>>,
+    shadows: Vec<Option<f32>>,
+    underlines: Vec<Option<f32>>,
+    paths: Vec<Option<f32>>,
+    monochrome_sprites: Vec<Option<f32>>,
+    subpixel_sprites: Vec<Option<f32>>,
+    polychrome_sprites: Vec<Option<f32>>,
+    surfaces: Vec<Option<f32>>,
+    backdrops: Vec<Option<f32>>,
+}
+
+impl FoldIndex {
+    fn build(folds: &[SceneFold], snapshot: &SceneRenderSnapshot) -> Self {
+        let mut index = FoldIndex {
+            quads: vec![None; snapshot.quads.len()],
+            shadows: vec![None; snapshot.shadows.len()],
+            underlines: vec![None; snapshot.underlines.len()],
+            paths: vec![None; snapshot.paths.len()],
+            monochrome_sprites: vec![None; snapshot.monochrome_sprites.len()],
+            subpixel_sprites: vec![None; snapshot.subpixel_sprites.len()],
+            polychrome_sprites: vec![None; snapshot.polychrome_sprites.len()],
+            surfaces: vec![None; snapshot.surfaces.len()],
+            backdrops: vec![None; snapshot.backdrops.len()],
+        };
+        for fold in folds {
+            let slot = match fold.primitive {
+                SceneFoldPrimitive::Quad => index.quads.get_mut(fold.index as usize),
+                SceneFoldPrimitive::Shadow => index.shadows.get_mut(fold.index as usize),
+                SceneFoldPrimitive::Underline => index.underlines.get_mut(fold.index as usize),
+                SceneFoldPrimitive::Path => index.paths.get_mut(fold.index as usize),
+                SceneFoldPrimitive::MonochromeSprite => {
+                    index.monochrome_sprites.get_mut(fold.index as usize)
+                }
+                SceneFoldPrimitive::SubpixelSprite => {
+                    index.subpixel_sprites.get_mut(fold.index as usize)
+                }
+                SceneFoldPrimitive::PolychromeSprite => {
+                    index.polychrome_sprites.get_mut(fold.index as usize)
+                }
+                SceneFoldPrimitive::Surface => index.surfaces.get_mut(fold.index as usize),
+                SceneFoldPrimitive::Backdrop => index.backdrops.get_mut(fold.index as usize),
+            };
+            if let Some(slot) = slot {
+                // Nested folds on one primitive multiply (an opacity
+                // group folded inside another folded group).
+                *slot = Some(slot.unwrap_or(1.0) * fold.factor);
+            }
+        }
+        index
     }
 }
 
@@ -4219,14 +5216,6 @@ pub(crate) fn snapshot_radii(bits: &[u32]) -> gpui::Corners<gpui::ScaledPixels> 
     }
 }
 
-fn snapshot_edges(bits: &[u32]) -> gpui::Edges<gpui::ScaledPixels> {
-    gpui::Edges {
-        top: gpui::ScaledPixels(f32::from_bits(bits[0])),
-        right: gpui::ScaledPixels(f32::from_bits(bits[1])),
-        bottom: gpui::ScaledPixels(f32::from_bits(bits[2])),
-        left: gpui::ScaledPixels(f32::from_bits(bits[3])),
-    }
-}
 
 fn snapshot_color(color: &GpuiGoSceneBackground) -> gpui::Background {
     // The ABI carries the stored solid HSLA record or the two-stop
@@ -4328,42 +5317,6 @@ fn snapshot_transformation(bits: &[u32]) -> gpui::TransformationMatrix {
     }
 }
 
-fn snapshot_quad(rec: &GpuiGoSceneQuadRecord) -> gpui::Quad {
-    gpui::Quad {
-        order: rec.order,
-        border_style: if rec.border_style == 0 {
-            gpui::BorderStyle::Solid
-        } else {
-            gpui::BorderStyle::Dashed
-        },
-        border_dashed_length: f32::from_bits(rec.border_dashed_length),
-        border_dashed_gap: f32::from_bits(rec.border_dashed_gap),
-        bounds: snapshot_bounds(&rec.bounds),
-        content_mask: snapshot_mask(&rec.content_mask),
-        background: snapshot_color(&rec.background),
-        border_color: snapshot_color(&rec.border_color),
-        corner_radii: snapshot_radii(&rec.corner_radii),
-        border_widths: snapshot_edges(&rec.border_widths),
-        corner_smoothing: f32::from_bits(rec.corner_smoothing),
-        padding: rec.padding,
-    }
-}
-
-fn snapshot_shadow(rec: &GpuiGoSceneShadowRecord) -> gpui::Shadow {
-    gpui::Shadow {
-        order: rec.order,
-        blur_radius: gpui::ScaledPixels(f32::from_bits(rec.blur_radius)),
-        bounds: snapshot_bounds(&rec.bounds),
-        corner_radii: snapshot_radii(&rec.corner_radii),
-        content_mask: snapshot_mask(&rec.content_mask),
-        color: snapshot_color(&rec.color),
-        element_bounds: snapshot_bounds(&rec.element_bounds),
-        element_corner_radii: snapshot_radii(&rec.element_corner_radii),
-        inset: gpui::ShaderBool::from(rec.inset != 0),
-        corner_smoothing: f32::from_bits(rec.corner_smoothing),
-    }
-}
-
 fn snapshot_underline(rec: &GpuiGoSceneUnderlineRecord) -> gpui::Underline {
     gpui::Underline {
         order: rec.order,
@@ -4447,7 +5400,7 @@ fn snapshot_path(data: &PathData) -> SnapshotPath {
 
 /// The pinned `Path::clipped_bounds()`: `bounds.intersect(&content_mask.bounds)`.
 fn clipped_path_bounds(data: &PathData) -> GpuiGoSceneBounds {
-    let clipped = SceneState::clipped_bounds(&data.rec.bounds, &data.rec.content_mask);
+    let clipped = SceneState::clipped_bounds(&data.rec.bounds, &data.rec.content_mask.bounds);
     GpuiGoSceneBounds {
         x: clipped.origin_x.to_bits(),
         y: clipped.origin_y.to_bits(),
@@ -4497,9 +5450,15 @@ pub(crate) fn scene_render_snapshot(handle: u64) -> Result<SceneRenderSnapshot, 
     if !state.is_finished {
         return Err(scene_status::ERR_NOT_FINISHED);
     }
-    let snapshot = SceneRenderSnapshot {
-        quads: state.quads.iter().map(snapshot_quad).collect(),
-        shadows: state.shadows.iter().map(snapshot_shadow).collect(),
+    Ok(render_snapshot_of_state(&state))
+}
+
+/// The snapshot builder over a locked, finished state (the tests drive
+/// it directly on their SceneState).
+fn render_snapshot_of_state(state: &SceneState) -> SceneRenderSnapshot {
+    let mut snapshot = SceneRenderSnapshot {
+        quads: state.quads.clone(),
+        shadows: state.shadows.clone(),
         underlines: state.underlines.iter().map(snapshot_underline).collect(),
         monochrome_sprites: state
             .monochrome_sprites
@@ -4521,11 +5480,86 @@ pub(crate) fn scene_render_snapshot(handle: u64) -> Result<SceneRenderSnapshot, 
         surface_opacities: state.surface_opacities.clone(),
         backdrops: state.backdrops.clone(),
         boundaries: state.boundaries.clone(),
+        effects: state.effects.clone(),
         commands: state.plan.commands.clone(),
         requirements: state.plan.requirements,
     };
-    Ok(snapshot)
+    // The single-primitive opacity folds (rev 16, ticket 50): applied
+    // to the SNAPSHOT's copies - the stored records stay exactly as
+    // inserted, so dumps replay them unchanged and a re-finish rebuilds
+    // the same plan.
+    let folds = FoldIndex::build(&state.plan.folds, &snapshot);
+    for (quad, factor) in snapshot.quads.iter_mut().zip(folds.quads.iter()) {
+        if let Some(factor) = factor {
+            fold_background(&mut quad.background, *factor);
+            fold_background(&mut quad.border_color, *factor);
+        }
+    }
+    for (shadow, factor) in snapshot.shadows.iter_mut().zip(folds.shadows.iter()) {
+        if let Some(factor) = factor {
+            fold_background(&mut shadow.color, *factor);
+        }
+    }
+    for (underline, factor) in snapshot.underlines.iter_mut().zip(folds.underlines.iter()) {
+        if let Some(factor) = factor {
+            let mut hsla: gpui::Hsla = underline.color.into();
+            hsla.alpha *= factor;
+            underline.color = hsla.into();
+        }
+    }
+    for (path, factor) in snapshot.paths.iter_mut().zip(folds.paths.iter()) {
+        if let Some(factor) = factor {
+            path.color = path.color.opacity(*factor);
+        }
+    }
+    for (sprite, factor) in snapshot
+        .monochrome_sprites
+        .iter_mut()
+        .zip(folds.monochrome_sprites.iter())
+    {
+        if let Some(factor) = factor {
+            let mut hsla: gpui::Hsla = sprite.color.into();
+            hsla.alpha *= factor;
+            sprite.color = hsla.into();
+        }
+    }
+    for (sprite, factor) in snapshot
+        .subpixel_sprites
+        .iter_mut()
+        .zip(folds.subpixel_sprites.iter())
+    {
+        if let Some(factor) = factor {
+            let mut hsla: gpui::Hsla = sprite.color.into();
+            hsla.alpha *= factor;
+            sprite.color = hsla.into();
+        }
+    }
+    for (sprite, factor) in snapshot
+        .polychrome_sprites
+        .iter_mut()
+        .zip(folds.polychrome_sprites.iter())
+    {
+        if let Some(factor) = factor {
+            sprite.opacity *= factor;
+        }
+    }
+    for (opacity, factor) in snapshot
+        .surface_opacities
+        .iter_mut()
+        .zip(folds.surfaces.iter())
+    {
+        if let Some(factor) = factor {
+            *opacity *= factor;
+        }
+    }
+    for (backdrop, factor) in snapshot.backdrops.iter_mut().zip(folds.backdrops.iter()) {
+        if let Some(factor) = factor {
+            backdrop.opacity = (f32::from_bits(backdrop.opacity) * factor).to_bits();
+        }
+    }
+    snapshot
 }
+
 
 
 /// The scene service table installed in reserved slot 3 of
@@ -4544,6 +5578,13 @@ pub(crate) fn scene_render_snapshot(handle: u64) -> Result<SceneRenderSnapshot, 
 /// `size_of_path_vertex_record` @264, `size_of_path_command_record`
 /// @268, `max_filters` @272; total size 280 (276 rounded up to the
 /// table's 8-byte alignment), alignment 8.
+///
+/// Version 6 (rev 16, ticket 50) appended `insert_effect` and
+/// `effect_dump` after `insert_batch` (pointers @216 and @224; 29
+/// pointers total, 232 bytes) and three trailing self-check scalars:
+/// `size_of_effect_record` @296, `size_of_content_mask` @300,
+/// `max_scene_groups` @304; total size 312 (308 rounded up), alignment
+/// 8.
 #[repr(C)]
 pub struct GpuiGoSceneTable {
     /// `scene_create`.
@@ -4619,6 +5660,15 @@ pub struct GpuiGoSceneTable {
     /// `scene_insert_batch` (service version 4, gpui-perf ticket 05):
     /// a packed op stream (see [`batch_op`]) applied in order in one call.
     pub insert_batch: Option<unsafe extern "system" fn(u64, *const u32, u32, *mut u32) -> i32>,
+    /// `scene_insert_effect` (service version 6, rev 16 ticket 50): the
+    /// effect-group marker insert (start or end, `flags.IS_START`).
+    pub insert_effect:
+        Option<unsafe extern "system" fn(u64, *const GpuiGoSceneEffectRecord) -> i32>,
+    /// `scene_effect_dump` (service version 6, rev 16 ticket 50): the
+    /// finished scene's effect records.
+    pub effect_dump: Option<
+        unsafe extern "system" fn(u64, *mut GpuiGoSceneEffectRecord, u32, *mut u32) -> i32,
+    >,
     /// Scene ABI version (see [`GPUI_GO_SCENE_SERVICE_VERSION`]).
     pub service_version: u32,
     /// `size_of::<GpuiGoSceneTable>()` self-check.
@@ -4654,6 +5704,12 @@ pub struct GpuiGoSceneTable {
     pub size_of_path_command_record: u32,
     /// Maximum filters in one chain (the pinned SmallVec capacity).
     pub max_filters: u32,
+    /// `size_of::<GpuiGoSceneEffectRecord>()` self-check (rev 16).
+    pub size_of_effect_record: u32,
+    /// `size_of::<GpuiGoSceneContentMask>()` self-check (rev 16).
+    pub size_of_content_mask: u32,
+    /// The group-count sanity bound `MAX_SCENE_GROUPS` (rev 16).
+    pub max_scene_groups: u32,
 }
 
 pub(crate) static SCENE_TABLE: GpuiGoSceneTable = GpuiGoSceneTable {
@@ -4684,6 +5740,8 @@ pub(crate) static SCENE_TABLE: GpuiGoSceneTable = GpuiGoSceneTable {
     path_dump: Some(scene_path_dump),
     path_script: Some(scene_path_script),
     insert_batch: Some(scene_insert_batch),
+    insert_effect: Some(scene_insert_effect),
+    effect_dump: Some(scene_effect_dump),
     service_version: GPUI_GO_SCENE_SERVICE_VERSION,
     size_of_table: core::mem::size_of::<GpuiGoSceneTable>() as u32,
     align_of_table: core::mem::align_of::<GpuiGoSceneTable>() as u32,
@@ -4702,6 +5760,9 @@ pub(crate) static SCENE_TABLE: GpuiGoSceneTable = GpuiGoSceneTable {
     size_of_path_vertex_record: core::mem::size_of::<GpuiGoScenePathVertexRecord>() as u32,
     size_of_path_command_record: core::mem::size_of::<GpuiGoPathCommandRecord>() as u32,
     max_filters: MAX_SCENE_FILTERS,
+    size_of_effect_record: core::mem::size_of::<GpuiGoSceneEffectRecord>() as u32,
+    size_of_content_mask: core::mem::size_of::<GpuiGoSceneContentMask>() as u32,
+    max_scene_groups: MAX_SCENE_GROUPS,
 };
 
 // ---------------------------------------------------------------------------
@@ -4943,6 +6004,36 @@ unsafe extern "system" fn scene_insert_polychrome_sprite(
     }
 }
 
+unsafe extern "system" fn scene_insert_effect(handle: u64, rec: *const GpuiGoSceneEffectRecord) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| scene_insert_effect_body(handle, rec)));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            mark_scene_failed(handle);
+            scene_status::ERR_PANIC
+        }
+    }
+}
+
+unsafe extern "system" fn scene_effect_dump(
+    handle: u64,
+    records: *mut GpuiGoSceneEffectRecord,
+    capacity: u32,
+    out_count: *mut u32,
+) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        scene_effect_dump_body(handle, records, capacity, out_count)
+    }));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            scene_status::ERR_PANIC
+        }
+    }
+}
+
 unsafe extern "system" fn scene_replay(handle: u64, start: u32, end: u32, prev: u64) -> i32 {
     let outcome = catch_unwind(AssertUnwindSafe(|| {
         scene_replay_body(handle, start, end, prev)
@@ -5169,8 +6260,11 @@ mod tests {
         })
     }
 
-    fn mask() -> GpuiGoSceneBounds {
-        full_bounds()
+    fn mask() -> GpuiGoSceneContentMask {
+        GpuiGoSceneContentMask {
+            bounds: full_bounds(),
+            ..Default::default()
+        }
     }
 
     fn quad(smoothing: f32) -> GpuiGoSceneQuadRecord {
@@ -5192,8 +6286,11 @@ mod tests {
             height: 100.0,
         });
         GpuiGoSceneQuadRecord {
+            content_mask: GpuiGoSceneContentMask {
+                bounds,
+                ..Default::default()
+            },
             bounds,
-            content_mask: bounds,
             ..Default::default()
         }
     }
@@ -5281,6 +6378,18 @@ mod tests {
                     format!("{} {}..{}", kind, command.range_start, command.range_end)
                 } else if command.command_kind == command_kind::BEGIN_FILTER {
                     format!("begin:{}", target_name(command.filter_target, command.target_index))
+                } else if command.command_kind == command_kind::BEGIN_EFFECT {
+                    format!(
+                        "begin-effect:{}",
+                        target_name(command.filter_target, command.target_index)
+                    )
+                } else if command.command_kind == command_kind::END_EFFECT {
+                    format!(
+                        "end-effect:{}[{}->{}]",
+                        target_name(command.filter_target, command.target_index),
+                        command.boundary_index,
+                        command.closing_boundary_index
+                    )
                 } else {
                     format!(
                         "end:{}[{}->{}]",
@@ -5471,8 +6580,11 @@ mod tests {
 
     #[test]
     fn render_commands_pair_nested_filters_and_bound_isolation_targets() {
-        // The pinned three-nested-group test: targets 0, 1, then inline;
-        // each end carries its matched start's index.
+        // The pinned three-nested-group test, updated for rev 16 (ticket
+        // 50): targets 0, 1, 2 - NO depth cap (the pre-R16 third group
+        // rendered inline, unfiltered; that divergence is the ticket's
+        // point). The first two keep EXACTLY the R15 plan (indices 0
+        // and 1); each end carries its matched start's index.
         let mut scene = new_scene();
         scene.insert_boundary(boundary(true)).unwrap();
         scene.insert_quad(quad(0.0)).unwrap();
@@ -5490,12 +6602,306 @@ mod tests {
                 "quad 0..1",
                 "begin:Isolated(1)",
                 "quad 1..2",
-                "begin:Inline",
+                "begin:Isolated(2)",
                 "quad 2..3",
-                "end:Inline[2->3]",
+                "end:Isolated(2)[2->3]",
                 "end:Isolated(1)[1->4]",
                 "end:Isolated(0)[0->5]",
             ]
+        );
+    }
+
+    fn effect(is_start: bool, flags: u32) -> GpuiGoSceneEffectRecord {
+        GpuiGoSceneEffectRecord {
+            bounds: full_bounds(),
+            content_mask: full_bounds(),
+            flags: flags | u32::from(is_start) * effect_flags::IS_START,
+            opacity: 0.5f32.to_bits(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn effect_groups_pair_through_the_shared_group_stack() {
+        // A matched effect pair composites through an isolated target
+        // slot, nested with a filter pair: the slots count OPEN groups
+        // of either kind (the filter takes 0, the effect 1) - the same
+        // stack, no depth cap.
+        let mut scene = new_scene();
+        scene.insert_boundary(boundary(true)).unwrap();
+        scene.insert_effect(effect(true, effect_flags::HAS_OPACITY)).unwrap();
+        scene.insert_quad(quad(0.0)).unwrap();
+        scene.insert_quad(quad(0.0)).unwrap();
+        scene.insert_effect(effect(false, effect_flags::HAS_OPACITY)).unwrap();
+        scene.insert_boundary(boundary(false)).unwrap();
+        // The two quads share one batch (the pinned merge rule: a batch
+        // extends while the next primitive stays under the following
+        // marker's order).
+        assert_eq!(
+            command_signature(&mut scene),
+            vec![
+                "begin:Isolated(0)",
+                "begin-effect:Isolated(1)",
+                "quad 0..2",
+                "end-effect:Isolated(1)[0->1]",
+                "end:Isolated(0)[0->1]",
+            ]
+        );
+        let requirements = scene.plan.requirements;
+        assert_eq!(requirements.isolated_target_count, 2);
+        assert_eq!(requirements.isolated_effect_count, 1);
+        assert_eq!(requirements.isolated_filter_count, 1);
+        assert_eq!(scene.effects.len(), 2);
+        // The effect markers survive with kernel-assigned orders.
+        assert!(scene.effects[0].order < scene.effects[1].order);
+    }
+
+    #[test]
+    fn single_primitive_opacity_group_folds_inline() {
+        // The fold: a pure-opacity effect group whose span holds exactly
+        // ONE primitive emits INLINE begin/end commands and the opacity
+        // multiplies that primitive's colour at snapshot time (the
+        // stored record stays as inserted - the dump reads it
+        // unchanged).
+        let mut scene = new_scene();
+        scene.insert_effect(effect(true, effect_flags::HAS_OPACITY)).unwrap();
+        let mut opaque = quad(0.0);
+        opaque.background.a = 1.0f32.to_bits();
+        opaque.border_color.a = 1.0f32.to_bits();
+        scene.insert_quad(opaque).unwrap();
+        scene.insert_effect(effect(false, effect_flags::HAS_OPACITY)).unwrap();
+        assert_eq!(
+            command_signature(&mut scene),
+            vec![
+                "begin-effect:Inline",
+                "quad 0..1",
+                "end-effect:Inline[0->1]",
+            ]
+        );
+        // The fold is recorded for the snapshot.
+        assert_eq!(scene.plan.folds.len(), 1);
+        assert_eq!(scene.plan.folds[0].primitive, SceneFoldPrimitive::Quad);
+        assert_eq!(scene.plan.folds[0].index, 0);
+        assert_eq!(scene.plan.folds[0].factor, 0.5);
+        // The STORED record is unmultiplied (dumps read it unchanged).
+        assert_eq!(f32::from_bits(scene.quads[0].background.a), 1.0);
+        // The snapshot applies the fold.
+        let snapshot = render_snapshot_of_state(&scene);
+        assert_eq!(f32::from_bits(snapshot.quads[0].background.a), 0.5);
+    }
+
+    #[test]
+    fn single_primitive_group_with_clip_does_not_fold() {
+        // A clipping group (rounded clip) does NOT fold even with one
+        // primitive: the clip needs the isolated composite.
+        let mut scene = new_scene();
+        scene
+            .insert_effect(effect(true, effect_flags::HAS_OPACITY | effect_flags::CLIP_TO_BOUNDS))
+            .unwrap();
+        scene.insert_quad(quad(0.0)).unwrap();
+        scene
+            .insert_effect(effect(false, effect_flags::HAS_OPACITY | effect_flags::CLIP_TO_BOUNDS))
+            .unwrap();
+        assert_eq!(
+            command_signature(&mut scene),
+            vec![
+                "begin-effect:Isolated(0)",
+                "quad 0..1",
+                "end-effect:Isolated(0)[0->1]",
+            ]
+        );
+        assert!(scene.plan.folds.is_empty());
+    }
+
+    #[test]
+    fn unmatched_effect_end_emits_an_inline_end() {
+        // The boundary machinery applies verbatim: an unmatched end
+        // renders inline.
+        let mut scene = new_scene();
+        scene.insert_quad(quad(0.0)).unwrap();
+        scene.insert_effect(effect(false, effect_flags::HAS_OPACITY)).unwrap();
+        assert_eq!(
+            command_signature(&mut scene),
+            vec!["quad 0..1", "end-effect:Inline[0->0]"]
+        );
+    }
+
+    #[test]
+    fn deep_effect_nesting_gets_targets_beyond_the_old_cap() {
+        // Depth 6: all six groups isolate (the pre-R16 cap was 2 - for
+        // FILTER groups; effect groups never existed).
+        let mut scene = new_scene();
+        for _ in 0..6 {
+            scene.insert_effect(effect(true, effect_flags::HAS_OPACITY)).unwrap();
+            scene.insert_quad(quad(0.0)).unwrap();
+        }
+        for _ in 0..6 {
+            scene.insert_effect(effect(false, effect_flags::HAS_OPACITY)).unwrap();
+        }
+        scene.finish().unwrap();
+        let commands = &scene.plan.commands;
+        let begins: Vec<_> = commands
+            .iter()
+            .filter(|command| command.command_kind == command_kind::BEGIN_EFFECT)
+            .collect();
+        assert_eq!(begins.len(), 6);
+        // The five OUTER groups isolate with nesting slots 0..4; the
+        // innermost (whose span is exactly its one quad) FOLDS to
+        // inline, its begin patched back.
+        for (depth, command) in begins.iter().take(5).enumerate() {
+            assert_eq!(command.filter_target, 1);
+            assert_eq!(command.target_index, depth as u32);
+        }
+        assert_eq!(begins[5].filter_target, 0);
+        // The requirement's high-water estimate counts every isolated
+        // begin (a conservative upper bound - the fold never opens it).
+        assert_eq!(scene.plan.requirements.isolated_target_count, 6);
+        // Exactly one fold: the innermost quad (the outer spans hold
+        // nested markers).
+        assert_eq!(scene.plan.folds.len(), 1);
+        assert_eq!(scene.plan.folds[0].primitive, SceneFoldPrimitive::Quad);
+        assert_eq!(scene.plan.folds[0].index, 5);
+    }
+
+    #[test]
+    fn scene_groups_limit_returns_err_limit() {
+        // MAX_SCENE_GROUPS is the ABI sanity bound: the start marker
+        // that would exceed it fails with ERR_LIMIT, and the boundary
+        // starts count toward the same bound (both kinds, one stack).
+        let mut scene = new_scene();
+        for _ in 0..MAX_SCENE_GROUPS {
+            scene.insert_effect(effect(true, effect_flags::HAS_OPACITY)).unwrap();
+        }
+        let overflow = effect(true, effect_flags::HAS_OPACITY);
+        let result = scene.insert_effect(overflow);
+        assert_eq!(result, Err(scene_status::ERR_LIMIT));
+        // End markers never count.
+        for _ in 0..4 {
+            scene
+                .insert_effect(effect(false, effect_flags::HAS_OPACITY))
+                .unwrap();
+        }
+        // Boundary starts share the bound: with MAX_SCENE_GROUPS effect
+        // starts already inserted, a boundary start is over it too.
+        let result = scene.insert_boundary(boundary(true));
+        assert_eq!(result, Err(scene_status::ERR_LIMIT));
+    }
+
+    #[test]
+    fn effect_record_validation_rejects_malformed_inserts() {
+        // Validation lives at the ABI boundary (the bodies), exactly
+        // like every other record: unknown flag bits, a singular
+        // transform, a non-zero mask kind, a property node without an
+        // id (or without a value), opacity out of range and negative
+        // radii all fail with ERR_BAD_VALUE.
+        let mut handle = 0u64;
+        assert_eq!(scene_create_body(&mut handle), scene_status::OK);
+        let rejects = |record: GpuiGoSceneEffectRecord| {
+            assert_eq!(
+                scene_insert_effect_body(handle, &record),
+                scene_status::ERR_BAD_VALUE
+            );
+        };
+        let mut record = effect(true, effect_flags::HAS_OPACITY);
+        record.flags |= 1 << 9;
+        rejects(record);
+
+        let mut record = effect(true, effect_flags::HAS_TRANSFORM);
+        record.transform = [0; 6];
+        rejects(record);
+
+        let mut record = effect(true, effect_flags::HAS_OPACITY);
+        record.mask_kind = 1;
+        rejects(record);
+
+        let mut record = effect(true, effect_flags::PROPERTY_NODE | effect_flags::HAS_OPACITY);
+        record.node_id = 0;
+        rejects(record);
+
+        let mut record = effect(true, effect_flags::PROPERTY_NODE);
+        record.node_id = 7;
+        rejects(record);
+
+        let mut record = effect(true, effect_flags::HAS_OPACITY);
+        record.opacity = 1.5f32.to_bits();
+        rejects(record);
+
+        let mut record = effect(true, effect_flags::HAS_OPACITY);
+        record.corner_radii = [(-1.0f32).to_bits(), 0, 0, 0];
+        rejects(record);
+
+        let mut record = effect(true, effect_flags::HAS_OPACITY);
+        record.reserved = 1;
+        rejects(record);
+        assert_eq!(scene_dispose_body(handle), scene_status::OK);
+    }
+
+    #[test]
+    fn extended_content_mask_validates_and_round_trips() {
+        // Fades, radii and smoothing ride every record that has a mask;
+        // the validation rejects negative fades, negative radii and
+        // out-of-range smoothing.
+        let mut scene = new_scene();
+        let mut record = quad(0.0);
+        record.content_mask.fade_out = [4.0f32.to_bits(), 0, 0, 8.0f32.to_bits()];
+        record.content_mask.corner_radii = [6.0f32.to_bits(); 4];
+        record.content_mask.corner_smoothing = 0.25f32.to_bits();
+        scene.insert_quad(record).unwrap();
+        scene.finish().unwrap();
+        assert_eq!(scene.quads[0].content_mask, record.content_mask);
+
+        // Validation lives at the ABI boundary (the bodies).
+        let mut handle = 0u64;
+        assert_eq!(scene_create_body(&mut handle), scene_status::OK);
+        let mut bad = quad(0.0);
+        bad.content_mask.fade_out = [(-1.0f32).to_bits(), 0, 0, 0];
+        assert_eq!(scene_insert_quad_body(handle, &bad), scene_status::ERR_BAD_VALUE);
+        let mut bad = quad(0.0);
+        bad.content_mask.corner_radii = [(-2.0f32).to_bits(), 0, 0, 0];
+        assert_eq!(scene_insert_quad_body(handle, &bad), scene_status::ERR_BAD_VALUE);
+        let mut bad = quad(0.0);
+        bad.content_mask.corner_smoothing = 1.5f32.to_bits();
+        assert_eq!(scene_insert_quad_body(handle, &bad), scene_status::ERR_BAD_VALUE);
+        assert_eq!(scene_dispose_body(handle), scene_status::OK);
+    }
+
+    #[test]
+    fn effect_records_replay_and_sort_like_boundaries() {
+        // Replay re-inserts effect markers with recomputed orders; the
+        // start-before-end tie-break applies to the effect array.
+        let mut scene = new_scene();
+        scene.insert_effect(effect(true, effect_flags::HAS_OPACITY)).unwrap();
+        scene.insert_quad(quad(0.0)).unwrap();
+        scene.insert_quad(quad(0.0)).unwrap();
+        scene.insert_effect(effect(false, effect_flags::HAS_OPACITY)).unwrap();
+        scene.finish().unwrap();
+        let ops = scene.ops.clone();
+        let mut replayed = new_scene();
+        replayed.replay(0, ops.len(), ops).unwrap();
+        replayed.finish().unwrap();
+        assert_eq!(replayed.effects.len(), 2);
+        assert_eq!(
+            command_signature(&mut replayed),
+            vec![
+                "begin-effect:Isolated(0)",
+                "quad 0..2",
+                "end-effect:Isolated(0)[0->1]",
+            ]
+        );
+        // The span's two primitives merge into one batch, so the group
+        // does NOT fold (a two-primitive span needs the group).
+        assert!(replayed.plan.folds.is_empty());
+    }
+
+    #[test]
+    fn unmatched_effect_start_renders_inline() {
+        let mut scene = new_scene();
+        scene.insert_effect(effect(true, effect_flags::HAS_OPACITY)).unwrap();
+        scene.insert_quad(quad(0.0)).unwrap();
+        scene.insert_quad(quad(0.0)).unwrap();
+        assert_eq!(
+            command_signature(&mut scene),
+            vec!["begin-effect:Inline", "quad 0..2"]
         );
     }
 
@@ -5678,15 +7084,22 @@ mod tests {
     fn kind_tiebreak_at_equal_order_follows_the_pinned_discriminants() {
         // Primitives at non-overlapping locations reuse order 1, so the
         // plan's ordering at that order is the PrimitiveKind discriminant
-        // order: Shadow(1) < Quad(2) < Underline(4) < Surface(8) <
-        // BackdropFilter(9). The boundaries take orders above all prior
+        // order: Shadow < Quad < Underline < Surface < BackdropFilter.
+        // (rev 16 inserted EffectGroupStart just under FilterBoundaryStart
+        // and EffectGroupEnd just over FilterBoundaryEnd; the RELATIVE
+        // order of the pre-existing kinds is unchanged, so no pre-R16
+        // scene can reorder.) The boundaries take orders above all prior
         // content (2 and 3) and bracket nothing in this degenerate shape.
-        let wide_mask = GpuiGoSceneBounds::from_f32(F32Bounds {
+        let wide_bounds = GpuiGoSceneBounds::from_f32(F32Bounds {
             origin_x: 0.0,
             origin_y: 0.0,
             width: 1000.0,
             height: 1000.0,
         });
+        let wide_mask = GpuiGoSceneContentMask {
+            bounds: wide_bounds,
+            ..Default::default()
+        };
         let at = |x: f32| {
             GpuiGoSceneBounds::from_f32(F32Bounds {
                 origin_x: x,
