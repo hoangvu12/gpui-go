@@ -23,4 +23,6 @@ Every behaviour check is a browser-parity harness fixture (an HTML page recorded
 
 ## Comments
 
+- 2026-10-26, orchestrator 11: the rebuild is approved by the user's decision of 2026-10-25 ("feel free to do native tickets after every go only is done, but make sure to make it fast somehow without making my pc to freeze"). Conditions: one cargo build at a time, `-j 4`, below-normal priority. R16 runs on the integration branch `native/r16` (50 → 51 → 52 → 53, then 42/43), with interim DLLs tested through `GPUI_GO_NATIVE_BUNDLE` and not committed; this ticket refreshes the embedded artifact.
+
 ## Answer
