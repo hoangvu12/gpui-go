@@ -322,7 +322,7 @@ func TestFilterChainIsEmptyRules(t *testing.T) {
 func TestStyledFilterMethodsAppendInOrder(t *testing.T) {
 	// .Grayscale(1).Blur(4) is the CSS filter: grayscale(1) blur(4) —
 	// the chain in call order, appended like Blur.
-	d := Div().Grayscale(1).Blur(4).Invert(0.5)
+	d := Div().Flex().Grayscale(1).Blur(4).Invert(0.5)
 	filters, ok := d.StyleMut().Filter.Get()
 	if !ok {
 		t.Fatal("no filter chain")

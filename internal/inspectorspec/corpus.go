@@ -118,7 +118,7 @@ func (v *panelView) EntityID() (gpui.EntityID, bool) { return 0, false }
 func (v *panelView) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
 	facts := readPanelFacts(v.model, app)
 	if facts.panicNextRender {
-		return gpui.Div().Child(gpui.Empty()).Child(panickingElement()).IntoElement()
+		return gpui.Div().Flex().Child(gpui.Empty()).Child(panickingElement()).IntoElement()
 	}
 	children := []gpui.AnyElement{
 		gpui.CustomElement[struct{}, struct{}](&headerElement{model: v.model}),

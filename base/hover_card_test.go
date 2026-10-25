@@ -21,9 +21,9 @@ func hoverCardHarness(changes *[]bool, tapToOpen bool) func(*gpui.Window, *gpui.
 			OpenDelay(hoverCardTestDelay).
 			CloseDelay(hoverCardTestDelay).
 			OnOpenChange(func(open bool, _ *gpui.Window, _ *gpui.App) { *changes = append(*changes, open) }).
-			Trigger(gpui.Div().DebugSelector("hover-card-trigger").Size(gpui.Px(20))).
+			Trigger(gpui.Div().Flex().DebugSelector("hover-card-trigger").Size(gpui.Px(20))).
 			Content(func(*HoverCardState, *gpui.Window, *gpui.Context[HoverCardState]) *gpui.DivElement {
-				return gpui.Div().ID("hover-card-content").DebugSelector("hover-card-content").Size(gpui.Px(10))
+				return gpui.Div().Flex().ID("hover-card-content").DebugSelector("hover-card-content").Size(gpui.Px(10))
 			}))
 	}
 }

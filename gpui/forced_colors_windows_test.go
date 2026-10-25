@@ -100,7 +100,7 @@ func TestForcedColorsStylePathDerivesOncePerPreferenceRecord(t *testing.T) {
 	}
 
 	div := func() *DivElement {
-		return Div().TextColor(Rgb(0xdc2626)).Bg(Rgb(0x2563eb))
+		return Div().Flex().TextColor(Rgb(0xdc2626)).Bg(Rgb(0x2563eb))
 	}
 	styleOf := func() Style {
 		var style Style

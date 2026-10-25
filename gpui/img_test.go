@@ -79,7 +79,7 @@ func imgAssetFixture(t *testing.T, key string, data []byte, build func(*paintVie
 // image (R:img.rs:348-380) and paints its polychrome sprite.
 func TestImgEmbeddedSourceThroughWindowAsset(t *testing.T) {
 	f := imgAssetFixture(t, "icons/photo.png", imgPNG(t, 4, 2), func(*paintView, *Window, *Context[paintView]) AnyElement {
-		return Div().SizeFull().Child(Img("icons/photo.png").ID("photo")).IntoElement()
+		return Div().Flex().SizeFull().Child(Img("icons/photo.png").Flex().ID("photo")).IntoElement()
 	})
 	scene := f.draw()
 	if n := len(sprites(t, scene)); n != 0 {
@@ -114,8 +114,8 @@ func TestImgEmbeddedSourceThroughImageCache(t *testing.T) {
 	ta := NewTestApp().WithAssets(registry)
 	cache := NewRetainAllImageCache(ta.App(), ta.RootScope())
 	f := newPaintFixtureIn(t, ta, func(*paintView, *Window, *Context[paintView]) AnyElement {
-		return Div().SizeFull().Child(
-			Img(EmbeddedResource("photo.png")).ImageCache(AnyImageCacheOf(cache)).Grayscale(true).ObjectFit(ObjectFitFill).W(Px(40)).H(Px(10)),
+		return Div().Flex().SizeFull().Child(
+			Img(EmbeddedResource("photo.png")).Flex().ImageCache(AnyImageCacheOf(cache)).Grayscale(true).ObjectFit(ObjectFitFill).W(Px(40)).H(Px(10)),
 		).IntoElement()
 	})
 	f.draw()
@@ -138,7 +138,7 @@ func TestImgEmbeddedSourceThroughImageCache(t *testing.T) {
 func TestImgInMemoryImageSource(t *testing.T) {
 	encoded := NewImage(ImageFormatPNG, imgPNG(t, 6, 3))
 	f := newPaintFixture(t, func(*paintView, *Window, *Context[paintView]) AnyElement {
-		return Div().SizeFull().Child(Img(encoded)).IntoElement()
+		return Div().Flex().SizeFull().Child(Img(encoded).Flex()).IntoElement()
 	})
 	scene := f.draw()
 	if n := len(sprites(t, scene)); n != 0 {
@@ -161,7 +161,7 @@ func TestImgInMemoryImageSource(t *testing.T) {
 func TestImgZeroFrameImageDoesNotPanicOnPaint(t *testing.T) {
 	empty := NewLoadedImage(&RenderImage{})
 	f := newPaintFixture(t, func(*paintView, *Window, *Context[paintView]) AnyElement {
-		return Img(ImageSourceFromRender(empty)).IntoElement()
+		return Img(ImageSourceFromRender(empty)).Flex().IntoElement()
 	})
 	if n := len(sprites(t, f.draw())); n != 0 {
 		t.Fatalf("zero-frame image sprites = %d, want 0", n)
@@ -172,7 +172,7 @@ func TestImgZeroFrameImageDoesNotPanicOnPaint(t *testing.T) {
 // window.draw(origin, size(100, 100), ..)).
 func imgAt(x, y float32, element func() AnyElement) func(*paintView, *Window, *Context[paintView]) AnyElement {
 	return func(*paintView, *Window, *Context[paintView]) AnyElement {
-		return Div().SizeFull().Child(Div().Absolute().Left(Px(x)).Top(Px(y)).W(Px(100)).H(Px(100)).Child(element())).IntoElement()
+		return Div().Flex().SizeFull().Child(Div().Flex().Absolute().Left(Px(x)).Top(Px(y)).W(Px(100)).H(Px(100)).Child(element())).IntoElement()
 	}
 }
 
@@ -185,7 +185,7 @@ func TestImgObjectFitCoverCropsToElementBounds(t *testing.T) {
 	var origin Point
 	f := newPaintFixture(t, func(v *paintView, w *Window, cx *Context[paintView]) AnyElement {
 		return imgAt(origin.X, origin.Y, func() AnyElement {
-			return Img(data).SizeFull().ObjectFit(fit).IntoElement()
+			return Img(data).Flex().SizeFull().ObjectFit(fit).IntoElement()
 		})(v, w, cx)
 	})
 	full := lastSprite(t, f.draw(), "fill image").Tile
@@ -204,8 +204,8 @@ func TestImgObjectFitCoverCropsToElementBounds(t *testing.T) {
 // TestImgExplicitAspectRatioIsNotOverridden ports R:img.rs:899-935.
 func TestImgExplicitAspectRatioIsNotOverridden(t *testing.T) {
 	f := newPaintFixture(t, imgAt(0, 0, func() AnyElement {
-		return Div().Size(Px(100)).OverflowHidden().Child(
-			Img(imgFrames(1, 100, 200)).SizeFull().AspectSquare().ObjectFit(ObjectFitContain),
+		return Div().Flex().Size(Px(100)).OverflowHidden().Child(
+			Img(imgFrames(1, 100, 200)).Flex().SizeFull().AspectSquare().ObjectFit(ObjectFitContain),
 		).IntoElement()
 	}))
 	if sprite := lastSprite(t, f.draw(), "contained image"); sprite.Bounds != dev(50, 0, 100, 200) {
@@ -217,7 +217,7 @@ func TestImgExplicitAspectRatioIsNotOverridden(t *testing.T) {
 // R:img.rs:937-960.
 func TestImgObjectFitCoverClampsCornerRadiiToVisibleBounds(t *testing.T) {
 	f := newPaintFixture(t, imgAt(0, 0, func() AnyElement {
-		return Img(imgFrames(1, 200, 100)).SizeFull().Rounded(Px(100)).ObjectFit(ObjectFitCover).IntoElement()
+		return Img(imgFrames(1, 200, 100)).Flex().SizeFull().Rounded(Px(100)).ObjectFit(ObjectFitCover).IntoElement()
 	}))
 	if sprite := lastSprite(t, f.draw(), "rounded cover"); sprite.CornerRadii.TopLeft != 100 {
 		t.Fatalf("corner radius %v, want 50 x scale 2 = 100", sprite.CornerRadii.TopLeft)
@@ -243,10 +243,10 @@ func TestImgStaleFrameIndexIsClampedWhenImageChanges(t *testing.T) {
 					next.FrameIndex = 4
 					return struct{}{}, next
 				})
-			})
-			return Div().Child(Img(five).ID("test-img")).Child(seed).IntoElement()
+			}).Flex()
+			return Div().Flex().Child(Img(five).Flex().ID("test-img")).Child(seed).IntoElement()
 		}
-		return Img(one).ID("test-img").IntoElement()
+		return Img(one).Flex().ID("test-img").IntoElement()
 	})
 	f.draw()
 	first = false
@@ -270,12 +270,12 @@ func TestImgFallbackAndLoadingReplacements(t *testing.T) {
 		return ImageAssetResult{Image: data}, true
 	}
 	f := imgAssetFixture(t, "present.png", imgPNG(t, 1, 1), func(*paintView, *Window, *Context[paintView]) AnyElement {
-		return Div().SizeFull().
-			Child(Img("missing.png").ID("missing").WithFallback(func() AnyElement {
-				return Div().W(Px(5)).H(Px(5)).Bg(paintRed).IntoElement()
+		return Div().Flex().SizeFull().
+			Child(Img("missing.png").Flex().ID("missing").WithFallback(func() AnyElement {
+				return Div().Flex().W(Px(5)).H(Px(5)).Bg(paintRed).IntoElement()
 			})).
-			Child(Img(custom).ID("slow").WithLoading(func() AnyElement {
-				return Div().W(Px(7)).H(Px(7)).Bg(paintBlue).IntoElement()
+			Child(Img(custom).Flex().ID("slow").WithLoading(func() AnyElement {
+				return Div().Flex().W(Px(7)).H(Px(7)).Bg(paintBlue).IntoElement()
 			})).
 			IntoElement()
 	})

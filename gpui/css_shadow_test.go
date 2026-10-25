@@ -70,7 +70,7 @@ func cssShadowScene(t *testing.T, element *DivElement) *Scene {
 type cssShadowView struct{ element *DivElement }
 
 func (v *cssShadowView) Render(w *Window, cx *Context[cssShadowView]) AnyElement {
-	return Div().P(Px(20)).Child(v.element).IntoElement()
+	return Div().Flex().P(Px(20)).Child(v.element).IntoElement()
 }
 
 // TestBoxShadowBlurSigmaIsHalfTheCSSRadius: a 24px CSS blur casts a
@@ -78,7 +78,7 @@ func (v *cssShadowView) Render(w *Window, cx *Context[cssShadowView]) AnyElement
 // device pixels at the test scale 2. The pin passed 24 through as σ
 // (48 device), twice as blurry as CSS.
 func TestBoxShadowBlurSigmaIsHalfTheCSSRadius(t *testing.T) {
-	box := Div().W(Px(100)).H(Px(60)).
+	box := Div().Flex().W(Px(100)).H(Px(60)).
 		Shadow([]BoxShadow{NewBoxShadow(0, 0, SolidBackground(Black())).WithBlurRadius(24)})
 	scene := cssShadowScene(t, box)
 	shadows, err := scene.Shadows()
@@ -99,7 +99,7 @@ func TestBoxShadowBlurSigmaIsHalfTheCSSRadius(t *testing.T) {
 // float_rounded_rect.cc:138-152) while the element's clip-out shape
 // keeps the element's 6px radii. The pin kept 6px radii for both.
 func TestBoxShadowSpreadGrowsCornerRadii(t *testing.T) {
-	box := Div().W(Px(100)).H(Px(60)).Rounded(Px(6)).
+	box := Div().Flex().W(Px(100)).H(Px(60)).Rounded(Px(6)).
 		Shadow([]BoxShadow{NewBoxShadow(0, 0, SolidBackground(Black())).WithSpreadRadius(4)})
 	scene := cssShadowScene(t, box)
 	shadows, err := scene.Shadows()
@@ -134,7 +134,7 @@ func TestBoxShadowSpreadGrowsCornerRadii(t *testing.T) {
 // gives 14 and the pin kept 4. Chromium AdjustedRadiusDimension
 // (float_rounded_rect.cc:138-152) is the same formula.
 func TestBoxShadowSpreadRatioRule(t *testing.T) {
-	box := Div().W(Px(120)).H(Px(70)).Rounded(Px(4)).
+	box := Div().Flex().W(Px(120)).H(Px(70)).Rounded(Px(4)).
 		Shadow([]BoxShadow{NewBoxShadow(0, 0, SolidBackground(Black())).WithSpreadRadius(10)})
 	scene := cssShadowScene(t, box)
 	shadows, err := scene.Shadows()
@@ -157,7 +157,7 @@ func TestBoxShadowSpreadRatioRule(t *testing.T) {
 func TestBoxShadowListPaintsFirstOnTop(t *testing.T) {
 	first := NewBoxShadow(0, 0, SolidBackground(Black())).WithBlurRadius(6)
 	second := NewBoxShadow(4, 4, SolidBackground(Black())).WithBlurRadius(6)
-	box := Div().W(Px(100)).H(Px(60)).Shadow([]BoxShadow{first, second})
+	box := Div().Flex().W(Px(100)).H(Px(60)).Shadow([]BoxShadow{first, second})
 	scene := cssShadowScene(t, box)
 	shadows, err := scene.Shadows()
 	if err != nil {
@@ -185,7 +185,7 @@ func TestBoxShadowListPaintsFirstOnTop(t *testing.T) {
 // already the CSS σ (the spec's D8 note "the pin uses σ = radius/2"
 // read blur.rs:17 without the half-resolution factor).
 func TestFilterBlurSigmaIsTheCSSRadius(t *testing.T) {
-	box := Div().W(Px(100)).H(Px(60)).Bg(SolidBackground(White())).Blur(3)
+	box := Div().Flex().W(Px(100)).H(Px(60)).Bg(SolidBackground(White())).Blur(3)
 	scene := cssShadowScene(t, box)
 	boundaries, err := scene.FilterBoundaries()
 	if err != nil {
@@ -212,7 +212,7 @@ func TestFilterBlurSigmaIsTheCSSRadius(t *testing.T) {
 // feeds). The pin passed the element bounds and cut the shadow at
 // bounds + 3σ.
 func TestFilterGroupCoversTheShadowInk(t *testing.T) {
-	box := Div().W(Px(100)).H(Px(60)).Bg(SolidBackground(White())).Blur(3).
+	box := Div().Flex().W(Px(100)).H(Px(60)).Bg(SolidBackground(White())).Blur(3).
 		Shadow([]BoxShadow{NewBoxShadow(12, 10, SolidBackground(Black())).WithBlurRadius(18)})
 	scene := cssShadowScene(t, box)
 	boundaries, err := scene.FilterBoundaries()
@@ -234,7 +234,7 @@ func TestFilterGroupCoversTheShadowInk(t *testing.T) {
 // σ = 0.5 × the record radius in texels is the CSS σ = 4 logical in
 // device pixels (see TestFilterBlurSigmaIsTheCSSRadius).
 func TestBackdropFilterBlurSigmaIsTheCSSRadius(t *testing.T) {
-	box := Div().W(Px(100)).H(Px(60)).BackdropBlur(4)
+	box := Div().Flex().W(Px(100)).H(Px(60)).BackdropBlur(4)
 	scene := cssShadowScene(t, box)
 	backdrops, err := scene.BackdropFilters()
 	if err != nil {

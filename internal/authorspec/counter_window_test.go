@@ -56,7 +56,7 @@ func (v *realCounterView) Render(w *gpui.Window, cx *gpui.Context[realCounterVie
 			DebugSelector("label").
 			Flex().
 			Child(NewCountLabel(value).Px3().Prefix("Count: "))).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("increment").
 			Child("Increment")).
 		IntoElement()

@@ -185,7 +185,7 @@ func (v *fillRootView) EntityID() (gpui.EntityID, bool) { return 0, false }
 
 // RenderOnce implements gpui.View.
 func (v *fillRootView) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
-	return gpui.Div().SizeFull().Bg(*v.fill).IntoElement()
+	return gpui.Div().Flex().SizeFull().Bg(*v.fill).IntoElement()
 }
 
 // openFilledWindow opens a shown window whose root view fills with fill

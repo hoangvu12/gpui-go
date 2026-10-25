@@ -28,7 +28,7 @@ func TestWindowTextRenderingModeFollowsBackgroundAppearance(t *testing.T) {
 
 	h := openHiddenAppWindow(t, "ticket06 text aa background", Size{Width: 320, Height: 160}, func(w *Window, app *App) View {
 		return transformRoot{build: func() AnyElement {
-			return Div().TextSize(Px(20)).Child("Grayscale on glass").IntoElement()
+			return Div().Flex().TextSize(Px(20)).Child("Grayscale on glass").IntoElement()
 		}}
 	})
 

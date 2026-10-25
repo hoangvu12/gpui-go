@@ -249,7 +249,7 @@ func View(_ *parity.EventLog) gpui.AnyElement {
 // root builds the fixture's root: the white flex column with the four
 // boxes, centered.
 func root() gpui.AnyElement {
-	return gpui.Div().
+	return gpui.Div().Flex().
 		ID("root").
 		DebugSelector("root").
 		SizeFull().

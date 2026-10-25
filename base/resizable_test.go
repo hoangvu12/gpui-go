@@ -41,10 +41,10 @@ type mixedSizingHarness struct {
 }
 
 func (h *mixedSizingHarness) Render(*gpui.Window, *gpui.Context[mixedSizingHarness]) gpui.AnyElement {
-	return gpui.Div().W(gpui.Px(h.width)).H(gpui.Px(100)).Child(
+	return gpui.Div().Flex().W(gpui.Px(h.width)).H(gpui.Px(100)).Child(
 		HResizable("mixed-sizing").
-			Child(NewResizablePanel().Size(240).Child(gpui.Div().SizeFull().DebugSelector("fixed-sidebar"))).
-			Child(NewResizablePanel().Child(gpui.Div().SizeFull().DebugSelector("flexible-content"))),
+			Child(NewResizablePanel().Size(240).Child(gpui.Div().Flex().SizeFull().DebugSelector("fixed-sidebar"))).
+			Child(NewResizablePanel().Child(gpui.Div().Flex().SizeFull().DebugSelector("flexible-content"))),
 	).IntoElement()
 }
 
@@ -86,10 +86,10 @@ type callerStateHarness struct {
 }
 
 func (h *callerStateHarness) Render(*gpui.Window, *gpui.Context[callerStateHarness]) gpui.AnyElement {
-	return gpui.Div().W(gpui.Px(h.width)).H(gpui.Px(100)).Child(
+	return gpui.Div().Flex().W(gpui.Px(h.width)).H(gpui.Px(100)).Child(
 		HResizable("caller-state").WithState(h.state).
-			Child(NewResizablePanel().Size(240).Child(gpui.Div().SizeFull().DebugSelector("cs-sidebar"))).
-			Child(NewResizablePanel().Child(gpui.Div().SizeFull())),
+			Child(NewResizablePanel().Size(240).Child(gpui.Div().Flex().SizeFull().DebugSelector("cs-sidebar"))).
+			Child(NewResizablePanel().Child(gpui.Div().Flex().SizeFull())),
 	).IntoElement()
 }
 
@@ -129,11 +129,11 @@ type resizableHarness struct {
 
 func (h *resizableHarness) Render(*gpui.Window, *gpui.Context[resizableHarness]) gpui.AnyElement {
 	resizes := h.resizes
-	return gpui.Div().W(gpui.Px(400)).H(gpui.Px(100)).Child(
+	return gpui.Div().Flex().W(gpui.Px(400)).H(gpui.Px(100)).Child(
 		HResizable("resizable").WithState(h.state).
 			OnResize(func(gpui.Entity[ResizableState], *gpui.Window, *gpui.App) { *resizes++ }).
-			Child(NewResizablePanel().Size(150).Child(gpui.Div().SizeFull().DebugSelector("first-panel"))).
-			Child(NewResizablePanel().Size(250).Child(gpui.Div().SizeFull().DebugSelector("second-panel"))),
+			Child(NewResizablePanel().Size(150).Child(gpui.Div().Flex().SizeFull().DebugSelector("first-panel"))).
+			Child(NewResizablePanel().Size(250).Child(gpui.Div().Flex().SizeFull().DebugSelector("second-panel"))),
 	).IntoElement()
 }
 
@@ -234,7 +234,7 @@ type handleStateHarness struct {
 
 func (h *handleStateHarness) Render(*gpui.Window, *gpui.Context[handleStateHarness]) gpui.AnyElement {
 	seen := h.seen
-	d := gpui.Div().Relative().W(gpui.Px(400)).H(gpui.Px(100)).Child(
+	d := gpui.Div().Flex().Relative().W(gpui.Px(400)).H(gpui.Px(100)).Child(
 		HResizable("handle-state").
 			WithHandleAppearance(func(handle *ResizeHandleContext, _ *gpui.Window, _ *gpui.App) (gpui.AnyElement, bool) {
 				if n := len(*seen); n == 0 || (*seen)[n-1] != handle.State() {
@@ -243,11 +243,11 @@ func (h *handleStateHarness) Render(*gpui.Window, *gpui.Context[handleStateHarne
 				// Nothing painted: this renderer is here to watch.
 				return gpui.AnyElement{}, false
 			}).
-			Child(NewResizablePanel().Size(150).Child(gpui.Div().SizeFull())).
-			Child(NewResizablePanel().Size(250).Child(gpui.Div().SizeFull().DebugSelector("hs-second"))),
+			Child(NewResizablePanel().Size(150).Child(gpui.Div().Flex().SizeFull())).
+			Child(NewResizablePanel().Size(250).Child(gpui.Div().Flex().SizeFull().DebugSelector("hs-second"))),
 	)
 	if h.covered {
-		d.Child(gpui.Div().Absolute().Inset0().Occlude())
+		d.Child(gpui.Div().Flex().Absolute().Inset0().Occlude())
 	}
 	return d.IntoElement()
 }
@@ -308,9 +308,9 @@ func TestResizableAHandleReportsThePressAndTheDragToItsRenderer(t *testing.T) {
 type sizedGroupHarness struct{}
 
 func (*sizedGroupHarness) Render(*gpui.Window, *gpui.Context[sizedGroupHarness]) gpui.AnyElement {
-	return gpui.Div().W(gpui.Px(400)).H(gpui.Px(100)).Child(
+	return gpui.Div().Flex().W(gpui.Px(400)).H(gpui.Px(100)).Child(
 		HResizable("sized-resizable").Size(40).Child(
-			NewResizablePanel().Child(gpui.Div().SizeFull().DebugSelector("sized-panel"))),
+			NewResizablePanel().Child(gpui.Div().Flex().SizeFull().DebugSelector("sized-panel"))),
 	).IntoElement()
 }
 

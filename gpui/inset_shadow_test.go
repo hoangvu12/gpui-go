@@ -24,7 +24,7 @@ type insetPanelView struct {
 }
 
 func (v *insetPanelView) Render(w *Window, cx *Context[insetPanelView]) AnyElement {
-	panel := Div().W(Px(120)).H(Px(60)).
+	panel := Div().Flex().W(Px(120)).H(Px(60)).
 		Bg(SolidBackground(Hsla{H: 0, S: 0, L: 0.15, A: 1}))
 	if v.border > 0 {
 		panel = panel.Border(Px(v.border)).
@@ -34,7 +34,7 @@ func (v *insetPanelView) Render(w *Window, cx *Context[insetPanelView]) AnyEleme
 		Shadow([]BoxShadow{v.shadow}).
 		DebugSelector("inset-panel")
 	v.element = panel
-	return Div().SizeFull().Child(panel).IntoElement()
+	return Div().Flex().SizeFull().Child(panel).IntoElement()
 }
 
 // insetPanelScene draws one frame of the inset panel and returns its

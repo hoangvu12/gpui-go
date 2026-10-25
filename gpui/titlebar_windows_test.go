@@ -230,11 +230,11 @@ func TestWin32TitlebarElementsDriveHitTestAndCaptionButtons(t *testing.T) {
 		return ViewOf(NewEntity(app, w.Scope(), func(v *interactView, _ *Context[interactView]) {
 			v.build = func(*interactView, *Window, *Context[interactView]) AnyElement {
 				caption := func(id string, left float32, area WindowControlArea) AnyElement {
-					return Div().ID(id).Absolute().Left(Px(left)).Top0().W(Px(40)).H(Px(32)).
+					return Div().Flex().ID(id).Absolute().Left(Px(left)).Top0().W(Px(40)).H(Px(32)).
 						Occlude().WindowControlArea(area).IntoElement()
 				}
-				return Div().Relative().SizeFull().Child(
-					Div().ID("titlebar").Absolute().Left0().Top0().W(Px(400)).H(Px(32)).
+				return Div().Flex().Relative().SizeFull().Child(
+					Div().Flex().ID("titlebar").Absolute().Left0().Top0().W(Px(400)).H(Px(32)).
 						WindowControlArea(WindowControlAreaDrag).
 						OnHover(func(h *bool, _ *Window, _ *App) {
 							if *h {

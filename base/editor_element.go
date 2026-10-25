@@ -366,11 +366,11 @@ func (e *textElement[M]) layoutFoldIcons(originX float32, bounds gpui.Bounds, la
 			child = gpui.Canvas(func(gpui.Bounds, *gpui.Window, *gpui.App) struct{} { return struct{}{} },
 				func(b gpui.Bounds, _ struct{}, w *gpui.Window, app *gpui.App) {
 					_ = gpui.PaintSvg(w, app, b, path, svg, gpui.UnitTransformation(), gpui.WindowTextStyle(w).Color)
-				}).Size(gpui.Px(foldIconWidth)).IntoElement()
+				}).Flex().Size(gpui.Px(foldIconWidth)).IntoElement()
 		}
 		stateEntity := e.state
 		bufferLine := info.bufferLine
-		icon := gpui.Div().ID(gpui.ElementIDOf(fmt.Sprintf("fold-%d", ix))).
+		icon := gpui.Div().Flex().ID(gpui.ElementIDOf(fmt.Sprintf("fold-%d", ix))).
 			Size(gpui.Px(foldIconWidth)).
 			Child(child).
 			OnMouseDown(gpui.MouseButtonLeft, func(_ *gpui.MouseDownEvent, _ *gpui.Window, app *gpui.App) {

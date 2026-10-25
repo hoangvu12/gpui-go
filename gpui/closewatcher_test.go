@@ -400,7 +400,7 @@ func (v *modalRootView) Render(w *Window, cx *Context[modalRootView]) AnyElement
 	root := Div().ID("root").SizeFull().Flex().Bg(overlayColors.page)
 	if v.handle.IsOpen() {
 		root.Child(TopLayer(v.handle).Kind(OverlayModal).
-			Child(Div().ID("m1").DebugSelector("m1").
+			Child(Div().Flex().ID("m1").DebugSelector("m1").
 				Absolute().Top(Px(60)).Left(Px(20)).W(Px(150)).H(Px(120)).
 				Bg(overlayColors.popover).Occlude()))
 	}

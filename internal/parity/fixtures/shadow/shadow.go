@@ -382,7 +382,7 @@ func BlurSigmaIsBlur(_ *parity.EventLog) gpui.AnyElement {
 
 // blurRoot builds the blur fixture's view with the given blur value.
 func blurRoot(blur float32) gpui.AnyElement {
-	return centeredRoot(roiWrapper("blur-card", blurBoxW+2*blurPad, blurBoxH+2*blurPad, gpui.Div().
+	return centeredRoot(roiWrapper("blur-card", blurBoxW+2*blurPad, blurBoxH+2*blurPad, gpui.Div().Flex().
 		ID("blur-box").
 		DebugSelector("blur-box").
 		W(gpui.Px(blurBoxW)).
@@ -468,7 +468,7 @@ func SpreadView(_ *parity.EventLog) gpui.AnyElement {
 // the rounded box with its hard spread halo, through the element path
 // (the CSS rules).
 func spreadHalo(id string, width, height, radii, spread float32, background, halo uint32) *gpui.DivElement {
-	box := gpui.Div().
+	box := gpui.Div().Flex().
 		ID(id + "-box").
 		DebugSelector(id + "-box").
 		W(gpui.Px(width)).
@@ -497,7 +497,7 @@ func SpreadPinRadii(_ *parity.EventLog) gpui.AnyElement {
 // spreadBox builds one rounded box with a hard spread halo, through
 // the element path (the CSS rules).
 func spreadBox(id string, width, height, radii, spread float32, background, halo uint32) *gpui.DivElement {
-	return gpui.Div().
+	return gpui.Div().Flex().
 		ID(id + "-box").
 		DebugSelector(id + "-box").
 		W(gpui.Px(width)).
@@ -514,7 +514,7 @@ func spreadBox(id string, width, height, radii, spread float32, background, halo
 // and its background quad on top, wrapped in the same-sized ROI
 // wrapper so the boxes are unchanged.
 func pinShadowBox(id string, width, height, radii, spread float32, background, halo uint32) *gpui.DivElement {
-	box := gpui.Div().
+	box := gpui.Div().Flex().
 		ID(id + "-box").
 		DebugSelector(id + "-box").
 		W(gpui.Px(width)).
@@ -653,7 +653,7 @@ func orderRoot(reversed bool) gpui.AnyElement {
 	}
 	return centeredRoot(roiWrapper("order-card",
 		orderBoxW+inkNear+inkFar, orderBoxH+inkNear+inkFar,
-		gpui.Div().
+		gpui.Div().Flex().
 			ID("order-box").
 			DebugSelector("order-box").
 			W(gpui.Px(orderBoxW)).
@@ -762,12 +762,12 @@ func filterRoot(shadowInsideGroup bool, sigma float32) gpui.AnyElement {
 		Flex().
 		Justify(gpui.AlignContentCenter).
 		AlignItems(gpui.AlignItemsCenter).
-		Child(gpui.Div().W(gpui.Px(swatchW)).H(gpui.Px(swatchH)).Bg(gpui.Rgb(swatchGreen)))
+		Child(gpui.Div().Flex().W(gpui.Px(swatchW)).H(gpui.Px(swatchH)).Bg(gpui.Rgb(swatchGreen)))
 	if shadowInsideGroup {
 		card = card.Shadow([]gpui.BoxShadow{dropShadow(filterOffsetX, filterOffsetY, filterBlur, 0, blurShadow)})
 		return centeredRoot(roiWrapper("filter-card", filterBoxW+2*filterPad, filterBoxH+2*filterPad, card))
 	}
-	wrapper := gpui.Div().
+	wrapper := gpui.Div().Flex().
 		W(gpui.Px(filterBoxW)).
 		H(gpui.Px(filterBoxH)).
 		Shadow([]gpui.BoxShadow{dropShadow(filterOffsetX, filterOffsetY, filterBlur, 0, blurShadow)}).
@@ -862,19 +862,19 @@ func BackdropSigmaIsHalfRadius(_ *parity.EventLog) gpui.AnyElement {
 func backdropRoot(blur float32) gpui.AnyElement {
 	bars := gpui.Div().Absolute().Inset0().Flex()
 	for _, color := range backdropBars {
-		bars = bars.Child(gpui.Div().
+		bars = bars.Child(gpui.Div().Flex().
 			W(gpui.Px(backdropBarW)).
 			HFull().
 			Bg(gpui.Rgb(color)))
 	}
-	return gpui.Div().
+	return gpui.Div().Flex().
 		ID("backdrop-stage").
 		DebugSelector("backdrop-stage").
 		SizeFull().
 		Relative().
 		Bg(gpui.Rgb(pageBackground)).
 		Child(bars).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("backdrop-panel").
 			DebugSelector("backdrop-panel").
 			Absolute().

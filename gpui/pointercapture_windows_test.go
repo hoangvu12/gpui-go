@@ -103,12 +103,12 @@ func openCaptureChangeWindow(t *testing.T) *captureChangeWindow {
 	}, func(w *Window, app *App) View {
 		return ViewOf(NewEntity(app, w.Scope(), func(v *interactView, _ *Context[interactView]) {
 			v.build = func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-				return Div().ID("root").SizeFull().Relative().Child(
-					Div().ID("button").
+				return Div().Flex().ID("root").SizeFull().Relative().Child(
+					Div().Flex().ID("button").
 						Absolute().Left(Px(20)).Top(Px(20)).Size(Px(80)).
 						Bg(interactRed).
 						Active(func(s StyleRefinement) StyleRefinement {
-							return Div().Refine(s).Bg(interactBlue).Style()
+							return Div().Flex().Refine(s).Bg(interactBlue).Style()
 						}).
 						OnMouseDownAll(func(e *MouseDownEvent, phase DispatchPhase, hitbox *Hitbox, w *Window, app *App) {
 							if phase == DispatchBubble && e.Button == MouseButtonLeft && hitbox.IsHovered(w) {

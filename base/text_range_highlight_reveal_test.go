@@ -38,11 +38,11 @@ func revealWindow(t *testing.T, ta *gpui.TestApp, markdown string, container rev
 	t.Helper()
 	state := newTextViewStateEntity(ta, markdown)
 	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		frame := gpui.Div().W(gpui.Px(200)).H(gpui.Px(100))
+		frame := gpui.Div().Flex().W(gpui.Px(200)).H(gpui.Px(100))
 		row := func(clamp bool) gpui.AnyElement {
 			return gpui.List(container.outer, func(ix int, _ *gpui.Window, _ *gpui.App) gpui.AnyElement {
 				if ix == 0 {
-					return gpui.Div().H(gpui.Px(40)).IntoElement()
+					return gpui.Div().Flex().H(gpui.Px(40)).IntoElement()
 				}
 				view := NewTextView(state)
 				if clamp {

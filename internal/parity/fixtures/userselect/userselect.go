@@ -253,7 +253,7 @@ func noneView(_ *parity.EventLog) gpui.AnyElement {
 }
 
 func paragraph(none bool) gpui.AnyElement {
-	text := gpui.Div().
+	text := gpui.Div().Flex().
 		ID("text").
 		DebugSelector("text").
 		W(gpui.Px(paragraphWidth))

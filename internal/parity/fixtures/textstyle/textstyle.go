@@ -122,7 +122,7 @@ func fixture(name, html string, view func(*parity.EventLog) gpui.AnyElement, box
 // rowElement builds one gpui row div: the shared box look, the extra
 // style application, and the row's text.
 func rowElement(id string, text string, style func(*gpui.DivElement) *gpui.DivElement) *gpui.DivElement {
-	div := gpui.Div().
+	div := gpui.Div().Flex().
 		ID(id).
 		DebugSelector(id).
 		// A flex COLUMN, like Chrome's block rows: the text child

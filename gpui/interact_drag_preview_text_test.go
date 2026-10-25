@@ -24,7 +24,7 @@ type previewTextView struct {
 
 func (v *previewTextView) Render(w *Window, cx *Context[previewTextView]) AnyElement {
 	v.textEl = Text(v.label)
-	return Div().W(Px(200)).H(Px(20)).
+	return Div().Flex().W(Px(200)).H(Px(20)).
 		Bg(Hsla{H: 0, S: 0, L: 0.5, A: 1}).
 		Child(v.textEl).
 		DebugSelector("preview-card").
@@ -37,14 +37,14 @@ func previewTextFixture(t *testing.T, label string) (*interactFixture, Entity[pr
 	t.Helper()
 	var preview Entity[previewTextView]
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-		source := Div().ID("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).CursorGrab().
+		source := Div().Flex().ID("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).CursorGrab().
 			OnDrag(dragPayload{name: "tab"}, func(value *dragPayload, offset Point, w *Window, app *App) View {
 				preview = NewEntity(app, w.Scope(), func(v *previewTextView, cx *Context[previewTextView]) {
 					v.label = label
 				})
 				return ViewOf(preview)
 			})
-		return Div().Relative().SizeFull().Child(source).IntoElement()
+		return Div().Flex().Relative().SizeFull().Child(source).IntoElement()
 	})
 	f.down(MouseButtonLeft, 10, 10)
 	f.draw()

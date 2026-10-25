@@ -230,7 +230,7 @@ func TestGradientBgAcceptsAGradientBackground(t *testing.T) {
 	gradient := LinearGradientBackground(90,
 		GradientStop{Color: Rgb(0xef4444), Position: 0},
 		GradientStop{Color: Rgb(0x3b82f6), Position: 1})
-	div := Div().Bg(gradient)
+	div := Div().Flex().Bg(gradient)
 	style := div.StyleMut()
 	background, ok := style.Background.Get()
 	if !ok || !equalBackground(background, gradient) {
@@ -238,7 +238,7 @@ func TestGradientBgAcceptsAGradientBackground(t *testing.T) {
 	}
 	// A solid Bg replaces it (one background, no CSS background-color
 	// under background-image layer).
-	div = Div().Bg(gradient).Bg(Rgb(0xffffff))
+	div = Div().Flex().Bg(gradient).Bg(Rgb(0xffffff))
 	background, _ = div.StyleMut().Background.Get()
 	if background.Kind != BackgroundKindSolid {
 		t.Fatalf("a later solid Bg did not replace the gradient: %+v", background)

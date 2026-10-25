@@ -148,7 +148,7 @@ type ToolbarGroup struct {
 // NewToolbarGroup creates a group with the given element id
 // (U:toolbar.rs:214-222).
 func NewToolbarGroup[I gpui.IntoElementID](id I) *ToolbarGroup {
-	base := gpui.Div().ID(id)
+	base := gpui.Div().Flex().ID(id)
 	return gpui.BindComponent(&ToolbarGroup{base: base}, base)
 }
 

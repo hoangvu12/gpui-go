@@ -106,6 +106,12 @@ func RewriteSource(path string, src []byte) (*FileRewrite, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse: %w", err)
 	}
+	if isGenerated(file) {
+		// Generated output is never hand-edited: its generator is
+		// fixed and rerun instead (the codemod must not widen the
+		// diff between a generator and its committed output).
+		return &FileRewrite{Path: path}, nil
+	}
 	facts := fileImportFacts(file)
 	res := &FileRewrite{Path: path}
 	if !facts.relevant() {
@@ -172,6 +178,37 @@ func RewriteSource(path string, src []byte) (*FileRewrite, error) {
 	res.Changed = true
 	res.Final = formatted
 	return res, nil
+}
+
+// isGenerated reports whether the file carries a generated-code
+// header: the Go convention's "Code generated" line with "DO NOT
+// EDIT." — both spellings the tree uses, on one line (tsxbundle,
+// class_generated.go) or split across the leading comment group
+// (styled_generated.go). The marker must sit in a comment group before
+// the package clause (a "Code generated" string inside the body, like
+// a generator's template or a test assertion, is not a header), and a
+// "Code generated" without "DO NOT EDIT." (tailwindgen's committed
+// palette source) is not machine-recognized as generated and is
+// rewritten like any other file.
+func isGenerated(file *ast.File) bool {
+	for _, cg := range file.Comments {
+		if cg.Pos() > file.Package {
+			break
+		}
+		gen, edit := false, false
+		for _, c := range cg.List {
+			if strings.HasPrefix(c.Text, "// Code generated") {
+				gen = true
+			}
+			if strings.Contains(c.Text, "DO NOT EDIT") {
+				edit = true
+			}
+		}
+		if gen && edit {
+			return true
+		}
+	}
+	return false
 }
 
 // importFacts records how the file refers to the gpui package.

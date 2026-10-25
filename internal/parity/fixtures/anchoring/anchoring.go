@@ -231,18 +231,18 @@ var page = `<!doctype html>
 // View is the fixture's gpui twin.
 func View(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElement {
 	s := stateOf(log)
-	rows := gpui.Div().
+	rows := gpui.Div().Flex().
 		ID("rows").
 		FlexCol()
 	if s.inserted {
-		rows = rows.Child(gpui.Div().
+		rows = rows.Child(gpui.Div().Flex().
 			ID("inserted").
 			DebugSelector("inserted").
 			Size(gpui.Px(scrollerW), gpui.Px(rowH)).
 			FlexShrink0().
 			Bg(gpui.Rgb(insertedBg)))
 	}
-	rows = rows.Child(gpui.Div().
+	rows = rows.Child(gpui.Div().Flex().
 		ID("focus").
 		DebugSelector("focus").
 		Size(gpui.Px(scrollerW), gpui.Px(rowH)).
@@ -250,14 +250,14 @@ func View(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElement {
 		TrackFocus(focusOf(log, w)).
 		Bg(gpui.Rgb(focusBg)))
 	for i := 2; i <= rowsCount+1; i++ {
-		rows = rows.Child(gpui.Div().
+		rows = rows.Child(gpui.Div().Flex().
 			ID(fmt.Sprintf("r%d", i)).
 			DebugSelector(fmt.Sprintf("r%d", i)).
 			Size(gpui.Px(scrollerW), gpui.Px(rowH)).
 			FlexShrink0().
 			Bg(gpui.Rgb(rowBg)))
 	}
-	scroller := gpui.Div().
+	scroller := gpui.Div().Flex().
 		ID("scroller").
 		DebugSelector("scroller").
 		Size(gpui.Px(scrollerW), gpui.Px(scrollerH)).

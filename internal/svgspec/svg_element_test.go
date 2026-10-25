@@ -67,7 +67,7 @@ func TestSvgElementCenteringAndTint(t *testing.T) {
 	f := newSvgFixture(t, bothFonts(t))
 	red := gpui.RgbaToHsla(0xff0000ff)
 	newDiv := func() *gpui.DivElement {
-		return gpui.Div().
+		return gpui.Div().Flex().
 			Size(gpui.PxLength(24), gpui.PxLength(24)).
 			Opacity(0.5).
 			TextColor(red).

@@ -97,8 +97,8 @@ const (
 // children pin flex-shrink: 0 (the harness discipline: the content
 // must overflow, not shrink).
 func verticalView(f *stickyFixture) AnyElement {
-	root := Div().SizeFull().DebugSelector("root")
-	scroller := Div().
+	root := Div().Flex().SizeFull().DebugSelector("root")
+	scroller := Div().Flex().
 		ID("scroller").
 		DebugSelector("scroller").
 		Size(Px(240), Px(300)).
@@ -107,24 +107,24 @@ func verticalView(f *stickyFixture) AnyElement {
 		FlexCol().
 		OverflowYScroll().
 		TrackScroll(*f.handle).
-		Child(Div().ID("focus").DebugSelector("focus").Size(Px(240), Px(40)).FlexShrink0().Bg(Rgb(0xfca5a5))).
-		Child(Div().
+		Child(Div().Flex().ID("focus").DebugSelector("focus").Size(Px(240), Px(40)).FlexShrink0().Bg(Rgb(0xfca5a5))).
+		Child(Div().Flex().
 			ID("section-a").
 			DebugSelector("section-a").
 			Size(Px(240), Px(200)).
 			FlexCol().
 			FlexShrink0().
-			Child(Div().
+			Child(Div().Flex().
 				ID("header-a").
 				DebugSelector("header-a").
 				Sticky().
 				Top(Px(12)).
 				Size(Px(240), Px(30)).
 				Bg(Rgb(0x2563eb)).
-				Child(Div().ID("bar").DebugSelector("bar").Size(Px(240), Px(10)).Bg(Rgb(0x93c5fd)))).
-			Child(Div().Size(Px(240), Px(170)).Bg(Rgb(0xe2e8f0)))).
-		Child(Div().Size(Px(240), Px(500)).FlexShrink0().Bg(Rgb(0xcbd5e1))).
-		Child(Div().
+				Child(Div().Flex().ID("bar").DebugSelector("bar").Size(Px(240), Px(10)).Bg(Rgb(0x93c5fd)))).
+			Child(Div().Flex().Size(Px(240), Px(170)).Bg(Rgb(0xe2e8f0)))).
+		Child(Div().Flex().Size(Px(240), Px(500)).FlexShrink0().Bg(Rgb(0xcbd5e1))).
+		Child(Div().Flex().
 			ID("footer").
 			DebugSelector("footer").
 			Sticky().
@@ -132,7 +132,7 @@ func verticalView(f *stickyFixture) AnyElement {
 			Size(Px(240), Px(36)).
 			FlexShrink0().
 			Bg(Rgb(0x16a34a))).
-		Child(Div().Size(Px(240), Px(40)).FlexShrink0().Bg(Rgb(0x94a3b8)))
+		Child(Div().Flex().Size(Px(240), Px(40)).FlexShrink0().Bg(Rgb(0x94a3b8)))
 	return root.Child(scroller).IntoElement()
 }
 
@@ -201,10 +201,10 @@ func TestStickySticksWithinScrollerNotAncestor(t *testing.T) {
 	inner := NewScrollHandle()
 	outer := NewScrollHandle()
 	f := newStickyFixture(t, func(f *stickyFixture, w *Window, cx *Context[harnessView]) AnyElement {
-		root := Div().SizeFull()
+		root := Div().Flex().SizeFull()
 		// The inner scroller: 120x120 over 400px of content, whose
 		// first child is a 20px sticky header (top: 0).
-		innerScroller := Div().
+		innerScroller := Div().Flex().
 			ID("inner").
 			DebugSelector("inner").
 			Size(Px(120), Px(120)).
@@ -214,19 +214,19 @@ func TestStickySticksWithinScrollerNotAncestor(t *testing.T) {
 			FlexShrink0().
 			OverflowYScroll().
 			TrackScroll(inner).
-			Child(Div().ID("ih").DebugSelector("ih").Sticky().Top(Px(0)).Size(Px(120), Px(20)).FlexShrink0()).
-			Child(Div().Size(Px(120), Px(380)).FlexShrink0())
+			Child(Div().Flex().ID("ih").DebugSelector("ih").Sticky().Top(Px(0)).Size(Px(120), Px(20)).FlexShrink0()).
+			Child(Div().Flex().Size(Px(120), Px(380)).FlexShrink0())
 		// The outer scroller wraps it with plenty of content.
-		outerScroller := Div().
+		outerScroller := Div().Flex().
 			ID("outer").
 			DebugSelector("outer").
 			Size(Px(400), Px(400)).
 			FlexCol().
 			OverflowYScroll().
 			TrackScroll(outer).
-			Child(Div().Size(Px(400), Px(500)).FlexShrink0()).
+			Child(Div().Flex().Size(Px(400), Px(500)).FlexShrink0()).
 			Child(innerScroller).
-			Child(Div().Size(Px(400), Px(500)).FlexShrink0())
+			Child(Div().Flex().Size(Px(400), Px(500)).FlexShrink0())
 		return root.Child(outerScroller).IntoElement()
 	})
 	// Scroll the OUTER 120 only: the inner scroller's window moves (to
@@ -251,7 +251,7 @@ func TestStickySticksWithinScrollerNotAncestor(t *testing.T) {
 // block — the scroller's content extent — still has room).
 func TestStickyLeftColumnInHorizontalScroller(t *testing.T) {
 	f := newStickyFixture(t, func(f *stickyFixture, w *Window, cx *Context[harnessView]) AnyElement {
-		root := Div().SizeFull()
+		root := Div().Flex().SizeFull()
 		scroller := Div().
 			ID("hscroller").
 			DebugSelector("hscroller").
@@ -261,8 +261,8 @@ func TestStickyLeftColumnInHorizontalScroller(t *testing.T) {
 			Flex().
 			OverflowXScroll().
 			TrackScroll(*f.handle).
-			Child(Div().Size(Px(40), Px(160)).FlexShrink0().Bg(Rgb(0xfca5a5))).
-			Child(Div().
+			Child(Div().Flex().Size(Px(40), Px(160)).FlexShrink0().Bg(Rgb(0xfca5a5))).
+			Child(Div().Flex().
 				ID("col").
 				DebugSelector("col").
 				Sticky().
@@ -270,7 +270,7 @@ func TestStickyLeftColumnInHorizontalScroller(t *testing.T) {
 				Size(Px(60), Px(160)).
 				FlexShrink0().
 				Bg(Rgb(0x2563eb))).
-			Child(Div().Size(Px(700), Px(160)).FlexShrink0().Bg(Rgb(0xcbd5e1)))
+			Child(Div().Flex().Size(Px(700), Px(160)).FlexShrink0().Bg(Rgb(0xcbd5e1)))
 		return root.Child(scroller).IntoElement()
 	})
 	f.draw()
@@ -293,8 +293,8 @@ func TestStickyLeftColumnInHorizontalScroller(t *testing.T) {
 // below it (670px) never runs out within the 400px scroll range.
 func TestStickyDirectChildOfScroller(t *testing.T) {
 	f := newStickyFixture(t, func(f *stickyFixture, w *Window, cx *Context[harnessView]) AnyElement {
-		root := Div().SizeFull()
-		scroller := Div().
+		root := Div().Flex().SizeFull()
+		scroller := Div().Flex().
 			ID("scroller").
 			DebugSelector("scroller").
 			Size(Px(240), Px(300)).
@@ -303,8 +303,8 @@ func TestStickyDirectChildOfScroller(t *testing.T) {
 			FlexCol().
 			OverflowYScroll().
 			TrackScroll(*f.handle).
-			Child(Div().ID("hdr").DebugSelector("hdr").Sticky().Top(Px(0)).Size(Px(240), Px(30)).FlexShrink0()).
-			Child(Div().Size(Px(240), Px(670)).FlexShrink0())
+			Child(Div().Flex().ID("hdr").DebugSelector("hdr").Sticky().Top(Px(0)).Size(Px(240), Px(30)).FlexShrink0()).
+			Child(Div().Flex().Size(Px(240), Px(670)).FlexShrink0())
 		return root.Child(scroller).IntoElement()
 	})
 	f.draw()
@@ -329,8 +329,8 @@ func TestStickyDirectChildOfScroller(t *testing.T) {
 // inside it.
 func TestNestedStickyInnerRidesOuter(t *testing.T) {
 	f := newStickyFixture(t, func(f *stickyFixture, w *Window, cx *Context[harnessView]) AnyElement {
-		root := Div().SizeFull()
-		scroller := Div().
+		root := Div().Flex().SizeFull()
+		scroller := Div().Flex().
 			ID("scroller").
 			Size(Px(200), Px(300)).
 			Ml(Px(60)).
@@ -338,28 +338,28 @@ func TestNestedStickyInnerRidesOuter(t *testing.T) {
 			FlexCol().
 			OverflowYScroll().
 			TrackScroll(*f.handle).
-			Child(Div().Size(Px(200), Px(20)).FlexShrink0()).
-			Child(Div().
+			Child(Div().Flex().Size(Px(200), Px(20)).FlexShrink0()).
+			Child(Div().Flex().
 				ID("section").
 				DebugSelector("section").
 				Size(Px(200), Px(400)).
 				FlexCol().
 				FlexShrink0().
-				Child(Div().
+				Child(Div().Flex().
 					ID("outer").
 					DebugSelector("outer").
 					Sticky().
 					Top(Px(0)).
 					Size(Px(200), Px(100)).
 					FlexCol().
-					Child(Div().
+					Child(Div().Flex().
 						ID("inner").
 						DebugSelector("inner").
 						Sticky().
 						Top(Px(10)).
 						Size(Px(200), Px(50)))).
-				Child(Div().Size(Px(200), Px(300)))).
-			Child(Div().Size(Px(200), Px(500)).FlexShrink0())
+				Child(Div().Flex().Size(Px(200), Px(300)))).
+			Child(Div().Flex().Size(Px(200), Px(500)).FlexShrink0())
 		return root.Child(scroller).IntoElement()
 	})
 	// Scroll 0: nothing is stuck (the outer's natural top is the port
@@ -388,8 +388,8 @@ func TestNestedStickyInnerRidesOuter(t *testing.T) {
 // so the header's bottom sits 6px above the section's end.
 func TestStickyMarginsContractContainingBlock(t *testing.T) {
 	f := newStickyFixture(t, func(f *stickyFixture, w *Window, cx *Context[harnessView]) AnyElement {
-		root := Div().SizeFull()
-		scroller := Div().
+		root := Div().Flex().SizeFull()
+		scroller := Div().Flex().
 			ID("scroller").
 			Size(Px(200), Px(150)).
 			Ml(Px(60)).
@@ -397,20 +397,20 @@ func TestStickyMarginsContractContainingBlock(t *testing.T) {
 			FlexCol().
 			OverflowYScroll().
 			TrackScroll(*f.handle).
-			Child(Div().Size(Px(200), Px(20)).FlexShrink0()).
-			Child(Div().
+			Child(Div().Flex().Size(Px(200), Px(20)).FlexShrink0()).
+			Child(Div().Flex().
 				ID("section").
 				Size(Px(200), Px(120)).
 				FlexCol().
 				FlexShrink0().
-				Child(Div().
+				Child(Div().Flex().
 					ID("hdr").
 					DebugSelector("hdr").
 					Sticky().
 					Top(Px(0)).
 					Mb(Px(6)).
 					Size(Px(200), Px(30)))).
-			Child(Div().Size(Px(200), Px(500)).FlexShrink0())
+			Child(Div().Flex().Size(Px(200), Px(500)).FlexShrink0())
 		return root.Child(scroller).IntoElement()
 	})
 	f.scrollTo(400)
@@ -439,7 +439,7 @@ func TestStickyValue(t *testing.T) {
 	// The Tailwind class: "sticky" applies Sticky() — it left the
 	// unsupported list (class.go) with this ticket, as "static" did
 	// with 33.
-	d := Div().Class("sticky")
+	d := Div().Flex().Class("sticky")
 	style := d.computeStyle()
 	if style.Position != PositionSticky {
 		t.Fatalf("class \"sticky\" leaves position %v, want Sticky", style.Position)
@@ -532,7 +532,7 @@ func (l *stickyHookList) Prepaint(global *GlobalElementID, inspector *InspectorE
 					Size:   Size{Width: bounds.Size.Width, Height: l.pitch},
 				}
 				sticky := StickyOffset(w, &l.headerStyle, headerBox, sectionCB)
-				header := Div().
+				header := Div().Flex().
 					ID(fmt.Sprintf("hook-h%d", i)).
 					DebugSelector(fmt.Sprintf("hook-h%d", i)).
 					Sticky().
@@ -601,7 +601,7 @@ func newStickyHookList(handle ScrollHandle) *stickyHookList {
 func TestStickyListHeaderHook(t *testing.T) {
 	handle := NewScrollHandle()
 	f := newStickyFixture(t, func(f *stickyFixture, w *Window, cx *Context[harnessView]) AnyElement {
-		root := Div().SizeFull()
+		root := Div().Flex().SizeFull()
 		return root.Child(CustomElement[hookFrame, hookPrepaint](newStickyHookList(handle))).IntoElement()
 	})
 	f.draw()

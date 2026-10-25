@@ -20,7 +20,7 @@ func (h *Host) Element() gpui.AnyElement {
 	if h.err == nil || !h.banner {
 		return h.lower(root).IntoElement()
 	}
-	return gpui.Div().
+	return gpui.Div().Flex().
 		SizeFull().
 		Child(h.lower(root).IntoElement()).
 		Child(h.errorBanner()).
@@ -33,7 +33,8 @@ func (h *Host) Element() gpui.AnyElement {
 // plugin's nodes run in the plugin's runtime even though they lower
 // with the app's tree.
 func (h *Host) lower(n *Node) *gpui.DivElement {
-	d := gpui.Div()
+	// display pinned by 69; 71 decides whether TSX <div> follows the block default
+	d := gpui.Div().Flex()
 	if n.ID != "" {
 		d = d.ID(n.ID)
 	}
@@ -85,7 +86,7 @@ func (h *Host) appendChildren(d *gpui.DivElement, nodes []*Node) {
 // window: the message with its .tsx file and line, monospace, one
 // text line per line of the error (zgui's banner model).
 func (h *Host) errorBanner() *gpui.DivElement {
-	b := gpui.Div().
+	b := gpui.Div().Flex().
 		DebugSelector(ErrorBannerSelector).
 		Absolute().
 		Left(gpui.Px(0)).

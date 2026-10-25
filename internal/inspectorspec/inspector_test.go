@@ -1309,7 +1309,7 @@ func TestOverlayPaintsIntoSceneAndReleaseIsInert(t *testing.T) {
 	ta := gpui.NewTestApp()
 	app := ta.App()
 	window := gpui.NewTestWindow(app, gpui.Size{Width: 200, Height: 100})
-	window.SetRootView(&probeView{build: func() gpui.AnyElement { return gpui.Div().Child("stable").IntoElement() }})
+	window.SetRootView(&probeView{build: func() gpui.AnyElement { return gpui.Div().Flex().Child("stable").IntoElement() }})
 
 	baseline, err := gpui.DrawWindowFrame(window)
 	if err != nil {
@@ -1396,7 +1396,7 @@ func TestInspectorPanelShrinksRootAndRendersElement(t *testing.T) {
 	rendered := 0
 	gpui.SetInspectorRenderer(f.app, func(w *gpui.Window, app *gpui.App) gpui.AnyElement {
 		rendered++
-		return gpui.Div().Child("inspector").IntoElement()
+		return gpui.Div().Flex().Child("inspector").IntoElement()
 	})
 	defer gpui.SetInspectorRenderer(f.app, nil)
 

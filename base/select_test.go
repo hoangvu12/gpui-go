@@ -44,7 +44,7 @@ func (h *selectHarness) Render(_ *gpui.Window, cx *gpui.Context[selectHarness]) 
 				h.closing = append(h.closing, "dismiss")
 			})
 		}).
-		Child(gpui.Div().TrackFocus(h.contentFocusHandle).Size(gpui.Px(20))))
+		Child(gpui.Div().Flex().TrackFocus(h.contentFocusHandle).Size(gpui.Px(20))))
 }
 
 // selectTestHarness is U:select.rs:373-384 harness: the trigger starts

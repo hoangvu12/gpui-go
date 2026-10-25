@@ -138,7 +138,7 @@ func newEditTestWindow(t *testing.T, handler InputHandler) (*TestApp, *Window) {
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
 			w.HandleInput(focus, handler)
-			return Div().ID("root").SizeFull().TrackFocus(focus).IntoElement()
+			return Div().Flex().ID("root").SizeFull().TrackFocus(focus).IntoElement()
 		}
 	})
 	window := cx.Window()
@@ -322,7 +322,7 @@ func TestEditActionsNoHandler(t *testing.T) {
 	focus := app.FocusHandle().TabStop(true)
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-			return Div().ID("root").SizeFull().TrackFocus(focus).IntoElement()
+			return Div().Flex().ID("root").SizeFull().TrackFocus(focus).IntoElement()
 		}
 	})
 	window := cx.Window()
@@ -348,7 +348,7 @@ func TestEditActionsPreventedKeydown(t *testing.T) {
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
 			w.HandleInput(focus, handler)
-			return Div().ID("root").SizeFull().TrackFocus(focus).
+			return Div().Flex().ID("root").SizeFull().TrackFocus(focus).
 				OnKeyDown(func(_ *KeyDownEvent, w *Window, app *App) { w.PreventDefault() }).
 				IntoElement()
 		}

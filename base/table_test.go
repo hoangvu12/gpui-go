@@ -52,7 +52,7 @@ func TestTableForwardsChildrenInstanceStyleAndPointerInteraction(t *testing.T) {
 			OnClick(func(*gpui.ClickEvent, *gpui.Window, *gpui.App) { clicks++ }).
 			Child(NewTableBody("body").Child(
 				NewTableRow("row", 1).Child(NewTableCell("cell", 1).Child(
-					gpui.Div().DebugSelector("table-child").Size(gpui.Px(20))))))
+					gpui.Div().Flex().DebugSelector("table-child").Size(gpui.Px(20))))))
 		return elementOf(t, table)
 	})
 

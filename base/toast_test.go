@@ -152,7 +152,7 @@ func TestToastStackBootstrapsMeasurementWithoutZeroHeightClipping(t *testing.T) 
 	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
 		return gpui.OwnRecipe(NewToastStack("stack", state).
 			W(gpui.Px(300)).
-			Item("first", gpui.Div().H(gpui.Px(80)).Child("Visible")))
+			Item("first", gpui.Div().Flex().H(gpui.Px(80)).Child("Visible")))
 	})
 	ovDraw(t, cx)
 	if h, ok := state.shared.heights[gpui.NameElementID("first").String()]; !ok || h != 80 {
@@ -169,7 +169,7 @@ func TestToastStackExpandsForHoverAndFocus(t *testing.T) {
 		return gpui.OwnRecipe(NewToastStack("stack", state).
 			FocusHandle(focus).
 			W(gpui.Px(300)).
-			Item("first", gpui.Div().H(gpui.Px(80))))
+			Item("first", gpui.Div().Flex().H(gpui.Px(80))))
 	})
 	ovDraw(t, cx)
 
@@ -210,9 +210,9 @@ func TestToastKeyedStackReflowMovesFromTheCurrentVisualPosition(t *testing.T) {
 	view, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
 		stack := NewToastStack("stack", h.state).
 			W(gpui.Px(300)).
-			Item("first", gpui.Div().DebugSelector("first-toast").H(gpui.Px(40)))
+			Item("first", gpui.Div().Flex().DebugSelector("first-toast").H(gpui.Px(40)))
 		if h.showSecond {
-			stack.Item("second", gpui.Div().DebugSelector("second-toast").H(gpui.Px(80)))
+			stack.Item("second", gpui.Div().Flex().DebugSelector("second-toast").H(gpui.Px(80)))
 		}
 		return gpui.OwnRecipe(stack)
 	})
@@ -260,11 +260,11 @@ func TestToastBottomStackReflowMovesUpWithoutAnOppositeDirectionJump(t *testing.
 			Absolute().
 			Bottom0().
 			W(gpui.Px(300)).
-			Item("bottom-first", gpui.Div().DebugSelector("bottom-first-toast").H(gpui.Px(40)))
+			Item("bottom-first", gpui.Div().Flex().DebugSelector("bottom-first-toast").H(gpui.Px(40)))
 		if h.showSecond {
-			stack.Item("bottom-second", gpui.Div().H(gpui.Px(80)))
+			stack.Item("bottom-second", gpui.Div().Flex().H(gpui.Px(80)))
 		}
-		return gpui.Div().Relative().Size(gpui.Px(300)).Child(stack).IntoElement()
+		return gpui.Div().Flex().Relative().Size(gpui.Px(300)).Child(stack).IntoElement()
 	})
 	ovDraw(t, cx)
 	ovDraw(t, cx)

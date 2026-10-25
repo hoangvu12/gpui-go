@@ -209,7 +209,7 @@ func drawSurfaceWindow(t *testing.T, build func() gpui.AnyElement) *gpui.Scene {
 // div's 0.5 element opacity paired to it.
 func TestSurfaceElementFitsContentAndPaintsTheRecord(t *testing.T) {
 	scene := drawSurfaceWindow(t, func() gpui.AnyElement {
-		return gpui.Div().
+		return gpui.Div().Flex().
 			Size(gpui.PxLength(200), gpui.PxLength(100)).
 			Opacity(0.5).
 			Child(gpui.NewSurfaceElement(gpui.UnsupportedSurfaceSource(100, 100)).

@@ -18,10 +18,10 @@ func avatarHarness(t *testing.T, image bool) *gpui.VisualTestContext {
 		if image {
 			a.Image(NewAvatarImage("avatar.png").Size(gpui.Px(20)))
 		}
-		a.Fallback(NewAvatarFallback().Child(gpui.Div().DebugSelector("avatar-fallback").Size(gpui.Px(20))))
+		a.Fallback(NewAvatarFallback().Child(gpui.Div().Flex().DebugSelector("avatar-fallback").Size(gpui.Px(20))))
 		// ItemsStart keeps the root at its content height (map gap 2b:
 		// the pin's flex parent would stretch it).
-		return gpui.Div().ItemsStart().Child(a).IntoElement()
+		return gpui.Div().Flex().ItemsStart().Child(a).IntoElement()
 	})
 }
 

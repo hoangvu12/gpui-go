@@ -25,7 +25,7 @@ func readyTask[T any](app *gpui.App, value T) gpui.Task[ProviderResult[T]] {
 type emptyEditorRoot struct{}
 
 func (*emptyEditorRoot) Render(*gpui.Window, *gpui.Context[emptyEditorRoot]) gpui.AnyElement {
-	return gpui.Div().IntoElement()
+	return gpui.Div().Flex().IntoElement()
 }
 
 // U:input/base/state.rs:4898-4955

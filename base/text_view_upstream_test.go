@@ -125,7 +125,7 @@ func TestTableActionsRenderBelowTheTable(t *testing.T) {
 					Style(DefaultTextViewStyle().WithTable(tableStyle)).
 					TableActions(func(table *TableData, _ *gpui.Window, _ *gpui.App) gpui.AnyElement {
 						captured = append(captured, *table)
-						return gpui.Div().DebugSelector("table-action").Child("Copy").IntoElement()
+						return gpui.Div().Flex().DebugSelector("table-action").Child("Copy").IntoElement()
 					})).IntoElement()
 		})
 		drawText(t, cx)
@@ -299,7 +299,7 @@ func linkRoot(t *testing.T, ta *gpui.TestApp, text string, clicks *[]gpui.ClickE
 						*clicks = append(*clicks, *event)
 					}
 				}))).
-			Child(gpui.Div().H(gpui.Px(40)).Child("footer")).IntoElement()
+			Child(gpui.Div().Flex().H(gpui.Px(40)).Child("footer")).IntoElement()
 	})
 	drawText(t, cx)
 	return cx

@@ -30,8 +30,8 @@ type classTestCase struct {
 func classTestCheck(t *testing.T, cases []classTestCase) {
 	t.Helper()
 	for _, tc := range cases {
-		got := *Div().Class(tc.classes).StyleMut()
-		want := *tc.want(Div()).StyleMut()
+		got := *Div().Flex().Class(tc.classes).StyleMut()
+		want := *tc.want(Div().Flex()).StyleMut()
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("Class(%q):\n got %+v\nwant %+v", tc.classes, got, want)
 		}
@@ -333,7 +333,7 @@ func TestClassVariantsOnDiv(t *testing.T) {
 	slate900 := Some(SolidBackground(Rgb(0x0f172a)))
 	white := Some(White())
 
-	d := Div().ID("x").Class("hover:bg-slate-700 hover:text-white active:bg-slate-900 focus:border-blue-500 group group-hover:text-white")
+	d := Div().Flex().ID("x").Class("hover:bg-slate-700 hover:text-white active:bg-slate-900 focus:border-blue-500 group group-hover:text-white")
 	if base := d.StyleMut(); base.Background.IsSome() || base.Text.Color.IsSome() || base.BorderColor.IsSome() {
 		t.Errorf("state classes reached the base style: %+v", *base)
 	}
@@ -356,7 +356,7 @@ func TestClassVariantsOnDiv(t *testing.T) {
 		t.Errorf("group hover style = %+v", gs)
 	}
 
-	d = Div().ID("y").Class("focus-visible:bg-slate-700 focus-within:bg-slate-900 group-active:text-white")
+	d = Div().Flex().ID("y").Class("focus-visible:bg-slate-700 focus-within:bg-slate-900 group-active:text-white")
 	if d.focusVisibleStyle == nil || d.focusVisibleStyle.Background != slate700 {
 		t.Errorf("focus-visible style = %+v", d.focusVisibleStyle)
 	}
@@ -368,10 +368,10 @@ func TestClassVariantsOnDiv(t *testing.T) {
 	}
 
 	// Named groups.
-	if g := Div().ID("g").Class("group/menu"); g.group == nil || *g.group != "menu" {
+	if g := Div().Flex().ID("g").Class("group/menu"); g.group == nil || *g.group != "menu" {
 		t.Errorf("group/menu group = %v", g.group)
 	}
-	d = Div().ID("m").Class("group-hover/menu:text-white group-active/menu:bg-slate-900")
+	d = Div().Flex().ID("m").Class("group-hover/menu:text-white group-active/menu:bg-slate-900")
 	if gs := d.groupHoverStyle; gs == nil || gs.Group != "menu" || gs.Style.Text.Color != white {
 		t.Errorf("group-hover/menu style = %+v", gs)
 	}
@@ -380,15 +380,15 @@ func TestClassVariantsOnDiv(t *testing.T) {
 	}
 
 	// Class merges into state styles set before, by a builder or a Class.
-	d = Div().ID("merge").Hover(Styles().Bg(Rgb(0x334155))).Class("hover:text-white")
+	d = Div().Flex().ID("merge").Hover(Styles().Bg(Rgb(0x334155))).Class("hover:text-white")
 	if d.hoverStyle.Background != slate700 || d.hoverStyle.Text.Color != white {
 		t.Errorf("Hover then Class: hover style = %+v; want both properties", *d.hoverStyle)
 	}
-	d = Div().ID("merge2").Class("hover:bg-slate-700").Class("hover:text-white")
+	d = Div().Flex().ID("merge2").Class("hover:bg-slate-700").Class("hover:text-white")
 	if d.hoverStyle.Background != slate700 || d.hoverStyle.Text.Color != white {
 		t.Errorf("Class then Class: hover style = %+v; want both properties", *d.hoverStyle)
 	}
-	d = Div().GroupHover("menu", Styles().Bg(Rgb(0x334155))).Class("group-hover/menu:text-white")
+	d = Div().Flex().GroupHover("menu", Styles().Bg(Rgb(0x334155))).Class("group-hover/menu:text-white")
 	if gs := d.groupHoverStyle; gs.Group != "menu" || gs.Style.Background != slate700 || gs.Style.Text.Color != white {
 		t.Errorf("GroupHover then Class: group hover style = %+v; want both properties", *gs)
 	}
@@ -396,7 +396,7 @@ func TestClassVariantsOnDiv(t *testing.T) {
 	// Setting the hover state after a Class with hover: panics like
 	// setting it twice.
 	classTestWantPanic(t, "hover style already set", func() {
-		Div().ID("p").Class("hover:bg-slate-700").Hover(Styles().TextColor(White()))
+		Div().Flex().ID("p").Class("hover:bg-slate-700").Hover(Styles().TextColor(White()))
 	})
 
 	// Scrolling classes match the scroll builders. Divergence toward
@@ -404,7 +404,7 @@ func TestClassVariantsOnDiv(t *testing.T) {
 	// pinned to the OverflowScroll builders (always a scroller); they
 	// now set the real OverflowAuto — scrollbars and their gutter appear
 	// only while an axis overflows.
-	s := Div().ID("s").Class("overflow-y-auto")
+	s := Div().Flex().ID("s").Class("overflow-y-auto")
 	if v, ok := s.StyleMut().OverflowY.Get(); !ok || v != OverflowAuto {
 		t.Errorf("overflow-y-auto OverflowY = %v, %v; want OverflowAuto", v, ok)
 	}
@@ -414,11 +414,11 @@ func TestClassVariantsOnDiv(t *testing.T) {
 	if !s.scrollStateful {
 		t.Error("overflow-y-auto did not make the div scroll-stateful")
 	}
-	if want := Div().ID("s").OverflowYAuto(); !reflect.DeepEqual(*s.StyleMut(), *want.StyleMut()) {
+	if want := Div().Flex().ID("s").OverflowYAuto(); !reflect.DeepEqual(*s.StyleMut(), *want.StyleMut()) {
 		t.Errorf("overflow-y-auto = %+v; want OverflowYAuto's %+v", *s.StyleMut(), *want.StyleMut())
 	}
-	s = Div().ID("s2").Class("overflow-scroll")
-	if want := Div().ID("s2").OverflowScroll(); !s.scrollStateful || !reflect.DeepEqual(*s.StyleMut(), *want.StyleMut()) {
+	s = Div().Flex().ID("s2").Class("overflow-scroll")
+	if want := Div().Flex().ID("s2").OverflowScroll(); !s.scrollStateful || !reflect.DeepEqual(*s.StyleMut(), *want.StyleMut()) {
 		t.Errorf("overflow-scroll = %+v (stateful %v); want OverflowScroll's %+v", *s.StyleMut(), s.scrollStateful, *want.StyleMut())
 	}
 }
@@ -430,7 +430,7 @@ type classTestCard struct {
 }
 
 func newClassTestCard(id string) *classTestCard {
-	return BindComponent(&classTestCard{}, Div().ID(id))
+	return BindComponent(&classTestCard{}, Div().Flex().ID(id))
 }
 
 // TestClassVariantsOnComponent checks Class on a component: base classes
@@ -587,7 +587,7 @@ func TestCheckClassesReasons(t *testing.T) {
 // neither panics nor stops the other classes.
 func TestClassUnknownClassesAreSkipped(t *testing.T) {
 	reports := classTestCapture(t)
-	d := Div().Class("p-1 classtest-skip-me bg-slate-800 z-10")
+	d := Div().Flex().Class("p-1 classtest-skip-me bg-slate-800 z-10")
 	if v, ok := d.StyleMut().PaddingLeft.Get(); !ok || v != DefiniteRem(0.25) {
 		t.Errorf("p-1 = %v, %v", v, ok)
 	}
@@ -609,21 +609,21 @@ func TestClassUnknownClassesAreSkipped(t *testing.T) {
 func TestClassErrorsReportOncePerString(t *testing.T) {
 	reports := classTestCapture(t)
 	const bad = "p-1 classtest-once-a"
-	Div().Class(bad)
-	Div().Class(bad)
+	Div().Flex().Class(bad)
+	Div().Flex().Class(bad)
 	if len(*reports) != 1 {
 		t.Fatalf("handler ran %d times for one string; want 1", len(*reports))
 	}
 	if (*reports)[0].classes != bad {
 		t.Errorf("reported string = %q; want %q", (*reports)[0].classes, bad)
 	}
-	Div().Class("p-1 classtest-once-b")
+	Div().Flex().Class("p-1 classtest-once-b")
 	if len(*reports) != 2 {
 		t.Errorf("handler ran %d times for two strings; want 2", len(*reports))
 	}
 	// Installing a handler forgets the strings already reported.
 	again := classTestCapture(t)
-	Div().Class(bad)
+	Div().Flex().Class(bad)
 	if len(*again) != 1 || len(*reports) != 2 {
 		t.Errorf("after a new handler: new %d, old %d reports; want 1 and 2", len(*again), len(*reports))
 	}
@@ -634,18 +634,22 @@ func TestClassErrorsReportOncePerString(t *testing.T) {
 func TestClassCachedSetIsNotAliased(t *testing.T) {
 	classTestNoErrors(t)
 	const classes = "shadow-md hover:shadow-lg"
-	a := Div().Class(classes)
+	a := Div().Flex().Class(classes)
 	if base, ok := a.StyleMut().BoxShadow.Get(); ok && len(base) > 0 {
 		base[0].OffsetY = 99
 	}
 	if hover, ok := a.hoverStyle.BoxShadow.Get(); ok && len(hover) > 0 {
 		hover[0].OffsetY = 99
 	}
-	b := Div().Class(classes)
-	if got, want := *b.StyleMut(), *Div().ShadowMd().StyleMut(); !reflect.DeepEqual(got, want) {
+	b := Div().Flex().Class(classes)
+	if got, want := *b.StyleMut(), *Div().Flex().ShadowMd().StyleMut(); !reflect.DeepEqual(got, want) {
 		t.Errorf("second element base = %+v; want %+v", got, want)
 	}
-	if got, want := *b.hoverStyle, *Div().ShadowLg().StyleMut(); !reflect.DeepEqual(got, want) {
+	// The hover refinement comes from the class parse, which cannot
+	// carry the construction-site Flex pin (only a display class
+	// would), so the want is a standalone shadow-lg refinement, not a
+	// Div chain whose pinned display would not match.
+	if got, want := *b.hoverStyle, Styles().ShadowLg().Refinement(); !reflect.DeepEqual(got, want) {
 		t.Errorf("second element hover = %+v; want %+v", got, want)
 	}
 }
@@ -654,8 +658,8 @@ func TestClassCachedSetIsNotAliased(t *testing.T) {
 // Styles() builder as well as the pinned closure, with the same result.
 func TestStyleBuilderStateArgument(t *testing.T) {
 	c := Rgb(0x334155)
-	built := Div().Hover(Styles().Bg(c))
-	closure := Div().Hover(func(s StyleRefinement) StyleRefinement {
+	built := Div().Flex().Hover(Styles().Bg(c))
+	closure := Div().Flex().Hover(func(s StyleRefinement) StyleRefinement {
 		s.Background = Some(BackgroundOf(c))
 		return s
 	})
@@ -663,7 +667,7 @@ func TestStyleBuilderStateArgument(t *testing.T) {
 		t.Errorf("Hover(Styles().Bg(c)) = %+v; want the closure's %+v", built.hoverStyle, closure.hoverStyle)
 	}
 
-	d := Div().ID("b").Active(Styles().Bg(c)).Focus(Styles().TextColor(White())).GroupHover("g", Styles().Opacity50())
+	d := Div().Flex().ID("b").Active(Styles().Bg(c)).Focus(Styles().TextColor(White())).GroupHover("g", Styles().Opacity50())
 	if d.activeStyle == nil || d.activeStyle.Background != Some(SolidBackground(c)) {
 		t.Errorf("Active(Styles()) = %+v", d.activeStyle)
 	}
@@ -677,7 +681,7 @@ func TestStyleBuilderStateArgument(t *testing.T) {
 	// The state style is a copy: changing the builder afterwards does
 	// not reach the element.
 	b := Styles().ShadowMd()
-	d = Div().Hover(b)
+	d = Div().Flex().Hover(b)
 	b.Bg(c)
 	if d.hoverStyle.Background.IsSome() {
 		t.Error("the hover style aliases its builder")
@@ -690,7 +694,7 @@ func TestStyleBuilderStateArgument(t *testing.T) {
 		t.Error("Refinement aliases the builder's shadows")
 	}
 
-	classTestWantPanic(t, "non-nil style", func() { Div().Hover((*StyleBuilder)(nil)) })
+	classTestWantPanic(t, "non-nil style", func() { Div().Flex().Hover((*StyleBuilder)(nil)) })
 }
 
 // TestColorHelpers checks Rgb, Hex, ParseHex, Opacity and Alpha.
@@ -891,7 +895,7 @@ func TestClassGradients(t *testing.T) {
 func TestClassGradientStateVariants(t *testing.T) {
 	classTestNoErrors(t)
 	red, blue := Rgb(0xef4444), Rgb(0x3b82f6)
-	d := Div().ID("g").Class("bg-linear-to-r from-red-500 to-blue-500 hover:bg-linear-to-b hover:from-amber-400 hover:to-cyan-500")
+	d := Div().Flex().ID("g").Class("bg-linear-to-r from-red-500 to-blue-500 hover:bg-linear-to-b hover:from-amber-400 hover:to-cyan-500")
 	background, ok := d.StyleMut().Background.Get()
 	if !ok || !equalBackground(background, LinearGradientToBackground(GradientDirectionToRight,
 		GradientStop{Color: red, Position: 0}, GradientStop{Color: blue, Position: 1})) {
@@ -907,7 +911,7 @@ func TestClassGradientStateVariants(t *testing.T) {
 	}
 
 	reports := classTestCapture(t)
-	Div().ID("g2").Class("bg-linear-to-r from-red-500 to-blue-500 hover:from-amber-400")
+	Div().Flex().ID("g2").Class("bg-linear-to-r from-red-500 to-blue-500 hover:from-amber-400")
 	if len(*reports) != 1 || !strings.Contains((*reports)[0].err.Error(), "sets one stop of a gradient") {
 		t.Errorf("a from- alone in a variant must report: %+v", *reports)
 	}
@@ -1075,7 +1079,7 @@ func TestClassBlurComposesWithColourFilters(t *testing.T) {
 		{"blur-sm grayscale", func(d *DivElement) *DivElement { return d.Blur(4).Grayscale(1) }},
 		{"blur-sm grayscale blur-md", func(d *DivElement) *DivElement { return d.Blur(4).Grayscale(1).Blur(12) }},
 	})
-	d := Div().Class("grayscale blur-md blur-none")
+	d := Div().Flex().Class("grayscale blur-md blur-none")
 	if filters, ok := d.StyleMut().Filter.Get(); !ok || len(filters) != 0 {
 		t.Errorf("blur-none = %v, %v; want the reset empty chain", filters, ok)
 	}
@@ -1122,7 +1126,7 @@ func TestClassTextStyleQuickFixes(t *testing.T) {
 	// normal-nums resets the features to none (Tailwind's
 	// font-feature-settings: normal): the refinement sets an empty
 	// list, overriding whatever was set before it.
-	d := Div().Class("tabular-nums normal-nums")
+	d := Div().Flex().Class("tabular-nums normal-nums")
 	if features, ok := d.StyleMut().Text.FontFeatures.Get(); !ok || len(features) != 0 {
 		t.Errorf("normal-nums = (%v, %v), want an empty feature list", features, ok)
 	}

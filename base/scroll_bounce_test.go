@@ -20,15 +20,15 @@ type bounceScrollTest struct {
 }
 
 func (v *bounceScrollTest) Render(*gpui.Window, *gpui.Context[bounceScrollTest]) gpui.AnyElement {
-	return gpui.Div().P(gpui.Px(20)).Child(
+	return gpui.Div().Flex().P(gpui.Px(20)).Child(
 		NewScrollBounce("bounce", v.handle,
-			gpui.Div().
+			gpui.Div().Flex().
 				ID("viewport").
 				W(gpui.Px(200)).
 				H(gpui.Px(200)).
 				OverflowYScroll().
 				TrackScroll(v.handle).
-				Child(gpui.Div().H(gpui.Px(600)).WFull())).
+				Child(gpui.Div().Flex().H(gpui.Px(600)).WFull())).
 			Enabled(v.enabled),
 	).IntoElement()
 }
@@ -39,7 +39,7 @@ type bounceListTest struct{ state *gpui.ListState }
 func (v *bounceListTest) Render(*gpui.Window, *gpui.Context[bounceListTest]) gpui.AnyElement {
 	return NewScrollBounce("bounce-list", v.state,
 		gpui.List(v.state, func(int, *gpui.Window, *gpui.App) gpui.AnyElement {
-			return gpui.Div().H(gpui.Px(40)).IntoElement()
+			return gpui.Div().Flex().H(gpui.Px(40)).IntoElement()
 		}).W(gpui.PxLength(200)).H(gpui.PxLength(200))).
 		Enabled(true).
 		IntoElement()

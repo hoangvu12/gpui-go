@@ -42,7 +42,7 @@ func TestInlineVirtualFontZoomRemeasuresOffscreenBlocks(t *testing.T) {
 		}),
 		render: func(_ *MarkdownNode, context *InlineRenderContext, _ *gpui.Window, _ *gpui.App) (InlineElement, bool) {
 			extent := context.FontSize() * 40 / 16
-			img := gpui.Img(gpui.NewImage(gpui.ImageFormatSVG, []byte(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"/>`))).W(gpui.Px(extent)).H(gpui.Px(extent))
+			img := gpui.Img(gpui.NewImage(gpui.ImageFormatSVG, []byte(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"/>`))).Flex().W(gpui.Px(extent)).H(gpui.Px(extent))
 			return NewInlineElement(img).WithBaseline(extent * 0.75), true
 		},
 	}

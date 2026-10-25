@@ -164,7 +164,7 @@ type searchHost struct {
 
 func (h *searchHost) Render(*gpui.Window, *gpui.Context[searchHost]) gpui.AnyElement {
 	requests := h.requests
-	return gpui.Div().SizeFull().
+	return gpui.Div().Flex().SizeFull().
 		OnAction(SearchAction, func(*Search, *gpui.Window, *gpui.App) { *requests++ }).
 		Child(gpui.ViewOf[EditorState](h.editor)).IntoElement()
 }

@@ -97,7 +97,7 @@ func painted(c gpui.Hsla) gpui.Background { return gpui.SolidBackground(c).Opaci
 // TestStyledMacroSemantics checks representative generated methods
 // against the styles.rs tables (field paths, units, negation, fractions).
 func TestStyledMacroSemantics(t *testing.T) {
-	d := gpui.Div().W4().HNeg1_2().MinW1_3().MaxHFull().MNeg0().Px2().PyPx().
+	d := gpui.Div().Flex().W4().HNeg1_2().MinW1_3().MaxHFull().MNeg0().Px2().PyPx().
 		Inset0().TopAuto().GapX0p5().RoundedSm().RoundedTlFull().BorderX2().BorderT(gpui.Px(5)).
 		Ring2().InsetRing8().RoundedSmoothing0p6().CursorPointer().CursorGrab().Invisible().OverflowXHidden().Relative()
 	s := d.Style()
@@ -143,28 +143,28 @@ func TestStyledMacroSemantics(t *testing.T) {
 	expect("relative", s.Position, gpui.Some(gpui.PositionRelative))
 
 	// The custom value setters accept every Into form.
-	s = gpui.Div().W(gpui.Px(3)).H(gpui.Fraction(0.5)).P(gpui.RemsOf(2)).Size(gpui.AutoLength()).Gap(gpui.Px(4)).Style()
+	s = gpui.Div().Flex().W(gpui.Px(3)).H(gpui.Fraction(0.5)).P(gpui.RemsOf(2)).Size(gpui.AutoLength()).Gap(gpui.Px(4)).Style()
 	expect("size one-arg width", get(s.SizeWidth), gpui.AutoLength())
 	expect("p from AbsoluteLength", getD(s.PaddingBottom), gpui.DefiniteRem(2))
 	expect("gap one-arg", []gpui.DefiniteLength{getD(s.GapWidth), getD(s.GapHeight)}, []gpui.DefiniteLength{gpui.DefinitePx(4), gpui.DefinitePx(4)})
-	s = gpui.Div().Size(gpui.PxLength(10), gpui.PxLength(20)).Style()
+	s = gpui.Div().Flex().Size(gpui.PxLength(10), gpui.PxLength(20)).Style()
 	expect("size two-arg", []gpui.Length{get(s.SizeWidth), get(s.SizeHeight)}, []gpui.Length{gpui.PxLength(10), gpui.PxLength(20)})
 
 	// shadow_md (styles.rs:904).
-	s = gpui.Div().ShadowMd().Style()
+	s = gpui.Div().Flex().ShadowMd().Style()
 	shadows, _ := s.BoxShadow.Get()
 	expect("shadow_md", shadows, []gpui.BoxShadow{
 		gpui.NewBoxShadow(0, 4, gpui.SolidBackground(gpui.Hsla{A: 0.1})).WithBlurRadius(6).WithSpreadRadius(-1),
 		gpui.NewBoxShadow(0, 2, gpui.SolidBackground(gpui.Hsla{A: 0.1})).WithBlurRadius(4).WithSpreadRadius(-2),
 	})
-	s = gpui.Div().ShadowMd().ShadowNone().Style()
+	s = gpui.Div().Flex().ShadowMd().ShadowNone().Style()
 	shadows, present := s.BoxShadow.Get()
 	expect("shadow_none is an explicit empty list", []any{present, len(shadows)}, []any{true, 0})
 }
 
 // TestStyledHandWrittenSemantics checks styled.rs's own methods.
 func TestStyledHandWrittenSemantics(t *testing.T) {
-	s := gpui.Div().Flex1().ItemsStart().SelfStart().ContentEnd().JustifyBetween().Truncate().
+	s := gpui.Div().Flex().Flex1().ItemsStart().SelfStart().ContentEnd().JustifyBetween().Truncate().
 		LineClamp(2).TextDecorationWavy().TextDecorationColor(red).TextDecoration2().
 		ColSpanFull().RowStart(2).Blur(3).Blur(4).BorderDashedLength(-1).BorderDashedGap(0.5).
 		Font(gpui.FontDescriptor{Family: "Inter", Weight: 600}).Style()
@@ -213,7 +213,7 @@ func TestStyledHandWrittenSemantics(t *testing.T) {
 		t.Errorf("font weight = %v", v)
 	}
 	// content_normal and text_decoration_none reset to absent.
-	s = gpui.Div().ContentCenter().ContentNormal().Underline().TextDecorationNone().Style()
+	s = gpui.Div().Flex().ContentCenter().ContentNormal().Underline().TextDecorationNone().Style()
 	if s.AlignContent.IsSome() || s.Text.Underline.IsSome() {
 		t.Error("content_normal / text_decoration_none must make the refinement absent")
 	}
@@ -225,17 +225,17 @@ func TestStyledHandWrittenSemantics(t *testing.T) {
 // :1823-1848 dashed_border_pattern_has_legacy_defaults_and_refines_independently.
 func TestStyleRefinementPinnedTests(t *testing.T) {
 	bg := gpui.SolidBackground(blue)
-	if v, _ := gpui.Div().BorderColor(bg).Style().BorderColor.Get(); v != bg {
+	if v, _ := gpui.Div().Flex().BorderColor(bg).Style().BorderColor.Get(); v != bg {
 		t.Errorf("border_color(Background) = %+v", v)
 	}
-	if v, _ := gpui.Div().BorderColor(red).Style().BorderColor.Get(); v != gpui.SolidBackground(red) {
+	if v, _ := gpui.Div().Flex().BorderColor(red).Style().BorderColor.Get(); v != gpui.SolidBackground(red) {
 		t.Errorf("border_color(Hsla) = %+v", v)
 	}
 
 	style := gpui.DefaultStyle()
-	size := gpui.Div().TextSize(gpui.Px(20)).Style()
+	size := gpui.Div().Flex().TextSize(gpui.Px(20)).Style()
 	style.Refine(&size)
-	weight := gpui.Div().FontWeight(600).Style()
+	weight := gpui.Div().Flex().FontWeight(600).Style()
 	style.Refine(&weight)
 	text := style.TextStyle()
 	if text == nil {
@@ -252,12 +252,12 @@ func TestStyleRefinementPinnedTests(t *testing.T) {
 	if style.BorderDashedLength != gpui.DefaultBorderDashedLength || style.BorderDashedGap != gpui.DefaultBorderDashedGap {
 		t.Fatalf("dash defaults = %v/%v", style.BorderDashedLength, style.BorderDashedGap)
 	}
-	dash := gpui.Div().BorderDashedLength(4).BorderDashedGap(0.5).Style()
+	dash := gpui.Div().Flex().BorderDashedLength(4).BorderDashedGap(0.5).Style()
 	style.Refine(&dash)
 	if style.BorderDashedLength != 4 || style.BorderDashedGap != 0.5 || style.BorderStyle != gpui.BorderStyleSolid {
 		t.Errorf("dash refine = %v/%v/%v", style.BorderDashedLength, style.BorderDashedGap, style.BorderStyle)
 	}
-	dashed := gpui.Div().BorderDashed().Style()
+	dashed := gpui.Div().Flex().BorderDashed().Style()
 	style.Refine(&dashed)
 	if style.BorderStyle != gpui.BorderStyleDashed {
 		t.Error("border_dashed")
@@ -267,7 +267,7 @@ func TestStyleRefinementPinnedTests(t *testing.T) {
 // TestStyleSnapshotIsIndependent checks that Style() deep-copies the
 // slice fields.
 func TestStyleSnapshotIsIndependent(t *testing.T) {
-	d := gpui.Div().Shadow([]gpui.BoxShadow{gpui.NewBoxShadow(1, 1, gpui.SolidBackground(red))}).Blur(2)
+	d := gpui.Div().Flex().Shadow([]gpui.BoxShadow{gpui.NewBoxShadow(1, 1, gpui.SolidBackground(red))}).Blur(2)
 	snap := d.Style()
 	shadows, _ := snap.BoxShadow.Get()
 	shadows[0].OffsetX = 99
@@ -293,11 +293,11 @@ func TestStyleSnapshotIsIndependent(t *testing.T) {
 func TestDivPaintsTheBoxInPinnedOrder(t *testing.T) {
 	inset := gpui.NewBoxShadow(1, 1, gpui.SolidBackground(green)).WithInset()
 	drop := gpui.NewBoxShadow(0, 2, gpui.SolidBackground(blue)).WithBlurRadius(4)
-	box := gpui.Div().W(gpui.Px(100)).H(gpui.Px(40)).Bg(red).Rounded(gpui.Px(6)).
+	box := gpui.Div().Flex().W(gpui.Px(100)).H(gpui.Px(40)).Bg(red).Rounded(gpui.Px(6)).
 		Border2().BorderColor(blue).Shadow([]gpui.BoxShadow{inset, drop}).
 		Ring(3).RingColor(green).InsetRing2().InsetRingColor(green).
-		Child(gpui.Div().Size(gpui.Px(10)).Bg(green))
-	_, scene := drawStyled(t, gpui.Div().P(gpui.Px(20)).Child(box).IntoElement())
+		Child(gpui.Div().Flex().Size(gpui.Px(10)).Bg(green))
+	_, scene := drawStyled(t, gpui.Div().Flex().P(gpui.Px(20)).Child(box).IntoElement())
 
 	quads := quadsOf(t, scene)
 	shadows := shadowsOf(t, scene)
@@ -377,7 +377,7 @@ func TestDivPaintsTheBoxInPinnedOrder(t *testing.T) {
 // TestDivPaintRadiiClampAndOpacity checks the radius clamp
 // (geometry.rs:2511) and that element opacity scales the box colors.
 func TestDivPaintRadiiClampAndOpacity(t *testing.T) {
-	_, scene := drawStyled(t, gpui.Div().W(gpui.Px(60)).H(gpui.Px(20)).RoundedFull().Opacity(0.5).Bg(red).IntoElement())
+	_, scene := drawStyled(t, gpui.Div().Flex().W(gpui.Px(60)).H(gpui.Px(20)).RoundedFull().Opacity(0.5).Bg(red).IntoElement())
 	quads := quadsOf(t, scene)
 	if len(quads) != 1 {
 		t.Fatalf("quads = %d", len(quads))
@@ -395,8 +395,8 @@ func TestDivPaintRadiiClampAndOpacity(t *testing.T) {
 // layout space is kept.
 func TestInvisibleDivKeepsLayoutAndPaintsNothing(t *testing.T) {
 	window, scene := drawStyled(t, gpui.Div().Flex().
-		Child(gpui.Div().Size(gpui.Px(30)).Bg(red).Invisible().Child(gpui.Div().Size(gpui.Px(5)).Bg(blue))).
-		Child(gpui.Div().Size(gpui.Px(30)).DebugSelector("after")).IntoElement())
+		Child(gpui.Div().Flex().Size(gpui.Px(30)).Bg(red).Invisible().Child(gpui.Div().Flex().Size(gpui.Px(5)).Bg(blue))).
+		Child(gpui.Div().Flex().Size(gpui.Px(30)).DebugSelector("after")).IntoElement())
 	if quads := quadsOf(t, scene); len(quads) != 0 {
 		t.Errorf("invisible div painted %d quads", len(quads))
 	}
@@ -416,8 +416,8 @@ func TestInvisibleDivKeepsLayoutAndPaintsNothing(t *testing.T) {
 // reserves its space and still insets the clip.
 func TestOverflowMaskInsetsByBorderWidths(t *testing.T) {
 	styled := func(borderColor gpui.Hsla) []gpui.Quad {
-		_, scene := drawStyled(t, gpui.Div().W(gpui.Px(50)).H(gpui.Px(50)).OverflowHidden().Border4().BorderColor(borderColor).
-			Child(gpui.Div().Size(gpui.Px(100)).Bg(red)).IntoElement())
+		_, scene := drawStyled(t, gpui.Div().Flex().W(gpui.Px(50)).H(gpui.Px(50)).OverflowHidden().Border4().BorderColor(borderColor).
+			Child(gpui.Div().Flex().Size(gpui.Px(100)).Bg(red)).IntoElement())
 		return quadsOf(t, scene)
 	}
 	want := dev(4, 4, 42, 42)
@@ -444,7 +444,7 @@ func TestOverflowMaskInsetsByBorderWidths(t *testing.T) {
 // TestDebugOutlineAndFilters checks the debug outline (style.rs:907) and
 // the filter / backdrop-filter primitives (style.rs:932-1009).
 func TestDebugOutlineAndFilters(t *testing.T) {
-	_, scene := drawStyled(t, gpui.Div().Size(gpui.Px(20)).Debug().BackdropBlur(8).Blur(0).Blur(3).Bg(red).IntoElement())
+	_, scene := drawStyled(t, gpui.Div().Flex().Size(gpui.Px(20)).Debug().BackdropBlur(8).Blur(0).Blur(3).Bg(red).IntoElement())
 	quads := quadsOf(t, scene)
 	if len(quads) != 5 {
 		t.Fatalf("quads = %d, want 4 outline strips + background", len(quads))
@@ -477,9 +477,9 @@ func TestGridColsMaxContentSizesColumnsToContent(t *testing.T) {
 	widths := []float32{100, 200, 50}
 	cells := make([]any, 0, len(widths))
 	for i, w := range widths {
-		cells = append(cells, gpui.Div().DebugSelector([]string{"cell-0", "cell-1", "cell-2"}[i]).W(gpui.Px(w)).H(gpui.Px(10)))
+		cells = append(cells, gpui.Div().Flex().DebugSelector([]string{"cell-0", "cell-1", "cell-2"}[i]).W(gpui.Px(w)).H(gpui.Px(10)))
 	}
-	window, _ := drawStyled(t, gpui.Div().SizeFull().Child(
+	window, _ := drawStyled(t, gpui.Div().Flex().SizeFull().Child(
 		gpui.Div().WFull().Grid().GridColsMaxContent(uint16(len(widths))).Children(cells...)).IntoElement())
 	for name, x := range map[string]float32{"cell-0": 0, "cell-1": 100, "cell-2": 300} {
 		b, ok := gpui.WindowDebugBound(window, name)

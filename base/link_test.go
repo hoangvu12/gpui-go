@@ -19,7 +19,7 @@ func linkHarness(t *testing.T, disabled bool) (*gpui.VisualTestContext, *linkCou
 	t.Helper()
 	c := &linkCounts{}
 	cx := drawn(t, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.Div().
+		return gpui.Div().Flex().
 			ID("link-parent").
 			TabGroup().
 			Size(gpui.Px(100)).

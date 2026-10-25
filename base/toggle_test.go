@@ -73,7 +73,7 @@ func TestToggleFixedHeightCentersOrdinaryChildGeometry(t *testing.T) {
 		return elementOf(t, ElementExtOf(NewToggle("alignment-toggle").
 			W(gpui.Px(120)).
 			H(gpui.Px(40)).
-			Child(ElementExtOf(gpui.Div().W(gpui.Px(48)).H(gpui.Px(12))).
+			Child(ElementExtOf(gpui.Div().Flex().W(gpui.Px(48)).H(gpui.Px(12))).
 				OnPrepaint(func(b gpui.Bounds, _ *gpui.Window, _ *gpui.App) { child, haveChild = b, true }))).
 			OnPrepaint(func(b gpui.Bounds, _ *gpui.Window, _ *gpui.App) { root, haveRoot = b, true }))
 	})

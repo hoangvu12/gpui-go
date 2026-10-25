@@ -327,7 +327,7 @@ func TestWhiteSpaceStyledTextCaretByteMap(t *testing.T) {
 	const source = "Alpha   beta\n\ngamma"
 	styled := NewStyledText(source)
 	setWhiteSpaceRoot(t, window, app, func() AnyElement {
-		return Div().W(Px(360)).Child(styled).IntoElement()
+		return Div().Flex().W(Px(360)).Child(styled).IntoElement()
 	})
 	if _, err := DrawWindowFrame(window); err != nil {
 		t.Fatalf("DrawWindowFrame: %v", err)
@@ -412,7 +412,7 @@ func TestWhiteSpaceStyledTextPreKeepsRows(t *testing.T) {
 		styled := NewStyledText(source)
 		mode := mode
 		setWhiteSpaceRoot(t, window, app, func() AnyElement {
-			return Div().W(Px(360)).Whitespace(mode).Child(styled).IntoElement()
+			return Div().Flex().W(Px(360)).Whitespace(mode).Child(styled).IntoElement()
 		})
 		if _, err := DrawWindowFrame(window); err != nil {
 			CloseTestWindow(window)
@@ -512,7 +512,7 @@ func TestWhiteSpaceElementEmptyCollapse(t *testing.T) {
 		window2, app2 := whiteSpaceWindow(t)
 		styled := NewStyledText(source)
 		setWhiteSpaceRoot(t, window2, app2, func() AnyElement {
-			return Div().W(Px(360)).LineHeight(Px(25)).Whitespace(c.mode).Child(styled).IntoElement()
+			return Div().Flex().W(Px(360)).LineHeight(Px(25)).Whitespace(c.mode).Child(styled).IntoElement()
 		})
 		if _, err := DrawWindowFrame(window2); err != nil {
 			CloseTestWindow(window2)

@@ -623,7 +623,7 @@ func tooltipContent(rec *tooltipRecord, w *Window, app *App) AnyElement {
 		Side(AnchorSideBottom).
 		Align(AnchorAlignStart).
 		Gap(tooltipGap).
-		Child(Div().
+		Child(Div().Flex().
 			ID("tooltip").
 			DebugSelector("tooltip").
 			Absolute().

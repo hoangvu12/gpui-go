@@ -119,9 +119,9 @@ type spriteAtlasView struct {
 func (v *spriteAtlasView) Render(w *Window, cx *Context[spriteAtlasView]) AnyElement {
 	return Div().SizeFull().Bg(White()).Flex().FlexRow().Gap(Px(12)).
 		Child(Text("glyph sprites share the window atlas")).
-		Child(Img(ImageSourceFromRender(v.raster)).W(Px(32)).H(Px(32))).
-		Child(Img(ImageSourceFromImage(v.svgImg)).W(Px(32)).H(Px(32))).
-		Child(Div().TextColor(Rgb(0x0000ff)).Child(Svg().Data(v.svgMask).Size(PxLength(32), PxLength(32)))).
+		Child(Img(ImageSourceFromRender(v.raster)).Flex().W(Px(32)).H(Px(32))).
+		Child(Img(ImageSourceFromImage(v.svgImg)).Flex().W(Px(32)).H(Px(32))).
+		Child(Div().Flex().TextColor(Rgb(0x0000ff)).Child(Svg().Data(v.svgMask).Size(PxLength(32), PxLength(32)))).
 		IntoElement()
 }
 
@@ -282,7 +282,7 @@ func (v *shapingCapView) Render(w *Window, cx *Context[shapingCapView]) AnyEleme
 	for i := 0; i < v.count; i++ {
 		column = column.Child(Text(fmt.Sprintf("page %d, distinct line %d", v.page, i)))
 	}
-	return Div().SizeFull().Child(column).IntoElement()
+	return Div().Flex().SizeFull().Child(column).IntoElement()
 }
 
 // TestHiddenWindowShapedTextsPastTheHandleBoundKeepDrawing reproduces

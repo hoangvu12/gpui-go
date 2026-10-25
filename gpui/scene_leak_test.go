@@ -18,7 +18,7 @@ func (r *perfFailingRoot) Render(w *gpui.Window, cx *gpui.Context[perfFailingRoo
 	if r.fail {
 		panic("abandoned frame (gpui-perf ticket 07 test)")
 	}
-	return gpui.Div().SizeFull().Child(r.inner).IntoElement()
+	return gpui.Div().Flex().SizeFull().Child(r.inner).IntoElement()
 }
 
 // TestLiveScenesStayFlatAcrossFrames (gpui-perf ticket 07): every drawn

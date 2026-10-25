@@ -17,7 +17,7 @@ func TestElementExtTextSelectionScopeScopesTheSubtree(t *testing.T) {
 	scope := TextSelectionScopeID(23)
 	_, cx := openSelectionView(t, ta, func(w *gpui.Window, cx *gpui.Context[testView]) gpui.AnyElement {
 		TextSelectionActivateScope(scope, w, cx.App())
-		return gpui.Div().Child(TextSelectionLayer{}).Child(ElementExtOf(registeringDiv(selection)).TextSelectionScope(scope)).IntoElement()
+		return gpui.Div().Flex().Child(TextSelectionLayer{}).Child(ElementExtOf(registeringDiv(selection)).TextSelectionScope(scope)).IntoElement()
 	})
 	drawText(t, cx)
 	cx.Update(func(w *gpui.Window, app *gpui.App) {

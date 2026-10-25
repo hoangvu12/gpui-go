@@ -317,7 +317,7 @@ func view(staticParents bool) gpui.AnyElement {
 // 6, padding 14) holding the static parent holding three absolute
 // children with left/top, right/bottom and percentage insets.
 func ancestorBox(staticParents bool) *gpui.DivElement {
-	parent := gpui.Div().
+	parent := gpui.Div().Flex().
 		ID("static-parent").
 		DebugSelector("static-parent").
 		W(gpui.Px(staticW)).
@@ -342,7 +342,7 @@ func ancestorBox(staticParents bool) *gpui.DivElement {
 			Top(gpui.Fraction(absPctTop)).
 			W(gpui.Px(absPctW)).
 			H(gpui.Px(absPctH)))
-	return gpui.Div().
+	return gpui.Div().Flex().
 		ID("ancestor").
 		DebugSelector("ancestor").
 		W(gpui.Px(ancestorWidth)).
@@ -359,7 +359,7 @@ func ancestorBox(staticParents bool) *gpui.DivElement {
 // padding 10) whose absolute child resolves against it directly — the
 // pin's behaviour, which the opt-in must not disturb.
 func controlBox() *gpui.DivElement {
-	return gpui.Div().
+	return gpui.Div().Flex().
 		ID("control").
 		DebugSelector("control").
 		W(gpui.Px(controlWidth)).
@@ -379,7 +379,7 @@ func controlBox() *gpui.DivElement {
 // chainS1 builds the nested static chain whose absolute children
 // escape to the window root (the port's initial containing block).
 func chainS1(staticParents bool) *gpui.DivElement {
-	s2 := gpui.Div().
+	s2 := gpui.Div().Flex().
 		ID("chain-s2").
 		DebugSelector("chain-s2").
 		W(gpui.Px(chainS2W)).
@@ -399,7 +399,7 @@ func chainS1(staticParents bool) *gpui.DivElement {
 			Bottom(gpui.Px(rootBLBottom)).
 			W(gpui.Px(rootBLW)).
 			H(gpui.Px(rootBLH)))
-	s1 := gpui.Div().
+	s1 := gpui.Div().Flex().
 		ID("chain-s1").
 		DebugSelector("chain-s1").
 		W(gpui.Px(chainS1W)).
@@ -414,7 +414,7 @@ func chainS1(staticParents bool) *gpui.DivElement {
 // absoluteBox builds one absolutely positioned child with the given
 // id and color; the caller adds the insets and size.
 func absoluteBox(id string, color uint32) *gpui.DivElement {
-	return gpui.Div().
+	return gpui.Div().Flex().
 		ID(id).
 		DebugSelector(id).
 		Absolute().

@@ -31,7 +31,7 @@ func inPrepaint[R any](t *testing.T, f func(w *gpui.Window, app *gpui.App) R) R 
 				out = f(w, app)
 			}
 			return struct{}{}
-		}, func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {}).W(gpui.Px(1000)).H(gpui.Px(1000)).IntoElement()
+		}, func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {}).Flex().W(gpui.Px(1000)).H(gpui.Px(1000)).IntoElement()
 	})
 	drawText(t, cx)
 	if !ran {

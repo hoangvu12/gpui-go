@@ -41,13 +41,13 @@ func (r *cursorPlatformRecorder) last() (CursorStyle, bool) {
 // (U:resizable/resize_handle.rs:264-300), and the default arrow over a
 // pointer parent (U:input/base/element.rs:1435).
 func cursorBoard(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-	return Div().Relative().SizeFull().
-		Child(Div().ID("pointer").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).CursorPointer()).
-		Child(Div().ID("text").Absolute().Left(Px(100)).Top(Px(0)).Size(Px(50)).CursorText()).
-		Child(Div().ID("col").Absolute().Left(Px(200)).Top(Px(0)).Size(Px(50)).CursorColResize()).
-		Child(Div().ID("row").Absolute().Left(Px(300)).Top(Px(0)).Size(Px(50)).CursorRowResize()).
-		Child(Div().ID("token-host").Absolute().Left(Px(0)).Top(Px(100)).Size(Px(100)).CursorPointer().
-			Child(Div().ID("token").Size(Px(40)).CursorDefault())).
+	return Div().Flex().Relative().SizeFull().
+		Child(Div().Flex().ID("pointer").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).CursorPointer()).
+		Child(Div().Flex().ID("text").Absolute().Left(Px(100)).Top(Px(0)).Size(Px(50)).CursorText()).
+		Child(Div().Flex().ID("col").Absolute().Left(Px(200)).Top(Px(0)).Size(Px(50)).CursorColResize()).
+		Child(Div().Flex().ID("row").Absolute().Left(Px(300)).Top(Px(0)).Size(Px(50)).CursorRowResize()).
+		Child(Div().Flex().ID("token-host").Absolute().Left(Px(0)).Top(Px(100)).Size(Px(100)).CursorPointer().
+			Child(Div().Flex().ID("token").Size(Px(40)).CursorDefault())).
 		IntoElement()
 }
 
@@ -89,13 +89,13 @@ func TestCursorAFrameHandsItsCursorToThePlatform(t *testing.T) {
 	rec := recordPlatformCursor(t, true)
 	text := false
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-		d := Div().ID("swap").Size(Px(100))
+		d := Div().Flex().ID("swap").Size(Px(100))
 		if text {
 			d.CursorText()
 		} else {
 			d.CursorPointer()
 		}
-		return Div().SizeFull().Child(d).IntoElement()
+		return Div().Flex().SizeFull().Child(d).IntoElement()
 	})
 	f.move(10, 10)
 	if got, _ := rec.last(); got != CursorPointingHand {

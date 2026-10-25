@@ -18,7 +18,7 @@ func (v *frameLoopView) Render(w *Window, cx *Context[frameLoopView]) AnyElement
 		v.animate--
 		RequestAnimationFrame(w)
 	}
-	return Div().SizeFull().IntoElement()
+	return Div().Flex().SizeFull().IntoElement()
 }
 
 // frameLoopModel is a non-view entity (never rendered).
@@ -220,7 +220,7 @@ type frameLoopCounter struct{ value int }
 func (r *frameLoopReader) Render(w *Window, cx *Context[frameLoopReader]) AnyElement {
 	r.renders++
 	_ = r.model.Read(cx, func(c *frameLoopCounter, _ *App) int { return c.value })
-	return Div().SizeFull().IntoElement()
+	return Div().Flex().SizeFull().IntoElement()
 }
 
 // TestFrameLoopTracksAccessedEntities checks the accessed-entity tracking
@@ -269,7 +269,7 @@ type frameLoopParent struct {
 }
 
 func (p *frameLoopParent) Render(w *Window, cx *Context[frameLoopParent]) AnyElement {
-	return Div().SizeFull().Child(p.child).IntoElement()
+	return Div().Flex().SizeFull().Child(p.child).IntoElement()
 }
 
 // TestFrameLoopTracksNestedRenderedViews checks that a nested view

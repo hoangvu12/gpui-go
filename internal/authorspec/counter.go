@@ -76,7 +76,7 @@ func (c *Counter) Render(w *gpui.Window, cx *gpui.Context[Counter]) gpui.AnyElem
 		Flex().
 		Gap2().
 		Child(NewCountLabel(c.count).Px3().Prefix("Count: ")).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("increment").
 			OnClick(cx.Listener((*Counter).clicked)).
 			Child("Increment")).
@@ -126,7 +126,7 @@ func (l *CountLabel) Prefix(value string) *CountLabel {
 // RenderOnce renders the label: a div styled by the recipe's refinement
 // with the formatted count as its text child.
 func (l *CountLabel) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
-	return gpui.Div().
+	return gpui.Div().Flex().
 		Refine(l.Style()).
 		Child(fmt.Sprintf("%s%d", l.prefix, l.value)).
 		IntoElement()

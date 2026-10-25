@@ -86,7 +86,7 @@ func a11yOf(t *testing.T, renders ...func(w *gpui.Window, app *gpui.App) *gpui.D
 				got = append(got, p)
 			}
 			return struct{}{}
-		}, func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {}).SizeFull().IntoElement()
+		}, func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {}).Flex().SizeFull().IntoElement()
 	})
 	if len(got) != len(renders) {
 		t.Fatalf("captured %d a11y nodes, want %d", len(got), len(renders))
@@ -106,7 +106,7 @@ func buttonHarness(t *testing.T, disabled bool) (*gpui.VisualTestContext, *butto
 	t.Helper()
 	counts := &buttonCounts{}
 	cx := drawn(t, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.Div().
+		return gpui.Div().Flex().
 			ID("button-parent").
 			TabGroup().
 			Size(gpui.Px(100)).
@@ -168,7 +168,7 @@ func TestButtonFixedHeightCentersOrdinaryChildGeometry(t *testing.T) {
 		b := ElementExtOf(NewButton("alignment-button").
 			W(gpui.Px(120)).
 			H(gpui.Px(40)).
-			Child(ElementExtOf(gpui.Div().W(gpui.Px(48)).H(gpui.Px(12))).
+			Child(ElementExtOf(gpui.Div().Flex().W(gpui.Px(48)).H(gpui.Px(12))).
 				OnPrepaint(func(bounds gpui.Bounds, _ *gpui.Window, _ *gpui.App) { child, haveChild = bounds, true }))).
 			OnPrepaint(func(bounds gpui.Bounds, _ *gpui.Window, _ *gpui.App) { root, haveRoot = bounds, true })
 		return elementOf(t, b)

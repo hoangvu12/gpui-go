@@ -81,7 +81,7 @@ func switchHarness(t *testing.T, checked, disabled bool) (*gpui.VisualTestContex
 	t.Helper()
 	rec := &switchRecord{last: checked}
 	cx := drawn(t, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.Div().
+		return gpui.Div().Flex().
 			ID("switch-parent").
 			TabGroup().
 			Size(gpui.Px(100)).

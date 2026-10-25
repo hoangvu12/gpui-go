@@ -89,7 +89,7 @@ func TestDrawablePaintsWithPrepaintBounds(t *testing.T) {
 			f := newPaintFixture(t, func(_ *paintView, w *Window, _ *Context[paintView]) AnyElement {
 				child := CustomElement[struct{}, struct{}](probe)
 				host := CustomElement[struct{}, struct{}](&offsetHost{origin: Point{X: 50, Y: 60}, asRoot: tc.asRoot, child: child})
-				return Div().SizeFull().Child(Div().W(Px(25)).H(Px(5))).Child(host).IntoElement()
+				return Div().Flex().SizeFull().Child(Div().Flex().W(Px(25)).H(Px(5))).Child(host).IntoElement()
 			})
 			scene := f.draw()
 			if probe.prepaints == 0 || probe.paints == 0 {
@@ -117,7 +117,7 @@ func TestDrawablePaintIgnoresPaintTimeOffset(t *testing.T) {
 	probe := &boundsProbe{color: paintGreen}
 	f := newPaintFixture(t, func(_ *paintView, w *Window, _ *Context[paintView]) AnyElement {
 		child := CustomElement[struct{}, struct{}](probe)
-		return Div().SizeFull().Child(Canvas(
+		return Div().Flex().SizeFull().Child(Canvas(
 			func(_ Bounds, w *Window, app *App) struct{} {
 				child.LayoutAsRoot(AvailableSize{Width: DefiniteAvailableSpace(100), Height: DefiniteAvailableSpace(100)}, w, app)
 				WithAbsoluteElementOffsetVoid(w, Point{X: 7, Y: 9}, func(w *Window) { child.Prepaint(w, app) })
@@ -126,7 +126,7 @@ func TestDrawablePaintIgnoresPaintTimeOffset(t *testing.T) {
 			func(_ Bounds, _ struct{}, w *Window, app *App) {
 				WithAbsoluteElementOffsetVoid(w, Point{X: 300, Y: 300}, func(w *Window) { child.Paint(w, app) })
 			},
-		).SizeFull()).IntoElement()
+		).Flex().SizeFull()).IntoElement()
 	})
 	f.draw()
 	if probe.prepaint != logical(7, 9, 30, 20) || probe.painted != probe.prepaint {

@@ -214,7 +214,7 @@ func (h *ResizeHandle[T]) RequestLayout(global *gpui.GlobalElementID, _ *gpui.In
 		state := sharedHandleStateOf(retained)
 		bgColor := handleColor(activeTheme(app), state.get().IsActive())
 
-		d := gpui.Div().ID(h.id).Occlude().Absolute().FlexShrink0().Group("handle")
+		d := gpui.Div().Flex().ID(h.id).Occlude().Absolute().FlexShrink0().Group("handle")
 		if h.onDrag != nil {
 			onDrag := h.onDrag
 			d.OnDrag(*h.dragValue, func(value *T, position gpui.Point, w *gpui.Window, app *gpui.App) gpui.View {
@@ -251,7 +251,7 @@ func (h *ResizeHandle[T]) RequestLayout(global *gpui.GlobalElementID, _ *gpui.In
 		if !drawn {
 			// The line fills the handle's content box exactly, so it has
 			// nothing to give: a shrinkable child collapses with it.
-			line := gpui.Div().FlexNone().Bg(bgColor).GroupHover("handle", gpui.Styles().Bg(bgColor))
+			line := gpui.Div().Flex().FlexNone().Bg(bgColor).GroupHover("handle", gpui.Styles().Bg(bgColor))
 			if AxisIsHorizontal(axis) {
 				line.HFull().W(gpui.Px(handleSize))
 			}

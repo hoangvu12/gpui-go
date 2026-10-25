@@ -39,7 +39,7 @@ func (v *focusView) Render(w *gpui.Window, cx *gpui.Context[focusView]) gpui.Any
 		items := make([]gpui.AnyElement, 0, end-start)
 		for ix := start; ix < end; ix++ {
 			*v.rendered = append(*v.rendered, ix)
-			item := gpui.Div().
+			item := gpui.Div().Flex().
 				W(gpui.PxLength(200)).
 				H(gpui.PxLength(20)).
 				DebugSelector(itemSelector(ix)).

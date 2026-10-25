@@ -549,7 +549,7 @@ func modalRoot(log *parity.EventLog, w *gpui.Window, state *modalState, variant 
 		layer := gpui.TopLayer(state.dialog).
 			DialogFocus(state.focusD).
 			ClosedBy(closedBy).
-			Backdrop(gpui.Div().SizeFull().Bg(gpui.RgbaToHsla(0x00000066)))
+			Backdrop(gpui.Div().Flex().SizeFull().Bg(gpui.RgbaToHsla(0x00000066)))
 		if state.noModal {
 			layer = layer.Kind(gpui.OverlayPopoverManual)
 		}
@@ -566,7 +566,7 @@ func modalRoot(log *parity.EventLog, w *gpui.Window, state *modalState, variant 
 // invokerBox builds the invoker: the click logs and opens the modal
 // (the page's showModal script).
 func invokerBox(log *parity.EventLog, state *modalState) *gpui.DivElement {
-	box := gpui.Div().ID("b1").DebugSelector("b1").
+	box := gpui.Div().Flex().ID("b1").DebugSelector("b1").
 		Absolute().Top(gpui.Px(0)).Left(gpui.Px(0)).
 		W(gpui.Px(invokerW)).H(gpui.Px(invokerH)).
 		Bg(gpui.Rgb(invokerBlue)).
@@ -593,7 +593,7 @@ func invokerBox(log *parity.EventLog, state *modalState) *gpui.DivElement {
 // page's data-id instrumentation binds: the keyup after the restore's
 // Tab reads its focus field).
 func anchorBox(log *parity.EventLog, state *modalState) *gpui.DivElement {
-	return gpui.Div().ID("anchor").DebugSelector("anchor").
+	return gpui.Div().Flex().ID("anchor").DebugSelector("anchor").
 		Absolute().Top(gpui.Px(anchorY)).Left(gpui.Px(anchorX)).
 		W(gpui.Px(invokerW)).H(gpui.Px(invokerH)).
 		Bg(gpui.Rgb(anchorGray)).
@@ -606,7 +606,7 @@ func anchorBox(log *parity.EventLog, state *modalState) *gpui.DivElement {
 // tracking the entry's dialog focus slot (focusable, not a tab stop),
 // with the key listeners the page's data-id instrumentation binds.
 func dialogBox(state *modalState, log *parity.EventLog) *gpui.DivElement {
-	return gpui.Div().ID("d").DebugSelector("d").
+	return gpui.Div().Flex().ID("d").DebugSelector("d").
 		Absolute().Top(gpui.Px(dialogY)).Left(gpui.Px(dialogX)).
 		W(gpui.Px(dialogW)).H(gpui.Px(dialogH)).
 		Bg(gpui.Rgb(dialogAmber)).
@@ -619,7 +619,7 @@ func dialogBox(state *modalState, log *parity.EventLog) *gpui.DivElement {
 // buttonBox builds one focusable dialog button, optionally carrying
 // the autofocus marking.
 func buttonBox(state *modalState, log *parity.EventLog, id string, x, y float32, focus gpui.FocusHandle, autofocus bool) *gpui.DivElement {
-	box := gpui.Div().ID(id).DebugSelector(id).
+	box := gpui.Div().Flex().ID(id).DebugSelector(id).
 		Absolute().Top(gpui.Px(buttonDY)).Left(gpui.Px(x)).
 		W(gpui.Px(buttonW)).H(gpui.Px(buttonH)).
 		Bg(gpui.Rgb(invokerBlue)).

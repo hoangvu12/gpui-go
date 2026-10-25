@@ -432,7 +432,7 @@ func (v *TextView) RequestLayout(_ *gpui.GlobalElementID, _ *gpui.InspectorEleme
 		OnAction(SelectAllAction, w.ListenerFor(state, (*TextViewState).onActionSelectAll)).
 		Child(gpui.ViewOf(state))
 	if v.scrollable {
-		el = el.Child(gpui.Div().Absolute().Inset0().Child(
+		el = el.Child(gpui.Div().Flex().Absolute().Inset0().Child(
 			ScrollbarVertical(list).ID(gpui.NamedIntegerElementID("text-view-scrollbar", uint64(state.EntityID()))).ViewportFromLayout(),
 		))
 	}

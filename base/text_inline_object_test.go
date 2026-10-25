@@ -14,7 +14,7 @@ import (
 // U:text/inline_object.rs:415-438
 func TestNativePaddingAndFixedSizeAreMeasuredWithoutFakeScaling(t *testing.T) {
 	inPrepaint(t, func(w *gpui.Window, app *gpui.App) struct{} {
-		native := NewInlineElement(gpui.Div().Px(gpui.Px(4)).Py(gpui.Px(2)).Child(gpui.Div().W(gpui.Px(40)).H(gpui.Px(10)))).WithBaseline(10)
+		native := NewInlineElement(gpui.Div().Flex().Px(gpui.Px(4)).Py(gpui.Px(2)).Child(gpui.Div().Flex().W(gpui.Px(40)).H(gpui.Px(10)))).WithBaseline(10)
 		measured := measureInlineObject("badge", &native, gpui.DefaultTextStyle(), w, app)
 		if measured.metrics.size != (gpui.Size{Width: 48, Height: 14}) || measured.metrics.baseline != 10 {
 			t.Fatalf("metrics %+v", measured.metrics)
@@ -31,7 +31,7 @@ func TestNativePaddingAndFixedSizeAreMeasuredWithoutFakeScaling(t *testing.T) {
 func TestInvalidBaselineUsesTextFallbackAndZeroWidthRemainsFinite(t *testing.T) {
 	inPrepaint(t, func(w *gpui.Window, app *gpui.App) struct{} {
 		for _, baseline := range []float32{float32(math.NaN()), -1, 30} {
-			native := NewInlineElement(gpui.Div().W(gpui.Px(20)).H(gpui.Px(20))).WithBaseline(baseline)
+			native := NewInlineElement(gpui.Div().Flex().W(gpui.Px(20)).H(gpui.Px(20))).WithBaseline(baseline)
 			measured := measureInlineObject("fallback", &native, gpui.DefaultTextStyle(), w, app)
 			if measured.content != nil || !measured.metrics.isValid() {
 				t.Fatalf("baseline %v: content %v metrics %+v", baseline, measured.content != nil, measured.metrics)

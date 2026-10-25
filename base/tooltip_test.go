@@ -25,9 +25,9 @@ func tooltipPositionerView(trigger *gpui.Bounds, placement *Placement) func(*gpu
 		if placement != nil {
 			positioner.Placement(*placement)
 		}
-		return gpui.Div().SizeFull().Child(
+		return gpui.Div().Flex().SizeFull().Child(
 			gpui.Deferred(positioner.Child(
-				gpui.Div().DebugSelector("TIP").W(gpui.Px(80)).H(gpui.Px(30)).Bg(gpui.Rgb(0x16a34a)),
+				gpui.Div().Flex().DebugSelector("TIP").W(gpui.Px(80)).H(gpui.Px(30)).Bg(gpui.Rgb(0x16a34a)),
 			)),
 		).IntoElement()
 	}
@@ -100,8 +100,8 @@ func TestTooltipPositionerPlacesEachRequestedSide(t *testing.T) {
 // app attaches .TooltipView, the window renders it in the hint layer).
 func tooltipHookView(trigger gpui.FocusHandle) func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
 	return func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.Div().SizeFull().Child(
-			gpui.Div().ID("tooltip-anchor").
+		return gpui.Div().Flex().SizeFull().Child(
+			gpui.Div().Flex().ID("tooltip-anchor").
 				W(gpui.Px(120)).H(gpui.Px(40)).
 				TrackFocus(trigger).
 				TooltipView(func(w *gpui.Window, app *gpui.App) gpui.AnyElement {
@@ -114,7 +114,7 @@ func tooltipHookView(trigger gpui.FocusHandle) func(*gpui.Window, *gpui.Context[
 						Align(gpui.AnchorAlignStart).
 						Gap(0).
 						Child(NewTooltip("hook-tip").
-							Child(gpui.Div().DebugSelector("hook-tip").
+							Child(gpui.Div().Flex().DebugSelector("hook-tip").
 								P2().TextXs().Bg(gpui.Rgb(0x16a34a)).
 								Child("Tip"))).
 						IntoElement()

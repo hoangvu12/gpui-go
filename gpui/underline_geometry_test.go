@@ -96,7 +96,7 @@ func TestTextElementUnderlineRecordFollowsChrome(t *testing.T) {
 				t.Fatalf("real text system: %v", err)
 			}
 			window.SetRootView(transformRoot{build: func() AnyElement {
-				return Div().Underline().TextSize(Px(fontSize)).Child(text).IntoElement()
+				return Div().Flex().Underline().TextSize(Px(fontSize)).Child(text).IntoElement()
 			}})
 			scene, err := DrawWindowFrame(window)
 			if err != nil {

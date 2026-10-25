@@ -34,14 +34,14 @@ func cbBounds(t *testing.T, cx *VisualTestContext, selector string) Bounds {
 // child with the given inset style. The ancestor sits at (10, 20) in a
 // 200x160 root, so its padding box origin is (14, 24).
 func cbAncestor(child func() *DivElement) *DivElement {
-	return Div().
+	return Div().Flex().
 		Size(Px(180), Px(120)).
 		Relative().
 		Ml(Px(10)).
 		Mt(Px(20)).
 		Border(Px(4)).
 		P(Px(6)).
-		Child(Div().
+		Child(Div().Flex().
 			Size(Px(100), Px(60)).
 			Static().
 			Child(child()))
@@ -50,7 +50,7 @@ func cbAncestor(child func() *DivElement) *DivElement {
 // cbAbsolute builds one absolute child with px insets and an explicit
 // size, selector name.
 func cbAbsolute(selector string, left, top float32) *DivElement {
-	return Div().
+	return Div().Flex().
 		ID(selector).
 		DebugSelector(selector).
 		Absolute().
@@ -72,7 +72,7 @@ func cbAbsolute(selector string, left, top float32) *DivElement {
 // failure against Chrome's record.
 func TestStaticParentDefersAbsoluteToPositionedAncestor(t *testing.T) {
 	cx := cbWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-		root := Div().Size(Px(200), Px(160)).DebugSelector("root")
+		root := Div().Flex().Size(Px(200), Px(160)).DebugSelector("root")
 		return root.Child(cbAncestor(func() *DivElement { return cbAbsolute("abs", 12, 8) })).IntoElement()
 	})
 	if b := cbBounds(t, cx, "abs"); b.Origin != (Point{X: 26, Y: 32}) || b.Size != (Size{Width: 40, Height: 30}) {
@@ -87,8 +87,8 @@ func TestStaticParentDefersAbsoluteToPositionedAncestor(t *testing.T) {
 // (120, 90).
 func TestStaticParentRightBottomInsetsResolveAgainstAncestor(t *testing.T) {
 	cx := cbWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-		root := Div().Size(Px(200), Px(160)).DebugSelector("root")
-		child := Div().
+		root := Div().Flex().Size(Px(200), Px(160)).DebugSelector("root")
+		child := Div().Flex().
 			ID("abs").
 			DebugSelector("abs").
 			Absolute().
@@ -108,8 +108,8 @@ func TestStaticParentRightBottomInsetsResolveAgainstAncestor(t *testing.T) {
 // (14+43, 24+56) = (57, 80).
 func TestStaticParentPercentageInsetsResolveAgainstAncestorPaddingBox(t *testing.T) {
 	cx := cbWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-		root := Div().Size(Px(200), Px(160)).DebugSelector("root")
-		child := Div().
+		root := Div().Flex().Size(Px(200), Px(160)).DebugSelector("root")
+		child := Div().Flex().
 			ID("abs").
 			DebugSelector("abs").
 			Absolute().
@@ -132,21 +132,21 @@ func TestStaticParentPercentageInsetsResolveAgainstAncestorPaddingBox(t *testing
 // static div) the child would overflow to (-34, -20).
 func TestStaticChainDefersToTheRoot(t *testing.T) {
 	cx := cbWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-		abs := Div().
+		abs := Div().Flex().
 			ID("abs").
 			DebugSelector("abs").
 			Absolute().
 			Right(Px(20)).
 			Bottom(Px(12)).
 			Size(Px(44), Px(28))
-		return Div().
+		return Div().Flex().
 			Size(Px(300), Px(200)).
 			DebugSelector("root").
-			Child(Div().
+			Child(Div().Flex().
 				Size(Px(50), Px(40)).
 				Static().
 				DebugSelector("static1").
-				Child(Div().
+				Child(Div().Flex().
 					Size(Px(30), Px(20)).
 					Static().
 					DebugSelector("static2").
@@ -169,11 +169,11 @@ func TestStaticChainDefersToTheRoot(t *testing.T) {
 // so left/top 10/6 puts the child at (14, 10).
 func TestAbsoluteUnderDefaultParentKeepsPinBehaviour(t *testing.T) {
 	cx := cbWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-		return Div().
+		return Div().Flex().
 			Size(Px(100), Px(80)).
 			DebugSelector("root").
 			Border(Px(4)).
-			Child(Div().
+			Child(Div().Flex().
 				ID("abs").
 				DebugSelector("abs").
 				Absolute().
@@ -206,7 +206,7 @@ func TestStaticBlockParentDefersAbsoluteToAncestor(t *testing.T) {
 			Block()
 		staticParent := Div().Size(Px(100), Px(60)).Static().Block()
 		staticParent = staticParent.Child(cbAbsolute("abs", 12, 8))
-		root := Div().Size(Px(200), Px(160)).DebugSelector("root")
+		root := Div().Flex().Size(Px(200), Px(160)).DebugSelector("root")
 		return root.Child(ancestor.Child(staticParent)).IntoElement()
 	})
 	if b := cbBounds(t, cx, "abs"); b.Origin != (Point{X: 26, Y: 32}) || b.Size != (Size{Width: 40, Height: 30}) {
@@ -222,17 +222,17 @@ func TestStaticBlockParentDefersAbsoluteToAncestor(t *testing.T) {
 // relative ones.
 func TestStaticElementStaysInFlowAndIgnoresInsets(t *testing.T) {
 	cx := cbWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-		return Div().
+		return Div().Flex().
 			Size(Px(120), Px(90)).
 			DebugSelector("root").
 			FlexCol().
-			Child(Div().
+			Child(Div().Flex().
 				Size(Px(40), Px(20)).
 				Static().
 				Left(Px(30)).
 				Top(Px(40)).
 				DebugSelector("flow1")).
-			Child(Div().
+			Child(Div().Flex().
 				Size(Px(40), Px(20)).
 				Static().
 				Right(Px(9)).
@@ -257,11 +257,11 @@ func TestStaticElementStaysInFlowAndIgnoresInsets(t *testing.T) {
 // flip) revisits the root's ICB role.
 func TestStaticRootFallsBackToDirectParent(t *testing.T) {
 	cx := cbWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-		return Div().
+		return Div().Flex().
 			Size(Px(100), Px(80)).
 			Static().
 			DebugSelector("root").
-			Child(Div().
+			Child(Div().Flex().
 				ID("abs").
 				DebugSelector("abs").
 				Absolute().
@@ -290,12 +290,12 @@ func TestPositionStaticValue(t *testing.T) {
 	}
 	// The Tailwind class: "static" applies Static() (the generated
 	// method-class switch; "relative" keeps applying Relative()).
-	d := Div().Class("static")
+	d := Div().Flex().Class("static")
 	style := d.computeStyle()
 	if style.Position != PositionStatic {
 		t.Fatalf("class \"static\" leaves position %v, want Static", style.Position)
 	}
-	d = Div().Class("relative")
+	d = Div().Flex().Class("relative")
 	style = d.computeStyle()
 	if style.Position != PositionRelative {
 		t.Fatalf("class \"relative\" leaves position %v, want Relative", style.Position)

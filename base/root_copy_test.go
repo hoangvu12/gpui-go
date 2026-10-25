@@ -20,7 +20,7 @@ func openSelectionRoot(t *testing.T, ta *gpui.TestApp, selection TextSelectionHa
 	_, cx := openRoot(ta, func(w *gpui.Window, cx *gpui.Context[Root]) gpui.View {
 		return gpui.ViewOf(gpui.NewEntity(cx, w.Scope(), func(v *testView, _ *gpui.Context[testView]) {
 			v.build = func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-				return gpui.Div().W(gpui.Px(200)).H(gpui.Px(40)).TrackFocus(focus).Child(registeringDiv(selection)).IntoElement()
+				return gpui.Div().Flex().W(gpui.Px(200)).H(gpui.Px(40)).TrackFocus(focus).Child(registeringDiv(selection)).IntoElement()
 			}
 		}))
 	})
@@ -171,7 +171,7 @@ func TestRootCopyKeystrokeStaysUnboundWithoutSelectionState(t *testing.T) {
 	_, cx := openRoot(ta, func(w *gpui.Window, cx *gpui.Context[Root]) gpui.View {
 		return gpui.ViewOf(gpui.NewEntity(cx, w.Scope(), func(v *testView, _ *gpui.Context[testView]) {
 			v.build = func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-				return gpui.Div().W(gpui.Px(200)).H(gpui.Px(40)).TrackFocus(focus).IntoElement()
+				return gpui.Div().Flex().W(gpui.Px(200)).H(gpui.Px(40)).TrackFocus(focus).IntoElement()
 			}
 		}))
 	})

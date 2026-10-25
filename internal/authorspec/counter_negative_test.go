@@ -55,21 +55,21 @@ func TestChildConversionNilDiagnostics(t *testing.T) {
 		t.Skip("element runtime draws through the native layout services")
 	}
 	mustPanic(t, "nil child value", "Child(nil)", func() {
-		gpui.Div().Child(nil)
+		gpui.Div().Flex().Child(nil)
 	})
 	mustPanic(t, "nil RenderOnce child value", "Child(typed nil recipe)", func() {
 		var label *CountLabel
-		gpui.Div().Child(label)
+		gpui.Div().Flex().Child(label)
 	})
 	mustPanic(t, "nil child value", "Child(nil view)", func() {
 		var view gpui.View
-		gpui.Div().Child(view)
+		gpui.Div().Flex().Child(view)
 	})
 	mustPanic(t, "zero AnyElement", "Child(zero AnyElement)", func() {
-		gpui.Div().Child(gpui.AnyElement{})
+		gpui.Div().Flex().Child(gpui.AnyElement{})
 	})
 	mustPanic(t, "unsupported child value of type int", "Child(42)", func() {
-		gpui.Div().Child(42)
+		gpui.Div().Flex().Child(42)
 	})
 }
 

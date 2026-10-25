@@ -18,7 +18,7 @@ type card struct {
 }
 
 func newCard(id string) *card {
-	return gpui.BindComponent(&card{}, gpui.Div().ID(id))
+	return gpui.BindComponent(&card{}, gpui.Div().Flex().ID(id))
 }
 
 func (c *card) Title(value string) *card  { c.title = value; return c }
@@ -39,7 +39,7 @@ type badge struct {
 }
 
 func newBadge() *badge {
-	b := &badge{base: gpui.Div()}
+	b := &badge{base: gpui.Div().Flex()}
 	gpui.BindStyledTo(b, b.base.StyleMut())
 	return gpui.BindParent(b)
 }
@@ -56,7 +56,7 @@ func TestComponentGetsTheWholeVocabularyFromOneMixin(t *testing.T) {
 		W(gpui.Px(120)).Title("Hello").H(gpui.Px(50)).Bg(red).Disabled(true).RoundedLg().
 		When(true, func(c *card) *card { return c.Border1().BorderColor(blue) }).
 		When(false, func(c *card) *card { return c.Bg(green) }).
-		Child(gpui.Div().Size(gpui.Px(8)).Bg(green)).
+		Child(gpui.Div().Flex().Size(gpui.Px(8)).Bg(green)).
 		OnClick(func(*gpui.ClickEvent, *gpui.Window, *gpui.App) {}).
 		DebugSelector("card").P1()
 	if !c.disabled || c.title != "Hello" || c.ChildCount() != 1 {
@@ -65,7 +65,7 @@ func TestComponentGetsTheWholeVocabularyFromOneMixin(t *testing.T) {
 	if v, _ := c.Style().Background.Get(); v != gpui.SolidBackground(red) {
 		t.Errorf("When(false) applied: %+v", v)
 	}
-	window, scene := drawStyled(t, gpui.Div().Child(c).IntoElement())
+	window, scene := drawStyled(t, gpui.Div().Flex().Child(c).IntoElement())
 	b, ok := gpui.WindowDebugBound(window, "card")
 	if !ok || b.Size != (gpui.Size{Width: 120, Height: 50}) {
 		t.Fatalf("card bounds = %+v, %v", b, ok)
@@ -88,7 +88,7 @@ func TestComponentGetsTheWholeVocabularyFromOneMixin(t *testing.T) {
 func TestFluentBuilder(t *testing.T) {
 	value := 3
 	var missing *int
-	d := gpui.Div().
+	d := gpui.Div().Flex().
 		WhenSome(&value, func(d *gpui.DivElement, v int) *gpui.DivElement { return d.Opacity(float32(v) / 10) }).
 		WhenSome(missing, func(d *gpui.DivElement, v int) *gpui.DivElement { return d.Hidden() }).
 		WhenNone(missing, func(d *gpui.DivElement) *gpui.DivElement { return d.Flex() }).
@@ -126,30 +126,30 @@ func TestComponentBindingMisuseFailsClearly(t *testing.T) {
 		f()
 	}
 	var nilCard *card
-	wantPanic("nil component", func() { gpui.BindComponent(nilCard, gpui.Div()) })
+	wantPanic("nil component", func() { gpui.BindComponent(nilCard, gpui.Div().Flex()) })
 	wantPanic("non-nil inner div", func() { gpui.BindComponent(&card{}, nil) })
 	var zero card
 	wantPanic("unbound Styled", func() { zero.Flex() })
 	wantPanic("unbound Parent", func() { zero.Child("x") })
 	wantPanic("unbound Interactive", func() { zero.ID("x") })
 	c := newCard("c")
-	wantPanic("already bound", func() { gpui.BindComponent(c, gpui.Div()) })
+	wantPanic("already bound", func() { gpui.BindComponent(c, gpui.Div().Flex()) })
 	copied := *c
 	wantPanic("copied bound component", func() { copied.Flex() })
 	wantPanic("copied bound component", func() { copied.Child("x") })
 	wantPanic("copied bound component", func() { copied.OnClick(func(*gpui.ClickEvent, *gpui.Window, *gpui.App) {}) })
-	wantPanic("one or two lengths", func() { gpui.Div().Size(gpui.Px(1), gpui.Px(2), gpui.Px(3)) })
+	wantPanic("one or two lengths", func() { gpui.Div().Flex().Size(gpui.Px(1), gpui.Px(2), gpui.Px(3)) })
 }
 
 // TestDivIDAcceptsStringsAndElementIDs checks DivElement.ID's
 // `impl Into<ElementId>` port: a string is ElementId::Name, any
 // ElementID (e.g. a named integer) is used as is.
 func TestDivIDAcceptsStringsAndElementIDs(t *testing.T) {
-	if id, ok := gpui.Div().ID("row").IntoElement().ID(); !ok || id != gpui.NameElementID("row") {
+	if id, ok := gpui.Div().Flex().ID("row").IntoElement().ID(); !ok || id != gpui.NameElementID("row") {
 		t.Errorf("string id = %+v, %v", id, ok)
 	}
 	want := gpui.NamedIntegerElementID("row", 3)
-	if id, ok := gpui.Div().ID(want).IntoElement().ID(); !ok || id != want {
+	if id, ok := gpui.Div().Flex().ID(want).IntoElement().ID(); !ok || id != want {
 		t.Errorf("element id = %+v, %v", id, ok)
 	}
 	if id, ok := newCard("x").ID(want).IntoElement().ID(); !ok || id != want {

@@ -74,7 +74,7 @@ type plotScopedView struct {
 }
 
 func (v *plotScopedView) Render(*gpui.Window, *gpui.Context[plotScopedView]) gpui.AnyElement {
-	body := gpui.Div().SizeFull()
+	body := gpui.Div().Flex().SizeFull()
 	if v.mounted {
 		body = body.Child(&plotRecorder{samples: v.samples, generation: v.generation, hasGeneration: true})
 	}

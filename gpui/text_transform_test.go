@@ -112,7 +112,7 @@ func drawTransformedText(t *testing.T, transform *TextTransform, text string) st
 	var painted []string
 	drawState(window).text = &transformCaptureSystem{testTextSystem: &testTextSystem{}, painted: &painted}
 	root := transformRoot{build: func() AnyElement {
-		return Div().TextTransform(*transform).TextSize(Px(16)).Child(text).IntoElement()
+		return Div().Flex().TextTransform(*transform).TextSize(Px(16)).Child(text).IntoElement()
 	}}
 	window.SetRootView(root)
 	if _, err := DrawWindowFrame(window); err != nil {
@@ -170,7 +170,7 @@ func TestStyledTextAppliesTextTransform(t *testing.T) {
 	var painted []string
 	drawState(window).text = &transformCaptureSystem{testTextSystem: &testTextSystem{}, painted: &painted}
 	window.SetRootView(transformRoot{build: func() AnyElement {
-		return Div().TextTransform(TextTransformUppercase).TextSize(Px(16)).Child(
+		return Div().Flex().TextTransform(TextTransformUppercase).TextSize(Px(16)).Child(
 			NewStyledText("hello styled").IntoElement()).IntoElement()
 	}})
 	if _, err := DrawWindowFrame(window); err != nil {

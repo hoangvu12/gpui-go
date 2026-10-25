@@ -47,7 +47,7 @@ func (e ElementExt[S]) OnPrepaint(callback func(bounds gpui.Bounds, w *gpui.Wind
 			return struct{}{}
 		},
 		func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {},
-	).Absolute().SizeFull()
+	).Flex().Absolute().SizeFull()
 	e.extend([]gpui.AnyElement{canvas.IntoElement()})
 	return e.element
 }

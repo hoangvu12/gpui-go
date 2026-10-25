@@ -311,7 +311,7 @@ func View() func(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.AnyEl
 			LineHeight(gpui.PhiLineHeight()).
 			OnKeyDown(log.KeyDown("root")).
 			OnKeyUp(log.KeyUp("root"))
-		field := gpui.Div().
+		field := gpui.Div().Flex().
 			ID("field").
 			DebugSelector("field").
 			Size(gpui.Px(fieldWidth), gpui.Px(fieldHeight)).
@@ -361,7 +361,7 @@ func PlainView() func(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.
 			LineHeight(gpui.PhiLineHeight()).
 			OnKeyDown(log.KeyDown("root")).
 			OnKeyUp(log.KeyUp("root"))
-		field := gpui.Div().
+		field := gpui.Div().Flex().
 			ID("field").
 			DebugSelector("field").
 			Size(gpui.Px(fieldWidth), gpui.Px(fieldHeight)).

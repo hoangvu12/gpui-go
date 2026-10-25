@@ -14,7 +14,7 @@ type inputTestRoot[M InputModeKind] struct {
 }
 
 func (r *inputTestRoot[M]) Render(*gpui.Window, *gpui.Context[inputTestRoot[M]]) gpui.AnyElement {
-	return gpui.Div().SizeFull().Child(gpui.ViewOf[InputBaseState[M]](r.input)).IntoElement()
+	return gpui.Div().Flex().SizeFull().Child(gpui.ViewOf[InputBaseState[M]](r.input)).IntoElement()
 }
 
 // inputView is InputView (U:input/base/state.rs:4794-4866): a state of one

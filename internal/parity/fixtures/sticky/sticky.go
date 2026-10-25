@@ -505,7 +505,7 @@ func LeftView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElement
 		Flex().
 		OverflowXScroll().
 		Bg(gpui.Rgb(scrollerBg)).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("hfocus").
 			DebugSelector("hfocus").
 			Size(gpui.Px(hFocusW), gpui.Px(hScrollerH)).
@@ -516,7 +516,7 @@ func LeftView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElement
 			Left(gpui.Px(leftInset)).
 			Size(gpui.Px(hColW), gpui.Px(hScrollerH)).
 			FlexShrink0()).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("hfiller").
 			DebugSelector("hfiller").
 			Size(gpui.Px(hFillerW), gpui.Px(hScrollerH)).
@@ -535,7 +535,7 @@ func SectionsView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyEle
 		Flex().
 		AlignItems(gpui.AlignItemsFlexStart).
 		Bg(gpui.Rgb(pageBackground))
-	scroller := gpui.Div().
+	scroller := gpui.Div().Flex().
 		ID("scroller").
 		DebugSelector("scroller").
 		Size(gpui.Px(vScrollerW), gpui.Px(vScrollerH)).
@@ -544,7 +544,7 @@ func SectionsView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyEle
 		FlexCol().
 		OverflowYScroll().
 		Bg(gpui.Rgb(scrollerBg)).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("focus").
 			DebugSelector("focus").
 			Size(gpui.Px(vScrollerW), gpui.Px(focusH)).
@@ -554,7 +554,7 @@ func SectionsView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyEle
 	sectionColors := []uint32{headerBg, footerBg, 0xd97706, 0x7c3aed}
 	for i, color := range sectionColors {
 		id := string(rune('1' + i))
-		section := gpui.Div().
+		section := gpui.Div().Flex().
 			ID("s"+id).
 			DebugSelector("s"+id).
 			Size(gpui.Px(vScrollerW), gpui.Px(sSectionH)).
@@ -564,7 +564,7 @@ func SectionsView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyEle
 			Child(stickyBox("h"+id, color).
 				Top(gpui.Px(0)).
 				Size(gpui.Px(vScrollerW), gpui.Px(sHeaderH))).
-			Child(gpui.Div().
+			Child(gpui.Div().Flex().
 				ID("f"+id).
 				DebugSelector("f"+id).
 				Size(gpui.Px(vScrollerW), gpui.Px(sFillerH)).
@@ -585,7 +585,7 @@ func verticalRoot(focus *gpui.FocusHandle) gpui.AnyElement {
 		Flex().
 		AlignItems(gpui.AlignItemsFlexStart).
 		Bg(gpui.Rgb(pageBackground))
-	focusRow := gpui.Div().
+	focusRow := gpui.Div().Flex().
 		ID("focus").
 		DebugSelector("focus").
 		Size(gpui.Px(vScrollerW), gpui.Px(focusH)).
@@ -594,7 +594,7 @@ func verticalRoot(focus *gpui.FocusHandle) gpui.AnyElement {
 	if focus != nil {
 		focusRow = focusRow.TrackFocus(*focus)
 	}
-	section := gpui.Div().
+	section := gpui.Div().Flex().
 		ID("section-a").
 		DebugSelector("section-a").
 		Size(gpui.Px(vScrollerW), gpui.Px(sectionH)).
@@ -604,18 +604,18 @@ func verticalRoot(focus *gpui.FocusHandle) gpui.AnyElement {
 		Child(stickyBox("header-a", headerBg).
 			Top(gpui.Px(topInset)).
 			Size(gpui.Px(vScrollerW), gpui.Px(headerH)).
-			Child(gpui.Div().
+			Child(gpui.Div().Flex().
 				ID("bar").
 				DebugSelector("bar").
 				Size(gpui.Px(vScrollerW), gpui.Px(barH)).
 				Bg(gpui.Rgb(barBg)))).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("filler-a").
 			DebugSelector("filler-a").
 			Size(gpui.Px(vScrollerW), gpui.Px(fillerH)).
 			FlexShrink0().
 			Bg(gpui.Rgb(fillerBg)))
-	scroller := gpui.Div().
+	scroller := gpui.Div().Flex().
 		ID("scroller").
 		DebugSelector("scroller").
 		Size(gpui.Px(vScrollerW), gpui.Px(vScrollerH)).
@@ -626,7 +626,7 @@ func verticalRoot(focus *gpui.FocusHandle) gpui.AnyElement {
 		Bg(gpui.Rgb(scrollerBg)).
 		Child(focusRow).
 		Child(section).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("spacer").
 			DebugSelector("spacer").
 			Size(gpui.Px(vScrollerW), gpui.Px(spacerH)).
@@ -636,7 +636,7 @@ func verticalRoot(focus *gpui.FocusHandle) gpui.AnyElement {
 			Bottom(gpui.Px(botInset)).
 			Size(gpui.Px(vScrollerW), gpui.Px(footerH)).
 			FlexShrink0()).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("tail").
 			DebugSelector("tail").
 			Size(gpui.Px(vScrollerW), gpui.Px(tailH)).
@@ -667,31 +667,31 @@ func verticalWrongRoot(focus *gpui.FocusHandle) gpui.AnyElement {
 		Flex().
 		AlignItems(gpui.AlignItemsFlexStart).
 		Bg(gpui.Rgb(pageBackground))
-	section := gpui.Div().
+	section := gpui.Div().Flex().
 		ID("section-a").
 		DebugSelector("section-a").
 		Size(gpui.Px(vScrollerW), gpui.Px(sectionH)).
 		FlexCol().
 		FlexShrink0().
 		Bg(gpui.Rgb(pageBackground)).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("header-a").
 			DebugSelector("header-a").
 			Relative().
 			Size(gpui.Px(vScrollerW), gpui.Px(headerH)).
 			Bg(gpui.Rgb(headerBg)).
-			Child(gpui.Div().
+			Child(gpui.Div().Flex().
 				ID("bar").
 				DebugSelector("bar").
 				Size(gpui.Px(vScrollerW), gpui.Px(barH)).
 				Bg(gpui.Rgb(barBg)))).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("filler-a").
 			DebugSelector("filler-a").
 			Size(gpui.Px(vScrollerW), gpui.Px(fillerH)).
 			FlexShrink0().
 			Bg(gpui.Rgb(fillerBg)))
-	scroller := gpui.Div().
+	scroller := gpui.Div().Flex().
 		ID("scroller").
 		DebugSelector("scroller").
 		Size(gpui.Px(vScrollerW), gpui.Px(vScrollerH)).
@@ -700,7 +700,7 @@ func verticalWrongRoot(focus *gpui.FocusHandle) gpui.AnyElement {
 		FlexCol().
 		OverflowYScroll().
 		Bg(gpui.Rgb(scrollerBg)).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("focus").
 			DebugSelector("focus").
 			Size(gpui.Px(vScrollerW), gpui.Px(focusH)).
@@ -708,20 +708,20 @@ func verticalWrongRoot(focus *gpui.FocusHandle) gpui.AnyElement {
 			Bg(gpui.Rgb(focusBg)).
 			TrackFocus(*focus)).
 		Child(section).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("spacer").
 			DebugSelector("spacer").
 			Size(gpui.Px(vScrollerW), gpui.Px(spacerH)).
 			FlexShrink0().
 			Bg(gpui.Rgb(spacerBg))).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("footer").
 			DebugSelector("footer").
 			Relative().
 			Size(gpui.Px(vScrollerW), gpui.Px(footerH)).
 			FlexShrink0().
 			Bg(gpui.Rgb(footerBg))).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("tail").
 			DebugSelector("tail").
 			Size(gpui.Px(vScrollerW), gpui.Px(tailH)).
@@ -733,7 +733,7 @@ func verticalWrongRoot(focus *gpui.FocusHandle) gpui.AnyElement {
 // stickyBox builds one sticky div with the given id and color; the
 // caller adds the insets and size.
 func stickyBox(id string, color uint32) *gpui.DivElement {
-	return gpui.Div().
+	return gpui.Div().Flex().
 		ID(id).
 		DebugSelector(id).
 		Sticky().

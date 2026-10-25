@@ -75,20 +75,20 @@ func (b *titlebarButton) IntoElement() AnyElement {
 func TestWindowControlAreasInTheRenderedFrame(t *testing.T) {
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
 		button := func(id string, left float32, area WindowControlArea) AnyElement {
-			return Div().ID(id).Absolute().Left(Px(left)).Top0().W(Px(40)).H(Px(32)).
+			return Div().Flex().ID(id).Absolute().Left(Px(left)).Top0().W(Px(40)).H(Px(32)).
 				Occlude().WindowControlArea(area).IntoElement()
 		}
-		mixin := BindComponent(&titlebarButton{}, Div().ID("mixin")).
+		mixin := BindComponent(&titlebarButton{}, Div().Flex().ID("mixin")).
 			Absolute().Left(Px(100)).Top0().W(Px(40)).H(Px(32)).
 			Occlude().WindowControlArea(WindowControlAreaMin)
-		return Div().Relative().SizeFull().Child(
-			Div().ID("titlebar").Absolute().Left0().Top0().W(Px(400)).H(Px(32)).
+		return Div().Flex().Relative().SizeFull().Child(
+			Div().Flex().ID("titlebar").Absolute().Left0().Top0().W(Px(400)).H(Px(32)).
 				WindowControlArea(WindowControlAreaDrag).
 				Child(button("max", 280, WindowControlAreaMax)).
 				Child(button("close", 320, WindowControlAreaClose)).
 				Child(mixin).
 				// Not occluding: the drag strip stays in the hit test.
-				Child(Div().ID("nested").Absolute().Left(Px(200)).Top0().W(Px(40)).H(Px(32)).
+				Child(Div().Flex().ID("nested").Absolute().Left(Px(200)).Top0().W(Px(40)).H(Px(32)).
 					WindowControlArea(WindowControlAreaClose)),
 		).IntoElement()
 	})
@@ -118,7 +118,7 @@ func TestWindowControlAreasInTheRenderedFrame(t *testing.T) {
 	// The next frame replaces the areas: an empty view has none.
 	f.view.Update(f.app, func(v *interactView, cx *Context[interactView]) {
 		v.build = func(*interactView, *Window, *Context[interactView]) AnyElement {
-			return Div().SizeFull().IntoElement()
+			return Div().Flex().SizeFull().IntoElement()
 		}
 		cx.Notify()
 	})

@@ -18,13 +18,13 @@ func anchoredAnchorView(anchorID string, anchor Bounds, configure func(*Anchored
 	return func(*paintView, *Window, *Context[paintView]) AnyElement {
 		popup := configure(Anchored().AnchorTo(anchorID))
 		return Div().SizeFull().Flex().Child(
-			Div().ID(anchorID).DebugSelector("ANCHOR").
+			Div().Flex().ID(anchorID).DebugSelector("ANCHOR").
 				Absolute().Top(Px(anchor.Origin.Y)).Left(Px(anchor.Origin.X)).
 				W(Px(anchor.Size.Width)).H(Px(anchor.Size.Height)).
 				Bg(paintBlue),
 		).Child(
 			Deferred(popup.Child(
-				Div().DebugSelector("POPUP").W(Px(60)).H(Px(40)).Bg(paintRed),
+				Div().Flex().DebugSelector("POPUP").W(Px(60)).H(Px(40)).Bg(paintRed),
 			)),
 		).IntoElement()
 	}
@@ -286,13 +286,13 @@ func anchoredAnchorViewWithPopup(anchorID string, anchor, popup Bounds, configur
 	return func(*paintView, *Window, *Context[paintView]) AnyElement {
 		popupElement := configure(Anchored().AnchorTo(anchorID))
 		return Div().SizeFull().Flex().Child(
-			Div().ID(anchorID).DebugSelector("ANCHOR").
+			Div().Flex().ID(anchorID).DebugSelector("ANCHOR").
 				Absolute().Top(Px(anchor.Origin.Y)).Left(Px(anchor.Origin.X)).
 				W(Px(anchor.Size.Width)).H(Px(anchor.Size.Height)).
 				Bg(paintBlue),
 		).Child(
 			Deferred(popupElement.Child(
-				Div().DebugSelector("POPUP").W(Px(popup.Size.Width)).H(Px(popup.Size.Height)).Bg(paintRed),
+				Div().Flex().DebugSelector("POPUP").W(Px(popup.Size.Width)).H(Px(popup.Size.Height)).Bg(paintRed),
 			)),
 		).IntoElement()
 	}
@@ -306,7 +306,7 @@ func TestAnchoredAnchorBoundsCellTracksTheAnchor(t *testing.T) {
 	f := newPaintFixture(t, func(*paintView, *Window, *Context[paintView]) AnyElement {
 		return Div().SizeFull().Flex().Child(
 			Deferred(Anchored().AnchorBounds(cell).Side(AnchorSideBottom).Align(AnchorAlignStart).Gap(8).Child(
-				Div().DebugSelector("POPUP").W(Px(60)).H(Px(40)).Bg(paintRed),
+				Div().Flex().DebugSelector("POPUP").W(Px(60)).H(Px(40)).Bg(paintRed),
 			)),
 		).IntoElement()
 	})
@@ -336,16 +336,16 @@ func TestAnchoredFollowsAScrolledAnchorAndHidesWhenClipped(t *testing.T) {
 	// deferred sibling, anchored to it 8px below, center-aligned.
 	f := newPaintFixture(t, func(*paintView, *Window, *Context[paintView]) AnyElement {
 		return Div().SizeFull().Flex().Child(
-			Div().ID("scroller").DebugSelector("SCROLLER").
+			Div().Flex().ID("scroller").DebugSelector("SCROLLER").
 				Absolute().Top(Px(40)).Left(Px(20)).
 				W(Px(200)).H(Px(300)).
 				OverflowYScroll().
-				Child(Div().DebugSelector("CONTENT").W(Px(200)).H(Px(800)).FlexCol().
-					Child(Div().H(Px(200))).
-					Child(Div().ID("trigger").DebugSelector("ANCHOR").W(Px(120)).H(Px(40)).Bg(paintBlue))),
+				Child(Div().Flex().DebugSelector("CONTENT").W(Px(200)).H(Px(800)).FlexCol().
+					Child(Div().Flex().H(Px(200))).
+					Child(Div().Flex().ID("trigger").DebugSelector("ANCHOR").W(Px(120)).H(Px(40)).Bg(paintBlue))),
 		).Child(
 			Deferred(Anchored().AnchorTo("trigger").Side(AnchorSideBottom).Align(AnchorAlignCenter).Gap(8).HideWhenAnchorClipped().Child(
-				Div().DebugSelector("POPUP").W(Px(100)).H(Px(50)).Bg(paintRed),
+				Div().Flex().DebugSelector("POPUP").W(Px(100)).H(Px(50)).Bg(paintRed),
 			)),
 		).IntoElement()
 	})
@@ -408,7 +408,7 @@ func TestAnchoredAnchorToMissingAnchorRendersAtTheLaidOutPosition(t *testing.T) 
 			// No element carries the id "missing" and no anchor cell is
 			// set: the popup stays where the layout placed it.
 			Deferred(Anchored().AnchorTo("missing").Side(AnchorSideBottom).Align(AnchorAlignStart).Gap(8).Child(
-				Div().DebugSelector("POPUP").W(Px(60)).H(Px(40)).Bg(paintRed),
+				Div().Flex().DebugSelector("POPUP").W(Px(60)).H(Px(40)).Bg(paintRed),
 			)),
 		).IntoElement()
 	})

@@ -24,8 +24,8 @@ type scrollRealView struct {
 }
 
 func (v *scrollRealView) Render(w *Window, cx *Context[scrollRealView]) AnyElement {
-	return Div().ID("scroller").W(Px(100)).H(Px(100)).OverflowYScroll().TrackScroll(v.handle).
-		Child(Div().W(Px(100)).H(Px(300)).FlexShrink0()).
+	return Div().Flex().ID("scroller").W(Px(100)).H(Px(100)).OverflowYScroll().TrackScroll(v.handle).
+		Child(Div().Flex().W(Px(100)).H(Px(300)).FlexShrink0()).
 		IntoElement()
 }
 

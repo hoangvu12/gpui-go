@@ -10,7 +10,7 @@ import (
 
 // U:toolbar.rs:271-277
 func TestToolbarBuilder(t *testing.T) {
-	toolbar := NewToolbar("toolbar").Disabled(true).Child(gpui.Div())
+	toolbar := NewToolbar("toolbar").Disabled(true).Child(gpui.Div().Flex())
 	if !toolbar.disabled || toolbar.ChildCount() != 1 {
 		t.Fatalf("disabled = %v, children = %d", toolbar.disabled, toolbar.ChildCount())
 	}
@@ -26,7 +26,7 @@ func TestToolbarDefaults(t *testing.T) {
 
 // U:toolbar.rs:287-296
 func TestToolbarGroupBuilder(t *testing.T) {
-	group := NewToolbarGroup("history-group").Label("History").Child(gpui.Div()).Child(gpui.Div())
+	group := NewToolbarGroup("history-group").Label("History").Child(gpui.Div().Flex()).Child(gpui.Div().Flex())
 	if group.label == nil || *group.label != "History" || group.ChildCount() != 2 {
 		t.Fatalf("label = %v, children = %d", group.label, group.ChildCount())
 	}
@@ -50,7 +50,7 @@ func toolbarHarness(t *testing.T, id string, disabled bool, n int) (*gpui.Visual
 				names = []string{"only"}
 			}
 			for i, h := range items {
-				tb.Child(gpui.Div().ID(names[i]).Size(gpui.Px(20)).TrackFocus(h))
+				tb.Child(gpui.Div().Flex().ID(names[i]).Size(gpui.Px(20)).TrackFocus(h))
 			}
 			return elementOf(t, tb)
 		}
@@ -90,7 +90,7 @@ func TestToolbarWithASingleItemKeepsFocusOnIt(t *testing.T) {
 // U:toolbar.rs:392-425
 func TestToolbarGroupExposesGroupRoleAndAccessibleName(t *testing.T) {
 	got := a11yOf(t, func(w *gpui.Window, app *gpui.App) *gpui.DivElement {
-		return NewToolbarGroup("history").Label("History").Child(gpui.Div().Size(gpui.Px(20))).render(w, app)
+		return NewToolbarGroup("history").Label("History").Child(gpui.Div().Flex().Size(gpui.Px(20))).render(w, app)
 	})
 	if got[0].role != gpui.RoleGroup || got[0].spec.Label != "History" {
 		t.Fatalf("group = %+v", got[0])

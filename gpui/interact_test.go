@@ -152,7 +152,7 @@ var (
 func TestInteractMouseClickDispatchTranscript(t *testing.T) {
 	rec := &transcript{}
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-		child := Div().ID("a").Size(Px(50)).
+		child := Div().Flex().ID("a").Size(Px(50)).
 			CaptureAnyMouseDown(func(e *MouseDownEvent, w *Window, app *App) { rec.add("a.capture-down") }).
 			OnMouseDown(MouseButtonLeft, func(e *MouseDownEvent, w *Window, app *App) { rec.add("a.down-left") }).
 			OnMouseDown(MouseButtonRight, func(e *MouseDownEvent, w *Window, app *App) { rec.add("a.down-right") }).
@@ -164,7 +164,7 @@ func TestInteractMouseClickDispatchTranscript(t *testing.T) {
 			OnAuxClick(func(e *ClickEvent, w *Window, app *App) {
 				rec.add("a.aux(%v)", e.IsRightClick())
 			})
-		return Div().ID("p").SizeFull().
+		return Div().Flex().ID("p").SizeFull().
 			CaptureAnyMouseDown(func(e *MouseDownEvent, w *Window, app *App) { rec.add("p.capture-down") }).
 			OnAnyMouseDown(func(e *MouseDownEvent, w *Window, app *App) { rec.add("p.down") }).
 			Child(child).IntoElement()
@@ -219,9 +219,9 @@ func TestInteractMouseClickDispatchTranscript(t *testing.T) {
 func TestInteractStopPropagationEndsDispatch(t *testing.T) {
 	rec := &transcript{}
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-		return Div().SizeFull().
+		return Div().Flex().SizeFull().
 			OnAnyMouseDown(func(e *MouseDownEvent, w *Window, app *App) { rec.add("parent") }).
-			Child(Div().Size(Px(50)).OnAnyMouseDown(func(e *MouseDownEvent, w *Window, app *App) {
+			Child(Div().Flex().Size(Px(50)).OnAnyMouseDown(func(e *MouseDownEvent, w *Window, app *App) {
 				rec.add("child")
 				app.StopPropagation()
 			})).IntoElement()
@@ -242,12 +242,12 @@ func keyboardActivation(t *testing.T) (*interactFixture, *[]string, FocusHandle,
 	window := NewTestWindow(app, Size{Width: 400, Height: 300})
 	view := NewEntity(app, window.Scope(), func(v *interactView, cx *Context[interactView]) {
 		v.build = func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-			return Div().SizeFull().
-				Child(Div().ID("a").W(Px(50)).H(Px(50)).TrackFocus(focusA).
+			return Div().Flex().SizeFull().
+				Child(Div().Flex().ID("a").W(Px(50)).H(Px(50)).TrackFocus(focusA).
 					OnClick(func(e *ClickEvent, w *Window, app *App) {
 						clicks = append(clicks, fmt.Sprintf("a:%s", e.Kind))
 					})).
-				Child(Div().ID("b").W(Px(50)).H(Px(50)).TrackFocus(focusB).
+				Child(Div().Flex().ID("b").W(Px(50)).H(Px(50)).TrackFocus(focusB).
 					OnClick(func(e *ClickEvent, w *Window, app *App) {
 						clicks = append(clicks, fmt.Sprintf("b:%s", e.Kind))
 					})).
@@ -413,7 +413,7 @@ func TestInteractClickRequiresElementID(t *testing.T) {
 	window := NewTestWindow(app, Size{Width: 100, Height: 100})
 	view := NewEntity(app, window.Scope(), func(v *interactView, cx *Context[interactView]) {
 		v.build = func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-			return Div().SizeFull().Child(Div().Size(Px(10)).OnClick(func(*ClickEvent, *Window, *App) {})).IntoElement()
+			return Div().Flex().SizeFull().Child(Div().Flex().Size(Px(10)).OnClick(func(*ClickEvent, *Window, *App) {})).IntoElement()
 		}
 	})
 	window.SetRootView(ViewOf(view))
@@ -467,7 +467,7 @@ func TestInteractClickEventAccessors(t *testing.T) {
 func TestInteractMouseDownOutAndUpOut(t *testing.T) {
 	rec := &transcript{}
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-		return Div().SizeFull().Child(Div().ID("target").W(Px(50)).H(Px(50)).
+		return Div().Flex().SizeFull().Child(Div().Flex().ID("target").W(Px(50)).H(Px(50)).
 			OnMouseDownOut(func(e *MouseDownEvent, w *Window, app *App) { rec.add("down-out(%v)", e.Position) }).
 			OnMouseUpOut(MouseButtonLeft, func(e *MouseUpEvent, w *Window, app *App) { rec.add("up-out-left") }).
 			OnMouseUpOut(MouseButtonRight, func(e *MouseUpEvent, w *Window, app *App) { rec.add("up-out-right") })).
@@ -495,7 +495,7 @@ func hoverListenerFixture(t *testing.T, left float32, transitions *[]bool) *inte
 	view := NewEntity(app, window.Scope(), func(v *interactView, cx *Context[interactView]) {
 		v.left = left
 		v.build = func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-			return Div().Relative().SizeFull().Child(Div().ID("hover-target").Absolute().
+			return Div().Flex().Relative().SizeFull().Child(Div().Flex().ID("hover-target").Absolute().
 				Left(Px(v.left)).Top0().Size(Px(20)).
 				OnClick(func(*ClickEvent, *Window, *App) {}).
 				OnHover(func(hovered *bool, w *Window, app *App) { *transitions = append(*transitions, *hovered) })).
@@ -588,14 +588,14 @@ func notifications(f *interactFixture, counter *Entity[notifyCounter]) int {
 // the canvas paint count as the member's painted background quad.
 func TestInteractGroupHoverUpdatesOnlyOnTransitions(t *testing.T) {
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-		return Div().SizeFull().Child(
-			Div().Ml(Px(20)).Mt(Px(20)).Size(Px(50)).Relative().Group("hover-group").
-				Child(Div().Absolute().SizeFull().Invisible().Bg(interactGreen).
+		return Div().Flex().SizeFull().Child(
+			Div().Flex().Ml(Px(20)).Mt(Px(20)).Size(Px(50)).Relative().Group("hover-group").
+				Child(Div().Flex().Absolute().SizeFull().Invisible().Bg(interactGreen).
 					GroupHover("hover-group", func(s StyleRefinement) StyleRefinement {
 						s.Visibility = Some(VisibilityVisible)
 						return s
 					})).
-				Child(Div().ID("stateful-group-hover-target").Absolute().Top0().Left0().Size(Px(10)).
+				Child(Div().Flex().ID("stateful-group-hover-target").Absolute().Top0().Left0().Size(Px(10)).
 					DebugSelector("stateful").
 					GroupHover("hover-group", func(s StyleRefinement) StyleRefinement {
 						s.SizeWidth, s.SizeHeight = Some(PxLength(20)), Some(PxLength(20))
@@ -649,9 +649,9 @@ func TestInteractHoverActiveFocusStyles(t *testing.T) {
 	window := NewTestWindow(app, Size{Width: 400, Height: 300})
 	view := NewEntity(app, window.Scope(), func(v *interactView, cx *Context[interactView]) {
 		v.build = func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-			return Div().SizeFull().Child(Div().ID("t").Size(Px(50)).Bg(interactRed).TrackFocus(focus).
-				Hover(func(s StyleRefinement) StyleRefinement { return Div().Refine(s).Bg(interactBlue).Style() }).
-				Active(func(s StyleRefinement) StyleRefinement { return Div().Refine(s).Bg(interactGreen).Style() })).
+			return Div().Flex().SizeFull().Child(Div().Flex().ID("t").Size(Px(50)).Bg(interactRed).TrackFocus(focus).
+				Hover(func(s StyleRefinement) StyleRefinement { return Div().Flex().Refine(s).Bg(interactBlue).Style() }).
+				Active(func(s StyleRefinement) StyleRefinement { return Div().Flex().Refine(s).Bg(interactGreen).Style() })).
 				IntoElement()
 		}
 	})
@@ -691,7 +691,7 @@ func TestInteractHoverActiveFocusStyles(t *testing.T) {
 	style := func() Style {
 		var s Style
 		app.Update(func(app *App) {
-			s = Div().TrackFocus(focus).FocusVisible(func(s StyleRefinement) StyleRefinement { s.Opacity = Some[float32](0.5); return s }).
+			s = Div().Flex().TrackFocus(focus).FocusVisible(func(s StyleRefinement) StyleRefinement { s.Opacity = Some[float32](0.5); return s }).
 				computeStyleInternal(nil, nil, window, app)
 		})
 		return s
@@ -719,8 +719,8 @@ func TestInteractHoverActiveFocusStyles(t *testing.T) {
 // (window.rs:6083-6086).
 func TestInteractCursorStylePerHitbox(t *testing.T) {
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-		return Div().SizeFull().Child(
-			Div().Size(Px(100)).CursorPointer().Child(Div().Size(Px(40)).CursorText()),
+		return Div().Flex().SizeFull().Child(
+			Div().Flex().Size(Px(100)).CursorPointer().Child(Div().Flex().Size(Px(40)).CursorText()),
 		).IntoElement()
 	})
 	expect := func(x, y float32, want CursorStyle) {
@@ -742,7 +742,7 @@ func TestInteractCursorStylePerHitbox(t *testing.T) {
 func TestInteractWindowCursorTakesPrecedence(t *testing.T) {
 	var windowCursor bool
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-		return Div().SizeFull().Child(Div().Size(Px(100)).CursorPointer()).Child(&cursorPainter{enabled: &windowCursor}).IntoElement()
+		return Div().Flex().SizeFull().Child(Div().Flex().Size(Px(100)).CursorPointer()).Child(&cursorPainter{enabled: &windowCursor}).IntoElement()
 	})
 	f.move(10, 10)
 	if got, _ := resolvedCursorStyle(f.window); got != CursorPointingHand {
@@ -792,7 +792,7 @@ type dragPayload struct{ name string }
 type dragPreview struct{}
 
 func (p *dragPreview) Render(w *Window, cx *Context[dragPreview]) AnyElement {
-	return Div().Size(Px(30)).DebugSelector("preview").IntoElement()
+	return Div().Flex().Size(Px(30)).DebugSelector("preview").IntoElement()
 }
 
 // previewHost runs the active-drag preview steps the draw path owns
@@ -829,20 +829,20 @@ func (p *previewHost) Paint(global *GlobalElementID, inspector *InspectorElement
 func TestInteractDragSourceTranscript(t *testing.T) {
 	rec := &transcript{}
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-		source := Div().ID("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).CursorGrab().
+		source := Div().Flex().ID("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).CursorGrab().
 			OnClick(func(*ClickEvent, *Window, *App) { rec.add("source.click") }).
 			OnDrag(dragPayload{name: "tab"}, func(value *dragPayload, offset Point, w *Window, app *App) View {
 				rec.add("constructor(%s,%v)", value.name, offset)
 				return ViewOf(NewEntity(app, w.Scope(), func(*dragPreview, *Context[dragPreview]) {}))
 			})
-		target := Div().ID("target").Absolute().Left(Px(200)).Top(Px(100)).Size(Px(100)).
+		target := Div().Flex().ID("target").Absolute().Left(Px(200)).Top(Px(100)).Size(Px(100)).
 			OnDragMove(func(e *DragMoveEvent[dragPayload], w *Window, app *App) {
 				rec.add("target.drag-move(%v,%s)", e.Event.Position, e.Drag(app).name)
 			})
 		target = OnDrop(target, func(value *dragPayload, e *MouseUpEvent, w *Window, app *App) {
 			rec.add("target.drop(%s)", value.name)
 		})
-		return Div().Relative().SizeFull().Child(source).Child(target).Child(&previewHostElement{}).IntoElement()
+		return Div().Flex().Relative().SizeFull().Child(source).Child(target).Child(&previewHostElement{}).IntoElement()
 	})
 	f.down(MouseButtonLeft, 10, 10)
 	f.draw()
@@ -906,7 +906,7 @@ func (p *previewHostElement) IntoElement() AnyElement {
 func TestInteractPointerCapture(t *testing.T) {
 	rec := &transcript{}
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-		return Div().SizeFull().Child(Div().Size(Px(50)).
+		return Div().Flex().SizeFull().Child(Div().Flex().Size(Px(50)).
 			OnMouseDownAll(func(e *MouseDownEvent, phase DispatchPhase, hitbox *Hitbox, w *Window, app *App) {
 				if phase == DispatchBubble && hitbox.IsHovered(w) {
 					w.CapturePointer(hitbox.ID())
@@ -952,14 +952,14 @@ func TestInteractHiddenDivRegistersNothing(t *testing.T) {
 	window := NewTestWindow(app, Size{Width: 400, Height: 300})
 	view := NewEntity(app, window.Scope(), func(v *interactView, cx *Context[interactView]) {
 		v.build = func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-			hidden := Div().Size(Px(100)).Invisible().TrackFocus(hiddenFocus).
+			hidden := Div().Flex().Size(Px(100)).Invisible().TrackFocus(hiddenFocus).
 				OnAnyMouseDown(func(*MouseDownEvent, *Window, *App) { rec.add("hidden.down") }).
 				OnKeyDown(func(*KeyDownEvent, *Window, *App) { rec.add("hidden.key") }).
-				Child(Div().Size(Px(50)).OnAnyMouseDown(func(*MouseDownEvent, *Window, *App) { rec.add("hidden-child.down") }))
-			return Div().SizeFull().
+				Child(Div().Flex().Size(Px(50)).OnAnyMouseDown(func(*MouseDownEvent, *Window, *App) { rec.add("hidden-child.down") }))
+			return Div().Flex().SizeFull().
 				OnAnyMouseDown(func(*MouseDownEvent, *Window, *App) { rec.add("root.down") }).
 				Child(hidden).
-				Child(Div().Size(Px(10)).TrackFocus(visibleFocus)).
+				Child(Div().Flex().Size(Px(10)).TrackFocus(visibleFocus)).
 				IntoElement()
 		}
 	})
@@ -984,7 +984,7 @@ func TestInteractHiddenDivRegistersNothing(t *testing.T) {
 
 // tabGroupFocus is the pinned TabGroupFocus view (div.rs:5972-5994).
 func tabGroupGroup(container, item FocusHandle) *DivElement {
-	return Div().TrackFocus(container).TabGroup().Child(Div().TrackFocus(item))
+	return Div().Flex().TrackFocus(container).TabGroup().Child(Div().Flex().TrackFocus(item))
 }
 
 // TestInteractFocusNextFromTabGroupContainer ports
@@ -999,7 +999,7 @@ func TestInteractFocusNextFromTabGroupContainer(t *testing.T) {
 	window := NewTestWindow(app, Size{Width: 400, Height: 300})
 	view := NewEntity(app, window.Scope(), func(v *interactView, cx *Context[interactView]) {
 		v.build = func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-			return Div().Child(tabGroupGroup(groupA, itemA)).Child(tabGroupGroup(groupB, itemB)).IntoElement()
+			return Div().Flex().Child(tabGroupGroup(groupA, itemA)).Child(tabGroupGroup(groupB, itemB)).IntoElement()
 		}
 	})
 	window.SetRootView(ViewOf(view))
@@ -1026,9 +1026,9 @@ func TestInteractSiblingKeyListenersStaySeparate(t *testing.T) {
 	window := NewTestWindow(app, Size{Width: 400, Height: 300})
 	view := NewEntity(app, window.Scope(), func(v *interactView, cx *Context[interactView]) {
 		v.build = func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-			return Div().OnKeyDown(func(*KeyDownEvent, *Window, *App) { rec.add("parent") }).
-				Child(Div().OnKeyDown(func(*KeyDownEvent, *Window, *App) { rec.add("sibling") })).
-				Child(Div().TrackFocus(focus).OnKeyDown(func(*KeyDownEvent, *Window, *App) { rec.add("focused") })).
+			return Div().Flex().OnKeyDown(func(*KeyDownEvent, *Window, *App) { rec.add("parent") }).
+				Child(Div().Flex().OnKeyDown(func(*KeyDownEvent, *Window, *App) { rec.add("sibling") })).
+				Child(Div().Flex().TrackFocus(focus).OnKeyDown(func(*KeyDownEvent, *Window, *App) { rec.add("focused") })).
 				IntoElement()
 		}
 	})
@@ -1051,7 +1051,7 @@ type interactButton struct {
 }
 
 func newInteractButton(id string) *interactButton {
-	return BindComponent(&interactButton{}, Div().ID(id))
+	return BindComponent(&interactButton{}, Div().Flex().ID(id))
 }
 
 func (b *interactButton) IntoElement() AnyElement {
@@ -1070,7 +1070,7 @@ func TestInteractMixinForwardsTicket06Builders(t *testing.T) {
 			OnMouseDown(MouseButtonLeft, func(*MouseDownEvent, *Window, *App) { rec.add("down") }).
 			OnHover(func(h *bool, w *Window, app *App) { rec.add("hover(%v)", *h) }).
 			OnClick(func(*ClickEvent, *Window, *App) { rec.add("click") })
-		return Div().SizeFull().Child(b).IntoElement()
+		return Div().Flex().SizeFull().Child(b).IntoElement()
 	})
 	f.move(10, 10)
 	f.down(MouseButtonLeft, 10, 10)

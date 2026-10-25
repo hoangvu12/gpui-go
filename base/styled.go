@@ -82,11 +82,11 @@ func (o RoleOverride) Role() (gpui.Role, bool) { return o.role, o.kind == roleOv
 // HFlex returns a row that centers its children on the cross axis
 // (U:styled.rs:34-40 h_flex). See StyledExt.HFlex for the cross-axis rule,
 // which is not symmetric with VFlex.
-func HFlex() *gpui.DivElement { return StyledExtOf(gpui.Div()).HFlex() }
+func HFlex() *gpui.DivElement { return StyledExtOf(gpui.Div().Flex()).HFlex() }
 
 // VFlex returns a column whose children stretch across the cross axis
 // (U:styled.rs:42-48 v_flex).
-func VFlex() *gpui.DivElement { return StyledExtOf(gpui.Div()).VFlex() }
+func VFlex() *gpui.DivElement { return StyledExtOf(gpui.Div().Flex()).VFlex() }
 
 // BoxShadow builds an outset box shadow (U:styled.rs:50-64 box_shadow).
 func BoxShadow(x, y, blur, spread float32, color gpui.Hsla) gpui.BoxShadow {

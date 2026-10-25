@@ -13,9 +13,9 @@ func TestMotionRevealSizesToTheMeasuredChildTimesProgress(t *testing.T) {
 	ta := gpui.NewTestApp()
 	progress := float32(0.5)
 	m := openMotionWindow(t, ta, func(*gpui.Window, *gpui.App) gpui.AnyElement {
-		child := gpui.Div().H(gpui.Px(40)).W(gpui.Px(10)).IntoElement()
-		return gpui.Div().W(gpui.Px(80)).Child(
-			gpui.Div().DebugSelector("reveal").Child(NewMotionReveal("reveal", progress, child)),
+		child := gpui.Div().Flex().H(gpui.Px(40)).W(gpui.Px(10)).IntoElement()
+		return gpui.Div().Flex().W(gpui.Px(80)).Child(
+			gpui.Div().Flex().DebugSelector("reveal").Child(NewMotionReveal("reveal", progress, child)),
 		).IntoElement()
 	})
 	height := func() float32 {

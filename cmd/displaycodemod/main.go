@@ -62,9 +62,14 @@
 //
 // The analysis is syntactic (go/parser + go/ast) plus file import facts,
 // which is enough to resolve the gpui package alias, dot-imports and
-// the gpui package's own files. Edits are byte-offset insertions, so
-// comments, line breaks and all other formatting are preserved; the
-// output is run through go/format (a no-op on gofmt-clean inputs).
+// the gpui package's own files. Files carrying a generated-code header
+// ("Code generated ... DO NOT EDIT.") are skipped: generated output is
+// never hand-edited — the codemod's -check gate would otherwise force
+// an impossible hand edit on a generated file; a generator that emits a
+// default-relying Div() is fixed and rerun instead. Edits are
+// byte-offset insertions, so comments, line breaks and all other
+// formatting are preserved; the output is run through go/format (a
+// no-op on gofmt-clean inputs).
 package main
 
 import (

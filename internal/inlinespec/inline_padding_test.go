@@ -28,7 +28,7 @@ func (v *paddedView) Render(w *gpui.Window, cx *gpui.Context[paddedView]) gpui.A
 				PaddingLeft:  authoring.Some(authoring.Rem(0.375)),
 				PaddingRight: authoring.Some(authoring.Rem(0.375)),
 			}).
-			Child(gpui.Div().Size(gpui.PxLength(10), gpui.PxLength(10)))).
+			Child(gpui.Div().Flex().Size(gpui.PxLength(10), gpui.PxLength(10)))).
 		Child("b").
 		IntoElement()
 }

@@ -106,8 +106,8 @@ func TestPlainTextStyleSelectsByDrag(t *testing.T) {
 	ta := newSelectionTestApp(t)
 	text := "alpha beta gamma delta"
 	cx := userSelectTestView(t, ta, func(w *Window, cx *Context[selectionView]) AnyElement {
-		return Div().SizeFull().Child(
-			Div().ID("text").DebugSelector("text").W(Px(600)).Child(Text(text)),
+		return Div().Flex().SizeFull().Child(
+			Div().Flex().ID("text").DebugSelector("text").W(Px(600)).Child(Text(text)),
 		).IntoElement()
 	})
 	bounds, lineHeight := userSelectRun(t, cx)
@@ -126,8 +126,8 @@ func TestPlainTextStyleSelectsByDrag(t *testing.T) {
 func TestDoubleClickSelectsTheWordOverPlainText(t *testing.T) {
 	ta := newSelectionTestApp(t)
 	cx := userSelectTestView(t, ta, func(w *Window, cx *Context[selectionView]) AnyElement {
-		return Div().SizeFull().Child(
-			Div().ID("text").DebugSelector("text").W(Px(600)).Child(Text("one latte, three")),
+		return Div().Flex().SizeFull().Child(
+			Div().Flex().ID("text").DebugSelector("text").W(Px(600)).Child(Text("one latte, three")),
 		).IntoElement()
 	})
 	bounds, lineHeight := userSelectRun(t, cx)
@@ -150,8 +150,8 @@ func TestDoubleClickSelectsTheWordOverPlainText(t *testing.T) {
 func TestTripleClickSelectsTheLineOverPlainText(t *testing.T) {
 	ta := newSelectionTestApp(t)
 	cx := userSelectTestView(t, ta, func(w *Window, cx *Context[selectionView]) AnyElement {
-		return Div().SizeFull().Child(
-			Div().ID("text").DebugSelector("text").W(Px(600)).Child(Text("one line only")),
+		return Div().Flex().SizeFull().Child(
+			Div().Flex().ID("text").DebugSelector("text").W(Px(600)).Child(Text("one line only")),
 		).IntoElement()
 	})
 	bounds, lineHeight := userSelectRun(t, cx)
@@ -176,8 +176,8 @@ func TestTripleClickSelectsTheLineOverPlainText(t *testing.T) {
 func TestUserSelectNoneSubtreeDoesNotSelect(t *testing.T) {
 	ta := newSelectionTestApp(t)
 	cx := userSelectTestView(t, ta, func(w *Window, cx *Context[selectionView]) AnyElement {
-		return Div().SizeFull().Child(
-			Div().ID("text").DebugSelector("text").W(Px(600)).SelectNone().Child(Text("alpha beta gamma delta")),
+		return Div().Flex().SizeFull().Child(
+			Div().Flex().ID("text").DebugSelector("text").W(Px(600)).SelectNone().Child(Text("alpha beta gamma delta")),
 		).IntoElement()
 	})
 	bounds := divTextBounds(t, cx)
@@ -200,10 +200,10 @@ func TestUserSelectNoneSubtreeDoesNotSelect(t *testing.T) {
 func TestUserSelectNoneDragFromOutsideSelectsNothing(t *testing.T) {
 	ta := newSelectionTestApp(t)
 	cx := userSelectTestView(t, ta, func(w *Window, cx *Context[selectionView]) AnyElement {
-		return Div().SizeFull().Child(
-			Div().ID("selectable").DebugSelector("text").W(Px(600)).Child(Text("alpha beta")),
+		return Div().Flex().SizeFull().Child(
+			Div().Flex().ID("selectable").DebugSelector("text").W(Px(600)).Child(Text("alpha beta")),
 		).Child(
-			Div().ID("none").W(Px(600)).SelectNone().Child(Text("gamma delta")),
+			Div().Flex().ID("none").W(Px(600)).SelectNone().Child(Text("gamma delta")),
 		).IntoElement()
 	})
 	bounds, lineHeight := userSelectRun(t, cx)
@@ -228,8 +228,8 @@ func TestUserSelectNoneDragFromOutsideSelectsNothing(t *testing.T) {
 func TestUserSelectTextReenablesUnderNone(t *testing.T) {
 	ta := newSelectionTestApp(t)
 	cx := userSelectTestView(t, ta, func(w *Window, cx *Context[selectionView]) AnyElement {
-		return Div().SizeFull().SelectNone().Child(
-			Div().ID("text").DebugSelector("text").W(Px(600)).SelectText().Child(Text("alpha beta gamma delta")),
+		return Div().Flex().SizeFull().SelectNone().Child(
+			Div().Flex().ID("text").DebugSelector("text").W(Px(600)).SelectText().Child(Text("alpha beta gamma delta")),
 		).IntoElement()
 	})
 	bounds, lineHeight := userSelectRun(t, cx)
@@ -249,8 +249,8 @@ func TestUserSelectTextReenablesUnderNone(t *testing.T) {
 func TestUserSelectAutoUnderNoneStaysNone(t *testing.T) {
 	ta := newSelectionTestApp(t)
 	cx := userSelectTestView(t, ta, func(w *Window, cx *Context[selectionView]) AnyElement {
-		return Div().SizeFull().SelectNone().Child(
-			Div().ID("text").DebugSelector("text").W(Px(600)).SelectAuto().Child(Text("alpha beta gamma delta")),
+		return Div().Flex().SizeFull().SelectNone().Child(
+			Div().Flex().ID("text").DebugSelector("text").W(Px(600)).SelectAuto().Child(Text("alpha beta gamma delta")),
 		).IntoElement()
 	})
 	bounds := divTextBounds(t, cx)
@@ -291,7 +291,7 @@ func TestUserSelectAllowsSelectionWalk(t *testing.T) {
 			})
 		})
 		WithTextStyleVoid(w, &auto, func(w *Window) { check("auto at the top") })
-		return Div().SizeFull().IntoElement()
+		return Div().Flex().SizeFull().IntoElement()
 	})
 	drawSelectionFrame(t, cx)
 	want := map[string]bool{
@@ -315,8 +315,8 @@ func TestUserSelectAllowsSelectionWalk(t *testing.T) {
 func TestCursorOverSelectableTextIsIBeam(t *testing.T) {
 	ta := newSelectionTestApp(t)
 	cx := userSelectTestView(t, ta, func(w *Window, cx *Context[selectionView]) AnyElement {
-		return Div().SizeFull().Child(
-			Div().ID("text").DebugSelector("text").W(Px(600)).Child(Text("alpha beta gamma")),
+		return Div().Flex().SizeFull().Child(
+			Div().Flex().ID("text").DebugSelector("text").W(Px(600)).Child(Text("alpha beta gamma")),
 		).IntoElement()
 	})
 	bounds, lineHeight := userSelectRun(t, cx)
@@ -333,8 +333,8 @@ func TestCursorOverSelectableTextIsIBeam(t *testing.T) {
 func TestCursorOverUserSelectNoneIsArrow(t *testing.T) {
 	ta := newSelectionTestApp(t)
 	cx := userSelectTestView(t, ta, func(w *Window, cx *Context[selectionView]) AnyElement {
-		return Div().SizeFull().Child(
-			Div().ID("text").DebugSelector("text").W(Px(600)).SelectNone().Child(Text("alpha beta gamma")),
+		return Div().Flex().SizeFull().Child(
+			Div().Flex().ID("text").DebugSelector("text").W(Px(600)).SelectNone().Child(Text("alpha beta gamma")),
 		).IntoElement()
 	})
 	cx.SimulateMouseMove(divCaretPoint(t, divTextBounds(t, cx), 4), nil, Modifiers{})
@@ -352,8 +352,8 @@ func TestCursorOverUserSelectNoneIsArrow(t *testing.T) {
 func TestExplicitCursorWinsOverTheAutomaticIBeam(t *testing.T) {
 	ta := newSelectionTestApp(t)
 	cx := userSelectTestView(t, ta, func(w *Window, cx *Context[selectionView]) AnyElement {
-		return Div().SizeFull().Child(
-			Div().ID("text").DebugSelector("text").W(Px(600)).CursorPointer().Child(Text("alpha beta gamma")),
+		return Div().Flex().SizeFull().Child(
+			Div().Flex().ID("text").DebugSelector("text").W(Px(600)).CursorPointer().Child(Text("alpha beta gamma")),
 		).IntoElement()
 	})
 	bounds, lineHeight := userSelectRun(t, cx)
@@ -392,15 +392,15 @@ func TestUserSelectClassesApply(t *testing.T) {
 // TestUserSelectStyleMethods pin the fluent methods against the
 // refinement they write.
 func TestUserSelectStyleMethods(t *testing.T) {
-	div := Div().SelectNone()
+	div := Div().Flex().SelectNone()
 	if value, ok := div.StyleMut().Text.UserSelect.Get(); !ok || value != UserSelectNone {
 		t.Fatalf("SelectNone set %v (ok %v)", value, ok)
 	}
-	div = Div().SelectText()
+	div = Div().Flex().SelectText()
 	if value, ok := div.StyleMut().Text.UserSelect.Get(); !ok || value != UserSelectText {
 		t.Fatalf("SelectText set %v (ok %v)", value, ok)
 	}
-	div = Div().SelectAuto()
+	div = Div().Flex().SelectAuto()
 	if value, ok := div.StyleMut().Text.UserSelect.Get(); !ok || value != UserSelectAuto {
 		t.Fatalf("SelectAuto set %v (ok %v)", value, ok)
 	}

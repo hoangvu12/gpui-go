@@ -27,7 +27,7 @@ import (
 type previewCardView struct{}
 
 func (v *previewCardView) Render(w *gpui.Window, cx *gpui.Context[previewCardView]) gpui.AnyElement {
-	return gpui.Div().
+	return gpui.Div().Flex().
 		W(gpui.Px(200)).
 		H(gpui.Px(40)).
 		Bg(gpui.SolidBackground(gpui.Hsla{H: 0, S: 0, L: 0.92, A: 1})).
@@ -41,7 +41,7 @@ func (v *previewCardView) Render(w *gpui.Window, cx *gpui.Context[previewCardVie
 type dragPreviewRoot struct{}
 
 func (v *dragPreviewRoot) Render(w *gpui.Window, cx *gpui.Context[dragPreviewRoot]) gpui.AnyElement {
-	source := gpui.Div().
+	source := gpui.Div().Flex().
 		ID("drag-source").
 		Absolute().
 		Left(gpui.Px(0)).

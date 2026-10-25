@@ -257,7 +257,7 @@ func focusOf(w *gpui.Window) gpui.FocusHandle {
 // tabindex row, with the outline: none pin's .OutlineNone() twin).
 func scrollerView(w *gpui.Window, focusable bool) gpui.AnyElement {
 	handle := handleOf(w)
-	scroller := gpui.Div().
+	scroller := gpui.Div().Flex().
 		ID("scroller").
 		DebugSelector("scroller").
 		Size(gpui.Px(scrollerW), gpui.Px(scrollerH)).
@@ -269,7 +269,7 @@ func scrollerView(w *gpui.Window, focusable bool) gpui.AnyElement {
 		Bg(gpui.Rgb(scrollerBg))
 	for i := 0; i < rowCnt; i++ {
 		id := fmt.Sprintf("rrow%d", i)
-		row := gpui.Div().
+		row := gpui.Div().Flex().
 			ID(id).
 			DebugSelector(id).
 			Size(gpui.Px(scrollerW), gpui.Px(rowH)).
@@ -322,7 +322,7 @@ func plainView(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.AnyElem
 // boxes, while the scroller's own box still passes.
 func WrongView(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.AnyElement {
 	handle := handleOf(w)
-	scroller := gpui.Div().
+	scroller := gpui.Div().Flex().
 		ID("scroller").
 		DebugSelector("scroller").
 		Size(gpui.Px(scrollerW), gpui.Px(scrollerH)).
@@ -332,7 +332,7 @@ func WrongView(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.AnyElem
 		Bg(gpui.Rgb(scrollerBg))
 	for i := 0; i < rowCnt; i++ {
 		id := fmt.Sprintf("rrow%d", i)
-		row := gpui.Div().
+		row := gpui.Div().Flex().
 			ID(id).
 			DebugSelector(id).
 			Size(gpui.Px(scrollerW), gpui.Px(rowH)).

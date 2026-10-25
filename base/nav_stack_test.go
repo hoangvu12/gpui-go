@@ -14,7 +14,7 @@ import (
 type navTestPage struct{}
 
 func (*navTestPage) Render(*gpui.Window, *gpui.Context[navTestPage]) gpui.AnyElement {
-	return gpui.Div().IntoElement()
+	return gpui.Div().Flex().IntoElement()
 }
 
 // navPage is U:nav_stack.rs:549-551 page.

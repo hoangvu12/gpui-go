@@ -80,11 +80,11 @@ func laidOutRuns(t *testing.T, ta *TestApp, texts ...string) []laidOutRun {
 	_, cx := ta.AddWindowView(func(v *selectionView, _ *Window, _ *Context[selectionView]) {
 		v.build = func(*Window, *Context[selectionView]) AnyElement {
 			layouts = layouts[:0]
-			root := Div().SizeFull()
+			root := Div().Flex().SizeFull()
 			for i, text := range texts {
 				styled := NewStyledText(text)
 				layouts = append(layouts, styled.Layout())
-				root = root.Child(Div().Absolute().Top(Px(float32(i) * 40)).Child(styled))
+				root = root.Child(Div().Flex().Absolute().Top(Px(float32(i) * 40)).Child(styled))
 			}
 			return root.IntoElement()
 		}
@@ -141,8 +141,8 @@ func openSelectionView(t *testing.T, ta *TestApp, build func(w *Window, cx *Cont
 // selectionElementOnly is SelectionElementOnlyView (U:text_selection.rs:
 // 2843-2856).
 func selectionElementOnly(*Window, *Context[selectionView]) AnyElement {
-	return Div().SizeFull().Child(TextSelectionLayer{}).Child(
-		Div().SizeFull().OnMouseDown(MouseButtonLeft, func(_ *MouseDownEvent, _ *Window, app *App) {
+	return Div().Flex().SizeFull().Child(TextSelectionLayer{}).Child(
+		Div().Flex().SizeFull().OnMouseDown(MouseButtonLeft, func(_ *MouseDownEvent, _ *Window, app *App) {
 			SuppressTextSelection(app)
 		}),
 	).IntoElement()
@@ -196,7 +196,7 @@ func registeringDiv(selection TextSelectionHandle) AnyElement {
 // registration.
 func doubleSelectionElement(selection TextSelectionHandle) func(*Window, *Context[selectionView]) AnyElement {
 	return func(*Window, *Context[selectionView]) AnyElement {
-		root := Div().SizeFull().Child(TextSelectionLayer{}).Child(TextSelectionLayer{})
+		root := Div().Flex().SizeFull().Child(TextSelectionLayer{}).Child(TextSelectionLayer{})
 		root = root.Child(registeringDiv(selection))
 		return root.IntoElement()
 	}
@@ -206,7 +206,7 @@ func doubleSelectionElement(selection TextSelectionHandle) func(*Window, *Contex
 // (U:text_selection.rs:2895-2911).
 func windowOwnedSelection(selection TextSelectionHandle) func(*Window, *Context[selectionView]) AnyElement {
 	return func(*Window, *Context[selectionView]) AnyElement {
-		return Div().SizeFull().Child(TextSelectionLayer{}).Child(registeringDiv(selection)).IntoElement()
+		return Div().Flex().SizeFull().Child(TextSelectionLayer{}).Child(registeringDiv(selection)).IntoElement()
 	}
 }
 
@@ -217,7 +217,7 @@ func newHandle(ta *TestApp, text string) TextSelectionHandle {
 }
 
 func emptyView(*Window, *Context[selectionView]) AnyElement {
-	return Div().IntoElement()
+	return Div().Flex().IntoElement()
 }
 
 // U:text_selection.rs:3015-3031
@@ -1076,7 +1076,7 @@ func TestUnitSelectionElementSupportsScopeAndRegistrationOnTheFirstFrame(t *test
 	scope := TextSelectionScopeID(23)
 	_, cx := openSelectionView(t, ta, func(w *Window, cx *Context[selectionView]) AnyElement {
 		TextSelectionActivateScope(scope, w, cx.App())
-		return Div().Child(TextSelectionLayer{}).Child(textSelectionScope(scope, registeringDiv(selection))).IntoElement()
+		return Div().Flex().Child(TextSelectionLayer{}).Child(textSelectionScope(scope, registeringDiv(selection))).IntoElement()
 	})
 	drawSelectionFrame(t, cx)
 	cx.Update(func(w *Window, app *App) {
@@ -1135,7 +1135,7 @@ func TestRetainedSelectionStateReleasesAndDoesNotResurrectSelection(t *testing.T
 	selection := newHandle(ta, "local")
 	enabled := true
 	view, cx := openSelectionView(t, ta, func(*Window, *Context[selectionView]) AnyElement {
-		div := Div()
+		div := Div().Flex()
 		if enabled {
 			div = div.Child(TextSelectionLayer{}).Child(registeringDiv(selection))
 		}

@@ -13,7 +13,7 @@ import (
 
 // overlayBox is an absolutely positioned colored box.
 func overlayBox(color Hsla, x, y, w, h float32) *DivElement {
-	return Div().Absolute().Left(Px(x)).Top(Px(y)).W(Px(w)).H(Px(h)).Bg(color)
+	return Div().Flex().Absolute().Left(Px(x)).Top(Px(y)).W(Px(w)).H(Px(h)).Bg(color)
 }
 
 // TestDeferredPriorityOrdering pins R:window.rs:3661-3710: the deferred
@@ -22,7 +22,7 @@ func overlayBox(color Hsla, x, y, w, h float32) *DivElement {
 // order regardless of tree order (stable for equal priorities).
 func TestDeferredPriorityOrdering(t *testing.T) {
 	f := newPaintFixture(t, func(_ *paintView, w *Window, _ *Context[paintView]) AnyElement {
-		return Div().SizeFull().
+		return Div().Flex().SizeFull().
 			Child(Deferred(overlayBox(paintRed, 0, 0, 100, 100)).Priority(2)).
 			Child(Deferred(overlayBox(paintBlue, 10, 10, 100, 100)).Priority(0)).
 			Child(Deferred(overlayBox(paintGreen, 20, 20, 100, 100)).Priority(1)).
@@ -54,9 +54,9 @@ func TestDeferredPriorityOrdering(t *testing.T) {
 // prepaint round), and nested draws paint above their causes.
 func TestDeferredPriorityAuto(t *testing.T) {
 	f := newPaintFixture(t, func(_ *paintView, w *Window, _ *Context[paintView]) AnyElement {
-		return Div().SizeFull().
+		return Div().Flex().SizeFull().
 			Child(Deferred(
-				Div().Child(overlayBox(paintRed, 0, 0, 50, 50)).
+				Div().Flex().Child(overlayBox(paintRed, 0, 0, 50, 50)).
 					Child(Deferred(overlayBox(paintBlue, 10, 10, 50, 50)).PriorityAuto()),
 			).Priority(5)).
 			Child(Deferred(overlayBox(paintGreen, 20, 20, 50, 50)).PriorityAuto()).
@@ -81,8 +81,8 @@ func TestDeferredPriorityAuto(t *testing.T) {
 // content mask (R:elements/deferred.rs:102-107).
 func TestDeferredEscapesAncestorClipAndHonorsContentMask(t *testing.T) {
 	f := newPaintFixture(t, func(_ *paintView, w *Window, _ *Context[paintView]) AnyElement {
-		return Div().SizeFull().
-			Child(Div().W(Px(50)).H(Px(50)).OverflowHidden().
+		return Div().Flex().SizeFull().
+			Child(Div().Flex().W(Px(50)).H(Px(50)).OverflowHidden().
 				Child(overlayBox(paintGray, 0, 0, 100, 100)).
 				Child(Deferred(overlayBox(paintRed, 0, 0, 100, 100)))).
 			Child(Deferred(overlayBox(paintBlue, 0, 0, 100, 100)).ContentMask(logical(0, 0, 30, 40))).
@@ -105,13 +105,13 @@ func TestDeferredEscapesAncestorClipAndHonorsContentMask(t *testing.T) {
 type deferredPanelView struct{}
 
 func (v *deferredPanelView) Render(w *Window, cx *Context[deferredPanelView]) AnyElement {
-	return Div().KeyContext("Panel").SizeFull().Child(
+	return Div().Flex().KeyContext("Panel").SizeFull().Child(
 		Deferred(
 			Anchored().Position(Point{X: 10, Y: 10}).Child(
-				Div().KeyContext("Popover").W(Px(200)).H(Px(200)).Child(
+				Div().Flex().KeyContext("Popover").W(Px(200)).H(Px(200)).Child(
 					Deferred(
 						Anchored().Position(Point{X: 30, Y: 30}).Child(
-							Div().KeyContext("NestedMenu").DebugSelector("NESTED_MENU").W(Px(50)).H(Px(50)),
+							Div().Flex().KeyContext("NestedMenu").DebugSelector("NESTED_MENU").W(Px(50)).H(Px(50)),
 						),
 					).Priority(2),
 				),
@@ -126,7 +126,7 @@ type deferredRootView struct {
 }
 
 func (v *deferredRootView) Render(w *Window, cx *Context[deferredRootView]) AnyElement {
-	return Div().KeyContext("Root").SizeFull().Child(CachedView(ViewOf(v.panel), Styles().SizeFull())).IntoElement()
+	return Div().Flex().KeyContext("Root").SizeFull().Child(CachedView(ViewOf(v.panel), Styles().SizeFull())).IntoElement()
 }
 
 // TestDeferredNestedDrawsWithReusedViews ports R:deferred.rs:214-264
@@ -231,7 +231,7 @@ func TestDeferredDepthLimit(t *testing.T) {
 	var nest func(depth int) any
 	nest = func(depth int) any {
 		if depth == 0 {
-			return Div().W(Px(1)).H(Px(1))
+			return Div().Flex().W(Px(1)).H(Px(1))
 		}
 		return Deferred(nest(depth - 1))
 	}
@@ -239,7 +239,7 @@ func TestDeferredDepthLimit(t *testing.T) {
 	window := NewTestWindow(app, Size{Width: 100, Height: 100})
 	view := NewEntity(app, window.Scope(), func(v *paintView, _ *Context[paintView]) {
 		v.build = func(*paintView, *Window, *Context[paintView]) AnyElement {
-			return Div().Child(nest(11)).IntoElement()
+			return Div().Flex().Child(nest(11)).IntoElement()
 		}
 	})
 	window.SetRootView(ViewOf(view))

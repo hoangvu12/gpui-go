@@ -53,7 +53,7 @@ func (s ToggleStyles) Disabled(build func(*StateStyle) *StateStyle) ToggleStyles
 // (U:toggle.rs:57-73 Toggle::new).
 func NewToggle[I gpui.IntoElementID](id I) *Toggle {
 	eid := gpui.ElementIDOf(id)
-	base := gpui.Div().ID(eid)
+	base := gpui.Div().Flex().ID(eid)
 	return gpui.BindComponent(&Toggle{id: eid, base: base, tabStop: true}, base)
 }
 

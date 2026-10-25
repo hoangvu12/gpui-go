@@ -512,7 +512,7 @@ func (s *Slots) wireScheduler() {
 // budget/banner styling, in flow (the slot's child), one line per
 // line of the error.
 func placeholderElement(msg string) *gpui.DivElement {
-	b := gpui.Div().
+	b := gpui.Div().Flex().
 		ID(PluginErrorSelector).
 		DebugSelector(PluginErrorSelector).
 		Bg(gpui.Rgb(0x7f1d1d)).

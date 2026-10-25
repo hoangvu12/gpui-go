@@ -142,13 +142,13 @@ func (s *sidebarNative) build() *gpui.DivElement {
 	}
 	return gpui.Div().Flex().FlexCol().W(gpui.Px(240)).HFull().Bg(c111827).
 		Child(gpui.Div().Class("flex items-center gap-1.5 px-4 pt-1 pb-1.5").TextSize(gpui.Px(14)).
-			Child(gpui.Div().FontWeight(600).TextColor(cd1d5db).Child("Agents")).
-			Child(gpui.Div().TextColor(c6b7280).Child(strconv.Itoa(len(nativeAgents))))).
+			Child(gpui.Div().Flex().FontWeight(600).TextColor(cd1d5db).Child("Agents")).
+			Child(gpui.Div().Flex().TextColor(c6b7280).Child(strconv.Itoa(len(nativeAgents))))).
 		Child(agents).
-		Child(gpui.Div().ID("counter").Class("mx-2 my-2 px-3 py-1.5 rounded-md bg-gray-700").
+		Child(gpui.Div().Flex().ID("counter").Class("mx-2 my-2 px-3 py-1.5 rounded-md bg-gray-700").
 			TextColor(cf9fafb).TextSize(gpui.Px(13)).
 			OnClick(func(*gpui.ClickEvent, *gpui.Window, *gpui.App) { s.Clicks++; s.fire() }).
-			Child(gpui.Div().Child(fmt.Sprintf("Clicked %d times", s.Clicks)))).
+			Child(gpui.Div().Flex().Child(fmt.Sprintf("Clicked %d times", s.Clicks)))).
 		Child(list)
 }
 
@@ -160,10 +160,10 @@ func (s *sidebarNative) agentRow(a struct{ pane, name, where, status string }) *
 	pane := a.pane
 	return gpui.Div().ID("agent-" + a.pane).Class(class).Flex().ItemsCenter().Gap(gpui.Px(8)).Py(gpui.Px(6)).Px(gpui.Px(8)).
 		OnClick(func(*gpui.ClickEvent, *gpui.Window, *gpui.App) { s.Current = pane; s.fire() }).
-		Child(gpui.Div().W(gpui.Px(8)).H(gpui.Px(8)).Rounded(gpui.Px(4)).Bg(nativeMark[a.status])).
+		Child(gpui.Div().Flex().W(gpui.Px(8)).H(gpui.Px(8)).Rounded(gpui.Px(4)).Bg(nativeMark[a.status])).
 		Child(gpui.Div().Flex().FlexCol().Flex1().
-			Child(gpui.Div().TextColor(ce5e7eb).TextSize(gpui.Px(13)).Child(a.name)).
-			Child(gpui.Div().TextColor(c9ca3af).TextSize(gpui.Px(11)).Child(a.status + " · " + a.where)))
+			Child(gpui.Div().Flex().TextColor(ce5e7eb).TextSize(gpui.Px(13)).Child(a.name)).
+			Child(gpui.Div().Flex().TextColor(c9ca3af).TextSize(gpui.Px(11)).Child(a.status + " · " + a.where)))
 }
 
 func (s *sidebarNative) sessionRow(i int) *gpui.DivElement {
@@ -171,8 +171,8 @@ func (s *sidebarNative) sessionRow(i int) *gpui.DivElement {
 	return gpui.Div().ID("row-" + strconv.Itoa(i)).Class(class).Flex().JustifyBetween().
 		TextColor(cd1d5db).TextSize(gpui.Px(12)).
 		OnClick(func(*gpui.ClickEvent, *gpui.Window, *gpui.App) { s.fire() }).
-		Child(gpui.Div().Child("session " + strconv.Itoa(i))).
-		Child(gpui.Div().TextColor(c6b7280).Child(strconv.Itoa((i*7)%60) + "m ago"))
+		Child(gpui.Div().Flex().Child("session " + strconv.Itoa(i))).
+		Child(gpui.Div().Flex().TextColor(c6b7280).Child(strconv.Itoa((i*7)%60) + "m ago"))
 }
 
 func (s *sidebarNative) fire() {

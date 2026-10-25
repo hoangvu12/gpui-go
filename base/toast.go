@@ -583,7 +583,7 @@ func (s *ToastStack) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
 				}
 			})
 		},
-	).Absolute().SizeFull())
+	).Flex().Absolute().SizeFull())
 	root.Children(items...)
 	style := s.Style()
 	return StyledExtOf(root).RefineStyle(&style).IntoElement()

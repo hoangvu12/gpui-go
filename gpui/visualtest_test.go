@@ -25,7 +25,7 @@ type harnessView struct {
 func (v *harnessView) Render(w *Window, cx *Context[harnessView]) AnyElement {
 	v.renders++
 	if v.build == nil {
-		return Div().IntoElement()
+		return Div().Flex().IntoElement()
 	}
 	return v.build(v, w, cx)
 }
@@ -54,7 +54,7 @@ type harnessChord struct{}
 // view is the window's root.
 func TestVisualTestContextAddWindowView(t *testing.T) {
 	ta, view, cx := addHarnessWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-		return Div().SizeFull().DebugSelector("root").IntoElement()
+		return Div().Flex().SizeFull().DebugSelector("root").IntoElement()
 	})
 	size, scale, rem, err := TestWindowDrawGeometry(cx.Window())
 	if err != nil || size != (Size{Width: 1920, Height: 1080}) || scale != 2 || rem != 16 {
@@ -94,7 +94,7 @@ func TestVisualTestContextAddWindowView(t *testing.T) {
 func TestVisualTestContextSimulateClickDrivesDivClick(t *testing.T) {
 	var clicks []string
 	_, _, cx := addHarnessWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-		return Div().SizeFull().Child(Div().ID("button").Size(Px(50)).
+		return Div().Flex().SizeFull().Child(Div().Flex().ID("button").Size(Px(50)).
 			OnClick(func(e *ClickEvent, w *Window, app *App) {
 				clicks = append(clicks, fmt.Sprintf("%s count=%d at=%v mods=%v", e.Kind, e.ClickCount(), e.Position(), e.Modifiers().Shift))
 			})).IntoElement()
@@ -120,7 +120,7 @@ func TestVisualTestContextKeyboardActivationThroughSimulatedEvents(t *testing.T)
 	focus := ta.App().FocusHandle()
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-			return Div().SizeFull().Child(Div().ID("button").Size(Px(50)).TrackFocus(focus).
+			return Div().Flex().SizeFull().Child(Div().Flex().ID("button").Size(Px(50)).TrackFocus(focus).
 				OnClick(func(e *ClickEvent, w *Window, app *App) { clicks = append(clicks, e.Kind.String()) })).IntoElement()
 		}
 	})
@@ -175,7 +175,7 @@ func TestSimulateKeystrokesChord(t *testing.T) {
 	focus := ta.App().FocusHandle()
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-			return Div().SizeFull().TrackFocus(focus).
+			return Div().Flex().SizeFull().TrackFocus(focus).
 				OnAction(harnessChordAction, func(*harnessChord, *Window, *App) { fired = append(fired, "chord") }).
 				OnAction(harnessUnitAction, func(*harnessUnit, *Window, *App) { fired = append(fired, "unit") }).
 				IntoElement()
@@ -214,7 +214,7 @@ func TestSimulateKeystrokesParsesEveryComponent(t *testing.T) {
 	focus := ta.App().FocusHandle()
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-			return Div().SizeFull().TrackFocus(focus).OnKeyDown(func(e *KeyDownEvent, w *Window, app *App) {
+			return Div().Flex().SizeFull().TrackFocus(focus).OnKeyDown(func(e *KeyDownEvent, w *Window, app *App) {
 				downs = append(downs, fmt.Sprintf("%s>%q", e.Keystroke.Unparse(), e.Keystroke.KeyChar))
 			}).IntoElement()
 		}
@@ -263,7 +263,7 @@ func TestSimulateInputTypesThroughTheInputHandler(t *testing.T) {
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
 			w.HandleInput(focus, input)
-			return Div().SizeFull().TrackFocus(focus).
+			return Div().Flex().SizeFull().TrackFocus(focus).
 				OnKeyDown(func(e *KeyDownEvent, w *Window, app *App) { downs = append(downs, e.Keystroke.Key) }).
 				OnAction(harnessUnitAction, func(*harnessUnit, *Window, *App) { downs = append(downs, "action") }).
 				IntoElement()
@@ -297,7 +297,7 @@ type harnessPayload struct{ name string }
 type harnessPreview struct{}
 
 func (p *harnessPreview) Render(w *Window, cx *Context[harnessPreview]) AnyElement {
-	return Div().Size(Px(10)).IntoElement()
+	return Div().Flex().Size(Px(10)).IntoElement()
 }
 
 // TestVisualTestContextDragAndDrop drives a div drag with
@@ -309,20 +309,20 @@ func (p *harnessPreview) Render(w *Window, cx *Context[harnessPreview]) AnyEleme
 func TestVisualTestContextDragAndDrop(t *testing.T) {
 	rec := &transcript{}
 	ta, _, cx := addHarnessWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-		source := Div().ID("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).
+		source := Div().Flex().ID("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).
 			OnClick(func(*ClickEvent, *Window, *App) { rec.add("source.click") }).
 			OnDrag(harnessPayload{name: "tab"}, func(value *harnessPayload, offset Point, w *Window, app *App) View {
 				rec.add("drag-start(%s,%v)", value.name, offset)
 				return ViewOf(NewEntity(app, w.Scope(), func(*harnessPreview, *Context[harnessPreview]) {}))
 			})
-		target := Div().ID("target").Absolute().Left(Px(200)).Top(Px(100)).Size(Px(100)).
+		target := Div().Flex().ID("target").Absolute().Left(Px(200)).Top(Px(100)).Size(Px(100)).
 			OnDragMove(func(e *DragMoveEvent[harnessPayload], w *Window, app *App) {
 				rec.add("drag-move(%v)", e.Event.Position)
 			})
 		target = OnDrop(target, func(value *harnessPayload, e *MouseUpEvent, w *Window, app *App) {
 			rec.add("drop(%s,%v)", value.name, e.Position)
 		})
-		return Div().Relative().SizeFull().Child(source).Child(target).IntoElement()
+		return Div().Flex().Relative().SizeFull().Child(source).Child(target).IntoElement()
 	})
 	left := MouseButtonLeft
 	cx.SimulateMouseDown(Point{X: 10, Y: 10}, MouseButtonLeft, NoModifiers())
@@ -358,7 +358,7 @@ func TestVisualTestContextDragAndDrop(t *testing.T) {
 func TestVisualTestContextHoverAndModifiers(t *testing.T) {
 	var hovers []bool
 	_, _, cx := addHarnessWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-		return Div().SizeFull().Child(Div().ID("h").Size(Px(50)).
+		return Div().Flex().SizeFull().Child(Div().Flex().ID("h").Size(Px(50)).
 			OnHover(func(hovered *bool, w *Window, app *App) { hovers = append(hovers, *hovered) })).IntoElement()
 	})
 	cx.SimulateMouseMove(Point{X: 10, Y: 10}, nil, NoModifiers())
@@ -383,7 +383,7 @@ func TestVisualTestContextHoverAndModifiers(t *testing.T) {
 // viewport follows and the refresh redraws).
 func TestVisualTestContextDebugBoundsAndResize(t *testing.T) {
 	_, view, cx := addHarnessWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-		return Div().SizeFull().DebugSelector("root").Child(Div().Size(Px(40)).DebugSelector("box")).IntoElement()
+		return Div().Flex().SizeFull().DebugSelector("root").Child(Div().Flex().Size(Px(40)).DebugSelector("box")).IntoElement()
 	})
 	if b, ok := cx.DebugBounds("box"); !ok || b != (Bounds{Size: Size{Width: 40, Height: 40}}) {
 		t.Fatalf("box = %+v %v", b, ok)
@@ -409,7 +409,7 @@ func TestVisualTestContextDispatchAction(t *testing.T) {
 	focus := ta.App().FocusHandle()
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-			return Div().SizeFull().TrackFocus(focus).
+			return Div().Flex().SizeFull().TrackFocus(focus).
 				OnAction(harnessUnitAction, func(*harnessUnit, *Window, *App) { fired++ }).IntoElement()
 		}
 	})
@@ -428,12 +428,12 @@ func TestVisualTestContextDispatchAction(t *testing.T) {
 // alone inserts no hitbox (div.rs:2887-2911), so nothing could press it.
 func TestDivComputeStyle(t *testing.T) {
 	makeDiv := func() *DivElement {
-		return Div().ID("t").Size(Px(50)).Bg(interactRed).
+		return Div().Flex().ID("t").Size(Px(50)).Bg(interactRed).
 			OnClick(func(*ClickEvent, *Window, *App) {}).
-			Active(func(s StyleRefinement) StyleRefinement { return Div().Refine(s).Bg(interactGreen).Style() })
+			Active(func(s StyleRefinement) StyleRefinement { return Div().Flex().Refine(s).Bg(interactGreen).Style() })
 	}
 	_, view, cx := addHarnessWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-		return Div().SizeFull().Child(makeDiv()).IntoElement()
+		return Div().Flex().SizeFull().Child(makeDiv()).IntoElement()
 	})
 	global := &GlobalElementID{Path: []ElementID{ViewElementID(view.EntityID()), NameElementID("t")}}
 	background := func() Background {
@@ -457,7 +457,7 @@ func TestDivComputeStyle(t *testing.T) {
 	}
 	// An id-less div has no retained state: the base style.
 	var style Style
-	cx.Update(func(w *Window, app *App) { style = Div().Bg(interactBlue).ComputeStyle(nil, nil, w, app) })
+	cx.Update(func(w *Window, app *App) { style = Div().Flex().Bg(interactBlue).ComputeStyle(nil, nil, w, app) })
 	if style.Background == nil || *style.Background != SolidBackground(interactBlue) {
 		t.Fatalf("id-less style = %+v", style.Background)
 	}
@@ -491,7 +491,7 @@ func (p *a11yProbe) Paint(global *GlobalElementID, inspector *InspectorElementID
 func TestVisualTestContextReadsPerElementA11yInfo(t *testing.T) {
 	label := "Go"
 	_, view, cx := addHarnessWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-		return Div().SizeFull().Child(Accessibility[struct{}, struct{}](&a11yProbe{spec: A11ySpec{Role: RoleButton, Label: label, Value: "v"}})).IntoElement()
+		return Div().Flex().SizeFull().Child(Accessibility[struct{}, struct{}](&a11yProbe{spec: A11ySpec{Role: RoleButton, Label: label, Value: "v"}})).IntoElement()
 	})
 	node, ok := cx.A11yNode(ViewElementID(view.EntityID()), NameElementID("probe"))
 	if !ok {
@@ -524,7 +524,7 @@ func TestTestAppWindowSimulation(t *testing.T) {
 	window := ta.OpenWindowWithOptions(WindowOptions{Bounds: Bounds{Size: Size{Width: 400, Height: 300}}},
 		func(v *harnessView, w *Window, cx *Context[harnessView]) {
 			v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-				return Div().ID("root").SizeFull().TrackFocus(focus).DebugSelector("root").
+				return Div().Flex().ID("root").SizeFull().TrackFocus(focus).DebugSelector("root").
 					OnClick(func(e *ClickEvent, w *Window, app *App) { events = append(events, "click") }).
 					OnAuxClick(func(e *ClickEvent, w *Window, app *App) { events = append(events, "aux") }).
 					OnHover(func(h *bool, w *Window, app *App) { events = append(events, fmt.Sprintf("hover(%v)", *h)) }).
@@ -582,7 +582,7 @@ func TestTestAppWindowSimulation(t *testing.T) {
 func TestSimulateEventValidation(t *testing.T) {
 	clicks := 0
 	_, _, cx := addHarnessWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-		return Div().ID("b").SizeFull().OnClick(func(*ClickEvent, *Window, *App) { clicks++ }).IntoElement()
+		return Div().Flex().ID("b").SizeFull().OnClick(func(*ClickEvent, *Window, *App) { clicks++ }).IntoElement()
 	})
 	cx.SimulateEvent(MouseDownEvent{Button: MouseButtonLeft, Position: Point{X: 1, Y: 1}, ClickCount: 1})
 	cx.SimulateEvent(MouseUpEvent{Button: MouseButtonLeft, Position: Point{X: 1, Y: 1}, ClickCount: 1})
@@ -625,7 +625,7 @@ type harnessCounter struct {
 }
 
 func (c *harnessCounter) Render(w *Window, cx *Context[harnessCounter]) AnyElement {
-	return Div().Child(fmt.Sprintf("Count: %d", c.count)).IntoElement()
+	return Div().Flex().Child(fmt.Sprintf("Count: %d", c.count)).IntoElement()
 }
 
 // TestTestAppBasicUsage ports test_basic_usage (R:app/test_app.rs:

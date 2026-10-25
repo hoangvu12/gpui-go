@@ -80,7 +80,7 @@ type AvatarImage struct {
 // accepts (U:avatar.rs:74-81 `impl Into<ImageSource>`; R:elements/img.rs
 // img).
 func NewAvatarImage(source any) *AvatarImage {
-	return gpui.BindStyled(&AvatarImage{image: gpui.Img(source)})
+	return gpui.BindStyled(&AvatarImage{image: gpui.Img(source).Flex()})
 }
 
 // RenderOnce implements gpui.RenderOnce (U:avatar.rs:95-99).

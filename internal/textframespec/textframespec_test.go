@@ -175,7 +175,7 @@ func (v *animatedTextView) Render(w *gpui.Window, cx *gpui.Context[animatedTextV
 		column = column.Child(gpui.Text(fmt.Sprintf("animated window text %d — redraws keep reusing this shaped line", i)))
 	}
 	return gpui.WithAnimation(
-		gpui.Div().SizeFull().Child(column),
+		gpui.Div().Flex().SizeFull().Child(column),
 		"animated-root",
 		gpui.NewAnimation(250*time.Millisecond).Repeat(),
 		func(d *gpui.DivElement, _ float32) *gpui.DivElement { return d },
@@ -286,7 +286,7 @@ func (v *scrollingTextView) Render(w *gpui.Window, cx *gpui.Context[scrollingTex
 	return gpui.UniformList(v.handle, scrollingRowCount, func(start, end int, w *gpui.Window, app *gpui.App) []gpui.AnyElement {
 		rows := make([]gpui.AnyElement, 0, end-start)
 		for ix := start; ix < end; ix++ {
-			rows = append(rows, gpui.Div().
+			rows = append(rows, gpui.Div().Flex().
 				H(gpui.PxLength(scrollingRowHeight)).
 				Child(gpui.Text(scrollingRowText(ix))).
 				IntoElement())
@@ -390,7 +390,7 @@ func (v *wrappingTextView) Render(w *gpui.Window, cx *gpui.Context[wrappingTextV
 	for i := 0; i < wrappingTextCount; i++ {
 		column = column.Child(gpui.Text(wrappingText(i)))
 	}
-	return gpui.Div().SizeFull().Child(column).IntoElement()
+	return gpui.Div().Flex().SizeFull().Child(column).IntoElement()
 }
 
 // TestResizingWindowDoesNotLeakSupersededLines is the third acceptance

@@ -287,7 +287,7 @@ func rasterRoot(sizeScale float32) gpui.AnyElement {
 		Justify(gpui.AlignContentCenter).
 		AlignItems(gpui.AlignItemsCenter).
 		Bg(gpui.Rgb(pageBackground))
-	grid := gpui.Div().
+	grid := gpui.Div().Flex().
 		ID("grid").
 		DebugSelector("grid").
 		FlexCol().
@@ -319,7 +319,7 @@ func sampleCell(col sampleColumn, size float32) *gpui.DivElement {
 // the base size while the rendered font size is explicit (the wrong
 // view's lever).
 func sampleCellAt(col sampleColumn, baseSize, renderSize float32) *gpui.DivElement {
-	return gpui.Div().
+	return gpui.Div().Flex().
 		ID(cellID(col, baseSize)).
 		DebugSelector(cellID(col, baseSize)).
 		W(gpui.Px(cellWidth)).
@@ -399,7 +399,7 @@ func ItalicView(_ *parity.EventLog) gpui.AnyElement {
 		Justify(gpui.AlignContentCenter).
 		AlignItems(gpui.AlignItemsCenter).
 		Bg(gpui.Rgb(pageBackground))
-	rows := gpui.Div().
+	rows := gpui.Div().Flex().
 		ID("rows").
 		DebugSelector("rows").
 		FlexCol().
@@ -423,7 +423,7 @@ func ItalicWrongText(_ *parity.EventLog) gpui.AnyElement {
 		Justify(gpui.AlignContentCenter).
 		AlignItems(gpui.AlignItemsCenter).
 		Bg(gpui.Rgb(pageBackground))
-	rows := gpui.Div().
+	rows := gpui.Div().Flex().
 		ID("rows").
 		DebugSelector("rows").
 		FlexCol().
@@ -443,7 +443,7 @@ func italicRow(id, family string, style gpui.FontStyle) *gpui.DivElement {
 // italicRowText builds one italic fixture row with an explicit text
 // (the wrong view's lever).
 func italicRowText(id, family string, style gpui.FontStyle, text string) *gpui.DivElement {
-	return gpui.Div().
+	return gpui.Div().Flex().
 		ID(id).
 		DebugSelector(id).
 		W(gpui.Px(italicRowWidth)).

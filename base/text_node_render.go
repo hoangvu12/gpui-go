@@ -376,7 +376,7 @@ func (p *paragraph) render(leafKey *textLeafKey, cx *nodeRenderContext, w *gpui.
 	if !hasImage {
 		text, highlights, cached := p.plainRender(cx, app)
 		if text == "" {
-			return gpui.Div().IntoElement()
+			return gpui.Div().Flex().IntoElement()
 		}
 		links := make([]textLinkRange, len(cached))
 		for i, l := range cached {
@@ -406,7 +406,7 @@ func (p *paragraph) render(leafKey *textLeafKey, cx *nodeRenderContext, w *gpui.
 					withRangeBackgrounds(sliceColorRanges(backgrounds, consumed, consumed+len(t))).
 					withReveal(cx.revealAt(leafKey, consumed, consumed+len(t))).IntoElement())
 			}
-			image := gpui.Img(cx.imageSourceOf(node.image)).ID(gpui.IntegerElementID(uint64(ix))).
+			image := gpui.Img(cx.imageSourceOf(node.image)).Flex().ID(gpui.IntegerElementID(uint64(ix))).
 				ObjectFit(gpui.ObjectFitContain).MaxW(gpui.Fraction(1))
 			if node.image.Width != nil {
 				image = image.W(*node.image.Width)
@@ -602,7 +602,7 @@ func (c *CodeBlock) render(options nodeRenderOptions, cx *nodeRenderContext, w *
 	var el gpui.AnyElement
 	if cx.codeBlockActions != nil {
 		el = block.ID(blockElementID("codeblock", c.Span, options.ix)).
-			Child(gpui.Div().ID("actions").Absolute().Top2().Right2().Bg(style.CodeBackground()).
+			Child(gpui.Div().Flex().ID("actions").Absolute().Top2().Right2().Bg(style.CodeBackground()).
 				Rounded(gpui.Px(theme.Tokens.Radius.Md)).Child(cx.codeBlockActions(c, w, app))).
 			IntoElement()
 	} else {
@@ -694,7 +694,7 @@ func renderListItemRow(content gpui.AnyElement, ix int, options nodeRenderOption
 		}
 		box := gpui.Div().Flex().Size(gpui.RemsOf(0.875)).ItemsCenter().JustifyCenter().Border1().BorderColor(style.Foreground())
 		if *checked {
-			box = box.Bg(style.Foreground()).Child(gpui.Img(gpui.NewImage(gpui.ImageFormatSVG, svg)).Size(gpui.RemsOf(0.625)))
+			box = box.Bg(style.Foreground()).Child(gpui.Img(gpui.NewImage(gpui.ImageFormatSVG, svg)).Flex().Size(gpui.RemsOf(0.625)))
 		}
 		row = row.Child(gpui.Div().Flex().Mr1p5().H(gpui.Px(lineHeight)).FlexNone().ItemsCenter().JustifyCenter().Child(box))
 	}
@@ -705,7 +705,7 @@ func renderListItemRow(content gpui.AnyElement, ix int, options nodeRenderOption
 func renderListItem(item blockNode, ix int, options nodeRenderOptions, cx *nodeRenderContext, w *gpui.Window, app *gpui.App) gpui.AnyElement {
 	li, ok := item.(*blockListItem)
 	if !ok {
-		return gpui.Div().IntoElement()
+		return gpui.Div().Flex().IntoElement()
 	}
 	child := func() nodeRenderOptions {
 		o := options
@@ -716,7 +716,7 @@ func renderListItem(item blockNode, ix int, options nodeRenderOptions, cx *nodeR
 	}
 	el := textBlockDiv().WFull().MinW0()
 	if li.spread {
-		el = el.Child(gpui.Div())
+		el = el.Child(gpui.Div().Flex())
 	}
 	var rows []*gpui.DivElement
 	for childIx, c := range li.children {
@@ -798,7 +798,7 @@ func tableRows(table *textTable, cx *nodeRenderContext, cellBase func(ix int) *g
 	var rows []any
 	ordinal := 0
 	for rowIx, row := range table.children {
-		r := gpui.Div().WFull()
+		r := gpui.Div().Flex().WFull()
 		if rowIx < rowCount-1 {
 			r = r.BorderB1()
 		}
@@ -963,15 +963,15 @@ func renderBlock(b blockNode, options nodeRenderOptions, cx *nodeRenderContext, 
 	case *blockCustom:
 		inner, ok := cx.markdownExtensions.renderBlock(&v.node, w, app)
 		if !ok {
-			inner = gpui.Div().Child(v.node.AsText()).IntoElement()
+			inner = gpui.Div().Flex().Child(v.node.AsText()).IntoElement()
 		}
 		return textBlockDiv().Pb(mb).Child(inner).IntoElement()
 	case *textTable:
 		return renderTable(v, options, cx, w, app)
 	case *blockHorizontalRule:
-		return gapped(gpui.Div().Bg(cx.style.Border()).H(gpui.Px(2)).IntoElement(), mb)
+		return gapped(gpui.Div().Flex().Bg(cx.style.Border()).H(gpui.Px(2)).IntoElement(), mb)
 	}
-	return gpui.Div().IntoElement()
+	return gpui.Div().Flex().IntoElement()
 }
 
 // renderRoot renders the document: every block in a box, or a virtualized
@@ -989,7 +989,7 @@ func (d *parsedDocument) renderRoot(list *gpui.ListState, cx *nodeRenderContext,
 	if list.ItemCount() != len(blocks) {
 		list.Reset(len(blocks))
 	}
-	return gpui.Div().SizeFull().Child(gpui.List(list, func(ix int, w *gpui.Window, app *gpui.App) gpui.AnyElement {
+	return gpui.Div().Flex().SizeFull().Child(gpui.List(list, func(ix int, w *gpui.Window, app *gpui.App) gpui.AnyElement {
 		cx.startBlock(ix)
 		// An item is laid out as a root at the list's width. Upstream's
 		// item roots are plain divs (gapped, Root), Block boxes that fill

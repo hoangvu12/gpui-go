@@ -185,7 +185,7 @@ func tree(log *parity.EventLog, withCapture bool) gpui.AnyElement {
 			OnGotPointerCapture(log.GotPointerCapture(id)).
 			OnLostPointerCapture(log.LostPointerCapture(id))
 	}
-	capEl := instrument(gpui.Div().
+	capEl := instrument(gpui.Div().Flex().
 		ID("cap").
 		DebugSelector("cap").
 		Size(gpui.Px(childWidth), gpui.Px(childHeight)).
@@ -199,7 +199,7 @@ func tree(log *parity.EventLog, withCapture bool) gpui.AnyElement {
 			}
 		})
 	}
-	other := instrument(gpui.Div().
+	other := instrument(gpui.Div().Flex().
 		ID("other").
 		DebugSelector("other").
 		Size(gpui.Px(childWidth), gpui.Px(childHeight)).

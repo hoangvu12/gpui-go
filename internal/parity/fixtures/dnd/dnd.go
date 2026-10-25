@@ -276,7 +276,7 @@ func DndView(shape dndShape) func(log *parity.EventLog, w *gpui.Window, app *gpu
 				OnDropEvent(log.Drop(id)).
 				OnDragEnd(log.DragEnd(id))
 		}
-		root := logDragEvents(gpui.Div().ID("root").DebugSelector("root"), "root").
+		root := logDragEvents(gpui.Div().Flex().ID("root").DebugSelector("root"), "root").
 			SizeFull().
 			Flex().
 			FlexCol().
@@ -286,7 +286,7 @@ func DndView(shape dndShape) func(log *parity.EventLog, w *gpui.Window, app *gpu
 			// browser-parity D1, so the golden-ratio opt-in keeps the
 			// recorded text placement.
 			LineHeight(gpui.PhiLineHeight())
-		source := logDragEvents(gpui.Div().ID("source").DebugSelector("source"), "source").
+		source := logDragEvents(gpui.Div().Flex().ID("source").DebugSelector("source"), "source").
 			Size(gpui.Px(windowWidth), gpui.Px(sourceHeight)).
 			Bg(gpui.Rgb(sourceColor)).
 			OnDrag(dndPayload{}, func(value *dndPayload, offset gpui.Point, w *gpui.Window, app *gpui.App) gpui.View {
@@ -297,7 +297,7 @@ func DndView(shape dndShape) func(log *parity.EventLog, w *gpui.Window, app *gpu
 			if dropped[id] {
 				background = droppedColor
 			}
-			return logDragEvents(gpui.Div().ID(id).DebugSelector(id), id).
+			return logDragEvents(gpui.Div().Flex().ID(id).DebugSelector(id), id).
 				Size(gpui.Px(targetWidth), gpui.Px(targetHeight)).
 				Bg(gpui.Rgb(background))
 		}
@@ -352,5 +352,5 @@ type dndPreview struct{}
 
 // Render implements the preview's element tree.
 func (v *dndPreview) Render(w *gpui.Window, cx *gpui.Context[dndPreview]) gpui.AnyElement {
-	return gpui.Div().Size(gpui.Px(20), gpui.Px(20)).Bg(gpui.Rgb(sourceColor)).IntoElement()
+	return gpui.Div().Flex().Size(gpui.Px(20), gpui.Px(20)).Bg(gpui.Rgb(sourceColor)).IntoElement()
 }

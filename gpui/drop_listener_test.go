@@ -11,7 +11,7 @@ type otherPayload struct{}
 
 // dragSource is the drag source of these tests, carrying payload.
 func dragSource[T any](payload T) *DivElement {
-	return Div().ID("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).
+	return Div().Flex().ID("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).
 		OnDrag(payload, func(*T, Point, *Window, *App) View { return nil })
 }
 
@@ -37,7 +37,7 @@ func TestDropListenerRefusalFallsThroughToOuterTarget(t *testing.T) {
 			f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
 				accepts := func(value *dragPayload) bool { return value.name != "refused" }
 				onInner := func(value *dragPayload, e *MouseUpEvent, w *Window, app *App) { rec.add("inner(%s)", value.name) }
-				inner := Div().ID("inner").Size(Px(50))
+				inner := Div().Flex().ID("inner").Size(Px(50))
 				if elementLevel {
 					inner = OnDrop(inner.CanDrop(func(value any, w *Window, app *App) bool {
 						payload := value.(dragPayload)
@@ -48,9 +48,9 @@ func TestDropListenerRefusalFallsThroughToOuterTarget(t *testing.T) {
 						CanDropWithin(func(value *dragPayload, w *Window, app *App) bool { return accepts(value) }).
 						OnDrop(onInner))
 				}
-				outer := OnDrop(Div().ID("outer").Absolute().Left(Px(200)).Top(Px(100)).Size(Px(100)).Child(inner),
+				outer := OnDrop(Div().Flex().ID("outer").Absolute().Left(Px(200)).Top(Px(100)).Size(Px(100)).Child(inner),
 					func(value *dragPayload, e *MouseUpEvent, w *Window, app *App) { rec.add("outer(%s)", value.name) })
-				return Div().Relative().SizeFull().Child(dragSource(dragPayload{name: c.payload})).Child(outer).IntoElement()
+				return Div().Flex().Relative().SizeFull().Child(dragSource(dragPayload{name: c.payload})).Child(outer).IntoElement()
 			})
 			f.startDrag()
 			f.dragMove(210, 110)
@@ -69,11 +69,11 @@ func TestDropListenerRefusalFallsThroughToOuterTarget(t *testing.T) {
 func TestDropListenerCanDropAnywhereTakesDropOutside(t *testing.T) {
 	rec := &transcript{}
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-		target := Div().ID("target").Absolute().Left(Px(200)).Top(Px(100)).Size(Px(50)).
+		target := Div().Flex().ID("target").Absolute().Left(Px(200)).Top(Px(100)).Size(Px(50)).
 			OnDropAlt(DropListener[dragPayload]{}.
 				CanDropAnywhere(func(*dragPayload, *Hitbox, *Window, *App) bool { return true }).
 				OnDrop(func(value *dragPayload, e *MouseUpEvent, w *Window, app *App) { rec.add("drop(%s)", value.name) }))
-		return Div().Relative().SizeFull().Child(dragSource(dragPayload{name: "tab"})).Child(target).IntoElement()
+		return Div().Flex().Relative().SizeFull().Child(dragSource(dragPayload{name: "tab"})).Child(target).IntoElement()
 	})
 	f.startDrag()
 	f.up(MouseButtonLeft, 100, 250)
@@ -97,12 +97,12 @@ func TestDragOverStyleTracksHoveringDrag(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-				target := Div().ID("target").Absolute().Left(Px(200)).Top(Px(100)).Size(Px(100)).Bg(interactRed).
+				target := Div().Flex().ID("target").Absolute().Left(Px(200)).Top(Px(100)).Size(Px(100)).Bg(interactRed).
 					OnDragOver(func(s StyleRefinement, value *dragPayload, w *Window, app *App) StyleRefinement {
 						if app.HasActiveDrag() {
 							t.Error("the drag-over callback saw the active drag")
 						}
-						return Div().Refine(s).Bg(interactBlue).Style()
+						return Div().Flex().Refine(s).Bg(interactBlue).Style()
 					})
 				if c.refuse {
 					target = target.CanDrop(func(any, *Window, *App) bool { return false })
@@ -114,7 +114,7 @@ func TestDragOverStyleTracksHoveringDrag(t *testing.T) {
 				case otherPayload:
 					source = dragSource(payload)
 				}
-				return Div().Relative().SizeFull().Child(source).Child(target).IntoElement()
+				return Div().Flex().Relative().SizeFull().Child(source).Child(target).IntoElement()
 			})
 			blue := func() int { return quadCount(t, f.window, interactBlue) }
 			f.startDrag()
@@ -145,20 +145,20 @@ func TestDragOverStyleTracksHoveringDrag(t *testing.T) {
 // the named group is hovered by a drag of its type.
 func TestDragOverAnyAndGroupDragOver(t *testing.T) {
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-		anyTarget := OnDrop(Div().ID("any").Absolute().Left(Px(200)).Top(Px(0)).Size(Px(50)).Bg(interactRed).
+		anyTarget := OnDrop(Div().Flex().ID("any").Absolute().Left(Px(200)).Top(Px(0)).Size(Px(50)).Bg(interactRed).
 			OnDragOverAny(func(s StyleRefinement, value any, w *Window, app *App) StyleRefinement {
-				return Div().Refine(s).Bg(interactBlue).Style()
+				return Div().Flex().Refine(s).Bg(interactBlue).Style()
 			}), func(*dragPayload, *MouseUpEvent, *Window, *App) {})
-		noListener := Div().ID("nolistener").Absolute().Left(Px(300)).Top(Px(0)).Size(Px(50)).Bg(interactRed).
+		noListener := Div().Flex().ID("nolistener").Absolute().Left(Px(300)).Top(Px(0)).Size(Px(50)).Bg(interactRed).
 			OnDragOverAny(func(s StyleRefinement, value any, w *Window, app *App) StyleRefinement {
-				return Div().Refine(s).Bg(interactBlue).Style()
+				return Div().Flex().Refine(s).Bg(interactBlue).Style()
 			})
-		groupChild := OnDrop(Div().ID("child").Size(Px(10)).Bg(interactRed).
+		groupChild := OnDrop(Div().Flex().ID("child").Size(Px(10)).Bg(interactRed).
 			GroupDragOver[dragPayload]("row", func(s StyleRefinement) StyleRefinement {
-			return Div().Refine(s).Bg(interactGreen).Style()
+			return Div().Flex().Refine(s).Bg(interactGreen).Style()
 		}), func(*dragPayload, *MouseUpEvent, *Window, *App) {})
-		row := Div().Group("row").Absolute().Left(Px(200)).Top(Px(200)).Size(Px(80)).Child(groupChild)
-		return Div().Relative().SizeFull().Child(dragSource(dragPayload{name: "tab"})).
+		row := Div().Flex().Group("row").Absolute().Left(Px(200)).Top(Px(200)).Size(Px(80)).Child(groupChild)
+		return Div().Flex().Relative().SizeFull().Child(dragSource(dragPayload{name: "tab"})).
 			Child(anyTarget).Child(noListener).Child(row).IntoElement()
 	})
 	f.startDrag()

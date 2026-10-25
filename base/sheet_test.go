@@ -25,8 +25,8 @@ func sheetHarness(t *testing.T, closable bool, focusFirst bool) (*gpui.VisualTes
 			OverlayClosable(closable).
 			RequestClose(func(*gpui.Window, *gpui.App) { *events = append(*events, "request") }).
 			OnClose(func(*gpui.ClickEvent, *gpui.Window, *gpui.App) { *events = append(*events, "closed") }).
-			Overlay(gpui.Div().Absolute().Inset0()).
-			Surface(gpui.Div().Absolute().Right0().Top0().HFull().W(gpui.Px(80)).Occlude())
+			Overlay(gpui.Div().Flex().Absolute().Inset0()).
+			Surface(gpui.Div().Flex().Absolute().Right0().Top0().HFull().W(gpui.Px(80)).Occlude())
 		return gpui.OwnRecipe(sheet)
 	})
 	if focusFirst {
@@ -87,16 +87,16 @@ func sheetInScrollArea(t *testing.T, deferred bool) (surface, mask, viewport gpu
 			func(b gpui.Bounds, _ struct{}, w *gpui.Window, _ *gpui.App) {
 				surface, mask = b, gpui.ContentMask(w)
 			},
-		).Absolute().Top0().Left0().SizeFull()
+		).Flex().Absolute().Top0().Left0().SizeFull()
 		var sheet any = NewSheet().Surface(probe)
 		if deferred {
 			sheet = gpui.Deferred(sheet)
 		}
-		scroll := gpui.Div().ID("scroll").Absolute().Left(gpui.Px(20)).Top(gpui.Px(20)).
+		scroll := gpui.Div().Flex().ID("scroll").Absolute().Left(gpui.Px(20)).Top(gpui.Px(20)).
 			W(gpui.Px(100)).H(gpui.Px(100)).OverflowYScroll().
-			Child(gpui.Div().H(gpui.Px(300))).
+			Child(gpui.Div().Flex().H(gpui.Px(300))).
 			Child(sheet)
-		return gpui.Div().SizeFull().Child(scroll).IntoElement()
+		return gpui.Div().Flex().SizeFull().Child(scroll).IntoElement()
 	})
 	ovDraw(t, cx)
 	return surface, mask, viewport

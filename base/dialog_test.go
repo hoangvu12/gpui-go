@@ -37,7 +37,7 @@ func TestDialogCloseTriggerSuppliesAccessibleButton(t *testing.T) {
 				return element
 			})
 			return struct{}{}
-		}, func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {}).SizeFull().IntoElement()
+		}, func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {}).Flex().SizeFull().IntoElement()
 	})
 	ovDraw(t, cx)
 	if !captured {
@@ -114,7 +114,7 @@ func TestDialogTriggerOpensSharedHandleAndReportsReason(t *testing.T) {
 		changes = append(changes, change{open, reason})
 	}
 	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.OwnRecipe(NewDialogTrigger(gpui.Div().Size(gpui.Px(100))).Handle(handle))
+		return gpui.OwnRecipe(NewDialogTrigger(gpui.Div().Flex().Size(gpui.Px(100))).Handle(handle))
 	})
 	ovDraw(t, cx)
 	cx.SimulateClick(ovPoint(20, 20), gpui.NoModifiers())
@@ -141,8 +141,8 @@ func TestDialogTheBackdropFillsTheHost(t *testing.T) {
 			Backdrop(gpui.Canvas(func(b gpui.Bounds, _ *gpui.Window, _ *gpui.App) struct{} {
 				bounds = b
 				return struct{}{}
-			}, func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {}).Absolute().SizeFull()).
-			Popup(gpui.Div().Size(gpui.Px(100))))
+			}, func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {}).Flex().Absolute().SizeFull()).
+			Popup(gpui.Div().Flex().Size(gpui.Px(100))))
 	})
 	viewport := dialogTestViewport(t, cx)
 	if bounds.Size != viewport {
@@ -159,7 +159,7 @@ func TestDialogPressingThePopupDoesNotDismiss(t *testing.T) {
 	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
 		return gpui.OwnRecipe(NewDialog().
 			Handle(handle).
-			Backdrop(gpui.Div().Absolute().SizeFull()).
+			Backdrop(gpui.Div().Flex().Absolute().SizeFull()).
 			Popup(NewDialogPopup().Size(gpui.Px(100))))
 	})
 	viewport := dialogTestViewport(t, cx)
@@ -182,7 +182,7 @@ func TestDialogThePopupIsCenteredByDefault(t *testing.T) {
 		return gpui.OwnRecipe(NewDialog().Popup(gpui.Canvas(func(b gpui.Bounds, _ *gpui.Window, _ *gpui.App) struct{} {
 			bounds = b
 			return struct{}{}
-		}, func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {}).Size(gpui.Px(100))))
+		}, func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {}).Flex().Size(gpui.Px(100))))
 	})
 	viewport := dialogTestViewport(t, cx)
 	if got, want := bounds.Center(), ovPoint(viewport.Width/2, viewport.Height/2); got != want {
@@ -205,14 +205,14 @@ func TestDialogTabStaysInsideAndEscapeClosesAndRestores(t *testing.T) {
 	inside := app.FocusHandle().TabStop(true)
 	handle := NewDialogHandle(false)
 	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.Div().SizeFull().
+		return gpui.Div().Flex().SizeFull().
 			// The outside stop, inert while the modal is open.
-			Child(gpui.Div().Size(gpui.Px(20)).TrackFocus(outside)).
+			Child(gpui.Div().Flex().Size(gpui.Px(20)).TrackFocus(outside)).
 			Child(gpui.OwnRecipe(NewDialog().
 				Handle(handle).
 				FocusHandle(focus).
-				Popup(gpui.Div().Size(gpui.Px(100)).Occlude().
-					Child(gpui.Div().ID("stop").Size(gpui.Px(20)).TrackFocus(inside))))).
+				Popup(gpui.Div().Flex().Size(gpui.Px(100)).Occlude().
+					Child(gpui.Div().Flex().ID("stop").Size(gpui.Px(20)).TrackFocus(inside))))).
 			IntoElement()
 	})
 	// The dialog renders closed: focus the outside element first, so the
