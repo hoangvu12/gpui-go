@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 10 (Claude Code)
 Blocked by: 69, 70
 Triage: ready-for-agent
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-25, orchestrator 10: verified and merged (b27679a). No conflicts. `go vet ./...` is clean, and `displaycodemod -check ./...` reports nothing to do under the new post-71 rule (only chains whose flex/grid-container vocabulary would go inert under block get pinned; reviewed, sound). The broad batch set plus inlinespec, listspec, textframespec, portfixture and accessspec: 70 packages ok. Failures: portfixture TestFx0004 (font count) and gpui/script TestFrameOverheadIsUnder1msAtTheProbeSize at 1.05 ms while the machine was loaded (frames ~200 ms); it passes when run alone. Spot-check: space_utils.cc:82-104 at 0d4dcd4f (a block container child's auto inline size stretches, except replaced, table and form controls) matches. The TSX decision (a `<div>` follows block; the `<text>` sugar keeps flex) was the orchestrator's call; it is reversible.
 
 - 2026-10-25, worker (core-71): flips landed, the codemod gate updated to the post-71 rule, 138 fixture pins revisited, the new display-block fixture recorded and passing, full suite green except the known set. See the Answer.
 

@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: orchestrator 10 (Claude Code)
 Blocked by: 71, 72, 73, 74
 Triage: ready-for-agent
 
