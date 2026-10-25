@@ -84,9 +84,16 @@ func TestWhiteSpaceCollapseTable(t *testing.T) {
 
 // TestWhiteSpaceCollapseAcrossSegments pins the cross-record rules: a
 // space run spanning two records collapses to the FIRST record's kept
-// space, a preserve record joins verbatim, and an atomic box splits a
-// run without collapsing across it (LastItemToCollapseWith's opaque
-// items, inline_items_builder.cc:218-228).
+// space, a preserve record joins verbatim, and an atomic box breaks the
+// collapse chain: the box is the builder's last item to collapse with
+// and ends kNotCollapsible (AppendAtomicInline appends it through
+// Append, not AppendOpaque — inline_items_builder.cc:218-228 and
+// 1281-1289), so a sub-run starting at the box keeps its one space and
+// a space before a trailing box survives the final removal. The three
+// box cases were re-measured in Chrome 155 (browser-core 78: the
+// original table folded the space after a box into the space before it,
+// which Chrome does not do — `a <box> b` renders one space on each
+// side).
 func TestWhiteSpaceCollapseAcrossSegments(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -133,25 +140,25 @@ func TestWhiteSpaceCollapseAcrossSegments(t *testing.T) {
 			want: "a   b",
 		},
 		{
-			name:     "a box splits a run without collapsing across it",
+			name:     "a box splits a run, each side keeps one space",
 			source:   "a   b", // run [1,4), box at 2 splits it
 			segments: []whiteSpaceSegment{{start: 0, end: 5, mode: WhiteSpaceNormal}},
 			boxes:    []int{2},
-			want:     "a b",
+			want:     "a  b",
 		},
 		{
-			name:     "a box after a kept space folds the following run",
+			name:     "a box after a kept space keeps the following space",
 			source:   "a  b",
 			segments: []whiteSpaceSegment{{start: 0, end: 4, mode: WhiteSpaceNormal}},
-			boxes:    []int{2}, // after "a ": the run [1,2) keeps, [2,3) folds
-			want:     "a b",
+			boxes:    []int{2}, // after "a ": the run [1,2) keeps, [2,3) keeps too
+			want:     "a  b",
 		},
 		{
-			name:     "a paragraph-start run before a box is removed",
+			name:     "a paragraph-start run before a box is removed, the run after the box keeps",
 			source:   "   b",
 			segments: []whiteSpaceSegment{{start: 0, end: 4, mode: WhiteSpaceNormal}},
 			boxes:    []int{2},
-			want:     "b",
+			want:     " b",
 		},
 	}
 	for _, c := range cases {

@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 10 (Claude Code)
 Blocked by: 68
 Triage: ready-for-agent
@@ -20,6 +20,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-25, orchestrator 10: verified and merged (ef745a5 + 93e34d8, with 69 and 70 together). `displaycodemod -check ./...` on the merged tree: 0 pending. The diff audit shows only `.Flex()` insertions, plus the TSX pin comment in gpui/script/lower.go and the class_test hover-want fix. `go vet ./...` is clean. The broad batch set plus inlinespec/listspec/textframespec: all ok except 78's four (fixed on its branch), spellspec TestSpellcheckCheckNeverBlocksTheUIThread (load; ok on re-run) and gpui/script TestFrameOverheadIsUnder1msAtTheProbeSize (the known load flake). The worker's capture comparison: zterm 15/19 and the gallery 66/69 byte-identical; every difference also occurs between two runs of the same code (spinner/reveal animation phase, one AA rounding step).
 
 ## Answer
 

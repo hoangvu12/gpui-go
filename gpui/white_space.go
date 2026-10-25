@@ -42,10 +42,19 @@ package gpui
 //     RemoveTrailingCollapsibleSpaceIfExists, inline_items_builder.cc:
 //     1624-1638); a forced break never is (RemoveTrailingCollapsible
 //     Space's kControl guard, 1379-1410).
-//   - Atomic inline boxes are opaque to collapsing
-//     (LastItemToCollapseWith skips kOpaqueToCollapsing items,
-//     inline_items_builder.cc:218-228), so a space run never collapses
-//     ACROSS a box, but the collapse state carries across it.
+//   - Atomic inline boxes are opaque separators in the text stream, but
+//     they are NOT opaque to the collapse state: an atomic inline item
+//     ends kNotCollapsible (AppendAtomicInline appends it through Append,
+//     not AppendOpaque — only open/close tags, bidi controls, empty text
+//     items and out-of-flow boxes are kOpaqueToCollapsing,
+//     inline_items_builder.cc:218-228), so it IS the last item to collapse
+//     with. A leading space run after a box therefore keeps its one space
+//     (AppendCollapseWhitespace's kNotCollapsible arm, :835-840), a space
+//     before a trailing box survives ExitBlock's final removal
+//     (LastItemToCollapseWith stops at the box), and
+//     AppendAtomicInline even restores a space removed before it
+//     (:1281-1289). Verified against Chrome 155: `a <box> b` renders one
+//     space on each side of the box.
 //   - Carriage returns and form feeds are ignored in preserve modes
 //     (ShouldIgnore, inline_items_builder.cc:163-168, and the line
 //     breaker's kCarriageReturn/kFormFeed arms, line_breaker.cc:2998-
@@ -348,6 +357,13 @@ type whitespaceCollapser struct {
 	// initialized true: an empty paragraph is the "remove leading
 	// spaces" state (inline_items_builder.cc:887-889).
 	endsKeptSpace bool
+	// boxes are the atomic inline insertion positions of the document
+	// being folded (nil for the single-element paths, which never
+	// contain a box). A box is the builder's kNotCollapsible last item
+	// once it is passed, so the trailing-space removals consult it.
+	boxes []int
+	// pos is the source offset the collapser has folded up to.
+	pos int
 }
 
 func newWhitespaceCollapser() *whitespaceCollapser {
@@ -412,10 +428,16 @@ func (c *whitespaceCollapser) emitNewline(dom int) {
 	c.endsKeptSpace = true
 }
 
-// removeTrailingKeptSpace removes the output's trailing kept space (the
-// unit collapse of RemoveTrailingCollapsibleSpace, 1379-1410: only a
-// kept TEXT space, never the forced break the kControl guard protects).
-func (c *whitespaceCollapser) removeTrailingKeptSpace() {
+// removeTrailingKeptSpaceBefore removes the output's trailing kept
+// space (the unit collapse of RemoveTrailingCollapsibleSpace,
+// 1379-1410: only a kept TEXT space, never the forced break the
+// kControl guard protects). upto is the source offset the removal
+// happens at: a forced break's own offset in pre-line, or the end of
+// the document at finish. An atomic box sitting after the space's
+// source byte and at or before upto is the builder's last item to
+// collapse with (kNotCollapsible), so the space is the item before
+// the box and survives (LastItemToCollapseWith stops at the box).
+func (c *whitespaceCollapser) removeTrailingKeptSpaceBefore(upto int) {
 	// The output's last character is the last unit that produces one;
 	// trailing collapsed units (the removed tail of the final space run)
 	// sit after it and must be walked past.
@@ -425,7 +447,8 @@ func (c *whitespaceCollapser) removeTrailingKeptSpace() {
 		if u.collapsed() {
 			continue
 		}
-		if u.keptSpace && u.textEnd == len(text) {
+		if u.keptSpace && u.textEnd == len(text) &&
+			!c.boxAfter(u.domStart, upto) {
 			c.units[i] = collapseUnit{
 				domStart:  u.domStart,
 				domEnd:    u.domEnd,
@@ -450,8 +473,12 @@ func (c *whitespaceCollapser) removeTrailingKeptSpace() {
 // dispatch): preserve modes copy the text (dropping carriage returns and
 // form feeds), pre-line splits at newlines, and the collapsing modes run
 // the space-run state machine. boxes are the source positions of atomic
-// inline boxes (opaque to collapsing, inline_items_builder.cc:218-228).
+// inline boxes — separators between the records; a sub-run or trailing
+// removal that would cross one stops at the box instead (the box is the
+// kNotCollapsible last item to collapse with, inline_items_builder.cc:
+// 218-228 and 1281-1289).
 func (c *whitespaceCollapser) append(text string, seg whiteSpaceSegment, boxes []int) {
+	defer func() { c.pos = seg.end }()
 	switch {
 	case seg.mode.whiteSpacePreservesSpaces():
 		c.appendPreserved(text, seg)
@@ -495,7 +522,7 @@ func (c *whitespaceCollapser) appendPreLine(text string, seg whiteSpaceSegment, 
 	i := seg.start
 	for i < seg.end {
 		if text[i] == '\n' {
-			c.removeTrailingKeptSpace()
+			c.removeTrailingKeptSpaceBefore(i)
 			c.emitNewline(i)
 			i++
 			continue
@@ -541,12 +568,15 @@ func (c *whitespaceCollapser) appendCollapsed(text string, seg whiteSpaceSegment
 
 // processSpaceRun folds one maximal collapsible run
 // (AppendCollapseWhitespace's space-run branches): the run splits at
-// atomic box positions (the box is opaque to collapsing but the state
-// carries across it, LastItemToCollapseWith, inline_items_builder.cc:
-// 218-228); a sub-run that consults the state — the item's leading run,
-// or any sub-run starting at a box — is removed when the output ends
-// with a kept space or forced break, and every other sub-run keeps one
-// space.
+// atomic box positions (a box sits between two source bytes, so a run
+// spanning the box position is two records' runs); a sub-run that
+// starts at an atomic box is the next record's leading run AFTER the
+// box — the box is the builder's last item to collapse with and ends
+// kNotCollapsible (an atomic inline is appended through Append, not
+// AppendOpaque), so the sub-run does NOT consult the state and keeps
+// its one space — while the segment's own leading run (no box before
+// it) does consult it, and is removed when the output ends with a kept
+// space or forced break (or the paragraph is still empty).
 func (c *whitespaceCollapser) processSpaceRun(start, end int, consultsState bool, boxes []int) {
 	p := start
 	for p < end {
@@ -556,9 +586,10 @@ func (c *whitespaceCollapser) processSpaceRun(start, end int, consultsState bool
 				q = bx
 			}
 		}
-		// A sub-run starting at a box position is the next item's
-		// leading run: it consults the state.
-		consults := consultsState || boxAt(boxes, p)
+		// A sub-run starting at a box position follows the atomic box:
+		// the box is the last item (kNotCollapsible), so this sub-run
+		// never folds into the previous kept space.
+		consults := consultsState && !boxAt(boxes, p)
 		if consults && c.endsKeptSpace {
 			c.emitCollapsed(p, q)
 			// The state is unchanged: the output still ends with the
@@ -580,6 +611,22 @@ func boxAt(boxes []int, pos int) bool {
 	return slices.Contains(boxes, pos)
 }
 
+// boxAfter reports whether an atomic box sits after the source byte
+// spacePos and at or before upto: the box is then between the kept
+// space and the offset the trailing-space removal happens at, so it is
+// the last item to collapse with and the space is not trailing
+// (LastItemToCollapseWith stops at a kNotCollapsible atomic inline;
+// AppendAtomicInline even restores a removed space before a box,
+// inline_items_builder.cc:1281-1289).
+func (c *whitespaceCollapser) boxAfter(spacePos, upto int) bool {
+	for _, bx := range c.boxes {
+		if bx > spacePos && bx <= upto {
+			return true
+		}
+	}
+	return false
+}
+
 // isCollapsibleSpaceByte reports the collapsible white space of the
 // collapsing modes (unicode::IsCollapsibleSpace over ASCII,
 // platform/text/character.h:179-182): space, line feed, tab and
@@ -598,7 +645,7 @@ func isCollapsibleSpaceByte(b byte) bool {
 // 1624-1638): the final trailing space is removed — never a forced
 // break.
 func (c *whitespaceCollapser) finish() {
-	c.removeTrailingKeptSpace()
+	c.removeTrailingKeptSpaceBefore(c.pos)
 }
 
 // result returns the display text and its byte map; the map is nil when
@@ -731,6 +778,7 @@ func collapseSegments(text string, segments []whiteSpaceSegment, boxes []int, am
 		return a.start - b.start
 	})
 	c := newWhitespaceCollapser()
+	c.boxes = boxes
 	covered := 0
 	fold := func(seg whiteSpaceSegment) {
 		c.append(text, seg, boxes)

@@ -120,8 +120,12 @@ func TestUniformListRetainsFocusedItemDispatch(t *testing.T) {
 		t.Fatalf("key deliveries after scrolling the item out = %d, want 2 (no delivery: the node is gone)", deliveries)
 	}
 
-	// Scroll the item back into the range: the callback returns with
-	// the item.
+	// Scroll the item back into the range: browser-core 14's focus
+	// fixup blurred the handle when the item left the frame (the
+	// end-of-frame equivalent of Chromium's node-removal focus fixup),
+	// and like a re-inserted DOM node in Chrome the returning item is
+	// not refocused — the key still falls to the body, so the listener
+	// stays at 2 deliveries.
 	view.Update(app, func(v *focusView, cx *gpui.Context[focusView]) {
 		v.handle.SetOffset(gpui.Point{})
 	})
@@ -130,8 +134,20 @@ func TestUniformListRetainsFocusedItemDispatch(t *testing.T) {
 		t.Fatalf("return draw: %v", err)
 	}
 	window.DispatchKeyEvent(&gpui.KeyDownEvent{Keystroke: gpui.MustParseKeystroke("a")}, app)
+	if deliveries != 2 {
+		t.Fatalf("key deliveries after the item returns = %d, want 2 (browser-core 14: the fixup blurred the handle; re-rendering does not refocus it)", deliveries)
+	}
+
+	// The callback itself does return with the item: once the app
+	// restores focus (a roving-tabindex app's remount refocus), the key
+	// reaches the same listener through the rebuilt dispatch node.
+	window.Focus(focus)
+	if _, err := gpui.DrawWindowFrame(window); err != nil {
+		t.Fatalf("refocus draw: %v", err)
+	}
+	window.DispatchKeyEvent(&gpui.KeyDownEvent{Keystroke: gpui.MustParseKeystroke("a")}, app)
 	if deliveries != 3 {
-		t.Fatalf("key deliveries after the item returns = %d, want 3 (the callback returns)", deliveries)
+		t.Fatalf("key deliveries after re-focusing the returned item = %d, want 3 (the callback returns)", deliveries)
 	}
 }
 

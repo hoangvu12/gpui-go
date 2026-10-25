@@ -33,11 +33,19 @@ import (
 // middle-aligned, with observable backgrounds) and a " suffix" text.
 type inlineView struct {
 	width float32
+	// phi pins the pin's 1.618 line height (26 at 16px), which the
+	// reference div.rs corpus derives its geometry from; 37 made CSS
+	// normal the default.
+	phi bool
 }
 
 // Render implements Render[inlineView].
 func (v *inlineView) Render(w *gpui.Window, cx *gpui.Context[inlineView]) gpui.AnyElement {
-	return gpui.Div().
+	root := gpui.Div().Block()
+	if v.phi {
+		root = root.LineHeight(gpui.PhiLineHeight())
+	}
+	return root.
 		Block().
 		W(gpui.PxLength(v.width)).
 		DebugSelector("flow").
@@ -69,6 +77,7 @@ func drawCorpus(t *testing.T, width float32) *gpui.Window {
 	window := gpui.NewTestWindow(app, gpui.Size{Width: 200, Height: 120})
 	view := gpui.NewEntity(app, window.Scope(), func(v *inlineView, cx *gpui.Context[inlineView]) {
 		v.width = width
+		v.phi = true
 	})
 	window.SetRootView(gpui.ViewOf(view))
 	if _, err := gpui.DrawWindowFrame(window); err != nil {
