@@ -86,7 +86,7 @@ func gradientBox(id string, background gpui.Background) *gpui.DivElement {
 // fixtureRoot builds a centered white root with the given rows of
 // boxes (flex column of flex rows, gap 24).
 func fixtureRoot(rows ...[]*gpui.DivElement) gpui.AnyElement {
-	root := gpui.Div().
+	root := gpui.Div().Flex().
 		ID("root").
 		DebugSelector("root").
 		SizeFull().

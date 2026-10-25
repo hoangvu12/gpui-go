@@ -132,7 +132,7 @@ func (f *displayFixture) wantBox(selector string, x, y, w, h float32) {
 // and a nested contents child splice the same.
 func TestDisplayContentsSplicesChildrenIntoParent(t *testing.T) {
 	child := func(id string, color uint32) *DivElement {
-		return Div().ID(id).DebugSelector(id).Size(Px(40), Px(30)).FlexShrink0().Bg(Rgb(color))
+		return Div().Flex().ID(id).DebugSelector(id).Size(Px(40), Px(30)).FlexShrink0().Bg(Rgb(color))
 	}
 	contents := func(children ...*DivElement) *DivElement {
 		// Box styles on a contents element are inert (no box to apply
@@ -182,13 +182,13 @@ func TestDisplayContentsSplicesChildrenIntoParent(t *testing.T) {
 // nothing (its inert none node takes no space).
 func TestDisplayContentsNestedSplicesUnderBlock(t *testing.T) {
 	f := newDisplayFixture(t, func(w *Window) AnyElement {
-		root := Div().ID("root").DebugSelector("root").SizeFull().FlexCol().
+		root := Div().Flex().ID("root").DebugSelector("root").SizeFull().FlexCol().
 			Child(Div().Contents().
 				Child(Div().Contents().
-					Child(Div().ID("b").DebugSelector("b").Size(Px(40), Px(30)).FlexShrink0().Bg(Rgb(0x222222)))).
-				Child(Div().ID("c").DebugSelector("c").Size(Px(40), Px(30)).FlexShrink0().Bg(Rgb(0x333333)))).
+					Child(Div().Flex().ID("b").DebugSelector("b").Size(Px(40), Px(30)).FlexShrink0().Bg(Rgb(0x222222)))).
+				Child(Div().Flex().ID("c").DebugSelector("c").Size(Px(40), Px(30)).FlexShrink0().Bg(Rgb(0x333333)))).
 			Child(Div().Contents()).
-			Child(Div().ID("d").DebugSelector("d").Size(Px(40), Px(30)).FlexShrink0().Bg(Rgb(0x444444)))
+			Child(Div().Flex().ID("d").DebugSelector("d").Size(Px(40), Px(30)).FlexShrink0().Bg(Rgb(0x444444)))
 		return root.IntoElement()
 	})
 	f.park()
@@ -211,8 +211,8 @@ func TestInlineBlockAndInlineGridAreAtomicInlineBoxes(t *testing.T) {
 			Child(Div().ID("ib2").DebugSelector("ib2").InlineBlock().Size(Px(50), Px(20)).Bg(Rgb(0x333333))).
 			Child(Div().ID("ig").DebugSelector("ig").InlineGrid().Size(Px(90), Px(30)).
 				GridTemplateCols(GridTemplate{Repeat: 2, MinSize: GridTemplateMinZero}).
-				Child(Div().ID("g1").DebugSelector("g1").Size(Px(45), Px(30)).Bg(Rgb(0x444444))).
-				Child(Div().ID("g2").DebugSelector("g2").Size(Px(45), Px(30)).Bg(Rgb(0x555555))))
+				Child(Div().Flex().ID("g1").DebugSelector("g1").Size(Px(45), Px(30)).Bg(Rgb(0x444444))).
+				Child(Div().Flex().ID("g2").DebugSelector("g2").Size(Px(45), Px(30)).Bg(Rgb(0x555555))))
 		return block.IntoElement()
 	})
 	f.park()
@@ -242,15 +242,15 @@ func TestInlineBlockAndInlineGridAreAtomicInlineBoxes(t *testing.T) {
 // paint_layer_scrollable_area.cc:1480-1500).
 func TestOverflowAutoReservesOnlyWhileOverflowing(t *testing.T) {
 	scroller := func(children ...*DivElement) *DivElement {
-		s := Div().ID("scroller").DebugSelector("scroller").
+		s := Div().Flex().ID("scroller").DebugSelector("scroller").
 			Size(Px(240), Px(300)).FlexCol().OverflowYAuto().
-			Child(Div().ID("filler").DebugSelector("filler").H(Px(30)).FlexShrink0().Bg(Rgb(0xe2e8f0)))
+			Child(Div().Flex().ID("filler").DebugSelector("filler").H(Px(30)).FlexShrink0().Bg(Rgb(0xe2e8f0)))
 		for _, c := range children {
 			s = s.Child(c)
 		}
 		return s
 	}
-	tall := Div().ID("tall").DebugSelector("tall").H(Px(570)).FlexShrink0().Bg(Rgb(0xcbd5e1))
+	tall := Div().Flex().ID("tall").DebugSelector("tall").H(Px(570)).FlexShrink0().Bg(Rgb(0xcbd5e1))
 
 	// Fits: no scrollbar, no reservation — the child keeps the full 240.
 	f := newDisplayFixture(t, func(w *Window) AnyElement {
@@ -299,11 +299,11 @@ func TestOverflowAutoReservesOnlyWhileOverflowing(t *testing.T) {
 func TestOverflowAutoScrollbarOnlyWhileOverflowingPixels(t *testing.T) {
 	handle := NewScrollHandle()
 	f := newDisplayFixture(t, func(w *Window) AnyElement {
-		root := Div().ID("root").SizeFull().
-			Child(Div().ID("scroller").DebugSelector("scroller").
+		root := Div().Flex().ID("root").SizeFull().
+			Child(Div().Flex().ID("scroller").DebugSelector("scroller").
 				Size(Px(240), Px(300)).FlexCol().OverflowYAuto().TrackScroll(handle).
-				Child(Div().ID("filler").DebugSelector("filler").H(Px(30)).FlexShrink0().Bg(Rgb(0xe2e8f0))).
-				Child(Div().ID("tall").DebugSelector("tall").H(Px(570)).FlexShrink0().Bg(Rgb(0xcbd5e1))))
+				Child(Div().Flex().ID("filler").DebugSelector("filler").H(Px(30)).FlexShrink0().Bg(Rgb(0xe2e8f0))).
+				Child(Div().Flex().ID("tall").DebugSelector("tall").H(Px(570)).FlexShrink0().Bg(Rgb(0xcbd5e1))))
 		return root.IntoElement()
 	})
 	f.park()
@@ -341,11 +341,11 @@ func TestOverflowAutoScrollbarOnlyWhileOverflowingPixels(t *testing.T) {
 func TestOverflowAutoScrollsWhenOverflowing(t *testing.T) {
 	handle := NewScrollHandle()
 	f := newDisplayFixture(t, func(w *Window) AnyElement {
-		root := Div().ID("root").SizeFull().
-			Child(Div().ID("scroller").DebugSelector("scroller").
+		root := Div().Flex().ID("root").SizeFull().
+			Child(Div().Flex().ID("scroller").DebugSelector("scroller").
 				Size(Px(240), Px(300)).FlexCol().OverflowYAuto().TrackScroll(handle).
-				Child(Div().ID("filler").DebugSelector("filler").H(Px(30)).FlexShrink0().Bg(Rgb(0xe2e8f0))).
-				Child(Div().ID("tall").DebugSelector("tall").H(Px(570)).FlexShrink0().Bg(Rgb(0xcbd5e1))))
+				Child(Div().Flex().ID("filler").DebugSelector("filler").H(Px(30)).FlexShrink0().Bg(Rgb(0xe2e8f0))).
+				Child(Div().Flex().ID("tall").DebugSelector("tall").H(Px(570)).FlexShrink0().Bg(Rgb(0xcbd5e1))))
 		return root.IntoElement()
 	})
 	f.park()
@@ -370,10 +370,10 @@ func TestOverflowAutoScrollsWhenOverflowing(t *testing.T) {
 func TestOverflowAutoFitsNeverScrolls(t *testing.T) {
 	handle := NewScrollHandle()
 	f := newDisplayFixture(t, func(w *Window) AnyElement {
-		root := Div().ID("root").SizeFull().
-			Child(Div().ID("scroller").DebugSelector("scroller").
+		root := Div().Flex().ID("root").SizeFull().
+			Child(Div().Flex().ID("scroller").DebugSelector("scroller").
 				Size(Px(240), Px(300)).FlexCol().OverflowYAuto().TrackScroll(handle).
-				Child(Div().ID("filler").DebugSelector("filler").Size(Px(240), Px(30)).FlexShrink0().Bg(Rgb(0xe2e8f0))))
+				Child(Div().Flex().ID("filler").DebugSelector("filler").Size(Px(240), Px(30)).FlexShrink0().Bg(Rgb(0xe2e8f0))))
 		return root.IntoElement()
 	})
 	f.park()
@@ -397,15 +397,15 @@ func TestOverflowAutoFitsNeverScrolls(t *testing.T) {
 func TestStickyInsideHiddenScrollerStaysNatural(t *testing.T) {
 	handle := NewScrollHandle()
 	build := func(w *Window) AnyElement {
-		root := Div().ID("root").SizeFull()
-		outer := Div().ID("outer").DebugSelector("outer").
+		root := Div().Flex().ID("root").SizeFull()
+		outer := Div().Flex().ID("outer").DebugSelector("outer").
 			Size(Px(300), Px(400)).FlexCol().OverflowYScroll().TrackScroll(handle).
-			Child(Div().Size(Px(300), Px(40)).FlexShrink0().Bg(Rgb(0xfca5a5))).
-			Child(Div().ID("hidden").DebugSelector("hidden").Size(Px(300), Px(300)).FlexCol().FlexShrink0().OverflowHidden().
-				Child(Div().ID("hdr").DebugSelector("hdr").Sticky().Top(Px(12)).
+			Child(Div().Flex().Size(Px(300), Px(40)).FlexShrink0().Bg(Rgb(0xfca5a5))).
+			Child(Div().Flex().ID("hidden").DebugSelector("hidden").Size(Px(300), Px(300)).FlexCol().FlexShrink0().OverflowHidden().
+				Child(Div().Flex().ID("hdr").DebugSelector("hdr").Sticky().Top(Px(12)).
 					Size(Px(300), Px(30)).FlexShrink0().Bg(Rgb(0x2563eb))).
-				Child(Div().Size(Px(300), Px(500)).FlexShrink0().Bg(Rgb(0xe2e8f0)))).
-			Child(Div().Size(Px(300), Px(500)).FlexShrink0().Bg(Rgb(0xcbd5e1)))
+				Child(Div().Flex().Size(Px(300), Px(500)).FlexShrink0().Bg(Rgb(0xe2e8f0)))).
+			Child(Div().Flex().Size(Px(300), Px(500)).FlexShrink0().Bg(Rgb(0xcbd5e1)))
 		return root.Child(outer).IntoElement()
 	}
 	f := newDisplayFixture(t, build)
@@ -447,7 +447,7 @@ func TestClassDisplayAndGutterClasses(t *testing.T) {
 	if v, ok := d.StyleMut().Display.Get(); !ok || v != DisplayFlowRoot {
 		t.Errorf("class flow-root display = %v, %v", v, ok)
 	}
-	d = Div().ID("d5").Class("scrollbar-gutter-stable")
+	d = Div().Flex().ID("d5").Class("scrollbar-gutter-stable")
 	if v, ok := d.StyleMut().ScrollbarGutter.Get(); !ok || v != ScrollbarGutterStable {
 		t.Errorf("class scrollbar-gutter-stable = %v, %v", v, ok)
 	}
@@ -457,8 +457,8 @@ func TestClassDisplayAndGutterClasses(t *testing.T) {
 // ScrollbarGutter refinement composes with the class layer exactly like
 // the builder, and a div carries the auto overflow refinement.
 func TestOverflowStyleRefinement(t *testing.T) {
-	viaClass := Div().ID("d").Class("scrollbar-gutter-stable overflow-y-auto")
-	viaBuilder := Div().ID("d").ScrollbarGutterStable().OverflowYAuto()
+	viaClass := Div().Flex().ID("d").Class("scrollbar-gutter-stable overflow-y-auto")
+	viaBuilder := Div().Flex().ID("d").ScrollbarGutterStable().OverflowYAuto()
 	if !reflect.DeepEqual(*viaClass.StyleMut(), *viaBuilder.StyleMut()) {
 		t.Errorf("class refinement = %+v; want the builder's %+v", *viaClass.StyleMut(), *viaBuilder.StyleMut())
 	}

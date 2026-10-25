@@ -60,13 +60,13 @@ func TestPopupTheSurfaceBlocksThePanelItCovers(t *testing.T) {
 			Block().
 			Relative().
 			Size(gpui.Px(200)).
-			Child(gpui.Div().
+			Child(gpui.Div().Flex().
 				ID("background").
 				Absolute().
 				SizeFull().
 				OnMouseMove(func(*gpui.MouseMoveEvent, *gpui.Window, *gpui.App) { backgroundHovered = true })).
-			Child(NewPopup("popup", gpui.Div().Size(gpui.Px(100))).Content(
-				gpui.Div().
+			Child(NewPopup("popup", gpui.Div().Flex().Size(gpui.Px(100))).Content(
+				gpui.Div().Flex().
 					ID("content").
 					Size(gpui.Px(40)).
 					OnMouseMove(func(*gpui.MouseMoveEvent, *gpui.Window, *gpui.App) { contentHovered = true }))).
@@ -98,8 +98,8 @@ func TestPopupTheSurfaceBlocksThePanelItCovers(t *testing.T) {
 func TestPopupTriggerCaptureEnablesDeferredContentOnTheNextFrame(t *testing.T) {
 	ta := gpui.NewTestApp()
 	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.OwnRecipe(NewPopup("popup", gpui.Div().DebugSelector("popup-trigger").Size(gpui.Px(100))).
-			Content(gpui.Div().DebugSelector("popup-content").Size(gpui.Px(20))))
+		return gpui.OwnRecipe(NewPopup("popup", gpui.Div().Flex().DebugSelector("popup-trigger").Size(gpui.Px(100))).
+			Content(gpui.Div().Flex().DebugSelector("popup-content").Size(gpui.Px(20))))
 	})
 	ovDraw(t, cx)
 	ovDraw(t, cx)
@@ -117,11 +117,11 @@ func TestPopupTriggerCaptureEnablesDeferredContentOnTheNextFrame(t *testing.T) {
 // captures the trigger's box; the content is a 100x60 debug box.
 func popupPlacementView(anchor gpui.Anchor, offset float32) func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
 	return func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.Div().SizeFull().Child(gpui.Div().Relative().Mt(gpui.Px(100)).W(gpui.Px(100)).H(gpui.Px(100)).Child(gpui.OwnRecipe(
-			NewPopup("placement", gpui.Div().ID("placement-trigger").Size(gpui.Px(100))).
+		return gpui.Div().Flex().SizeFull().Child(gpui.Div().Flex().Relative().Mt(gpui.Px(100)).W(gpui.Px(100)).H(gpui.Px(100)).Child(gpui.OwnRecipe(
+			NewPopup("placement", gpui.Div().Flex().ID("placement-trigger").Size(gpui.Px(100))).
 				Anchor(anchor).
 				Offset(offset).
-				Content(gpui.Div().DebugSelector("placement-content").W(gpui.Px(100)).H(gpui.Px(60))),
+				Content(gpui.Div().Flex().DebugSelector("placement-content").W(gpui.Px(100)).H(gpui.Px(60))),
 		))).IntoElement()
 	}
 }
@@ -178,9 +178,9 @@ func TestPopupOffsetAndClampThroughTheCoreAnchored(t *testing.T) {
 	// overflows, and the shift clamps the popup's bottom edge to the
 	// window's (1920x1080 test window, 8px margin).
 	_, cx = openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.Div().SizeFull().Child(gpui.Div().Relative().Mt(gpui.Px(1000)).W(gpui.Px(100)).H(gpui.Px(100)).Child(gpui.OwnRecipe(
-			NewPopup("clamped", gpui.Div().ID("clamped-trigger").Size(gpui.Px(100))).
-				Content(gpui.Div().DebugSelector("clamped-content").W(gpui.Px(100)).H(gpui.Px(60))),
+		return gpui.Div().Flex().SizeFull().Child(gpui.Div().Flex().Relative().Mt(gpui.Px(1000)).W(gpui.Px(100)).H(gpui.Px(100)).Child(gpui.OwnRecipe(
+			NewPopup("clamped", gpui.Div().Flex().ID("clamped-trigger").Size(gpui.Px(100))).
+				Content(gpui.Div().Flex().DebugSelector("clamped-content").W(gpui.Px(100)).H(gpui.Px(60))),
 		))).IntoElement()
 	})
 	ovDraw(t, cx)

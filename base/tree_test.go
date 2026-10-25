@@ -195,7 +195,7 @@ func TestTreeRendersItemsAndHandlesClicksAndKeys(t *testing.T) {
 		}
 		return gpui.OwnRecipe(NewTree(state).W(gpui.Px(200)).H(gpui.Px(200)).Item(
 			func(ix int, entry *TreeEntry, _ TreeEntryState, _ *gpui.Window, _ *gpui.App) gpui.AnyElement {
-				return gpui.Div().H(gpui.Px(20)).Child(entry.Item().Label).IntoElement()
+				return gpui.Div().Flex().H(gpui.Px(20)).Child(entry.Item().Label).IntoElement()
 			}))
 	})
 	ta.Update(func(app *gpui.App) { Init(app) })

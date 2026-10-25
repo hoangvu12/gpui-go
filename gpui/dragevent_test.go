@@ -61,9 +61,9 @@ func dragSequenceView(rec *dragLog, accept1, accept3, preventStart bool) func(v 
 				OnDropEvent(func(e *DropEvent, w *Window, app *App) { rec.dragEntry("drop", id, e.DropEffect, true) }).
 				OnDragEnd(func(e *DragEndEvent, w *Window, app *App) { rec.dragEntry("dragend", id, e.DropEffect, true) })
 		}
-		root := logDragEvents(Div().ID("root").DebugSelector("root").Relative().SizeFull(), "root").
+		root := logDragEvents(Div().Flex().ID("root").DebugSelector("root").Relative().SizeFull(), "root").
 			OnKeyDown(func(e *KeyDownEvent, w *Window, app *App) { rec.add("keydown") })
-		source := logDragEvents(Div().ID("source").DebugSelector("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)), "source").
+		source := logDragEvents(Div().Flex().ID("source").DebugSelector("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)), "source").
 			OnDrag(dragPayload{name: "chip"}, func(value *dragPayload, offset Point, w *Window, app *App) View {
 				return ViewOf(NewEntity(app, w.Scope(), func(*dragPreview, *Context[dragPreview]) {}))
 			})
@@ -72,14 +72,14 @@ func dragSequenceView(rec *dragLog, accept1, accept3, preventStart bool) func(v 
 				w.PreventDefault()
 			})
 		}
-		t1 := logDragEvents(Div().ID("t1").DebugSelector("t1").Absolute().Left(Px(100)).Top(Px(0)).Size(Px(100)), "t1")
+		t1 := logDragEvents(Div().Flex().ID("t1").DebugSelector("t1").Absolute().Left(Px(100)).Top(Px(0)).Size(Px(100)), "t1")
 		if accept1 {
 			t1 = t1.OnDragOverEvent(func(e *DragOverEvent, w *Window, app *App) {
 				w.PreventDefault()
 			})
 		}
-		t2 := logDragEvents(Div().ID("t2").DebugSelector("t2").Absolute().Left(Px(100)).Top(Px(100)).Size(Px(100)), "t2")
-		t3 := Div().ID("t3").DebugSelector("t3").Absolute().Left(Px(100)).Top(Px(200)).Size(Px(100))
+		t2 := logDragEvents(Div().Flex().ID("t2").DebugSelector("t2").Absolute().Left(Px(100)).Top(Px(100)).Size(Px(100)), "t2")
+		t3 := Div().Flex().ID("t3").DebugSelector("t3").Absolute().Left(Px(100)).Top(Px(200)).Size(Px(100))
 		if accept3 {
 			// The accept listener registers before the logging listener so
 			// the log reads the effect it set (the Chrome record reads the
@@ -293,7 +293,7 @@ func TestDragOverEffectMaskedAgainstAllowed(t *testing.T) {
 	rec := &dragLog{}
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
 		// A copy-only drag whose target asks for move.
-		source := Div().ID("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).
+		source := Div().Flex().ID("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).
 			OnDragAlt(func(cursorOffset Point, cursorStyle *CursorStyle, w *Window, app *App) AnyDrag {
 				return AnyDrag{
 					Value:         dragPayload{name: "chip"},
@@ -301,7 +301,7 @@ func TestDragOverEffectMaskedAgainstAllowed(t *testing.T) {
 					EffectAllowed: DragAllowsCopy,
 				}
 			})
-		target := Div().ID("t1").Absolute().Left(Px(100)).Top(Px(0)).Size(Px(100)).
+		target := Div().Flex().ID("t1").Absolute().Left(Px(100)).Top(Px(0)).Size(Px(100)).
 			OnDragOverEvent(func(e *DragOverEvent, w *Window, app *App) {
 				e.DropEffect = DragEffectMove
 				w.PreventDefault()
@@ -309,7 +309,7 @@ func TestDragOverEffectMaskedAgainstAllowed(t *testing.T) {
 			}).
 			OnDropEvent(func(e *DropEvent, w *Window, app *App) { rec.add("drop:%s", e.DropEffect) }).
 			OnDragEnd(func(e *DragEndEvent, w *Window, app *App) { rec.add("dragend:%s", e.DropEffect) })
-		return Div().ID("root").Relative().SizeFull().Child(source).Child(target).IntoElement()
+		return Div().Flex().ID("root").Relative().SizeFull().Child(source).Child(target).IntoElement()
 	})
 	f.down(MouseButtonLeft, dragSourceX, dragSourceY)
 	f.draw()
@@ -335,20 +335,20 @@ func TestDragOverEffectMaskedAgainstAllowed(t *testing.T) {
 func TestDragStartEffectAllowedNarrowing(t *testing.T) {
 	rec := &dragLog{}
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-		source := Div().ID("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).
+		source := Div().Flex().ID("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).
 			OnDrag(dragPayload{name: "chip"}, func(value *dragPayload, offset Point, w *Window, app *App) View {
 				return ViewOf(NewEntity(app, w.Scope(), func(*dragPreview, *Context[dragPreview]) {}))
 			}).
 			OnDragStart(func(e *DragStartEvent, w *Window, app *App) {
 				e.EffectAllowed = DragAllowsMove
 			})
-		target := Div().ID("t1").Absolute().Left(Px(100)).Top(Px(0)).Size(Px(100)).
+		target := Div().Flex().ID("t1").Absolute().Left(Px(100)).Top(Px(0)).Size(Px(100)).
 			OnDragOverEvent(func(e *DragOverEvent, w *Window, app *App) {
 				rec.add("dragover:%s", e.DropEffect)
 				w.PreventDefault()
 			}).
 			OnDropEvent(func(e *DropEvent, w *Window, app *App) { rec.add("drop:%s", e.DropEffect) })
-		return Div().ID("root").Relative().SizeFull().Child(source).Child(target).IntoElement()
+		return Div().Flex().ID("root").Relative().SizeFull().Child(source).Child(target).IntoElement()
 	})
 	f.down(MouseButtonLeft, dragSourceX, dragSourceY)
 	f.draw()

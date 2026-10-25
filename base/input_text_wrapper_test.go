@@ -237,7 +237,7 @@ func TestTextWrapperWrapRowQueriesAfterIncrementalSplice(t *testing.T) {
 type emptyTestRoot struct{}
 
 func (*emptyTestRoot) Render(*gpui.Window, *gpui.Context[emptyTestRoot]) gpui.AnyElement {
-	return gpui.Div().IntoElement()
+	return gpui.Div().Flex().IntoElement()
 }
 
 // emptyShapedLines are ShapedLine::default().with_len(n): shaped empty

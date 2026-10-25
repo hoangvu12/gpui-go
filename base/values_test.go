@@ -178,11 +178,11 @@ func TestComponentTraitsFocusRingAPICarriesStateWithoutVisuals(t *testing.T) {
 // element). The trait stays state-only; this pins the visual layer's
 // mapping helper.
 func TestComponentTraitsFocusRingOutlineOptsTheCoreRingOut(t *testing.T) {
-	disabled := FocusRingOutline(gpui.Div(), false)
+	disabled := FocusRingOutline(gpui.Div().Flex(), false)
 	if style, ok := disabled.StyleMut().OutlineStyle.Get(); !ok || style != gpui.OutlineNone {
 		t.Fatalf("FocusRing(false) outline style = %v, %v; want none", style, ok)
 	}
-	enabled := FocusRingOutline(gpui.Div().TrackFocus(gpui.FocusHandle{}), true)
+	enabled := FocusRingOutline(gpui.Div().Flex().TrackFocus(gpui.FocusHandle{}), true)
 	if _, ok := enabled.StyleMut().OutlineStyle.Get(); ok {
 		t.Fatal("FocusRing(true) pinned an outline style; want the default auto kind")
 	}

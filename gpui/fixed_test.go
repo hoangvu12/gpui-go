@@ -18,7 +18,7 @@ import (
 
 // fixedBox builds one fixed div; the caller adds the insets and size.
 func fixedBox(id string, color uint32) *DivElement {
-	return Div().ID(id).DebugSelector(id).Fixed().Bg(Rgb(color))
+	return Div().Flex().ID(id).DebugSelector(id).Fixed().Bg(Rgb(color))
 }
 
 // newFixedWindow opens one test app and window whose root view is set
@@ -53,7 +53,7 @@ type fixedPlainView struct{}
 
 func (v *fixedPlainView) Render(w *Window, cx *Context[fixedPlainView]) AnyElement {
 	return Div().ID("root").SizeFull().Flex().Bg(Rgb(0xffffff)).
-		Child(Div().ID("flow").W(Px(100)).H(Px(100)).Bg(Rgb(0x94a3b8)).
+		Child(Div().Flex().ID("flow").W(Px(100)).H(Px(100)).Bg(Rgb(0x94a3b8)).
 			Child(fixedBox("fixed", 0xdc2626).
 				Left(Px(40)).Top(Px(20)).W(Px(50)).H(Px(30)))).
 		IntoElement()
@@ -82,8 +82,8 @@ type fixedChainedView struct{}
 
 func (v *fixedChainedView) Render(w *Window, cx *Context[fixedChainedView]) AnyElement {
 	return Div().ID("root").SizeFull().Flex().Bg(Rgb(0xffffff)).
-		Child(Div().ID("ancestor").W(Px(200)).H(Px(200)).Relative().Bg(Rgb(0xf8fafc)).
-			Child(Div().ID("static-parent").W(Px(100)).H(Px(100)).Static().Bg(Rgb(0xe2e8f0)).
+		Child(Div().Flex().ID("ancestor").W(Px(200)).H(Px(200)).Relative().Bg(Rgb(0xf8fafc)).
+			Child(Div().Flex().ID("static-parent").W(Px(100)).H(Px(100)).Static().Bg(Rgb(0xe2e8f0)).
 				Child(fixedBox("fixed", 0xdc2626).
 					Left(Px(300)).Top(Px(200)).W(Px(60)).H(Px(40))))).
 		IntoElement()
@@ -117,11 +117,11 @@ type fixedScrollerView struct {
 
 func (v *fixedScrollerView) Render(w *Window, cx *Context[fixedScrollerView]) AnyElement {
 	return Div().ID("root").SizeFull().Flex().Bg(Rgb(0xffffff)).
-		Child(Div().ID("scroller").DebugSelector("scroller").W(Px(200)).H(Px(200)).OverflowYScroll().
+		Child(Div().Flex().ID("scroller").DebugSelector("scroller").W(Px(200)).H(Px(200)).OverflowYScroll().
 			TrackScroll(v.scroll).
-			Child(Div().ID("content").DebugSelector("content").W(Px(200)).H(Px(600)).FlexCol().
-				Child(Div().ID("row1").DebugSelector("row1").W(Px(200)).H(Px(40)).Bg(Rgb(0xfca5a5)).TrackFocus(v.target)).
-				Child(Div().ID("row2").DebugSelector("row2").W(Px(200)).H(Px(40)).Bg(Rgb(0xe2e8f0))).
+			Child(Div().Flex().ID("content").DebugSelector("content").W(Px(200)).H(Px(600)).FlexCol().
+				Child(Div().Flex().ID("row1").DebugSelector("row1").W(Px(200)).H(Px(40)).Bg(Rgb(0xfca5a5)).TrackFocus(v.target)).
+				Child(Div().Flex().ID("row2").DebugSelector("row2").W(Px(200)).H(Px(40)).Bg(Rgb(0xe2e8f0))).
 				Child(fixedBox("fixed", 0xdc2626).
 					Left(Px(140)).Top(Px(60)).W(Px(90)).H(Px(50))))).
 		IntoElement()
@@ -234,7 +234,7 @@ func (v *fixedAbsChildView) Render(w *Window, cx *Context[fixedAbsChildView]) An
 	return Div().ID("root").SizeFull().Flex().Bg(Rgb(0xffffff)).
 		Child(fixedBox("fixed", 0xdc2626).
 			Left(Px(300)).Top(Px(200)).W(Px(60)).H(Px(40)).
-			Child(Div().ID("abs").DebugSelector("abs").Absolute().
+			Child(Div().Flex().ID("abs").DebugSelector("abs").Absolute().
 				Left(Px(40)).Top(Px(20)).W(Px(20)).H(Px(10)).Bg(Rgb(0x2563eb)))).
 		IntoElement()
 }

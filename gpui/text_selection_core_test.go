@@ -21,8 +21,8 @@ func selectableTestView(t *testing.T, ta *TestApp, text string) (TextSelectionHa
 	_, cx := openSelectionView(t, ta, func(*Window, *Context[selectionView]) AnyElement {
 		run := SelectableTextWithHandle("text", handle, text)
 		layout = run.styledText.Layout()
-		return Div().SizeFull().Child(TextSelectionLayer{}).Child(
-			Div().W(Px(600)).H(Px(80)).Child(run),
+		return Div().Flex().SizeFull().Child(TextSelectionLayer{}).Child(
+			Div().Flex().W(Px(600)).H(Px(80)).Child(run),
 		).IntoElement()
 	})
 	drawSelectionFrame(t, cx)

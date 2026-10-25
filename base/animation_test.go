@@ -134,8 +134,8 @@ func TestEasingPresetsAndLerp(t *testing.T) {
 func TestEffectTransitionAnimatesStyleOverItsDuration(t *testing.T) {
 	ta := gpui.NewTestApp()
 	m := openMotionWindow(t, ta, func(*gpui.Window, *gpui.App) gpui.AnyElement {
-		box := gpui.Div().Absolute().DebugSelector("box").W(gpui.Px(10)).H(gpui.Px(10))
-		return gpui.Div().Size(gpui.Px(200)).Child(
+		box := gpui.Div().Flex().Absolute().DebugSelector("box").W(gpui.Px(10)).H(gpui.Px(10))
+		return gpui.Div().Flex().Size(gpui.Px(200)).Child(
 			NewEffectTransition(100*time.Millisecond).
 				Ease(gpui.Linear).
 				SlideY(-40, 0).

@@ -48,7 +48,7 @@ func checkboxHarness(t *testing.T, state CheckboxState, disabled bool) (*gpui.Vi
 	t.Helper()
 	rec := &checkboxRecord{}
 	cx := drawn(t, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.Div().
+		return gpui.Div().Flex().
 			ID("checkbox-parent").
 			TabGroup().
 			Size(gpui.Px(100)).

@@ -172,7 +172,7 @@ func (p *Popup) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
 			gpui.RequestAnimationFrame(w)
 		}
 		return struct{}{}
-	}, func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {}).Absolute().SizeFull().Top0().Left0()
+	}, func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {}).Flex().Absolute().SizeFull().Top0().Left0()
 
 	style := p.Style()
 	root := StyledExtOf(p.base.Child(p.trigger).Child(measure)).RefineStyle(&style)

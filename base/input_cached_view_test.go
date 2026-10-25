@@ -33,7 +33,7 @@ type cursorConsumerPanel struct {
 
 func (p *cursorConsumerPanel) Render(_ *gpui.Window, cx *gpui.Context[cursorConsumerPanel]) gpui.AnyElement {
 	*p.observed = p.input.Read(cx.App(), func(s *EditorState, _ *gpui.App) cursorLayout { return cursorLayoutOf(s) })
-	return gpui.Div().SizeFull().Child(gpui.ViewOf[EditorState](p.input)).IntoElement()
+	return gpui.Div().Flex().SizeFull().Child(gpui.ViewOf[EditorState](p.input)).IntoElement()
 }
 
 // cursorConsumerRoot is the upstream Root: the panel, cached.
@@ -42,7 +42,7 @@ type cursorConsumerRoot struct {
 }
 
 func (r *cursorConsumerRoot) Render(*gpui.Window, *gpui.Context[cursorConsumerRoot]) gpui.AnyElement {
-	return gpui.Div().SizeFull().Child(gpui.CachedView(gpui.ViewOf[cursorConsumerPanel](r.panel), gpui.Styles().SizeFull())).IntoElement()
+	return gpui.Div().Flex().SizeFull().Child(gpui.CachedView(gpui.ViewOf[cursorConsumerPanel](r.panel), gpui.Styles().SizeFull())).IntoElement()
 }
 
 // U:input/base/state.rs:4957-5019
@@ -103,7 +103,7 @@ type idleInputPanel struct {
 
 func (p *idleInputPanel) Render(*gpui.Window, *gpui.Context[idleInputPanel]) gpui.AnyElement {
 	*p.renders++
-	return gpui.Div().SizeFull().Child(gpui.ViewOf[InputState](p.input)).IntoElement()
+	return gpui.Div().Flex().SizeFull().Child(gpui.ViewOf[InputState](p.input)).IntoElement()
 }
 
 // idleInputRoot is the upstream Root: the panel, cached.
@@ -112,7 +112,7 @@ type idleInputRoot struct {
 }
 
 func (r *idleInputRoot) Render(*gpui.Window, *gpui.Context[idleInputRoot]) gpui.AnyElement {
-	return gpui.Div().SizeFull().Child(gpui.CachedView(gpui.ViewOf[idleInputPanel](r.panel), gpui.Styles().SizeFull())).IntoElement()
+	return gpui.Div().Flex().SizeFull().Child(gpui.CachedView(gpui.ViewOf[idleInputPanel](r.panel), gpui.Styles().SizeFull())).IntoElement()
 }
 
 // U:input/base/state.rs:5123-5192

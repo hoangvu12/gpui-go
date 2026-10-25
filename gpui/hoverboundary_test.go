@@ -35,23 +35,23 @@ func hoverTree(f *hoverFixture, v *interactView, w *Window, cx *Context[interact
 	}
 	leaf := func(id string, x float32) *DivElement {
 		enter, leave := bind(id)
-		d := Div().ID(id).DebugSelector(id).
+		d := Div().Flex().ID(id).DebugSelector(id).
 			// The offsets resolve against p (the nearest positioned
 			// ancestor): Top0 is p's top edge.
 			Absolute().Left(Px(x)).Top0().Size(Px(40)).
 			OnPointerEnter(enter).OnPointerLeave(leave)
 		if f.useStyle {
 			d = d.Bg(interactRed).Hover(func(s StyleRefinement) StyleRefinement {
-				return Div().Refine(s).Bg(interactBlue).Style()
+				return Div().Flex().Refine(s).Bg(interactBlue).Style()
 			})
 		}
 		return d
 	}
 	rootEnter, rootLeave := bind("root")
 	pEnter, pLeave := bind("p")
-	return Div().ID("root").DebugSelector("root").SizeFull().Relative().
+	return Div().Flex().ID("root").DebugSelector("root").SizeFull().Relative().
 		OnPointerEnter(rootEnter).OnPointerLeave(rootLeave).
-		Child(Div().ID("p").DebugSelector("p").
+		Child(Div().Flex().ID("p").DebugSelector("p").
 			Absolute().Left(Px(100)).Top(Px(100)).Size(Px(v.left), Px(100)).
 			OnPointerEnter(pEnter).OnPointerLeave(pLeave).
 			// The children resolve their absolute offsets against p, the

@@ -23,7 +23,7 @@ func newHandle(ta *gpui.TestApp, text string) TextSelectionHandle {
 // its bounds as text bounds (the on_prepaint registrations of
 // U:text_selection.rs:2858-2934).
 func registeringDiv(selection TextSelectionHandle) *gpui.DivElement {
-	return ElementExtOf(gpui.Div().SizeFull()).OnPrepaint(func(bounds gpui.Bounds, w *gpui.Window, app *gpui.App) {
+	return ElementExtOf(gpui.Div().Flex().SizeFull()).OnPrepaint(func(bounds gpui.Bounds, w *gpui.Window, app *gpui.App) {
 		hitbox := w.InsertHitbox(bounds, gpui.HitboxNormal)
 		selection.Register(NewTextSelectionRegistration(hitbox, bounds).WithTextBounds([]gpui.Bounds{bounds}), w, app)
 	})

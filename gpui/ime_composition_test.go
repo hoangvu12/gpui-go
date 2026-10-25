@@ -301,14 +301,14 @@ func newIMEWindowTest(t *testing.T) *imeWindowTest {
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
 			w.HandleInput(f.focus, f.editor)
-			return Div().ID("root").SizeFull().
+			return Div().Flex().ID("root").SizeFull().
 				OnKeyDown(func(e *KeyDownEvent, w *Window, app *App) {
 					f.keyLog = append(f.keyLog, "keydown:root isComposing="+boolString(e.IsComposing))
 				}).
 				OnKeyUp(func(e *KeyUpEvent, w *Window, app *App) {
 					f.keyLog = append(f.keyLog, "keyup:root isComposing="+boolString(e.IsComposing))
 				}).
-				Child(Div().ID("field").Size(Px(200), Px(40)).TrackFocus(f.focus).
+				Child(Div().Flex().ID("field").Size(Px(200), Px(40)).TrackFocus(f.focus).
 					OnKeyDown(func(e *KeyDownEvent, w *Window, app *App) {
 						f.keyLog = append(f.keyLog, "keydown:field isComposing="+boolString(e.IsComposing))
 					}).
@@ -442,14 +442,14 @@ func TestKeyEventsWithPlainInputHandlerAreNeverComposing(t *testing.T) {
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
 			w.HandleInput(focus, &plainIMEWindowHandler{})
-			return Div().ID("root").SizeFull().
+			return Div().Flex().ID("root").SizeFull().
 				OnKeyDown(func(e *KeyDownEvent, w *Window, app *App) {
 					keyLog = append(keyLog, "keydown isComposing="+boolString(e.IsComposing))
 				}).
 				OnKeyUp(func(e *KeyUpEvent, w *Window, app *App) {
 					keyLog = append(keyLog, "keyup isComposing="+boolString(e.IsComposing))
 				}).
-				Child(Div().ID("field").Size(Px(200), Px(40)).TrackFocus(focus)).
+				Child(Div().Flex().ID("field").Size(Px(200), Px(40)).TrackFocus(focus)).
 				IntoElement()
 		}
 	})

@@ -141,7 +141,7 @@ func TestObjectPositionDegenerateInputs(t *testing.T) {
 func TestObjectPositionStyleRefinement(t *testing.T) {
 	// The style property refines like any paint option: a later
 	// refinement wins, the default keeps the element unperturbed.
-	st := Div().ObjectPosition(ObjectLeft(), ObjectTop()).StyleMut()
+	st := Div().Flex().ObjectPosition(ObjectLeft(), ObjectTop()).StyleMut()
 	pos, ok := st.ObjectPosition.Get()
 	if !ok || pos != (ObjectPosition{X: ObjectLeft(), Y: ObjectTop()}) {
 		t.Errorf("ObjectPosition refinement = %+v, %v", pos, ok)
@@ -155,14 +155,14 @@ func TestObjectPositionStyleRefinement(t *testing.T) {
 		t.Errorf("refined style's object position = %+v", style.ObjectPosition)
 	}
 	// A second refinement replaces it.
-	style.Refine(Div().ObjectPosition(ObjectRight(), ObjectBottom()).StyleMut())
+	style.Refine(Div().Flex().ObjectPosition(ObjectRight(), ObjectBottom()).StyleMut())
 	if style.ObjectPosition == nil || *style.ObjectPosition != (ObjectPosition{X: ObjectRight(), Y: ObjectBottom()}) {
 		t.Errorf("re-refined style's object position = %+v", style.ObjectPosition)
 	}
 }
 
 func TestImageRenderingStyleRefinement(t *testing.T) {
-	st := Div().RenderingPixelated().StyleMut()
+	st := Div().Flex().RenderingPixelated().StyleMut()
 	rendering, ok := st.ImageRendering.Get()
 	if !ok || rendering != ImageRenderingPixelated {
 		t.Errorf("RenderingPixelated refinement = %+v, %v", rendering, ok)
@@ -181,7 +181,7 @@ func TestImageRenderingStyleRefinement(t *testing.T) {
 }
 
 func TestObjectFitStyleRefinement(t *testing.T) {
-	st := Div().ObjectCover().StyleMut()
+	st := Div().Flex().ObjectCover().StyleMut()
 	fit, ok := st.ObjectFit.Get()
 	if !ok || fit != ObjectFitCover {
 		t.Errorf("ObjectCover refinement = %+v, %v", fit, ok)

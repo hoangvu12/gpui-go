@@ -35,7 +35,7 @@ func textViewTestRoot(t *testing.T, ta *gpui.TestApp, text string) (gpui.Entity[
 	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
 		return gpui.Div().Block().W(gpui.Px(160)).
 			Child(gpui.Div().Block().H(gpui.Px(24)).OverflowHidden().Child(NewTextView(state).Selectable(true))).
-			Child(gpui.Div().H(gpui.Px(40)).Child("footer")).IntoElement()
+			Child(gpui.Div().Flex().H(gpui.Px(40)).Child("footer")).IntoElement()
 	})
 	return state, cx
 }
@@ -81,7 +81,7 @@ func (controlPlugin) Parse(node *MdastNode, _ *MarkdownParseContext) *MarkdownNo
 
 func (p controlPlugin) Render(node *MarkdownNode, _ *gpui.Window, _ *gpui.App) gpui.AnyElement {
 	label := node.AsText()
-	return gpui.Div().ID(gpui.NameElementID("same-control-id")).W(gpui.Px(60)).H(gpui.Px(24)).
+	return gpui.Div().Flex().ID(gpui.NameElementID("same-control-id")).W(gpui.Px(60)).H(gpui.Px(24)).
 		OnMouseDown(gpui.MouseButtonLeft, func(_ *gpui.MouseDownEvent, _ *gpui.Window, app *gpui.App) { app.StopPropagation() }).
 		OnClick(func(*gpui.ClickEvent, *gpui.Window, *gpui.App) { *p.clicks = append(*p.clicks, label) }).
 		Child(label).IntoElement()
@@ -131,11 +131,11 @@ func TestInlineHoverCardIsLazyAndRetainsAtomicCopy(t *testing.T) {
 		}),
 		render: func(*MarkdownNode, *InlineRenderContext, *gpui.Window, *gpui.App) (InlineElement, bool) {
 			card := NewHoverCard("mention-hover").Anchor(gpui.AnchorTopCenter).
-				Trigger(gpui.Div().Child("@member")).
+				Trigger(gpui.Div().Flex().Child("@member")).
 				Content(func(*HoverCardState, *gpui.Window, *gpui.Context[HoverCardState]) *gpui.DivElement {
 					builds++
-					return gpui.Div().ID(gpui.NameElementID("hover-content")).Child(
-						gpui.Div().DebugSelector("inline-test-card").W(gpui.Px(120)).H(gpui.Px(40)).Child("Member profile"))
+					return gpui.Div().Flex().ID(gpui.NameElementID("hover-content")).Child(
+						gpui.Div().Flex().DebugSelector("inline-test-card").W(gpui.Px(120)).H(gpui.Px(40)).Child("Member profile"))
 				})
 			return NewInlineElement(card), true
 		},
@@ -203,7 +203,7 @@ func (r *inlinePluginRoot) open(t *testing.T, ta *gpui.TestApp, state gpui.Entit
 				return InlineElement{}, false
 			}
 			value := float32(*r.preparedSize)
-			img := gpui.Img(gpui.NewImage(gpui.ImageFormatSVG, []byte(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><path d="M0 0L40 40" stroke="black"/></svg>`)))
+			img := gpui.Img(gpui.NewImage(gpui.ImageFormatSVG, []byte(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><path d="M0 0L40 40" stroke="black"/></svg>`))).Flex()
 			unit := context.FontSize() / 16
 			return NewInlineElement(img.W(gpui.Px(unit * value)).H(gpui.Px(unit * value))).WithBaseline(unit * value * 0.75), true
 		},
@@ -430,7 +430,7 @@ func TestInlineObjectInheritsBoldAndLinkClicksWithoutOpeningOnDrag(t *testing.T)
 			if context.TextStyle().FontWeight != 700 {
 				t.Errorf("weight %v", context.TextStyle().FontWeight)
 			}
-			return NewInlineElement(gpui.Div().Child("formula")), true
+			return NewInlineElement(gpui.Div().Flex().Child("formula")), true
 		},
 	}
 	extensions := MarkdownExtensions{}.Plugin(plugin)
@@ -474,7 +474,7 @@ func TestSelectionBandBeyondClipCopiesOffscreenText(t *testing.T) {
 	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
 		return gpui.Div().Block().W(gpui.Px(200)).Child(TextSelectionLayer{}).
 			Child(gpui.Div().Block().H(gpui.Px(40)).OverflowHidden().Child(NewTextView(state).Selectable(true))).
-			Child(gpui.Div().H(gpui.Px(160))).IntoElement()
+			Child(gpui.Div().Flex().H(gpui.Px(160))).IntoElement()
 	})
 	drawText(t, cx)
 	dragSelect(t, cx, tpt(2, 8), tpt(180, 150), true)
@@ -524,7 +524,7 @@ func TestOuterListContentTotalStableWhileScrolling(t *testing.T) {
 	ta := textTestApp(t)
 	list := gpui.NewListState(n, 2048).MeasureAll()
 	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.Div().W(gpui.Px(360)).H(gpui.Px(500)).Child(
+		return gpui.Div().Flex().W(gpui.Px(360)).H(gpui.Px(500)).Child(
 			gpui.List(list, func(ix int, _ *gpui.Window, _ *gpui.App) gpui.AnyElement {
 				return gpui.Div().Block().WFull().Child(TextViewMarkdown(gpui.NamedIntegerElementID("md", uint64(ix)), items[ix%len(items)])).IntoElement()
 			}).SizeFull()).IntoElement()
@@ -565,7 +565,7 @@ func TestInlineVirtualResourceGrowthRemeasuresAllBlocksAndPreservesCopy(t *testi
 		}),
 		render: func(_ *MarkdownNode, context *InlineRenderContext, _ *gpui.Window, _ *gpui.App) (InlineElement, bool) {
 			extent := context.FontSize() * float32(prepared) / 16
-			img := gpui.Img(gpui.NewImage(gpui.ImageFormatSVG, []byte(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><path d="M0 0L40 40" stroke="black"/></svg>`))).W(gpui.Px(extent)).H(gpui.Px(extent))
+			img := gpui.Img(gpui.NewImage(gpui.ImageFormatSVG, []byte(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><path d="M0 0L40 40" stroke="black"/></svg>`))).Flex().W(gpui.Px(extent)).H(gpui.Px(extent))
 			return NewInlineElement(img).WithBaseline(extent * 0.75), true
 		},
 	}

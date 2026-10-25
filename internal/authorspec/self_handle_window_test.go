@@ -202,7 +202,7 @@ func (selfKeeperView) EntityID() (gpui.EntityID, bool) { return 0, false }
 
 // RenderOnce implements gpui.View.
 func (selfKeeperView) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
-	return gpui.Div().ID("keeper").SizeFull().IntoElement()
+	return gpui.Div().Flex().ID("keeper").SizeFull().IntoElement()
 }
 
 // clickAt delivers a synthetic left click at the window-local logical

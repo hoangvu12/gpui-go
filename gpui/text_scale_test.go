@@ -119,7 +119,7 @@ func setRootForTest(t *testing.T, w *Window, app *App) {
 type remProbeView struct{}
 
 func (v *remProbeView) Render(w *Window, cx *Context[remProbeView]) AnyElement {
-	return Div().ID("probe").DebugSelector("probe").W(DefiniteRem(2)).H(Px(20)).IntoElement()
+	return Div().Flex().ID("probe").DebugSelector("probe").W(DefiniteRem(2)).H(Px(20)).IntoElement()
 }
 
 func TestFrameRemSizeNeverCallsTheHostlessRecordPerElement(t *testing.T) {

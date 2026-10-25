@@ -35,7 +35,7 @@ func (v *transitionBoxView) Render(w *Window, cx *Context[transitionBoxView]) An
 	if !v.redBG {
 		bg = Rgb(0x0000FF)
 	}
-	el := Div().ID("box").DebugSelector("box").
+	el := Div().Flex().ID("box").DebugSelector("box").
 		Size(PxLength(v.width), PxLength(40)).
 		Opacity(opacity).
 		Bg(bg)
@@ -455,7 +455,7 @@ func TestTransitionStyleNegativeDelayStartsInsideTheInterval(t *testing.T) {
 type idlessBoxView struct{}
 
 func (v *idlessBoxView) Render(w *Window, cx *Context[idlessBoxView]) AnyElement {
-	return Div().Size(PxLength(100), PxLength(40)).
+	return Div().Flex().Size(PxLength(100), PxLength(40)).
 		Transition(NewTransitionRule(TransitionWidth, msT(400))).
 		IntoElement()
 }

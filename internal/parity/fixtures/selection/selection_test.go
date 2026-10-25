@@ -159,7 +159,7 @@ func wrongViewWithoutLayer(_ *parity.EventLog, w *gpui.Window, app *gpui.App) gp
 		TextSize(gpui.Px(16)).
 		LineHeight(gpui.Px(25)).
 		TextColor(gpui.Rgb(0xdc2626)).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("text").
 			DebugSelector("text").
 			W(gpui.Px(380)).

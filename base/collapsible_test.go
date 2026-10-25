@@ -14,8 +14,8 @@ func collapsibleHarness(t *testing.T, open bool) *gpui.VisualTestContext {
 	return drawn(t, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
 		return elementOf(t, NewCollapsible().
 			Open(open).
-			Child(gpui.Div().DebugSelector("trigger").Size(gpui.Px(10))).
-			Content(gpui.Div().DebugSelector("content").Size(gpui.Px(10))))
+			Child(gpui.Div().Flex().DebugSelector("trigger").Size(gpui.Px(10))).
+			Content(gpui.Div().Flex().DebugSelector("content").Size(gpui.Px(10))))
 	})
 }
 

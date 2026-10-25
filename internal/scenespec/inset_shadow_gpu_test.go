@@ -29,7 +29,7 @@ type insetHighlightView struct {
 }
 
 func (v *insetHighlightView) Render(w *gpui.Window, cx *gpui.Context[insetHighlightView]) gpui.AnyElement {
-	panel := gpui.Div().W(gpui.Px(160)).H(gpui.Px(80)).
+	panel := gpui.Div().Flex().W(gpui.Px(160)).H(gpui.Px(80)).
 		Bg(gpui.SolidBackground(gpui.Hsla{H: 0, S: 0, L: 0.15, A: 1})).
 		Rounded(gpui.Px(12)).
 		Shadow([]gpui.BoxShadow{{

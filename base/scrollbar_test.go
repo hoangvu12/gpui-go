@@ -370,7 +370,7 @@ type sbHarness struct {
 }
 
 func (v *sbHarness) Render(*gpui.Window, *gpui.Context[sbHarness]) gpui.AnyElement {
-	return gpui.Div().
+	return gpui.Div().Flex().
 		Relative().
 		W(gpui.Px(100)).
 		H(gpui.Px(100)).

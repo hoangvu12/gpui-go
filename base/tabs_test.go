@@ -39,7 +39,7 @@ func TestTabsFixedHeightTabCentersOrdinaryChildGeometry(t *testing.T) {
 	var root, child gpui.Bounds
 	drawn(t, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
 		tab := ElementExtOf(NewTab("alignment-tab").W(gpui.Px(120)).H(gpui.Px(40)).
-			Child(ElementExtOf(gpui.Div().W(gpui.Px(48)).H(gpui.Px(12))).
+			Child(ElementExtOf(gpui.Div().Flex().W(gpui.Px(48)).H(gpui.Px(12))).
 				OnPrepaint(func(b gpui.Bounds, _ *gpui.Window, _ *gpui.App) { child = b }))).
 			OnPrepaint(func(b gpui.Bounds, _ *gpui.Window, _ *gpui.App) { root = b })
 		return elementOf(t, tab)

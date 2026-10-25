@@ -32,7 +32,7 @@ func (v *realProbeView) Render(w *gpui.Window, cx *gpui.Context[realProbeView]) 
 			run(w, app)
 		}
 		return struct{}{}
-	}, func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {}).W(gpui.Px(400)).H(gpui.Px(200)).IntoElement()
+	}, func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {}).Flex().W(gpui.Px(400)).H(gpui.Px(200)).IntoElement()
 }
 
 // inRealPrepaint runs f inside a prepaint pass of a real Win32 window; f

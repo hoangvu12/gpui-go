@@ -184,7 +184,7 @@ type TreeRenderItem func(ix int, entry *TreeEntry, state TreeEntryState, w *gpui
 // defaultTreeRenderItem is the empty div the state and element start
 // with (U:tree.rs:211, 511).
 func defaultTreeRenderItem(int, *TreeEntry, TreeEntryState, *gpui.Window, *gpui.App) gpui.AnyElement {
-	return gpui.Div().IntoElement()
+	return gpui.Div().Flex().IntoElement()
 }
 
 // TreeState is the behavior and interaction state for a virtualized
@@ -497,7 +497,7 @@ func (s *TreeState) Render(_ *gpui.Window, cx *gpui.Context[TreeState]) gpui.Any
 			ix := start + i
 			entry := &visible[i].entry
 			entryState := visible[i].state
-			d := TestSupport(gpui.Div().ID(gpui.IntegerElementID(uint64(ix)))).
+			d := TestSupport(gpui.Div().Flex().ID(gpui.IntegerElementID(uint64(ix)))).
 				Role(gpui.RoleTreeItem).
 				AriaLabel(entry.item.Label).
 				AriaSelected(entryState.selected)

@@ -30,7 +30,7 @@ func (v *vlHarness) Render(_ *gpui.Window, cx *gpui.Context[vlHarness]) gpui.Any
 			*visibleRanges = append(*visibleRanges, vlRange{start, end})
 			items := make([]*gpui.DivElement, 0, end-start)
 			for ix := start; ix < end; ix++ {
-				items = append(items, gpui.Div().W(gpui.Px(itemSizes[ix].Width)).H(gpui.Px(itemSizes[ix].Height)).DebugSelector(fmt.Sprintf("vl-item-%d", ix)))
+				items = append(items, gpui.Div().Flex().W(gpui.Px(itemSizes[ix].Width)).H(gpui.Px(itemSizes[ix].Height)).DebugSelector(fmt.Sprintf("vl-item-%d", ix)))
 			}
 			return items
 		}).

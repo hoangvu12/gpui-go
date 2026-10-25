@@ -65,9 +65,9 @@ func newSmoothKeyboardFixture(t *testing.T) (f *scrollFixture, handle ScrollHand
 	focus = app.FocusHandle().TabStop(true)
 	view := NewEntity(app, window.Scope(), func(v *scrollView, cx *Context[scrollView]) {
 		v.build = func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-			scroller := Div().ID("scroller").W(Px(100)).H(Px(100)).FlexCol().OverflowYScroll().TrackScroll(handle).
-				Child(Div().W(Px(100)).H(Px(300)).FlexShrink0()).
-				Child(Div().ID("target").W(Px(100)).H(Px(50)).FlexShrink0().TrackFocus(focus))
+			scroller := Div().Flex().ID("scroller").W(Px(100)).H(Px(100)).FlexCol().OverflowYScroll().TrackScroll(handle).
+				Child(Div().Flex().W(Px(100)).H(Px(300)).FlexShrink0()).
+				Child(Div().Flex().ID("target").W(Px(100)).H(Px(50)).FlexShrink0().TrackFocus(focus))
 			return scroller.IntoElement()
 		}
 	})
@@ -325,9 +325,9 @@ func TestSmoothScrollReducedMotionIsInstant(t *testing.T) {
 	focus := app.FocusHandle().TabStop(true)
 	view := NewEntity(app, window.Scope(), func(v *scrollView, cx *Context[scrollView]) {
 		v.build = func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-			scroller := Div().ID("scroller").W(Px(100)).H(Px(100)).FlexCol().OverflowYScroll().TrackScroll(handle).
-				Child(Div().W(Px(100)).H(Px(300)).FlexShrink0()).
-				Child(Div().ID("target").W(Px(100)).H(Px(50)).FlexShrink0().TrackFocus(focus))
+			scroller := Div().Flex().ID("scroller").W(Px(100)).H(Px(100)).FlexCol().OverflowYScroll().TrackScroll(handle).
+				Child(Div().Flex().W(Px(100)).H(Px(300)).FlexShrink0()).
+				Child(Div().Flex().ID("target").W(Px(100)).H(Px(50)).FlexShrink0().TrackFocus(focus))
 			return scroller.IntoElement()
 		}
 	})
@@ -464,7 +464,7 @@ func TestSmoothScrollClampsTheTargetIntoTheRange(t *testing.T) {
 	inner := NewScrollHandle()
 	outer := NewScrollHandle()
 	f := newSmoothScrollFixture(t, Size{Width: 300, Height: 300}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-		return Div().ID("root").SizeFull().Child(nestedWheelScrollers(outer, inner, nil)).IntoElement()
+		return Div().Flex().ID("root").SizeFull().Child(nestedWheelScrollers(outer, inner, nil)).IntoElement()
 	})
 	// One notch of 100px over the inner scroller (range 200): the target
 	// clamps at -200 and the animation lands there; the outer never
@@ -496,7 +496,7 @@ func TestSmoothScrollAnchoringAdjustsARunningAnimation(t *testing.T) {
 	handle := NewScrollHandle()
 	inserted := false
 	f := newSmoothScrollFixture(t, Size{Width: 400, Height: 300}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-		scroller := Div().
+		scroller := Div().Flex().
 			ID("scroller").
 			W(Px(100)).
 			H(Px(100)).
@@ -504,10 +504,10 @@ func TestSmoothScrollAnchoringAdjustsARunningAnimation(t *testing.T) {
 			OverflowYScroll().
 			FlexCol()
 		if inserted {
-			scroller = scroller.Child(Div().ID("new").W(Px(100)).H(Px(50)).FlexShrink0().DebugSelector("new"))
+			scroller = scroller.Child(Div().Flex().ID("new").W(Px(100)).H(Px(50)).FlexShrink0().DebugSelector("new"))
 		}
 		for i := 0; i < 6; i++ {
-			scroller = scroller.Child(Div().ID(rowID(i)).W(Px(100)).H(Px(50)).FlexShrink0().DebugSelector(rowID(i)))
+			scroller = scroller.Child(Div().Flex().ID(rowID(i)).W(Px(100)).H(Px(50)).FlexShrink0().DebugSelector(rowID(i)))
 		}
 		return scroller.IntoElement()
 	})

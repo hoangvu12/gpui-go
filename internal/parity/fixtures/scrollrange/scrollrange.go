@@ -355,7 +355,7 @@ func RangeView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElemen
 		Flex().
 		AlignItems(gpui.AlignItemsFlexStart).
 		Bg(gpui.Rgb(pageBackground))
-	scroller := gpui.Div().
+	scroller := gpui.Div().Flex().
 		ID("scroller").
 		DebugSelector("scroller").
 		Size(gpui.Px(scrollerW), gpui.Px(scrollerH)).
@@ -368,7 +368,7 @@ func RangeView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElemen
 		Pt(gpui.Fraction(padTopPercent)).
 		Pb(gpui.Px(padBottom)).
 		Bg(gpui.Rgb(scrollerBg)).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("focus").
 			DebugSelector("focus").
 			Size(gpui.Px(scrollerW), gpui.Px(focusH)).
@@ -379,7 +379,7 @@ func RangeView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElemen
 			// twin.
 			OutlineNone().
 			Bg(gpui.Rgb(focusBg))).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("nested").
 			DebugSelector("nested").
 			Size(gpui.Px(scrollerW), gpui.Px(nestedH)).
@@ -387,19 +387,19 @@ func RangeView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElemen
 			AlignItems(gpui.AlignItemsFlexStart).
 			FlexShrink0().
 			Bg(gpui.Rgb(nestedBg)).
-			Child(gpui.Div().
+			Child(gpui.Div().Flex().
 				ID("tall").
 				DebugSelector("tall").
 				Size(gpui.Px(tallW), gpui.Px(tallH)).
 				FlexShrink0().
 				Bg(gpui.Rgb(tallBg)))).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("spacer").
 			DebugSelector("spacer").
 			Size(gpui.Px(scrollerW), gpui.Px(spacerH)).
 			FlexShrink0().
 			Bg(gpui.Rgb(spacerBg))).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("last").
 			DebugSelector("last").
 			Size(gpui.Px(scrollerW), gpui.Px(lastH)).
@@ -417,7 +417,7 @@ func borderView(width float32) func(log *parity.EventLog) gpui.AnyElement {
 			SizeFull().
 			Flex().
 			Bg(gpui.Rgb(pageBackground)).
-			Child(gpui.Div().
+			Child(gpui.Div().Flex().
 				ID("boxed").
 				DebugSelector("boxed").
 				Size(gpui.Px(borderBoxW), gpui.Px(borderBoxH)).
@@ -426,7 +426,7 @@ func borderView(width float32) func(log *parity.EventLog) gpui.AnyElement {
 				Border(gpui.Px(width)).
 				BorderColor(gpui.Rgb(borderColor)).
 				Bg(gpui.Rgb(pageBackground)).
-				Child(gpui.Div().
+				Child(gpui.Div().Flex().
 					ID("inner").
 					DebugSelector("inner").
 					SizeFull().
@@ -459,7 +459,7 @@ func WrongPaddingBasisView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gp
 		Flex().
 		AlignItems(gpui.AlignItemsFlexStart).
 		Bg(gpui.Rgb(pageBackground))
-	scroller := gpui.Div().
+	scroller := gpui.Div().Flex().
 		ID("scroller").
 		DebugSelector("scroller").
 		Size(gpui.Px(scrollerW), gpui.Px(scrollerH)).
@@ -470,7 +470,7 @@ func WrongPaddingBasisView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gp
 		Pt(gpui.Px(padTopPercent * scrollerH)).
 		Pb(gpui.Px(0)).
 		Bg(gpui.Rgb(scrollerBg)).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("focus").
 			DebugSelector("focus").
 			Size(gpui.Px(scrollerW), gpui.Px(focusH)).
@@ -481,7 +481,7 @@ func WrongPaddingBasisView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gp
 			// twin.
 			OutlineNone().
 			Bg(gpui.Rgb(focusBg))).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("nested").
 			DebugSelector("nested").
 			Size(gpui.Px(scrollerW), gpui.Px(nestedH)).
@@ -489,19 +489,19 @@ func WrongPaddingBasisView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gp
 			AlignItems(gpui.AlignItemsFlexStart).
 			FlexShrink0().
 			Bg(gpui.Rgb(nestedBg)).
-			Child(gpui.Div().
+			Child(gpui.Div().Flex().
 				ID("tall").
 				DebugSelector("tall").
 				Size(gpui.Px(tallW), gpui.Px(tallH)).
 				FlexShrink0().
 				Bg(gpui.Rgb(tallBg)))).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("spacer").
 			DebugSelector("spacer").
 			Size(gpui.Px(scrollerW), gpui.Px(spacerH)).
 			FlexShrink0().
 			Bg(gpui.Rgb(spacerBg))).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("last").
 			DebugSelector("last").
 			Size(gpui.Px(scrollerW), gpui.Px(lastH)).

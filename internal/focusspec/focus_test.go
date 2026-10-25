@@ -47,7 +47,7 @@ type keysView struct {
 // the typed action listener.
 func (v *keysView) Render(w *gpui.Window, cx *gpui.Context[keysView]) gpui.AnyElement {
 	transcript := v.transcript
-	return gpui.Div().
+	return gpui.Div().Flex().
 		KeyContext("Root").
 		OnKeyDown(func(e *gpui.KeyDownEvent, w *gpui.Window, app *gpui.App) {
 			*transcript = append(*transcript, "root-keydown:"+e.Keystroke.Key)
@@ -55,7 +55,7 @@ func (v *keysView) Render(w *gpui.Window, cx *gpui.Context[keysView]) gpui.AnyEl
 		OnAction(shadowAction, func(a *shadow, w *gpui.Window, app *gpui.App) {
 			*transcript = append(*transcript, "shadow")
 		}).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			KeyContext("Keys").
 			TrackFocus(v.focus).
 			OnKeyDown(func(e *gpui.KeyDownEvent, w *gpui.Window, app *gpui.App) {
@@ -296,7 +296,7 @@ type phaseView struct {
 
 func (v *phaseView) Render(w *gpui.Window, cx *gpui.Context[phaseView]) gpui.AnyElement {
 	transcript := v.transcript
-	return gpui.Div().
+	return gpui.Div().Flex().
 		KeyContext("Root").
 		CaptureKeyDown(func(e *gpui.KeyDownEvent, w *gpui.Window, app *gpui.App) {
 			*transcript = append(*transcript, "capture:root")
@@ -304,7 +304,7 @@ func (v *phaseView) Render(w *gpui.Window, cx *gpui.Context[phaseView]) gpui.Any
 		OnKeyDown(func(e *gpui.KeyDownEvent, w *gpui.Window, app *gpui.App) {
 			*transcript = append(*transcript, "bubble:root")
 		}).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			KeyContext("Keys").
 			TrackFocus(v.focus).
 			CaptureKeyDown(func(e *gpui.KeyDownEvent, w *gpui.Window, app *gpui.App) {
@@ -576,12 +576,12 @@ type releaseView struct {
 func (v *releaseView) Render(w *gpui.Window, cx *gpui.Context[releaseView]) gpui.AnyElement {
 	transcript := v.transcript
 	focus := v.focus
-	return gpui.Div().
+	return gpui.Div().Flex().
 		KeyContext("Root").
 		OnKeyDown(func(e *gpui.KeyDownEvent, w *gpui.Window, app *gpui.App) {
 			*transcript = append(*transcript, "root-keydown:"+e.Keystroke.Key)
 		}).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			KeyContext("Keys").
 			TrackFocus(focus).
 			OnKeyDown(func(e *gpui.KeyDownEvent, w *gpui.Window, app *gpui.App) {
@@ -681,14 +681,14 @@ type tabView struct {
 }
 
 func (v *tabView) Render(w *gpui.Window, cx *gpui.Context[tabView]) gpui.AnyElement {
-	return gpui.Div().
+	return gpui.Div().Flex().
 		KeyContext("Root").
-		Child(gpui.Div().KeyContext("Row").TrackFocus(v.d)).
-		Child(gpui.Div().KeyContext("Row").TrackFocus(v.a)).
-		Child(gpui.Div().KeyContext("Row").TrackFocus(v.b)).
-		Child(gpui.Div().KeyContext("Row").TrackFocus(v.c)).
-		Child(gpui.Div().KeyContext("Group").TabGroup().
-			Child(gpui.Div().TrackFocus(v.e)).
-			Child(gpui.Div().TrackFocus(v.f))).
+		Child(gpui.Div().Flex().KeyContext("Row").TrackFocus(v.d)).
+		Child(gpui.Div().Flex().KeyContext("Row").TrackFocus(v.a)).
+		Child(gpui.Div().Flex().KeyContext("Row").TrackFocus(v.b)).
+		Child(gpui.Div().Flex().KeyContext("Row").TrackFocus(v.c)).
+		Child(gpui.Div().Flex().KeyContext("Group").TabGroup().
+			Child(gpui.Div().Flex().TrackFocus(v.e)).
+			Child(gpui.Div().Flex().TrackFocus(v.f))).
 		IntoElement()
 }

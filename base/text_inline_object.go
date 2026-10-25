@@ -68,7 +68,7 @@ func measureInlineObject(text string, presentation *InlineElement, style gpui.Te
 	result := measuredInlineObject{metrics: fallback, text: text, fontSize: fontSize, textStyle: style}
 	if presentation != nil {
 		// The wrapper carries inherited marks into both layout and painting.
-		wrapper := gpui.Div().Child(presentation.element)
+		wrapper := gpui.Div().Flex().Child(presentation.element)
 		*wrapper.TextStyleMut() = textStyleSubtractDefault(style)
 		element := wrapper.IntoElement()
 		measured := element.LayoutAsRoot(gpui.AvailableSize{Width: gpui.MaxContentAvailableSpace(), Height: gpui.MaxContentAvailableSpace()}, w, app)
@@ -112,7 +112,7 @@ func (o measuredInlineObject) element() (gpui.AnyElement, bool) {
 		return *el, true
 	}
 	text := gpui.NewStyledText(o.text).WithRuns([]gpui.TextRun{o.textStyle.ToRun(len(o.text))})
-	return gpui.Div().
+	return gpui.Div().Flex().
 		W(gpui.Px(o.metrics.size.Width)).
 		H(gpui.Px(o.metrics.size.Height)).
 		TextSize(gpui.Px(o.fontSize)).

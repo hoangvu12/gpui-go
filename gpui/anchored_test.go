@@ -11,12 +11,12 @@ import "testing"
 // anchored menu.
 func anchoredTestView(position Point) func(*paintView, *Window, *Context[paintView]) AnyElement {
 	return func(*paintView, *Window, *Context[paintView]) AnyElement {
-		return Div().SizeFull().Child(
-			Div().ID("scroll-container").OverflowYScroll().SizeFull().
-				Child(Div().DebugSelector("CONTENT").H(Px(2000)).WFull()).
+		return Div().Flex().SizeFull().Child(
+			Div().Flex().ID("scroll-container").OverflowYScroll().SizeFull().
+				Child(Div().Flex().DebugSelector("CONTENT").H(Px(2000)).WFull()).
 				Child(Deferred(
 					Anchored().SnapToWindow().Position(position).Child(
-						Div().ID("menu").DebugSelector("MENU").W(Px(200)).H(Px(300)),
+						Div().Flex().ID("menu").DebugSelector("MENU").W(Px(200)).H(Px(300)),
 					),
 				).Priority(1)),
 		).IntoElement()
@@ -77,8 +77,8 @@ func TestAnchoredSnapsToWindow(t *testing.T) {
 // anchoredAt renders one anchored 200x300 menu built by configure.
 func anchoredAt(configure func(*AnchoredElement) *AnchoredElement) func(*paintView, *Window, *Context[paintView]) AnyElement {
 	return func(*paintView, *Window, *Context[paintView]) AnyElement {
-		return Div().SizeFull().Child(Deferred(
-			configure(Anchored()).Child(Div().DebugSelector("MENU").W(Px(200)).H(Px(300)).Bg(paintBlue)),
+		return Div().Flex().SizeFull().Child(Deferred(
+			configure(Anchored()).Child(Div().Flex().DebugSelector("MENU").W(Px(200)).H(Px(300)).Bg(paintBlue)),
 		)).IntoElement()
 	}
 }
@@ -107,8 +107,8 @@ func TestAnchoredSwitchAnchorFlips(t *testing.T) {
 // anchored top-right, so it keeps its anchor and snaps left.
 func TestAnchoredSwitchAnchorFallsBackToSnap(t *testing.T) {
 	f := newPaintFixture(t, func(*paintView, *Window, *Context[paintView]) AnyElement {
-		return Div().SizeFull().Child(Deferred(
-			Anchored().Position(Point{X: 500, Y: 10}).Child(Div().DebugSelector("MENU").W(Px(600)).H(Px(300))),
+		return Div().Flex().SizeFull().Child(Deferred(
+			Anchored().Position(Point{X: 500, Y: 10}).Child(Div().Flex().DebugSelector("MENU").W(Px(600)).H(Px(300))),
 		)).IntoElement()
 	})
 	f.draw()
@@ -139,9 +139,9 @@ func TestAnchoredSnapToWindowWithMarginAndClientInset(t *testing.T) {
 // insets sits at its container's content origin), then offset.
 func TestAnchoredLocalPositionAndOffset(t *testing.T) {
 	f := newPaintFixture(t, func(*paintView, *Window, *Context[paintView]) AnyElement {
-		return Div().SizeFull().Child(Div().W(Px(40)).H(Px(10))).Child(
+		return Div().Flex().SizeFull().Child(Div().Flex().W(Px(40)).H(Px(10))).Child(
 			Anchored().PositionMode(AnchoredPositionLocal).Position(Point{X: 5, Y: 6}).Offset(Point{X: 1, Y: 2}).
-				Child(Div().DebugSelector("MENU").W(Px(20)).H(Px(30))),
+				Child(Div().Flex().DebugSelector("MENU").W(Px(20)).H(Px(30))),
 		).IntoElement()
 	})
 	f.draw()

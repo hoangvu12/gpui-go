@@ -15,7 +15,7 @@ func TestScrollAnchoringKeepsVisibleContentOnInsertionAbove(t *testing.T) {
 	handle := NewScrollHandle()
 	inserted := false
 	f := newScrollFixture(t, Size{Width: 400, Height: 300}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-		scroller := Div().
+		scroller := Div().Flex().
 			ID("scroller").
 			W(Px(100)).
 			H(Px(100)).
@@ -23,10 +23,10 @@ func TestScrollAnchoringKeepsVisibleContentOnInsertionAbove(t *testing.T) {
 			OverflowYScroll().
 			FlexCol()
 		if inserted {
-			scroller = scroller.Child(Div().ID("new").W(Px(100)).H(Px(50)).FlexShrink0().DebugSelector("new"))
+			scroller = scroller.Child(Div().Flex().ID("new").W(Px(100)).H(Px(50)).FlexShrink0().DebugSelector("new"))
 		}
 		for i := 0; i < 6; i++ {
-			scroller = scroller.Child(Div().ID(rowID(i)).W(Px(100)).H(Px(50)).FlexShrink0().DebugSelector(rowID(i)))
+			scroller = scroller.Child(Div().Flex().ID(rowID(i)).W(Px(100)).H(Px(50)).FlexShrink0().DebugSelector(rowID(i)))
 		}
 		return scroller.IntoElement()
 	})
@@ -79,7 +79,7 @@ func TestScrollAnchoringDoesNotFireFromRestOrFollowUserScrolls(t *testing.T) {
 	handle := NewScrollHandle()
 	inserted := false
 	f := newScrollFixture(t, Size{Width: 400, Height: 300}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-		scroller := Div().
+		scroller := Div().Flex().
 			ID("scroller").
 			W(Px(100)).
 			H(Px(100)).
@@ -87,10 +87,10 @@ func TestScrollAnchoringDoesNotFireFromRestOrFollowUserScrolls(t *testing.T) {
 			OverflowYScroll().
 			FlexCol()
 		if inserted {
-			scroller = scroller.Child(Div().ID("new").W(Px(100)).H(Px(50)).FlexShrink0().DebugSelector("new"))
+			scroller = scroller.Child(Div().Flex().ID("new").W(Px(100)).H(Px(50)).FlexShrink0().DebugSelector("new"))
 		}
 		for i := 0; i < 6; i++ {
-			scroller = scroller.Child(Div().ID(rowID(i)).W(Px(100)).H(Px(50)).FlexShrink0().DebugSelector(rowID(i)))
+			scroller = scroller.Child(Div().Flex().ID(rowID(i)).W(Px(100)).H(Px(50)).FlexShrink0().DebugSelector(rowID(i)))
 		}
 		return scroller.IntoElement()
 	})

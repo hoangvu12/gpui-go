@@ -36,12 +36,12 @@ func wantCursor(t *testing.T, what string, got, want gpui.CursorStyle) {
 // and a disabled state style can replace it.
 func TestCursorAButtonShowsTheCursorItIsStyledWith(t *testing.T) {
 	cx := drawn(t, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.Div().Relative().Size(gpui.Px(300)).
-			Child(gpui.Div().Absolute().Left(gpui.Px(0)).Top(gpui.Px(0)).Size(gpui.Px(50)).
+		return gpui.Div().Flex().Relative().Size(gpui.Px(300)).
+			Child(gpui.Div().Flex().Absolute().Left(gpui.Px(0)).Top(gpui.Px(0)).Size(gpui.Px(50)).
 				Child(NewButton("pointer").SizeFull().CursorPointer())).
-			Child(gpui.Div().Absolute().Left(gpui.Px(100)).Top(gpui.Px(0)).Size(gpui.Px(50)).
+			Child(gpui.Div().Flex().Absolute().Left(gpui.Px(100)).Top(gpui.Px(0)).Size(gpui.Px(50)).
 				Child(NewButton("plain").SizeFull())).
-			Child(gpui.Div().Absolute().Left(gpui.Px(200)).Top(gpui.Px(0)).Size(gpui.Px(50)).
+			Child(gpui.Div().Flex().Absolute().Left(gpui.Px(200)).Top(gpui.Px(0)).Size(gpui.Px(50)).
 				Child(NewButton("disabled").SizeFull().CursorPointer().Disabled(true).
 					Styles(func(s ButtonStyles) ButtonStyles {
 						return s.Disabled(func(st *StateStyle) *StateStyle { return st.CursorNotAllowed() })
@@ -103,10 +103,10 @@ func (h *resizableCursorHarness) Render(*gpui.Window, *gpui.Context[resizableCur
 	if h.vertical {
 		group = VResizable("cursor-v")
 	}
-	return gpui.Div().W(gpui.Px(400)).H(gpui.Px(400)).Child(
+	return gpui.Div().Flex().W(gpui.Px(400)).H(gpui.Px(400)).Child(
 		group.
-			Child(NewResizablePanel().Size(150).Child(gpui.Div().SizeFull())).
-			Child(NewResizablePanel().Size(250).Child(gpui.Div().SizeFull().DebugSelector("cursor-second"))),
+			Child(NewResizablePanel().Size(150).Child(gpui.Div().Flex().SizeFull())).
+			Child(NewResizablePanel().Size(250).Child(gpui.Div().Flex().SizeFull().DebugSelector("cursor-second"))),
 	).IntoElement()
 }
 
@@ -147,7 +147,7 @@ type huggingCursorHarness struct {
 }
 
 func (h *huggingCursorHarness) Render(*gpui.Window, *gpui.Context[huggingCursorHarness]) gpui.AnyElement {
-	return gpui.Div().Relative().OverflowHidden().W(gpui.Px(200)).H(gpui.Px(200)).
+	return gpui.Div().Flex().Relative().OverflowHidden().W(gpui.Px(200)).H(gpui.Px(200)).
 		Child(NewResizeHandle[noDrag]("hug", h.axis).Inside(h.edge)).
 		IntoElement()
 }

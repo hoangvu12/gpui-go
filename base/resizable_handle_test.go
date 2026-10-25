@@ -30,7 +30,7 @@ func (p *handleProbe) tick() int {
 
 // hairline is U:resizable/resize_handle.rs:508-523.
 func hairline(axis gpui.Axis, probe *handleProbe) gpui.AnyElement {
-	line := gpui.Div().FlexNone()
+	line := gpui.Div().Flex().FlexNone()
 	if axis == gpui.AxisHorizontal {
 		line.W(gpui.Px(1)).HFull()
 	} else {
@@ -61,11 +61,11 @@ func (h *huggingHarness) Render(*gpui.Window, *gpui.Context[huggingHarness]) gpu
 	axis, probe := h.axis, h.probe
 	neighbour := func() *gpui.DivElement {
 		if axis == gpui.AxisHorizontal {
-			return gpui.Div().W(gpui.Px(100)).HFull()
+			return gpui.Div().Flex().W(gpui.Px(100)).HFull()
 		}
-		return gpui.Div().H(gpui.Px(100)).WFull()
+		return gpui.Div().Flex().H(gpui.Px(100)).WFull()
 	}
-	popover := gpui.Div().Absolute()
+	popover := gpui.Div().Flex().Absolute()
 	if axis == gpui.AxisHorizontal {
 		popover.Top0().Left(gpui.Px(50)).W(gpui.Px(300)).HFull()
 	} else {
@@ -81,7 +81,7 @@ func (h *huggingHarness) Render(*gpui.Window, *gpui.Context[huggingHarness]) gpu
 	} else {
 		row.FlexCol().H(gpui.Px(400)).W(gpui.Px(100))
 	}
-	dock := gpui.Div().Relative().OverflowHidden()
+	dock := gpui.Div().Flex().Relative().OverflowHidden()
 	if axis == gpui.AxisHorizontal {
 		dock.W(gpui.Px(200)).HFull()
 	} else {

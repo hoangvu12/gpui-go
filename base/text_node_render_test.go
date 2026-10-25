@@ -75,7 +75,7 @@ func TestTableColumnUsesPreparedInlineMetricsAfterResourceUpdate(t *testing.T) {
 	e := MarkdownExtensions{}.Plugin(textRenderPlugin{
 		testInlinePlugin: newTestInlinePlugin("test"),
 		render: func(*MarkdownNode, *InlineRenderContext, *gpui.Window, *gpui.App) (InlineElement, bool) {
-			img := gpui.Img(gpui.NewImage(gpui.ImageFormatSVG, []byte("<svg/>"))).W(gpui.Px(float32(width.Load()))).H(gpui.Px(20))
+			img := gpui.Img(gpui.NewImage(gpui.ImageFormatSVG, []byte("<svg/>"))).Flex().W(gpui.Px(float32(width.Load()))).H(gpui.Px(20))
 			return NewInlineElement(img).WithBaseline(15), true
 		},
 	})

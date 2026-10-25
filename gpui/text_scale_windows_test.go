@@ -16,7 +16,7 @@ import "testing"
 type hostRemProbe struct{}
 
 func (v *hostRemProbe) Render(w *Window, cx *Context[hostRemProbe]) AnyElement {
-	return Div().ID("probe").DebugSelector("probe").W(DefiniteRem(2)).H(Px(20)).IntoElement()
+	return Div().Flex().ID("probe").DebugSelector("probe").W(DefiniteRem(2)).H(Px(20)).IntoElement()
 }
 
 // openHostRemWindow opens a real (parked off-screen) window rendering

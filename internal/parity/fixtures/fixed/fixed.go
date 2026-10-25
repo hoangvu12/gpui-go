@@ -347,7 +347,7 @@ func WrongAbsolute(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.Any
 func buildTree(log *parity.EventLog, w *gpui.Window, _ *gpui.App, absolute bool) gpui.AnyElement {
 	focus := scrollFocusOf(log, w)
 	fixedOrAbsolute := func(id string, color uint32) *gpui.DivElement {
-		box := gpui.Div().ID(id).DebugSelector(id).Bg(gpui.Rgb(color))
+		box := gpui.Div().Flex().ID(id).DebugSelector(id).Bg(gpui.Rgb(color))
 		if absolute {
 			return box.Absolute()
 		}
@@ -361,13 +361,13 @@ func buildTree(log *parity.EventLog, w *gpui.Window, _ *gpui.App, absolute bool)
 		AlignItems(gpui.AlignItemsFlexStart).
 		Gap(gpui.Px(columnGap)).
 		Bg(gpui.Rgb(pageBackground))
-	content := gpui.Div().
+	content := gpui.Div().Flex().
 		ID("content").
 		DebugSelector("content").
 		W(gpui.Px(scrollerW)).
 		H(gpui.Px(contentH)).
 		FlexCol().
-		Child(gpui.Div().ID("row1").DebugSelector("row1").
+		Child(gpui.Div().Flex().ID("row1").DebugSelector("row1").
 			W(gpui.Px(scrollerW)).H(gpui.Px(rowH)).
 			Bg(gpui.Rgb(row1Bg)).
 			TrackFocus(*focus)).
@@ -377,11 +377,11 @@ func buildTree(log *parity.EventLog, w *gpui.Window, _ *gpui.App, absolute bool)
 			W(gpui.Px(fixedAW)).
 			H(gpui.Px(fixedAH)))
 	for i := 0; i < fillerRows; i++ {
-		content = content.Child(gpui.Div().
+		content = content.Child(gpui.Div().Flex().
 			W(gpui.Px(scrollerW)).H(gpui.Px(rowH)).
 			Bg(gpui.Rgb(fillerBg)))
 	}
-	scroller := gpui.Div().
+	scroller := gpui.Div().Flex().
 		ID("scroller").
 		DebugSelector("scroller").
 		W(gpui.Px(scrollerW)).
@@ -394,7 +394,7 @@ func buildTree(log *parity.EventLog, w *gpui.Window, _ *gpui.App, absolute bool)
 		Bg(gpui.Rgb(scrollerBg)).
 		Child(content)
 	root.Child(scroller)
-	root.Child(gpui.Div().
+	root.Child(gpui.Div().Flex().
 		ID("ancestor").
 		DebugSelector("ancestor").
 		W(gpui.Px(ancestorW)).
@@ -414,16 +414,16 @@ func buildTree(log *parity.EventLog, w *gpui.Window, _ *gpui.App, absolute bool)
 				Top(gpui.Px(fixedBY)).
 				W(gpui.Px(fixedBW)).
 				H(gpui.Px(fixedBH)))))
-	root.Child(gpui.Div().
+	root.Child(gpui.Div().Flex().
 		ID("stack").
 		DebugSelector("stack").
 		W(gpui.Px(stackW)).
 		H(gpui.Px(stackH)).
 		FlexCol().
-		Child(gpui.Div().ID("row-a").DebugSelector("row-a").
+		Child(gpui.Div().Flex().ID("row-a").DebugSelector("row-a").
 			W(gpui.Px(rowAW)).H(gpui.Px(rowAH)).
 			Bg(gpui.Rgb(rowABg))).
-		Child(gpui.Div().ID("row-b").DebugSelector("row-b").
+		Child(gpui.Div().Flex().ID("row-b").DebugSelector("row-b").
 			W(gpui.Px(rowBW)).H(gpui.Px(rowBH)).
 			Bg(gpui.Rgb(rowBBg))).
 		Child(fixedOrAbsolute("fixed-c", fixedCBg).
@@ -431,10 +431,10 @@ func buildTree(log *parity.EventLog, w *gpui.Window, _ *gpui.App, absolute bool)
 			Top(gpui.Px(fixedCY)).
 			W(gpui.Px(fixedCW)).
 			H(gpui.Px(fixedCH))).
-		Child(gpui.Div().ID("row-c").DebugSelector("row-c").
+		Child(gpui.Div().Flex().ID("row-c").DebugSelector("row-c").
 			W(gpui.Px(rowCW)).H(gpui.Px(rowCH)).
 			Bg(gpui.Rgb(rowCBg))).
-		Child(gpui.Div().ID("row-d").DebugSelector("row-d").
+		Child(gpui.Div().Flex().ID("row-d").DebugSelector("row-d").
 			W(gpui.Px(rowDW)).H(gpui.Px(rowDH)).
 			Bg(gpui.Rgb(rowDBg))))
 	return root.IntoElement()

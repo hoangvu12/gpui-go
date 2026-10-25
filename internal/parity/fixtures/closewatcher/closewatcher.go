@@ -570,7 +570,7 @@ func EscapePerOverlay(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.An
 // focus handle (the page's buttons are focusable, and the keydown
 // entries' focus field reads it).
 func invokerBox(log *parity.EventLog, id string, x, y float32, focus gpui.FocusHandle, overlay gpui.OverlayHandle) *gpui.DivElement {
-	return gpui.Div().ID(id).DebugSelector(id).
+	return gpui.Div().Flex().ID(id).DebugSelector(id).
 		Absolute().Top(gpui.Px(y)).Left(gpui.Px(x)).
 		W(gpui.Px(invokerW)).H(gpui.Px(invokerH)).
 		Bg(gpui.Rgb(invokerBlue)).
@@ -587,7 +587,7 @@ func invokerBox(log *parity.EventLog, id string, x, y float32, focus gpui.FocusH
 // anchorBox builds the root-level focusable anchor the Tab default
 // moves focus onto.
 func anchorBox(log *parity.EventLog, state *cwState) *gpui.DivElement {
-	return gpui.Div().ID("anchor").DebugSelector("anchor").
+	return gpui.Div().Flex().ID("anchor").DebugSelector("anchor").
 		Absolute().Top(gpui.Px(anchorY)).Left(gpui.Px(anchorX)).
 		W(gpui.Px(invokerW)).H(gpui.Px(invokerH)).
 		Bg(gpui.Rgb(anchorGray)).
@@ -599,7 +599,7 @@ func anchorBox(log *parity.EventLog, state *cwState) *gpui.DivElement {
 // and keydown listeners the page's data-id instrumentation binds (and
 // the hitbox they insert — the light-dismiss chain's containment).
 func popoverBox(log *parity.EventLog, id string, x, y, w, h float32, background uint32) *gpui.DivElement {
-	return gpui.Div().ID(id).DebugSelector(id).
+	return gpui.Div().Flex().ID(id).DebugSelector(id).
 		Absolute().Top(gpui.Px(y)).Left(gpui.Px(x)).
 		W(gpui.Px(w)).H(gpui.Px(h)).
 		Bg(gpui.Rgb(background)).

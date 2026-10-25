@@ -32,7 +32,7 @@ type View struct {
 // explicit wiring when the host is mounted.
 func (v *View) Render(w *gpui.Window, cx *gpui.Context[View]) gpui.AnyElement {
 	if v.Host == nil {
-		return gpui.Div().IntoElement()
+		return gpui.Div().Flex().IntoElement()
 	}
 	if cx != nil {
 		if v.Host.Notify == nil && w != nil {

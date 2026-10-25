@@ -38,7 +38,7 @@ func (v *tooltipView) ensureFocusHandles(w *Window) {
 func (v *tooltipView) Render(w *Window, cx *Context[tooltipView]) AnyElement {
 	v.ensureFocusHandles(w)
 	root := Div().ID("root").SizeFull().Flex().Bg(overlayColors.page)
-	b1 := Div().ID("b1").DebugSelector("b1").
+	b1 := Div().Flex().ID("b1").DebugSelector("b1").
 		Absolute().Top(Px(0)).Left(Px(0)).W(Px(40)).H(Px(20)).
 		Bg(overlayColors.invoker).
 		TrackFocus(v.b1).
@@ -47,7 +47,7 @@ func (v *tooltipView) Render(w *Window, cx *Context[tooltipView]) AnyElement {
 		})
 	if v.customContent {
 		b1 = b1.TooltipView(func(w *Window, app *App) AnyElement {
-			return Div().ID("tip").DebugSelector("tip").
+			return Div().Flex().ID("tip").DebugSelector("tip").
 				Absolute().Top(Px(24)).Left(Px(0)).W(Px(120)).H(Px(60)).
 				Bg(overlayColors.popover).Occlude().
 				OnPointerEnter(func(*PointerEnterEvent, *Window, *App) {
@@ -75,7 +75,7 @@ func (v *tooltipView) Render(w *Window, cx *Context[tooltipView]) AnyElement {
 	if !v.dropB1 {
 		root.Child(b1)
 	}
-	root.Child(Div().ID("anchor").DebugSelector("anchor").
+	root.Child(Div().Flex().ID("anchor").DebugSelector("anchor").
 		Absolute().Top(Px(0)).Left(Px(300)).W(Px(40)).H(Px(20)).
 		Bg(overlayColors.child).
 		TrackFocus(v.anchor))

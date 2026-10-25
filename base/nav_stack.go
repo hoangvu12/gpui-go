@@ -361,7 +361,7 @@ func (n *NavStack) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
 	// outgoing one is on its way out, and the incoming one is not yet
 	// where it will be.
 	if changing {
-		d.Child(gpui.Div().Absolute().Inset0().Occlude())
+		d.Child(gpui.Div().Flex().Absolute().Inset0().Occlude())
 	}
 	return d.IntoElement()
 }

@@ -693,7 +693,7 @@ type activationLog struct {
 }
 
 func (a *activationLog) Render(w *Window, cx *Context[activationLog]) AnyElement {
-	return Div().SizeFull().IntoElement()
+	return Div().Flex().SizeFull().IntoElement()
 }
 
 // TestRealWindowActivationReachesObservers checks the OS activation

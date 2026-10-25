@@ -42,7 +42,7 @@ func debugBounds(t *testing.T, cx *gpui.VisualTestContext, selector string) gpui
 
 // column is the fixed-width test column (U:styled.rs:225-231).
 func column(selector string, height float32) *gpui.DivElement {
-	return gpui.Div().W(gpui.Px(20)).H(gpui.Px(height)).FlexShrink0().DebugSelector(selector)
+	return gpui.Div().Flex().W(gpui.Px(20)).H(gpui.Px(height)).FlexShrink0().DebugSelector(selector)
 }
 
 // U:styled.rs:261-284: h_flex centers on the cross axis while v_flex
@@ -50,15 +50,15 @@ func column(selector string, height float32) *gpui.DivElement {
 func TestStyledHFlexCentersAndVFlexStretchesOnTheCrossAxis(t *testing.T) {
 	ta := gpui.NewTestApp()
 	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.Div().
+		return gpui.Div().Flex().
 			W(gpui.Px(200)).
 			H(gpui.Px(100)).
 			Child(HFlex().
 				SizeFull().
 				Child(column("row-child", 40)).
 				Child(column("row-overflowing-child", 140)).
-				Child(gpui.Div().W(gpui.Px(20)).DebugSelector("row-stretch"))).
-			Child(VFlex().SizeFull().DebugSelector("col").Child(gpui.Div().H(gpui.Px(20)).DebugSelector("col-stretch"))).
+				Child(gpui.Div().Flex().W(gpui.Px(20)).DebugSelector("row-stretch"))).
+			Child(VFlex().SizeFull().DebugSelector("col").Child(gpui.Div().Flex().H(gpui.Px(20)).DebugSelector("col-stretch"))).
 			IntoElement()
 	})
 	cx.RunUntilParked()
@@ -95,7 +95,7 @@ func TestStyledHFlexCentersAndVFlexStretchesOnTheCrossAxis(t *testing.T) {
 
 // Go-own: the StyledExt wrapper writes the pinned fields.
 func TestStyledExtWritesThePinnedFields(t *testing.T) {
-	d := StyledExtOf(gpui.Div()).Paddings(EdgesAll(gpui.Px(4)))
+	d := StyledExtOf(gpui.Div().Flex()).Paddings(EdgesAll(gpui.Px(4)))
 	d = StyledExtOf(d).CornerRadii(gpui.Corners{TopLeft: 1, TopRight: 2, BottomRight: 3, BottomLeft: 4})
 	d = StyledExtOf(d).FontSemibold()
 	d = StyledExtOf(d).DebugRed()
@@ -121,7 +121,7 @@ func TestStyledExtWritesThePinnedFields(t *testing.T) {
 // U:observe.rs:45-51: observation preserves identity and the native type
 // in normal builds.
 func TestObservationPreservesIdentityAndNativeTypeInNormalBuilds(t *testing.T) {
-	div := gpui.Div().ID("target")
+	div := gpui.Div().Flex().ID("target")
 	element := TestSupport(TestSupport(div))
 	if element != div {
 		t.Fatal("test_support changed the element")
@@ -137,8 +137,8 @@ func TestElementExtOnPrepaintReportsBounds(t *testing.T) {
 	ta := gpui.NewTestApp()
 	var seen []gpui.Bounds
 	openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		inner := gpui.Div().Relative().W(gpui.Px(40)).H(gpui.Px(30)).Mt(gpui.Px(10))
-		return gpui.Div().Child(ElementExtOf(inner).OnPrepaint(func(b gpui.Bounds, _ *gpui.Window, _ *gpui.App) {
+		inner := gpui.Div().Flex().Relative().W(gpui.Px(40)).H(gpui.Px(30)).Mt(gpui.Px(10))
+		return gpui.Div().Flex().Child(ElementExtOf(inner).OnPrepaint(func(b gpui.Bounds, _ *gpui.Window, _ *gpui.App) {
 			seen = append(seen, b)
 		})).IntoElement()
 	})
@@ -156,8 +156,8 @@ func TestInteractiveElementExtOnDoubleClick(t *testing.T) {
 	ta := gpui.NewTestApp()
 	fired := 0
 	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		target := gpui.Div().ID("target").Size(gpui.Px(50))
-		return gpui.Div().SizeFull().Child(InteractiveElementExtOf(target).OnDoubleClick(
+		target := gpui.Div().Flex().ID("target").Size(gpui.Px(50))
+		return gpui.Div().Flex().SizeFull().Child(InteractiveElementExtOf(target).OnDoubleClick(
 			func(*gpui.ClickEvent, *gpui.Window, *gpui.App) { fired++ })).IntoElement()
 	})
 	at := gpui.Point{X: 10, Y: 10}
@@ -180,13 +180,13 @@ func TestInteractiveElementExtOnDoubleClick(t *testing.T) {
 type rootTestContent struct{}
 
 func (*rootTestContent) Render(*gpui.Window, *gpui.Context[rootTestContent]) gpui.AnyElement {
-	return gpui.Div().IntoElement()
+	return gpui.Div().Flex().IntoElement()
 }
 
 type rootTestLayer struct{}
 
 func (*rootTestLayer) Render(*gpui.Window, *gpui.Context[rootTestLayer]) gpui.AnyElement {
-	return gpui.Div().IntoElement()
+	return gpui.Div().Flex().IntoElement()
 }
 
 func rootTestLayerBuild(*rootTestLayer, *gpui.Window, *gpui.Context[rootTestLayer]) {}
@@ -235,7 +235,7 @@ type hookPlugin struct {
 }
 
 func (*hookPlugin) Render(*gpui.Window, *gpui.Context[hookPlugin]) gpui.AnyElement {
-	return gpui.Div().DebugSelector("plugin-overlay").SizeFull().IntoElement()
+	return gpui.Div().Flex().DebugSelector("plugin-overlay").SizeFull().IntoElement()
 }
 
 func (p *hookPlugin) Prepare(*gpui.Window, *gpui.Context[hookPlugin]) {
@@ -252,7 +252,7 @@ func (p *hookPlugin) Decorate(surface gpui.AnyElement, root *Root, _ *gpui.Windo
 	if root.View() == nil {
 		panic("decorate saw no view")
 	}
-	return gpui.Div().DebugSelector("decorated").SizeFull().Child(surface).IntoElement()
+	return gpui.Div().Flex().DebugSelector("decorated").SizeFull().Child(surface).IntoElement()
 }
 
 // Go-own: the three plugin stages run in order, the instance style wins
@@ -290,13 +290,13 @@ type tabView struct {
 }
 
 func (v *tabView) Render(*gpui.Window, *gpui.Context[tabView]) gpui.AnyElement {
-	trap := gpui.Div().TrackFocus(v.container)
+	trap := gpui.Div().Flex().TrackFocus(v.container)
 	for _, stop := range v.inside {
-		trap = trap.Child(gpui.Div().Size(gpui.Px(10)).TrackFocus(stop))
+		trap = trap.Child(gpui.Div().Flex().Size(gpui.Px(10)).TrackFocus(stop))
 	}
-	return gpui.Div().SizeFull().
+	return gpui.Div().Flex().SizeFull().
 		Child(trap).
-		Child(gpui.Div().Size(gpui.Px(10)).TrackFocus(v.outside)).
+		Child(gpui.Div().Flex().Size(gpui.Px(10)).TrackFocus(v.outside)).
 		IntoElement()
 }
 

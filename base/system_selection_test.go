@@ -29,8 +29,8 @@ func withSystemSelectionColors(t *testing.T, ta *gpui.TestApp, colors gpui.Selec
 func TestSelectableTextSelectionPaintsWithTheSystemWash(t *testing.T) {
 	ta := textTestApp(t)
 	_, cx := openSelectionView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.Div().SizeFull().Child(TextSelectionLayer{}).Child(
-			gpui.Div().W(gpui.Px(240)).H(gpui.Px(32)).Child(NewSelectableText("local", "alpha beta")),
+		return gpui.Div().Flex().SizeFull().Child(TextSelectionLayer{}).Child(
+			gpui.Div().Flex().W(gpui.Px(240)).H(gpui.Px(32)).Child(NewSelectableText("local", "alpha beta")),
 		).IntoElement()
 	})
 	drawText(t, cx)
@@ -72,8 +72,8 @@ func TestSelectableTextSelectionFollowsTheInjectedSystemColors(t *testing.T) {
 	withSystemSelectionColors(t, ta, injected)
 
 	_, cx := openSelectionView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.Div().SizeFull().Child(TextSelectionLayer{}).Child(
-			gpui.Div().W(gpui.Px(240)).H(gpui.Px(32)).Child(NewSelectableText("local", "alpha beta")),
+		return gpui.Div().Flex().SizeFull().Child(TextSelectionLayer{}).Child(
+			gpui.Div().Flex().W(gpui.Px(240)).H(gpui.Px(32)).Child(NewSelectableText("local", "alpha beta")),
 		).IntoElement()
 	})
 	drawText(t, cx)
@@ -102,8 +102,8 @@ func TestSelectableTextSelectionFollowsTheInjectedSystemColors(t *testing.T) {
 	own := gpui.Rgb(0x00FF00).Alpha(0.3)
 	ta2 := textTestApp(t)
 	_, cx2 := openSelectionView(t, ta2, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.Div().SizeFull().Child(TextSelectionLayer{}).Child(
-			gpui.Div().W(gpui.Px(240)).H(gpui.Px(32)).Child(
+		return gpui.Div().Flex().SizeFull().Child(TextSelectionLayer{}).Child(
+			gpui.Div().Flex().W(gpui.Px(240)).H(gpui.Px(32)).Child(
 				NewSelectableText("local", "alpha beta").SelectionColor(own),
 			),
 		).IntoElement()

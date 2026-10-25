@@ -102,7 +102,7 @@ func pt(p Point) string { return fmt.Sprintf("(%g,%g)", p.X, p.Y) }
 // observeWheel wraps child in a full-size identified div whose bubble
 // wheel listener records observe() inside the dispatch.
 func observeWheel(rec *scrollSteps, observe func() string, child any) AnyElement {
-	return Div().ID("observer").SizeFull().
+	return Div().Flex().ID("observer").SizeFull().
 		OnScrollWheel(func(_ *ScrollWheelEvent, phase DispatchPhase, _ *Hitbox, _ *Window, _ *App) {
 			if phase == DispatchBubble {
 				rec.add("dispatch=%s", observe())
@@ -271,9 +271,9 @@ func TestScrollCoalesceScrollDelta(t *testing.T) {
 
 // divScroller is a 100x100 tracked scroller over a content child.
 func divScroller(handle ScrollHandle, contentW, contentH float32, configure func(*DivElement) *DivElement) *DivElement {
-	d := Div().ID("scroller").W(Px(100)).H(Px(100)).TrackScroll(handle)
+	d := Div().Flex().ID("scroller").W(Px(100)).H(Px(100)).TrackScroll(handle)
 	d = configure(d)
-	return d.Child(Div().W(Px(contentW)).H(Px(contentH)).FlexShrink0().Bg(scrollContentColor).DebugSelector("content"))
+	return d.Child(Div().Flex().W(Px(contentW)).H(Px(contentH)).FlexShrink0().Bg(scrollContentColor).DebugSelector("content"))
 }
 
 // TestScrollDivWheelTranscript is the div wheel transcript: line and
@@ -482,8 +482,8 @@ func TestScrollDivConcurrentScrollArbitration(t *testing.T) {
 // across frames, and its children prepaint under it.
 func TestScrollDivElementStateOffset(t *testing.T) {
 	f := newScrollFixture(t, Size{Width: 400, Height: 300}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-		return Div().ID("scroller").W(Px(100)).H(Px(100)).OverflowYScroll().
-			Child(Div().W(Px(100)).H(Px(300)).FlexShrink0().DebugSelector("content")).
+		return Div().Flex().ID("scroller").W(Px(100)).H(Px(100)).OverflowYScroll().
+			Child(Div().Flex().W(Px(100)).H(Px(300)).FlexShrink0().DebugSelector("content")).
 			IntoElement()
 	})
 	f.wheel(50, 50, ScrollDeltaPixels(0, -40), TouchPhaseMoved)
@@ -520,7 +520,7 @@ func TestScrollBuildersRequireElementID(t *testing.T) {
 				}
 			}()
 			newScrollFixture(t, Size{Width: 100, Height: 100}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-				return build(Div().Size(Px(50))).IntoElement()
+				return build(Div().Flex().Size(Px(50))).IntoElement()
 			})
 		})
 	}
@@ -534,9 +534,9 @@ func TestScrollBuildersRequireElementID(t *testing.T) {
 func TestScrollHandleScrollToItemAndBottom(t *testing.T) {
 	handle := NewScrollHandle()
 	f := newScrollFixture(t, Size{Width: 400, Height: 300}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-		d := Div().ID("scroller").W(Px(100)).H(Px(100)).FlexCol().OverflowYScroll().TrackScroll(handle)
+		d := Div().Flex().ID("scroller").W(Px(100)).H(Px(100)).FlexCol().OverflowYScroll().TrackScroll(handle)
 		for i := 0; i < 10; i++ {
-			d = d.Child(Div().WFull().H(Px(30)).FlexShrink0())
+			d = d.Child(Div().Flex().WFull().H(Px(30)).FlexShrink0())
 		}
 		return d.IntoElement()
 	})
@@ -630,9 +630,9 @@ func (p *offsetProbe) Paint(global *GlobalElementID, inspector *InspectorElement
 func TestScrollFractionalPaddingDoesNotMakeFittingContainerScrollable(t *testing.T) {
 	handle := NewScrollHandle()
 	newScrollFixture(t, Size{Width: 400, Height: 300}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-		return Div().SizeFull().Child(
-			Div().ID("container").H(Px(50)).W(Px(100)).Py(Px(4.25)).OverflowYScroll().TrackScroll(handle).
-				Child(Div().WFull().H(Px(42))),
+		return Div().Flex().SizeFull().Child(
+			Div().Flex().ID("container").H(Px(50)).W(Px(100)).Py(Px(4.25)).OverflowYScroll().TrackScroll(handle).
+				Child(Div().Flex().WFull().H(Px(42))),
 		).IntoElement()
 	})
 	if got := handle.MaxOffset().Y; got != 0 {
@@ -647,7 +647,7 @@ func TestScrollFractionalPaddingDoesNotMakeFittingContainerScrollable(t *testing
 func uniformItems(start, end int) []AnyElement {
 	items := make([]AnyElement, 0, end-start)
 	for ix := start; ix < end; ix++ {
-		items = append(items, Div().W(Px(200)).H(Px(20)).DebugSelector(fmt.Sprintf("item-%d", ix)).IntoElement())
+		items = append(items, Div().Flex().W(Px(200)).H(Px(20)).DebugSelector(fmt.Sprintf("item-%d", ix)).IntoElement())
 	}
 	return items
 }
@@ -712,7 +712,7 @@ func TestScrollUniformListScrollStrategyNearest(t *testing.T) {
 	handle := NewUniformListScrollHandle()
 	var visible [2]int
 	f := newScrollFixture(t, Size{Width: 400, Height: 300}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-		return Div().ID("list-example").SizeFull().Child(
+		return Div().Flex().ID("list-example").SizeFull().Child(
 			UniformList(handle, 47, func(start, end int, w *Window, app *App) []AnyElement {
 				visible = [2]int{start, end}
 				return uniformItems(start, end)
@@ -769,7 +769,7 @@ func TestScrollUniformListScrollStrategyNearest(t *testing.T) {
 
 func listRows(height float32) func(ix int, w *Window, app *App) AnyElement {
 	return func(ix int, w *Window, app *App) AnyElement {
-		return Div().H(Px(height)).WFull().DebugSelector(fmt.Sprintf("row-%d", ix)).IntoElement()
+		return Div().Flex().H(Px(height)).WFull().DebugSelector(fmt.Sprintf("row-%d", ix)).IntoElement()
 	}
 }
 
@@ -902,7 +902,7 @@ func TestScrollListChildScrollHandlerCanStopListScroll(t *testing.T) {
 	childSaw := false
 	f := newScrollFixture(t, Size{Width: 100, Height: 100}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
 		return List(state, func(ix int, w *Window, app *App) AnyElement {
-			return Div().H(Px(20)).WFull().
+			return Div().Flex().H(Px(20)).WFull().
 				OnScrollWheel(func(_ *ScrollWheelEvent, phase DispatchPhase, hitbox *Hitbox, w *Window, app *App) {
 					if phase == DispatchBubble && hitbox.ShouldHandleScroll(w) {
 						childSaw = true
@@ -927,7 +927,7 @@ func listHeights(special int, height *float32) func(ix int, w *Window, app *App)
 		if ix == special {
 			h = *height
 		}
-		return Div().H(Px(h)).WFull().IntoElement()
+		return Div().Flex().H(Px(h)).WFull().IntoElement()
 	}
 }
 
@@ -1001,7 +1001,7 @@ func TestScrollListScrollbarDragWithGrowingContent(t *testing.T) {
 			if ix == 9 {
 				h = last
 			}
-			return Div().H(Px(h)).WFull().IntoElement()
+			return Div().Flex().H(Px(h)).WFull().IntoElement()
 		}).SizeFull().IntoElement()
 	})
 	state.ScrollbarDragStarted()

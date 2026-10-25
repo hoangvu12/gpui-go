@@ -83,7 +83,7 @@ func TestForcedColorsPassIsOffWithoutForcedColors(t *testing.T) {
 	if state := app.ForcedColors(); state.Active {
 		t.Fatalf("App.ForcedColors() = %+v, want inactive without forced colours", state)
 	}
-	d := Div().
+	d := Div().Flex().
 		TextColor(Rgb(0xdc2626)).
 		Bg(Rgb(0x2563eb).Alpha(0.5)).
 		Border(Px(2)).
@@ -111,7 +111,7 @@ func TestForcedColorsPassIsOffWithoutForcedColors(t *testing.T) {
 func TestForcedColorsPassIsOffWhenTheOverrideReportsNoForcedColors(t *testing.T) {
 	app, window := newForcedColorsFixture(t)
 	app.SetForcedColors(&ForcedColorsState{Active: false, Colors: forcedColorsTestPalette()})
-	d := Div().TextColor(Rgb(0xdc2626)).Bg(Rgb(0x2563eb))
+	d := Div().Flex().TextColor(Rgb(0xdc2626)).Bg(Rgb(0x2563eb))
 	style := styleOf(app, window, d)
 	if color, ok := style.Text.Color.Get(); !ok || color != Rgb(0xdc2626) {
 		t.Fatalf("text color = %v (present %v), want the authored red", color, ok)
@@ -131,7 +131,7 @@ func TestForcedColorsMapsStyleColorsToSystemColors(t *testing.T) {
 	forceForcedColors(app)
 	underlineRed := Rgb(0xdc2626)
 	strikeGreen := Rgb(0x16a34a)
-	d := Div().
+	d := Div().Flex().
 		TextColor(Rgb(0xdc2626)).
 		Bg(Rgb(0x2563eb).Alpha(0.5)).
 		Border(Px(2)).
@@ -175,7 +175,7 @@ func TestForcedColorsMapsStyleColorsToSystemColors(t *testing.T) {
 func TestForcedColorsForcesUnauthoredColorsToo(t *testing.T) {
 	app, window := newForcedColorsFixture(t)
 	forceForcedColors(app)
-	style := styleOf(app, window, Div().Bg(Rgb(0xffffff)))
+	style := styleOf(app, window, Div().Flex().Bg(Rgb(0xffffff)))
 	if color, ok := style.Text.Color.Get(); !ok || color != Rgb(0xffffff) {
 		t.Fatalf("text color = %v (present %v), want CanvasText forced on a colorless element", color, ok)
 	}
@@ -192,7 +192,7 @@ func TestForcedColorsForcesUnauthoredColorsToo(t *testing.T) {
 func TestForcedColorsKeepsTransparentBackgroundsInvisible(t *testing.T) {
 	app, window := newForcedColorsFixture(t)
 	forceForcedColors(app)
-	style := styleOf(app, window, Div().Bg(Rgb(0x2563eb).Alpha(0)))
+	style := styleOf(app, window, Div().Flex().Bg(Rgb(0x2563eb).Alpha(0)))
 	if bg := style.Background; bg == nil || !bg.IsTransparent() {
 		t.Fatalf("background = %+v, want a fully transparent Canvas", bg)
 	}
@@ -211,7 +211,7 @@ func TestForcedColorsClearsGradientBackgrounds(t *testing.T) {
 		From:      GradientStop{Color: Rgb(0xdc2626), Position: 0},
 		To:        GradientStop{Color: Rgb(0x2563eb), Position: 1},
 	}}
-	style := styleOf(app, window, Div().Bg(gradient))
+	style := styleOf(app, window, Div().Flex().Bg(gradient))
 	if bg := style.Background; bg != nil {
 		t.Fatalf("background = %+v, want the cleared gradient (no background)", bg)
 	}
@@ -224,7 +224,7 @@ func TestForcedColorsClearsGradientBackgrounds(t *testing.T) {
 func TestForcedColorAdjustNoneOptsOutOfThePass(t *testing.T) {
 	app, window := newForcedColorsFixture(t)
 	forceForcedColors(app)
-	d := Div().
+	d := Div().Flex().
 		ForcedColorAdjustNone().
 		TextColor(Rgb(0xdc2626)).
 		Bg(Rgb(0x2563eb).Alpha(0.5)).
@@ -256,7 +256,7 @@ func TestForcedColorAdjustNoneClass(t *testing.T) {
 	if err := CheckClasses("forced-color-adjust-none"); err != nil {
 		t.Fatalf("the forced-color-adjust-none class must apply: %v", err)
 	}
-	d := Div().Class("forced-color-adjust-none")
+	d := Div().Flex().Class("forced-color-adjust-none")
 	value, ok := d.StyleMut().ForcedColorAdjust.Get()
 	if !ok || value != ForcedColorAdjustNone {
 		t.Fatalf("the class set ForcedColorAdjust = %+v (present %v), want none", value, ok)
@@ -289,7 +289,7 @@ func TestSetForcedColorsPinsAndClearsTheOverride(t *testing.T) {
 func TestForcedColorsMapsTheImageStyle(t *testing.T) {
 	app, window := newForcedColorsFixture(t)
 	forceForcedColors(app)
-	img := Img(NewImage(ImageFormatPNG, nil)).
+	img := Img(NewImage(ImageFormatPNG, nil)).Flex().
 		Bg(Rgb(0x2563eb).Alpha(0.25)).
 		Border(Px(1)).
 		BorderColor(Rgb(0x16a34a))

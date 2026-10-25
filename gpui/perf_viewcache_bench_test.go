@@ -47,7 +47,7 @@ func perfPaneChild(view gpui.View, cached bool, width, height float32) any {
 	if cached {
 		child = gpui.CachedView(view, gpui.Styles().SizeFull())
 	}
-	return gpui.Div().W(gpui.Px(width)).H(gpui.Px(height)).Child(child)
+	return gpui.Div().Flex().W(gpui.Px(width)).H(gpui.Px(height)).Child(child)
 }
 
 // perfCachedDivRoot is ticket 01's div root with each pane in a fixed cell.
@@ -74,7 +74,7 @@ type perfTextPane struct {
 func (p *perfTextPane) Render(w *gpui.Window, cx *gpui.Context[perfTextPane]) gpui.AnyElement {
 	rows := make([]any, 0, len(p.lines))
 	for _, line := range p.lines {
-		rows = append(rows, gpui.Div().Child(line))
+		rows = append(rows, gpui.Div().Flex().Child(line))
 	}
 	return gpui.Div().Flex().FlexCol().W(gpui.Px(perfColumnWidthP)).TextXs().Children(rows...).IntoElement()
 }

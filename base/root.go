@@ -280,7 +280,7 @@ func (r *Root) Render(w *gpui.Window, cx *gpui.Context[Root]) gpui.AnyElement {
 	for _, plugin := range r.plugins {
 		overlays = append(overlays, plugin.view)
 	}
-	content := gpui.Div().
+	content := gpui.Div().Flex().
 		ID("root").
 		KeyContext(rootContext).
 		OnAction(CopyAction, cx.Listener(func(r *Root, a *Copy, w *gpui.Window, cx *gpui.Context[Root]) {
@@ -290,7 +290,7 @@ func (r *Root) Render(w *gpui.Window, cx *gpui.Context[Root]) gpui.AnyElement {
 		SizeFull().
 		Child(TextSelectionLayer{}).
 		Child(r.view).
-		Child(gpui.Div().Absolute().Inset0().Children(overlays...))
+		Child(gpui.Div().Flex().Absolute().Inset0().Children(overlays...))
 	for _, plugin := range r.plugins {
 		plugin.style(content, w, app)
 	}

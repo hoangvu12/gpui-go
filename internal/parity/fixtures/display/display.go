@@ -320,7 +320,7 @@ func WrongModesView(_ *parity.EventLog) gpui.AnyElement {
 // the correct view (display: contents) or the wrong one (the default
 // flex).
 func modesRoot(contentsElements bool) gpui.AnyElement {
-	root := gpui.Div().
+	root := gpui.Div().Flex().
 		ID("root").
 		DebugSelector("root").
 		SizeFull().
@@ -365,17 +365,17 @@ func modesRoot(contentsElements bool) gpui.AnyElement {
 			InlineGrid().
 			Size(gpui.Px(gridW), gpui.Px(boxH)).
 			GridTemplateCols(gpui.GridTemplate{Repeat: 2, MinSize: gpui.GridTemplateMinZero}).
-			Child(gpui.Div().
+			Child(gpui.Div().Flex().
 				ID("g1").
 				DebugSelector("g1").
 				Size(gpui.Px(gridCol), gpui.Px(boxH)).
 				Bg(gpui.Rgb(0xd97706))).
-			Child(gpui.Div().
+			Child(gpui.Div().Flex().
 				ID("g2").
 				DebugSelector("g2").
 				Size(gpui.Px(gridCol), gpui.Px(boxH)).
 				Bg(gpui.Rgb(0xd97706))))
-	nest := gpui.Div().
+	nest := gpui.Div().Flex().
 		ID("nest").
 		DebugSelector("nest").
 		W(gpui.Px(boxW)).
@@ -396,7 +396,7 @@ func modesRoot(contentsElements bool) gpui.AnyElement {
 
 // solidBox is one flat-coloured compared box.
 func solidBox(id string, color uint32) *gpui.DivElement {
-	return gpui.Div().
+	return gpui.Div().Flex().
 		ID(id).
 		DebugSelector(id).
 		Size(gpui.Px(boxW), gpui.Px(boxH)).
@@ -407,7 +407,7 @@ func solidBox(id string, color uint32) *gpui.DivElement {
 // contentsBox is the contents element with inert box styles (the
 // page's .contents twin): no box, its children spliced into the parent.
 func contentsBox(contents bool, children ...*gpui.DivElement) *gpui.DivElement {
-	box := gpui.Div().Bg(gpui.Rgb(contentsRed)).Size(gpui.Px(999), gpui.Px(999)).P(gpui.Px(8))
+	box := gpui.Div().Flex().Bg(gpui.Rgb(contentsRed)).Size(gpui.Px(999), gpui.Px(999)).P(gpui.Px(8))
 	if contents {
 		box = box.Contents()
 	}
@@ -525,7 +525,7 @@ func overflowView(_ *parity.EventLog) gpui.AnyElement {
 // approximation).
 func overflowRoot() gpui.AnyElement {
 	scroller := func(id, rowID, fillID string, overfill bool) *gpui.DivElement {
-		s := gpui.Div().
+		s := gpui.Div().Flex().
 			ID(id).
 			DebugSelector(id).
 			Size(gpui.Px(scW), gpui.Px(scH)).
@@ -533,7 +533,7 @@ func overflowRoot() gpui.AnyElement {
 			FlexShrink0().
 			OverflowXHidden().
 			Bg(gpui.Rgb(scrollerBg)).
-			Child(gpui.Div().
+			Child(gpui.Div().Flex().
 				ID(rowID).
 				DebugSelector(rowID).
 				H(gpui.Px(rowH)).
@@ -541,7 +541,7 @@ func overflowRoot() gpui.AnyElement {
 				Bg(gpui.Rgb(fitsBg)))
 		s = s.OverflowYAuto()
 		if overfill {
-			s = s.Child(gpui.Div().
+			s = s.Child(gpui.Div().Flex().
 				ID(fillID).
 				DebugSelector(fillID).
 				H(gpui.Px(fillH)).
@@ -550,7 +550,7 @@ func overflowRoot() gpui.AnyElement {
 		}
 		return s
 	}
-	root := gpui.Div().
+	root := gpui.Div().Flex().
 		ID("root").
 		DebugSelector("root").
 		SizeFull().
@@ -569,7 +569,7 @@ func overflowRoot() gpui.AnyElement {
 		FlexShrink0().
 		OverflowYHidden().
 		Bg(gpui.Rgb(scrollerBg)).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("h-fill").
 			DebugSelector("h-fill").
 			W(gpui.Px(hFillW)).

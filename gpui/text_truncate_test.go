@@ -96,7 +96,7 @@ type truncateView struct {
 }
 
 func (v *truncateView) Render(w *Window, cx *Context[truncateView]) AnyElement {
-	return Div().Child(v.style(Div().FlexCol().W(PxLength(100))).Child(v.child())).IntoElement()
+	return Div().Flex().Child(v.style(Div().Flex().FlexCol().W(PxLength(100))).Child(v.child())).IntoElement()
 }
 
 func drawTruncateView(t *testing.T, style func(*DivElement) *DivElement, child func() AnyElement) []string {

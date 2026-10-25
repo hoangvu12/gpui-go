@@ -27,7 +27,7 @@ func (h *stepperHarness) Render(*gpui.Window, *gpui.Context[stepperHarness]) gpu
 		W(gpui.Px(120)).
 		H(gpui.Px(20)).
 		DecrementButton(func(b *Button) *Button { return b.W(gpui.Px(20)).HFull() }).
-		Input(gpui.Div().SizeFull()).
+		Input(gpui.Div().Flex().SizeFull()).
 		IncrementButton(func(b *Button) *Button { return b.W(gpui.Px(20)).HFull() }))
 }
 

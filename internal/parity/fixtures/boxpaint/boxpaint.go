@@ -298,7 +298,7 @@ func clipRoot(clipped bool) gpui.AnyElement {
 // and a red child as large as the whole box at the content origin, not
 // shrinking, so it overflows the clip on the right and bottom.
 func clipBox(boxID, childID string, clipped, visibleBorder bool) *gpui.DivElement {
-	box := gpui.Div().
+	box := gpui.Div().Flex().
 		ID(boxID).
 		DebugSelector(boxID).
 		W(gpui.Px(clipBoxWidth)).
@@ -311,7 +311,7 @@ func clipBox(boxID, childID string, clipped, visibleBorder bool) *gpui.DivElemen
 	if visibleBorder {
 		box = box.BorderColor(gpui.Rgb(borderDark))
 	}
-	child := gpui.Div().
+	child := gpui.Div().Flex().
 		ID(childID).
 		DebugSelector(childID).
 		W(gpui.Px(clipBoxWidth)).
@@ -407,7 +407,7 @@ func RadiiPerCornerClamp(_ *parity.EventLog) gpui.AnyElement {
 // radiiRoot builds the radii fixture's root: the uneven box over the
 // factor box, centered.
 func radiiRoot(uneven, factor *gpui.DivElement) gpui.AnyElement {
-	return gpui.Div().
+	return gpui.Div().Flex().
 		ID("root").
 		DebugSelector("root").
 		SizeFull().
@@ -424,7 +424,7 @@ func radiiRoot(uneven, factor *gpui.DivElement) gpui.AnyElement {
 // radiiBox builds one plain rounded box of the radii fixture: the
 // width, height, color and radii come from the view that builds it.
 func radiiBox(id string, width, height float32, background gpui.Hsla, radii gpui.Corners) *gpui.DivElement {
-	box := gpui.Div().
+	box := gpui.Div().Flex().
 		ID(id).
 		DebugSelector(id).
 		W(gpui.Px(width)).
@@ -532,7 +532,7 @@ func objectFitRoot(fits func(image gpui.Image) []gpui.ObjectFit) gpui.AnyElement
 		Gap(gpui.Px(frameGap)).
 		Bg(gpui.Rgb(pageBackground))
 	for i, fit := range fits(image) {
-		root = root.Child(gpui.Div().
+		root = root.Child(gpui.Div().Flex().
 			ID(ids[i]).
 			DebugSelector(ids[i]).
 			W(gpui.Px(frameWidth)).
@@ -545,7 +545,7 @@ func objectFitRoot(fits func(image gpui.Image) []gpui.ObjectFit) gpui.AnyElement
 // fittedImage builds one object-fit image: the intrinsic 60x40 source
 // inside a 128x108 box with a 4px border and 12px padding.
 func fittedImage(image gpui.Image, fit gpui.ObjectFit) *gpui.ImgElement {
-	return gpui.Img(image).
+	return gpui.Img(image).Flex().
 		ObjectFit(fit).
 		W(gpui.Px(frameWidth)).
 		H(gpui.Px(frameHeight)).

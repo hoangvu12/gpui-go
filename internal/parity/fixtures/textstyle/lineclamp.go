@@ -55,7 +55,7 @@ func init() { parity.Register(LineClampFixture) }
 // LineClamp(2) and hidden overflow — the clamp itself synthesizes the
 // end-ellipsis truncation.
 func lineClampView(log *parity.EventLog) gpui.AnyElement {
-	row := gpui.Div().
+	row := gpui.Div().Flex().
 		ID("row-clamp").
 		DebugSelector("row-clamp").
 		FlexCol().
@@ -81,7 +81,7 @@ func lineClampView(log *parity.EventLog) gpui.AnyElement {
 // which the correct view carries as its measured Tier C floor; see the
 // fixture's tolerance comment.)
 func WrongLineClampView(log *parity.EventLog) gpui.AnyElement {
-	row := gpui.Div().
+	row := gpui.Div().Flex().
 		ID("row-clamp").
 		DebugSelector("row-clamp").
 		FlexCol().

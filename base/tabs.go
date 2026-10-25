@@ -37,7 +37,7 @@ type Tab struct {
 // NewTab creates a tab with the given element id (U:tabs.rs:38-52
 // Tab::new).
 func NewTab[I gpui.IntoElementID](id I) *Tab {
-	base := gpui.Div()
+	base := gpui.Div().Flex()
 	return gpui.BindComponent(&Tab{id: gpui.ElementIDOf(id), base: base}, base)
 }
 

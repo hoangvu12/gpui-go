@@ -48,7 +48,7 @@ func recordingAnimation(deltas *[]float32, maxFPS *float32) func(*paintView, *Wi
 		} else {
 			animation = animation.Repeat()
 		}
-		return Div().SizeFull().Child(WithAnimation(Div(), "repeating-animation", animation, func(d *DivElement, delta float32) *DivElement {
+		return Div().Flex().SizeFull().Child(WithAnimation(Div().Flex(), "repeating-animation", animation, func(d *DivElement, delta float32) *DivElement {
 			*deltas = append(*deltas, delta)
 			return d
 		})).IntoElement()
@@ -59,8 +59,8 @@ func recordingAnimation(deltas *[]float32, maxFPS *float32) func(*paintView, *Wi
 // R:animation.rs:680-701 test_animation_wrappers_accept_children (the
 // animation half; MapElement is the port's ParentElement forwarding).
 func TestAnimationWrappersAcceptChildren(t *testing.T) {
-	element := WithAnimation(Div().ID("id"), "animation", NewAnimation(time.Second), func(d *DivElement, _ float32) *DivElement { return d }).
-		MapElement(func(d *DivElement) *DivElement { return d.Child(Div()) })
+	element := WithAnimation(Div().Flex().ID("id"), "animation", NewAnimation(time.Second), func(d *DivElement, _ float32) *DivElement { return d }).
+		MapElement(func(d *DivElement) *DivElement { return d.Child(Div().Flex()) })
 	if element.element.ChildCount() != 1 {
 		t.Fatalf("mapped element children = %d, want 1", element.element.ChildCount())
 	}
@@ -112,7 +112,7 @@ type sampleRecord struct {
 func TestAnimationZeroDurationSequenceAdvancesWithoutNaN(t *testing.T) {
 	var samples []sampleRecord
 	f := animationFixture(t, NewTestApp(), func(*paintView, *Window, *Context[paintView]) AnyElement {
-		return WithAnimations(Div(), "animation-sequence", []Animation{NewAnimation(time.Duration(0)), NewAnimation(time.Duration(0))}, func(d *DivElement, ix int, delta float32) *DivElement {
+		return WithAnimations(Div().Flex(), "animation-sequence", []Animation{NewAnimation(time.Duration(0)), NewAnimation(time.Duration(0))}, func(d *DivElement, ix int, delta float32) *DivElement {
 			samples = append(samples, sampleRecord{ix, delta})
 			return d
 		}).IntoElement()
@@ -175,9 +175,9 @@ func TestAnimationSyncedAnimationsSharePhaseAcrossElements(t *testing.T) {
 		}
 	}
 	f := animationFixture(t, NewTestApp(), func(*paintView, *Window, *Context[paintView]) AnyElement {
-		root := Div().SizeFull().Child(WithAnimation(Div(), "first-synced-animation", NewAnimation(time.Second).RepeatSynced(), record(&first)))
+		root := Div().Flex().SizeFull().Child(WithAnimation(Div().Flex(), "first-synced-animation", NewAnimation(time.Second).RepeatSynced(), record(&first)))
 		if showSecond {
-			root = root.Child(WithAnimation(Div(), "second-synced-animation", NewAnimation(time.Second).RepeatSynced(), record(&second)))
+			root = root.Child(WithAnimation(Div().Flex(), "second-synced-animation", NewAnimation(time.Second).RepeatSynced(), record(&second)))
 		}
 		return root.IntoElement()
 	})

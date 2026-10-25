@@ -74,7 +74,7 @@ func (v *modalView) Render(w *Window, cx *Context[modalView]) AnyElement {
 	}
 	// The invoker: its click opens the modal (the popovertarget
 	// activation's modal twin — a command=show-modal invoker).
-	root.Child(Div().ID("b1").DebugSelector("b1").
+	root.Child(Div().Flex().ID("b1").DebugSelector("b1").
 		W(Px(40)).H(Px(20)).Bg(overlayColors.invoker).
 		TrackFocus(v.focusB1).
 		OnClick(func(_ *ClickEvent, w *Window, _ *App) {
@@ -83,7 +83,7 @@ func (v *modalView) Render(w *Window, cx *Context[modalView]) AnyElement {
 		}))
 	// The outside focusable anchor: while the modal is open it is
 	// inert — Tab never reaches it and clicks fall through.
-	root.Child(Div().ID("anchor").DebugSelector("anchor").
+	root.Child(Div().Flex().ID("anchor").DebugSelector("anchor").
 		Absolute().Top(Px(0)).Left(Px(300)).W(Px(40)).H(Px(20)).
 		Bg(overlayColors.child).
 		TrackFocus(v.focusAnchor))
@@ -93,16 +93,16 @@ func (v *modalView) Render(w *Window, cx *Context[modalView]) AnyElement {
 		// and names it on the layer so the focusing steps' fallback can
 		// find it and the descendants search can skip it.
 		layer := TopLayer(v.dialog).ClosedBy(v.closedBy).DialogFocus(v.focusD)
-		d := Div().ID("d").DebugSelector("d").
+		d := Div().Flex().ID("d").DebugSelector("d").
 			Absolute().Top(Px(60)).Left(Px(20)).W(Px(150)).H(Px(120)).
 			Bg(overlayColors.popover).Occlude().
 			TrackFocus(v.focusD)
 		if !v.noButtons {
-			b1 := Div().ID("d1").DebugSelector("d1").
+			b1 := Div().Flex().ID("d1").DebugSelector("d1").
 				Absolute().Top(Px(10)).Left(Px(10)).W(Px(40)).H(Px(20)).
 				Bg(overlayColors.invoker).
 				TrackFocus(v.focusD1)
-			b2 := Div().ID("d2").DebugSelector("d2").
+			b2 := Div().Flex().ID("d2").DebugSelector("d2").
 				Absolute().Top(Px(10)).Left(Px(60)).W(Px(40)).H(Px(20)).
 				Bg(overlayColors.invoker).
 				TrackFocus(v.focusD2)
@@ -406,11 +406,11 @@ func TestA11yModalBlocksOutsideSubtree(t *testing.T) {
 	open := false
 	view := NewEntity(app, window.Scope(), func(v *a11yDivView, cx *Context[a11yDivView]) {
 		v.build = func(w *Window, cx *Context[a11yDivView]) AnyElement {
-			root := Div().ID("col").FlexCol().
+			root := Div().Flex().ID("col").FlexCol().
 				Child(ax(leaf("live").Role(RoleButton))).
 				Child(ax(leaf("frozen").Role(RoleLink)))
 			if open {
-				box := Div().ID("d").AccessibilityID("d").Role(RoleDialog).
+				box := Div().Flex().ID("d").AccessibilityID("d").Role(RoleDialog).
 					Child(ax(leaf("inner").Role(RoleCheckBox))).
 					Absolute().Top(Px(60)).Left(Px(20)).W(Px(150)).H(Px(120))
 				root.Child(TopLayer(dialogHandle).DialogFocus(dialogFocus).Child(box))

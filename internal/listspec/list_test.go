@@ -68,7 +68,7 @@ func (v *listView) Render(w *gpui.Window, cx *gpui.Context[listView]) gpui.AnyEl
 		if v.stateful {
 			return newStatefulItem(ix, spec.height, v.probes)
 		}
-		return gpui.Div().
+		return gpui.Div().Flex().
 			W(gpui.PxLength(itemWidth)).
 			H(gpui.PxLength(spec.height)).
 			DebugSelector(spec.id).
@@ -79,7 +79,7 @@ func (v *listView) Render(w *gpui.Window, cx *gpui.Context[listView]) gpui.AnyEl
 		list = list.WithSizingBehavior(v.sizing)
 	}
 	if v.parentHeight > 0 {
-		return gpui.Div().
+		return gpui.Div().Flex().
 			H(gpui.PxLength(v.parentHeight)).
 			Child(list.W(gpui.DefiniteLengthOf(gpui.Fraction(1.0)))).
 			IntoElement()

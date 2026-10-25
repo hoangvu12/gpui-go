@@ -60,7 +60,7 @@ func checkSvgSprite(t *testing.T, scene *Scene) {
 // "svg error".
 func TestImgSvgEmbeddedAssetRenders(t *testing.T) {
 	f := imgAssetFixture(t, "icons/dot.svg", []byte(imgSvgRect24x12), func(*paintView, *Window, *Context[paintView]) AnyElement {
-		return Div().SizeFull().Child(Img("icons/dot.svg").ID("dot")).IntoElement()
+		return Div().Flex().SizeFull().Child(Img("icons/dot.svg").Flex().ID("dot")).IntoElement()
 	})
 	f.draw()
 	f.ta.RunUntilParked()
@@ -78,7 +78,7 @@ func TestImgSvgEmbeddedAssetRenders(t *testing.T) {
 func TestImgSvgImageSourceRenders(t *testing.T) {
 	encoded := NewImage(ImageFormatSVG, []byte(imgSvgRect24x12))
 	f := newPaintFixture(t, func(*paintView, *Window, *Context[paintView]) AnyElement {
-		return Div().SizeFull().Child(Img(encoded)).IntoElement()
+		return Div().Flex().SizeFull().Child(Img(encoded).Flex()).IntoElement()
 	})
 	f.draw()
 	f.ta.RunUntilParked()
@@ -98,7 +98,7 @@ func TestImgSvgImageSourceRenders(t *testing.T) {
 func TestImgSvgParseErrorsKeepThePinnedVariants(t *testing.T) {
 	garbage := []byte("not an svg at all")
 	f := imgAssetFixture(t, "broken.svg", garbage, func(*paintView, *Window, *Context[paintView]) AnyElement {
-		return Div().SizeFull().Child(Img("broken.svg")).Child(Img(NewImage(ImageFormatSVG, garbage))).IntoElement()
+		return Div().Flex().SizeFull().Child(Img("broken.svg").Flex()).Child(Img(NewImage(ImageFormatSVG, garbage)).Flex()).IntoElement()
 	})
 	f.draw()
 	f.ta.RunUntilParked()

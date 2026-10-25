@@ -182,8 +182,8 @@ func TestPaintAPICanvasSceneTranscript(t *testing.T) {
 			w.PaintLayer(logical(60, 10, 20, 20), func(w *Window) {
 				w.PaintQuad(Fill(logical(60, 10, 20, 20), SolidBackground(paintYellow)))
 			})
-		}).W(Px(100)).H(Px(50)).Bg(paintRed)
-		return Div().SizeFull().Child(Div().W(Px(10)).H(Px(10))).Child(canvas).IntoElement()
+		}).Flex().W(Px(100)).H(Px(50)).Bg(paintRed)
+		return Div().Flex().SizeFull().Child(Div().Flex().W(Px(10)).H(Px(10))).Child(canvas).IntoElement()
 	})
 	scene := f.draw()
 
@@ -327,7 +327,7 @@ func (p *layoutProbe) Paint(*GlobalElementID, *InspectorElementID, Bounds, *Layo
 func TestPaintAPILayoutBoundsAndClientInset(t *testing.T) {
 	var got, given Bounds
 	f := newPaintFixture(t, func(_ *paintView, w *Window, _ *Context[paintView]) AnyElement {
-		return Div().SizeFull().Child(Div().W(Px(25)).H(Px(5))).Child(CustomElement[LayoutID, struct{}](&layoutProbe{got: &got, given: &given})).IntoElement()
+		return Div().Flex().SizeFull().Child(Div().Flex().W(Px(25)).H(Px(5))).Child(CustomElement[LayoutID, struct{}](&layoutProbe{got: &got, given: &given})).IntoElement()
 	})
 	f.draw()
 	if got != given || got != logical(25, 0, 30, 40) {
@@ -352,11 +352,11 @@ func TestPaintAPILayoutBoundsAndClientInset(t *testing.T) {
 // mouse_position - cursor_offset, above the main scene.
 func TestPaintAPIDragPreviewPainted(t *testing.T) {
 	f := newPaintFixture(t, func(_ *paintView, w *Window, _ *Context[paintView]) AnyElement {
-		return Div().SizeFull().Bg(paintGray).IntoElement()
+		return Div().Flex().SizeFull().Bg(paintGray).IntoElement()
 	})
 	preview := NewEntity(f.app, f.window.Scope(), func(v *paintView, _ *Context[paintView]) {
 		v.build = func(*paintView, *Window, *Context[paintView]) AnyElement {
-			return Div().W(Px(40)).H(Px(20)).Bg(paintBlue).IntoElement()
+			return Div().Flex().W(Px(40)).H(Px(20)).Bg(paintBlue).IntoElement()
 		}
 	})
 	f.draw()
@@ -385,7 +385,7 @@ func TestPaintAPIDragPreviewPainted(t *testing.T) {
 // from its cursor requests (none here: the arrow).
 func TestPaintAPIFrameResetsCursorStyle(t *testing.T) {
 	f := newPaintFixture(t, func(_ *paintView, w *Window, _ *Context[paintView]) AnyElement {
-		return Div().SizeFull().IntoElement()
+		return Div().Flex().SizeFull().IntoElement()
 	})
 	f.draw()
 	if style, ok := resolvedCursorStyle(f.window); !ok || style != CursorArrow {

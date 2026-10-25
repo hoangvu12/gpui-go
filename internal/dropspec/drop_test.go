@@ -554,12 +554,12 @@ func (v *partialDropSurface) EntityID() (gpui.EntityID, bool) { return 0, false 
 func (v *partialDropSurface) RenderOnce(w *gpui.Window, app *gpui.App) gpui.AnyElement {
 	rec := v.rec
 	root := gpui.Div().ID("root").SizeFull().Flex().FlexCol()
-	accepting := gpui.OnDrop(gpui.Div().ID("accepting").Size(gpui.Px(320), gpui.Px(110)), func(paths *gpui.ExternalPaths, event *gpui.MouseUpEvent, w *gpui.Window, app *gpui.App) {
+	accepting := gpui.OnDrop(gpui.Div().Flex().ID("accepting").Size(gpui.Px(320), gpui.Px(110)), func(paths *gpui.ExternalPaths, event *gpui.MouseUpEvent, w *gpui.Window, app *gpui.App) {
 		rec.mu.Lock()
 		rec.dropped = append(rec.dropped, *paths)
 		rec.mu.Unlock()
 	})
-	plain := gpui.Div().ID("plain").Size(gpui.Px(320), gpui.Px(110))
+	plain := gpui.Div().Flex().ID("plain").Size(gpui.Px(320), gpui.Px(110))
 	element, err := gpui.TryIntoElement(root.Child(accepting).Child(plain))
 	if err != nil {
 		panic(fmt.Sprintf("dropspec: surface conversion: %v", err))

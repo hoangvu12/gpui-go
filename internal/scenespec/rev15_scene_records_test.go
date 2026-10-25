@@ -382,7 +382,7 @@ func TestPixelatedSpriteFlagSplitsBatches(t *testing.T) {
 type dropShadowView struct{}
 
 func (v *dropShadowView) Render(w *gpui.Window, cx *gpui.Context[dropShadowView]) gpui.AnyElement {
-	panel := gpui.Div().W(gpui.Px(160)).H(gpui.Px(80)).
+	panel := gpui.Div().Flex().W(gpui.Px(160)).H(gpui.Px(80)).
 		Bg(gpui.SolidBackground(gpui.Hsla{H: 0, S: 0, L: 1, A: 0.5})).
 		Shadow([]gpui.BoxShadow{{
 			Color:      gpui.SolidBackground(gpui.Hsla{H: 0, S: 1, L: 0.5, A: 1}),

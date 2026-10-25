@@ -26,7 +26,7 @@ import (
 // TestA11yDivAccessibilityIDBuilderWritesAuthorID ports
 // test_accessibility_id_builder_writes_author_id (div.rs:5690-5700).
 func TestA11yDivAccessibilityIDBuilderWritesAuthorID(t *testing.T) {
-	d := Div().ID("buffer-font-size").AccessibilityID("settings.buffer-font-size")
+	d := Div().Flex().ID("buffer-font-size").AccessibilityID("settings.buffer-font-size")
 	spec := A11ySpec{Role: RoleSpinButton}
 	d.WriteA11yInfo(&spec)
 	if spec.AuthorID != "settings.buffer-font-size" {
@@ -39,7 +39,7 @@ func TestA11yDivAccessibilityIDBuilderWritesAuthorID(t *testing.T) {
 // The pin sets Interactivity.aria directly; the port sets it through
 // the builders (the Go aria state is private to the div).
 func TestA11yDivWriteInfoStringAndNumericProperties(t *testing.T) {
-	d := Div().
+	d := Div().Flex().
 		AccessibilityID("settings.buffer-font-size").
 		AriaLabel("Buffer Font Size").
 		AriaValue("15").
@@ -82,7 +82,7 @@ func TestA11yDivWriteInfoStringAndNumericProperties(t *testing.T) {
 // TestA11yDivWriteInfoDisabledModalAndLiveRegion ports
 // test_write_a11y_info_disabled_modal_and_live_region (div.rs:5727-5742).
 func TestA11yDivWriteInfoDisabledModalAndLiveRegion(t *testing.T) {
-	d := Div().AriaDisabled(true).AriaModal(true).AriaLive(A11yLiveAssertive).AriaLiveAtomic(true)
+	d := Div().Flex().AriaDisabled(true).AriaModal(true).AriaLive(A11yLiveAssertive).AriaLiveAtomic(true)
 	spec := A11ySpec{Role: RoleDialog}
 	d.WriteA11yInfo(&spec)
 	if !spec.Disabled {
@@ -104,7 +104,7 @@ func TestA11yDivWriteInfoDisabledModalAndLiveRegion(t *testing.T) {
 // (div.rs:5744-5765): Some(false) explicitly CLEARS a flag a previous
 // frame set.
 func TestA11yDivWriteInfoFalseClearsFlags(t *testing.T) {
-	d := Div().AriaDisabled(false).AriaModal(false).AriaLiveAtomic(false)
+	d := Div().Flex().AriaDisabled(false).AriaModal(false).AriaLiveAtomic(false)
 	spec := A11ySpec{Role: RoleDialog}
 	spec.Disabled, spec.Modal, spec.LiveAtomic = true, true, true
 	d.WriteA11yInfo(&spec)
@@ -115,7 +115,7 @@ func TestA11yDivWriteInfoFalseClearsFlags(t *testing.T) {
 	// properties).
 	untouched := A11ySpec{}
 	untouched.Disabled = true
-	Div().WriteA11yInfo(&untouched)
+	Div().Flex().WriteA11yInfo(&untouched)
 	if !untouched.Disabled {
 		t.Error("an absent aria_disabled cleared the flag")
 	}
@@ -124,21 +124,21 @@ func TestA11yDivWriteInfoFalseClearsFlags(t *testing.T) {
 // TestA11yDivRoleAndAdvertisedActions covers the element hooks
 // (div.rs:2261-2271) and the action advertisement (div.rs:4153-4161).
 func TestA11yDivRoleAndAdvertisedActions(t *testing.T) {
-	if _, ok := Div().A11yRole(); ok {
+	if _, ok := Div().Flex().A11yRole(); ok {
 		t.Error("a plain div reports a role")
 	}
-	if _, ok := Div().Role(RoleGenericContainer).A11yRole(); ok {
+	if _, ok := Div().Flex().Role(RoleGenericContainer).A11yRole(); ok {
 		t.Error("GenericContainer was not filtered (div.rs:2264-2266)")
 	}
-	if role, ok := Div().Role(RoleTab).A11yRole(); !ok || role != RoleTab {
+	if role, ok := Div().Flex().Role(RoleTab).A11yRole(); !ok || role != RoleTab {
 		t.Errorf("A11yRole = %s %v, want Tab true", role, ok)
 	}
-	if !Div().AriaHidden().IsA11yHidden() || Div().IsA11yHidden() {
+	if !Div().Flex().AriaHidden().IsA11yHidden() || Div().Flex().IsA11yHidden() {
 		t.Error("IsA11yHidden does not mirror aria_hidden")
 	}
 	ta := NewTestApp()
 	focus := ta.App().FocusHandle()
-	d := Div().
+	d := Div().Flex().
 		OnClick(func(*ClickEvent, *Window, *App) {}).
 		TrackFocus(focus).
 		OnA11yAction(A11yActionIncrement, func(*A11yActionData, *Window, *App) {}).
@@ -161,23 +161,23 @@ func TestA11yDivRoleAndAdvertisedActions(t *testing.T) {
 			t.Error("a negative usize builder value did not panic")
 		}
 	}()
-	Div().AriaLevel(-1)
+	Div().Flex().AriaLevel(-1)
 }
 
 // TestA11yDivStateLivesOnTheDiv pins the STORAGE note: the authoring
 // state is the div's own field, absent until a builder runs and shared
 // by every builder call on that div.
 func TestA11yDivStateLivesOnTheDiv(t *testing.T) {
-	plain := Div()
+	plain := Div().Flex()
 	if plain.hasA11yAuthoring() {
 		t.Fatal("a div with no a11y builder reports authoring state")
 	}
-	d := Div().Role(RoleButton)
+	d := Div().Flex().Role(RoleButton)
 	st := d.a11yStateIfAny()
 	if st == nil || d.AriaLabel("x").a11yStateIfAny() != st {
 		t.Fatal("builders on one div do not share its authoring state")
 	}
-	if Div().Role(RoleButton).a11yStateIfAny() == st {
+	if Div().Flex().Role(RoleButton).a11yStateIfAny() == st {
 		t.Fatal("two divs share authoring state")
 	}
 }
@@ -190,9 +190,9 @@ func TestA11yDivStateLivesOnTheDiv(t *testing.T) {
 // pixel half is the tabnav-inert parity fixture).
 func TestA11yDivInertHidesTheSubtree(t *testing.T) {
 	f := newA11yDivFixture(t, "inert a11y", func(w *Window, cx *Context[a11yDivView]) AnyElement {
-		return ax(Div().ID("col").AccessibilityID("col").FlexCol().
+		return ax(Div().Flex().ID("col").AccessibilityID("col").FlexCol().
 			Child(ax(leaf("live").Role(RoleButton))).
-			Child(ax(Div().ID("cover").AccessibilityID("cover").Role(RoleGroup).Inert().
+			Child(ax(Div().Flex().ID("cover").AccessibilityID("cover").Role(RoleGroup).Inert().
 				Child(ax(leaf("frozen").Role(RoleCheckBox))))).
 			Child(ax(leaf("after").Role(RoleLink))))
 	})
@@ -482,7 +482,7 @@ func ax(d *DivElement) AnyElement { return divIntoA11yElement(d) }
 
 // leaf is a fixed-size authored div.
 func leaf(id string) *DivElement {
-	return Div().ID(id).AccessibilityID(id).W(Px(40)).H(Px(10))
+	return Div().Flex().ID(id).AccessibilityID(id).W(Px(40)).H(Px(10))
 }
 
 // a11yPropertiesTree is the property corpus: one node per new property
@@ -490,13 +490,13 @@ func leaf(id string) *DivElement {
 func a11yPropertiesTree(incrementRuns *int) func(w *Window, cx *Context[a11yDivView]) AnyElement {
 	return func(w *Window, cx *Context[a11yDivView]) AnyElement {
 		row := func(id string, role Role, children ...AnyElement) AnyElement {
-			d := Div().ID(id).AccessibilityID(id).Role(role).FlexRow()
+			d := Div().Flex().ID(id).AccessibilityID(id).Role(role).FlexRow()
 			for _, c := range children {
 				d = d.Child(c)
 			}
 			return ax(d)
 		}
-		return ax(Div().ID("controls").AccessibilityID("controls").Role(RoleGroup).AriaLabel("Controls").FlexCol().SizeFull().
+		return ax(Div().Flex().ID("controls").AccessibilityID("controls").Role(RoleGroup).AriaLabel("Controls").FlexCol().SizeFull().
 			Child(ax(leaf("check").Role(RoleCheckBox).AriaLabel("Agree").AriaToggled(ToggledMixed).AriaDisabled(true))).
 			Child(ax(leaf("switch").Role(RoleSwitch).AriaToggled(ToggledTrue).OnClick(func(*ClickEvent, *Window, *App) {}))).
 			Child(ax(leaf("volume").Role(RoleSlider).AriaValue("15").
@@ -504,25 +504,25 @@ func a11yPropertiesTree(incrementRuns *int) func(w *Window, cx *Context[a11yDivV
 				AriaOrientation(A11yOrientationHorizontal).
 				OnA11yAction(A11yActionIncrement, func(*A11yActionData, *Window, *App) { *incrementRuns++ }).
 				OnA11yAction(A11yActionDecrement, func(*A11yActionData, *Window, *App) {}))).
-			Child(ax(Div().ID("tabs").AccessibilityID("tabs").Role(RoleTabList).AriaOrientation(A11yOrientationVertical).FlexRow().
+			Child(ax(Div().Flex().ID("tabs").AccessibilityID("tabs").Role(RoleTabList).AriaOrientation(A11yOrientationVertical).FlexRow().
 				Child(ax(leaf("tab-1").Role(RoleTab).AriaSelected(true).AriaPositionInSet(1).AriaSizeOfSet(2))).
 				Child(ax(leaf("tab-2").Role(RoleTab).AriaSelected(false).AriaPositionInSet(2).AriaSizeOfSet(2))))).
 			Child(ax(leaf("combo").Role(RoleComboBox).AriaExpanded(false).AriaPlaceholder("Pick one").AriaKeyshortcuts("Alt+Down"))).
 			Child(ax(leaf("title").Role(RoleHeading).AriaLevel(2).AriaLabel("Title"))).
-			Child(ax(Div().ID("grid").AccessibilityID("grid").Role(RoleTable).AriaRowCount(4).AriaColumnCount(3).
-				Child(ax(Div().ID("row-1").AccessibilityID("row-1").Role(RoleRow).AriaRowIndex(1).FlexRow().
+			Child(ax(Div().Flex().ID("grid").AccessibilityID("grid").Role(RoleTable).AriaRowCount(4).AriaColumnCount(3).
+				Child(ax(Div().Flex().ID("row-1").AccessibilityID("row-1").Role(RoleRow).AriaRowIndex(1).FlexRow().
 					Child(ax(leaf("head").Role(RoleColumnHeader).AriaColumnIndex(0))).
 					Child(ax(leaf("cell").Role(RoleCell).AriaRowIndex(1).AriaColumnIndex(2))))))).
 			Child(ax(leaf("dialog").Role(RoleDialog).AriaModal(true).AriaDescription("Confirm"))).
 			Child(ax(leaf("status").Role(RoleAlert).AriaLive(A11yLiveAssertive).AriaLiveAtomic(true))).
 			// aria_hidden without a role: a GenericContainer node
 			// (element.rs:429-430) whose subtree keeps its nodes.
-			Child(ax(Div().ID("decor").AccessibilityID("decor").AriaHidden().
+			Child(ax(Div().Flex().ID("decor").AccessibilityID("decor").AriaHidden().
 				Child(ax(leaf("inner").Role(RoleButton))))).
 			// GenericContainer is filtered (no node); an id-less role
 			// publishes no node (element.rs:110).
 			Child(ax(leaf("plain").Role(RoleGenericContainer))).
-			Child(ax(Div().Role(RoleButton).AriaLabel("no id").W(Px(10)).H(Px(10)))).
+			Child(ax(Div().Flex().Role(RoleButton).AriaLabel("no id").W(Px(10)).H(Px(10)))).
 			Child(ax(leaf("doc").Role(RoleTextInput).A11ySyntheticChildren(func(b *A11ySubtree) {
 				b.PushChild(b.SyntheticNodeID(0), A11ySpec{Role: RoleTextRun, Value: "run"})
 			}))).
@@ -758,7 +758,7 @@ const fixtureA11yDivActiveDescendantTrace = `window "Listbox" gen=1 seq=3 nodes=
 func TestA11yDivActiveDescendantGoldenTrace(t *testing.T) {
 	var focus FocusHandle
 	f := newA11yDivFixture(t, "Listbox", func(w *Window, cx *Context[a11yDivView]) AnyElement {
-		return ax(Div().ID("listbox").AccessibilityID("listbox").Role(RoleGroup).AriaLabel("Fruit").TrackFocus(focus).FlexCol().SizeFull().
+		return ax(Div().Flex().ID("listbox").AccessibilityID("listbox").Role(RoleGroup).AriaLabel("Fruit").TrackFocus(focus).FlexCol().SizeFull().
 			Child(ax(leaf("opt-apple").Role(RoleButton).AriaLabel("Apple").AriaSelected(false))).
 			Child(ax(leaf("opt-pear").Role(RoleButton).AriaLabel("Pear").AriaSelected(true).AriaActiveDescendant())))
 	})

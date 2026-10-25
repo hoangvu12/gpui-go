@@ -77,7 +77,7 @@ func newDefaultActionTest(t *testing.T) *defaultActionTest {
 func (f *defaultActionTest) build(w *Window) AnyElement {
 	rec := f.rec
 	focusName := f.focusName
-	root := Div().ID("root").SizeFull().
+	root := Div().Flex().ID("root").SizeFull().
 		OnKeyDown(func(_ *KeyDownEvent, w *Window, app *App) {
 			rec.add("keydown:root focus=%s", focusName(w))
 			if f.preventKeyDown {
@@ -91,18 +91,18 @@ func (f *defaultActionTest) build(w *Window) AnyElement {
 			rec.add("keyup:root focus=%s", focusName(w))
 		})
 	return root.
-		Child(Div().ID("a").Size(Px(60)).TrackFocus(f.focusA).
+		Child(Div().Flex().ID("a").Size(Px(60)).TrackFocus(f.focusA).
 			Focus(func(s StyleRefinement) StyleRefinement { s.Background = Some(BackgroundOf(Rgb(0x22c55e))); return s }).
 			OnKeyDown(func(_ *KeyDownEvent, w *Window, app *App) { rec.add("keydown:a focus=%s", focusName(w)) }).
 			OnKeyUp(func(_ *KeyUpEvent, w *Window, app *App) { rec.add("keyup:a focus=%s", focusName(w)) })).
-		Child(Div().ID("b").Size(Px(60)).TrackFocus(f.focusB).
+		Child(Div().Flex().ID("b").Size(Px(60)).TrackFocus(f.focusB).
 			Focus(func(s StyleRefinement) StyleRefinement { s.Background = Some(BackgroundOf(Rgb(0x22c55e))); return s })).
-		Child(Div().ID("scroller").Size(Px(200), Px(200)).OverflowYScroll().TrackScroll(f.scroll).
+		Child(Div().Flex().ID("scroller").Size(Px(200), Px(200)).OverflowYScroll().TrackScroll(f.scroll).
 			OnKeyDown(func(_ *KeyDownEvent, w *Window, app *App) { rec.add("keydown:scroller focus=%s", focusName(w)) }).
 			OnKeyUp(func(_ *KeyUpEvent, w *Window, app *App) { rec.add("keyup:scroller focus=%s", focusName(w)) }).
-			Child(Div().ID("content").Size(Px(200), Px(1000)).
+			Child(Div().Flex().ID("content").Size(Px(200), Px(1000)).
 				Child(func() AnyElement {
-					target := Div().ID("target").Size(Px(200), Px(50)).TrackFocus(f.focusTarget)
+					target := Div().Flex().ID("target").Size(Px(200), Px(50)).TrackFocus(f.focusTarget)
 					if f.textInput != nil {
 						w.HandleInput(f.focusTarget, f.textInput)
 					}
@@ -393,9 +393,9 @@ func TestDefaultActivationRunsAfterKeyUpListeners(t *testing.T) {
 	rec := &transcript{}
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-			return Div().ID("root").SizeFull().
+			return Div().Flex().ID("root").SizeFull().
 				OnKeyUp(func(_ *KeyUpEvent, w *Window, app *App) { rec.add("keyup:root") }).
-				Child(Div().ID("button").Size(Px(60)).TrackFocus(focus).
+				Child(Div().Flex().ID("button").Size(Px(60)).TrackFocus(focus).
 					OnClick(func(_ *ClickEvent, w *Window, app *App) { rec.add("click:button") })).
 				IntoElement()
 		}
@@ -422,9 +422,9 @@ func TestDefaultActivationPreventedKeyDown(t *testing.T) {
 	rec := &transcript{}
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-			return Div().ID("root").SizeFull().
+			return Div().Flex().ID("root").SizeFull().
 				OnKeyDown(func(_ *KeyDownEvent, w *Window, app *App) { w.PreventDefault() }).
-				Child(Div().ID("button").Size(Px(60)).TrackFocus(focus).
+				Child(Div().Flex().ID("button").Size(Px(60)).TrackFocus(focus).
 					OnClick(func(_ *ClickEvent, w *Window, app *App) { rec.add("click:button") })).
 				IntoElement()
 		}
@@ -455,7 +455,7 @@ func TestKeyBindingOrderGPUIShape(t *testing.T) {
 	rec := &transcript{}
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-			return Div().ID("root").SizeFull().TrackFocus(focus).
+			return Div().Flex().ID("root").SizeFull().TrackFocus(focus).
 				OnKeyDown(func(_ *KeyDownEvent, w *Window, app *App) { rec.add("keydown:root") }).
 				OnAction(keyOrderAction, func(*keyOrderPayload, *Window, *App) { rec.add("action") }).
 				IntoElement()
@@ -480,7 +480,7 @@ func TestKeyBindingOrderBrowserOrder(t *testing.T) {
 	rec := &transcript{}
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-			return Div().ID("root").SizeFull().TrackFocus(focus).
+			return Div().Flex().ID("root").SizeFull().TrackFocus(focus).
 				OnKeyDown(func(_ *KeyDownEvent, w *Window, app *App) {
 					rec.add("keydown:root")
 					if w.DefaultPrevented() {
@@ -510,7 +510,7 @@ func TestKeyBindingOrderBrowserOrderPreventDefaultSuppressesBinding(t *testing.T
 	rec := &transcript{}
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-			return Div().ID("root").SizeFull().TrackFocus(focus).
+			return Div().Flex().ID("root").SizeFull().TrackFocus(focus).
 				OnKeyDown(func(_ *KeyDownEvent, w *Window, app *App) {
 					rec.add("keydown:root")
 					w.PreventDefault()
@@ -542,11 +542,11 @@ func TestKeyBindingOrderBrowserOrderBindingOverridesCoreDefault(t *testing.T) {
 	rec := &transcript{}
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-			return Div().ID("root").SizeFull().
+			return Div().Flex().ID("root").SizeFull().
 				OnKeyDown(func(_ *KeyDownEvent, w *Window, app *App) { rec.add("keydown:root") }).
 				OnAction(keyOrderAction, func(*keyOrderPayload, *Window, *App) { rec.add("action") }).
-				Child(Div().ID("a").Size(Px(60)).TrackFocus(focusA)).
-				Child(Div().ID("b").Size(Px(60)).TrackFocus(focusB)).
+				Child(Div().Flex().ID("a").Size(Px(60)).TrackFocus(focusA)).
+				Child(Div().Flex().ID("b").Size(Px(60)).TrackFocus(focusB)).
 				IntoElement()
 		}
 	})
@@ -607,7 +607,7 @@ func TestKeyBindingOrderBrowserOrderNotifiesObserversOnce(t *testing.T) {
 	defer sub.Cancel()
 	_, cx := ta.AddWindowView(func(v *harnessView, w *Window, cx *Context[harnessView]) {
 		v.build = func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-			return Div().ID("root").SizeFull().TrackFocus(focus).
+			return Div().Flex().ID("root").SizeFull().TrackFocus(focus).
 				OnAction(keyOrderAction, func(*keyOrderPayload, *Window, *App) {}).
 				IntoElement()
 		}

@@ -17,9 +17,9 @@ func autoscrollRows(requester int, request func(Bounds) Bounds) func(ix int, w *
 			return Canvas(func(bounds Bounds, w *Window, _ *App) struct{} {
 				w.RequestAutoscroll(request(bounds))
 				return struct{}{}
-			}, func(Bounds, struct{}, *Window, *App) {}).H(Px(20)).WFull().IntoElement()
+			}, func(Bounds, struct{}, *Window, *App) {}).Flex().H(Px(20)).WFull().IntoElement()
 		}
-		return Div().H(Px(20)).WFull().DebugSelector(fmt.Sprintf("row-%d", ix)).
+		return Div().Flex().H(Px(20)).WFull().DebugSelector(fmt.Sprintf("row-%d", ix)).
 			OnMouseDown(MouseButtonLeft, func(*MouseDownEvent, *Window, *App) {}).IntoElement()
 	}
 }
@@ -119,8 +119,8 @@ func TestListAutoscrollIgnoresRequestsFromOutside(t *testing.T) {
 		before := Canvas(func(_ Bounds, w *Window, _ *App) struct{} {
 			w.RequestAutoscroll(Bounds{Origin: Point{Y: 500}, Size: Size{Width: 10, Height: 10}})
 			return struct{}{}
-		}, func(Bounds, struct{}, *Window, *App) {}).H(Px(0)).WFull().IntoElement()
-		return Div().SizeFull().Child(before).Child(List(state, listRows(20)).SizeFull()).IntoElement()
+		}, func(Bounds, struct{}, *Window, *App) {}).Flex().H(Px(0)).WFull().IntoElement()
+		return Div().Flex().SizeFull().Child(before).Child(List(state, listRows(20)).SizeFull()).IntoElement()
 	})
 	if top := state.LogicalScrollTop(); top != (ListOffset{}) {
 		t.Fatalf("logical scroll top = %+v, want {0 0}", top)

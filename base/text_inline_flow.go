@@ -465,7 +465,7 @@ func (f *inlineFlow) Paint(_ *gpui.GlobalElementID, _ *gpui.InspectorElementID, 
 // (U:text/inline_flow.rs:257-299; the click handlers ride a wrapper, see
 // the file comment).
 func inlineFlowImageElement(ix int, source gpui.ImageSource, link *LinkMark, size gpui.Size, handler LinkClickHandlerFn) gpui.AnyElement {
-	image := gpui.Img(source).ID(gpui.IntegerElementID(uint64(ix))).ObjectFit(gpui.ObjectFitContain).
+	image := gpui.Img(source).Flex().ID(gpui.IntegerElementID(uint64(ix))).ObjectFit(gpui.ObjectFitContain).
 		MaxW(gpui.Fraction(1)).W(gpui.Px(size.Width)).H(gpui.Px(size.Height))
 	if link == nil {
 		return image.IntoElement()
@@ -482,7 +482,7 @@ func textLinkedImage(id gpui.ElementID, image *gpui.ImgElement, url string, hand
 		app.StopPropagation()
 		handleLinkClick(handler, url, *event, w, app)
 	}
-	return gpui.Div().ID(id).CursorPointer().OnClick(open).OnAuxClick(open).Child(image).IntoElement()
+	return gpui.Div().Flex().ID(id).CursorPointer().OnClick(open).OnAuxClick(open).Child(image).IntoElement()
 }
 
 // inlineFlowIntrinsicWidth is the intrinsic width for table sizing, using
@@ -1013,7 +1013,7 @@ func measureImageSize(ix int, source gpui.ImageSource, width, height *gpui.Defin
 // intrinsicImageSize lays an img out at its min size
 // (U:text/inline_flow.rs:1523-1545).
 func intrinsicImageSize(ix int, source gpui.ImageSource, width, height *gpui.DefiniteLength, w *gpui.Window, app *gpui.App) *gpui.Size {
-	image := gpui.Img(source).ID(gpui.IntegerElementID(uint64(ix))).ObjectFit(gpui.ObjectFitContain).MaxW(gpui.Fraction(1))
+	image := gpui.Img(source).Flex().ID(gpui.IntegerElementID(uint64(ix))).ObjectFit(gpui.ObjectFitContain).MaxW(gpui.Fraction(1))
 	if width != nil {
 		image = image.W(*width)
 	}

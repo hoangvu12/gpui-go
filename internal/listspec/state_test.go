@@ -169,9 +169,9 @@ type abandonView struct {
 func (v *abandonView) Render(w *gpui.Window, cx *gpui.Context[abandonView]) gpui.AnyElement {
 	*v.mutations++
 	if v.fail {
-		return gpui.Div().Child(gpui.Empty()).Child(panickingElement()).IntoElement()
+		return gpui.Div().Flex().Child(gpui.Empty()).Child(panickingElement()).IntoElement()
 	}
-	return gpui.Div().Child("stable").IntoElement()
+	return gpui.Div().Flex().Child("stable").IntoElement()
 }
 
 // panickingElement returns an element whose paint panics (the
@@ -266,5 +266,5 @@ type staticTextView struct{}
 
 // Render implements Render[staticTextView].
 func (v *staticTextView) Render(w *gpui.Window, cx *gpui.Context[staticTextView]) gpui.AnyElement {
-	return gpui.Div().Child("stable").IntoElement()
+	return gpui.Div().Flex().Child("stable").IntoElement()
 }

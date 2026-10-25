@@ -44,7 +44,7 @@ func (v *staticView) Render(w *gpui.Window, cx *gpui.Context[staticView]) gpui.A
 
 // gridChild is one fixed-size grid cell with a debug selector.
 func gridChild(name string) *gpui.DivElement {
-	return gpui.Div().Size(gpui.PxLength(40), gpui.PxLength(30)).DebugSelector(name)
+	return gpui.Div().Flex().Size(gpui.PxLength(40), gpui.PxLength(30)).DebugSelector(name)
 }
 
 // TestAuthoringGridPlacesCellsByTemplate checks the grid display with
@@ -91,7 +91,7 @@ func TestAuthoringGridAtPlacesByLine(t *testing.T) {
 		GridTemplateCols(gpui.GridTemplate{Repeat: 2, MinSize: gpui.GridTemplateMinZero}).
 		GridTemplateRows(gpui.GridTemplate{Repeat: 2, MinSize: gpui.GridTemplateMinZero}).
 		Child(gridChild("auto-1")).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			Size(gpui.PxLength(40), gpui.PxLength(30)).
 			DebugSelector("placed").
 			GridAt(gpui.GridLocation{
@@ -114,16 +114,16 @@ func TestAuthoringGridAtPlacesByLine(t *testing.T) {
 // from its positioned ancestor's origin and leaves the flow (the flow
 // sibling below it starts at the parent's top).
 func TestAuthoringAbsoluteOffsetsFromAncestor(t *testing.T) {
-	window := drawAuthoringCorpus(t, gpui.Div().
+	window := drawAuthoringCorpus(t, gpui.Div().Flex().
 		W(gpui.PxLength(200)).
 		H(gpui.PxLength(100)).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			Absolute().
 			Left(gpui.PxLength(10)).
 			Top(gpui.PxLength(20)).
 			Size(gpui.PxLength(30), gpui.PxLength(30)).
 			DebugSelector("abs")).
-		Child(gpui.Div().Size(gpui.PxLength(40), gpui.PxLength(30)).DebugSelector("flow")).
+		Child(gpui.Div().Flex().Size(gpui.PxLength(40), gpui.PxLength(30)).DebugSelector("flow")).
 		IntoElement())
 
 	abs, ok := gpui.WindowDebugBound(window, "abs")
@@ -145,10 +145,10 @@ func TestAuthoringAbsoluteOffsetsFromAncestor(t *testing.T) {
 // TestAuthoringContentSizedElement checks content-based sizing: a div
 // with auto width/height wraps its fixed child exactly.
 func TestAuthoringContentSizedElement(t *testing.T) {
-	window := drawAuthoringCorpus(t, gpui.Div().
+	window := drawAuthoringCorpus(t, gpui.Div().Flex().
 		W(gpui.PxLength(100)).
 		H(gpui.PxLength(80)).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			Size(gpui.PxLength(50), gpui.PxLength(40)).
 			DebugSelector("content")).
 		IntoElement())
@@ -169,8 +169,8 @@ func TestAuthoringRefinementOrder(t *testing.T) {
 	window := drawAuthoringCorpus(t, gpui.Div().
 		Block().
 		Refine(gpui.StyleRefinement{Display: authoring.Some(authoring.DisplayFlex)}).
-		Child(gpui.Div().Size(gpui.PxLength(50), gpui.PxLength(40)).DebugSelector("r1")).
-		Child(gpui.Div().Size(gpui.PxLength(50), gpui.PxLength(40)).DebugSelector("r2")).
+		Child(gpui.Div().Flex().Size(gpui.PxLength(50), gpui.PxLength(40)).DebugSelector("r1")).
+		Child(gpui.Div().Flex().Size(gpui.PxLength(50), gpui.PxLength(40)).DebugSelector("r2")).
 		IntoElement())
 
 	first, ok := gpui.WindowDebugBound(window, "r1")

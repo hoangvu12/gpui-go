@@ -29,7 +29,7 @@ func (v *uniformView) Render(w *gpui.Window, cx *gpui.Context[uniformView]) gpui
 		items := make([]gpui.AnyElement, 0, end-start)
 		for ix := start; ix < end; ix++ {
 			*v.rendered = append(*v.rendered, ix)
-			items = append(items, gpui.Div().
+			items = append(items, gpui.Div().Flex().
 				W(gpui.PxLength(200)).
 				H(gpui.PxLength(20)).
 				DebugSelector(itemSelector(ix)).

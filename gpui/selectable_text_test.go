@@ -25,8 +25,8 @@ func TestExplicitHandleConstructorPreservesDocumentContract(t *testing.T) {
 func TestLocalHandleParticipatesInWindowSelection(t *testing.T) {
 	ta := newSelectionTestApp(t)
 	_, cx := openSelectionView(t, ta, func(*Window, *Context[selectionView]) AnyElement {
-		return Div().SizeFull().Child(TextSelectionLayer{}).Child(
-			Div().W(Px(240)).H(Px(32)).Child(NewSelectableText("local", "alpha beta")),
+		return Div().Flex().SizeFull().Child(TextSelectionLayer{}).Child(
+			Div().Flex().W(Px(240)).H(Px(32)).Child(NewSelectableText("local", "alpha beta")),
 		).IntoElement()
 	})
 	drawSelectionFrame(t, cx)

@@ -9,9 +9,9 @@ type userSelectAllocView struct {
 }
 
 func (v *userSelectAllocView) Render(w *Window, cx *Context[userSelectAllocView]) AnyElement {
-	root := Div().SizeFull().FlexCol()
+	root := Div().Flex().SizeFull().FlexCol()
 	for _, text := range v.texts {
-		row := Div().W(Px(300))
+		row := Div().Flex().W(Px(300))
 		if v.none {
 			row = row.SelectNone()
 		}

@@ -288,9 +288,9 @@ func TestWin32InputRealWindowClickHoverCursor(t *testing.T) {
 	var clicks []ClickEvent
 	f := openWin32InputWindow(t, "gpui input click", func(f *win32InputWindow) func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
 		return func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-			return Div().Relative().SizeFull().Child(
-				Div().ID("button").Absolute().Left(Px(20)).Top(Px(20)).Size(Px(80)).Bg(interactRed).CursorPointer().
-					Hover(func(s StyleRefinement) StyleRefinement { return Div().Refine(s).Bg(interactBlue).Style() }).
+			return Div().Flex().Relative().SizeFull().Child(
+				Div().Flex().ID("button").Absolute().Left(Px(20)).Top(Px(20)).Size(Px(80)).Bg(interactRed).CursorPointer().
+					Hover(func(s StyleRefinement) StyleRefinement { return Div().Flex().Refine(s).Bg(interactBlue).Style() }).
 					OnClick(func(e *ClickEvent, w *Window, app *App) {
 						clicks = append(clicks, *e)
 						// The handled answer travels back as the message
@@ -432,20 +432,20 @@ func containsInOrder(got, want []string) bool {
 func TestWin32InputRealWindowDragWithPreview(t *testing.T) {
 	f := openWin32InputWindow(t, "gpui input drag", func(f *win32InputWindow) func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
 		return func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-			source := Div().ID("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).CursorGrab().
+			source := Div().Flex().ID("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).CursorGrab().
 				OnClick(func(*ClickEvent, *Window, *App) { f.add("source.click") }).
 				OnDrag(dragPayload{name: "tab"}, func(value *dragPayload, offset Point, w *Window, app *App) View {
 					f.add("constructor(" + value.name + ")")
 					return ViewOf(NewEntity(app, w.Scope(), func(*dragPreview, *Context[dragPreview]) {}))
 				})
-			target := Div().ID("target").Absolute().Left(Px(200)).Top(Px(100)).Size(Px(100)).
+			target := Div().Flex().ID("target").Absolute().Left(Px(200)).Top(Px(100)).Size(Px(100)).
 				OnDragMove(func(e *DragMoveEvent[dragPayload], w *Window, app *App) {
 					f.add("target.drag-move(" + e.Drag(app).name + ")")
 				})
 			target = OnDrop(target, func(value *dragPayload, e *MouseUpEvent, w *Window, app *App) {
 				f.add("target.drop(" + value.name + ")")
 			})
-			return Div().Relative().SizeFull().Child(source).Child(target).Child(&previewHostElement{}).IntoElement()
+			return Div().Flex().Relative().SizeFull().Child(source).Child(target).Child(&previewHostElement{}).IntoElement()
 		}
 	})
 
@@ -520,9 +520,9 @@ func TestWin32InputRealWindowWheelScrolls(t *testing.T) {
 	handle := NewScrollHandle()
 	f := openWin32InputWindow(t, "gpui input wheel", func(f *win32InputWindow) func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
 		return func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-			return Div().Relative().SizeFull().Child(
-				Div().ID("scroller").Absolute().Left(Px(40)).Top(Px(40)).W(Px(100)).H(Px(100)).OverflowYScroll().TrackScroll(handle).
-					Child(Div().W(Px(100)).H(Px(300)).FlexShrink0()),
+			return Div().Flex().Relative().SizeFull().Child(
+				Div().Flex().ID("scroller").Absolute().Left(Px(40)).Top(Px(40)).W(Px(100)).H(Px(100)).OverflowYScroll().TrackScroll(handle).
+					Child(Div().Flex().W(Px(100)).H(Px(300)).FlexShrink0()),
 			).IntoElement()
 		}
 	})

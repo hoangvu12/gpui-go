@@ -96,7 +96,7 @@ func TestInputSingleLineIsCenteredInATallerFrame(t *testing.T) {
 type inputEmptyRoot struct{ input gpui.Entity[InputState] }
 
 func (*inputEmptyRoot) Render(*gpui.Window, *gpui.Context[inputEmptyRoot]) gpui.AnyElement {
-	return gpui.Div().IntoElement()
+	return gpui.Div().Flex().IntoElement()
 }
 
 // buildUnrenderedInput opens a window whose root is empty and creates an

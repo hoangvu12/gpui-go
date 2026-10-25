@@ -39,7 +39,7 @@ func (h *keyedHost) Render(w *Window, cx *Context[keyedHost]) AnyElement {
 		})
 		h.seen = append(h.seen, h.handle.EntityID())
 	}
-	return Div().IntoElement()
+	return Div().Flex().IntoElement()
 }
 
 // TestHelperUseKeyedStateLifecycle pins use_keyed_state: the entity is
@@ -144,7 +144,7 @@ func (h *useStateHost) Render(w *Window, cx *Context[useStateHost]) AnyElement {
 	init := func(*Window, *Context[keyedCounter]) keyedCounter { return keyedCounter{} }
 	h.a = append(h.a, w.UseState(cx, init).EntityID())
 	h.b = append(h.b, w.UseState(cx, init).EntityID())
-	return Div().IntoElement()
+	return Div().Flex().IntoElement()
 }
 
 // TestHelperUseStateKeysByCallSite pins use_state (window.rs:4116-4132):
@@ -178,9 +178,9 @@ type focusForwarder struct {
 }
 
 func (f *focusForwarder) Render(w *Window, cx *Context[focusForwarder]) AnyElement {
-	return Div().
-		Child(Div().W(PxLength(50)).H(PxLength(50)).TrackFocus(f.a)).
-		Child(Div().W(PxLength(50)).H(PxLength(50)).TrackFocus(f.b)).
+	return Div().Flex().
+		Child(Div().Flex().W(PxLength(50)).H(PxLength(50)).TrackFocus(f.a)).
+		Child(Div().Flex().W(PxLength(50)).H(PxLength(50)).TrackFocus(f.b)).
 		IntoElement()
 }
 
@@ -237,8 +237,8 @@ type focusTree struct {
 }
 
 func (f *focusTree) Render(w *Window, cx *Context[focusTree]) AnyElement {
-	return Div().TrackFocus(f.parent).
-		Child(Div().W(PxLength(10)).H(PxLength(10)).TrackFocus(f.child)).
+	return Div().Flex().TrackFocus(f.parent).
+		Child(Div().Flex().W(PxLength(10)).H(PxLength(10)).TrackFocus(f.child)).
 		IntoElement()
 }
 
@@ -529,13 +529,13 @@ func TestHelperWindowRootDowncast(t *testing.T) {
 type recipeView struct{}
 
 func (recipeView) EntityID() (EntityID, bool)                { return 0, false }
-func (recipeView) RenderOnce(w *Window, app *App) AnyElement { return Div().IntoElement() }
+func (recipeView) RenderOnce(w *Window, app *App) AnyElement { return Div().Flex().IntoElement() }
 
 type lineHeightHost struct{ inFrame float32 }
 
 func (h *lineHeightHost) Render(w *Window, cx *Context[lineHeightHost]) AnyElement {
 	h.inFrame = w.LineHeight()
-	return Div().IntoElement()
+	return Div().Flex().IntoElement()
 }
 
 // TestHelperLineHeightAndModifiers pins Window::line_height

@@ -83,7 +83,7 @@ func (v *overlayView) Render(w *Window, cx *Context[overlayView]) AnyElement {
 	}
 	// The parent's invoker: clicking it toggles the parent (the
 	// popovertarget activation).
-	root.Child(Div().ID("b1").DebugSelector("b1").
+	root.Child(Div().Flex().ID("b1").DebugSelector("b1").
 		W(Px(40)).H(Px(20)).Bg(overlayColors.invoker).
 		OnClick(func(*ClickEvent, *Window, *App) {
 			v.log = append(v.log, "click:b1")
@@ -93,7 +93,7 @@ func (v *overlayView) Render(w *Window, cx *Context[overlayView]) AnyElement {
 		if v.anchorFocus == (FocusHandle{}) {
 			v.anchorFocus = NewFocusHandle(w).TabStop(true)
 		}
-		root.Child(Div().ID("anchor").DebugSelector("anchor").
+		root.Child(Div().Flex().ID("anchor").DebugSelector("anchor").
 			W(Px(40)).H(Px(20)).TrackFocus(v.anchorFocus))
 	}
 	v.appendOverlays(root)
@@ -107,7 +107,7 @@ func (v *overlayView) Render(w *Window, cx *Context[overlayView]) AnyElement {
 func (v *overlayView) appendOverlays(root *DivElement) {
 	// b2: inside p1's content (the invoker link that makes p1 an
 	// ancestor of p2), or at the root in sibling mode.
-	b2 := Div().ID("b2").DebugSelector("b2").
+	b2 := Div().Flex().ID("b2").DebugSelector("b2").
 		W(Px(40)).H(Px(20)).Bg(overlayColors.invoker).
 		OnClick(func(*ClickEvent, *Window, *App) {
 			v.log = append(v.log, "click:b2")
@@ -122,10 +122,10 @@ func (v *overlayView) appendOverlays(root *DivElement) {
 			parentLayer = parentLayer.Kind(OverlayPopoverManual)
 		}
 		if v.backdrop {
-			parentLayer = parentLayer.Backdrop(Div().DebugSelector("backdrop").
+			parentLayer = parentLayer.Backdrop(Div().Flex().DebugSelector("backdrop").
 				SizeFull().Bg(Hsla{H: 0, S: 0, L: 0, A: 0.4}))
 		}
-		p1 := Div().ID("p1").DebugSelector("p1").
+		p1 := Div().Flex().ID("p1").DebugSelector("p1").
 			Absolute().Top(Px(60)).Left(Px(20)).W(Px(150)).H(Px(120)).
 			Bg(overlayColors.popover).Occlude().
 			OnClick(func(*ClickEvent, *Window, *App) {
@@ -140,7 +140,7 @@ func (v *overlayView) appendOverlays(root *DivElement) {
 	}
 	if v.child.IsOpen() {
 		root.Child(TopLayer(v.child).Invoker("b2").
-			Child(Div().ID("p2").DebugSelector("p2").
+			Child(Div().Flex().ID("p2").DebugSelector("p2").
 				Absolute().Top(Px(60)).Left(Px(200)).W(Px(100)).H(Px(80)).
 				Bg(overlayColors.child).Occlude().
 				OnClick(func(*ClickEvent, *Window, *App) {
@@ -457,10 +457,10 @@ func TestAnchoredIsAContainingBlockForAbsoluteChildrenOfStaticDivs(t *testing.T)
 	f := newPaintFixture(t, func(*paintView, *Window, *Context[paintView]) AnyElement {
 		return Div().SizeFull().Flex().Child(
 			Anchored().Child(
-				Div().DebugSelector("STATIC").Static().
+				Div().Flex().DebugSelector("STATIC").Static().
 					W(Px(100)).H(Px(100)).
 					Mt(Px(30)).
-					Child(Div().DebugSelector("ABS").Absolute().
+					Child(Div().Flex().DebugSelector("ABS").Absolute().
 						Top(Px(10)).Left(Px(15)).W(Px(20)).H(Px(20)).Bg(paintRed)),
 			)).IntoElement()
 	})

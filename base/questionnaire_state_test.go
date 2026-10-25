@@ -19,7 +19,7 @@ type questionnaireHarness struct {
 }
 
 func (*questionnaireHarness) Render(*gpui.Window, *gpui.Context[questionnaireHarness]) gpui.AnyElement {
-	return gpui.Div().IntoElement()
+	return gpui.Div().Flex().IntoElement()
 }
 
 func newQuestionnaireHarness(h *questionnaireHarness, w *gpui.Window, cx *gpui.Context[questionnaireHarness]) {

@@ -40,14 +40,14 @@ import "testing"
 // 100x100 scroller at (50,50) (range 200) plus a tall spacer. configure
 // styles the inner scroller (overscroll containment).
 func nestedWheelScrollers(outer, inner ScrollHandle, configure func(*DivElement) *DivElement) *DivElement {
-	innerDiv := Div().ID("inner").W(Px(100)).H(Px(100)).TrackScroll(inner).OverflowYScroll().FlexShrink0()
+	innerDiv := Div().Flex().ID("inner").W(Px(100)).H(Px(100)).TrackScroll(inner).OverflowYScroll().FlexShrink0()
 	if configure != nil {
 		innerDiv = configure(innerDiv)
 	}
-	innerDiv = innerDiv.Child(Div().ID("inner-content").W(Px(100)).H(Px(300)).FlexShrink0().Bg(scrollContentColor))
-	return Div().ID("outer").W(Px(200)).H(Px(200)).TrackScroll(outer).OverflowYScroll().FlexCol().
+	innerDiv = innerDiv.Child(Div().Flex().ID("inner-content").W(Px(100)).H(Px(300)).FlexShrink0().Bg(scrollContentColor))
+	return Div().Flex().ID("outer").W(Px(200)).H(Px(200)).TrackScroll(outer).OverflowYScroll().FlexCol().
 		Child(innerDiv.Ml(Px(50)).Mt(Px(50))).
-		Child(Div().ID("outer-spacer").W(Px(200)).H(Px(350)).FlexShrink0().Bg(scrollContentColor))
+		Child(Div().Flex().ID("outer-spacer").W(Px(200)).H(Px(350)).FlexShrink0().Bg(scrollContentColor))
 }
 
 // TestWheelScrollLatching is the ticket's first acceptance check: a
@@ -61,7 +61,7 @@ func TestWheelScrollLatching(t *testing.T) {
 	inner := NewScrollHandle()
 	outer := NewScrollHandle()
 	f := newScrollFixture(t, Size{Width: 300, Height: 300}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-		return Div().ID("root").SizeFull().Child(nestedWheelScrollers(outer, inner, nil)).IntoElement()
+		return Div().Flex().ID("root").SizeFull().Child(nestedWheelScrollers(outer, inner, nil)).IntoElement()
 	})
 
 	// One gesture: three notches at the same position. The inner
@@ -107,7 +107,7 @@ func TestWheelOverscrollContainStopsChaining(t *testing.T) {
 	inner := NewScrollHandle()
 	outer := NewScrollHandle()
 	f := newScrollFixture(t, Size{Width: 300, Height: 300}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-		return Div().ID("root").SizeFull().Child(
+		return Div().Flex().ID("root").SizeFull().Child(
 			nestedWheelScrollers(outer, inner, func(d *DivElement) *DivElement { return d.OverscrollContain() }),
 		).IntoElement()
 	})
@@ -138,7 +138,7 @@ func TestWheelOverscrollContainStopsChaining(t *testing.T) {
 	innerX := NewScrollHandle()
 	outerX := NewScrollHandle()
 	f2 := newScrollFixture(t, Size{Width: 300, Height: 300}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-		return Div().ID("root").SizeFull().Child(
+		return Div().Flex().ID("root").SizeFull().Child(
 			nestedWheelScrollers(outerX, innerX, func(d *DivElement) *DivElement { return d.OverscrollXContain() }),
 		).IntoElement()
 	})
@@ -162,7 +162,7 @@ func TestWheelLatchingModifiersBreak(t *testing.T) {
 	inner := NewScrollHandle()
 	outer := NewScrollHandle()
 	f := newScrollFixture(t, Size{Width: 300, Height: 300}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-		return Div().ID("root").SizeFull().Child(nestedWheelScrollers(outer, inner, nil)).IntoElement()
+		return Div().Flex().ID("root").SizeFull().Child(nestedWheelScrollers(outer, inner, nil)).IntoElement()
 	})
 	f.wheel(100, 100, ScrollDeltaPixels(0, -80), TouchPhaseMoved)
 	latch := inputState(f.window).wheelLatch
@@ -212,12 +212,12 @@ func TestKeyboardScrollMousePressTarget(t *testing.T) {
 	view := NewEntity(app, window.Scope(), func(v *scrollView, cx *Context[scrollView]) {
 		v.build = func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
 			return Div().ID("root").SizeFull().Flex().
-				Child(Div().ID("left").W(Px(140)).H(Px(300)).TrackScroll(left).OverflowYScroll().
-					Child(Div().ID("left-content").W(Px(140)).H(Px(600)).FlexShrink0().
-						Child(Div().ID("left-target").W(Px(140)).H(Px(40)).FlexShrink0().TrackFocus(focus)))).
-				Child(Div().ID("right").W(Px(140)).H(Px(300)).TrackScroll(right).OverflowYScroll().
-					Child(Div().ID("right-content").W(Px(140)).H(Px(600)).FlexShrink0().
-						Child(Div().ID("right-press").W(Px(140)).H(Px(40)).FlexShrink0()))).
+				Child(Div().Flex().ID("left").W(Px(140)).H(Px(300)).TrackScroll(left).OverflowYScroll().
+					Child(Div().Flex().ID("left-content").W(Px(140)).H(Px(600)).FlexShrink0().
+						Child(Div().Flex().ID("left-target").W(Px(140)).H(Px(40)).FlexShrink0().TrackFocus(focus)))).
+				Child(Div().Flex().ID("right").W(Px(140)).H(Px(300)).TrackScroll(right).OverflowYScroll().
+					Child(Div().Flex().ID("right-content").W(Px(140)).H(Px(600)).FlexShrink0().
+						Child(Div().Flex().ID("right-press").W(Px(140)).H(Px(40)).FlexShrink0()))).
 				IntoElement()
 		}
 	})
@@ -271,16 +271,16 @@ func TestKeyboardScrollContainCutsChaining(t *testing.T) {
 	contain := true
 	view := NewEntity(app, window.Scope(), func(v *scrollView, cx *Context[scrollView]) {
 		v.build = func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-			innerDiv := Div().ID("inner").W(Px(100)).H(Px(100)).TrackScroll(inner).OverflowYScroll().FlexShrink0()
+			innerDiv := Div().Flex().ID("inner").W(Px(100)).H(Px(100)).TrackScroll(inner).OverflowYScroll().FlexShrink0()
 			if contain {
 				innerDiv = innerDiv.OverscrollContain()
 			}
-			innerDiv = innerDiv.Child(Div().ID("inner-content").W(Px(100)).H(Px(300)).FlexShrink0().Bg(scrollContentColor).
-				Child(Div().ID("focus-row").W(Px(100)).H(Px(40)).FlexShrink0().TrackFocus(focus)))
-			outerDiv := Div().ID("outer").W(Px(200)).H(Px(200)).TrackScroll(outer).OverflowYScroll().FlexCol().
+			innerDiv = innerDiv.Child(Div().Flex().ID("inner-content").W(Px(100)).H(Px(300)).FlexShrink0().Bg(scrollContentColor).
+				Child(Div().Flex().ID("focus-row").W(Px(100)).H(Px(40)).FlexShrink0().TrackFocus(focus)))
+			outerDiv := Div().Flex().ID("outer").W(Px(200)).H(Px(200)).TrackScroll(outer).OverflowYScroll().FlexCol().
 				Child(innerDiv.Ml(Px(50)).Mt(Px(50))).
-				Child(Div().ID("outer-spacer").W(Px(200)).H(Px(350)).FlexShrink0().Bg(scrollContentColor))
-			return Div().ID("root").SizeFull().Child(outerDiv).IntoElement()
+				Child(Div().Flex().ID("outer-spacer").W(Px(200)).H(Px(350)).FlexShrink0().Bg(scrollContentColor))
+			return Div().Flex().ID("root").SizeFull().Child(outerDiv).IntoElement()
 		}
 	})
 	window.SetRootView(ViewOf(view))
@@ -330,7 +330,7 @@ func TestWheelScrollLatchingExhaustedInnerStartsOuter(t *testing.T) {
 	inner := NewScrollHandle()
 	outer := NewScrollHandle()
 	f := newScrollFixture(t, Size{Width: 300, Height: 300}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-		return Div().ID("root").SizeFull().Child(nestedWheelScrollers(outer, inner, nil)).IntoElement()
+		return Div().Flex().ID("root").SizeFull().Child(nestedWheelScrollers(outer, inner, nil)).IntoElement()
 	})
 	// Scroll the inner to its end through its own gestures.
 	f.wheel(100, 100, ScrollDeltaPixels(0, -200), TouchPhaseMoved)
@@ -380,7 +380,7 @@ func TestWheelLineStepIsChromesPixelsPerLine(t *testing.T) {
 	// The uniform list: the same notch advances the scroll top.
 	listHandle := NewUniformListScrollHandle()
 	g := newScrollFixture(t, Size{Width: 200, Height: 100}, func(v *scrollView, w *Window, cx *Context[scrollView]) AnyElement {
-		return Div().ID("list-example").SizeFull().Child(
+		return Div().Flex().ID("list-example").SizeFull().Child(
 			UniformList(listHandle, 100, func(start, end int, w *Window, app *App) []AnyElement {
 				return uniformItems(start, end)
 			}).SizeFull()).IntoElement()

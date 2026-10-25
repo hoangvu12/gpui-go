@@ -241,7 +241,7 @@ func innerRows(w *gpui.Window, focusHandle *gpui.FocusHandle) []gpui.AnyElement 
 	rows := make([]gpui.AnyElement, 0, rowCnt)
 	for i := 0; i < rowCnt; i++ {
 		id := fmt.Sprintf("irow%d", i)
-		row := gpui.Div().
+		row := gpui.Div().Flex().
 			ID(id).
 			DebugSelector(id).
 			Size(gpui.Px(innerW), gpui.Px(rowH)).
@@ -361,7 +361,7 @@ func WheelView(log *parity.EventLog, w *gpui.Window, app *gpui.App, contain stri
 // inner scroller's overscroll-behavior.
 func wheelView(contain string) func(log *parity.EventLog) gpui.AnyElement {
 	return func(log *parity.EventLog) gpui.AnyElement {
-		inner := gpui.Div().
+		inner := gpui.Div().Flex().
 			ID("inner").
 			DebugSelector("inner").
 			Size(gpui.Px(innerW), gpui.Px(innerH)).
@@ -377,7 +377,7 @@ func wheelView(contain string) func(log *parity.EventLog) gpui.AnyElement {
 		for _, row := range innerRows(nil, nil) {
 			inner = inner.Child(row)
 		}
-		outer := gpui.Div().
+		outer := gpui.Div().Flex().
 			ID("outer").
 			DebugSelector("outer").
 			Size(gpui.Px(outerW), gpui.Px(outerH)).
@@ -387,7 +387,7 @@ func wheelView(contain string) func(log *parity.EventLog) gpui.AnyElement {
 			OverflowYScroll().
 			Bg(gpui.Rgb(outerBg)).
 			Child(inner).
-			Child(gpui.Div().
+			Child(gpui.Div().Flex().
 				ID("ospacer").
 				DebugSelector("ospacer").
 				Size(gpui.Px(outerW), gpui.Px(spacerH)).
@@ -598,7 +598,7 @@ func KeyboardTargetView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.
 		out := make([]gpui.AnyElement, 0, ktRowCount)
 		for i := 0; i < ktRowCount; i++ {
 			id := fmt.Sprintf("%srow%d", prefix, i)
-			row := gpui.Div().
+			row := gpui.Div().Flex().
 				ID(id).
 				DebugSelector(id).
 				Size(gpui.Px(ktScrollerW), gpui.Px(ktRowH)).
@@ -612,7 +612,7 @@ func KeyboardTargetView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.
 		return out
 	}
 	scroller := func(id string, x float32, children []gpui.AnyElement) *gpui.DivElement {
-		d := gpui.Div().
+		d := gpui.Div().Flex().
 			ID(id).
 			DebugSelector(id).
 			Size(gpui.Px(ktScrollerW), gpui.Px(ktScrollerH)).
@@ -642,7 +642,7 @@ func KeyboardTargetView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.
 // focus handle.
 func KeyboardContainView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElement {
 	focus := containFocusOf(w)
-	inner := gpui.Div().
+	inner := gpui.Div().Flex().
 		ID("inner").
 		DebugSelector("inner").
 		Size(gpui.Px(innerW), gpui.Px(innerH)).
@@ -656,7 +656,7 @@ func KeyboardContainView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui
 	for _, row := range innerRows(w, &focus) {
 		inner = inner.Child(row)
 	}
-	outer := gpui.Div().
+	outer := gpui.Div().Flex().
 		ID("outer").
 		DebugSelector("outer").
 		Size(gpui.Px(outerW), gpui.Px(outerH)).
@@ -666,7 +666,7 @@ func KeyboardContainView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui
 		OverflowYScroll().
 		Bg(gpui.Rgb(outerBg)).
 		Child(inner).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("ospacer").
 			DebugSelector("ospacer").
 			Size(gpui.Px(outerW), gpui.Px(spacerH)).

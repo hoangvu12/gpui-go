@@ -395,7 +395,7 @@ func TabView(prevent bool) func(log *parity.EventLog, w *gpui.Window, app *gpui.
 			OnKeyDown(rootKeyDown).
 			OnKeyUp(log.KeyUp("root"))
 		box := func(id string, handle gpui.FocusHandle) *gpui.DivElement {
-			return gpui.Div().
+			return gpui.Div().Flex().
 				ID(id).
 				DebugSelector(id).
 				Size(gpui.Px(tabBoxWidth), gpui.Px(tabBoxHeight)).
@@ -528,7 +528,7 @@ func ScrollView(prevent bool) func(log *parity.EventLog, w *gpui.Window, app *gp
 			OnClick(log.Click("root")).
 			OnKeyDown(rootKeyDown).
 			OnKeyUp(log.KeyUp("root"))
-		scroller := gpui.Div().
+		scroller := gpui.Div().Flex().
 			ID("scroller").
 			DebugSelector("scroller").
 			Size(gpui.Px(scrollerWidth), gpui.Px(scrollerHeight)).
@@ -537,7 +537,7 @@ func ScrollView(prevent bool) func(log *parity.EventLog, w *gpui.Window, app *gp
 			OnClick(log.Click("scroller")).
 			OnKeyDown(log.KeyDown("scroller")).
 			OnKeyUp(log.KeyUp("scroller"))
-		content := gpui.Div().
+		content := gpui.Div().Flex().
 			ID("content").
 			DebugSelector("content").
 			Size(gpui.Px(scrollerWidth), gpui.Px(contentHeight)).
@@ -545,7 +545,7 @@ func ScrollView(prevent bool) func(log *parity.EventLog, w *gpui.Window, app *gp
 			OnClick(log.Click("content")).
 			OnKeyDown(log.KeyDown("content")).
 			OnKeyUp(log.KeyUp("content"))
-		target := gpui.Div().
+		target := gpui.Div().Flex().
 			ID("target").
 			DebugSelector("target").
 			Size(gpui.Px(scrollerWidth), gpui.Px(targetHeight)).
@@ -558,7 +558,7 @@ func ScrollView(prevent bool) func(log *parity.EventLog, w *gpui.Window, app *gp
 			OnClick(log.Click("target")).
 			OnKeyDown(log.KeyDown("target")).
 			OnKeyUp(log.KeyUp("target"))
-		filler := gpui.Div().
+		filler := gpui.Div().Flex().
 			Size(gpui.Px(scrollerWidth), gpui.Px(targetHeight)).
 			Bg(gpui.Rgb(fillerColor))
 		return root.
@@ -664,7 +664,7 @@ func ActivateView(prevent bool) func(log *parity.EventLog, w *gpui.Window, app *
 			LineHeight(gpui.PhiLineHeight()).
 			OnKeyDown(rootKeyDown).
 			OnKeyUp(log.KeyUp("root"))
-		button := gpui.Div().
+		button := gpui.Div().Flex().
 			ID("btn").
 			DebugSelector("btn").
 			Size(gpui.Px(120), gpui.Px(60)).
@@ -772,7 +772,7 @@ func BindingOrderView(browserOrder bool) func(log *parity.EventLog, w *gpui.Wind
 			OnKeyDown(log.KeyDown("root")).
 			OnKeyUp(log.KeyUp("root")).
 			OnAction(keyOrderAction, func(*keyOrderPayload, *gpui.Window, *gpui.App) { bindingOrderActions++ })
-		box := gpui.Div().
+		box := gpui.Div().Flex().
 			ID("a").
 			DebugSelector("a").
 			Size(gpui.Px(tabBoxWidth), gpui.Px(tabBoxHeight)).

@@ -26,14 +26,14 @@ func (p *vcPanel) Render(w *Window, cx *Context[vcPanel]) AnyElement {
 	panel := Div().ID(fmt.Sprintf("panel-%d", p.index)).KeyContext(fmt.Sprintf("Panel%d", p.index)).
 		SizeFull().Flex().FlexCol().Gap(Px(4)).P(Px(4)).
 		Bg(Rgb(0x1e293b)).Border1().BorderColor(Rgb(0x334155)).
-		Child(Div().ID("button").W(Px(80)).H(Px(20)).Bg(Rgb(0x2563eb)).
+		Child(Div().Flex().ID("button").W(Px(80)).H(Px(20)).Bg(Rgb(0x2563eb)).
 			Hover(Styles().Bg(Rgb(0xdc2626))).CursorPointer().
 			OnClick(func(*ClickEvent, *Window, *App) { clicks[index]++ })).
 		Child(Text(p.label)).
-		Child(Div().ID("field").KeyContext("Field").TrackFocus(p.focus).W(Px(60)).H(Px(16)).
+		Child(Div().Flex().ID("field").KeyContext("Field").TrackFocus(p.focus).W(Px(60)).H(Px(16)).
 			Bg(Rgb(0x16a34a)).Focus(Styles().Bg(Rgb(0xf8fafc))))
 	if p.index == 0 {
-		panel.Child(Deferred(Div().KeyContext("Overlay").Absolute().Left(Px(150)).Top(Px(10)).
+		panel.Child(Deferred(Div().Flex().KeyContext("Overlay").Absolute().Left(Px(150)).Top(Px(10)).
 			W(Px(30)).H(Px(30)).Bg(Rgb(0xeab308))).Priority(1))
 	}
 	return panel.IntoElement()
@@ -54,7 +54,7 @@ func (r *vcRoot) Render(w *Window, cx *Context[vcRoot]) AnyElement {
 		if r.cached {
 			child = CachedView(ViewOf(panel), Styles().SizeFull())
 		}
-		grid.Child(Div().W(Px(200)).H(Px(100)).Child(child))
+		grid.Child(Div().Flex().W(Px(200)).H(Px(100)).Child(child))
 	}
 	return grid.IntoElement()
 }
@@ -350,7 +350,7 @@ func TestViewCacheBoundsChangeRerenders(t *testing.T) {
 	})
 	root := NewEntity(app, window.Scope(), func(v *paintView, _ *Context[paintView]) {
 		v.build = func(*paintView, *Window, *Context[paintView]) AnyElement {
-			return Div().Child(Div().W(Px(width)).H(Px(100)).Child(CachedView(ViewOf(panel), Styles().SizeFull()))).IntoElement()
+			return Div().Flex().Child(Div().Flex().W(Px(width)).H(Px(100)).Child(CachedView(ViewOf(panel), Styles().SizeFull()))).IntoElement()
 		}
 	})
 	window.SetRootView(ViewOf(root))

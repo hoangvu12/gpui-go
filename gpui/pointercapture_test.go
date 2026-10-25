@@ -36,7 +36,7 @@ type captureFixture struct {
 // side by side at p's top-left (the pin's flex default, no gap).
 func captureTree(f *captureFixture, v *interactView, w *Window, cx *Context[interactView]) AnyElement {
 	leaf := func(id string, x float32) *DivElement {
-		return Div().ID(id).DebugSelector(id).
+		return Div().Flex().ID(id).DebugSelector(id).
 			Absolute().Left(Px(x)).Top(Px(0)).Size(Px(80), Px(60)).
 			OnPointerEnter(func(*PointerEnterEvent, *Window, *App) { f.events.add("enter:%s", id) }).
 			OnPointerLeave(func(*PointerLeaveEvent, *Window, *App) { f.events.add("leave:%s", id) }).
@@ -48,7 +48,7 @@ func captureTree(f *captureFixture, v *interactView, w *Window, cx *Context[inte
 			OnGotPointerCapture(func(*GotPointerCaptureEvent, *Window, *App) { f.events.add("got:%s", id) }).
 			OnLostPointerCapture(func(*LostPointerCaptureEvent, *Window, *App) { f.events.add("lost:%s", id) })
 	}
-	root := Div().ID("root").DebugSelector("root").SizeFull().Relative().
+	root := Div().Flex().ID("root").DebugSelector("root").SizeFull().Relative().
 		OnPointerEnter(func(*PointerEnterEvent, *Window, *App) { f.events.add("enter:root") }).
 		OnPointerLeave(func(*PointerLeaveEvent, *Window, *App) { f.events.add("leave:root") }).
 		OnMouseDown(MouseButtonLeft, func(*MouseDownEvent, *Window, *App) { f.events.add("down:root") }).
@@ -57,7 +57,7 @@ func captureTree(f *captureFixture, v *interactView, w *Window, cx *Context[inte
 		OnClick(func(*ClickEvent, *Window, *App) { f.events.add("click:root") }).
 		OnGotPointerCapture(func(*GotPointerCaptureEvent, *Window, *App) { f.events.add("got:root") }).
 		OnLostPointerCapture(func(*LostPointerCaptureEvent, *Window, *App) { f.events.add("lost:root") })
-	p := Div().ID("p").DebugSelector("p").
+	p := Div().Flex().ID("p").DebugSelector("p").
 		Absolute().Left(Px(100)).Top(Px(100)).Size(Px(200), Px(120)).
 		OnPointerEnter(func(*PointerEnterEvent, *Window, *App) { f.events.add("enter:p") }).
 		OnPointerLeave(func(*PointerLeaveEvent, *Window, *App) { f.events.add("leave:p") }).
@@ -267,12 +267,12 @@ func TestPointerCaptureLocalPosition(t *testing.T) {
 	var capLocal, pLocal Point
 	var moveLocal Point
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-		return Div().ID("root").SizeFull().Relative().
-			Child(Div().ID("p").Absolute().Left(Px(100)).Top(Px(100)).Size(Px(200), Px(120)).
+		return Div().Flex().ID("root").SizeFull().Relative().
+			Child(Div().Flex().ID("p").Absolute().Left(Px(100)).Top(Px(100)).Size(Px(200), Px(120)).
 				OnMouseDown(MouseButtonLeft, func(e *MouseDownEvent, w *Window, app *App) {
 					pLocal = e.LocalPosition(wHitbox(w, ".root.p"))
 				}).
-				Child(Div().ID("cap").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(80), Px(60)).
+				Child(Div().Flex().ID("cap").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(80), Px(60)).
 					OnMouseDownAll(func(e *MouseDownEvent, phase DispatchPhase, hitbox *Hitbox, w *Window, app *App) {
 						if phase == DispatchBubble && hitbox.IsHovered(w) {
 							w.CapturePointer(hitbox.ID())
@@ -402,12 +402,12 @@ func TestPointerCancelClearsPressesAndDrag(t *testing.T) {
 func TestPointerCancelCancelsActiveDrag(t *testing.T) {
 	rec := &transcript{}
 	f := newInteractFixture(t, func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-		source := Div().ID("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).
+		source := Div().Flex().ID("source").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(50)).
 			OnDrag(dragPayload{name: "tab"}, func(value *dragPayload, offset Point, w *Window, app *App) View {
 				rec.add("constructor(%s)", value.name)
 				return ViewOf(NewEntity(app, w.Scope(), func(*dragPreview, *Context[dragPreview]) {}))
 			})
-		return Div().Relative().SizeFull().Child(source).Child(&previewHostElement{}).IntoElement()
+		return Div().Flex().Relative().SizeFull().Child(source).Child(&previewHostElement{}).IntoElement()
 	})
 	f.down(MouseButtonLeft, 10, 10)
 	f.draw()
@@ -458,7 +458,7 @@ func TestPointerCaptureDropsWhenElementLeavesTree(t *testing.T) {
 	f.view.Update(f.app, func(v *interactView, cx *Context[interactView]) {
 		v.left = 0
 		v.build = func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-			return Div().ID("root").DebugSelector("root").SizeFull().Relative().
+			return Div().Flex().ID("root").DebugSelector("root").SizeFull().Relative().
 				OnMouseDown(MouseButtonLeft, func(*MouseDownEvent, *Window, *App) { f.events.add("down:root") }).
 				OnMouseMove(func(*MouseMoveEvent, *Window, *App) { f.events.add("move:root") }).
 				IntoElement()
@@ -484,20 +484,20 @@ func TestPointerCaptureHoverStylesFollowTheChain(t *testing.T) {
 	window := NewTestWindow(app, Size{Width: 400, Height: 300})
 	hover := func(d *DivElement) *DivElement {
 		return d.Bg(interactRed).Hover(func(s StyleRefinement) StyleRefinement {
-			return Div().Refine(s).Bg(interactBlue).Style()
+			return Div().Flex().Refine(s).Bg(interactBlue).Style()
 		})
 	}
 	view := NewEntity(app, window.Scope(), func(v *interactView, cx *Context[interactView]) {
 		v.build = func(v *interactView, w *Window, cx *Context[interactView]) AnyElement {
-			return Div().ID("root").SizeFull().Relative().
-				Child(Div().ID("p").Absolute().Left(Px(100)).Top(Px(100)).Size(Px(200), Px(120)).
-					Child(hover(Div().ID("cap").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(80), Px(60)).
+			return Div().Flex().ID("root").SizeFull().Relative().
+				Child(Div().Flex().ID("p").Absolute().Left(Px(100)).Top(Px(100)).Size(Px(200), Px(120)).
+					Child(hover(Div().Flex().ID("cap").Absolute().Left(Px(0)).Top(Px(0)).Size(Px(80), Px(60)).
 						OnMouseDownAll(func(e *MouseDownEvent, phase DispatchPhase, hitbox *Hitbox, w *Window, app *App) {
 							if phase == DispatchBubble && hitbox.IsHovered(w) {
 								w.CapturePointer(hitbox.ID())
 							}
 						})).IntoElement()).
-					Child(hover(Div().ID("other").Absolute().Left(Px(80)).Top(Px(0)).Size(Px(80), Px(60))).IntoElement())).
+					Child(hover(Div().Flex().ID("other").Absolute().Left(Px(80)).Top(Px(0)).Size(Px(80), Px(60))).IntoElement())).
 				IntoElement()
 		}
 	})

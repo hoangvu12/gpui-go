@@ -54,7 +54,7 @@ type Button struct {
 // (U:button.rs:38-56 Button::new).
 func NewButton[I gpui.IntoElementID](id I) *Button {
 	eid := gpui.ElementIDOf(id)
-	base := TestSupport(gpui.Div().ID(eid))
+	base := TestSupport(gpui.Div().Flex().ID(eid))
 	return gpui.BindComponent(&Button{
 		id:        eid,
 		base:      base,

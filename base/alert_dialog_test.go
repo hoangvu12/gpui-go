@@ -17,7 +17,7 @@ func TestAlertDialogBackdropIsNotClosableByDefault(t *testing.T) {
 	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
 		return gpui.OwnRecipe(NewAlertDialog().
 			RequestClose(func(bool, *gpui.Window, *gpui.App) { closeRequested = true }).
-			Backdrop(gpui.Div().Size(gpui.Px(200))))
+			Backdrop(gpui.Div().Flex().Size(gpui.Px(200))))
 	})
 	ovDraw(t, cx)
 	cx.SimulateClick(ovPoint(20, 20), gpui.NoModifiers())
@@ -37,7 +37,7 @@ func TestAlertDialogHostStylePositionsThePopup(t *testing.T) {
 			gpui.Canvas(func(b gpui.Bounds, _ *gpui.Window, _ *gpui.App) struct{} {
 				bounds = b
 				return struct{}{}
-			}, func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {}).Size(gpui.Px(100))))
+			}, func(gpui.Bounds, struct{}, *gpui.Window, *gpui.App) {}).Flex().Size(gpui.Px(100))))
 	})
 	ovDraw(t, cx)
 	if bounds.Origin != (gpui.Point{}) {

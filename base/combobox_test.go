@@ -35,7 +35,7 @@ func (h *comboboxHarness) Render(_ *gpui.Window, cx *gpui.Context[comboboxHarnes
 		OnConfirm(func(_ *gpui.Window, app *gpui.App) { record(app, "confirm", nil) }).
 		OnDismiss(func(_ *gpui.Window, app *gpui.App) { record(app, "dismiss", nil) }).
 		OnOpenChange(func(open bool, _ *gpui.Window, app *gpui.App) { record(app, "close", &open) }).
-		Child(gpui.Div().TrackFocus(h.contentFocus).Size(gpui.Px(20))))
+		Child(gpui.Div().Flex().TrackFocus(h.contentFocus).Size(gpui.Px(20))))
 }
 
 // comboboxTestHarness is U:combobox.rs:202-211: open, with the content

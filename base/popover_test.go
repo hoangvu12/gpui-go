@@ -29,16 +29,16 @@ func TestPopoverClickInsideNestedChildKeepsTheParentOpen(t *testing.T) {
 	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
 		return gpui.OwnRecipe(NewPopover("parent-popover").
 			TriggerWith(func(bool, *gpui.Window, *gpui.App) gpui.AnyElement {
-				return gpui.Div().DebugSelector("parent-trigger").Size(gpui.Px(40)).IntoElement()
+				return gpui.Div().Flex().DebugSelector("parent-trigger").Size(gpui.Px(40)).IntoElement()
 			}).
 			Content(func(*PopoverState, *gpui.Window, *gpui.Context[PopoverState]) any {
-				return gpui.Div().DebugSelector("parent-content").Size(gpui.Px(40)).
+				return gpui.Div().Flex().DebugSelector("parent-content").Size(gpui.Px(40)).
 					Child(gpui.OwnRecipe(NewPopover("child-popover").
 						TriggerWith(func(bool, *gpui.Window, *gpui.App) gpui.AnyElement {
-							return gpui.Div().DebugSelector("child-trigger").Size(gpui.Px(40)).IntoElement()
+							return gpui.Div().Flex().DebugSelector("child-trigger").Size(gpui.Px(40)).IntoElement()
 						}).
 						Content(func(*PopoverState, *gpui.Window, *gpui.Context[PopoverState]) any {
-							return gpui.Div().DebugSelector("child-content").Size(gpui.Px(40))
+							return gpui.Div().Flex().DebugSelector("child-content").Size(gpui.Px(40))
 						})))
 			}))
 	})
@@ -84,10 +84,10 @@ func popoverHarness(changes *[]bool, defaultOpen bool) func(*gpui.Window, *gpui.
 		return gpui.OwnRecipe(NewPopover("base-popover").
 			DefaultOpen(defaultOpen).
 			TriggerWith(func(bool, *gpui.Window, *gpui.App) gpui.AnyElement {
-				return gpui.Div().Child("Open").IntoElement()
+				return gpui.Div().Flex().Child("Open").IntoElement()
 			}).
 			Content(func(*PopoverState, *gpui.Window, *gpui.Context[PopoverState]) any {
-				return gpui.Div().DebugSelector("base-popover-content").Size(gpui.Px(40))
+				return gpui.Div().Flex().DebugSelector("base-popover-content").Size(gpui.Px(40))
 			}).
 			OnOpenChange(func(open bool, _ *gpui.Window, _ *gpui.App) { *changes = append(*changes, open) }))
 	}
@@ -161,7 +161,7 @@ func (r *ovRecordingTrigger) Open(open bool) *ovRecordingTrigger {
 func (r *ovRecordingTrigger) IsOpen() bool { return r.open }
 
 func (r *ovRecordingTrigger) RenderOnce(*gpui.Window, *gpui.App) gpui.AnyElement {
-	return gpui.Div().Size(gpui.Px(40)).Child("Open").IntoElement()
+	return gpui.Div().Flex().Size(gpui.Px(40)).Child("Open").IntoElement()
 }
 
 // U:popover.rs:547-570
@@ -173,7 +173,7 @@ func TestPopoverAnOpenPopoverTellsItsTriggerItIsOpenNotSelected(t *testing.T) {
 		return gpui.OwnRecipe(NewPopover("recording-popover").
 			Trigger(&ovRecordingTrigger{calls: &calls}).
 			Content(func(*PopoverState, *gpui.Window, *gpui.Context[PopoverState]) any {
-				return gpui.Div().Size(gpui.Px(40))
+				return gpui.Div().Flex().Size(gpui.Px(40))
 			}))
 	})
 	ovDraw(t, cx)
@@ -201,7 +201,7 @@ func TestPopoverKeyboardActivationOpensThePopover(t *testing.T) {
 		return gpui.OwnRecipe(NewPopover("keyboard-popover").
 			Trigger(NewButton("keyboard-trigger").TrackFocus(triggerFocus).Child("Open")).
 			Content(func(*PopoverState, *gpui.Window, *gpui.Context[PopoverState]) any {
-				return gpui.Div().DebugSelector("keyboard-popover-content").Size(gpui.Px(40))
+				return gpui.Div().Flex().DebugSelector("keyboard-popover-content").Size(gpui.Px(40))
 			}))
 	})
 	ovDraw(t, cx)

@@ -329,7 +329,7 @@ func (s *selectionFixture) view(_ *parity.EventLog, w *gpui.Window, app *gpui.Ap
 		LineHeight(gpui.Px(textLineHeight)).
 		TextColor(gpui.Rgb(textColor)).
 		Child(gpui.TextSelectionLayer{}).
-		Child(gpui.Div().
+		Child(gpui.Div().Flex().
 			ID("text").
 			DebugSelector("text").
 			W(gpui.Px(paragraphWidth)).

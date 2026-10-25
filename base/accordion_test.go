@@ -89,7 +89,7 @@ func TestAccordionItemStacksHeaderAbovePanel(t *testing.T) {
 			return elementOf(t, NewAccordion("accordion").W(gpui.Px(200)).Child(
 				NewAccordionItem().Open(open).
 					Header(NewAccordionHeader(NewAccordionTrigger("trigger").H(gpui.Px(20)).DebugSelector("trigger"))).
-					Panel(NewAccordionPanel().Child(gpui.Div().H(gpui.Px(30)).DebugSelector("panel")))))
+					Panel(NewAccordionPanel().Child(gpui.Div().Flex().H(gpui.Px(30)).DebugSelector("panel")))))
 		})
 		trigger := debugBounds(t, cx, "trigger")
 		if trigger.Size.Width != 200 {

@@ -19,10 +19,10 @@ func TestInlineObjectPaintsAtItsPrepaintOrigin(t *testing.T) {
 	origin := gpui.Point{X: 40, Y: 30}
 	var scale float32
 	_, cx := openTestView(t, ta, func(*gpui.Window, *gpui.Context[testView]) gpui.AnyElement {
-		return gpui.Div().SizeFull().Child(gpui.Canvas(
+		return gpui.Div().Flex().SizeFull().Child(gpui.Canvas(
 			func(_ gpui.Bounds, w *gpui.Window, app *gpui.App) gpui.AnyElement {
 				scale = gpui.ScaleFactorOf(w)
-				presentation := NewInlineElement(gpui.Div().W(gpui.Px(24)).H(gpui.Px(12)).Bg(content)).WithBaseline(10)
+				presentation := NewInlineElement(gpui.Div().Flex().W(gpui.Px(24)).H(gpui.Px(12)).Bg(content)).WithBaseline(10)
 				measured := measureInlineObject("x", &presentation, gpui.WindowTextStyle(w), w, app)
 				size := measured.metrics.size
 				selection := gpui.Bounds{Origin: origin, Size: size}
@@ -36,7 +36,7 @@ func TestInlineObjectPaintsAtItsPrepaintOrigin(t *testing.T) {
 			func(_ gpui.Bounds, el gpui.AnyElement, w *gpui.Window, app *gpui.App) {
 				el.Paint(w, app)
 			},
-		).SizeFull()).IntoElement()
+		).Flex().SizeFull()).IntoElement()
 	})
 	cx.RunUntilParked()
 	scene, err := gpui.DrawWindowFrame(cx.Window())

@@ -40,11 +40,11 @@ func maskAtTop(state *gpui.ListState) bool {
 type horizontalAreaTest struct{ scrollHandle gpui.ScrollHandle }
 
 func (v *horizontalAreaTest) Render(*gpui.Window, *gpui.Context[horizontalAreaTest]) gpui.AnyElement {
-	return gpui.Div().W(gpui.Px(100)).H(gpui.Px(40)).Child(horizontalScrollArea(
+	return gpui.Div().Flex().W(gpui.Px(100)).H(gpui.Px(40)).Child(horizontalScrollArea(
 		"horizontal-scroll-area",
 		v.scrollHandle,
 		&gpui.StyleRefinement{},
-		gpui.Div().W(gpui.Px(300)).H(gpui.Px(40)),
+		gpui.Div().Flex().W(gpui.Px(300)).H(gpui.Px(40)),
 	)).IntoElement()
 }
 
@@ -78,18 +78,18 @@ type listWithHorizontalAreaTest struct {
 
 func (v *listWithHorizontalAreaTest) Render(*gpui.Window, *gpui.Context[listWithHorizontalAreaTest]) gpui.AnyElement {
 	scrollHandle := v.scrollHandle
-	root := gpui.Div().W(gpui.Px(100)).H(gpui.Px(100)).Child(
+	root := gpui.Div().Flex().W(gpui.Px(100)).H(gpui.Px(100)).Child(
 		gpui.List(v.listState, func(ix int, _ *gpui.Window, _ *gpui.App) gpui.AnyElement {
 			if ix == 0 {
 				return horizontalScrollArea("horizontal-scroll-area", scrollHandle, &gpui.StyleRefinement{},
-					gpui.Div().W(gpui.Px(300)).H(gpui.Px(40))).IntoElement()
+					gpui.Div().Flex().W(gpui.Px(300)).H(gpui.Px(40))).IntoElement()
 			}
-			return gpui.Div().W(gpui.Px(100)).H(gpui.Px(40)).IntoElement()
+			return gpui.Div().Flex().W(gpui.Px(100)).H(gpui.Px(40)).IntoElement()
 		}).SizeFull(),
 	)
 	if v.occluded {
 		// An overlay above the list, like an open dialog or menu.
-		root = root.Child(gpui.Div().Absolute().Top0().Left0().SizeFull().Occlude())
+		root = root.Child(gpui.Div().Flex().Absolute().Top0().Left0().SizeFull().Occlude())
 	}
 	return root.IntoElement()
 }
@@ -145,13 +145,13 @@ type listWithVerticalMaskTest struct {
 }
 
 func (v *listWithVerticalMaskTest) Render(*gpui.Window, *gpui.Context[listWithVerticalMaskTest]) gpui.AnyElement {
-	return gpui.Div().
+	return gpui.Div().Flex().
 		ID("outer").
 		W(gpui.Px(100)).
 		H(gpui.Px(100)).
 		OverflowYScroll().
 		TrackScroll(v.outerHandle).
-		Child(gpui.Div().WFull().H(gpui.Px(400)).Child(
+		Child(gpui.Div().Flex().WFull().H(gpui.Px(400)).Child(
 			gpui.Div().
 				Block(). // gap 2b: the mask's static position.
 				Relative().
@@ -159,7 +159,7 @@ func (v *listWithVerticalMaskTest) Render(*gpui.Window, *gpui.Context[listWithVe
 				H(gpui.Px(80)).
 				OverflowHidden().
 				Child(gpui.List(v.listState, func(int, *gpui.Window, *gpui.App) gpui.AnyElement {
-					return gpui.Div().WFull().H(gpui.Px(40)).IntoElement()
+					return gpui.Div().Flex().WFull().H(gpui.Px(40)).IntoElement()
 				}).SizeFull()).
 				Child(NewScrollableMask(gpui.AxisVertical, v.listState)))).
 		IntoElement()
@@ -328,14 +328,14 @@ func (v *nestedVerticalScrollTest) Render(*gpui.Window, *gpui.Context[nestedVert
 			Relative().
 			WFull().
 			H(gpui.Px(60)).
-			Child(gpui.Div().
+			Child(gpui.Div().Flex().
 				ID("inner").
 				SizeFull().
 				OverflowYScroll().
 				TrackScroll(v.innerHandle).
-				Child(gpui.Div().WFull().H(gpui.Px(v.innerContentHeight)))).
+				Child(gpui.Div().Flex().WFull().H(gpui.Px(v.innerContentHeight)))).
 			Child(NewScrollableMask(gpui.AxisVertical, v.innerHandle))).
-		Child(gpui.Div().WFull().H(gpui.Px(400))).
+		Child(gpui.Div().Flex().WFull().H(gpui.Px(400))).
 		IntoElement()
 }
 
@@ -435,7 +435,7 @@ type listWithVerticalAreaTest struct {
 
 func (v *listWithVerticalAreaTest) Render(*gpui.Window, *gpui.Context[listWithVerticalAreaTest]) gpui.AnyElement {
 	scrollHandle := v.scrollHandle
-	return gpui.Div().W(gpui.Px(100)).H(gpui.Px(100)).Child(
+	return gpui.Div().Flex().W(gpui.Px(100)).H(gpui.Px(100)).Child(
 		gpui.List(v.listState, func(ix int, _ *gpui.Window, _ *gpui.App) gpui.AnyElement {
 			if ix == 0 {
 				return gpui.Div().
@@ -443,16 +443,16 @@ func (v *listWithVerticalAreaTest) Render(*gpui.Window, *gpui.Context[listWithVe
 					Relative().
 					WFull().
 					H(gpui.Px(60)).
-					Child(gpui.Div().
+					Child(gpui.Div().Flex().
 						ID("inner").
 						SizeFull().
 						OverflowYScroll().
 						TrackScroll(scrollHandle).
-						Child(gpui.Div().WFull().H(gpui.Px(300)))).
+						Child(gpui.Div().Flex().WFull().H(gpui.Px(300)))).
 					Child(NewScrollableMask(gpui.AxisVertical, scrollHandle)).
 					IntoElement()
 			}
-			return gpui.Div().W(gpui.Px(100)).H(gpui.Px(40)).IntoElement()
+			return gpui.Div().Flex().W(gpui.Px(100)).H(gpui.Px(40)).IntoElement()
 		}).SizeFull(),
 	).IntoElement()
 }

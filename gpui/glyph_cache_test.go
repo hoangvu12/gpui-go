@@ -14,7 +14,7 @@ func (*glyphCacheTestView) Render(w *Window, cx *Context[glyphCacheTestView]) An
 	rows := make([]any, 0, 24)
 	colors := []Hsla{Rgb(0x000000), Rgb(0xd03030), Rgb(0x3060c0)}
 	for i := 0; i < 24; i++ {
-		row := Div().Pl(Px(float32(i) * 0.37)).TextColor(colors[i%len(colors)]).
+		row := Div().Flex().Pl(Px(float32(i) * 0.37)).TextColor(colors[i%len(colors)]).
 			Child(fmt.Sprintf("%02d Sphinx of black quartz, judge my vow! 0123456789 ÅÉß", i))
 		switch i % 3 {
 		case 1:

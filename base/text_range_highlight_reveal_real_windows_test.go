@@ -54,7 +54,7 @@ func (r *realRevealRoot) Render(w *gpui.Window, cx *gpui.Context[realRevealRoot]
 	case "list":
 		return frame.Child(gpui.List(r.outer, func(ix int, _ *gpui.Window, _ *gpui.App) gpui.AnyElement {
 			if ix == 0 {
-				return gpui.Div().H(gpui.Px(40)).IntoElement()
+				return gpui.Div().Flex().H(gpui.Px(40)).IntoElement()
 			}
 			return NewTextView(state).IntoElement()
 		}).SizeFull()).IntoElement()

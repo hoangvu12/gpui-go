@@ -67,7 +67,7 @@ func (p *perfDivPane) Render(w *gpui.Window, cx *gpui.Context[perfDivPane]) gpui
 	children := make([]any, 0, perfDivsPerPane)
 	for i := 0; i < perfDivsPerPane; i++ {
 		hue := uint32((p.index*perfDivsPerPane + i + p.tick) % 7)
-		children = append(children, gpui.Div().
+		children = append(children, gpui.Div().Flex().
 			Size(gpui.Px(18)).
 			M1().
 			Bg(gpui.Rgb(0x203040+hue*0x101010)).
@@ -104,7 +104,7 @@ func (r *perfTextRoot) Render(w *gpui.Window, cx *gpui.Context[perfTextRoot]) gp
 	for c := 0; c < perfTextColumns; c++ {
 		rows := make([]any, 0, perColumn)
 		for i := c * perColumn; i < (c+1)*perColumn && i < len(r.lines); i++ {
-			rows = append(rows, gpui.Div().Child(r.lines[i]))
+			rows = append(rows, gpui.Div().Flex().Child(r.lines[i]))
 		}
 		columns = append(columns, gpui.Div().Flex().FlexCol().W(gpui.Px(perfColumnWidthP)).TextXs().Children(rows...))
 	}
