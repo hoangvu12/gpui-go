@@ -988,10 +988,16 @@ func List(state *ListState, renderItem func(ix int, w *Window, app *App) AnyElem
 	if renderItem == nil {
 		panic("gpui: List requires a non-nil item render callback")
 	}
+	// The list's node is a leaf (its items are placed by prepaint, not
+	// as Taffy children), so its display cannot change its layout; the
+	// pin is the pin's Style::default() (Flex) while the div default is
+	// block (browser-core 71, spec D6).
+	style := DefaultStyle()
+	style.Display = DisplayFlex
 	return &ListElement{
 		state:      state,
 		renderItem: renderItem,
-		style:      DefaultStyle(),
+		style:      style,
 		sizing:     ListAuto,
 	}
 }

@@ -14,6 +14,7 @@ import (
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/closewatcher"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/contextmenu"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/display"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/displayblock"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/dnd"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/editkeys"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/filters"

@@ -489,7 +489,7 @@ func AncestorView(shape ancestorShape) func(log *parity.EventLog, w *gpui.Window
 			}
 		}
 		child := func(id string, color uint32) *gpui.DivElement {
-			return gpui.Div().Flex().
+			return gpui.Div().
 				ID(id).
 				DebugSelector(id).
 				Size(gpui.Px(childWidth), gpui.Px(childHeight)).
@@ -588,7 +588,7 @@ func ButtonView(variant ButtonVariant) func(log *parity.EventLog, w *gpui.Window
 		if variant != NoRootClickVariant {
 			root = root.OnClick(log.Click("root"))
 		}
-		btn := gpui.Div().Flex().
+		btn := gpui.Div().
 			ID("btn").
 			DebugSelector("btn").
 			Size(gpui.Px(btnWidth), gpui.Px(btnHeight)).
@@ -682,7 +682,7 @@ func FocusView(count FocusBoxCount, mode FocusRingMode) func(log *parity.EventLo
 			OnKeyUp(log.KeyUp("root"))
 		box := func(id string, handle gpui.FocusHandle) *gpui.DivElement {
 			focusBackground, ringBackground := focusBackgroundsOf(mode)
-			box := gpui.Div().Flex().
+			box := gpui.Div().
 				ID(id).
 				DebugSelector(id).
 				Size(gpui.Px(btnWidth), gpui.Px(btnHeight)).

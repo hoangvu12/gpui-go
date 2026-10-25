@@ -368,7 +368,7 @@ func RangeView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElemen
 		Pt(gpui.Fraction(padTopPercent)).
 		Pb(gpui.Px(padBottom)).
 		Bg(gpui.Rgb(scrollerBg)).
-		Child(gpui.Div().Flex().
+		Child(gpui.Div().
 			ID("focus").
 			DebugSelector("focus").
 			Size(gpui.Px(scrollerW), gpui.Px(focusH)).
@@ -387,19 +387,19 @@ func RangeView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElemen
 			AlignItems(gpui.AlignItemsFlexStart).
 			FlexShrink0().
 			Bg(gpui.Rgb(nestedBg)).
-			Child(gpui.Div().Flex().
+			Child(gpui.Div().
 				ID("tall").
 				DebugSelector("tall").
 				Size(gpui.Px(tallW), gpui.Px(tallH)).
 				FlexShrink0().
 				Bg(gpui.Rgb(tallBg)))).
-		Child(gpui.Div().Flex().
+		Child(gpui.Div().
 			ID("spacer").
 			DebugSelector("spacer").
 			Size(gpui.Px(scrollerW), gpui.Px(spacerH)).
 			FlexShrink0().
 			Bg(gpui.Rgb(spacerBg))).
-		Child(gpui.Div().Flex().
+		Child(gpui.Div().
 			ID("last").
 			DebugSelector("last").
 			Size(gpui.Px(scrollerW), gpui.Px(lastH)).
@@ -417,7 +417,7 @@ func borderView(width float32) func(log *parity.EventLog) gpui.AnyElement {
 			SizeFull().
 			Flex().
 			Bg(gpui.Rgb(pageBackground)).
-			Child(gpui.Div().Flex().
+			Child(gpui.Div().
 				ID("boxed").
 				DebugSelector("boxed").
 				Size(gpui.Px(borderBoxW), gpui.Px(borderBoxH)).
@@ -426,7 +426,7 @@ func borderView(width float32) func(log *parity.EventLog) gpui.AnyElement {
 				Border(gpui.Px(width)).
 				BorderColor(gpui.Rgb(borderColor)).
 				Bg(gpui.Rgb(pageBackground)).
-				Child(gpui.Div().Flex().
+				Child(gpui.Div().
 					ID("inner").
 					DebugSelector("inner").
 					SizeFull().
@@ -470,7 +470,7 @@ func WrongPaddingBasisView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gp
 		Pt(gpui.Px(padTopPercent * scrollerH)).
 		Pb(gpui.Px(0)).
 		Bg(gpui.Rgb(scrollerBg)).
-		Child(gpui.Div().Flex().
+		Child(gpui.Div().
 			ID("focus").
 			DebugSelector("focus").
 			Size(gpui.Px(scrollerW), gpui.Px(focusH)).
@@ -489,19 +489,19 @@ func WrongPaddingBasisView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gp
 			AlignItems(gpui.AlignItemsFlexStart).
 			FlexShrink0().
 			Bg(gpui.Rgb(nestedBg)).
-			Child(gpui.Div().Flex().
+			Child(gpui.Div().
 				ID("tall").
 				DebugSelector("tall").
 				Size(gpui.Px(tallW), gpui.Px(tallH)).
 				FlexShrink0().
 				Bg(gpui.Rgb(tallBg)))).
-		Child(gpui.Div().Flex().
+		Child(gpui.Div().
 			ID("spacer").
 			DebugSelector("spacer").
 			Size(gpui.Px(scrollerW), gpui.Px(spacerH)).
 			FlexShrink0().
 			Bg(gpui.Rgb(spacerBg))).
-		Child(gpui.Div().Flex().
+		Child(gpui.Div().
 			ID("last").
 			DebugSelector("last").
 			Size(gpui.Px(scrollerW), gpui.Px(lastH)).

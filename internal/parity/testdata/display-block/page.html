@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		/* No display: the browser's block default, the rule under
+		   test. */
+		padding: 20px;
+		box-sizing: border-box;
+		font: 16px/25px "Segoe UI", system-ui, sans-serif;
+		color: #0f172a;
+	}
+	#stack {
+		box-sizing: border-box;
+		width: 400px;
+		height: 200px;
+		background: #f1f5f9;
+	}
+	#b1 {
+		box-sizing: border-box;
+		width: 200px;
+		height: 40px;
+		margin-left: 20px;
+		background: #2563eb;
+	}
+	#b2 {
+		box-sizing: border-box;
+		height: 40px;
+		background: #16a34a;
+	}
+	#nested {
+		box-sizing: border-box;
+		height: 60px;
+		padding: 8px;
+		background: #e2e8f0;
+	}
+	#inner {
+		box-sizing: border-box;
+		height: 44px;
+		margin-left: 12px;
+		background: #dc2626;
+	}
+	#para {
+		box-sizing: border-box;
+		height: 30px;
+		background: #fde68a;
+		padding-left: 8px;
+	}
+	#flex-sib {
+		box-sizing: border-box;
+		height: 40px;
+		/* The contrast: display stated, like the view's .Flex(). */
+		display: flex;
+		gap: 8px;
+		background: #bbf7d0;
+	}
+	#fs1, #fs2 {
+		box-sizing: border-box;
+		width: 60px;
+		height: 24px;
+		background: #7c3aed;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div id="stack" data-id="stack">
+		<div id="b1" data-id="b1"></div>
+		<div id="b2" data-id="b2"></div>
+		<div id="nested" data-id="nested">
+			<div id="inner" data-id="inner"></div>
+		</div>
+	</div>
+	<div id="para" data-id="para">text in a plain block</div>
+	<div id="flex-sib" data-id="flex-sib">
+		<div id="fs1" data-id="fs1"></div>
+		<div id="fs2" data-id="fs2"></div>
+	</div>
+</body>
+</html>

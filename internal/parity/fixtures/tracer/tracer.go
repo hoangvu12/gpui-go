@@ -141,7 +141,7 @@ func WithoutClick(log *parity.EventLog) gpui.AnyElement {
 // data-ids, which the replay's box comparison and event transcript
 // key on.
 func boxElement(log *parity.EventLog, width, height, pad float32, withClick bool) gpui.AnyElement {
-	box := gpui.Div().Flex().
+	box := gpui.Div().
 		ID("box").
 		DebugSelector("box").
 		Size(gpui.Px(width), gpui.Px(height)).

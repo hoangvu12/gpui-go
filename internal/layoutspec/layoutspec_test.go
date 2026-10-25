@@ -48,6 +48,11 @@ func computeDefinite(t *testing.T, engine *gpui.LayoutEngine, ctx *gpui.LayoutCo
 // sizedBox returns a Style with a definite px size.
 func sizedBox(w, h float32) gpui.Style {
 	style := gpui.DefaultStyle()
+	// The pin's default display: these boxes build flex trees (the
+	// sibling order tests read x positions); the div default is block
+	// since browser-core 71 (spec D6), so the tests state Flex like the
+	// codemod pinned the element chains.
+	style.Display = gpui.DisplayFlex
 	style.Size = gpui.LengthSize{Width: gpui.PxLength(w), Height: gpui.PxLength(h)}
 	return style
 }
@@ -213,8 +218,13 @@ func TestParentRelativeLayoutBoundsSnapsInParentSpace(t *testing.T) {
 	ctx := gpui.NewTestLayoutContext() // scale 2
 
 	rootStyle := gpui.DefaultStyle()
+	// The test's siblings sit side by side (the second at x 24.5): the
+	// flex row the pre-71 default gave every div, stated explicitly
+	// since browser-core 71 (spec D6).
+	rootStyle.Display = gpui.DisplayFlex
 	rootStyle.Size = gpui.LengthSize{Width: gpui.PxLength(49.5), Height: gpui.PxLength(10)}
 	childStyle := gpui.DefaultStyle()
+	childStyle.Display = gpui.DisplayFlex
 	childStyle.Size.Width = gpui.DefiniteLengthOf(gpui.Fraction(0.5))
 
 	// Children are requested first and attached to the parent.

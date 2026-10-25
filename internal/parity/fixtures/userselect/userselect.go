@@ -253,6 +253,11 @@ func noneView(_ *parity.EventLog) gpui.AnyElement {
 }
 
 func paragraph(none bool) gpui.AnyElement {
+	// The pin's default display (Flex) stays: the selection
+	// gesture's text-collection path was built and recorded against
+	// the measured-leaf text child (a flex item), not the paragraph
+	// span; the page twin's <p> block text is a follow-up (selection
+	// over inline fragments, ticket 19's corpus).
 	text := gpui.Div().Flex().
 		ID("text").
 		DebugSelector("text").

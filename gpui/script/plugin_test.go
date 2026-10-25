@@ -26,13 +26,18 @@ import (
 )
 
 // pluginAppView is the app: two slots, one with fallback children.
+// The root and the slots state display: flex explicitly — they relied
+// on the pre-71 flex default of a TSX <div>, which is block since
+// browser-core 71 (spec D6); the slot's contributions stay laid out
+// left to right, which TestPluginsRenderOrderAndRespondThroughAWindow
+// asserts.
 const pluginAppView = `
 export function App() {
 	return (
-		<div id="root" style={{ width: 320, height: "100%", background: "#111827", padding: 4 }}>
+		<div id="root" style={{ display: "flex", width: 320, height: "100%", background: "#111827", padding: 4 }}>
 			<div id="header" style={{ padding: 4, color: "#f9fafb", fontSize: 13 }}>header</div>
-			<slot id="main-slot" name="main" style={{ padding: 4, background: "#1f2937" }} />
-			<slot id="side-slot" name="side" style={{ padding: 4, background: "#1f2937" }}>no side plugin</slot>
+			<slot id="main-slot" name="main" style={{ display: "flex", padding: 4, background: "#1f2937" }} />
+			<slot id="side-slot" name="side" style={{ display: "flex", padding: 4, background: "#1f2937" }}>no side plugin</slot>
 		</div>
 	);
 }

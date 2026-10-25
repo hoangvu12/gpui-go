@@ -434,7 +434,7 @@ func flipPopup(id, anchorID string, flip bool, background uint32) gpui.AnyElemen
 		anchored = anchored.TryFallbacks(gpui.AnchorFlipBlock)
 	}
 	return gpui.Deferred(anchored.Child(
-		gpui.Div().Flex().ID(id).DebugSelector(id).
+		gpui.Div().ID(id).DebugSelector(id).
 			W(gpui.Px(flipPopupW)).H(gpui.Px(flipPopupH)).
 			Bg(gpui.Rgb(background)),
 	)).IntoElement()
@@ -525,7 +525,7 @@ func ShiftView(_ *parity.EventLog) gpui.AnyElement {
 			Align(gpui.AnchorAlignStart).
 			Gap(sidesGap).
 			TryFallbacks(gpui.AnchorShift).
-			Child(gpui.Div().Flex().ID("p-sx").DebugSelector("p-sx").
+			Child(gpui.Div().ID("p-sx").DebugSelector("p-sx").
 				W(gpui.Px(shiftXPopupW)).H(gpui.Px(shiftXPopupH)).
 				Bg(gpui.Rgb(bottomGreen)))),
 		gpui.Deferred(gpui.Anchored().
@@ -534,7 +534,7 @@ func ShiftView(_ *parity.EventLog) gpui.AnyElement {
 			Align(gpui.AnchorAlignStart).
 			Gap(sidesGap).
 			TryFallbacks(gpui.AnchorShift).
-			Child(gpui.Div().Flex().ID("p-sy").DebugSelector("p-sy").
+			Child(gpui.Div().ID("p-sy").DebugSelector("p-sy").
 				W(gpui.Px(shiftYPopupW)).H(gpui.Px(shiftYPopupH)).
 				Bg(gpui.Rgb(leftPurple)))),
 	)
@@ -653,7 +653,7 @@ func hiddenRoot(log *parity.EventLog, w *gpui.Window, hide bool) gpui.AnyElement
 		anchored = anchored.HideWhenAnchorClipped()
 	}
 	return anchorRoot(
-		gpui.Div().Flex().ID("scroller").DebugSelector("scroller").
+		gpui.Div().ID("scroller").DebugSelector("scroller").
 			Absolute().Top(gpui.Px(hiddenScrollerY)).Left(gpui.Px(hiddenScrollerX)).
 			W(gpui.Px(hiddenScrollerW)).H(gpui.Px(hiddenScrollerH)).
 			OverflowYScroll().
@@ -668,9 +668,9 @@ func hiddenRoot(log *parity.EventLog, w *gpui.Window, hide bool) gpui.AnyElement
 					OnClick(log.Click("content")).
 					OnKeyDown(log.KeyDown("content")).
 					OnKeyUp(log.KeyUp("content")).
-					Child(gpui.Div().Flex().H(gpui.Px(hiddenSpacerH))).
+					Child(gpui.Div().H(gpui.Px(hiddenSpacerH))).
 					Child(
-						gpui.Div().Flex().ID("anchor").DebugSelector("anchor").
+						gpui.Div().ID("anchor").DebugSelector("anchor").
 							W(gpui.Px(hiddenAnchorW)).H(gpui.Px(hiddenAnchorH)).
 							TrackFocus(focus).
 							OnClick(log.Click("anchor")).
@@ -680,7 +680,7 @@ func hiddenRoot(log *parity.EventLog, w *gpui.Window, hide bool) gpui.AnyElement
 					),
 			),
 		gpui.Deferred(anchored.Child(
-			gpui.Div().Flex().ID("popup").DebugSelector("popup").
+			gpui.Div().ID("popup").DebugSelector("popup").
 				W(gpui.Px(hiddenPopupW)).H(gpui.Px(hiddenPopupH)).
 				Bg(gpui.Rgb(bottomGreen)))),
 	)
@@ -739,7 +739,7 @@ func popup(id, anchorID string, side gpui.AnchorSide, align gpui.AnchorAlign, ga
 		Side(side).
 		Align(align).
 		Gap(gap).
-		Child(gpui.Div().Flex().ID(id).DebugSelector(id).
+		Child(gpui.Div().ID(id).DebugSelector(id).
 			W(gpui.Px(popupW)).H(gpui.Px(popupH)).
 			Bg(gpui.Rgb(background)))).IntoElement()
 }

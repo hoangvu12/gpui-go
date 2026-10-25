@@ -138,7 +138,7 @@ const page = `<!doctype html>
 // deliver them in Chromium's order (gpui/hoverboundary.go).
 func View(log *parity.EventLog) gpui.AnyElement {
 	child := func(id string, background uint32) *gpui.DivElement {
-		return gpui.Div().Flex().
+		return gpui.Div().
 			ID(id).
 			DebugSelector(id).
 			Size(gpui.Px(childWidth), gpui.Px(childHeight)).
@@ -177,7 +177,7 @@ func View(log *parity.EventLog) gpui.AnyElement {
 // Tier B fails.
 func WithoutEnterListeners(log *parity.EventLog) gpui.AnyElement {
 	child := func(id string, background uint32) *gpui.DivElement {
-		return gpui.Div().Flex().
+		return gpui.Div().
 			ID(id).
 			DebugSelector(id).
 			Size(gpui.Px(childWidth), gpui.Px(childHeight)).

@@ -1,10 +1,23 @@
-// Command displaycodemod pins the current default display (Flex) on
-// every element that relies on it, as browser-core ticket 68 (spec D6,
-// user story 11) requires before the default flips to Block in ticket
-// 71: it inserts an explicit .Flex() after every gpui.Div()/gpui.Img()/
-// gpui.Canvas() constructor call whose visible method chain does not
-// already set display, so flipping the default changes nothing for
-// existing code.
+// Command displaycodemod guards the flipped default display. Browser-
+// core ticket 68 wrote it as the pre-flip safety net (pin .Flex() on
+// every default-reliant Div/Img/Canvas chain, applied across the repo
+// by tickets 69 and 70); ticket 71 flipped the default display to
+// Block (spec D6, the browser div default), and the tool's rule moved
+// with it:
+//
+// A root Div/Img/Canvas chain with NO display selector and NO flex/grid
+// container vocabulary now deliberately uses the block default, like a
+// plain HTML div — the tool leaves it alone. A chain whose vocabulary
+// is flex/grid CONTAINER-only (FlexCol, FlexWrap, Gap, ItemsCenter,
+// JustifyBetween, ContentStart, grid templates, or the Tailwind
+// equivalents flex-col, gap-2, items-center, justify-*, content-*,
+// grid-cols-*) became silently broken at the flip: those properties
+// are inert under Block, so the element that used to lay its children
+// out with flexbox now stacks them as blocks. The tool inserts an
+// explicit .Flex() after those roots, restoring the pre-71 layout.
+// Flex ITEM vocabulary (Flex1, FlexGrow, FlexShrink, FlexBasis,
+// Self*) does not count: item properties depend on the PARENT being a
+// flex container, not on the element's own display.
 //
 // The rule, in full:
 //
@@ -12,36 +25,33 @@
 //     element style starts at Style::default() with an empty caller
 //     refinement: Div, Img and Canvas (the three BindStyled element
 //     constructors in gpui; gpui.Styles() builds a bare refinement, not
-//     an element, and every other element — Anchored, TopLayer, Empty —
-//     either pins its display internally or has no caller-facing Styled
-//     surface). Custom components are covered transitively: their render
-//     builds on a Div/Img/Canvas somewhere, and that construction site
-//     gets pinned.
+//     an element, and every other element — Anchored, TopLayer, Empty,
+//     and since 71 Svg, Text, StyledText, List and UniformList — pins
+//     its display in its constructor). Custom components are covered
+//     transitively: their render builds on a Div/Img/Canvas somewhere,
+//     and that construction site is analyzed.
 //
 //   - The CHAIN is the maximal run of selector method calls built
 //     directly on the root's result (gpui.Div().W4().P2() has the chain
 //     W4, P2). Chains rooted elsewhere — a helper's returned element, a
 //     component constructor — are not touched; their own construction
-//     site was pinned.
+//     site is analyzed.
 //
 //   - The chain EXPLICITLY sets display when any link is one of the
 //     display selectors (Display, Block, Flex, Grid, Inline, InlineFlex,
 //     InlineBlock, InlineGrid, Contents, FlowRoot, Hidden) or a Class
 //     call whose literal string contains a Tailwind display class
 //     (flex, block, grid, hidden, inline, inline-flex, inline-block,
-//     inline-grid, contents, flow-root). Flex-direction and flex-grow
-//     vocabulary (FlexCol, Flex1, ...) does NOT set display. Non-literal
-//     Class strings and refinement merges (Refine, StyleMut, state-style
-//     builders) are unknown, not explicit: the tool still pins the root,
-//     which is safe because a display set anywhere after the constructor
-//     overwrites the pin.
+//     inline-grid, contents, flow-root, without a state-variant
+//     prefix). Explicit chains are never touched.
 //
 //   - ACTION: insert .Flex() immediately after the root constructor call
-//     when the chain does not explicitly set display. Inserting at the
-//     root is the earliest possible point, so every later display choice
-//     (a method, a Class, a refinement merge, a helper that styles the
-//     element) wins exactly as before; when nothing else sets display,
-//     the element stays Flex across the ticket 71 flip.
+//     when the chain does not explicitly set display AND it uses
+//     flex/grid container vocabulary. Inserting at the root is the
+//     earliest possible point, so every later display choice (a method,
+//     a Class, a refinement merge, a helper that styles the element)
+//     still wins; when nothing else sets display, the element's
+//     container vocabulary is live again.
 //
 // Usage:
 //
@@ -52,9 +62,11 @@
 // any go command). Flags:
 //
 //	-w      write the rewritten files in place (gofmt-formatted)
-//	-check  exit 1 when anything would change; no writes (ticket 71's
-//	        gate: run it after the flip's codemod has been applied)
-//	-v      print per-file insertion counts and skipped chains
+//	-check  exit 1 when anything would change; no writes (the gate the
+//	        tree must stay green on: a pending insertion is a flex-
+//	        vocabulary chain the flip silently broke)
+//	-v      print per-file insertion counts, explicit chains and
+//	        default-reliant roots
 //
 // Without -w or -check the tool prints a unified diff of what it would
 // change plus a per-directory summary. The rewrite is idempotent: a
@@ -66,10 +78,10 @@
 // ("Code generated ... DO NOT EDIT.") are skipped: generated output is
 // never hand-edited — the codemod's -check gate would otherwise force
 // an impossible hand edit on a generated file; a generator that emits a
-// default-relying Div() is fixed and rerun instead. Edits are
-// byte-offset insertions, so comments, line breaks and all other
-// formatting are preserved; the output is run through go/format (a
-// no-op on gofmt-clean inputs).
+// flex-vocabulary Div() without display is fixed and rerun instead.
+// Edits are byte-offset insertions, so comments, line breaks and all
+// other formatting are preserved; the output is run through go/format
+// (a no-op on gofmt-clean inputs).
 package main
 
 import (
@@ -123,7 +135,7 @@ func run(args []string) int {
 			if res.Changed {
 				kind = fmt.Sprintf("%d insertion(s)", len(res.Edits))
 			}
-			fmt.Printf("%s: %s (%d roots, %d explicit)\n", path, kind, res.Roots, res.Explicit)
+			fmt.Printf("%s: %s (%d roots, %d explicit, %d default-block)\n", path, kind, res.Roots, res.Explicit, res.Defaults)
 		}
 	}
 

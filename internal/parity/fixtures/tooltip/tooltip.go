@@ -460,7 +460,7 @@ func (s *tooltipState) trackFocus(log *parity.EventLog) {
 func hoverView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElement {
 	state := tooltipStateOf(w)
 	root := gpui.Div().ID("root").DebugSelector("root").
-		SizeFull().Flex().Bg(gpui.Rgb(pageBackground)).
+		SizeFull().Bg(gpui.Rgb(pageBackground)).
 		OnKeyDown(log.KeyDown("root")).
 		OnKeyUp(log.KeyUp("root")).
 		Child(invokerBox(log, state, true))
@@ -473,7 +473,7 @@ func focusView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElemen
 	state := tooltipStateOf(w)
 	state.trackFocus(log)
 	root := gpui.Div().ID("root").DebugSelector("root").
-		SizeFull().Flex().Bg(gpui.Rgb(pageBackground)).
+		SizeFull().Bg(gpui.Rgb(pageBackground)).
 		OnKeyDown(log.KeyDown("root")).
 		OnKeyUp(log.KeyUp("root")).
 		Child(invokerBox(log, state, false)).
@@ -487,7 +487,7 @@ func focusView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElemen
 func lookView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElement {
 	state := tooltipStateOf(w)
 	root := gpui.Div().ID("root").DebugSelector("root").
-		SizeFull().Flex().Bg(gpui.Rgb(pageBackground)).
+		SizeFull().Bg(gpui.Rgb(pageBackground)).
 		OnPointerEnter(log.PointerEnter("root")).
 		Child(lookInvokerBox(log, state))
 	return root.IntoElement()
@@ -498,7 +498,7 @@ func lookView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElement
 // either — a pure painting fixture; the timed story is the hover
 // fixture's).
 func lookInvokerBox(log *parity.EventLog, state *tooltipState) *gpui.DivElement {
-	return gpui.Div().Flex().ID("b1").DebugSelector("b1").
+	return gpui.Div().ID("b1").DebugSelector("b1").
 		Absolute().Top(gpui.Px(0)).Left(gpui.Px(0)).
 		W(gpui.Px(invokerW)).H(gpui.Px(invokerH)).
 		Bg(gpui.Rgb(invokerBlue)).
@@ -516,7 +516,7 @@ func lookInvokerBox(log *parity.EventLog, state *tooltipState) *gpui.DivElement 
 func WrongLookView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElement {
 	state := tooltipStateOf(w)
 	root := gpui.Div().ID("root").DebugSelector("root").
-		SizeFull().Flex().Bg(gpui.Rgb(pageBackground)).
+		SizeFull().Bg(gpui.Rgb(pageBackground)).
 		Child(wrongInvokerBox(state))
 	return root.IntoElement()
 }
@@ -527,7 +527,7 @@ func WrongLookView(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyEl
 // instrumented custom content (the grace proof) and the plain default
 // look.
 func invokerBox(log *parity.EventLog, state *tooltipState, withCustomTip bool) *gpui.DivElement {
-	box := gpui.Div().Flex().ID("b1").DebugSelector("b1").
+	box := gpui.Div().ID("b1").DebugSelector("b1").
 		Absolute().Top(gpui.Px(0)).Left(gpui.Px(0)).
 		W(gpui.Px(invokerW)).H(gpui.Px(invokerH)).
 		Bg(gpui.Rgb(invokerBlue)).
@@ -538,7 +538,7 @@ func invokerBox(log *parity.EventLog, state *tooltipState, withCustomTip bool) *
 		TrackFocus(state.focusB1).OutlineNone()
 	if withCustomTip {
 		return box.TooltipView(func(w *gpui.Window, app *gpui.App) gpui.AnyElement {
-			return gpui.Div().Flex().ID("tip").DebugSelector("tip").
+			return gpui.Div().ID("tip").DebugSelector("tip").
 				Absolute().Top(gpui.Px(tipY)).Left(gpui.Px(tipX)).
 				W(gpui.Px(tipW)).H(gpui.Px(tipH)).
 				Bg(gpui.Rgb(tipAmber)).Occlude().
@@ -553,7 +553,7 @@ func invokerBox(log *parity.EventLog, state *tooltipState, withCustomTip bool) *
 // wrongInvokerBox is the wrong view's invoker: the default look with a
 // different text.
 func wrongInvokerBox(state *tooltipState) *gpui.DivElement {
-	return gpui.Div().Flex().ID("b1").DebugSelector("b1").
+	return gpui.Div().ID("b1").DebugSelector("b1").
 		Absolute().Top(gpui.Px(0)).Left(gpui.Px(0)).
 		W(gpui.Px(invokerW)).H(gpui.Px(invokerH)).
 		Bg(gpui.Rgb(invokerBlue)).
@@ -564,7 +564,7 @@ func wrongInvokerBox(state *tooltipState) *gpui.DivElement {
 
 // anchorBox builds the focus fixture's second tab stop.
 func anchorBox(log *parity.EventLog, state *tooltipState) *gpui.DivElement {
-	return gpui.Div().Flex().ID("anchor").DebugSelector("anchor").
+	return gpui.Div().ID("anchor").DebugSelector("anchor").
 		Absolute().Top(gpui.Px(0)).Left(gpui.Px(600)).
 		W(gpui.Px(invokerW)).H(gpui.Px(invokerH)).
 		Bg(gpui.Rgb(0x94a3b8)).

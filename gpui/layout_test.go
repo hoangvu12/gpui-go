@@ -332,17 +332,23 @@ func TestParseEnums(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestStyleToRecordDefaults pins that the default Style translates into
-// exactly the default ABI record: every field the reference forwards
-// carries the same value the default record would give the native side
-// (taffy defaults and gpui defaults coincide), so a default node behaves
-// like a reference default node.
+// the default ABI record on every forwarded field except Display: the
+// display is the one deliberate divergence (browser-core 71, spec D6) —
+// the default Style carries Block (the browser div default) while the
+// ABI record's default remains the Taffy default (Flex, the pin's
+// value), so a default node behaves like a browser div, and a record
+// built directly from the ABI keeps the pin's translation.
 func TestStyleToRecordDefaults(t *testing.T) {
 	defaultStyleValue := DefaultStyle()
 	ctx := NewTestLayoutContext()
 	got := styleToRecord(&defaultStyleValue, ctx)
 	want := mustDefaultRecord(t)
+	if got.Display != native.DisplayBlock {
+		t.Errorf("default style record display = %d, want the block tag (the D6 divergence)", got.Display)
+	}
+	got.Display = native.DisplayFlex
 	if got != want {
-		t.Errorf("default style record mismatch:\ngot  %+v\nwant %+v", got, want)
+		t.Errorf("default style record mismatch (every field but Display):\ngot  %+v\nwant %+v", got, want)
 	}
 }
 

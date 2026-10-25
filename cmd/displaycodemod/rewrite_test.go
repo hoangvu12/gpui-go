@@ -62,79 +62,82 @@ func assertStable(t *testing.T, src string) string {
 	return out
 }
 
-// TestDefaultReliancePinsFlex covers the core rule: an element whose
-// chain never selects display gets .Flex() immediately after the
-// constructor, and a second run changes nothing.
-func TestDefaultReliancePinsFlex(t *testing.T) {
+// TestFlexVocabularyPinsFlex covers the core post-71 rule
+// (browser-core 71, spec D6): an element whose chain carries flex/grid
+// CONTAINER vocabulary without stating display gets .Flex()
+// immediately after the constructor — under the block default those
+// properties are inert, so the pin restores the pre-71 layout — and a
+// second run changes nothing.
+func TestFlexVocabularyPinsFlex(t *testing.T) {
 	cases := []struct {
 		name string
 		body string
 		want string
 	}{
 		{
-			name: "bare constructor",
-			body: "d := gpui.Div()",
-			want: "d := gpui.Div().Flex()",
+			name: "flex direction vocabulary",
+			body: "d := gpui.Div().FlexCol().W4()",
+			want: "d := gpui.Div().Flex().FlexCol().W4()",
 		},
 		{
-			name: "plain chain",
-			body: "d := gpui.Div().W4().P2()",
-			want: "d := gpui.Div().Flex().W4().P2()",
+			name: "gap vocabulary",
+			body: "d := gpui.Div().W4().P2().Gap(gpui.Px(4))",
+			want: "d := gpui.Div().Flex().W4().P2().Gap(gpui.Px(4))",
+		},
+		{
+			name: "item alignment vocabulary",
+			body: "d := gpui.Div().ItemsCenter()",
+			want: "d := gpui.Div().Flex().ItemsCenter()",
+		},
+		{
+			name: "justify vocabulary",
+			body: "d := gpui.Div().JustifyBetween()",
+			want: "d := gpui.Div().Flex().JustifyBetween()",
+		},
+		{
+			name: "wrap vocabulary",
+			body: "d := gpui.Div().FlexWrap()",
+			want: "d := gpui.Div().Flex().FlexWrap()",
+		},
+		{
+			name: "grid template vocabulary",
+			body: "d := gpui.Div().GridCols(2).W4()",
+			want: "d := gpui.Div().Flex().GridCols(2).W4()",
 		},
 		{
 			name: "multi-line chain",
-			body: "d := gpui.Div().\n\tID(\"root\").\n\tSizeFull()",
-			want: "d := gpui.Div().Flex().\n\tID(\"root\").\n\tSizeFull()",
+			body: "d := gpui.Div().\n\tID(\"root\").\n\tFlexCol()",
+			want: "d := gpui.Div().Flex().\n\tID(\"root\").\n\tFlexCol()",
 		},
 		{
 			name: "constructor passed to a helper",
-			body: "d := wrap(gpui.Div().W4(), cx)",
-			want: "d := wrap(gpui.Div().Flex().W4(), cx)",
-		},
-		{
-			name: "constructor passed bare to a helper",
-			body: "d := z.dragRoot(gpui.Div(), cx)",
-			want: "d := z.dragRoot(gpui.Div().Flex(), cx)",
+			body: "d := wrap(gpui.Div().FlexCol(), cx)",
+			want: "d := wrap(gpui.Div().Flex().FlexCol(), cx)",
 		},
 		{
 			name: "constructor in a composite literal",
-			body: "d := box{inner: gpui.Div().ID(\"x\")}",
-			want: "d := box{inner: gpui.Div().Flex().ID(\"x\")}",
+			body: "d := box{inner: gpui.Div().Gap(gpui.Px(4))}",
+			want: "d := box{inner: gpui.Div().Flex().Gap(gpui.Px(4))}",
 		},
 		{
 			name: "returned from a helper",
-			body: "return gpui.Div()",
-			want: "return gpui.Div().Flex()",
-		},
-		{
-			name: "flex direction vocabulary is not display",
-			body: "d := gpui.Div().FlexCol().Gap(gpui.Px(4))",
-			want: "d := gpui.Div().Flex().FlexCol().Gap(gpui.Px(4))",
-		},
-		{
-			name: "grow and wrap vocabulary is not display",
-			body: "d := gpui.Div().Flex1().FlexWrap().FlexBasisAuto()",
-			want: "d := gpui.Div().Flex().Flex1().FlexWrap().FlexBasisAuto()",
+			body: "return gpui.Div().ItemsStart()",
+			want: "return gpui.Div().Flex().ItemsStart()",
 		},
 		{
 			name: "IntoElement tail",
-			body: "d := gpui.Div().W4().IntoElement()",
-			want: "d := gpui.Div().Flex().W4().IntoElement()",
+			body: "d := gpui.Div().FlexCol().W4().IntoElement()",
+			want: "d := gpui.Div().Flex().FlexCol().W4().IntoElement()",
 		},
 		{
-			name: "state styles do not pin the base display",
-			body: "d := gpui.Div().W4().Hover(gpui.Styles().Bg(x))",
-			want: "d := gpui.Div().Flex().W4().Hover(gpui.Styles().Bg(x))",
+			name: "img with flex vocabulary",
+			body: "d := gpui.Img(source).FlexCol()",
+			want: "d := gpui.Img(source).Flex().FlexCol()",
 		},
 		{
-			name: "img relies on the default",
-			body: "d := gpui.Img(source).W4()",
-			want: "d := gpui.Img(source).Flex().W4()",
-		},
-		{
-			name: "canvas relies on the default",
-			body: "d := gpui.Canvas(p, q).SizeFull()",
-			want: "d := gpui.Canvas(p, q).Flex().SizeFull()",
+			name: "canvas with flex vocabulary",
+			body: "d := gpui.Canvas(p, q).Gap(gpui.Px(4))",
+			want: "d := gpui.Canvas(p, q).Flex().Gap(gpui.Px(4))",
 		},
 	}
 	for _, tc := range cases {
@@ -142,6 +145,41 @@ func TestDefaultReliancePinsFlex(t *testing.T) {
 			got := assertStable(t, snippet(tc.body))
 			if got != snippet(tc.want) {
 				t.Fatalf("got:\n%s\nwant:\n%s", got, snippet(tc.want))
+			}
+		})
+	}
+}
+
+// TestPlainChainsUseTheBlockDefault covers the other half of the
+// post-71 rule: a chain with no display selector and no flex/grid
+// container vocabulary deliberately uses the browser default (Block,
+// like an HTML div), and the tool must leave it byte-for-byte alone.
+// Flex ITEM vocabulary (grow/shrink/basis/self) is parent-relative and
+// does not pin either.
+func TestPlainChainsUseTheBlockDefault(t *testing.T) {
+	bodies := []string{
+		"d := gpui.Div()",
+		"d := gpui.Div().W4().P2()",
+		"d := gpui.Div().\n\tID(\"root\").\n\tSizeFull()",
+		"d := wrap(gpui.Div().W4(), cx)",
+		"d := z.dragRoot(gpui.Div(), cx)",
+		"d := box{inner: gpui.Div().ID(\"x\")}",
+		"return gpui.Div()",
+		// Item vocabulary: live whenever the PARENT is a flex container,
+		// regardless of this element's own display.
+		"d := gpui.Div().Flex1().FlexBasis(gpui.AutoLength()).FlexShrink0().SelfStart()",
+		"d := gpui.Div().FlexGrow(1).W4()",
+		// State styles build a refinement; the base chain stays plain.
+		"d := gpui.Div().W4().Hover(gpui.Styles().Bg(x))",
+		"d := gpui.Img(source).W4()",
+		"d := gpui.Canvas(p, q).SizeFull()",
+		"d := gpui.Div().W4().IntoElement()",
+	}
+	for _, body := range bodies {
+		t.Run(body, func(t *testing.T) {
+			src := snippet(body)
+			if got := assertStable(t, src); got != src {
+				t.Fatalf("changed a plain (deliberate block) chain:\n%s", got)
 			}
 		})
 	}
@@ -222,37 +260,48 @@ func TestExplicitDisplayLeavesChainUnchanged(t *testing.T) {
 	}
 }
 
-// TestClassNonDisplayStillPins covers Class strings without a display
-// class and non-literal Class arguments: the chain still relies on the
-// default, so the root is pinned (a later class application would
-// overwrite the pin, keeping behaviour identical).
-func TestClassNonDisplayStillPins(t *testing.T) {
+// TestClassFlexContainerVocabularyPins covers Class strings that
+// carry flex/grid container classes without a display class: under
+// the block default those classes are inert, so the root is pinned
+// (a display class applied later would still overwrite the pin).
+func TestClassFlexContainerVocabularyPins(t *testing.T) {
 	cases := []struct {
 		name string
 		body string
 		want string
 	}{
 		{
-			name: "class without display token",
-			body: `d := gpui.Div().Class("p-2 w-full")`,
-			want: `d := gpui.Div().Flex().Class("p-2 w-full")`,
+			name: "flex-col class",
+			body: `d := gpui.Div().Class("flex-col p-2")`,
+			want: `d := gpui.Div().Flex().Class("flex-col p-2")`,
 		},
 		{
-			name: "class with non-literal argument",
-			body: "d := gpui.Div().Class(classes)",
-			want: "d := gpui.Div().Flex().Class(classes)",
+			name: "gap class",
+			body: `d := gpui.Div().Class("w-full gap-2")`,
+			want: `d := gpui.Div().Flex().Class("w-full gap-2")`,
 		},
 		{
-			name: "class with variant of a non-display class",
-			body: `d := gpui.Div().Class("hover:bg-slate-700")`,
-			want: `d := gpui.Div().Flex().Class("hover:bg-slate-700")`,
+			name: "items class",
+			body: `d := gpui.Div().Class("items-center")`,
+			want: `d := gpui.Div().Flex().Class("items-center")`,
 		},
 		{
-			// A variant sets display only in that state; the base
-			// display still comes from the default.
-			name: "class with a display class under a state variant",
-			body: `d := gpui.Div().ID("x").Class("hover:hidden p-2")`,
-			want: `d := gpui.Div().Flex().ID("x").Class("hover:hidden p-2")`,
+			name: "justify class",
+			body: `d := gpui.Div().Class("justify-between p-2")`,
+			want: `d := gpui.Div().Flex().Class("justify-between p-2")`,
+		},
+		{
+			name: "grid-cols class",
+			body: `d := gpui.Div().Class("grid-cols-3")`,
+			want: `d := gpui.Div().Flex().Class("grid-cols-3")`,
+		},
+		{
+			// A variant sets the property only in that state, and the
+			// base display still comes from the default — the pin keeps
+			// the variant live.
+			name: "container class under a state variant",
+			body: `d := gpui.Div().ID("x").Class("hover:flex-col p-2")`,
+			want: `d := gpui.Div().Flex().ID("x").Class("hover:flex-col p-2")`,
 		},
 	}
 	for _, tc := range cases {
@@ -265,11 +314,33 @@ func TestClassNonDisplayStillPins(t *testing.T) {
 	}
 }
 
+// TestClassNonDisplayNonContainerLeftAlone covers Class strings that
+// neither set display nor carry flex/grid container vocabulary, and
+// non-literal Class arguments: the chain uses the block default
+// deliberately (or styles itself through the class layer at runtime),
+// and the tool leaves it alone.
+func TestClassNonDisplayNonContainerLeftAlone(t *testing.T) {
+	bodies := []string{
+		`d := gpui.Div().Class("p-2 w-full")`,
+		"d := gpui.Div().Class(classes)",
+		`d := gpui.Div().Class("hover:bg-slate-700")`,
+		`d := gpui.Div().ID("x").Class("hover:hidden p-2")`,
+	}
+	for _, body := range bodies {
+		t.Run(body, func(t *testing.T) {
+			src := snippet(body)
+			if got := assertStable(t, src); got != src {
+				t.Fatalf("changed a plain class chain:\n%s", got)
+			}
+		})
+	}
+}
+
 // TestNestedRoots covers chains inside chains: the inner root's chain
 // is analyzed independently of the outer one.
 func TestNestedRoots(t *testing.T) {
-	src := snippet("d := gpui.Div().W4().\n\tChild(gpui.Div().Block().P2())")
-	want := snippet("d := gpui.Div().Flex().W4().\n\tChild(gpui.Div().Block().P2())")
+	src := snippet("d := gpui.Div().FlexCol().\n\tChild(gpui.Div().Block().P2())")
+	want := snippet("d := gpui.Div().Flex().FlexCol().\n\tChild(gpui.Div().Block().P2())")
 	if got := assertStable(t, src); got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
@@ -278,8 +349,8 @@ func TestNestedRoots(t *testing.T) {
 // TestPackageGpuiUnqualified covers the gpui package's own files, where
 // the constructors are unqualified.
 func TestPackageGpuiUnqualified(t *testing.T) {
-	src := "package gpui\n\nfunc f() *DivElement {\n\treturn Div().ID(\"x\")\n}\n"
-	want := "package gpui\n\nfunc f() *DivElement {\n\treturn Div().Flex().ID(\"x\")\n}\n"
+	src := "package gpui\n\nfunc f() *DivElement {\n\treturn Div().FlexCol().ID(\"x\")\n}\n"
+	want := "package gpui\n\nfunc f() *DivElement {\n\treturn Div().Flex().FlexCol().ID(\"x\")\n}\n"
 	if got := assertStable(t, src); got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
@@ -296,10 +367,10 @@ func TestAliasedAndDotImports(t *testing.T) {
 import g "github.com/hoangvu12/gpui-go/gpui"
 
 func f() {
-	d := g.Div().W4()
+	d := g.Div().FlexCol().W4()
 }
 `
-	want := strings.Replace(src, "g.Div().W4()", "g.Div().Flex().W4()", 1)
+	want := strings.Replace(src, "g.Div().FlexCol().W4()", "g.Div().Flex().FlexCol().W4()", 1)
 	if got := assertStable(t, src); got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
@@ -308,10 +379,10 @@ func f() {
 import . "github.com/hoangvu12/gpui-go/gpui"
 
 func f() {
-	d := Div().W4()
+	d := Div().FlexCol().W4()
 }
 `
-	want = strings.Replace(src, "Div().W4()", "Div().Flex().W4()", 1)
+	want = strings.Replace(src, "Div().FlexCol().W4()", "Div().Flex().FlexCol().W4()", 1)
 	if got := assertStable(t, src); got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
@@ -342,10 +413,16 @@ func TestStylesBuilderIsNotARoot(t *testing.T) {
 // is set (or not) in later statements — a later setter overwrites the
 // pin, so behaviour is preserved either way.
 func TestVariableReassignmentPinsTheRoot(t *testing.T) {
-	src := snippet("d := gpui.Div()\nd = d.W4()\nd.Block()")
-	want := snippet("d := gpui.Div().Flex()\nd = d.W4()\nd.Block()")
+	src := snippet("d := gpui.Div().FlexCol()\nd = d.W4()\nd.Block()")
+	want := snippet("d := gpui.Div().Flex().FlexCol()\nd = d.W4()\nd.Block()")
 	if got := assertStable(t, src); got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
+	}
+	// No container vocabulary anywhere: the plain chain stays at the
+	// block default.
+	src = snippet("d := gpui.Div()\nd = d.W4()")
+	if got := assertStable(t, src); got != src {
+		t.Fatalf("changed a plain reassigned chain:\n%s", got)
 	}
 }
 
@@ -358,8 +435,8 @@ import "github.com/hoangvu12/gpui-go/gpui"
 
 func f() {
 	d := gpui.Div(). // the box
-		W4(). // its size
-		P2()
+		FlexCol(). // its direction
+		W4()
 	_ = d
 }
 `
@@ -378,7 +455,7 @@ func f() {
 // test assertion) do not skip the file.
 func TestGeneratedFilesSkipped(t *testing.T) {
 	pkg := func(header string) string {
-		return header + "package main\n\nimport \"github.com/hoangvu12/gpui-go/gpui\"\n\nfunc f() {\n\td := gpui.Div().W4()\n}\n"
+		return header + "package main\n\nimport \"github.com/hoangvu12/gpui-go/gpui\"\n\nfunc f() {\n\td := gpui.Div().FlexCol()\n}\n"
 	}
 	skipped := []struct {
 		name   string
@@ -430,11 +507,11 @@ func TestGeneratedFilesSkipped(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			src := pkg(tc.header)
 			if tc.name == "marker inside the body is not a header" {
-				src = strings.Replace(src, "d := gpui.Div().W4()",
-					"d := gpui.Div().W4() // Code generated; DO NOT EDIT.", 1)
+				src = strings.Replace(src, "d := gpui.Div().FlexCol()",
+					"d := gpui.Div().FlexCol() // Code generated; DO NOT EDIT.", 1)
 			}
 			got := rewriteOnce(t, src)
-			want := strings.Replace(src, "gpui.Div().W4()", "gpui.Div().Flex().W4()", 1)
+			want := strings.Replace(src, "gpui.Div().FlexCol()", "gpui.Div().Flex().FlexCol()", 1)
 			if got != want {
 				t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 			}
@@ -451,7 +528,8 @@ func TestParseErrorReported(t *testing.T) {
 }
 
 // TestIdempotenceOnMixedFile runs the codemod twice over a file that
-// mixes pinned, default-reliant and explicit chains.
+// mixes pinned, flex-vocabulary, explicit and plain (deliberate
+// block) chains.
 func TestIdempotenceOnMixedFile(t *testing.T) {
 	src := `package main
 
@@ -466,6 +544,8 @@ func f() {
 	g := gpui.Img(src).Flex()
 	h := gpui.Img(src).SizeFull()
 	i := gpui.Div().FlexCol()
+	j := gpui.Div().FlexShrink0()
+	k := gpui.Div().Class("items-center p-2")
 }
 `
 	first := rewriteOnce(t, src)
@@ -478,10 +558,14 @@ func f() {
 		"b := gpui.Div().W4().Block()",
 		"c := gpui.Div().W4().Class(\"flex\")",
 		"d := gpui.Div().Hidden()",
-		"e := gpui.Div().Flex().P2()",
+		"e := gpui.Div().P2()",
 		"g := gpui.Img(src).Flex()",
-		"h := gpui.Img(src).Flex().SizeFull()",
+		"h := gpui.Img(src).SizeFull()",
 		"i := gpui.Div().Flex().FlexCol()",
+		// Item vocabulary and no-vocabulary chains stay at the block
+		// default.
+		"j := gpui.Div().FlexShrink0()",
+		"k := gpui.Div().Flex().Class(\"items-center p-2\")",
 	} {
 		if !strings.Contains(first, want) {
 			t.Fatalf("missing %q in:\n%s", want, first)

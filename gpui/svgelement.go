@@ -210,7 +210,14 @@ type svgDrawable struct {
 
 // Svg creates a new SVG element (svg.rs svg()).
 func Svg() *SvgElement {
-	return &SvgElement{style: DefaultStyle()}
+	style := DefaultStyle()
+	// The pin's interactivity base style is Style::default(), whose
+	// display is Flex; an svg is a childless leaf (sized by its style),
+	// so the display cannot change its layout, but pinning it keeps the
+	// element's node exactly at the pin's value while the div default
+	// is block (browser-core 71, spec D6).
+	style.Display = DisplayFlex
+	return &SvgElement{style: style}
 }
 
 // Path sets the path to the SVG file for this element (Svg::path):

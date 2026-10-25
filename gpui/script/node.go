@@ -45,6 +45,10 @@ type Node struct {
 	// plugin's nodes run in the plugin's VM even though they lower
 	// with the app's tree). nil on Go-built nodes (no handlers).
 	owner *Host
+	// isTextElement records that the node was built from the host's
+	// <text> tag (div sugar for a text run) rather than a <div>: the
+	// lowering pins the text run's own display (lower.go).
+	isTextElement bool
 	// slotName is the slot element's name (which plugins fill it), and
 	// slotFallback the JSX children it falls back to when none do.
 	slotName     string

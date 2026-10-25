@@ -155,6 +155,13 @@ func setEdgesAbsolute(edges *gpui.AbsoluteLengthEdges, value gpui.AbsoluteLength
 // align-content, border widths). Unknown keys fail the run.
 func parseStyleMap(m map[string]string, extended bool) (gpui.Style, error) {
 	style := gpui.DefaultStyle()
+	// The pin's default display: these fixtures replay the REFERENCE
+	// harness's recorded traces, whose Style::default() is Flex. The
+	// gpui div default is block since browser-core 71 (spec D6) — a
+	// deliberate divergence toward CSS that must not leak into the
+	// pin-fidelity replay, so the display starts at the pin's value
+	// unless the fixture's own style map sets one.
+	style.Display = gpui.DisplayFlex
 	keys := make([]string, 0, len(m))
 	for key := range m {
 		keys = append(keys, key)

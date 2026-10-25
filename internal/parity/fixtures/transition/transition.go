@@ -396,7 +396,7 @@ func backgroundRules() []gpui.TransitionRule {
 // column like the page's body.
 func root(log *parity.EventLog, boxes []box) gpui.AnyElement {
 	s := stateOf(log)
-	goDiv := gpui.Div().Flex().
+	goDiv := gpui.Div().
 		ID("go").
 		W(gpui.Px(goWidth)).
 		H(gpui.Px(goHeight)).
@@ -416,7 +416,7 @@ func root(log *parity.EventLog, boxes []box) gpui.AnyElement {
 		Bg(gpui.Rgb(pageBackground)).
 		Child(goDiv)
 	for _, b := range boxes {
-		el := gpui.Div().Flex().
+		el := gpui.Div().
 			ID(b.id).
 			DebugSelector(b.id).
 			H(gpui.Px(boxHeight)).

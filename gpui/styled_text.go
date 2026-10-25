@@ -237,8 +237,9 @@ func (s *StyledText) Paint(global *GlobalElementID, inspector *InspectorElementI
 }
 
 // LayoutNodeStyle implements the root-stretch report (the text node's
-// style is the default style, like the Text element).
-func (s *StyledText) LayoutNodeStyle() (Style, bool) { return DefaultStyle(), true }
+// style is the default style with the pin's Flex display, like the Text
+// element).
+func (s *StyledText) LayoutNodeStyle() (Style, bool) { return textNodeStyle(), true }
 
 // ---------------------------------------------------------------------------
 // TextLayout (R:elements/text.rs:616-634, 808-1161)
@@ -388,7 +389,7 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 		}
 		return size
 	}
-	layoutID, err := requestMeasuredLayoutOf(w, DefaultStyle(), measure)
+	layoutID, err := requestMeasuredLayoutOf(w, textNodeStyle(), measure)
 	if err != nil {
 		panic(fmt.Sprintf("gpui: StyledText request_layout: %v", err))
 	}

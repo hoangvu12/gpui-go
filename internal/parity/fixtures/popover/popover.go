@@ -408,14 +408,14 @@ func DismissNoInvokerLink(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpu
 // popoverRoot builds the fixture's tree: the root with b1, and the
 // two popovers in the top layer while their handles are open.
 func popoverRoot(log *parity.EventLog, w *gpui.Window, state *popoverState, backdrop bool) gpui.AnyElement {
-	root := gpui.Div().ID("root").SizeFull().Flex().Bg(gpui.Rgb(pageBackground)).
+	root := gpui.Div().ID("root").SizeFull().Bg(gpui.Rgb(pageBackground)).
 		Child(invokerBox(log, "b1", 0, 0, state.parent))
 	parentLayer := gpui.TopLayer(state.parent)
 	if !state.noInvokerLink {
 		parentLayer = parentLayer.Invoker("b1")
 	}
 	if backdrop {
-		parentLayer = parentLayer.Backdrop(gpui.Div().Flex().
+		parentLayer = parentLayer.Backdrop(gpui.Div().
 			SizeFull().
 			Bg(gpui.RgbaToHsla(0x00000066)))
 	}
@@ -435,7 +435,7 @@ func popoverRoot(log *parity.EventLog, w *gpui.Window, state *popoverState, back
 // overlay (the popovertarget activation; a zero handle does nothing —
 // the discrimination view's unlinked invoker).
 func invokerBox(log *parity.EventLog, id string, x, y float32, overlay gpui.OverlayHandle) *gpui.DivElement {
-	box := gpui.Div().Flex().ID(id).DebugSelector(id).
+	box := gpui.Div().ID(id).DebugSelector(id).
 		Absolute().Top(gpui.Px(y)).Left(gpui.Px(x)).
 		W(gpui.Px(invokerW)).H(gpui.Px(invokerH)).
 		Bg(gpui.Rgb(invokerBlue)).
@@ -456,7 +456,7 @@ func invokerBox(log *parity.EventLog, id string, x, y float32, overlay gpui.Over
 // click listeners the page's data-id instrumentation binds (and the
 // hitbox they insert — the light-dismiss chain's containment).
 func popoverBox(log *parity.EventLog, id string, x, y, w, h float32, background uint32) *gpui.DivElement {
-	return gpui.Div().Flex().ID(id).DebugSelector(id).
+	return gpui.Div().ID(id).DebugSelector(id).
 		Absolute().Top(gpui.Px(y)).Left(gpui.Px(x)).
 		W(gpui.Px(w)).H(gpui.Px(h)).
 		Bg(gpui.Rgb(background)).

@@ -311,7 +311,7 @@ func clipBox(boxID, childID string, clipped, visibleBorder bool) *gpui.DivElemen
 	if visibleBorder {
 		box = box.BorderColor(gpui.Rgb(borderDark))
 	}
-	child := gpui.Div().Flex().
+	child := gpui.Div().
 		ID(childID).
 		DebugSelector(childID).
 		W(gpui.Px(clipBoxWidth)).
@@ -424,7 +424,7 @@ func radiiRoot(uneven, factor *gpui.DivElement) gpui.AnyElement {
 // radiiBox builds one plain rounded box of the radii fixture: the
 // width, height, color and radii come from the view that builds it.
 func radiiBox(id string, width, height float32, background gpui.Hsla, radii gpui.Corners) *gpui.DivElement {
-	box := gpui.Div().Flex().
+	box := gpui.Div().
 		ID(id).
 		DebugSelector(id).
 		W(gpui.Px(width)).
@@ -532,7 +532,7 @@ func objectFitRoot(fits func(image gpui.Image) []gpui.ObjectFit) gpui.AnyElement
 		Gap(gpui.Px(frameGap)).
 		Bg(gpui.Rgb(pageBackground))
 	for i, fit := range fits(image) {
-		root = root.Child(gpui.Div().Flex().
+		root = root.Child(gpui.Div().
 			ID(ids[i]).
 			DebugSelector(ids[i]).
 			W(gpui.Px(frameWidth)).
@@ -545,7 +545,7 @@ func objectFitRoot(fits func(image gpui.Image) []gpui.ObjectFit) gpui.AnyElement
 // fittedImage builds one object-fit image: the intrinsic 60x40 source
 // inside a 128x108 box with a 4px border and 12px padding.
 func fittedImage(image gpui.Image, fit gpui.ObjectFit) *gpui.ImgElement {
-	return gpui.Img(image).Flex().
+	return gpui.Img(image).
 		ObjectFit(fit).
 		W(gpui.Px(frameWidth)).
 		H(gpui.Px(frameHeight)).

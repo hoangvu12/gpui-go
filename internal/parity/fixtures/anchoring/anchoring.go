@@ -235,14 +235,14 @@ func View(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElement {
 		ID("rows").
 		FlexCol()
 	if s.inserted {
-		rows = rows.Child(gpui.Div().Flex().
+		rows = rows.Child(gpui.Div().
 			ID("inserted").
 			DebugSelector("inserted").
 			Size(gpui.Px(scrollerW), gpui.Px(rowH)).
 			FlexShrink0().
 			Bg(gpui.Rgb(insertedBg)))
 	}
-	rows = rows.Child(gpui.Div().Flex().
+	rows = rows.Child(gpui.Div().
 		ID("focus").
 		DebugSelector("focus").
 		Size(gpui.Px(scrollerW), gpui.Px(rowH)).
@@ -250,7 +250,7 @@ func View(log *parity.EventLog, w *gpui.Window, _ *gpui.App) gpui.AnyElement {
 		TrackFocus(focusOf(log, w)).
 		Bg(gpui.Rgb(focusBg)))
 	for i := 2; i <= rowsCount+1; i++ {
-		rows = rows.Child(gpui.Div().Flex().
+		rows = rows.Child(gpui.Div().
 			ID(fmt.Sprintf("r%d", i)).
 			DebugSelector(fmt.Sprintf("r%d", i)).
 			Size(gpui.Px(scrollerW), gpui.Px(rowH)).

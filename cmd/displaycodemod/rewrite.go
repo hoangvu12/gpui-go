@@ -44,6 +44,80 @@ var displaySelectors = map[string]bool{
 	"Hidden":      true,
 }
 
+// flexContainerSelectors are the Styled-vocabulary method names that
+// set properties applying only when the element ITSELF is a flex (or
+// grid) container: direction, wrap, gap, item alignment, content
+// distribution and grid templates. They are live under DisplayFlex
+// (or DisplayGrid for the grid half) and inert under DisplayBlock, so
+// since browser-core 71 (spec D6) flipped the default to Block, a
+// chain carrying one of them WITHOUT an explicit display selector
+// silently lost its layout: the properties went inert. The codemod
+// restores the pre-71 behaviour by pinning .Flex() on exactly those
+// chains. Flex ITEM vocabulary (Flex1, FlexGrow, FlexShrink,
+// FlexBasis, Self*) is deliberately absent: those properties depend
+// on the PARENT being a flex container, not on the element's own
+// display, so an unpinned item inside a flex parent is correct.
+var flexContainerSelectors = map[string]bool{
+	"FlexDirection":   true,
+	"FlexCol":         true,
+	"FlexColReverse":  true,
+	"FlexRow":         true,
+	"FlexRowReverse":  true,
+	"FlexWrap":        true,
+	"FlexWrapReverse": true,
+	"FlexNowrap":      true,
+	"Gap":             true,
+	"ItemsStart":      true,
+	"ItemsEnd":        true,
+	"ItemsCenter":     true,
+	"ItemsBaseline":   true,
+	"ItemsStretch":    true,
+	"JustifyStart":    true,
+	"JustifyEnd":      true,
+	"JustifyCenter":   true,
+	"JustifyBetween":  true,
+	"JustifyAround":   true,
+	"JustifyEvenly":   true,
+	"ContentNormal":   true,
+	"ContentCenter":   true,
+	"ContentStart":    true,
+	"ContentEnd":      true,
+	"ContentBetween":  true,
+	"ContentAround":   true,
+	"ContentEvenly":   true,
+	"ContentStretch":  true,
+	// Grid templates: live only under DisplayGrid. A chain that sets a
+	// grid template without .Grid() was a flex box before 71 (the
+	// template inert); the pin restores that pre-71 behaviour.
+	"GridTemplateCols":   true,
+	"GridTemplateRows":   true,
+	"GridCols":           true,
+	"GridColsMinContent": true,
+	"GridColsMaxContent": true,
+	"GridRows":           true,
+	"GridRowsMinContent": true,
+	"GridRowsMaxContent": true,
+}
+
+// tailwindFlexContainerPrefixes are the Tailwind class prefixes whose
+// classes apply only under a flex (or grid) container display — the
+// class layer of flexContainerSelectors (gap-2, flex-col, items-center,
+// justify-between, content-start, grid-cols-3). A variant prefix
+// (hover:flex-col) still counts: the base display comes from the
+// default, so the element needs the pin for the variant to work.
+var tailwindFlexContainerPrefixes = []string{
+	"flex-col",
+	"flex-row",
+	"flex-wrap",
+	"flex-nowrap",
+	"gap-",
+	"items-",
+	"justify-",
+	"content-",
+	"grid-cols-",
+	"grid-rows-",
+}
+
 // tailwindDisplayClasses are the Tailwind classes that set display
 // (gpui/class_generated.go). A Class literal containing one of them
 // without a variant prefix makes the chain's display explicit; under a
@@ -88,6 +162,11 @@ type FileRewrite struct {
 	// Explicit is the number of roots skipped because their chain
 	// already sets display.
 	Explicit int
+	// Defaults is the number of roots left at the block default: no
+	// display selector and no flex/grid container vocabulary — the
+	// browser-like default browser-core 71 (spec D6) flipped to, which
+	// a plain chain now deliberately uses.
+	Defaults int
 }
 
 // RewriteSource analyzes one Go source file and returns the rewrite.
@@ -137,6 +216,16 @@ func RewriteSource(path string, src []byte) (*FileRewrite, error) {
 		res.Roots++
 		if chainSetsDisplay(root, parents) {
 			res.Explicit++
+			continue
+		}
+		// Post-71 rule (browser-core 71, spec D6): the default display
+		// is Block, so a plain chain with no flex/grid container
+		// vocabulary deliberately uses the browser default and is left
+		// alone. Only a chain whose container vocabulary went inert
+		// under Block — the elements that silently changed layout at
+		// the flip — is pinned back to Flex.
+		if !chainUsesFlexContainer(root, parents) {
+			res.Defaults++
 			continue
 		}
 		pos := fset.Position(root.End())
@@ -337,6 +426,74 @@ func classLiteralSetsDisplay(call *ast.CallExpr) bool {
 		class := strings.TrimSuffix(strings.TrimPrefix(field, "!"), "!")
 		if tailwindDisplayClasses[class] {
 			return true
+		}
+	}
+	return false
+}
+
+// chainUsesFlexContainer walks the root's method chain (the same
+// maximal run of selector calls chainSetsDisplay walks) and reports
+// whether any link uses flex/grid CONTAINER vocabulary without the
+// display being stated elsewhere: a container-only method selector, or
+// a Class literal carrying a flex/grid container class. Such a chain
+// was a flex box before browser-core 71 flipped the default display to
+// Block (its container properties were live); under the block default
+// they are inert, so the codemod pins .Flex() to restore the layout.
+// Item vocabulary (Flex1, FlexShrink0, Self*) is parent-relative and
+// does not count.
+func chainUsesFlexContainer(root *ast.CallExpr, parents map[ast.Node]ast.Node) bool {
+	cur := ast.Node(root)
+	for {
+		sel, ok := parents[cur].(*ast.SelectorExpr)
+		if !ok || sel.X != cur {
+			return false
+		}
+		call, ok := parents[sel].(*ast.CallExpr)
+		if !ok || call.Fun != sel {
+			return false
+		}
+		if flexContainerSelectors[sel.Sel.Name] {
+			return true
+		}
+		if sel.Sel.Name == "Class" && classLiteralUsesFlexContainer(call) {
+			return true
+		}
+		cur = call
+	}
+}
+
+// classLiteralUsesFlexContainer reports whether a Class call's first
+// argument is a string literal containing a Tailwind flex/grid
+// container class (gap-2, flex-col, items-center, ...). Non-literal
+// arguments are unknown and do not trigger the pin: a chain that
+// styles itself through an unknown class string is the author's
+// statement, and the class layer (later wins) still governs display.
+func classLiteralUsesFlexContainer(call *ast.CallExpr) bool {
+	if len(call.Args) == 0 {
+		return false
+	}
+	lit, ok := call.Args[0].(*ast.BasicLit)
+	if !ok || lit.Kind != token.STRING {
+		return false
+	}
+	value, err := strconv.Unquote(lit.Value)
+	if err != nil {
+		return false
+	}
+	for _, field := range strings.Fields(value) {
+		// A variant-prefixed class (hover:flex-col) sets the property
+		// only in that state, but the base display still comes from the
+		// default — the element needs the flex pin for the variant to
+		// work — so the variant prefix is looked through.
+		class := field
+		if idx := strings.LastIndex(class, ":"); idx >= 0 {
+			class = class[idx+1:]
+		}
+		class = strings.TrimSuffix(strings.TrimPrefix(class, "!"), "!")
+		for _, prefix := range tailwindFlexContainerPrefixes {
+			if strings.HasPrefix(class, prefix) {
+				return true
+			}
 		}
 	}
 	return false

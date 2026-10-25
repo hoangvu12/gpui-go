@@ -41,8 +41,8 @@ func (v *sampleView) Render(w *gpui.Window, cx *gpui.Context[sampleView]) gpui.A
 				W(gpui.PxLength(30)).
 				H(gpui.PxLength(10)))).
 		// A div whose display is set by the helper it is passed to: the
-		// codemod pins the constructor (redundant, later setter wins)
-		// and the bounds must stay block-flow.
+		// codemod leaves the plain chain alone (the block default), and
+		// the helper's later setter still wins.
 		Child(blockBox(gpui.Div().
 			DebugSelector("helper-block").
 			W(gpui.PxLength(24)).
@@ -85,8 +85,8 @@ func chip() *gpui.DivElement {
 }
 
 // blockBox sets the display on an element passed to it (the helper
-// styling the task's rule speaks about: the codemod pins the root at
-// the call site, and this later setter still wins).
+// styling the task's rule speaks about: this later setter wins over
+// whatever the chain states).
 func blockBox(d *gpui.DivElement) *gpui.DivElement {
 	return d.Block()
 }

@@ -211,10 +211,11 @@ var modesPage = `<!doctype html>
 		width: ` + f2s(4*boxW+3*colGap) + `px;
 		height: ` + f2s(boxH) + `px;
 		/* The block parent whose paragraph collects the atomic boxes:
-		   display: block, the browser's default, pinned explicitly. The
-		   fixed height pins the flow below it: the line box's strut
-		   (invisible, no glyphs) extends past it without moving any
-		   compared box or painted pixel. */
+		   display: block, the browser's default since browser-core 71,
+		   stated explicitly (the view pins it the same way). The fixed
+		   height pins the flow below it: the line box's strut (invisible,
+		   no glyphs) extends past it without moving any compared box or
+		   painted pixel. */
 		display: block;
 		margin-left: 20px;
 		margin-top: 20px;
@@ -310,15 +311,15 @@ func modesView(_ *parity.EventLog) gpui.AnyElement {
 }
 
 // WrongModesView is the deliberately-wrong display view: every contents
-// element left at the port's default display (flex) — the pre-ticket
+// element left as a plain flex box — the pre-ticket
 // pin, whose boxes take space in the row.
 func WrongModesView(_ *parity.EventLog) gpui.AnyElement {
 	return modesRoot(false)
 }
 
 // modesRoot builds the display page's tree; contentsElements selects
-// the correct view (display: contents) or the wrong one (the default
-// flex).
+// the correct view (display: contents) or the wrong one (a plain flex
+// box, the pre-ticket pin's contents).
 func modesRoot(contentsElements bool) gpui.AnyElement {
 	root := gpui.Div().Flex().
 		ID("root").
@@ -365,12 +366,12 @@ func modesRoot(contentsElements bool) gpui.AnyElement {
 			InlineGrid().
 			Size(gpui.Px(gridW), gpui.Px(boxH)).
 			GridTemplateCols(gpui.GridTemplate{Repeat: 2, MinSize: gpui.GridTemplateMinZero}).
-			Child(gpui.Div().Flex().
+			Child(gpui.Div().
 				ID("g1").
 				DebugSelector("g1").
 				Size(gpui.Px(gridCol), gpui.Px(boxH)).
 				Bg(gpui.Rgb(0xd97706))).
-			Child(gpui.Div().Flex().
+			Child(gpui.Div().
 				ID("g2").
 				DebugSelector("g2").
 				Size(gpui.Px(gridCol), gpui.Px(boxH)).
@@ -394,9 +395,10 @@ func modesRoot(contentsElements bool) gpui.AnyElement {
 		IntoElement()
 }
 
-// solidBox is one flat-coloured compared box.
+// solidBox is one flat-coloured compared box (a plain div in the
+// page).
 func solidBox(id string, color uint32) *gpui.DivElement {
-	return gpui.Div().Flex().
+	return gpui.Div().
 		ID(id).
 		DebugSelector(id).
 		Size(gpui.Px(boxW), gpui.Px(boxH)).

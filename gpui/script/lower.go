@@ -33,8 +33,25 @@ func (h *Host) Element() gpui.AnyElement {
 // plugin's nodes run in the plugin's runtime even though they lower
 // with the app's tree.
 func (h *Host) lower(n *Node) *gpui.DivElement {
-	// display pinned by 69; 71 decides whether TSX <div> follows the block default
-	d := gpui.Div().Flex()
+	// A TSX <div> follows the browser default display — block since
+	// browser-core 71 (spec D6), like an HTML div: children stack, an
+	// auto width fills the containing block, and text children form a
+	// paragraph. A node that relied on the old flex default now states
+	// it through its className or style, exactly like HTML.
+	//
+	// The <text> tag is NOT a div — it is the host's sugar for one
+	// styled text run — so it keeps the pin's shape: a flex row whose
+	// single text child is a flex item (the cheap measured-leaf path).
+	// A block paragraph per text run would lay every run out through
+	// the inline paragraph machinery (its line queries re-run per
+	// frame), which the sidebar-shaped trees — 200+ styled runs —
+	// measured at ~100ms per frame; runs that must flow as inline
+	// content go inside their block parent as bare text children
+	// (the tsx fixtures' shape), which is the HTML spelling anyway.
+	d := gpui.Div()
+	if n.isTextElement {
+		d = d.Flex()
+	}
 	if n.ID != "" {
 		d = d.ID(n.ID)
 	}

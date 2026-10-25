@@ -311,7 +311,7 @@ func filteredSwatch(id string, filters []gpui.Filter) *gpui.DivElement {
 	}
 	colors := []uint32{stripeRed, stripeGreen, stripeBlue, stripeWhite, stripeGray}
 	for _, color := range colors {
-		sw = sw.Child(gpui.Div().Flex().
+		sw = sw.Child(gpui.Div().
 			W(gpui.Px(stripeWidth)).
 			H(gpui.Px(swatchHeight)).
 			FlexShrink(0).
@@ -543,13 +543,13 @@ func imageRoot(chooser func(id string) []gpui.Filter) gpui.AnyElement {
 		Gap(gpui.Px(imageCellGap)).
 		Bg(gpui.Rgb(pageBackground))
 	for _, id := range []string{"img-control", "img-grayscale", "img-hue-rotate"} {
-		img := gpui.Img(image).Flex().
+		img := gpui.Img(image).
 			W(gpui.Px(60)).
 			H(gpui.Px(40))
 		if filters := chooser(id); filters != nil {
 			img = img.Filter(filters)
 		}
-		root = root.Child(gpui.Div().Flex().
+		root = root.Child(gpui.Div().
 			ID(id).
 			DebugSelector(id).
 			W(gpui.Px(60)).
@@ -731,7 +731,7 @@ func objectPositionRoot(cells []positionedFrame) gpui.AnyElement {
 		rowDiv := gpui.Div().Flex().Gap(gpui.Px(frameGap))
 		for col := 0; col < 4; col++ {
 			cell := cells[row*4+col]
-			img := gpui.Img(image).Flex().
+			img := gpui.Img(image).
 				ObjectPosition(cell.position.X, cell.position.Y).
 				W(gpui.Px(frameWidth)).
 				H(gpui.Px(frameHeight)).
@@ -747,7 +747,7 @@ func objectPositionRoot(cells []positionedFrame) gpui.AnyElement {
 			} else {
 				img = img.ObjectFit(cell.fit)
 			}
-			rowDiv = rowDiv.Child(gpui.Div().Flex().
+			rowDiv = rowDiv.Child(gpui.Div().
 				ID(cell.id).
 				DebugSelector(cell.id).
 				W(gpui.Px(frameWidth)).
@@ -859,14 +859,14 @@ func pixelatedRoot(pointSampled bool) gpui.AnyElement {
 		{"smooth", false},
 		{"pixelated", pointSampled},
 	} {
-		img := gpui.Img(image).Flex().
+		img := gpui.Img(image).
 			ObjectFit(gpui.ObjectFitFill).
 			W(gpui.Px(pixelCell)).
 			H(gpui.Px(pixelCell))
 		if cell.pointSamp {
 			img = img.RenderingPixelated()
 		}
-		root = root.Child(gpui.Div().Flex().
+		root = root.Child(gpui.Div().
 			ID(cell.id).
 			DebugSelector(cell.id).
 			W(gpui.Px(pixelCell)).

@@ -234,6 +234,12 @@ func TestMeasureKnownDimensionsAreLogical(t *testing.T) {
 		t.Fatalf("RequestMeasuredLayout: %v", err)
 	}
 	rootStyle := DefaultStyle()
+	// The stretched known height is the flex row's cross-axis rule —
+	// the pre-71 default display, stated explicitly since browser-core
+	// 71 (spec D6) turned the div default into block (a block item's
+	// auto height is its content, so no known height reaches the
+	// measure).
+	rootStyle.Display = DisplayFlex
 	rootStyle.Size = LengthSize{Width: PxLength(30), Height: PxLength(20)}
 	root, err := engine.RequestLayout(ctx, rootStyle, child)
 	if err != nil {

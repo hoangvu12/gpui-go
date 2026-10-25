@@ -243,7 +243,7 @@ func ShiftedView() func(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpu
 			OnClick(log.Click("root")).
 			OnKeyDown(log.KeyDown("root")).
 			OnKeyUp(log.KeyUp("root"))
-		box := gpui.Div().Flex().
+		box := gpui.Div().
 			ID("box").
 			DebugSelector("box").
 			Size(gpui.Px(boxWidth), gpui.Px(boxHeight)).
@@ -303,7 +303,7 @@ func BindingView(spelling string) func(log *parity.EventLog, w *gpui.Window, app
 			OnKeyDown(log.KeyDown("root")).
 			OnKeyUp(log.KeyUp("root")).
 			OnAction(keyFiredAction, func(*keyFiredPayload, *gpui.Window, *gpui.App) { firedActions++ })
-		box := gpui.Div().Flex().
+		box := gpui.Div().
 			ID("box").
 			DebugSelector("box").
 			Size(gpui.Px(boxWidth), gpui.Px(boxHeight)).

@@ -37,7 +37,12 @@
 // Host elements are div and text (a text element is div sugar for a
 // text run), plus Fragment, whose children lower as their parent's
 // direct children, and slot — the plugin seam (see Plugins below): a
-// div-like container whose children the slot registry owns. Their
+// div-like container whose children the slot registry owns. A TSX
+// <div> follows the browser default display — block since browser-core
+// 71 (spec D6): children stack, an auto width fills the containing
+// block, and text children form a paragraph — exactly like HTML; state
+// flex (className "flex ..." or style display "flex") when the
+// component wants flexbox. Their
 // props:
 //
 //	key?: string         identity for stateful behaviour (scrolling,
