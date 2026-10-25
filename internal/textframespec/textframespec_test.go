@@ -205,11 +205,18 @@ func TestTextUnderAnimationRedrawsBounded(t *testing.T) {
 	if liveAfterFirst == 0 {
 		t.Fatalf("the first frame shaped no handles: LiveShapingHandles = 0, want the frame's text lines")
 	}
-	// The measure passes shape each text under its unwrapped and
-	// wrapped keys (min-content then known-width), so the steady state
-	// is at most two handles per text element.
-	if want := animatedTextCount * 2; liveAfterFirst > want {
-		t.Fatalf("LiveShapingHandles after the first frame = %d, want <= %d (two handles per text)", liveAfterFirst, want)
+	// The measure passes shape each text under its three sizing-mode
+	// keys: the wrap-0 min-content shape, the unwrapped max-content
+	// shape and the wrapped known-width shape (browser-core 32's D2
+	// rule: a min-content query wraps at width zero, so it is a distinct
+	// native shape — the deliberate cost of the correct min-content,
+	// like Chrome's zero-available-inline-size line breaking). All
+	// three are re-queried every animation frame, so each is a live
+	// shapedLineCache entry at the steady state: three handles per text
+	// element, bounded by the two-frame rotation and the native handle
+	// bound.
+	if want := animatedTextCount * 3; liveAfterFirst > want {
+		t.Fatalf("LiveShapingHandles after the first frame = %d, want <= %d (three handles per text: wrap-0, unwrapped and wrapped — browser-core 32)", liveAfterFirst, want)
 	}
 
 	// A short run first: a hundred further animation frames must not
@@ -405,15 +412,18 @@ func TestResizingWindowDoesNotLeakSupersededLines(t *testing.T) {
 	})
 
 	// The first draw records the baseline: the texts' handles at the
-	// initial width (at most two keys per text — the unwrapped
-	// min-content pass and the wrapped final pass).
+	// initial width — three keys per text (browser-core 32's D2 adds
+	// the wrap-0 min-content shape next to the unwrapped max-content
+	// and the wrapped final-pass shapes; all three are live
+	// shapedLineCache entries at the steady state, re-queried by every
+	// frame's measure passes).
 	drawTextFrame(t, host, window)
 	baseline := system.LiveShapingHandles()
 	if baseline == 0 {
 		t.Fatalf("the first resize-corpus frame shaped no handles: LiveShapingHandles = 0")
 	}
-	if want := wrappingTextCount * 2; baseline > want {
-		t.Fatalf("LiveShapingHandles after the first frame = %d, want <= %d (two handles per text)", baseline, want)
+	if want := wrappingTextCount * 3; baseline > want {
+		t.Fatalf("LiveShapingHandles after the first frame = %d, want <= %d (three handles per text: wrap-0, unwrapped and wrapped — browser-core 32)", baseline, want)
 	}
 
 	// Resizing with text: cycle through distinct widths (a distinct
