@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 11 (Claude Code); R16 integration branch native/r16
+Status: resolved
+Assignee: orchestrator 11 (Claude Code); worker chat 050b3f93; R16 integration branch native/r16
 Blocked by: 39, 49
 Triage: ready-for-agent
 
@@ -25,6 +25,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-26, orchestrator 11: verified on `native/r16` (f347ad9); it reaches main with ticket 54. The tree is clean and nothing under `internal/native/artifacts` is committed. The test DLL `588cd19d…` matches the build output in the shared target. With the embedded manifest temporarily pointed at that test build (the loader requires the two manifests to agree; reverted afterwards), `go test -p 1 -count=1` over internal/native/..., scenespec, rendererspec, conformance/..., portfixture, parity/..., gpui, glyphspec, textspec, layoutspec, fontspec and textframespec: 52 packages ok. Failures: portfixture TestFx0004 (known) and 7 internal/native loader tests that check the embedded DLL against the swapped manifest (expected until 54 refreshes the artifact). The fx-0003/fx-0007 accepted divergences are limited to the six depth-3 plan fields the design changes on purpose (§3.1). Spot-check: cc/trees/property_tree_builder.cc:368-403 at 0d4dcd4f (rounded corner and opacity force a render surface only when more than one descendant draws) matches. GAP handed to 51/52: pool buckets are still window-sized (sub-window targets drew nothing through the pinned sprite pipeline).
 
 ## Answer
 
