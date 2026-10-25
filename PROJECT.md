@@ -16,7 +16,7 @@ The user confirmed two things:
 
 The research map is [.scratch/browser-parity/map.md](.scratch/browser-parity/map.md). **Accepted 2026-10-23.** The research is done (research/browser-parity/README.md), and the user accepted D0-D14 as recommended. **When the browser and the GPUI-CE pin differ, the browser wins**, with each divergence recorded and its fixtures updated. This replaces "full 1:1 GPUI-CE core behavior" below as the behavioural target; the pin stays the starting point and the evidence trail.
 
-The core owns behaviour, browser-like; components move to a new public repo, `gpui-go-base`. UI scripting is TSX via esbuild + goja ([ADR 0003](docs/adr/0003-tsx-ui-scripting.md)). The next step is a spec from the proposal (the user runs /to-spec).
+The core owns behaviour, browser-like; components move to a new public repo, `gpui-go-base`. The split happened in browser-core ticket 75 (2026-10-26): Base, zterm and the gallery now live in the local `gpui-go-base` repository (`C:\Users\ADMIN\Desktop\nguyenvu\gpui-go-base`), which depends only on gpui-go's public API. UI scripting is TSX via esbuild + goja ([ADR 0003](docs/adr/0003-tsx-ui-scripting.md)). The next step is a spec from the proposal (the user runs /to-spec).
 
 ## Current phase
 

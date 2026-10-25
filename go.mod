@@ -6,8 +6,6 @@ require (
 	github.com/clipperhouse/uax29/v2 v2.7.0
 	github.com/dop251/goja v0.0.0-20261023133238-1622cea953df
 	github.com/evanw/esbuild v0.28.2
-	github.com/yuin/goldmark v1.8.6
-	golang.org/x/net v0.61.0
 )
 
 require (

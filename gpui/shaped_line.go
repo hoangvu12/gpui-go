@@ -15,8 +15,9 @@ package gpui
 //     name at R:text_system.rs:325-339) → WindowTextSystem.ShapeLine;
 //   - TextSystem::layout_width (legacy text_system.rs:745-760: the
 //     width of one shaped character) → WindowTextSystem.LayoutWidth;
-//   - TextSystem::line_wrapper (legacy text_system.rs:332) →
-//     WindowTextSystem.LineWrapper (line_wrapper.go);
+//   - TextSystem::line_wrapper (legacy text_system.rs:332) → the
+//     LineWrapper moved into the gpui-go-base repository with Base
+//     (browser-core ticket 75); it measures through LayoutWidth;
 //   - ShapedLine len / width / with_len / paint / paint_background
 //     (legacy text_system/line.rs:43-130) and the LineLayout geometry
 //     index_for_x / closest_index_for_x / x_for_index (legacy

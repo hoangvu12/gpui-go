@@ -30,7 +30,6 @@ package richtextspec
 import (
 	"math"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
@@ -127,8 +126,9 @@ func (v *realView) Render(w *gpui.Window, cx *gpui.Context[realView]) gpui.AnyEl
 
 // TestRealRichText draws a multi-run StyledText in a real window and
 // pins the per-run paint transcript, then checks the ShapedLine facade
-// and the LineWrapper against the adapter's own geometry on the same
-// window text system.
+// against the adapter's own geometry on the same window text system.
+// (The LineWrapper subtest moved to the gpui-go-base repository with
+// Base in browser-core ticket 75.)
 func TestRealRichText(t *testing.T) {
 	gray := gpui.Hsla{H: 0, S: 0, L: 0.5, A: 1}
 	const text = "Hello brave new world"
@@ -404,41 +404,6 @@ func TestRealRichText(t *testing.T) {
 		})
 	})
 
-	t.Run("LineWrapper over the real font", func(t *testing.T) {
-		const words = "alpha bravo charlie delta echo foxtrot golf"
-		font := base.FontDescriptorOf()
-		onHost(t, host, func() {
-			tsys := window.TextSystem()
-			wrapper, err := tsys.LineWrapper(font, 16)
-			if err != nil {
-				t.Errorf("LineWrapper: %v", err)
-				return
-			}
-			const width = 90
-			boundaries := wrapper.WrapLine([]gpui.LineFragment{gpui.LineFragmentText(words)}, width)
-			if len(boundaries) < 2 {
-				t.Errorf("boundaries = %v, want the text wrapped at %vpx", boundaries, width)
-				return
-			}
-			start := 0
-			for _, boundary := range append(boundaries, gpui.Boundary{Ix: len(words)}) {
-				if boundary.Ix <= start || (boundary.Ix < len(words) && words[boundary.Ix-1] != ' ') {
-					t.Errorf("boundary %d does not start a word after %d (%v)", boundary.Ix, start, boundaries)
-					return
-				}
-				// The row's content (without its trailing break space) fits.
-				row := strings.TrimRight(words[start:boundary.Ix], " ")
-				var rowWidth float32
-				for _, ch := range row {
-					rowWidth += tsys.LayoutWidth(font, 16, ch)
-				}
-				if rowWidth > width+0.01 {
-					t.Errorf("row %q measures %v, wider than %v", row, rowWidth, width)
-				}
-				start = boundary.Ix
-			}
-		})
-	})
 }
 
 // ligatureFamily returns the first candidate family present in the font

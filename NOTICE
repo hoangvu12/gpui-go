@@ -5,10 +5,9 @@ gpui-go is a Go port of GPUI-CE (https://github.com/gpui-ce/gpui-ce),
 Copyright 2022 - 2025 Zed Industries, Inc., licensed under the Apache
 License, Version 2.0.
 
-The base package (base/) is a Go port of GPUI Base, the crates/base crate of
-gpui-component (https://github.com/gpui-ce/gpui-component, commit
-c08206932417f863062d2ab70cc2854c6ca04238), Copyright 2024 - 2026 Longbridge
-<https://longbridge.com>, licensed under the Apache License, Version 2.0.
+The GPUI Base component library (the base package and the zterm and gallery
+examples) moved to the separate gpui-go-base repository in browser-core
+ticket 75; its NOTICE covers the gpui-component (crates/base) credits.
 
 The native library embedded at internal/native/artifacts/gpui_go_native.dll
 is built from GPUI-CE and other third-party crates. Their licenses and

@@ -1,98 +1,15 @@
 package gpui
 
 // Base ticket 10's in-package tests: the unexported pieces of the rich
-// text port (the wrapper's word-character table, the run computation of
-// StyledText and the per-run painter's segment merge). The public
-// behavior lives in internal/richtextspec.
+// text port (the run computation of StyledText and the per-run painter's
+// segment merge). The public behavior lives in internal/richtextspec.
+// (The legacy LineWrapper and its word-character table moved to the
+// gpui-go-base repository with Base in browser-core ticket 75.)
 
 import (
 	"strings"
 	"testing"
 )
-
-// TestIsWordChar is the port of the legacy line_wrapper.rs:1241-1320
-// test_is_word_char.
-func TestIsWordChar(t *testing.T) {
-	assertWord := func(word string) {
-		t.Helper()
-		for _, c := range word {
-			if !isWordChar(c) {
-				t.Errorf("isWordChar(%q U+%04X) = false, want true (word %q)", c, c, word)
-			}
-		}
-	}
-	assertNotWord := func(word string) {
-		t.Helper()
-		found := false
-		for _, c := range word {
-			if !isWordChar(c) {
-				found = true
-			}
-		}
-		if !found {
-			t.Errorf("every character of %q is a word character, want at least one that is not", word)
-		}
-	}
-
-	assertWord("Hello123")
-	assertWord("non-English")
-	assertWord("var_name")
-	assertWord("123456")
-	assertWord("3.1415")
-	assertWord("10^2")
-	assertWord("1~2")
-	assertWord("100%")
-	assertWord("@mention")
-	assertWord("#hashtag")
-	assertWord("$variable")
-	assertWord("a=1")
-	assertWord("Self::is_word_char")
-	assertWord("on;")
-	assertWord("more⋯")
-	assertWord("won’t")
-	assertWord("‘twas")
-	assertWord("plz!")
-	assertWord("see)")
-	assertWord("quoted”")
-	assertWord("well…")
-
-	// Space.
-	assertNotWord("foo bar")
-
-	// URL case.
-	assertWord("github.com")
-	assertNotWord("zed-industries/zed")
-	assertNotWord("zed-industries\\zed")
-	assertNotWord("a=1&b=2")
-	assertNotWord("foo?b=2")
-
-	// Latin-1 Supplement.
-	assertWord("ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏ")
-	// Latin Extended-A.
-	assertWord("ĀāĂăĄąĆćĈĉĊċČčĎď")
-	// Latin Extended-B.
-	assertWord("ƀƁƂƃƄƅƆƇƈƉƊƋƌƍƎƏ")
-	// Cyrillic.
-	assertWord("АБВГДЕЖЗИЙКЛМНОП")
-	// Vietnamese.
-	assertWord("ThậmchíđếnkhithuachạychúngcònnhẫntâmgiếtnốtsốđôngtùchínhtrịởYênBáivàCaoBằng")
-	// Bengali.
-	assertWord("গিয়েছিলেন")
-	assertWord("ছেলে")
-	assertWord("হচ্ছিল")
-
-	// Non-word characters.
-	assertNotWord("你好")
-	assertNotWord("안녕하세요")
-	assertNotWord("こんにちは")
-	assertNotWord("😀😁😂")
-	assertNotWord("()[]{}<>")
-
-	// Non-breaking glue characters (UAX #14).
-	assertWord(" ")
-	assertWord(" ")
-	assertWord("‑")
-}
 
 // TestComputeStyledRunsFillsGaps pins compute_runs (R:elements/text.rs:
 // 452-477): default runs fill the gaps, highlighted runs carry the
