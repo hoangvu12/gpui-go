@@ -17,7 +17,7 @@ import "testing"
 func anchoredAnchorView(anchorID string, anchor Bounds, configure func(*AnchoredElement) *AnchoredElement) func(*paintView, *Window, *Context[paintView]) AnyElement {
 	return func(*paintView, *Window, *Context[paintView]) AnyElement {
 		popup := configure(Anchored().AnchorTo(anchorID))
-		return Div().SizeFull().Flex().Child(
+		return Div().Relative().SizeFull().Flex().Child(
 			Div().Flex().ID(anchorID).DebugSelector("ANCHOR").
 				Absolute().Top(Px(anchor.Origin.Y)).Left(Px(anchor.Origin.X)).
 				W(Px(anchor.Size.Width)).H(Px(anchor.Size.Height)).
@@ -285,7 +285,7 @@ func TestAnchoredNoFallbacksLeavesTheBasePlacement(t *testing.T) {
 func anchoredAnchorViewWithPopup(anchorID string, anchor, popup Bounds, configure func(*AnchoredElement) *AnchoredElement) func(*paintView, *Window, *Context[paintView]) AnyElement {
 	return func(*paintView, *Window, *Context[paintView]) AnyElement {
 		popupElement := configure(Anchored().AnchorTo(anchorID))
-		return Div().SizeFull().Flex().Child(
+		return Div().Relative().SizeFull().Flex().Child(
 			Div().Flex().ID(anchorID).DebugSelector("ANCHOR").
 				Absolute().Top(Px(anchor.Origin.Y)).Left(Px(anchor.Origin.X)).
 				W(Px(anchor.Size.Width)).H(Px(anchor.Size.Height)).
@@ -335,7 +335,7 @@ func TestAnchoredFollowsAScrolledAnchorAndHidesWhenClipped(t *testing.T) {
 	// (60,240,120,40) sits 200px into the content. The popup is a
 	// deferred sibling, anchored to it 8px below, center-aligned.
 	f := newPaintFixture(t, func(*paintView, *Window, *Context[paintView]) AnyElement {
-		return Div().SizeFull().Flex().Child(
+		return Div().Relative().SizeFull().Flex().Child(
 			Div().Flex().ID("scroller").DebugSelector("SCROLLER").
 				Absolute().Top(Px(40)).Left(Px(20)).
 				W(Px(200)).H(Px(300)).

@@ -1,0 +1,110 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: flex-start;
+		gap: 40px;
+	}
+	#grandparent {
+		box-sizing: border-box;
+		width: 200px;
+		height: 160px;
+		position: relative;
+		border: 6px solid #334155;
+		padding: 14px;
+		background: #ffffff;
+	}
+	/* The parents under test: no position (the browser default is
+	   static, so they are NOT containing blocks), no display (the
+	   browser default is block). */
+	#parent {
+		box-sizing: border-box;
+		width: 120px;
+		height: 90px;
+		margin-left: 10px;
+		margin-top: 6px;
+		background: #e2e8f0;
+	}
+	#parent2 {
+		box-sizing: border-box;
+		width: 60px;
+		height: 50px;
+		margin-left: 8px;
+		margin-top: 40px;
+		background: #dbeafe;
+	}
+	#child-a {
+		position: absolute;
+		left: 12px;
+		top: 8px;
+		width: 40px;
+		height: 30px;
+		background: #dc2626;
+	}
+	#child-b {
+		position: absolute;
+		right: 16px;
+		bottom: 10px;
+		width: 50px;
+		height: 36px;
+		background: #2563eb;
+	}
+	#chain-outer {
+		box-sizing: border-box;
+		width: 60px;
+		height: 50px;
+		background: #dbeafe;
+	}
+	#chain-inner {
+		box-sizing: border-box;
+		width: 40px;
+		height: 30px;
+		margin-left: 6px;
+		margin-top: 40px;
+		background: #dbeafe;
+	}
+	#root-abs-br {
+		position: absolute;
+		right: 24px;
+		bottom: 18px;
+		width: 40px;
+		height: 26px;
+		background: #7c3aed;
+	}
+	#root-abs-bl {
+		position: absolute;
+		left: 30px;
+		bottom: 24px;
+		width: 36px;
+		height: 22px;
+		background: #7c3aed;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div id="grandparent" data-id="grandparent">
+		<div id="parent" data-id="parent">
+			<div id="child-a" data-id="child-a"></div>
+			<div id="parent2" data-id="parent2">
+				<div id="child-b" data-id="child-b"></div>
+			</div>
+		</div>
+	</div>
+	<div id="chain-outer" data-id="chain-outer">
+		<div id="chain-inner" data-id="chain-inner">
+			<div id="root-abs-br" data-id="root-abs-br"></div>
+			<div id="root-abs-bl" data-id="root-abs-bl"></div>
+		</div>
+	</div>
+</body>
+</html>

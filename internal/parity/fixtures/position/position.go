@@ -284,8 +284,10 @@ func View(_ *parity.EventLog) gpui.AnyElement {
 }
 
 // WrongDirectParent is the deliberately-wrong view for the Tier A and
-// Tier C comparisons: every static parent is left at the port's
-// default (relative), so the absolute children resolve against their
+// Tier C comparisons: every static parent is pinned at the port's OLD
+// default (relative — stated explicitly, because ticket 76 flipped the
+// default to static and the unpositioned form would now be the
+// correct view), so the absolute children resolve against their
 // DIRECT parent — the pin's behaviour, the exact state before ticket
 // 33. Five absolute boxes move (abs-tl, abs-br, abs-pct land on the
 // static parent's box instead of the ancestor's padding box;
@@ -297,7 +299,9 @@ func WrongDirectParent(_ *parity.EventLog) gpui.AnyElement {
 }
 
 // view builds the fixture's tree; staticParents selects the correct
-// view (position: static) or the wrong one (the default relative).
+// view (position: static) or the wrong one (the old default, relative,
+// stated explicitly — the unpositioned form is the static default since
+// ticket 76 and would be the correct view).
 func view(staticParents bool) gpui.AnyElement {
 	root := gpui.Div().
 		ID("root").
@@ -325,6 +329,8 @@ func ancestorBox(staticParents bool) *gpui.DivElement {
 		Bg(gpui.Rgb(staticBackground))
 	if staticParents {
 		parent = parent.Static()
+	} else {
+		parent = parent.Relative()
 	}
 	parent = parent.
 		Child(absoluteBox("abs-tl", absRed).
@@ -387,6 +393,8 @@ func chainS1(staticParents bool) *gpui.DivElement {
 		Bg(gpui.Rgb(chainBackground))
 	if staticParents {
 		s2 = s2.Static()
+	} else {
+		s2 = s2.Relative()
 	}
 	s2 = s2.
 		Child(absoluteBox("root-abs-br", rootAbsPurple).
@@ -407,6 +415,8 @@ func chainS1(staticParents bool) *gpui.DivElement {
 		Bg(gpui.Rgb(chainBackground))
 	if staticParents {
 		s1 = s1.Static()
+	} else {
+		s1 = s1.Relative()
 	}
 	return s1.Child(s2)
 }

@@ -7,7 +7,7 @@ package gpui
 // ancestor whose position is anything but static (css-position-3 §2.1
 // and §3.1, def-cb / abs-cb). Chromium decides containership exactly
 // that way: LayoutObject::ComputeIsAbsoluteContainer
-// (third_party/blink/renderer/core/layout/layout_object.cc:2069-2081 in
+// (third_party/blink/renderer/core/layout/layout_object.cc:2072-2082 in
 // the research checkout) returns true when the style's position is not
 // kStatic; the bit is set from the style
 // (layout_box_model_object.cc:503-504), read by
@@ -17,7 +17,7 @@ package gpui
 // (LayoutObject::ContainerForAbsolutePosition, layout_object.cc:1877
 // -1883, through FindAncestorByPredicate's parent-chain walk at
 // :192-207). When no ancestor qualifies, the LayoutView contains it
-// (ComputeIsFixedContainer, layout_object.cc:2035-2040: the LayoutView
+// (ComputeIsFixedContainer, layout_object.cc:2035-2041: the LayoutView
 // is always a fixed — and therefore absolute — container): the initial
 // containing block. The inset basis is the containing block's PADDING
 // box ("|inset| is relative to the container's padding-box",
@@ -28,12 +28,13 @@ package gpui
 // which is also this port's pinned behaviour (the research README's
 // L2: "reparent in Go").
 //
-// This file implements that reparenting for the opt-in (D3's first
-// step): parents that set PositionStatic stop being containing blocks
-// for their absolute children, which then resolve against the nearest
-// positioned ancestor. The DEFAULT stays PositionRelative until ticket
-// 76 flips it, so with no Static() anywhere the native tree is built
-// exactly as before (bit-for-bit).
+// This file implements that rule for the opt-in (D3's first step,
+// browser-core 33) and for the DEFAULT (D3's second step,
+// browser-core 76): the default position is Static, so every plain
+// div is a static parent — exactly the browser's rule — and
+// positioned parents state .Relative() (or another positioned value)
+// explicitly; cmd/positioncodemod migrated the sites that relied on
+// the pin's Relative default and guards the tree.
 //
 // Mechanism: the native ABI attaches children when the parent node is
 // created (CreateNode; there is no reparent call), so the attachment
@@ -47,13 +48,39 @@ package gpui
 // absolute pass places them against its padding box, as CSS says. A
 // deferred child with no open scope (no participating positioned
 // ancestor) falls back to attaching to its direct parent — the pin's
-// behaviour — which keeps non-participating containers (Anchored,
-// Deferred, custom elements that walk children outside
-// RequestContainerLayout) at today's semantics for absolute children
-// under a static wrapper: their absolutes escape to the nearest
-// PARTICIPATING positioned ancestor, or stay on the direct parent when
-// there is none. Ticket 25 (anchored) and ticket 76 (the default flip)
-// can adopt RequestContainerLayout to close that gap.
+// behaviour — which keeps non-participating containers (a
+// non-div root that walks children outside RequestContainerLayout,
+// custom elements on the plain RequestElementLayout seam) at today's
+// semantics for absolute children under a static wrapper.
+//
+// The root's ICB role (browser-core 76): the window ROOT element
+// always opens a scope — even when its own style is static —
+// because the root node stands in for Chromium's LayoutView, which is
+// always a fixed — and therefore absolute — container
+// (ComputeIsFixedContainer's IsA<LayoutView> arm,
+// layout_object.cc:2035-2041, and ComputeIsAbsoluteContainer's
+// is_fixed_container || position != kStatic, layout_object.cc:
+// 2072-2082): the initial containing block exists no matter what the
+// html element's own position says. A static chain with no positioned
+// ancestor therefore defers into the root's scope and resolves
+// against the root node's padding box (the root fills the window; its
+// own padding shifts the basis — the ticket-33 documented
+// approximation). The flag that selects the root's request is set by
+// drawRoots around the root walk and consumed by the first scope
+// open (or discarded by the plain requestLayoutOf seam, the
+// non-participating-root approximation).
+//
+// Standalone roots (browser-core 76): a subtree laid out with
+// LayoutAsRoot — List/UniformList/virtual-list items, the
+// measured trees, the cached-view refresh, the deferred surfaces —
+// IS its own native root, so its request walk runs with the enclosing
+// scopes detached (withIsolatedContainingBlocks in
+// drawable.layoutAsRoot): an absolute child of a row stays inside the
+// row (the pin's direct-parent rule — "elements whose absolute
+// children must stay inside them keep behaving the same"), while the
+// CSS rule keeps holding WITHIN the row's own subtree. The detach
+// also stops a measured tree's deferred children from leaking into
+// the live tree's scopes (a cross-tree attach the pin never produced).
 //
 // The scope stack lives on the frame under construction and is
 // balanced per element (open before the child walk, close after the
@@ -73,15 +100,26 @@ type containingBlockScope struct {
 // (relative, absolute, sticky and fixed — everything but static, which
 // is Chromium's rule; a fixed element IS an absolute container too:
 // ComputeIsAbsoluteContainer runs is_fixed_container || position !=
-// kStatic, layout_object.cc:2069-2081). A static element returns nil:
+// kStatic, layout_object.cc:2072-2082). A static element returns nil:
 // it opens no scope, and its absolute children defer to the enclosing
-// one.
+// one — EXCEPT the window root: when the frame's icbPending flag is
+// set (drawRoots marked this request walk as the root's), the root
+// opens its scope even when static, because the root node stands in
+// for the LayoutView, which is always an absolute container
+// (ComputeIsFixedContainer's IsA<LayoutView> arm, layout_object.cc:
+// 2035-2041). The flag is consumed here (the root's own scope open is
+// the first open of the walk) and by requestLayoutOf (the
+// non-participating-root discard).
 func openContainingBlock(w *Window, style *Style) *containingBlockScope {
-	if style.Position == PositionStatic {
+	f := currentFrame(w)
+	rootICB := f.icbPending
+	if rootICB {
+		f.icbPending = false
+	}
+	if style.Position == PositionStatic && !rootICB {
 		return nil
 	}
 	scope := &containingBlockScope{}
-	f := currentFrame(w)
 	f.containingBlockScopes = append(f.containingBlockScopes, scope)
 	return scope
 }
@@ -101,6 +139,29 @@ func closeContainingBlock(w *Window, scope *containingBlockScope) {
 	}
 	f.containingBlockScopes[n-1] = nil
 	f.containingBlockScopes = f.containingBlockScopes[:n-1]
+}
+
+// withIsolatedContainingBlocks runs f with the frame's containing-
+// block scopes detached: the enclosing walk's scopes (and the pending
+// root ICB flag) are stashed, f runs with an empty scope stack, and
+// both are restored after. Standalone roots use this (browser-core
+// 76; see the file header): a subtree laid out with LayoutAsRoot is
+// its own native root, so its static elements keep the pin's
+// direct-parent rule at the root boundary instead of deferring into
+// an enclosing (unrelated) scope, and its own positioned elements
+// still open scopes for their descendants — the CSS rule holds within
+// the subtree.
+func withIsolatedContainingBlocks[R any](w *Window, f func(*Window) R) R {
+	frame := currentFrame(w)
+	savedScopes := frame.containingBlockScopes
+	savedPending := frame.icbPending
+	frame.containingBlockScopes = nil
+	frame.icbPending = false
+	defer func() {
+		frame.containingBlockScopes = savedScopes
+		frame.icbPending = savedPending
+	}()
+	return f(w)
 }
 
 // deferAbsoluteChild hands one absolute child to the innermost open
@@ -230,18 +291,24 @@ func requestLayoutNode(w *Window, own *containingBlockScope, style Style, childr
 		if deferredAny {
 			attached = flow
 		}
-	} else if own != nil && len(own.deferred) > 0 {
+	}
+	if own != nil && len(own.deferred) > 0 {
 		// The scope owner: attach the absolutes deferred by static
 		// descendants AND the fixed children deferred by every descendant
 		// as children of this (positioned) node, after the element
 		// children — out of flow, so their order in the child list does
 		// not affect the in-flow layout. For the ROOT scope this is the
 		// initial-containing-block stand-in (ticket 33's static-chain
-		// case): the fixed children become Taffy children of the root
-		// node and their insets resolve against its padding box — the
-		// window. (The element children here are the POST-split list:
-		// a fixed child deferred above is already in own.deferred, not
-		// in the element list.)
+		// case; browser-core 76: the root owns its scope even when its
+		// own style is static, so this attach runs for a static root too —
+		// the root defers its OWN absolute children into its own scope
+		// above and immediately re-absorbs them, resolving against
+		// itself, exactly as the ICB rule says): the fixed children and
+		// the escaped absolutes become Taffy children of the root node
+		// and their insets resolve against its padding box — the window.
+		// (The element children here are the POST-split list: a fixed or
+		// absolute child deferred above is already in own.deferred or in
+		// an inner scope's deferred list, not in the element list.)
 		element := attached
 		attached = make([]LayoutID, 0, len(element)+len(own.deferred))
 		attached = append(attached, element...)

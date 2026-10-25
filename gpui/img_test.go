@@ -172,7 +172,7 @@ func TestImgZeroFrameImageDoesNotPanicOnPaint(t *testing.T) {
 // window.draw(origin, size(100, 100), ..)).
 func imgAt(x, y float32, element func() AnyElement) func(*paintView, *Window, *Context[paintView]) AnyElement {
 	return func(*paintView, *Window, *Context[paintView]) AnyElement {
-		return Div().Flex().SizeFull().Child(Div().Flex().Absolute().Left(Px(x)).Top(Px(y)).W(Px(100)).H(Px(100)).Child(element())).IntoElement()
+		return Div().Relative().Flex().SizeFull().Child(Div().Flex().Absolute().Left(Px(x)).Top(Px(y)).W(Px(100)).H(Px(100)).Child(element())).IntoElement()
 	}
 }
 

@@ -335,7 +335,12 @@ func View(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.AnyElement {
 // the scrolled content, fixed-b against the static chain's positioned
 // ancestor, fixed-c against the flow column) — the exact state before
 // ticket 35 (class.go's old advice: "use absolute inside a relative
-// ancestor that fills the window"). All three move: fixed-a scrolls
+// ancestor that fills the window"). Since ticket 76 flipped the default
+// position to static, a plain absolute box under unpositioned ancestors
+// escapes to the window root exactly like a fixed one, so the wrong
+// view also positions the boxes' DOM ancestors (the content and the
+// flow column are .Relative() there): the pre-35 pin IS "absolute
+// inside positioned ancestors". All three boxes move: fixed-a scrolls
 // with the content (and is clipped by the scroller), fixed-b lands on
 // the ancestor's padding box, fixed-c falls off the window.
 func WrongAbsolute(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.AnyElement {
@@ -343,7 +348,8 @@ func WrongAbsolute(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.Any
 }
 
 // buildTree renders the fixture's tree; absolute selects the
-// deliberately-wrong view's plain-absolute boxes.
+// deliberately-wrong view's plain-absolute boxes (with the boxes' DOM
+// ancestors positioned, the pre-35 pin's shape — see WrongAbsolute).
 func buildTree(log *parity.EventLog, w *gpui.Window, _ *gpui.App, absolute bool) gpui.AnyElement {
 	focus := scrollFocusOf(log, w)
 	fixedOrAbsolute := func(id string, color uint32) *gpui.DivElement {
@@ -366,7 +372,13 @@ func buildTree(log *parity.EventLog, w *gpui.Window, _ *gpui.App, absolute bool)
 		DebugSelector("content").
 		W(gpui.Px(scrollerW)).
 		H(gpui.Px(contentH)).
-		FlexCol().
+		FlexCol()
+	if absolute {
+		// The pre-35 pin's shape: the wrong view's absolute boxes resolve
+		// against their DOM ancestors, so those ancestors are positioned.
+		content = content.Relative()
+	}
+	content = content.
 		Child(gpui.Div().ID("row1").DebugSelector("row1").
 			W(gpui.Px(scrollerW)).H(gpui.Px(rowH)).
 			Bg(gpui.Rgb(row1Bg)).
@@ -413,12 +425,16 @@ func buildTree(log *parity.EventLog, w *gpui.Window, _ *gpui.App, absolute bool)
 				Top(gpui.Px(fixedBY)).
 				W(gpui.Px(fixedBW)).
 				H(gpui.Px(fixedBH)))))
-	root.Child(gpui.Div().Flex().
+	stack := gpui.Div().Flex().
 		ID("stack").
 		DebugSelector("stack").
 		W(gpui.Px(stackW)).
 		H(gpui.Px(stackH)).
-		FlexCol().
+		FlexCol()
+	if absolute {
+		stack = stack.Relative()
+	}
+	root.Child(stack.
 		Child(gpui.Div().ID("row-a").DebugSelector("row-a").
 			W(gpui.Px(rowAW)).H(gpui.Px(rowAH)).
 			Bg(gpui.Rgb(rowABg))).

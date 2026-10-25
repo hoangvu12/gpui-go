@@ -603,6 +603,19 @@ in `fixtures/position` pins that, and the fixture's wrong view (every static
 parent left relative) is the pre-ticket pin, so its Tier A failure is the
 regression gate. Custom container elements join the rule through
 `gpui.RequestContainerLayout`; `RequestElementLayout` keeps the plain attach.
+Ticket 76 flipped the DEFAULT to static (spec D3's second step): the parents
+that relied on the pin's Relative default state `.Relative()` explicitly
+(`cmd/positioncodemod` migrated them and guards the tree with its
+`-check` gate, the displaycodemod pattern), the window root always opens its
+containing-block scope — the initial containing block, Chromium's LayoutView
+being always an absolute container — so an absolute child with no positioned
+ancestor resolves against the window, and a subtree laid out with
+`LayoutAsRoot` (List/UniformList/virtual-list rows, measured trees, cached-view
+refreshes) requests with the enclosing scopes detached, keeping its absolute
+children inside itself. `fixtures/positiondefault` is the default's fixture:
+an absolute child of unpositioned parents resolving against the positioned
+grandparent and against the window root, with the old relative default as its
+deliberately-wrong view.
 
 Ticket 32 (text min-content, spec D2) made every measured text path wrap at
 every break opportunity under a min-content available width — the Text element's

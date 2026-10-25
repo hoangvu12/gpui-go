@@ -4,19 +4,24 @@ import (
 	"fmt"
 )
 
-// The position lint of browser-core ticket 33 (spec D3): report every
-// absolutely positioned div whose direct parent is position: static.
-// Under the CSS containing-block rule (css-position-3 §2.1; Chromium
-// decides containership from position != static,
-// LayoutObject::ComputeIsAbsoluteContainer,
-// core/layout/layout_object.cc:2069-2081), such a child resolves
+// The position lint of browser-core ticket 33 (spec D3), updated for
+// ticket 76's default flip: report every absolutely positioned div
+// whose direct parent is position: static. Under the CSS containing-
+// block rule (css-position-3 §2.1; Chromium decides containership from
+// position != static, LayoutObject::ComputeIsAbsoluteContainer,
+// core/layout/layout_object.cc:2072-2082), such a child resolves
 // against the nearest positioned ancestor instead of the parent —
 // which is exactly what the runtime does — but it is rarely what the
-// author meant: the usual intent is "pin to my direct parent", and the
-// fix for that is .Relative() on the parent. The lint is advisory: it
-// walks the authored element tree BEFORE any window or frame exists
-// (it never renders), so it can run from tests, generators or a dev
-// command.
+// author meant: the usual intent is "pin to my direct parent", and
+// the fix for that is .Relative() on the parent. Since ticket 76 the
+// default IS static, so the lint fires on every parent that relies on
+// the default — that is the point: authored trees state their intent,
+// and cmd/positioncodemod guards the source tree the same way (its
+// parent-of-absolute rule; the parity fixture packages are exempt
+// there, their Chrome pages being the ground truth). The lint is
+// advisory: it walks the authored element tree BEFORE any window or
+// frame exists (it never renders), so it can run from tests,
+// generators or a dev command.
 //
 // Walk scope: DIVS (the authoring surface that carries Position
 // styles), unwrapped through their accessibility companions. Views

@@ -649,7 +649,18 @@ func (d *drawable[L, P, E]) paint(global *GlobalElementID, inspector *InspectorE
 // available space changed), and return the root's measured size.
 func (d *drawable[L, P, E]) layoutAsRoot(available AvailableSize, w *Window, app *App) Size {
 	if d.phase == phaseStart {
-		d.requestLayout(nil, nil, w, app)
+		// browser-core 76: a standalone root's request walk runs with the
+		// enclosing containing-block scopes detached (List/UniformList/
+		// virtual-list items, measured trees, cached-view refreshes, the
+		// deferred surfaces): the subtree IS its own native root, so its
+		// static elements keep the pin's direct-parent rule at the root
+		// boundary, the CSS rule keeps holding inside it, and no deferred
+		// child of a discarded measurement leaks into the live tree's
+		// scopes (containingblock.go).
+		withIsolatedContainingBlocks(w, func(w *Window) struct{} {
+			d.requestLayout(nil, nil, w, app)
+			return struct{}{}
+		})
 	}
 	if d.phase != phaseRequested && d.phase != phaseLayoutComputed {
 		panic("gpui: cannot measure after painting")
@@ -1184,6 +1195,13 @@ type frameDrawState struct {
 	// being requested, and static parents defer their absolute children
 	// into it. Balanced per element; empty outside a request walk.
 	containingBlockScopes []*containingBlockScope
+	// icbPending marks the request walk that builds the window's root
+	// node: drawRoots sets it around the root element's request, and the
+	// first scope open (openContainingBlock) consumes it to force the
+	// root's ICB scope even when the root's own style is static, while
+	// the plain requestLayoutOf seam discards it (the non-participating-
+	// root approximation). See containingblock.go.
+	icbPending bool
 	// stickyScrollers is the open scroll-container scope stack of the
 	// prepaint phase (browser-core ticket 34, spec L3; sticky.go): the
 	// innermost context belongs to the nearest scroll container of the
@@ -1727,8 +1745,14 @@ func layoutContextOf(w *Window) LayoutContext {
 // other style attaches its children directly, exactly like the pin.
 // Container elements that walk their own children should use
 // RequestContainerLayout instead, which also absorbs deferred
-// absolutes into the node.
+// absolutes into the node. A request reaching this seam while the
+// frame's icbPending flag is still set discards the flag: its element
+// is a non-participating ROOT (it requests children without opening a
+// scope), so no root ICB scope exists this frame and the pin's
+// direct-parent approximation keeps holding below it
+// (containingblock.go's documented limitation, browser-core 76).
 func requestLayoutOf(w *Window, style Style, children ...LayoutID) (LayoutID, error) {
+	currentFrame(w).icbPending = false
 	return requestLayoutNode(w, nil, style, children)
 }
 
