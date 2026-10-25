@@ -191,27 +191,3 @@ func TestShapedLineHardTabGeometry(t *testing.T) {
 		t.Errorf("LayoutWidth('\\t') = %v, want one stop (56)", got)
 	}
 }
-
-// A resolved tab fragment wraps like the '\t' text character at its
-// given width (Base's input hands the wrapper its column widths).
-func TestLineWrapperTabFragmentTakesItsWidth(t *testing.T) {
-	ta := NewTestApp()
-	window := NewTestWindow(ta.App(), Size{Width: 400, Height: 200})
-	t.Cleanup(func() { CloseTestWindow(window) })
-	wrapper, err := window.TextSystem().LineWrapper(DefaultFontDescriptor(), 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The test text system's advance is 6px per character at 10px.
-	text := []LineFragment{LineFragmentText("ab"), LineFragmentText("\t"), LineFragmentText("cd")}
-	if got := wrapper.WrapLine(text, 30); len(got) != 0 {
-		t.Errorf("text tab (6px): boundaries %v, want none at 30px", got)
-	}
-	tab := []LineFragment{LineFragmentText("ab"), LineFragmentTab(30), LineFragmentText("cd")}
-	got := wrapper.WrapLine(tab, 30)
-	// Like the text '\t', the tab is a break candidate (a non-word,
-	// non-space character): the row breaks before it.
-	if want := []Boundary{{Ix: 2}, {Ix: 3}}; !slices.Equal(got, want) {
-		t.Errorf("resolved tab (30px): boundaries %v, want %v", got, want)
-	}
-}

@@ -26,7 +26,9 @@ package gpui
 //     reset_cursor_style; :5746-5760 dispatch_event's modality and
 //     propagation / prevent-default reset.
 //
-// Go adaptations (recorded in evidence/base/ticket06-*.json): the Rust
+// Go adaptations (recorded in evidence/base/ticket06-*.json, now in the
+// gpui-go-base repository — the evidence moved with Base in browser-core
+// ticket 75): the Rust
 // ClickEvent enum is a Kind-tagged struct (FileDropEvent's convention);
 // Rc<RefCell<..>> state cells are pointers retained in the element
 // state; the pinned StatefulInteractiveElement type restriction (on_click,

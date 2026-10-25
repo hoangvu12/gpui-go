@@ -1,6 +1,8 @@
 // Package richtextspec holds Base ticket 10's rich-text tests: the
-// pinned highlight semantics, the legacy LineWrapper and ShapedLine
-// facade, StyledText/TextLayout and the per-run paint transcripts.
+// pinned highlight semantics, the ShapedLine facade, StyledText/
+// TextLayout and the per-run paint transcripts. (The legacy LineWrapper
+// tests moved to the gpui-go-base repository with Base in browser-core
+// ticket 75.)
 //
 // This file is the deterministic slice: test windows drawn through the
 // real element pipeline with the deterministic test text system (the
@@ -217,7 +219,7 @@ func TestTextStyleHighlightAndToRun(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// The legacy LineWrapper (legacy text_system/line_wrapper.rs)
+// The ShapedLine facade on the deterministic text system
 // ---------------------------------------------------------------------------
 
 // newTestWindow opens a deterministic test window with an empty root.
@@ -228,77 +230,6 @@ func newTestWindow(t *testing.T) *gpui.Window {
 	t.Cleanup(func() { gpui.CloseTestWindow(window) })
 	return window
 }
-
-// TestWrapLine is the port of legacy line_wrapper.rs:836-982
-// test_wrap_line.
-func TestWrapLine(t *testing.T) {
-	window := newTestWindow(t)
-	wrapper, err := window.TextSystem().LineWrapper(gpui.FontDescriptor{Family: ".ZedMono", Weight: 400}, 16)
-	if err != nil {
-		t.Fatalf("LineWrapper: %v", err)
-	}
-	text := gpui.LineFragmentText
-	element := gpui.LineFragmentElement
-	b := func(ix int, indent uint32) gpui.Boundary { return gpui.Boundary{Ix: ix, NextIndent: indent} }
-	cases := []struct {
-		name      string
-		fragments []gpui.LineFragment
-		want      []gpui.Boundary
-	}{
-		{"words", []gpui.LineFragment{text("aa bbb cccc ddddd eeee")}, []gpui.Boundary{b(7, 0), b(12, 0), b(18, 0)}},
-		{"long word", []gpui.LineFragment{text("aaa aaaaaaaaaaaaaaaaaa")}, []gpui.Boundary{b(4, 0), b(11, 0), b(18, 0)}},
-		{"indented", []gpui.LineFragment{text("     aaaaaaa")}, []gpui.Boundary{b(7, 5), b(9, 5), b(11, 5)}},
-		{"spaces", []gpui.LineFragment{text("                            ")}, []gpui.Boundary{b(7, 0), b(14, 0), b(21, 0)}},
-		{"deep indent", []gpui.LineFragment{text("          aaaaaaaaaaaaaa")}, []gpui.Boundary{b(7, 0), b(14, 3), b(18, 3), b(22, 3)}},
-		{"multiple text fragments", []gpui.LineFragment{text("aa bbb "), text("cccc ddddd eeee")}, []gpui.Boundary{b(7, 0), b(12, 0), b(18, 0)}},
-		{"text and elements", []gpui.LineFragment{text("aa "), element(20, 1), text(" bbb "), element(30, 1), text(" cccc")}, []gpui.Boundary{b(5, 0), b(9, 0), b(11, 0)}},
-		{"leading element", []gpui.LineFragment{element(50, 1), text(" aaaa bbbb cccc dddd")}, []gpui.Boundary{b(2, 0), b(7, 0), b(12, 0), b(17, 0)}},
-		{"large element", []gpui.LineFragment{text("short text "), element(100, 1), text(" more text")}, []gpui.Boundary{b(6, 0), b(11, 0), b(12, 0), b(18, 0)}},
-		{"glue characters", []gpui.LineFragment{text("a b c‑d e")}, []gpui.Boundary{b(12, 0)}},
-	}
-	for _, c := range cases {
-		got := wrapper.WrapLine(c.fragments, 72)
-		if len(got) != len(c.want) {
-			t.Errorf("%s: boundaries = %v, want %v", c.name, got, c.want)
-			continue
-		}
-		for i := range got {
-			if got[i] != c.want[i] {
-				t.Errorf("%s: boundaries = %v, want %v", c.name, got, c.want)
-				break
-			}
-		}
-	}
-}
-
-// TestLineWrapperLetterSpacing pins the wrapper's tracking arithmetic
-// (legacy line_wrapper.rs:96-104, 135-143): letter spacing widens every
-// character after the first, so the same text wraps earlier.
-func TestLineWrapperLetterSpacing(t *testing.T) {
-	window := newTestWindow(t)
-	wrapper, err := window.TextSystem().LineWrapper(gpui.FontDescriptor{Family: ".ZedMono", Weight: 400}, 16)
-	if err != nil {
-		t.Fatalf("LineWrapper: %v", err)
-	}
-	fragments := []gpui.LineFragment{gpui.LineFragmentText("aaaaaaaaaaaa")}
-	// 9.6 per char: 7 chars fit 72 (67.2), the 8th overflows.
-	if got := wrapper.WrapLine(fragments, 72); len(got) == 0 || got[0].Ix != 7 {
-		t.Fatalf("untracked boundaries = %v, want the first at 7", got)
-	}
-	// +2 per following char: 9.6 + 6*11.6 = 79.2 > 72, so 6 chars fit.
-	wrapper.SetLetterSpacing(ptr(float32(2)))
-	if got := wrapper.WrapLine(fragments, 72); len(got) == 0 || got[0].Ix != 6 {
-		t.Fatalf("tracked boundaries = %v, want the first at 6", got)
-	}
-	wrapper.SetLetterSpacing(nil)
-	if got := window.TextSystem().LayoutWidth(gpui.FontDescriptor{Family: ".ZedMono"}, 16, 'm'); !near(got, 9.6, 1e-4) {
-		t.Fatalf("LayoutWidth('m') = %v, want the em width 9.6", got)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// The ShapedLine facade on the deterministic text system
-// ---------------------------------------------------------------------------
 
 // TestShapedLineGeometryTestSystem pins the legacy x/index semantics
 // (legacy line_layout.rs:56-114) over the deterministic glyph table:
