@@ -342,7 +342,7 @@ func ancestorBox(staticParents bool) *gpui.DivElement {
 			Top(gpui.Fraction(absPctTop)).
 			W(gpui.Px(absPctW)).
 			H(gpui.Px(absPctH)))
-	return gpui.Div().Flex().
+	return gpui.Div().
 		ID("ancestor").
 		DebugSelector("ancestor").
 		W(gpui.Px(ancestorWidth)).
@@ -359,7 +359,7 @@ func ancestorBox(staticParents bool) *gpui.DivElement {
 // padding 10) whose absolute child resolves against it directly — the
 // pin's behaviour, which the opt-in must not disturb.
 func controlBox() *gpui.DivElement {
-	return gpui.Div().Flex().
+	return gpui.Div().
 		ID("control").
 		DebugSelector("control").
 		W(gpui.Px(controlWidth)).
@@ -414,7 +414,7 @@ func chainS1(staticParents bool) *gpui.DivElement {
 // absoluteBox builds one absolutely positioned child with the given
 // id and color; the caller adds the insets and size.
 func absoluteBox(id string, color uint32) *gpui.DivElement {
-	return gpui.Div().Flex().
+	return gpui.Div().
 		ID(id).
 		DebugSelector(id).
 		Absolute().

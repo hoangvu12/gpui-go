@@ -296,7 +296,7 @@ func menuViewOf(firstID string, boxCount int, focusable, prevent, mouseKinds boo
 			// The colours model the page's source order: .menued comes
 			// after :focus, so a menued box keeps the menu colour even
 			// while focused — the Focus refinement follows the state.
-			box := gpui.Div().Flex().
+			box := gpui.Div().
 				ID(id).
 				DebugSelector(id).
 				Size(gpui.Px(boxWidth), gpui.Px(boxHeight)).

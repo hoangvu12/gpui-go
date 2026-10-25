@@ -310,9 +310,14 @@ type DefiniteLengthSize struct {
 type Display uint8
 
 const (
-	// DisplayBlock arranges children with the block layout algorithm.
+	// DisplayBlock arranges children with the block layout algorithm
+	// (the default — browser-core ticket 71, spec D6: a plain div stacks
+	// its children and an auto width fills the containing block, like
+	// HTML; a divergence toward CSS from the pin, whose default is
+	// Flex).
 	DisplayBlock Display = iota
-	// DisplayFlex arranges children with the flexbox algorithm (default).
+	// DisplayFlex arranges children with the flexbox algorithm (the
+	// pin's default; state it explicitly since browser-core 71).
 	DisplayFlex
 	// DisplayGrid arranges children with the CSS Grid algorithm.
 	DisplayGrid
@@ -1211,16 +1216,18 @@ type Style struct {
 }
 
 // DefaultStyle returns the reference Style::default() for the forwarded
-// subset: Flex display, Relative position, Visible overflow, zero
-// scrollbar width, auto insets/sizes/min/max/flex-basis, zero margins,
-// padding and borders, no alignment overrides, zero gap, Row direction,
-// NoWrap, grow 0, shrink 1, and no grid properties.
+// subset: Block display (browser-core 71, spec D6: the browser's div
+// default; the pin's default is Flex — the recorded divergence), Relative
+// position, Visible overflow, zero scrollbar width, auto insets/sizes/
+// min/max/flex-basis, zero margins, padding and borders, no alignment
+// overrides, zero gap, Row direction, NoWrap, grow 0, shrink 1, and no grid
+// properties.
 func DefaultStyle() Style {
 	zeroAbs := AbsoluteLength{Kind: AbsoluteLengthPx, Value: 0}
 	zeroDefinite := DefiniteLength{Kind: DefiniteLengthPx, Value: 0}
 	zeroLen := Length{Definite: zeroDefinite}
 	return Style{
-		Display:             DisplayFlex,
+		Display:             DisplayBlock,
 		Position:            PositionRelative,
 		OverflowX:           OverflowVisible,
 		OverflowY:           OverflowVisible,
@@ -1258,6 +1265,21 @@ func DefaultStyle() Style {
 		CornerRadii:        AbsoluteLengthCorners{TopLeft: zeroAbs, TopRight: zeroAbs, BottomRight: zeroAbs, BottomLeft: zeroAbs},
 		Outline:            OutlineStyle{Kind: OutlineAuto, Width: DefaultOutlineWidth},
 	}
+}
+
+// textNodeStyle is the measured text node's style: the default style
+// with the display pinned back to Flex. The Text and StyledText nodes
+// are measured leaves (no Taffy children), so their display cannot
+// change their own layout — a parent paragraph classifies them by their
+// published inline content, and Flex and Block behave identically in
+// the non-atomic arms — but pinning keeps the nodes exactly at the
+// pin's Style::default() while the div default is block (browser-core
+// 71, spec D6; the same reasoning pins Svg, List, UniformList, the
+// selection layer and the capture surface).
+func textNodeStyle() Style {
+	style := DefaultStyle()
+	style.Display = DisplayFlex
+	return style
 }
 
 // ---------------------------------------------------------------------------

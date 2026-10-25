@@ -158,6 +158,9 @@ func (e *appContainer) RequestLayout(global *gpui.GlobalElementID, inspector *gp
 		childIDs = append(childIDs, child.RequestLayout(w, app))
 	}
 	style := gpui.DefaultStyle()
+	// The container is a flex column (the gap needs flex; the div
+	// default is block since browser-core 71, spec D6).
+	style.Display = gpui.DisplayFlex
 	style.FlexDirection = gpui.FlexDirectionColumn
 	style.Gap = gpui.DefiniteLengthSize{Width: gpui.DefinitePx(8), Height: gpui.DefinitePx(8)}
 	style.Padding = gpui.DefiniteLengthEdges{
@@ -194,6 +197,8 @@ func (e *appContainer) Paint(global *gpui.GlobalElementID, inspector *gpui.Inspe
 // root stretch (window roots fill the window when their size is auto).
 func (e *appContainer) LayoutNodeStyle() (gpui.Style, bool) {
 	style := gpui.DefaultStyle()
+	// The flex column, stated explicitly (see RequestLayout).
+	style.Display = gpui.DisplayFlex
 	style.FlexDirection = gpui.FlexDirectionColumn
 	style.Gap = gpui.DefiniteLengthSize{Width: gpui.DefinitePx(8), Height: gpui.DefinitePx(8)}
 	style.Padding = gpui.DefiniteLengthEdges{

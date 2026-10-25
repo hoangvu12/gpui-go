@@ -172,7 +172,12 @@ type UniformListElement struct {
 // reference uniform_list + track_scroll, R:uniform_list.rs:22-55,
 // 686-691).
 func UniformList(handle *UniformListScrollHandle, count int, renderItems func(start, end int, w *Window, app *App) []AnyElement) *UniformListElement {
+	// The list's node is a leaf or a measured node (its items are
+	// placed by prepaint, not as Taffy children), so its display cannot
+	// change its layout; the pin is the pin's Style::default() (Flex)
+	// while the div default is block (browser-core 71, spec D6).
 	style := DefaultStyle()
+	style.Display = DisplayFlex
 	style.OverflowY = OverflowScroll
 	return &UniformListElement{
 		handle:      handle,

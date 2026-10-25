@@ -226,7 +226,7 @@ func InertView() func(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.
 		}
 		// b is the page's half-height inner box (its own colour), the
 		// click target that must pass through the inert cover to the root.
-		b := gpui.Div().Flex().
+		b := gpui.Div().
 			ID("b").
 			DebugSelector("b").
 			Size(gpui.Px(boxWidth), gpui.Px(boxHeight/2)).
@@ -548,7 +548,7 @@ func instrumentedRoot(log *parity.EventLog) *gpui.DivElement {
 // focusBox builds one focusable box: fixed size, the focus style, the
 // tracked handle and the key logging.
 func focusBox(id string, handle gpui.FocusHandle, log *parity.EventLog) *gpui.DivElement {
-	return gpui.Div().Flex().
+	return gpui.Div().
 		ID(id).
 		DebugSelector(id).
 		Size(gpui.Px(boxWidth), gpui.Px(boxHeight)).

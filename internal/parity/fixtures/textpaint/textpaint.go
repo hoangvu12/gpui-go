@@ -319,7 +319,7 @@ func sampleCell(col sampleColumn, size float32) *gpui.DivElement {
 // the base size while the rendered font size is explicit (the wrong
 // view's lever).
 func sampleCellAt(col sampleColumn, baseSize, renderSize float32) *gpui.DivElement {
-	return gpui.Div().Flex().
+	return gpui.Div().
 		ID(cellID(col, baseSize)).
 		DebugSelector(cellID(col, baseSize)).
 		W(gpui.Px(cellWidth)).
@@ -443,7 +443,7 @@ func italicRow(id, family string, style gpui.FontStyle) *gpui.DivElement {
 // italicRowText builds one italic fixture row with an explicit text
 // (the wrong view's lever).
 func italicRowText(id, family string, style gpui.FontStyle, text string) *gpui.DivElement {
-	return gpui.Div().Flex().
+	return gpui.Div().
 		ID(id).
 		DebugSelector(id).
 		W(gpui.Px(italicRowWidth)).

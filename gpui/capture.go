@@ -661,12 +661,15 @@ type SurfaceElement struct {
 
 // NewSurfaceElement creates a surface element drawing the given source
 // (the pinned surface() constructor): the object fit defaults to
-// Contain.
+// Contain. The style keeps the pin's Flex display (a childless leaf's
+// display cannot change its layout; browser-core 71, spec D6).
 func NewSurfaceElement(source SurfaceSource) *SurfaceElement {
+	style := DefaultStyle()
+	style.Display = DisplayFlex
 	return &SurfaceElement{
 		source:    source,
 		objectFit: ObjectFitContain,
-		style:     DefaultStyle(),
+		style:     style,
 	}
 }
 

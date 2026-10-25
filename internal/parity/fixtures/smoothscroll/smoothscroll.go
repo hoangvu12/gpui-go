@@ -269,7 +269,7 @@ func scrollerView(w *gpui.Window, focusable bool) gpui.AnyElement {
 		Bg(gpui.Rgb(scrollerBg))
 	for i := 0; i < rowCnt; i++ {
 		id := fmt.Sprintf("rrow%d", i)
-		row := gpui.Div().Flex().
+		row := gpui.Div().
 			ID(id).
 			DebugSelector(id).
 			Size(gpui.Px(scrollerW), gpui.Px(rowH)).
@@ -332,7 +332,7 @@ func WrongView(log *parity.EventLog, w *gpui.Window, app *gpui.App) gpui.AnyElem
 		Bg(gpui.Rgb(scrollerBg))
 	for i := 0; i < rowCnt; i++ {
 		id := fmt.Sprintf("rrow%d", i)
-		row := gpui.Div().Flex().
+		row := gpui.Div().
 			ID(id).
 			DebugSelector(id).
 			Size(gpui.Px(scrollerW), gpui.Px(rowH)).

@@ -825,6 +825,10 @@ func (h *Host) jsxElement(call goja.FunctionCall) goja.Value {
 	slot := false
 	switch typ := call.Argument(0).String(); typ {
 	case "div", "text":
+		// The host's two element tags share the nodeElement shape; the
+		// tag is recorded so the lowering can treat the text sugar's
+		// display differently from the div's (lower.go).
+		n.isTextElement = typ == "text"
 	case "Fragment":
 		n.kind = nodeFragment
 	case "slot":

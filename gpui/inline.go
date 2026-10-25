@@ -547,9 +547,22 @@ type inlineDocument struct {
 type inlineParagraph struct {
 	layoutID LayoutID
 	document *inlineDocument
-	// measurement is the cached (wrapWidth, layout) pair; nil before
-	// the first measure.
+	// measurement is the paragraph's last measured layout — the answer
+	// to the layout engine's last measure query, which is the layout
+	// the committed node size came from; prepaint and paint use it.
 	measurement *inlineParagraphMeasurement
+	// maxContent, minContent and definite cache the layouts by the wrap
+	// width's sizing mode (nil, zero, definite). The D2 sizing-mode
+	// note calls these "distinct entries"; the original single slot
+	// thrashed when the layout engine interleaves the queries (a
+	// paragraph child measured for the definite width, then for
+	// max-content, then definite again recomputed the native shaping
+	// on every query — a block-default tree of 200+ text paragraphs
+	// made each frame ~100ms of repeated shaping since browser-core 71
+	// flipped the default).
+	maxContent *inlineParagraphMeasurement
+	minContent *inlineParagraphMeasurement
+	definite   *inlineParagraphMeasurement
 	// paintOrigin is committed by prepaintChildren.
 	paintOrigin Point
 }
@@ -802,8 +815,9 @@ func (c *inlineParagraphCollector) finishParagraph() {
 		// (unwrapped, max-content), zero (min-content) and a definite
 		// width are distinct entries, so the min-content layout never
 		// answers a max-content or definite query.
-		if paragraph.measurement != nil && wrapWidthsEqual(paragraph.measurement.wrapWidth, wrapWidth) {
-			return paragraph.measurement.layout.size
+		if cached := paragraph.cachedMeasurement(wrapWidth); cached != nil {
+			paragraph.measurement = cached
+			return cached.layout.size
 		}
 		layout, err := frameTextSystem(c.window).layoutInline(inlineLayoutRequest{
 			text:             measuredDocument.text,
@@ -821,7 +835,9 @@ func (c *inlineParagraphCollector) finishParagraph() {
 		if err != nil {
 			panic(fmt.Sprintf("gpui: inline paragraph layout: %v", err))
 		}
-		paragraph.measurement = &inlineParagraphMeasurement{wrapWidth: wrapWidth, layout: &layout}
+		measured := &inlineParagraphMeasurement{wrapWidth: wrapWidth, layout: &layout}
+		paragraph.storeMeasurement(wrapWidth, measured)
+		paragraph.measurement = measured
 		return layout.size
 	})
 	if err != nil {
@@ -841,6 +857,38 @@ func wrapWidthsEqual(a, b *float32) bool {
 		return a == nil && b == nil
 	}
 	return *a == *b
+}
+
+// cachedMeasurement returns the cached layout for the wrap width's
+// sizing mode: the max-content slot for nil, the min-content slot for
+// zero, the definite slot for a width (only when the width matches —
+// the definite slot is replaced when the containing block resizes).
+// Nil when the mode has not been measured yet.
+func (p *inlineParagraph) cachedMeasurement(wrapWidth *float32) *inlineParagraphMeasurement {
+	switch {
+	case wrapWidth == nil:
+		return p.maxContent
+	case *wrapWidth == 0:
+		return p.minContent
+	default:
+		if p.definite != nil && wrapWidthsEqual(p.definite.wrapWidth, wrapWidth) {
+			return p.definite
+		}
+		return nil
+	}
+}
+
+// storeMeasurement caches the measurement in the wrap width's sizing
+// mode slot.
+func (p *inlineParagraph) storeMeasurement(wrapWidth *float32, m *inlineParagraphMeasurement) {
+	switch {
+	case wrapWidth == nil:
+		p.maxContent = m
+	case *wrapWidth == 0:
+		p.minContent = m
+	default:
+		p.definite = m
+	}
 }
 
 // requestInlineDivFrame is InlineDivFrameState::request_layout: collect

@@ -2950,9 +2950,14 @@ func (l *TextSelectionLayer) ID() (ElementID, bool) {
 // SourceLocation implements Element.
 func (l *TextSelectionLayer) SourceLocation() *SourceLocation { return nil }
 
-// RequestLayout requests an empty node (U:text_selection.rs:2534-2542).
+// RequestLayout requests an empty node (U:text_selection.rs:2534-2542)
+// at the pin's default display (Flex; browser-core 71, spec D6 — a
+// childless node's display cannot change its layout, but the node
+// stays exactly at the pin's value).
 func (l *TextSelectionLayer) RequestLayout(_ *GlobalElementID, _ *InspectorElementID, w *Window, _ *App) (LayoutID, struct{}) {
-	id, err := RequestElementLayout(w, DefaultStyle())
+	style := DefaultStyle()
+	style.Display = DisplayFlex
+	id, err := RequestElementLayout(w, style)
 	if err != nil {
 		panic(err)
 	}

@@ -144,10 +144,13 @@ new fixtures. The implementation lives in `internal/parity`:
    the PNG in beside the fixture, `//go:embed` it, and inject it into the HTML as a
    `data:` URI so the recorded `page.html` is self-contained (the object-fit fixture
    `internal/parity/fixtures/boxpaint` is the template; the gpui side builds the same
-   image with `gpui.NewImage` from the embedded bytes). **Flex defaults:** the pin's
-   default display is flex where the browser's is block — pin `display: flex` on the
-   page's containers (and `flex-shrink: 0` where a child must overflow) so both sides
-   place children identically.
+   image with `gpui.NewImage` from the embedded bytes). **The default display is
+   block** (browser-core 71, spec D6 — a deliberate divergence from the pin, whose
+   default is Flex): a plain div on either side stacks its children and an auto width
+   fills the containing block, so the page needs no `display: flex` pin to match the
+   view's default. State `display: flex` on a page container exactly when the view
+   states `.Flex()` (or `flex` in a className), and carry `flex-shrink: 0` where a
+   flex child must overflow.
    system UI font in gpui agree on this PC. The keyorder fixtures show the key-event
    rules: focusable elements need a `tabindex` on the page and
    `TrackFocus(handle).TabStop(true)` handles in the view (created once, outside the

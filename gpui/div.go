@@ -857,7 +857,7 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		cell.collapse = collapse
 		return size
 	}
-	layoutID, err := requestMeasuredLayoutOf(w, DefaultStyle(), measure)
+	layoutID, err := requestMeasuredLayoutOf(w, textNodeStyle(), measure)
 	if err != nil {
 		panic(fmt.Sprintf("gpui: text element request_layout: %v", err))
 	}
@@ -974,8 +974,8 @@ func (t *textElement) Paint(global *GlobalElementID, inspector *InspectorElement
 }
 
 // LayoutNodeStyle implements the root-stretch report (the text node's
-// style is the default style).
-func (t *textElement) LayoutNodeStyle() (Style, bool) { return DefaultStyle(), true }
+// style is the default style with the pin's Flex display).
+func (t *textElement) LayoutNodeStyle() (Style, bool) { return textNodeStyle(), true }
 
 // ---------------------------------------------------------------------------
 // Div (elements/div.rs Div / Interactivity, bounded to this slice)
@@ -1204,6 +1204,11 @@ type DivElement struct {
 }
 
 // Div creates a new div element (the fixture constructor spelling).
+// Like an HTML div, its default display is block (browser-core 71,
+// spec D6): children stack vertically and an auto width fills the
+// containing block, and inline children (text) form a paragraph. State
+// Flex (or another display) explicitly to lay children out with
+// flexbox, exactly like a browser stylesheet does.
 func Div() *DivElement {
 	return BindStyled(&DivElement{})
 }

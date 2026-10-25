@@ -434,7 +434,7 @@ func OffsetView(log *parity.EventLog) gpui.AnyElement {
 		// recorded text placement.
 		LineHeight(gpui.PhiLineHeight())
 	box := func(b outlineBox) *gpui.DivElement {
-		d := gpui.Div().Flex().
+		d := gpui.Div().
 			ID(b.id).
 			DebugSelector(b.id).
 			Size(gpui.Px(boxWidth), gpui.Px(boxHeight)).
@@ -477,7 +477,7 @@ func DashedView(log *parity.EventLog) gpui.AnyElement {
 		// The page's 1.618 line-height pin, mirrored (D1: the port's
 		// default is CSS normal; PhiLineHeight is the opt-in).
 		LineHeight(gpui.PhiLineHeight()).
-		Child(gpui.Div().Flex().
+		Child(gpui.Div().
 			ID("dashed").
 			DebugSelector("dashed").
 			Size(gpui.Px(200), gpui.Px(100)).
@@ -506,7 +506,7 @@ func FocusView(outlineNone bool) func(log *parity.EventLog, w *gpui.Window, app 
 			focus = gpui.NewFocusHandle(w).TabStop(true)
 			log.TrackFocus(focus, "box")
 		}
-		box := gpui.Div().Flex().
+		box := gpui.Div().
 			ID("box").
 			DebugSelector("box").
 			Size(gpui.Px(focusBoxWidth), gpui.Px(focusBoxHeight)).

@@ -1,0 +1,74 @@
+{
+  "name": "display-block",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-25T04:22:36Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "b1": {
+      "x": 40,
+      "y": 20,
+      "width": 200,
+      "height": 40
+    },
+    "b2": {
+      "x": 20,
+      "y": 60,
+      "width": 400,
+      "height": 40
+    },
+    "flex-sib": {
+      "x": 20,
+      "y": 250,
+      "width": 600,
+      "height": 40
+    },
+    "fs1": {
+      "x": 20,
+      "y": 250,
+      "width": 60,
+      "height": 24
+    },
+    "fs2": {
+      "x": 88,
+      "y": 250,
+      "width": 60,
+      "height": 24
+    },
+    "inner": {
+      "x": 40,
+      "y": 108,
+      "width": 372,
+      "height": 44
+    },
+    "nested": {
+      "x": 20,
+      "y": 100,
+      "width": 400,
+      "height": 60
+    },
+    "para": {
+      "x": 20,
+      "y": 220,
+      "width": 600,
+      "height": 30
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "stack": {
+      "x": 20,
+      "y": 20,
+      "width": 400,
+      "height": 200
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

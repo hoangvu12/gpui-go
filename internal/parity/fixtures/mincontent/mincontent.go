@@ -298,7 +298,7 @@ func styledTextSpan(rowID, spanID string) *gpui.DivElement {
 // wraps there.
 func shrinkRow() *gpui.DivElement {
 	return rowBox("row-shrink").
-		Child(gpui.Div().Flex().
+		Child(gpui.Div().
 			ID("shrink-fixed").
 			DebugSelector("shrink-fixed").
 			W(gpui.Px(shrinkFixedWidth)).

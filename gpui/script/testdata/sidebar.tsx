@@ -84,7 +84,9 @@ export function App() {
 			</div>
 			<div
 				id="counter"
-				className="mx-2 my-2 px-3 py-1.5 rounded-md bg-gray-700"
+				// flex: this row relied on the pre-71 default display; the
+				// TSX <div> default is block since browser-core 71 (D6).
+				className="flex mx-2 my-2 px-3 py-1.5 rounded-md bg-gray-700"
 				style={{ color: "#f9fafb", fontSize: 13 }}
 				onClick={() => clicks.set(clicks.get() + 1)}
 			>

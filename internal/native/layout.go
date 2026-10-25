@@ -428,9 +428,15 @@ type LayoutStyleRecord struct {
 }
 
 // NewLayoutStyleRecord returns a style record with every optional field
-// absent and every defaulted field carrying the gpui default (the record the
-// pinned gpui Style::default() forwards). It translates to exactly the
-// Taffy default style.
+// absent and every defaulted field carrying the Taffy default style — the
+// ABI-level default the pinned gpui Style::default() used to forward field
+// for field. Since browser-core 71 (spec D6) the Go DefaultStyle carries
+// Block where this record keeps Flex: the record stays the Taffy default
+// because it is the ABI's invariant base (the direct-record consumers —
+// the ABI and rev-15 field tests — build flex trees from it), and
+// styleToRecord always writes the style's own Display, so the record's
+// Display default is only reachable through that ABI surface, never
+// through a gpui Style.
 func NewLayoutStyleRecord() LayoutStyleRecord {
 	return LayoutStyleRecord{
 		Display:             DisplayFlex,

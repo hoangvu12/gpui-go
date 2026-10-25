@@ -307,7 +307,7 @@ ui/card.go:57:9: unknown class "itms-center"
    ```
 
    For rows of different heights, use `gpui.List` with `gpui.NewListState`. Do not build thousands of divs in Render.
-5. **Layout is flexbox and grid (Taffy).** GPUI's default style is not CSS's: a div with no display class is a flex row (no wrap, `shrink` 1), not a block. Write `flex` (row) or `flex flex-col` (column) explicitly, as Tailwind code usually does. The root view fills the window, so give its root div `size-full`. There are no viewport units and no z-index: later siblings paint on top, and overlays go in `gpui.Deferred` or `gpui.Anchored`.
+5. **Layout is flexbox, grid and block (Taffy).** A div's default display is `block`, like an HTML div (browser-core 71, spec D6): children stack vertically, an auto width fills the containing block, and text children form a paragraph. Write `flex` (row) or `flex flex-col` (column) explicitly when you want flexbox, as Tailwind code usually does. The root view fills the window, so give its root div `size-full`. There are no viewport units and no z-index: later siblings paint on top, and overlays go in `gpui.Deferred` or `gpui.Anchored`.
 6. **Text is a child.** `.Child("Save")` or `.Child(fmt.Sprintf("%d items", n))`. Text styles on a div apply to its text and are inherited by its children.
 
 ## A full example: a card with a button
