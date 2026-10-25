@@ -159,6 +159,7 @@ The palette is Tailwind CSS v3.4's default palette. It has 22 families (slate, g
 ## What Class supports
 
 - **Every zero-argument method that has a Tailwind class**, about 2,260 classes, named from the method names. This covers layout, flex, grid, spacing, sizing, position, insets, display, typography, borders, radii, shadows, rings, cursors and opacity steps. GPUI-only methods with no Tailwind class (negative padding, gap and sizes such as `PNeg4`; `MinSize4`, `MaxSize4`) have no class.
+- **Position**: `relative`, `absolute`, `fixed`, `sticky` and `static` (browser-core 33-35). The default position is `static` (browser-core 76, the CSS default; the pin's default was Relative — the recorded divergence), so an `absolute` child resolves against the nearest positioned ancestor: call `.Relative()` — or add the `relative` class — on the element that should be its containing block, exactly as in CSS. `fixed` places relative to the window; `sticky` needs a scroll-container ancestor to stick inside (browser-core 34).
 - **Spacing and sizing on the 0.25rem scale, any step.** `p-13`, `w-0.75` and `gap-7` work even without a method (`n` is `n/4` rem). The prefixes are `p px py pt pr pb pl`, `m mx my mt mr mb ml`, `gap gap-x gap-y`, `w h size min-w min-h max-w max-h`, `inset inset-x inset-y top right bottom left` and `basis`. Values can be `n`, `px`, `full`, a fraction `a/b`, `auto` (not for padding or gap), `[12px]`, `[1.5rem]`, `[50%]` or `[0]`. A leading `-` works for margins and insets only.
 - **max-w names**: `max-w-xs` … `max-w-7xl` (20rem … 80rem, the v3 scale), plus `max-w-none` and `max-h-none`.
 - **Borders**: `border`, `border-t|r|b|l|x|y` (1px), `border-<n>`, `border-[3px]`, `border-t-[3px]`, `border-solid`, `border-dashed`.
@@ -188,8 +189,6 @@ A rejected class is skipped, the rest of the string still applies, and the reaso
 | `space-x-*`, `space-y-*` | Use `gap-*` on the flex parent. |
 | `divide-*` | Give each child after the first a `border-t` (or `border-l`), or put separator elements between them. |
 | `pointer-events-*` | Not supported. |
-| `fixed` | Use `absolute` inside a `relative` ancestor that fills the window, or `gpui.Deferred` / `gpui.Anchored` for overlays. |
-| `sticky`, `static` | Not supported. Elements are relative unless absolute. |
 | `inline-block`, `inline-grid`, `table*`, `contents`, `flow-root`, `list-item` | Use `flex`, `grid`, `block`, `inline` or `inline-flex`. |
 | `outline-solid`, `outline-dotted`, `outline-double`, `outline-hidden` | Only `outline`, `outline-<n>`, `outline-offset-<n>`, `outline-<color>`, `outline-none` and `outline-dashed` are supported: the native scene's border records are solid or dashed only (a recorded limitation, ticket 48). Negative outline offsets have no class; call `.OutlineOffset(-3)`. |
 | `ring-offset-*`, `ring-inset` | Not supported. Use `inset-ring-*` for an inset ring. |

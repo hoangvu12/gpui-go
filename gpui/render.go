@@ -309,7 +309,19 @@ func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawSt
 // draws (3474-3475).
 func drawRoots(w *Window, app *App, ds *windowDrawState, frame *frameDrawState) error {
 	root := viewElementOf(ds.root)
+	// browser-core 76 (spec D3): the root element's request walk is the
+	// window's initial-containing-block stand-in. Chromium's LayoutView
+	// is always a fixed — and therefore absolute — container
+	// (ComputeIsFixedContainer's IsA<LayoutView> arm,
+	// core/layout/layout_object.cc:2035-2041), so the root opens its
+	// containing-block scope even when its own style is static: a
+	// static chain with no positioned ancestor resolves against the
+	// root node (the ICB) instead of falling back to the direct parent.
+	// The flag is consumed by the root's own scope open (or discarded by
+	// a non-participating root's plain request; containingblock.go).
+	frame.icbPending = true
 	layoutID := root.RequestLayout(w, app)
+	frame.icbPending = false
 
 	// The root size: the viewport, shrunk by the inspector panel's
 	// width when the window's inspector is on (window.rs 3403-3415:

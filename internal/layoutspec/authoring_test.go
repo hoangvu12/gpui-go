@@ -114,7 +114,7 @@ func TestAuthoringGridAtPlacesByLine(t *testing.T) {
 // from its positioned ancestor's origin and leaves the flow (the flow
 // sibling below it starts at the parent's top).
 func TestAuthoringAbsoluteOffsetsFromAncestor(t *testing.T) {
-	window := drawAuthoringCorpus(t, gpui.Div().Flex().
+	window := drawAuthoringCorpus(t, gpui.Div().Relative().Flex().
 		W(gpui.PxLength(200)).
 		H(gpui.PxLength(100)).
 		Child(gpui.Div().Flex().

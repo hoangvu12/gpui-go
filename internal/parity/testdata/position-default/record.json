@@ -1,0 +1,74 @@
+{
+  "name": "position-default",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-25T12:18:37Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "chain-inner": {
+      "x": 246,
+      "y": 40,
+      "width": 40,
+      "height": 30
+    },
+    "chain-outer": {
+      "x": 240,
+      "y": 0,
+      "width": 60,
+      "height": 50
+    },
+    "child-a": {
+      "x": 18,
+      "y": 14,
+      "width": 40,
+      "height": 30
+    },
+    "child-b": {
+      "x": 128,
+      "y": 108,
+      "width": 50,
+      "height": 36
+    },
+    "grandparent": {
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 160
+    },
+    "parent": {
+      "x": 30,
+      "y": 60,
+      "width": 120,
+      "height": 90
+    },
+    "parent2": {
+      "x": 38,
+      "y": 60,
+      "width": 60,
+      "height": 50
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "root-abs-bl": {
+      "x": 30,
+      "y": 354,
+      "width": 36,
+      "height": 22
+    },
+    "root-abs-br": {
+      "x": 576,
+      "y": 356,
+      "width": 40,
+      "height": 26
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

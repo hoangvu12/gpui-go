@@ -23,7 +23,13 @@ type vcPanel struct {
 
 func (p *vcPanel) Render(w *Window, cx *Context[vcPanel]) AnyElement {
 	index, clicks := p.index, p.clicks
+	// Relative: the panel hosts panel-0's deferred ABSOLUTE overlay, so
+	// it is the overlay's containing block (browser-core 76's position
+	// codemod rule — a parent that pins its absolute children states
+	// its position; the cached side lays the subtree out through the
+	// standalone-root path, which keeps the pin rule either way).
 	panel := Div().ID(fmt.Sprintf("panel-%d", p.index)).KeyContext(fmt.Sprintf("Panel%d", p.index)).
+		Relative().
 		SizeFull().Flex().FlexCol().Gap(Px(4)).P(Px(4)).
 		Bg(Rgb(0x1e293b)).Border1().BorderColor(Rgb(0x334155)).
 		Child(Div().Flex().ID("button").W(Px(80)).H(Px(20)).Bg(Rgb(0x2563eb)).

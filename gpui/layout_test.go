@@ -337,14 +337,26 @@ func TestParseEnums(t *testing.T) {
 // the default Style carries Block (the browser div default) while the
 // ABI record's default remains the Taffy default (Flex, the pin's
 // value), so a default node behaves like a browser div, and a record
-// built directly from the ABI keeps the pin's translation.
+// built directly from the ABI keeps the pin's translation. The
+// position is the second divergence (browser-core 76, spec D3): the
+// default Style carries Static (the CSS default; the pin's default is
+// Relative), which the record translation maps onto the Relative tag
+// (Taffy has no static value) with the insets zeroed — for the default
+// style's auto insets the zeroed (absent) tags are bit-identical to
+// the auto edges, so the record still equals the default record.
 func TestStyleToRecordDefaults(t *testing.T) {
 	defaultStyleValue := DefaultStyle()
+	if defaultStyleValue.Position != PositionStatic {
+		t.Fatalf("default style position = %v, want Static (the D3 divergence; the pin's default is Relative)", defaultStyleValue.Position)
+	}
 	ctx := NewTestLayoutContext()
 	got := styleToRecord(&defaultStyleValue, ctx)
 	want := mustDefaultRecord(t)
 	if got.Display != native.DisplayBlock {
 		t.Errorf("default style record display = %d, want the block tag (the D6 divergence)", got.Display)
+	}
+	if got.Position != native.PositionRelative {
+		t.Errorf("default style record position = %d, want the relative tag (static maps onto the pin's Relative; Taffy has no static value)", got.Position)
 	}
 	got.Display = native.DisplayFlex
 	if got != want {
@@ -386,11 +398,15 @@ func sizeLens(w, h native.LayoutLen) native.LayoutSize {
 // TestStyleToRecordLengths pins the unit conversion: definite logical
 // lengths become device pixels with the pinned rounding (rem resolved
 // through the request-time rem scope first), percentages stay fractions,
-// auto stays auto.
+// auto stays auto. The style states its position (relative) so the
+// insets translate: a static box's insets are zeroed instead (the
+// static semantics live in the position tests and
+// TestStyleToRecordDefaults).
 func TestStyleToRecordLengths(t *testing.T) {
 	ctx := NewTestLayoutContext() // scale 2, rem 16
 
 	style := DefaultStyle()
+	style.Position = PositionRelative
 	style.Size = LengthSize{Width: PxLength(100), Height: RemsLength(1.5)}
 	style.MinSize.Width = DefiniteLengthOf(Fraction(0.5))
 	style.MaxSize.Width = AutoLength()

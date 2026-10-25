@@ -1,6 +1,9 @@
 package gpui
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 // browser-core ticket 33 (spec D3): position: static, the opt-in.
 // These tests pin the containing-block rule — an absolute child of a
@@ -64,7 +67,7 @@ func cbAbsolute(selector string, left, top float32) *DivElement {
 // insets against the nearest positioned ancestor's PADDING box
 // (css-position-3 §2.1; Chromium decides containership from position
 // != static, LayoutObject::ComputeIsAbsoluteContainer,
-// core/layout/layout_object.cc:2069-2081). The ancestor is at (10, 20)
+// core/layout/layout_object.cc:2072-2082). The ancestor is at (10, 20)
 // with border 4 and padding 6, so its padding box origin is (14, 24)
 // and the child's left/top 12/8 lands at (26, 32). Under the pin (the
 // direct parent, whose content origin is (20, 30)) the child would sit
@@ -161,15 +164,19 @@ func TestStaticChainDefersToTheRoot(t *testing.T) {
 	}
 }
 
-// TestAbsoluteUnderDefaultParentKeepsPinBehaviour pins the
-// bit-for-bit default: without the opt-in, an absolute child resolves
-// against its DIRECT parent's padding box (the pin's behaviour — the
-// research README L2, Taffy compute/flexbox.rs:2231-2239). A 100x80
-// parent at (0, 0) with border 4 has its padding box origin at (4, 4),
-// so left/top 10/6 puts the child at (14, 10).
+// TestAbsoluteUnderDefaultParentKeepsPinBehaviour pins the migration
+// rule on the pre-flip default shape: a parent of an absolute child
+// states .Relative() (the codemod's pin — exactly what this root now
+// carries), so the child resolves against its DIRECT parent's padding
+// box, the pin's rule, unchanged by the flip. A 100x80 parent at
+// (0, 0) with border 4 has its padding box origin at (4, 4), so
+// left/top 10/6 puts the child at (14, 10). The static-root ICB arm
+// (the same tree with the pin removed) is pinned by
+// TestStaticRootIsTheInitialContainingBlock: the root absorbs its own
+// absolute children either way.
 func TestAbsoluteUnderDefaultParentKeepsPinBehaviour(t *testing.T) {
 	cx := cbWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
-		return Div().Flex().
+		return Div().Relative().Flex().
 			Size(Px(100), Px(80)).
 			DebugSelector("root").
 			Border(Px(4)).
@@ -183,7 +190,7 @@ func TestAbsoluteUnderDefaultParentKeepsPinBehaviour(t *testing.T) {
 			IntoElement()
 	})
 	if b := cbBounds(t, cx, "abs"); b.Origin != (Point{X: 14, Y: 10}) || b.Size != (Size{Width: 50, Height: 40}) {
-		t.Fatalf("absolute under a default (relative) parent = %+v, want origin (14, 10) size 50x40 (the pin's direct-parent rule)", b)
+		t.Fatalf("absolute under a relative parent = %+v, want origin (14, 10) size 50x40 (the pin's direct-parent rule)", b)
 	}
 }
 
@@ -248,14 +255,17 @@ func TestStaticElementStaysInFlowAndIgnoresInsets(t *testing.T) {
 	}
 }
 
-// TestStaticRootFallsBackToDirectParent pins the documented fallback:
-// a static element with no positioned scope above it (here: the ROOT
-// element itself opts into static, so nothing opens a scope) attaches
-// its absolute children to itself — the pin's behaviour — rather than
-// leaving them unattached. The root is the port's initial containing
-// block stand-in only when it stays positioned; ticket 76 (the default
-// flip) revisits the root's ICB role.
-func TestStaticRootFallsBackToDirectParent(t *testing.T) {
+// TestStaticRootIsTheInitialContainingBlock pins the root's ICB role
+// under the flipped default (browser-core 76): the ROOT element opts
+// into static, and its absolute children still resolve against IT —
+// the root node stands in for Chromium's LayoutView, which is always
+// an absolute container (ComputeIsFixedContainer's IsA<LayoutView>
+// arm, layout_object.cc:2035-2041) no matter what the html element's
+// own position says. The pre-76 documented fallback (a static root
+// attaching absolutes to the direct parent) no longer exists; the
+// geometry is unchanged either way here because the direct parent IS
+// the root.
+func TestStaticRootIsTheInitialContainingBlock(t *testing.T) {
 	cx := cbWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
 		return Div().Flex().
 			Size(Px(100), Px(80)).
@@ -271,7 +281,7 @@ func TestStaticRootFallsBackToDirectParent(t *testing.T) {
 			IntoElement()
 	})
 	if b := cbBounds(t, cx, "abs"); b.Origin != (Point{X: 8, Y: 8}) || b.Size != (Size{Width: 40, Height: 30}) {
-		t.Fatalf("absolute under a static ROOT = %+v, want origin (8, 8) size 40x30 (the direct-parent fallback)", b)
+		t.Fatalf("absolute under a static ROOT = %+v, want origin (8, 8) size 40x30 (the root is the ICB)", b)
 	}
 }
 
@@ -299,5 +309,80 @@ func TestPositionStaticValue(t *testing.T) {
 	style = d.computeStyle()
 	if style.Position != PositionRelative {
 		t.Fatalf("class \"relative\" leaves position %v, want Relative", style.Position)
+	}
+}
+
+// TestDefaultParentDefersAbsoluteToPositionedAncestor pins the FLIPPED
+// default (browser-core 76, spec D3's second step): with no Static()
+// anywhere, an unpositioned parent is static by default, so its
+// absolute child resolves against the nearest positioned ancestor —
+// exactly the opt-in rule of ticket 33, now the default. The geometry
+// is cbAncestor's minus the explicit Static(): the child lands at
+// (26, 32), against the ancestor's padding box.
+func TestDefaultParentDefersAbsoluteToPositionedAncestor(t *testing.T) {
+	cx := cbWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
+		ancestor := Div().
+			Size(Px(180), Px(120)).
+			Relative().
+			Ml(Px(10)).
+			Mt(Px(20)).
+			Border(Px(4)).
+			P(Px(6)).
+			Block()
+		parent := Div().Size(Px(100), Px(60)).Block()
+		parent = parent.Child(cbAbsolute("abs", 12, 8))
+		root := Div().Flex().Size(Px(200), Px(160)).DebugSelector("root")
+		return root.Child(ancestor.Child(parent)).IntoElement()
+	})
+	if b := cbBounds(t, cx, "abs"); b.Origin != (Point{X: 26, Y: 32}) || b.Size != (Size{Width: 40, Height: 30}) {
+		t.Fatalf("absolute under a default (static) parent = %+v, want origin (26, 32) size 40x30 (the ancestor's padding box)", b)
+	}
+}
+
+// TestListRowKeepsItsAbsoluteChildrenUnderTheStaticDefault pins the
+// standalone-root rule (browser-core 76): List/UniformList/virtual-list
+// items are laid out as their own roots (LayoutAsRoot), so their
+// static-by-default rows keep the pin's direct-parent rule for
+// absolute children — the badge stays inside its row instead of
+// escaping into the enclosing positioned ancestor's scope. Item 2
+// sits at y=40 in the 20px rows; its badge lands at the row's origin
+// plus (4, 2).
+func TestListRowKeepsItsAbsoluteChildrenUnderTheStaticDefault(t *testing.T) {
+	st := NewListState(4, 0)
+	cx := cbWindow(t, func(v *harnessView, w *Window, cx *Context[harnessView]) AnyElement {
+		list := List(st, func(ix int, w *Window, app *App) AnyElement {
+			selector := fmt.Sprintf("row-%d", ix)
+			badge := fmt.Sprintf("badge-%d", ix)
+			// Static is stated explicitly (the codemod's documented escape
+			// form): the row is static BY DESIGN, and its absolute badge
+			// stays inside it because the row is a standalone root.
+			return Div().Static().Flex().
+				ID(selector).
+				DebugSelector(selector).
+				W(Px(120)).
+				H(Px(20)).
+				Child(Div().Flex().
+					ID(badge).
+					DebugSelector(badge).
+					Absolute().
+					Left(Px(4)).
+					Top(Px(2)).
+					W(Px(10)).
+					H(Px(8)).
+					IntoElement()).
+				IntoElement()
+		})
+		// The wrapper is positioned: without the standalone-root detach
+		// (drawable.layoutAsRoot) the rows' badges would defer into its
+		// scope and resolve against the wrapper instead of their rows.
+		return Div().Flex().Relative().SizeFull().
+			Child(list.SizeFull()).
+			IntoElement()
+	})
+	if b := cbBounds(t, cx, "badge-2"); b.Origin != (Point{X: 4, Y: 42}) || b.Size != (Size{Width: 10, Height: 8}) {
+		t.Fatalf("badge-2 = %+v, want origin (4, 42) size 10x8 (inside its row, the row at y=40)", b)
+	}
+	if b := cbBounds(t, cx, "row-2"); b.Origin != (Point{X: 0, Y: 40}) || b.Size != (Size{Width: 120, Height: 20}) {
+		t.Fatalf("row-2 = %+v, want origin (0, 40) size 120x20", b)
 	}
 }

@@ -1217,8 +1217,12 @@ type Style struct {
 
 // DefaultStyle returns the reference Style::default() for the forwarded
 // subset: Block display (browser-core 71, spec D6: the browser's div
-// default; the pin's default is Flex — the recorded divergence), Relative
-// position, Visible overflow, zero scrollbar width, auto insets/sizes/
+// default; the pin's default is Flex — the recorded divergence), Static
+// position (browser-core 76, spec D3: the CSS default; the pin's
+// default is Relative — the second recorded divergence — so an
+// absolute child resolves against the nearest positioned ancestor,
+// and insets on a default-position element are ignored), Visible
+// overflow, zero scrollbar width, auto insets/sizes/
 // min/max/flex-basis, zero margins, padding and borders, no alignment
 // overrides, zero gap, Row direction, NoWrap, grow 0, shrink 1, and no grid
 // properties.
@@ -1228,7 +1232,7 @@ func DefaultStyle() Style {
 	zeroLen := Length{Definite: zeroDefinite}
 	return Style{
 		Display:             DisplayBlock,
-		Position:            PositionRelative,
+		Position:            PositionStatic,
 		OverflowX:           OverflowVisible,
 		OverflowY:           OverflowVisible,
 		ScrollbarWidth:      zeroAbs,
