@@ -4,7 +4,7 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 10 (Claude Code)
 Blocked by: 71, 72, 73, 74
 Triage: ready-for-agent
@@ -22,6 +22,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-25, orchestrator 10: verified and merged (5943c13; the new repo's initial commit is 5c4aa9b). gpui-go on the merged tree: `go vet ./...` and `go build ./...` are clean, and `displaycodemod -check` reports nothing to do. `go test -p 1 -count=1 ./...`: 92 packages ok; portfixture TestFx0004 (font count) fails, and clipspec failed intermittently under OS clipboard contention (it passed on a later run alone; a plain Get-Clipboard works). gpui-go-base against that tree: vet, build and `go test -p 1 -count=1 ./...` all ok (10 packages); `basecoverage -check` is current (1238 tests, 0 gaps). The new repo has no remote. Resolved for the local split; the GitHub step stays open (unticked) until the user's go-ahead. NOTE for that step: zterm and the gallery are committed in gpui-go-base's history, so a public push must first drop them from history (e.g. re-import without examples/zterm and examples/base-gallery), not just from the tip.
 
 ## Answer
 
