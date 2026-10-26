@@ -82,7 +82,7 @@ func TestSameEngineReentryRejectedFromMeasure(t *testing.T) {
 
 	var nestedComputeErr, cachedBoundsErr, freshBoundsErr, requestErr error
 	var measured gpui.LayoutID
-	measured, err = engine.RequestMeasuredLayout(ctx, sizedBox(10, 10), func(req gpui.MeasureRequest) gpui.Size {
+	measured, err = engine.RequestMeasuredLayout(ctx, sizedBox(10, 10), func(req gpui.MeasureRequest) gpui.MeasuredSize {
 		nestedComputeErr = engine.ComputeLayout(ctx, firstRoot, gpui.AvailableSize{
 			Width:  gpui.DefiniteAvailableSpace(40),
 			Height: gpui.DefiniteAvailableSpace(40),
@@ -90,7 +90,7 @@ func TestSameEngineReentryRejectedFromMeasure(t *testing.T) {
 		_, cachedBoundsErr = engine.LayoutBounds(ctx, firstRoot)
 		_, freshBoundsErr = engine.LayoutBounds(ctx, measured)
 		_, requestErr = engine.RequestLayout(ctx, sizedBox(1, 1))
-		return gpui.Size{Width: 10, Height: 10}
+		return gpui.MeasuredSize{Size: gpui.Size{Width: 10, Height: 10}}
 	})
 	if err != nil {
 		t.Fatalf("RequestMeasuredLayout: %v", err)
@@ -162,7 +162,7 @@ func TestIndependentEngineNestingAllowedFromMeasure(t *testing.T) {
 
 	var nestedErr error
 	var nestedBounds gpui.Bounds
-	measured, err := engineA.RequestMeasuredLayout(ctx, sizedBox(10, 10), func(req gpui.MeasureRequest) gpui.Size {
+	measured, err := engineA.RequestMeasuredLayout(ctx, sizedBox(10, 10), func(req gpui.MeasureRequest) gpui.MeasuredSize {
 		// Compute engine B's tree from inside engine A's measure callback.
 		nestedErr = engineB.ComputeLayout(ctx, bTree, gpui.AvailableSize{
 			Width:  gpui.DefiniteAvailableSpace(40),
@@ -171,7 +171,7 @@ func TestIndependentEngineNestingAllowedFromMeasure(t *testing.T) {
 		if nestedErr == nil {
 			nestedBounds, nestedErr = engineB.LayoutBounds(ctx, bChild)
 		}
-		return gpui.Size{Width: 10, Height: 10}
+		return gpui.MeasuredSize{Size: gpui.Size{Width: 10, Height: 10}}
 	})
 	if err != nil {
 		t.Fatalf("engineA.RequestMeasuredLayout: %v", err)

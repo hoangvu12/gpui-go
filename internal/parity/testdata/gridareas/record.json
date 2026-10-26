@@ -1,0 +1,44 @@
+{
+  "name": "gridareas",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-26T17:05:22Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "areas": {
+      "x": 16,
+      "y": 16,
+      "width": 300,
+      "height": 80
+    },
+    "head": {
+      "x": 16,
+      "y": 16,
+      "width": 300,
+      "height": 30
+    },
+    "main": {
+      "x": 136,
+      "y": 46,
+      "width": 180,
+      "height": 50
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "side": {
+      "x": 16,
+      "y": 46,
+      "width": 120,
+      "height": 50
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

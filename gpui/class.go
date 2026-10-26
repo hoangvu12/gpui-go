@@ -560,6 +560,7 @@ var classStages = []classStage{
 	borderClass,
 	opacityClass,
 	gridClass,
+	gridAreaClass,
 	aspectClass,
 	blurClass,
 	gradientClass,
@@ -1161,7 +1162,10 @@ func opacityClass(b *StyleBuilder, u string) (bool, string) {
 	return true, ""
 }
 
-// gridClass applies grid templates and placements with a count.
+// gridClass applies grid templates and placements with a count, and
+// the arbitrary track lists (browser-core 42): grid-cols-[240px_1fr]
+// and grid-rows-[auto_auto] — the underscores unescape to spaces like
+// every Tailwind arbitrary value, then parse as a CSS track list.
 func gridClass(b *StyleBuilder, u string) (bool, string) {
 	for _, g := range []struct {
 		prefix string
@@ -1180,14 +1184,69 @@ func gridClass(b *StyleBuilder, u string) (bool, string) {
 		if !ok {
 			continue
 		}
+		// The arbitrary track list: grid-cols-[240px_1fr].
+		if inner, ok := arbitrary(v); ok {
+			tracks, err := parseTrackListText(tailwindUnescape(inner))
+			if err != nil {
+				return true, g.prefix + "[…] takes a track list, like [240px_1fr]: " + err.Error()
+			}
+			if len(tracks) > 256 {
+				return true, g.prefix + "[…] takes at most 256 tracks"
+			}
+			if g.prefix == "grid-cols-" {
+				b.GridColsList(tracks...)
+			} else {
+				b.GridRowsList(tracks...)
+			}
+			return true, ""
+		}
 		n, ok := parseCount(v)
 		if !ok || n == 0 || n > math.MaxInt16 {
-			return true, g.prefix + "… takes a count; grid templates other than repeat(n) are not supported"
+			return true, g.prefix + "… takes a count or a track list, like [240px_1fr] (other grid templates than repeat(n) need the brackets)"
 		}
 		g.apply(int16(n))
 		return true, ""
 	}
 	return false, ""
+}
+
+// gridAreaClass applies the named grid area surface (browser-core 42):
+// grid-areas-["head_head"_"side_main"] sets the container's template
+// (the underscores unescape to spaces, restoring the CSS quoted rows)
+// and grid-area-[head] places the item in the named area.
+func gridAreaClass(b *StyleBuilder, u string) (bool, string) {
+	if inner, ok := strings.CutPrefix(u, "grid-areas-"); ok {
+		value, ok := arbitrary(inner)
+		if !ok {
+			// A bare word is not a template: the class needs the brackets.
+			return true, "grid-areas-… takes a bracketed template, like [\"head_head\"_\"side_main\"]"
+		}
+		template, err := ParseGridTemplateAreas(tailwindUnescape(value))
+		if err != nil {
+			return true, "grid-areas-[…]: " + err.Error()
+		}
+		b.GridTemplateAreasValue(template)
+		return true, ""
+	}
+	if inner, ok := strings.CutPrefix(u, "grid-area-"); ok {
+		name, ok := arbitrary(inner)
+		if !ok {
+			return true, "grid-area-… takes a bracketed area name, like [head]"
+		}
+		if name == "" || !validGridAreaName(name) {
+			return true, "grid-area-[…] takes an area name"
+		}
+		b.GridArea(name)
+		return true, ""
+	}
+	return false, ""
+}
+
+// tailwindUnescape converts a Tailwind arbitrary value's underscores
+// back to spaces (the documented unescaping; a leading underscore keeps
+// a literal underscore, which grid values never need).
+func tailwindUnescape(inner string) string {
+	return strings.ReplaceAll(inner, "_", " ")
 }
 
 // aspectClass applies aspect-[4/3] and aspect-[1.5].

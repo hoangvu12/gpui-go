@@ -109,7 +109,7 @@ func TestLayoutServiceTableValidation(t *testing.T) {
 		name   string
 		mutate func(*layoutTable)
 	}{
-		{"service version", func(tb *layoutTable) { tb.serviceVersion = 2 }},
+		{"service version", func(tb *layoutTable) { tb.serviceVersion = 3 }},
 		{"table size", func(tb *layoutTable) { tb.sizeOfTable = 999 }},
 		{"table alignment", func(tb *layoutTable) { tb.alignOfTable = 4 }},
 		{"style record size", func(tb *layoutTable) { tb.sizeOfStyleRecord = 340 }},
@@ -199,8 +199,20 @@ func TestLayoutRecordBinaryLayout(t *testing.T) {
 	if got := unsafe.Offsetof(measureResponseRec{}.baselinePresent); got != 12 {
 		t.Errorf("offsetof(measureResponseRec.baselinePresent) = %d, want 12", got)
 	}
-	if got := unsafe.Sizeof(layoutTable{}); got != 168 {
-		t.Errorf("sizeof(layoutTable) = %d, want 168", got)
+	if got := unsafe.Sizeof(layoutTable{}); got != 184 {
+		t.Errorf("sizeof(layoutTable) = %d, want 184", got)
+	}
+	if got := unsafe.Offsetof(layoutTable{}.nodeSetGridTemplateArea); got != 120 {
+		t.Errorf("offsetof(layoutTable.nodeSetGridTemplateArea) = %d, want 120", got)
+	}
+	if got := unsafe.Offsetof(layoutTable{}.nodeSetGridArea); got != 128 {
+		t.Errorf("offsetof(layoutTable.nodeSetGridArea) = %d, want 128", got)
+	}
+	if got := unsafe.Offsetof(layoutTable{}.serviceVersion); got != 136 {
+		t.Errorf("offsetof(layoutTable.serviceVersion) = %d, want 136", got)
+	}
+	if got := unsafe.Sizeof(LayoutGridAreaRecord{}); got != 24 {
+		t.Errorf("sizeof(LayoutGridAreaRecord) = %d, want 24", got)
 	}
 }
 

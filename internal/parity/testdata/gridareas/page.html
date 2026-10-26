@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		padding: 16px;
+		box-sizing: border-box;
+		font: 16px/40px "Segoe UI", system-ui, sans-serif;
+		color: #0f172a;
+	}
+	.grid {
+		box-sizing: border-box;
+		display: grid;
+		grid-template-columns: 240px 1fr;
+		background: #e2e8f0;
+	}
+	.cell {
+		box-sizing: border-box;
+		background: #dbeafe;
+	}
+
+	.areas {
+		box-sizing: border-box;
+		display: grid;
+		grid-template-columns: 120px 1fr;
+		grid-template-areas: "head head" "side main";
+		width: 300px;
+		background: #e2e8f0;
+	}
+	.areas .cell { box-sizing: border-box; background: #dbeafe; }
+</style>
+</head>
+<body data-id="root">
+	<div class="areas" data-id="areas">
+		<div class="cell" data-id="head" style="grid-area: head; height: 30px"></div>
+		<div class="cell" data-id="side" style="grid-area: side; height: 50px"></div>
+		<div class="cell" data-id="main" style="grid-area: main; height: 50px"></div>
+	</div>
+</body>
+</html>

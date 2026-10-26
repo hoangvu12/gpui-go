@@ -285,7 +285,11 @@ type textLayoutInner struct {
 	// under (nil: not truncated).
 	truncateWidth *float32
 	size          *Size
-	bounds        *Bounds
+	// baseline is the measured document's first baseline (browser-core
+	// 42; nil when the document has no line box) — cached with the
+	// shape so a cache hit answers a baseline query without re-shaping.
+	baseline *float32
+	bounds   *Bounds
 }
 
 // layout requests the measured node (R:elements/text.rs:887-1000).
@@ -302,7 +306,7 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 	text = applyTextTransformPreservingByteLen(text, textStyle.TextTransform)
 
 	state := l.state
-	measure := func(req MeasureRequest) Size {
+	measure := func(req MeasureRequest) MeasuredSize {
 		// evaluate_wrap_width (R:elements/text.rs:809-827), with the D2
 		// min-content rule (browser-core 32): a min-content available
 		// width wraps at width zero — every break opportunity — so the
@@ -337,11 +341,11 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 		if inner := state.inner; inner != nil && inner.size != nil && truncation.Width == nil && inner.truncateWidth == nil {
 			if minContent {
 				if inner.minContent {
-					return *inner.size
+					return MeasuredSize{Size: *inner.size, FirstBaseline: inner.baseline}
 				}
 			} else if !inner.minContent &&
 				(wrapWidth == nil && inner.wrapWidth == nil || wrapWidth != nil && inner.wrapWidth != nil && *wrapWidth == *inner.wrapWidth) {
-				return *inner.size
+				return MeasuredSize{Size: *inner.size, FirstBaseline: inner.baseline}
 			}
 		}
 		seam := frameTextSystem(w)
@@ -378,6 +382,10 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 			// inline_layout_algorithm.cc:1488-1492).
 			size = Size{}
 		}
+		var baseline *float32
+		if effective != "" {
+			baseline = firstTextBaseline(document, lineHeight)
+		}
 		state.inner = &textLayoutInner{
 			len:           len(text),
 			text:          text,
@@ -389,8 +397,9 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 			minContent:    minContent,
 			truncateWidth: truncation.Width,
 			size:          &size,
+			baseline:      baseline,
 		}
-		return size
+		return MeasuredSize{Size: size, FirstBaseline: baseline}
 	}
 	layoutID, err := requestMeasuredLayoutOf(w, textNodeStyle(), measure)
 	if err != nil {

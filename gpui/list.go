@@ -249,7 +249,7 @@ func (u *UniformListElement) RequestLayout(global *GlobalElementID, inspector *I
 		itemHeight := u.measuredItem.Height
 		count := u.count
 		itemWidth := u.measuredItem.Width
-		layoutID, err = requestMeasuredLayoutOf(w, u.style, func(req MeasureRequest) Size {
+		layoutID, err = requestMeasuredLayoutOf(w, u.style, func(req MeasureRequest) MeasuredSize {
 			desiredHeight := itemHeight * float32(count)
 			width := itemWidth
 			if req.KnownWidthPresent {
@@ -261,7 +261,7 @@ func (u *UniformListElement) RequestLayout(global *GlobalElementID, inspector *I
 			if req.AvailHeight.Kind == AvailDefinite && req.AvailHeight.Definite < height {
 				height = req.AvailHeight.Definite
 			}
-			return Size{Width: width, Height: height}
+			return MeasuredSize{Size: Size{Width: width, Height: height}}
 		})
 	}
 	if err != nil {

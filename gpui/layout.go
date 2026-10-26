@@ -464,10 +464,24 @@ func styleToRecord(s *Style, ctx *LayoutContext) native.LayoutStyleRecord {
 	rec.FlexShrinkPresent = 1
 	rec.FlexShrinkBits = math.Float32bits(s.FlexShrink)
 
-	gridTemplateToRecord(s.GridRows,
-		&rec.GridTemplateRowsPresent, &rec.GridTemplateRowsRepeat, &rec.GridTemplateRowsMinSize)
-	gridTemplateToRecord(s.GridCols,
-		&rec.GridTemplateColumnsPresent, &rec.GridTemplateColumnsRepeat, &rec.GridTemplateColumnsMinSize)
+	if s.GridColsList == nil {
+		gridTemplateToRecord(s.GridCols,
+			&rec.GridTemplateColumnsPresent, &rec.GridTemplateColumnsRepeat, &rec.GridTemplateColumnsMinSize)
+	} else {
+		// The full track list takes the axis over (the native
+		// layout_node_set_grid_tracks call applies it after the record;
+		// the record's repeat form stays off so a plain SetStyle never
+		// resurrects the pinned template over the list).
+		gridTemplateToRecord(nil,
+			&rec.GridTemplateColumnsPresent, &rec.GridTemplateColumnsRepeat, &rec.GridTemplateColumnsMinSize)
+	}
+	if s.GridRowsList == nil {
+		gridTemplateToRecord(s.GridRows,
+			&rec.GridTemplateRowsPresent, &rec.GridTemplateRowsRepeat, &rec.GridTemplateRowsMinSize)
+	} else {
+		gridTemplateToRecord(nil,
+			&rec.GridTemplateRowsPresent, &rec.GridTemplateRowsRepeat, &rec.GridTemplateRowsMinSize)
+	}
 	if s.GridLocation != nil {
 		rec.GridPlacementPresent = 1
 		gridPlacementToRecord(s.GridLocation.Row.Start, &rec.GridRowStartKind, &rec.GridRowStartValue)
@@ -707,9 +721,120 @@ func (e *LayoutEngine) RequestLayout(ctx *LayoutContext, style Style, children .
 	if err != nil {
 		return LayoutID{}, fmt.Errorf("gpui: RequestLayout: %w", err)
 	}
+	// The CSS grid surface the style record cannot carry (browser-core
+	// 42: full track lists and the named area template/placement) rides
+	// the node's stored style through the dedicated entries after the
+	// record.
+	if err := applyGridStyleExtras(e, node, &style, ctx); err != nil {
+		return LayoutID{}, fmt.Errorf("gpui: RequestLayout: %w", err)
+	}
 	id := LayoutID{engine: e, node: node, generation: e.generation}
 	e.recordInlineStyleState(id, &style)
 	return id, nil
+}
+
+// applyGridStyleExtras pushes the grid styles the ABI record cannot
+// carry (browser-core 42): the full track lists (grid-template-columns/
+// rows: `240px 1fr`) through SetGridTracks, and the named area template
+// plus the item's named placement through the rev-16 area entries. The
+// native calls REPLACE the stored style's axes and placements, so every
+// full style write must re-apply them (StretchAutoSizeToFill re-styles
+// an existing node; a fresh node applies them right after creation).
+func applyGridStyleExtras(e *LayoutEngine, node native.NodeHandle, style *Style, ctx *LayoutContext) error {
+	if len(style.GridColsList) > 0 {
+		if err := e.native.SetGridTracks(node, native.LayoutGridAxisColumns, trackListToRecords(style.GridColsList, ctx.ScaleFactor())); err != nil {
+			return fmt.Errorf("grid template columns: %w", err)
+		}
+	}
+	if len(style.GridRowsList) > 0 {
+		if err := e.native.SetGridTracks(node, native.LayoutGridAxisRows, trackListToRecords(style.GridRowsList, ctx.ScaleFactor())); err != nil {
+			return fmt.Errorf("grid template rows: %w", err)
+		}
+	}
+	if style.GridAreas != nil {
+		records, names := gridAreaRecords(style.GridAreas)
+		columnCount := 0
+		if len(style.GridAreas.Rows) > 0 {
+			columnCount = len(style.GridAreas.Rows[0])
+		}
+		if err := e.native.SetGridTemplateAreas(node, uint32(len(style.GridAreas.Rows)), uint32(columnCount), records, names); err != nil {
+			return fmt.Errorf("grid template areas: %w", err)
+		}
+	}
+	if style.GridAreaName != "" {
+		if err := e.native.SetGridArea(node, style.GridAreaName); err != nil {
+			return fmt.Errorf("grid area %q: %w", style.GridAreaName, err)
+		}
+	}
+	return nil
+}
+
+// trackListToRecords converts one track list to the ABI minmax records,
+// converting definite logical lengths to device pixels with the pinned
+// definite-length rule (round to the nearest device pixel, ties toward
+// zero).
+func trackListToRecords(tracks []GridTrack, scaleFactor float32) []native.LayoutTrackRecord {
+	records := make([]native.LayoutTrackRecord, len(tracks))
+	for i, track := range tracks {
+		records[i] = native.LayoutTrackRecord{
+			MinTag:  trackSizingTag(track.Min),
+			MinBits: trackSizingBits(track.Min, scaleFactor),
+			MaxTag:  trackSizingTag(track.Max),
+			MaxBits: trackSizingBits(track.Max, scaleFactor),
+		}
+	}
+	return records
+}
+
+// trackSizingTag maps one minmax side onto the ABI track tag.
+func trackSizingTag(sizing TrackSizing) uint32 {
+	switch sizing.Kind {
+	case TrackLength:
+		return native.TrackMinLength
+	case TrackMinContent:
+		return native.TrackMinContent
+	case TrackMaxContent:
+		return native.TrackMaxContent
+	case TrackAuto:
+		return native.TrackAuto
+	default:
+		return native.TrackFr
+	}
+}
+
+// trackSizingBits maps one minmax side's value onto the ABI bits: the
+// device-converted length for a length, the fr factor verbatim (the
+// factor is unitless), zero otherwise.
+func trackSizingBits(sizing TrackSizing, scaleFactor float32) uint32 {
+	switch sizing.Kind {
+	case TrackLength:
+		return math.Float32bits(roundToDevicePixel(sizing.Length, scaleFactor))
+	case TrackFr:
+		return math.Float32bits(sizing.Length)
+	default:
+		return 0
+	}
+}
+
+// gridAreaRecords flattens one area template into the ABI records plus
+// the shared names buffer (the records slice the buffer by offset and
+// length).
+func gridAreaRecords(template *GridAreaTemplate) ([]native.LayoutGridAreaRecord, []byte) {
+	names := make([]byte, 0, 16*len(template.rects))
+	records := make([]native.LayoutGridAreaRecord, 0, len(template.rects))
+	for _, name := range template.AreaNames() {
+		rect := template.rects[name]
+		records = append(records, native.LayoutGridAreaRecord{
+			RowStart:    uint32(rect.rowStart),
+			RowEnd:      uint32(rect.rowEnd),
+			ColumnStart: uint32(rect.columnStart),
+			ColumnEnd:   uint32(rect.columnEnd),
+			NameOffset:  uint32(len(names)),
+			NameLen:     uint32(len(name)),
+		})
+		names = append(names, name...)
+	}
+	return records, names
 }
 
 // recordInlineStyleState records the inline-orchestration style facts
@@ -794,7 +919,11 @@ func (e *LayoutEngine) RequestMeasuredLayout(ctx *LayoutContext, style Style, me
 // are divided by the (compute-time) scale factor to logical pixels, the
 // user function returns raw logical pixels, and the pinned
 // measured-size snapping (clamp >= 0, multiply by scale, ceil) is applied
-// to the result before it crosses back.
+// to the result before it crosses back. The baseline crosses as the
+// unrounded device value (logical × scale, the definite-available-space
+// rule): CSS baselines are not pixel-snapped, and the pinned snap would
+// put a 17.3px baseline at a different offset than the paint layer's
+// line placement.
 func (e *LayoutEngine) wrapMeasure(measure MeasureFunc) native.MeasureFunc {
 	return func(req native.GoMeasureRequest) native.GoMeasureResponse {
 		scale := e.activeScale
@@ -806,11 +935,21 @@ func (e *LayoutEngine) wrapMeasure(measure MeasureFunc) native.MeasureFunc {
 			AvailWidth:         availToLogical(req.AvailWidth, scale),
 			AvailHeight:        availToLogical(req.AvailHeight, scale),
 		}
-		size := measure(logical)
-		return native.GoMeasureResponse{
-			Width:  snapMeasuredSize(size.Width, scale),
-			Height: snapMeasuredSize(size.Height, scale),
+		result := measure(logical)
+		response := native.GoMeasureResponse{
+			Width:  snapMeasuredSize(result.Width, scale),
+			Height: snapMeasuredSize(result.Height, scale),
 		}
+		if result.FirstBaseline != nil {
+			// A negative offset would fail the native validation; clamp at
+			// zero (the box top) rather than failing the compute.
+			baseline := *result.FirstBaseline * scale
+			if baseline < 0 {
+				baseline = 0
+			}
+			response.FirstBaseline = &baseline
+		}
+		return response
 	}
 }
 

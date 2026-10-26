@@ -473,7 +473,7 @@ func (r *layoutTreeRunner) emitLayoutBounds(nodes []laidOutNode) error {
 // clamp-and-ceil, and the trace must show the raw value the fixture
 // returned.
 func makeMeasureFn(label string, spec conformance.MeasuredSpec, rec *recorder) gpui.MeasureFunc {
-	return func(req gpui.MeasureRequest) gpui.Size {
+	return func(req gpui.MeasureRequest) gpui.MeasuredSize {
 		fields := []field{
 			{"label", label},
 			{"knownWidthPresent", uint64(boolToU(req.KnownWidthPresent))},
@@ -501,7 +501,9 @@ func makeMeasureFn(label string, spec conformance.MeasuredSpec, rec *recorder) g
 			field{"width", conformance.F32Bits(measured.Width)},
 			field{"height", conformance.F32Bits(measured.Height)},
 		)
-		return measured
+		// The spec's measured nodes carry no baseline (the deterministic
+		// shapes are not text): the algorithms' height fallback applies.
+		return gpui.MeasuredSize{Size: measured}
 	}
 }
 

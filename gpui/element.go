@@ -1819,6 +1819,11 @@ func StretchAutoSizeToFill(w *Window, id LayoutID, style Style, viewport Size) e
 	if err := ds.engine.native.SetStyle(id.node, &record); err != nil {
 		return fmt.Errorf("gpui: StretchAutoSizeToFill: %w", err)
 	}
+	// The grid extras replace the stored style's axes and placements, so
+	// the full style write above must re-apply them (browser-core 42).
+	if err := applyGridStyleExtras(ds.engine, id.node, &stretched, &ctx); err != nil {
+		return fmt.Errorf("gpui: StretchAutoSizeToFill: %w", err)
+	}
 	return nil
 }
 

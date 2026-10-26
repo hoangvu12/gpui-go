@@ -194,6 +194,17 @@ func (e *extractor) classSurface(s *Surface) error {
 	for _, g := range grid {
 		arms = append(arms, Template([]string{g, ""}, numType))
 	}
+	// The arbitrary grid track lists and the named-area classes
+	// (browser-core 42): grid-cols-[240px_1fr], grid-rows-[auto_auto],
+	// grid-areas-["head_head"_"side_main"] and grid-area-[head]. The
+	// value part is a template literal string; the class layer parses and
+	// explains rejects.
+	arms = append(arms,
+		Template([]string{"grid-cols-[", "]"}, strType),
+		Template([]string{"grid-rows-[", "]"}, strType),
+		Template([]string{"grid-areas-[", "]"}, strType),
+		Template([]string{"grid-area-[", "]"}, strType),
+	)
 	arms = append(arms,
 		Template([]string{"aspect-[", "]"}, numType),
 		Template([]string{"aspect-[", "/", "]"}, numType, numType),

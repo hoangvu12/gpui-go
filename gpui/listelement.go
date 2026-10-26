@@ -1081,7 +1081,7 @@ func (l *ListElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		response := st.layoutItems(nil, availableHeight, padding, l.renderItem, w, app)
 		maxItemWidth := response.maxItemWidth
 		totalHeight := st.totalHeight()
-		layoutID, err = requestMeasuredLayoutOf(w, l.style, func(req MeasureRequest) Size {
+		layoutID, err = requestMeasuredLayoutOf(w, l.style, func(req MeasureRequest) MeasuredSize {
 			width := maxItemWidth
 			if req.KnownWidthPresent {
 				width = req.KnownWidth
@@ -1092,7 +1092,7 @@ func (l *ListElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 			if req.AvailHeight.Kind == AvailDefinite && req.AvailHeight.Definite < height {
 				height = req.AvailHeight.Definite
 			}
-			return Size{Width: width, Height: height}
+			return MeasuredSize{Size: Size{Width: width, Height: height}}
 		})
 	} else {
 		layoutID, err = requestLayoutOf(w, l.style)

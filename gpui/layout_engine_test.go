@@ -164,10 +164,10 @@ func TestMeasuredLeafFlow(t *testing.T) {
 	ctx := NewTestLayoutContext() // scale 2
 
 	var gotRequest MeasureRequest
-	root, err := engine.RequestMeasuredLayout(ctx, DefaultStyle(), func(req MeasureRequest) Size {
+	root, err := engine.RequestMeasuredLayout(ctx, DefaultStyle(), func(req MeasureRequest) MeasuredSize {
 		gotRequest = req
 		// Raw logical: negative height clamps to zero, 12.3 ceils.
-		return Size{Width: 12.3, Height: -5}
+		return MeasuredSize{Size: Size{Width: 12.3, Height: -5}}
 	})
 	if err != nil {
 		t.Fatalf("RequestMeasuredLayout: %v", err)
@@ -221,14 +221,14 @@ func TestMeasureKnownDimensionsAreLogical(t *testing.T) {
 	// the fixtures). Taffy may query the node several times (caching); not
 	// every query carries the stretched known dimension.
 	var sawKnownHeight bool
-	child, err := engine.RequestMeasuredLayout(ctx, DefaultStyle(), func(req MeasureRequest) Size {
+	child, err := engine.RequestMeasuredLayout(ctx, DefaultStyle(), func(req MeasureRequest) MeasuredSize {
 		if req.KnownHeightPresent && req.KnownHeight != 20 {
 			t.Errorf("known height = %v, want 20 logical (40 device / 2)", req.KnownHeight)
 		}
 		if req.KnownHeightPresent && req.KnownHeight == 20 {
 			sawKnownHeight = true
 		}
-		return Size{Width: 10, Height: 20}
+		return MeasuredSize{Size: Size{Width: 10, Height: 20}}
 	})
 	if err != nil {
 		t.Fatalf("RequestMeasuredLayout: %v", err)
@@ -275,9 +275,9 @@ func TestComputeAvailableSpaceConversion(t *testing.T) {
 	ctx := NewTestLayoutContext() // scale 2
 
 	var seen []AvailableSpace
-	root, err := engine.RequestMeasuredLayout(ctx, DefaultStyle(), func(req MeasureRequest) Size {
+	root, err := engine.RequestMeasuredLayout(ctx, DefaultStyle(), func(req MeasureRequest) MeasuredSize {
 		seen = append(seen, req.AvailWidth)
-		return Size{Width: 10, Height: 10}
+		return MeasuredSize{Size: Size{Width: 10, Height: 10}}
 	})
 	if err != nil {
 		t.Fatalf("RequestMeasuredLayout: %v", err)

@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		padding: 16px;
+		box-sizing: border-box;
+		font: 16px/40px "Segoe UI", system-ui, sans-serif;
+		color: #0f172a;
+	}
+	.grid {
+		box-sizing: border-box;
+		display: grid;
+		grid-template-columns: 240px 1fr;
+		background: #e2e8f0;
+	}
+	.cell {
+		box-sizing: border-box;
+		background: #dbeafe;
+	}
+
+</style>
+</head>
+<body data-id="root">
+	<div class="grid" data-id="grid-a" style="width: 460px">
+		<div class="cell" data-id="a1" style="height: 40px"></div>
+		<div class="cell" data-id="a2" style="height: 60px"></div>
+		<div class="cell" data-id="a3" style="height: 40px"></div>
+		<div class="cell" data-id="a4" style="height: 40px"></div>
+	</div>
+	<div class="grid" data-id="grid-b" style="width: 360px">
+		<div class="cell" data-id="b1" style="height: 40px"></div>
+		<div class="cell" data-id="b2" style="height: 40px"></div>
+	</div>
+</body>
+</html>

@@ -2,7 +2,10 @@ package gpui
 
 //go:generate go run ../cmd/stylegen -out styled_generated.go
 
-import "slices"
+import (
+	"fmt"
+	"slices"
+)
 
 // This file ports the pinned Styled trait (ticket base-05; reference
 // crates/gpui/src/styled.rs at 254b5dbd47cbb5acbcc5bbdcbb322a339276c88a)
@@ -1197,6 +1200,51 @@ func (s *Styled[Self]) GridRowsMinContent[_ lazy](rows uint16) Self {
 // GridRowsMaxContent sets max-content row sizing (styled.rs:964).
 func (s *Styled[Self]) GridRowsMaxContent[_ lazy](rows uint16) Self {
 	s.StyleMut().GridRows = Some(GridTemplate{Repeat: rows, MinSize: GridTemplateMinMaxContent})
+	return s.self
+}
+
+// GridColsList sets the full column track list (browser-core
+// 42, CSS grid-template-columns: 240px 1fr — each track a minmax pair;
+// build them with PxTrack/FrTrack/AutoTrack/MinContentTrack/
+// MaxContentTrack/MinMaxTrack). It replaces the pinned repeat form.
+func (s *Styled[Self]) GridColsList(tracks ...GridTrack) Self {
+	s.StyleMut().GridColsList = Some(tracks)
+	return s.self
+}
+
+// GridRowsList sets the full row track list (CSS
+// grid-template-rows). It replaces the pinned repeat form.
+func (s *Styled[Self]) GridRowsList(tracks ...GridTrack) Self {
+	s.StyleMut().GridRowsList = Some(tracks)
+	return s.self
+}
+
+// GridTemplateAreas sets the named area template (browser-core 42, CSS
+// grid-template-areas): one quoted row string per argument —
+// GridTemplateAreas("head head", "side main"). The row strings parse
+// like the CSS value (a parse failure panics, the same builder contract
+// as Size's arity check).
+func (s *Styled[Self]) GridTemplateAreas(rows ...string) Self {
+	template, err := ParseGridTemplateAreas(joinAreaRows(rows))
+	if err != nil {
+		panic(fmt.Sprintf("gpui: GridTemplateAreas: %v", err))
+	}
+	s.StyleMut().GridAreas = Some(template)
+	return s.self
+}
+
+// GridTemplateAreasValue sets an already-parsed named area template (the
+// class layer's non-panicking form of GridTemplateAreas).
+func (s *Styled[Self]) GridTemplateAreasValue(template *GridAreaTemplate) Self {
+	s.StyleMut().GridAreas = Some(template)
+	return s.self
+}
+
+// GridArea places this item into its parent grid by area name
+// (browser-core 42, CSS grid-area: <name>); the parent's
+// GridTemplateAreas must define the name.
+func (s *Styled[Self]) GridArea(name string) Self {
+	s.StyleMut().GridAreaName = Some(name)
 	return s.self
 }
 

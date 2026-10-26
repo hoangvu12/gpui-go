@@ -979,6 +979,10 @@ type CoreClass =
 	`col-end-${number}` |
 	`row-start-${number}` |
 	`row-end-${number}` |
+	`grid-cols-[${string}]` |
+	`grid-rows-[${string}]` |
+	`grid-areas-[${string}]` |
+	`grid-area-[${string}]` |
 	`aspect-[${number}]` |
 	`aspect-[${number}/${number}]` |
 	`text-[${number}px]` |
@@ -1668,6 +1672,10 @@ type Class =
 	`col-end-${number}` |
 	`row-start-${number}` |
 	`row-end-${number}` |
+	`grid-cols-[${string}]` |
+	`grid-rows-[${string}]` |
+	`grid-areas-[${string}]` |
+	`grid-area-[${string}]` |
 	`aspect-[${number}]` |
 	`aspect-[${number}/${number}]` |
 	`text-[${number}px]` |

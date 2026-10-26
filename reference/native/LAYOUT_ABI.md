@@ -100,15 +100,19 @@ typedef struct {
 
 `CLARIFIED` (structure; the function list was already authoritative): slot 1
 of `GpuiGoAbiTable` holds the address of a static
-`#[repr(C)] GpuiGoLayoutTable` (168 bytes, alignment 8): 15 function
+`#[repr(C)] GpuiGoLayoutTable` (184 bytes, alignment 8): 17 function
 pointers (all `extern "system"`, each returning `i32`), then 11 self-check
-scalars — `service_version` (1), `size_of_table`, `align_of_table`,
+scalars — `service_version` (2), `size_of_table`, `align_of_table`,
 `size_of_style_record`, `size_of_layout_record`, `size_of_avail`,
 `size_of_avail_size`, `size_of_measure_request`,
 `align_of_measure_request`, `size_of_measure_response`,
 `align_of_measure_response`. The Go loader copies the table out of DLL
 memory, verifies `service_version` and every record size/alignment against
 its mirrors, and rejects null function slots, before any call.
+
+**rev 16** (browser-core ticket 42) bumped the service version to 2 by
+appending two entries after `layout_set_trampoline` (every earlier slot's
+offset is unchanged):
 
 ```c
 // engine lifecycle
@@ -154,6 +158,32 @@ i32 layout_dump(u64 engine, u64 root, u64* node_ids, GpuiGoLayoutRecord* records
 // trampoline: registered once per process before any measured compute
 i32 layout_set_trampoline(Trampoline trampoline);
 // where Trampoline = i32 (*)(GpuiMeasureRequest* req, GpuiMeasureResponse* resp)
+
+// rev 16 (browser-core ticket 42): the named grid areas.
+// GpuiGoGridAreaRecord is { u32 row_start, row_end, column_start,
+// column_end, name_offset, name_len } (24 bytes, align 4): one named
+// rectangle in 1-BASED grid line numbers. The names live in one UTF-8
+// buffer (names_utf8/names_bytes); each record slices it by
+// name_offset/name_len. row_count/column_count are the template's size
+// in tracks (the template may exceed the named areas through `.`
+// cells); area_count 0 clears the template. Bounds: names 1..=256
+// bytes, areas <= 256, a start line in 1..=65535 with end > start up to
+// 65535, and duplicate names are caller errors (CSS requires one
+// rectangle per name; the Go adapter parses the template string).
+i32 layout_node_set_grid_template_areas(u64 engine, u64 node, u32 row_count,
+                                        u32 column_count,
+                                        const GpuiGoGridAreaRecord* areas,
+                                        u32 area_count,
+                                        const char* names_utf8,
+                                        u32 names_bytes);
+// rev 16: CSS grid-area: <name> — all four of the item's placements
+// become the named line, which Taffy's resolver maps to the area's
+// edges through the implicit <name>-start / <name>-end lines the
+// template defines (an unknown name is accepted and resolves through
+// Taffy's named-line fallback). An empty name (len 0, null pointer)
+// restores the Auto placements.
+i32 layout_node_set_grid_area(u64 engine, u64 node, const char* name_utf8,
+                              u32 name_len);
 ```
 
 `GpuiGoLayoutRecord` mirrors taffy's `Layout` for the fields the GPUI adapter
@@ -164,18 +194,36 @@ top/right/bottom/left (all f32, unrounded device pixels — Taffy rounding is
 disabled; the pinned Go-side snapping consumes them), plus a trailing
 `u32 record_size`.
 
-## The rev-15 measured baseline (recorded limit)
+## The measured baseline (rev 16: fed into the algorithms)
 
 The measure response carries the measured content's first baseline, and
-the layout record echoes it for measured nodes. Taffy 0.13's public
-surface cannot feed a measured leaf's baseline into the algorithms: the
-leaf compute hardcodes `first_baselines: Point::NONE`
-(`compute/leaf.rs:157`), the stored `Layout` drops the field entirely,
-and the `TaffyView` the compute drives is `pub(crate)` — so baseline
-alignment still falls back to the item's height exactly as the pin does.
-The echo is what the later Go styling tickets (L8) consume; wiring it
-into the algorithms needs a Taffy change or a vendored tree trait
-(revisit with the R17 retained-layout ABI).
+the layout record echoes it for measured nodes. **Rev 16** (browser-core
+ticket 42) closed rev 15's recorded limit: Taffy 0.13's algorithms are
+generic over its low-level tree traits, so the service drives them
+through its OWN implementation of `TraversePartialTree`,
+`LayoutPartialTree`, `CacheTree`, `LayoutFlexboxContainer`,
+`LayoutGridContainer` and `LayoutBlockContainer` (a view over the same
+`TaffyTree` storage that mirrors the crate's `pub(crate)` `TaffyView`
+ dispatch exactly), instead of `TaffyTree::compute_layout_with_measure`.
+A measured leaf's `LayoutOutput` carries its measure response's baseline
+in `first_baselines.y`, offset by the leaf's resolved top padding and
+border (relative to the border box — exactly the contract flexbox §8.3
+and grid §11.5.1 baseline alignment consume), so `align-items: baseline`
+and `align-self: baseline` align text baselines like Chrome's; the cache
+replays patched outputs whole, and the layout record's `first_baseline`
+echo still reports the raw measure-response value (from the measured
+box's top).
+
+Two structural consequences of the trait route, recorded here:
+
+- `TaffyTree`'s unrounded/final layout slots are `pub(crate)`, so the
+  service's view writes layouts through `set_unrounded_layout` into its
+  own per-node store (identical values: rounding is disabled, and a
+  node never laid out reads the zero layout `TaffyTree` initializes).
+- A baseline-less measure (the rev-15 shape) keeps the pre-rev-16
+  behavior everywhere: no baseline is patched in and the algorithms
+  fall back to the item's height, so every rev-15 fixture is
+  byte-identical.
 
 ## Status codes
 

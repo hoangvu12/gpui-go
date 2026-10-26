@@ -40,6 +40,7 @@ import (
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/tabnav"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/textpaint"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/textstyle"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/gridlayout"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/textwrap"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/tooltip"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/tracer"

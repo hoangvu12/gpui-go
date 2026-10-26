@@ -67,6 +67,22 @@ func refinePointer[T any](dst **T, src Optional[T]) {
 	}
 }
 
+// refineGridTracks writes a present track list into a style field: a
+// present list replaces the axis (CSS track lists replace, never merge).
+func refineGridTracks(dst *[]GridTrack, src Optional[[]GridTrack]) {
+	if src.present {
+		*dst = src.value
+	}
+}
+
+// refineAreaTemplate writes a present area template into the style's
+// optional field (a present template replaces any earlier one).
+func refineAreaTemplate(dst **GridAreaTemplate, src Optional[*GridAreaTemplate]) {
+	if src.present {
+		*dst = src.value
+	}
+}
+
 // StyleRefinement is the refinement of Style (the derived
 // StyleRefinement of style.rs:233): every field is optional and Refine
 // applies only the present ones. See the file comment for the flattened
@@ -195,6 +211,21 @@ type StyleRefinement struct {
 	GridCols     Optional[GridTemplate]
 	GridRows     Optional[GridTemplate]
 	GridLocation Optional[GridLocation]
+
+	// GridColsList is the full column track list's refinement (CSS
+	// grid-template-columns: 240px 1fr — browser-core 42): present
+	// replaces the axis list (and takes precedence over the pinned
+	// GridCols repeat form).
+	GridColsList Optional[[]GridTrack]
+	// GridRowsList is the full row track list's refinement (CSS
+	// grid-template-rows).
+	GridRowsList Optional[[]GridTrack]
+	// GridAreas is the named area template's refinement (CSS
+	// grid-template-areas).
+	GridAreas Optional[*GridAreaTemplate]
+	// GridAreaName is the item's named placement's refinement (CSS
+	// grid-area: <name>); it takes precedence over GridLocation.
+	GridAreaName Optional[string]
 
 	Debug      Optional[bool]
 	DebugBelow Optional[bool]
@@ -365,6 +396,12 @@ func (s *Style) refineBoxed(r *StyleRefinement, boxes *styleBoxes) {
 	refinePointer(&s.GridCols, r.GridCols)
 	refinePointer(&s.GridRows, r.GridRows)
 	refinePointer(&s.GridLocation, r.GridLocation)
+	refineGridTracks(&s.GridColsList, r.GridColsList)
+	refineGridTracks(&s.GridRowsList, r.GridRowsList)
+	refineAreaTemplate(&s.GridAreas, r.GridAreas)
+	if name, ok := r.GridAreaName.Get(); ok {
+		s.GridAreaName = name
+	}
 	refineValue(&s.Debug, r.Debug)
 	refineValue(&s.DebugBelow, r.DebugBelow)
 }
@@ -466,6 +503,10 @@ func (r *StyleRefinement) Refine(other *StyleRefinement) {
 	mergeOptional(&r.GridCols, other.GridCols)
 	mergeOptional(&r.GridRows, other.GridRows)
 	mergeOptional(&r.GridLocation, other.GridLocation)
+	mergeOptional(&r.GridColsList, other.GridColsList)
+	mergeOptional(&r.GridRowsList, other.GridRowsList)
+	mergeOptional(&r.GridAreas, other.GridAreas)
+	mergeOptional(&r.GridAreaName, other.GridAreaName)
 	mergeOptional(&r.Debug, other.Debug)
 	mergeOptional(&r.DebugBelow, other.DebugBelow)
 }

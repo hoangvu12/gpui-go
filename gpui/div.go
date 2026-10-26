@@ -751,6 +751,11 @@ type stringLayoutState struct {
 type shapedCell struct {
 	shaped    shapedText
 	wrapWidth *float32
+	// baseline is the measured document's first baseline (the offset
+	// the paint layer places line 0 at; browser-core 42) — cached with
+	// the shape so a cache hit answers a baseline query without
+	// re-shaping. Nil when the document has no line box.
+	baseline *float32
 	// minContent marks a cell shaped for a MIN-CONTENT query: wrapped
 	// at width zero, with the min-content size (the longest word by the
 	// word count), not the pinned min(wrap, width) size. The cell is a
@@ -776,6 +781,31 @@ type shapedCell struct {
 	// collapse (nil when the display text is the source text): the
 	// selection geometry queries map source offsets through it.
 	collapse *collapseMap
+}
+
+func firstTextBaseline(shaped shapedText, lineHeight float32) *float32 {
+	if shaped == nil || shaped.lineCount() == 0 {
+		// No line box (the empty text's self-collapsing rule): no
+		// baseline — the algorithms fall back to the item's height.
+		return nil
+	}
+	// Chrome's strut math (browser-core 42): the font's FIXED (rounded)
+	// ascent and descent, and the leading split with the ASCENT side
+	// floored — inline_box_state.cc:182/202 take
+	// FontMetrics::FixedAscent/FixedDescent for the strut, and
+	// line_utils.cc CalculateLeadingSpace floors
+	// (line_height - fixed_height) / 2 onto the ascent side (the
+	// remainder on the descent side). A definite line-height L places
+	// the first baseline at round(A) + floor((L - round(A) -
+	// round(D)) / 2): measured at Segoe UI 12/16/24px under line-height
+	// 40 — baselines 25 / 26 / 30, the baseline-aligned flex and grid
+	// rows putting the 12px and 16px items 5px and 4px below the 24px
+	// one and growing to 45 (Chrome 155 headless, the recorder's
+	// device-metrics override at scale 2).
+	ascent := roundToNearest(shaped.ascent())
+	descent := roundToNearest(shaped.descent())
+	baseline := ascent + floor32((lineHeight-ascent-descent)/2)
+	return &baseline
 }
 
 // textElement is the Text element: a string displayed as one shaped,
@@ -836,7 +866,7 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 	// published inline content carry the transformed text (byte length
 	// preserved, so the covering runs stay valid).
 	text := applyTextTransformPreservingByteLen(t.text, textStyle.TextTransform)
-	measure := func(req MeasureRequest) Size {
+	measure := func(req MeasureRequest) MeasuredSize {
 		// The pinned measure closure: wrap at the known width or the
 		// definite available width (WhiteSpace::Normal); a max-content
 		// query measures unwrapped. D2 (browser-core 32) adds the
@@ -879,11 +909,11 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		if cell.shaped != nil && truncation.Width == nil && cell.truncateWidth == nil {
 			if minContent {
 				if cell.minContent {
-					return cell.size
+					return MeasuredSize{Size: cell.size, FirstBaseline: cell.baseline}
 				}
 			} else if !cell.minContent &&
 				(!hasWrap && cell.wrapWidth == nil || hasWrap && cell.wrapWidth != nil && wrap == *cell.wrapWidth) {
-				return cell.size
+				return MeasuredSize{Size: cell.size, FirstBaseline: cell.baseline}
 			}
 		}
 		// The wrap width is boxed only when the text shapes (gpui-perf
@@ -937,6 +967,9 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 			// empty-line self-collapsing block,
 			// inline_layout_algorithm.cc:1488-1492), not one empty row.
 			size = Size{}
+			cell.baseline = nil
+		} else {
+			cell.baseline = firstTextBaseline(shaped, lineHeight)
 		}
 		cell.shaped = shaped
 		cell.wrapWidth = wrapWidth
@@ -946,7 +979,7 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		cell.size = size
 		cell.source = text
 		cell.collapse = collapse
-		return size
+		return MeasuredSize{Size: size, FirstBaseline: cell.baseline}
 	}
 	layoutID, err := requestMeasuredLayoutOf(w, textNodeStyle(), measure)
 	if err != nil {
@@ -1400,6 +1433,42 @@ func (d *DivElement) GridTemplateCols(template GridTemplate) *DivElement {
 // GridTemplateRows sets the row track template (grid-template-rows).
 func (d *DivElement) GridTemplateRows(template GridTemplate) *DivElement {
 	d.StyleMut().GridRows = Some(template)
+	return d
+}
+
+// GridColsList sets the full column track list (browser-core 42, CSS
+// grid-template-columns: 240px 1fr — each track a minmax pair; see
+// PxTrack/FrTrack/AutoTrack/MinContentTrack/MaxContentTrack/
+// MinMaxTrack). It replaces the pinned repeat form.
+func (d *DivElement) GridColsList(tracks ...GridTrack) *DivElement {
+	d.StyleMut().GridColsList = Some(tracks)
+	return d
+}
+
+// GridRowsList sets the full row track list (CSS grid-template-rows).
+// It replaces the pinned repeat form.
+func (d *DivElement) GridRowsList(tracks ...GridTrack) *DivElement {
+	d.StyleMut().GridRowsList = Some(tracks)
+	return d
+}
+
+// GridTemplateAreas sets the named area template (browser-core 42, CSS
+// grid-template-areas): one quoted row string per argument —
+// GridTemplateAreas("head head", "side main"). A parse failure panics
+// (the builder contract).
+func (d *DivElement) GridTemplateAreas(rows ...string) *DivElement {
+	template, err := ParseGridTemplateAreas(joinAreaRows(rows))
+	if err != nil {
+		panic(fmt.Sprintf("gpui: GridTemplateAreas: %v", err))
+	}
+	d.StyleMut().GridAreas = Some(template)
+	return d
+}
+
+// GridArea places this item into its parent grid by area name
+// (browser-core 42, CSS grid-area: <name>).
+func (d *DivElement) GridArea(name string) *DivElement {
+	d.StyleMut().GridAreaName = Some(name)
 	return d
 }
 

@@ -52,7 +52,12 @@ const (
 )
 
 // layoutServiceVersion mirrors GPUI_GO_LAYOUT_SERVICE_VERSION.
-const layoutServiceVersion uint32 = 1
+//
+// v2 (browser-core ticket 42): the table's two grid-area entries
+// (node_set_grid_template_areas / node_set_grid_area) — 17 function
+// pointers, 184 bytes. The trait-driven compute changes no record
+// layouts.
+const layoutServiceVersion uint32 = 2
 
 func layoutStatusName(code int32) string {
 	switch code {
@@ -496,36 +501,39 @@ type LayoutRecord struct {
 // Service table mirror and validation
 // ---------------------------------------------------------------------------
 
-// layoutTable mirrors the native GpuiGoLayoutTable: 15 function pointers
-// then 11 self-check scalars; 168 bytes, alignment 8 (rev 15: the
-// grid-tracks slot).
+// layoutTable mirrors the native GpuiGoLayoutTable: 17 function
+// pointers then 11 self-check scalars; 184 bytes, alignment 8 (rev 15:
+// the grid-tracks slot; rev 16: the grid-template-areas and grid-area
+// slots appended after set_trampoline).
 type layoutTable struct {
-	engineCreate           uintptr
-	engineReset            uintptr
-	engineDispose          uintptr
-	nodeCreate             uintptr
-	nodeSetStyle           uintptr
-	nodeSetMeasure         uintptr
-	nodeSetGridTracks      uintptr
-	nodeRemoveSubtree      uintptr
-	compute                uintptr
-	nodeLayout             uintptr
-	nodeParent             uintptr
-	nodeChildCount         uintptr
-	nodeChild              uintptr
-	dump                   uintptr
-	setTrampoline          uintptr
-	serviceVersion         uint32
-	sizeOfTable            uint32
-	alignOfTable           uint32
-	sizeOfStyleRecord      uint32
-	sizeOfLayoutRecord     uint32
-	sizeOfAvail            uint32
-	sizeOfAvailSize        uint32
-	sizeOfMeasureRequest   uint32
-	alignOfMeasureRequest  uint32
-	sizeOfMeasureResponse  uint32
-	alignOfMeasureResponse uint32
+	engineCreate            uintptr
+	engineReset             uintptr
+	engineDispose           uintptr
+	nodeCreate              uintptr
+	nodeSetStyle            uintptr
+	nodeSetMeasure          uintptr
+	nodeSetGridTracks       uintptr
+	nodeRemoveSubtree       uintptr
+	compute                 uintptr
+	nodeLayout              uintptr
+	nodeParent              uintptr
+	nodeChildCount          uintptr
+	nodeChild               uintptr
+	dump                    uintptr
+	setTrampoline           uintptr
+	nodeSetGridTemplateArea uintptr
+	nodeSetGridArea         uintptr
+	serviceVersion          uint32
+	sizeOfTable             uint32
+	alignOfTable            uint32
+	sizeOfStyleRecord       uint32
+	sizeOfLayoutRecord      uint32
+	sizeOfAvail             uint32
+	sizeOfAvailSize         uint32
+	sizeOfMeasureRequest    uint32
+	alignOfMeasureRequest   uint32
+	sizeOfMeasureResponse   uint32
+	alignOfMeasureResponse  uint32
 }
 
 // layoutTableFromSlot reinterprets a reserved-slot word (the address of the
@@ -840,6 +848,109 @@ const (
 
 // MaxGridTracks is the maximum track components in one axis (rev 15).
 const MaxGridTracks = 256
+
+// LayoutGridAreaRecord mirrors GpuiGoGridAreaRecord (rev 16): one named
+// rectangle of the grid's area template, in 1-based grid line numbers
+// (start line, end line). 24 bytes, alignment 4. The names of a whole
+// template share one UTF-8 buffer; each record slices it by
+// NameOffset/NameLen.
+type LayoutGridAreaRecord struct {
+	// RowStart is the 1-based grid line the area starts at (row axis).
+	RowStart uint32
+	// RowEnd is the 1-based grid line the area ends at (row axis).
+	RowEnd uint32
+	// ColumnStart is the 1-based grid line the area starts at.
+	ColumnStart uint32
+	// ColumnEnd is the 1-based grid line the area ends at.
+	ColumnEnd uint32
+	// NameOffset is the byte offset of the area's name in the template's
+	// names buffer.
+	NameOffset uint32
+	// NameLen is the byte length of the area's name.
+	NameLen uint32
+}
+
+// MaxGridAreas is the maximum areas in one template (rev 16).
+const MaxGridAreas = 256
+
+// MaxGridAreaName is the maximum bytes of one area name (rev 16).
+const MaxGridAreaName = 256
+
+// SetGridTemplateAreas defines the node's named area template (rev 16;
+// CSS grid-template-areas, with the rects the Go adapter parses out of
+// the template string). RowCount/ColumnCount are the template's size in
+// tracks (the template may exceed the named areas through `.` cells);
+// names is the shared UTF-8 name buffer. An empty area list clears the
+// template.
+func (e *LayoutEngine) SetGridTemplateAreas(node NodeHandle, rowCount, columnCount uint32, areas []LayoutGridAreaRecord, names []byte) error {
+	if err := e.checkIdle("layout_node_set_grid_template_areas"); err != nil {
+		return err
+	}
+	if rowCount > 65535 || columnCount > 65535 {
+		return layoutStatusError(layoutErrBadValue, "layout_node_set_grid_template_areas: template too large")
+	}
+	if len(areas) > MaxGridAreas {
+		return layoutStatusError(layoutErrBadValue, "layout_node_set_grid_template_areas: too many areas")
+	}
+	var areaPtr *LayoutGridAreaRecord
+	if len(areas) > 0 {
+		areaPtr = &areas[0]
+	}
+	var namePtr *byte
+	if len(names) > 0 {
+		namePtr = &names[0]
+	}
+	code, err := callLayoutNodeSetGridTemplateAreas(
+		e.svc.table.nodeSetGridTemplateArea,
+		uint64(e.handle),
+		uint64(node),
+		rowCount,
+		columnCount,
+		areaPtr,
+		uint32(len(areas)),
+		namePtr,
+		uint32(len(names)),
+	)
+	if err != nil {
+		return err
+	}
+	if code != layoutStatusOK {
+		return layoutStatusError(code, "layout_node_set_grid_template_areas")
+	}
+	return nil
+}
+
+// SetGridArea places the node into its parent grid by area name (rev 16;
+// CSS grid-area: <name> — all four placements become the named line, and
+// the native resolver maps them through the implicit <name>-start and
+// <name>-end lines the template areas define). An empty name restores
+// the Auto placements.
+func (e *LayoutEngine) SetGridArea(node NodeHandle, name string) error {
+	if err := e.checkIdle("layout_node_set_grid_area"); err != nil {
+		return err
+	}
+	if len(name) > MaxGridAreaName {
+		return layoutStatusError(layoutErrBadValue, "layout_node_set_grid_area: name too long")
+	}
+	var namePtr *byte
+	if len(name) > 0 {
+		namePtr = &[]byte(name)[0]
+	}
+	code, err := callLayoutNodeSetGridArea(
+		e.svc.table.nodeSetGridArea,
+		uint64(e.handle),
+		uint64(node),
+		namePtr,
+		uint32(len(name)),
+	)
+	if err != nil {
+		return err
+	}
+	if code != layoutStatusOK {
+		return layoutStatusError(code, "layout_node_set_grid_area")
+	}
+	return nil
+}
 
 // SetGridTracks replaces the node's grid template for one axis with a
 // variable-length track list (rev 15; CSS grid-template-rows/columns —
