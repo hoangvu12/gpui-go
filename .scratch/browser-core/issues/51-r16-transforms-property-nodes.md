@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 11 (Claude Code); R16 integration branch native/r16
+Status: resolved
+Assignee: orchestrator 11 (Claude Code); worker chat ecf2aabc; R16 integration branch native/r16
 Blocked by: 39, 49
 Triage: ready-for-agent
 
@@ -24,6 +24,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-26, orchestrator 11: verified on `native/r16` (d14ff99); it reaches main with ticket 54. Clean tree, no artifacts committed. The test DLL `6dea0dc4…` matches the shared target's build output. With the manifest swapped in for the test run: `go vet` clean; the same 13-path test set as 50 gives 52 packages ok, failing only portfixture TestFx0004 (known) and the 7 internal/native loader tests that fail by construction under the swap. Spot-check: css_properties.json5:6747 at 0d4dcd4f (transform-origin initial `TransformOrigin(50%, 50%, 0)`) matches. 50's gap (window-sized buckets) is fixed here. The worker's map gist was shortened by the orchestrator.
 
 ## Answer
 
