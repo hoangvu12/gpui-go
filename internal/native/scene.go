@@ -70,8 +70,24 @@ const (
 // MAX_SCENE_GROUPS = 1024 sanity bound, and grew the requirements
 // record (isolated_effect_count) and the meta record (effect_count).
 // The design doc's "scene service v5" became this version 6 because
-// ticket 77 had already taken 5.
-const sceneServiceVersion uint32 = 6
+// ticket 77 had already taken 5. Version 7 (rev 16, browser-core
+// ticket 51) appended the update_property entry (the design's
+// appendix A.7: the finished-scene property-node mutation with the
+// old/new mapped bounds) - the only addition, no records or scalars
+// changed.
+const sceneServiceVersion uint32 = 7
+
+// Property kinds of Scene.UpdateProperty (rev 16, ticket 51; the
+// native scene_property_kind mirror).
+const (
+	// ScenePropertyMatrix updates the node's 2x3 transform (six f32
+	// values, row-major [m00, m01, m10, m11, tx, ty]; the records must
+	// carry SceneEffectFlagHasTransform).
+	ScenePropertyMatrix uint32 = 0
+	// ScenePropertyOpacity updates the node's group opacity (one f32
+	// value in [0, 1]; the records must carry SceneEffectFlagHasOpacity).
+	ScenePropertyOpacity uint32 = 1
+)
 
 func sceneStatusName(code int32) string {
 	switch code {
@@ -881,10 +897,11 @@ const (
 // Service table mirror and validation
 // ---------------------------------------------------------------------------
 
-// sceneTable mirrors the native GpuiGoSceneTable: 27 function pointers
-// then 17 self-check scalars; 288 bytes, alignment 8 (ticket16 added
+// sceneTable mirrors the native GpuiGoSceneTable: 30 function pointers
+// then the self-check scalars; 320 bytes, alignment 8 (ticket16 added
 // the three path entries and the three path record sizes; version 4
-// appended insert_batch).
+// appended insert_batch; version 6 appended insert_effect/effect_dump
+// and the effect record scalars; version 7 appended update_property).
 type sceneTable struct {
 	create                   uintptr
 	clear                    uintptr
@@ -915,6 +932,7 @@ type sceneTable struct {
 	insertBatch              uintptr
 	insertEffect             uintptr
 	effectDump               uintptr
+	updateProperty           uintptr
 	serviceVersion           uint32
 	sizeOfTable              uint32
 	alignOfTable             uint32
@@ -1009,7 +1027,7 @@ func validateSceneTable(t *sceneTable, path string) error {
 		t.insertSubpixelSprite, t.insertPolychromeSprite, t.replay, t.finish,
 		t.length, t.meta, t.dump, t.planDump, t.requirements, t.panicProbe,
 		t.insertPath, t.pathDump, t.pathScript, t.insertBatch, t.insertEffect,
-		t.effectDump,
+		t.effectDump, t.updateProperty,
 	}
 	names := [...]string{
 		"scene_create", "scene_clear", "scene_dispose", "scene_push_layer",
@@ -1022,6 +1040,7 @@ func validateSceneTable(t *sceneTable, path string) error {
 		"scene_requirements", "scene_panic_probe",
 		"scene_insert_path", "scene_path_dump", "scene_path_script",
 		"scene_insert_batch", "scene_insert_effect", "scene_effect_dump",
+		"scene_update_property",
 	}
 	for i, slot := range slots {
 		if slot == 0 {
@@ -1285,6 +1304,86 @@ func (sc *Scene) EffectDump() ([]SceneEffectRecord, error) {
 		return out[:count], nil
 	}
 	return nil, sceneStatusError(sceneErrCapacity, "scene_effect_dump capacity retry failed")
+}
+
+// UpdateProperty mutates a finished scene's property-node records in
+// place (rev 16, ticket 51; the design's appendix A.7): every effect
+// record carrying NodeID takes the new value - the 2x3 matrix
+// (ScenePropertyMatrix, six f32 bits row-major [m00, m01, m10, m11,
+// tx, ty]; the records must carry SceneEffectFlagHasTransform) or the
+// group opacity (ScenePropertyOpacity, one f32 bit word; the records
+// must carry SceneEffectFlagHasOpacity). No re-sort, no re-plan: the
+// render walk consults the mutated records, so the same scene handle
+// re-presents with the updated value. Returns the group's old and new
+// mapped device bounds - the damage union the caller re-presents
+// (mapped through the old/new matrix; the record bounds when the node
+// has no transform).
+//
+// Requires Finish (ErrSceneNotFinished before); a stale node id, an
+// unknown kind, a wrong value count or a value the insert validation
+// would reject answers ErrSceneBadValue.
+func (sc *Scene) UpdateProperty(nodeID uint32, kind uint32, values []uint32) (oldBounds, newBounds SceneBounds, err error) {
+	if nodeID == 0 {
+		return SceneBounds{}, SceneBounds{}, sceneStatusError(sceneErrBadValue, "scene_update_property: node id is zero")
+	}
+	want := 0
+	switch kind {
+	case ScenePropertyMatrix:
+		want = 6
+	case ScenePropertyOpacity:
+		want = 1
+	default:
+		return SceneBounds{}, SceneBounds{}, sceneStatusError(sceneErrBadValue, fmt.Sprintf("scene_update_property: unknown kind %d", kind))
+	}
+	if len(values) != want {
+		return SceneBounds{}, SceneBounds{}, sceneStatusError(sceneErrBadValue, fmt.Sprintf("scene_update_property: kind %d needs %d values, got %d", kind, want, len(values)))
+	}
+	// The value validation mirrors the insert rules (the native side
+	// validates again before mutating).
+	if kind == ScenePropertyMatrix {
+		m00 := float64(math.Float32frombits(values[0]))
+		m01 := float64(math.Float32frombits(values[1]))
+		m10 := float64(math.Float32frombits(values[2]))
+		m11 := float64(math.Float32frombits(values[3]))
+		tx := float64(math.Float32frombits(values[4]))
+		ty := float64(math.Float32frombits(values[5]))
+		for _, value := range []float64{m00, m01, m10, m11, tx, ty} {
+			if math.IsNaN(value) || math.IsInf(value, 0) {
+				return SceneBounds{}, SceneBounds{}, badRecord("scene_update_property", "matrix value non-finite")
+			}
+		}
+		determinant := m00*m11 - m01*m10
+		if math.IsNaN(determinant) || math.IsInf(determinant, 0) || determinant == 0 {
+			return SceneBounds{}, SceneBounds{}, badRecord("scene_update_property", "matrix 2x2 is singular")
+		}
+	} else {
+		opacity := float64(math.Float32frombits(values[0]))
+		if math.IsNaN(opacity) || math.IsInf(opacity, 0) || opacity < 0 || opacity > 1 {
+			return SceneBounds{}, SceneBounds{}, badRecord("scene_update_property", "opacity out of range")
+		}
+	}
+	if err := sc.flushBatch(); err != nil {
+		return SceneBounds{}, SceneBounds{}, err
+	}
+	code, err := sc.withScene("scene_update_property", func() (int32, error) {
+		return callSceneUpdateProperty(
+			sc.svc.table.updateProperty,
+			uint64(sc.handle),
+			nodeID,
+			kind,
+			uintptr(unsafe.Pointer(&values[0])),
+			uint32(len(values)),
+			&oldBounds,
+			&newBounds,
+		)
+	})
+	if err != nil {
+		return SceneBounds{}, SceneBounds{}, err
+	}
+	if code != sceneStatusOK {
+		return SceneBounds{}, SceneBounds{}, sceneStatusError(code, "scene_update_property")
+	}
+	return oldBounds, newBounds, nil
 }
 
 // InsertSurface inserts a surface record with its paired opacity (the

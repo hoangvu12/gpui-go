@@ -209,6 +209,36 @@ func callSceneEffectDump(fn uintptr, scene uint64, records uintptr, capacity uin
 	return callStatus(r1), nil
 }
 
+// callSceneUpdateProperty invokes scene_update_property (rev 16,
+// ticket 51).
+func callSceneUpdateProperty(
+	fn uintptr,
+	scene uint64,
+	nodeID uint32,
+	kind uint32,
+	values uintptr,
+	valueCount uint32,
+	outOld *SceneBounds,
+	outNew *SceneBounds,
+) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_update_property")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(scene),
+		uintptr(nodeID),
+		uintptr(kind),
+		values,
+		uintptr(valueCount),
+		uintptr(unsafe.Pointer(outOld)),
+		uintptr(unsafe.Pointer(outNew)),
+	)
+	runtime.KeepAlive(outOld)
+	runtime.KeepAlive(outNew)
+	return callStatus(r1), nil
+}
+
 func callScenePlanDump(
 	fn uintptr,
 	scene uint64,

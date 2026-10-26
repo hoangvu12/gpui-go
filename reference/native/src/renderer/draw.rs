@@ -206,6 +206,14 @@ impl GroupTargetPool {
     /// `needs_half` pre-creates the half-resolution blur scratch (filter
     /// groups). Returns None over the caps - the caller renders the
     /// group inline and the overflow stays observable.
+    ///
+    /// The bucket is bounds-sized (ticket 51 finishing 50's handed-off
+    /// gap): the region's extent rounded UP to the 256-px granularity
+    /// and clamped to the window, its origin the region's floor clamped
+    /// so the bucket stays inside the window. Sibling groups of nearby
+    /// sizes reuse one backing (the quantization), and a group far
+    /// smaller than the window no longer pays the window's bytes
+    /// (risk 1's measured mitigation).
     fn acquire(
         &mut self,
         device: &ID3D11Device,
@@ -214,28 +222,34 @@ impl GroupTargetPool {
         window: (u32, u32),
         needs_half: bool,
     ) -> Option<GroupLease> {
-        // rev 16, ticket 50 (the recorded deviation): the bucket is
-        // WINDOW-SIZED this revision. The bounds-sized bucketing (the
-        // 256-px quantization below, `GROUP_TARGET_BUCKET_GRANULARITY`)
-        // landed structurally - the pool, the offset viewport plumbing
-        // and the region-relative composite all speak it - but the
-        // small-bucket path has a pinned-sprite-pipeline issue this
-        // ticket did not resolve (the polychrome sprite batch draws
-        // nothing into a target smaller than the window; the vendored
-        // quad/shadow pipelines work). Tickets 51/52 - the transform
-        // work that needs local-space targets anyway - finish the
-        // sizing. Until then every bucket = the window: EXACTLY the
-        // R15 group-target shape, so all R15 fixtures stay
-        // pixel-identical by construction.
-        let width = window.0.max(1);
-        let height = window.1.max(1);
-        let _ = region_size;
+        // The bucket size: the region's extent quantized up to the
+        // 256-px granularity, clamped to the window (the bucket never
+        // escapes the surface; the offset viewport drops what falls
+        // outside it, exactly the content the composite never draws).
+        let granularity = GROUP_TARGET_BUCKET_GRANULARITY as f32;
+        let quantize = |extent: f32, window_extent: u32| -> u32 {
+            let clamped_extent = if !extent.is_finite() || extent <= 0.0 {
+                1.0
+            } else {
+                extent
+            };
+            let bucket = (clamped_extent / granularity).ceil() * granularity;
+            (bucket.min(window_extent.max(1) as f32).max(1.0)) as u32
+        };
+        let width = quantize(region_size[0], window.0);
+        let height = quantize(region_size[1], window.1);
         // The bucket's origin: the region's floor, clamped so the
         // bucket stays inside the window (the composite region is
         // window-space either way).
         let origin = [
-            region_origin[0].floor().max(0.0).min((window.0 as f32 - width as f32).max(0.0)),
-            region_origin[1].floor().max(0.0).min((window.1 as f32 - height as f32).max(0.0)),
+            region_origin[0]
+                .floor()
+                .max(0.0)
+                .min((window.0 as f32 - width as f32).max(0.0)),
+            region_origin[1]
+                .floor()
+                .max(0.0)
+                .min((window.1 as f32 - height as f32).max(0.0)),
         ];
         // Reuse a free entry of the exact bucket size.
         if let Some(position) = self
@@ -481,6 +495,10 @@ pub(super) enum ShaderModule {
     Blur,
     BlurComposite,
     SmoothedBlurComposite,
+    /// The transformed-group composite (rev 16, ticket 51): the quad
+    /// under the effect group's 2x3 matrix over the local-space
+    /// subtree bucket.
+    TransformedBlurComposite,
     /// The vendored backdrop mirror-crop pass (rev 15).
     BackdropCrop,
 }
@@ -504,6 +522,7 @@ impl ShaderModule {
             Self::Blur => "blur",
             Self::BlurComposite => "blur_composite",
             Self::SmoothedBlurComposite => "smoothed_blur_composite",
+            Self::TransformedBlurComposite => "transformed_blur_composite",
             Self::BackdropCrop => "backdrop_crop",
         }
     }
@@ -561,6 +580,12 @@ impl ShaderModule {
                 "smoothed_blur_composite",
                 include_bytes!(concat!(env!("OUT_DIR"), "/smoothed_blur_composite.vs_5_0.dxbc")),
                 include_bytes!(concat!(env!("OUT_DIR"), "/smoothed_blur_composite.ps_5_0.dxbc")),
+                false,
+            )),
+            Self::TransformedBlurComposite => Ok(vendored_bytecode(
+                "transformed_blur_composite",
+                include_bytes!(concat!(env!("OUT_DIR"), "/transformed_blur_composite.vs_5_0.dxbc")),
+                include_bytes!(concat!(env!("OUT_DIR"), "/transformed_blur_composite.ps_5_0.dxbc")),
                 false,
             )),
             Self::BackdropCrop => Ok(vendored_bytecode(
@@ -750,6 +775,20 @@ struct CompositeExtensionsUniforms {
     sample_offset: [f32; 2],
     count: u32,
     padding0: u32,
+    /// The composite target's window-space origin (rev 16, ticket 51):
+    /// SV_Position is target-frame - a nested group composites into
+    /// an offset pooled bucket - so the vendored composite shaders add
+    /// this to recover the window position. (0, 0) for the window and
+    /// the offscene target.
+    target_origin: [f32; 2],
+    padding2: [f32; 2],
+    /// The transformed-group composite's 2x3 matrix rows (rev 16,
+    /// ticket 51): `transform_row0` = (m00, m01, tx, 0) and
+    /// `transform_row1` = (m10, m11, ty, 0) - the ABI record's
+    /// row-major layout (device = row.xy . p + row.z). The unit
+    /// matrix for every other composite pass.
+    transform_row0: [f32; 4],
+    transform_row1: [f32; 4],
 }
 
 impl Default for CompositeExtensionsUniforms {
@@ -765,6 +804,10 @@ impl Default for CompositeExtensionsUniforms {
             sample_offset: [0.0; 2],
             count: 0,
             padding0: 0,
+            target_origin: [0.0, 0.0],
+            padding2: [0.0, 0.0],
+            transform_row0: [1.0, 0.0, 0.0, 0.0],
+            transform_row1: [0.0, 1.0, 0.0, 0.0],
         }
     }
 }
@@ -1107,6 +1150,9 @@ pub(super) struct DrawPipelines {
     blur_composite_fragment: ID3D11PixelShader,
     smoothed_blur_composite_vertex: ID3D11VertexShader,
     smoothed_blur_composite_fragment: ID3D11PixelShader,
+    /// The transformed-group composite (rev 16, ticket 51).
+    transformed_blur_composite_vertex: ID3D11VertexShader,
+    transformed_blur_composite_fragment: ID3D11PixelShader,
     /// The vendored backdrop mirror-crop pass (rev 15).
     backdrop_crop_vertex: ID3D11VertexShader,
     backdrop_crop_fragment: ID3D11PixelShader,
@@ -1208,6 +1254,11 @@ impl DrawPipelines {
             create_vertex_shader(device, smoothed_blur_composite.vertex)?;
         let smoothed_blur_composite_fragment =
             create_fragment_shader(device, smoothed_blur_composite.fragment)?;
+        let transformed_blur_composite = ShaderModule::TransformedBlurComposite.bytecode()?;
+        let transformed_blur_composite_vertex =
+            create_vertex_shader(device, transformed_blur_composite.vertex)?;
+        let transformed_blur_composite_fragment =
+            create_fragment_shader(device, transformed_blur_composite.fragment)?;
         let backdrop_crop = ShaderModule::BackdropCrop.bytecode()?;
         let backdrop_crop_vertex = create_vertex_shader(device, backdrop_crop.vertex)?;
         let backdrop_crop_fragment = create_fragment_shader(device, backdrop_crop.fragment)?;
@@ -1251,6 +1302,8 @@ impl DrawPipelines {
             blur_composite_fragment,
             smoothed_blur_composite_vertex,
             smoothed_blur_composite_fragment,
+            transformed_blur_composite_vertex,
+            transformed_blur_composite_fragment,
             backdrop_crop_vertex,
             backdrop_crop_fragment,
             blur_params_buffer,
@@ -1862,6 +1915,27 @@ fn pre_draw(
     Ok(())
 }
 
+/// Uploads the globals' viewport size for the CURRENT render target
+/// (rev 16, ticket 51): the vertex clip math divides by it, so a pooled
+/// group bucket needs its own size while the walk is inside it (the
+/// pin's `pre_draw` does the same for the window; the font uniforms are
+/// untouched - they never depend on the target).
+fn set_target_globals(
+    ctx: &ID3D11DeviceContext,
+    globals: &GlobalElements,
+    size: [f32; 2],
+) -> Result<(), i32> {
+    update_buffer(
+        ctx,
+        &globals.globals_buffer,
+        &[GlobalUniforms {
+            viewport_size: vec2f(size[0], size[1]),
+            premultiplied_alpha: gpui_render::shaders::common::ShaderBool::Disabled,
+            padding: 0,
+        }],
+    )
+}
+
 /// One draw pass over a finished scene's render plan (the pin's
 /// `render`): uploads the frame's instance buffers, walks the compiled
 /// command stream in order, and manages the offscene/isolated group
@@ -1950,9 +2024,24 @@ fn render_scene(
     // pooled lease (None when the group renders inline: an inline
     // command from the plan, or the pool budget demoted an isolated
     // group). The END arm reads the kind from its own command.
+    //
+    // rev 16 (ticket 51): `tag` matches the END command's
+    // boundary_index (the BEGIN's effect-record index; usize::MAX for
+    // filter frames) so an INLINE effect end can restore exactly the
+    // frame its begin pushed, and `offset` carries the inline
+    // translation fast path (the viewport offset when the group's
+    // transform is translation-only and nothing else groups).
     struct GroupFrame {
         parent: ActiveTarget,
         lease: Option<GroupLease>,
+        tag: usize,
+        /// The group's content region in the CURRENT frame (the
+        /// bucket's un-quantized extent: the clip bounds or the
+        /// content-extent/record-bounds region the BEGIN looked up).
+        /// The composites draw THIS rect (not the quantized bucket),
+        /// sampling the bucket at (region-relative position) / bucket
+        /// size - the quantization margin never reaches the target.
+        region: [f32; 4],
     }
     let mut group_stack: Vec<GroupFrame> = Vec::new();
 
@@ -2106,151 +2195,225 @@ fn render_scene(
                     // (the plan compiles them into begin/end commands).
                 }
             }
-        } else if (command.command_kind == command_kind::BEGIN_FILTER
-            || command.command_kind == command_kind::BEGIN_EFFECT)
-            && command.filter_target == 1
+        } else if command.command_kind == command_kind::BEGIN_FILTER
+            || command.command_kind == command_kind::BEGIN_EFFECT
         {
-            // An isolated group begins: acquire a pooled bucket for its
-            // region, redirect the walk into it through the offset
-            // viewport, and clear it. A pool overflow demotes the group
-            // to inline (the children keep drawing into the current
-            // target, un-grouped - observably: the debug-stats counter
-            // and a debug-build warning already fired in the pool).
+            // An ISOLATED group begins: acquire a pooled bucket for its
+            // content, redirect the walk into it, and clear it. A pool
+            // overflow demotes the group to inline (the children keep
+            // drawing into the current target, un-grouped - observably:
+            // the debug-stats counter and a debug-build warning already
+            // fired in the pool).
+            //
+            // rev 16 (ticket 51, fixing 50's handed-off gap): the bucket
+            // renders at its FRAME'S ORIGIN with the GLOBALS' viewport
+            // size set to the bucket - the children keep their true
+            // coordinates, so every pipeline's fragment invariant
+            // (SV_Position equals the records' coordinate space - the
+            // polychrome sprite's rounded-rect SDF, the vendored
+            // quads'/shadows' border geometry, the underline wave, the
+            // content-mask fades) holds exactly as it does on the
+            // window. The offset-viewport shape 50 sketched (window
+            // coordinates shifted by the bucket origin) breaks that
+            // invariant: the fragment's SV_Position lands at
+            // window-minus-origin while the records stay window-space,
+            // and the per-pixel geometry (measured against the records)
+            // reads the sprite/rounded-quad as fully outside - nothing
+            // draws. The bucket therefore spans the frame's [0,
+            // extent max]: bounds-sized (quantized to the 256-px
+            // granularity, clamped to the window) for effect groups -
+            // the local extent for a transform group's local-authored
+            // subtree, the content extent's max corner for window-frame
+            // groups - and window-sized for FILTER groups (R15's exact
+            // blur textures and scratch: a bounds-sized filter bucket
+            // would wrap the gaussian at the region edge and shift the
+            // R15 blur fixtures' edge pixels; ticket 53's region-limited
+            // blur owns that change).
             let is_filter = command.command_kind == command_kind::BEGIN_FILTER;
-            let record_bounds = if is_filter {
-                snapshot
-                    .boundaries
-                    .get(command.boundary_index as usize)
-                    .map(|record| (record.bounds, record.max_blur_radius()))
-                    .ok_or(renderer_status::ERR_BAD_VALUE)?
-            } else {
-                snapshot
-                    .effects
-                    .get(command.boundary_index as usize)
-                    .map(|record| (record.bounds, 0.0))
-                    .ok_or(renderer_status::ERR_BAD_VALUE)?
-            };
-            let record = record_bounds.0;
-            let blur_radius = record_bounds.1;
-            // The group's bucket region: filter groups dilate by the
-            // blur chain's reach (the composite region; content outside
-            // is never composited, exactly as R15); effect groups use
-            // the clip bounds when they clip (content outside the rrect
-            // is dropped - CSS overflow) or the content extent when
-            // they do not (nothing is lost).
-            let clip_to_bounds = !is_filter
-                && (snapshot.effects[command.boundary_index as usize].flags
-                    & (crate::scene::effect_flags::CLIP_TO_BOUNDS
-                        | crate::scene::effect_flags::ROUNDED_CLIP_ONLY))
-                    != 0;
-            let region = if is_filter || clip_to_bounds {
-                let dilation = GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * blur_radius;
-                [
-                    f32::from_bits(record.x) - dilation,
-                    f32::from_bits(record.y) - dilation,
-                    f32::from_bits(record.w) + 2.0 * dilation,
-                    f32::from_bits(record.h) + 2.0 * dilation,
-                ]
-            } else {
-                group_extents
-                    .iter()
-                    .find(|(index, _)| *index == command_index(snapshot, command))
-                    .map(|(_, extent)| *extent)
-                    .unwrap_or([
+            if command.filter_target == 1 {
+                let record_bounds = if is_filter {
+                    snapshot
+                        .boundaries
+                        .get(command.boundary_index as usize)
+                        .map(|record| (record.bounds, record.max_blur_radius()))
+                        .ok_or(renderer_status::ERR_BAD_VALUE)?
+                } else {
+                    snapshot
+                        .effects
+                        .get(command.boundary_index as usize)
+                        .map(|record| (record.bounds, 0.0))
+                        .ok_or(renderer_status::ERR_BAD_VALUE)?
+                };
+                let record = record_bounds.0;
+                let blur_radius = record_bounds.1;
+                // The group's content region in the CURRENT frame: the
+                // dilated record bounds for filter groups (R15's exact
+                // composite quad); the clip bounds when the effect
+                // group clips (content outside the rrect is dropped -
+                // CSS overflow); the content extent when it does not
+                // (nothing is lost). A transform group's region is its
+                // LOCAL content extent (the subtree's records are
+                // local-frame).
+                let clip_to_bounds = !is_filter
+                    && (snapshot.effects[command.boundary_index as usize].flags
+                        & (crate::scene::effect_flags::CLIP_TO_BOUNDS
+                            | crate::scene::effect_flags::ROUNDED_CLIP_ONLY))
+                        != 0;
+                let region = if is_filter {
+                    let dilation = GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * blur_radius;
+                    [
+                        f32::from_bits(record.x) - dilation,
+                        f32::from_bits(record.y) - dilation,
+                        f32::from_bits(record.w) + 2.0 * dilation,
+                        f32::from_bits(record.h) + 2.0 * dilation,
+                    ]
+                } else if clip_to_bounds {
+                    [
                         f32::from_bits(record.x),
                         f32::from_bits(record.y),
                         f32::from_bits(record.w),
                         f32::from_bits(record.h),
-                    ])
-            };
-            let needs_half = is_filter && BlurKernel::for_radius(blur_radius).is_some();
-            let lease = {
-                let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
-                surface_state.draw_targets.group_pool.acquire(
-                    &device,
-                    [region[0], region[1]],
-                    [region[2], region[3]],
-                    window,
-                    needs_half,
-                )
-            };
-            match lease {
-                Some(lease) => {
-                    group_stack.push(GroupFrame {
-                        parent: current.clone(),
-                        lease: Some(lease.clone()),
-                    });
-                    current = ActiveTarget {
-                        rtv: lease.rtv.clone(),
-                        srv: lease.srv.clone(),
-                        viewport: D3D11_VIEWPORT {
-                            // The offset viewport: a window position p
-                            // rasterizes to bucket pixel p - origin
-                            // (pixels outside the bucket are dropped,
-                            // exactly the content the composite never
-                            // draws).
-                            TopLeftX: -lease.origin[0],
-                            TopLeftY: -lease.origin[1],
-                            Width: window.0 as f32,
-                            Height: window.1 as f32,
-                            MinDepth: 0.0,
-                            MaxDepth: 1.0,
-                        },
-                        origin: lease.origin,
-                        size: lease.size,
-                    };
-                    active_render_target = current.rtv.clone();
-                    frame.viewport = current.viewport;
-                    unsafe {
-                        if let Some(rtv) = current.rtv.as_ref() {
-                            ctx.ClearRenderTargetView(rtv, &[0.0; 4]);
-                            let bound = Some(rtv.clone());
-                            ctx.OMSetRenderTargets(Some(slice::from_ref(&bound)), None);
-                            ctx.RSSetViewports(Some(slice::from_ref(&current.viewport)));
+                    ]
+                } else {
+                    group_extents
+                        .iter()
+                        .find(|(index, ..)| *index == command_index(snapshot, command))
+                        .map(|(_, region, _)| *region)
+                        .unwrap_or([
+                            f32::from_bits(record.x),
+                            f32::from_bits(record.y),
+                            f32::from_bits(record.w),
+                            f32::from_bits(record.h),
+                        ])
+                };
+                // The bucket's extent (the frame's [0, max]): the
+                // window for filter groups (R15-exact); the region's
+                // far corner otherwise (quantized up, clamped to the
+                // window).
+                let bucket_extent = if is_filter {
+                    [window.0 as f32, window.1 as f32]
+                } else {
+                    [region[0] + region[2], region[1] + region[3]]
+                };
+                let needs_half = is_filter && BlurKernel::for_radius(blur_radius).is_some();
+                let lease = {
+                    let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
+                    surface_state.draw_targets.group_pool.acquire(
+                        &device,
+                        [0.0, 0.0],
+                        [bucket_extent[0], bucket_extent[1]],
+                        window,
+                        needs_half,
+                    )
+                };
+                match lease {
+                    Some(lease) => {
+                        group_stack.push(GroupFrame {
+                            parent: current.clone(),
+                            lease: Some(lease.clone()),
+                            tag: command.boundary_index as usize,
+                            region,
+                        });
+                        current = ActiveTarget {
+                            rtv: lease.rtv.clone(),
+                            srv: lease.srv.clone(),
+                            // The bucket renders the frame's [0, size]:
+                            // the children draw at their true frame
+                            // coordinates (pixels beyond the bucket are
+                            // dropped - exactly the content the
+                            // composite never draws).
+                            viewport: D3D11_VIEWPORT {
+                                TopLeftX: 0.0,
+                                TopLeftY: 0.0,
+                                Width: lease.size[0],
+                                Height: lease.size[1],
+                                MinDepth: 0.0,
+                                MaxDepth: 1.0,
+                            },
+                            origin: [0.0, 0.0],
+                            size: lease.size,
+                        };
+                        active_render_target = current.rtv.clone();
+                        frame.viewport = current.viewport;
+                        // The globals' viewport size must match the
+                        // bound viewport: the vertex clip math divides
+                        // by it, so the children's frame coordinates map
+                        // to the bucket pixel-for-pixel (the pin's own
+                        // invariant - its pre_draw does exactly this
+                        // for the window).
+                        set_target_globals(&ctx, &frame.globals, current.size)?;
+                        unsafe {
+                            if let Some(rtv) = current.rtv.as_ref() {
+                                ctx.ClearRenderTargetView(rtv, &[0.0; 4]);
+                                let bound = Some(rtv.clone());
+                                ctx.OMSetRenderTargets(Some(slice::from_ref(&bound)), None);
+                                ctx.RSSetViewports(Some(slice::from_ref(&current.viewport)));
+                            }
                         }
                     }
-                }
-                None => {
-                    // The pool demoted the group to inline: no target
-                    // switch, nothing to clear; the end command is a
-                    // no-op for the walk (the overflow is already
-                    // observable through the debug stats).
-                    group_stack.push(GroupFrame {
-                        parent: current.clone(),
-                        lease: None,
-                    });
+                    None => {
+                        // The pool demoted the group to inline: no target
+                        // switch, nothing to clear; the end command is a
+                        // no-op for the walk (the overflow is already
+                        // observable through the debug stats).
+                        group_stack.push(GroupFrame {
+                            parent: current.clone(),
+                            lease: None,
+                            tag: command.boundary_index as usize,
+                            region,
+                        });
+                    }
                 }
             }
-        } else if (command.command_kind == command_kind::END_FILTER
-            || command.command_kind == command_kind::END_EFFECT)
-            && command.filter_target == 1
+            // A plain INLINE begin draws nothing (the pinned plan's
+            // inline arms are no-ops).
+        } else if command.command_kind == command_kind::END_FILTER
+            || command.command_kind == command_kind::END_EFFECT
         {
-            // An isolated group ends: composite the bucket into the
-            // parent under the group's parameters, then restore the
-            // parent target and viewport. An inline (or demoted) group
-            // frame only restores - the pinned plan's inline arms draw
+            // A group ends: composite the bucket into the parent under
+            // the group's parameters, then restore the parent target,
+            // viewport and globals. An inline (or demoted) group frame
+            // only restores - the pinned plan's inline arms draw
             // nothing.
-            let entry = group_stack
-                .pop()
-                .ok_or(renderer_status::ERR_DEVICE)?;
-            let parent = entry.parent.clone();
-            match entry.lease {
-                Some(lease) => {
+            //
+            // rev 16 (ticket 51): the pop is tagged - the END command's
+            // boundary_index is the group's BEGIN record index for a
+            // matched pair, so the frame that begin pushed is the one
+            // this end restores (an unmatched end's boundary_index is
+            // its own marker, which no frame carries). Filter groups
+            // keep the exact R15 shape: only their ISOLATED ends act.
+            let is_filter = command.command_kind == command_kind::END_FILTER;
+            let frame_at_top = !group_stack.is_empty()
+                && group_stack
+                    .last()
+                    .is_some_and(|entry| entry.tag == command.boundary_index as usize);
+            if frame_at_top && (command.filter_target == 1 || !is_filter) {
+                let entry = group_stack.pop().ok_or(renderer_status::ERR_DEVICE)?;
+                let parent = entry.parent.clone();
+                // Restore the parent's target, viewport and globals
+                // BEFORE compositing: the composite's vertex divides by
+                // the globals' viewport size and rasterizes through the
+                // PARENT's viewport, so the bucket's globals must not
+                // leak into its own draw.
+                current = parent.clone();
+                active_render_target = current.rtv.clone();
+                frame.viewport = current.viewport;
+                set_target_globals(&ctx, &frame.globals, current.size)?;
+                if let Some(lease) = entry.lease {
                     let source = ActiveTarget {
                         rtv: lease.rtv.clone(),
                         srv: lease.srv.clone(),
                         viewport: D3D11_VIEWPORT {
-                            TopLeftX: -lease.origin[0],
-                            TopLeftY: -lease.origin[1],
-                            Width: window.0 as f32,
-                            Height: window.1 as f32,
+                            TopLeftX: 0.0,
+                            TopLeftY: 0.0,
+                            Width: lease.size[0],
+                            Height: lease.size[1],
                             MinDepth: 0.0,
                             MaxDepth: 1.0,
                         },
-                        origin: lease.origin,
+                        origin: [0.0, 0.0],
                         size: lease.size,
                     };
-                    let is_filter = command.command_kind == command_kind::END_FILTER;
                     if is_filter {
                         let boundary = snapshot
                             .boundaries
@@ -2282,22 +2445,22 @@ fn render_scene(
                             &source,
                             &parent,
                             effect,
+                            entry.region,
                         )?;
                     }
                     let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
                     surface_state.draw_targets.group_pool.release(&lease);
                 }
-                None => {}
+                unsafe {
+                    ctx.OMSetRenderTargets(Some(slice::from_ref(&current.rtv)), None);
+                }
             }
-            current = parent;
-            active_render_target = current.rtv.clone();
-            frame.viewport = current.viewport;
-            unsafe {
-                ctx.OMSetRenderTargets(Some(slice::from_ref(&current.rtv)), None);
-            }
+            // An unmatched end, or an inline group whose begin pushed
+            // nothing, draws nothing (the pinned plan's Inline arms are
+            // no-ops).
         }
-        // Inline filter and effect groups and inline begin/end commands
-        // draw nothing (the pinned plan's Inline arms are no-ops).
+        // Plain inline begins (no offset, no lease) draw nothing (the
+        // pinned plan's Inline arms are no-ops).
     }
 
     // The pin's retain_surface_views: after the command loop, keep
@@ -2339,14 +2502,32 @@ fn command_index(snapshot: &Snapshot, command: &GpuiGoSceneCommandRecord) -> usi
         .unwrap_or(usize::MAX)
 }
 
-/// The R16 pre-pass: every ISOLATED group's content extent, keyed by
-/// its BEGIN command's index - the union of the primitives in its span
-/// and its nested groups' composite extents (a nested filter group
-/// contributes its dilated record bounds; a nested effect group its
-/// own extent). Effect groups that CLIP use their record bounds
-/// instead (content outside the rrect is dropped), so only the
-/// non-clipping groups consume this table.
-fn group_content_extents(snapshot: &Snapshot) -> Vec<(usize, [f32; 4])> {
+/// The R16 pre-pass: every group's LOCAL region and DEVICE footprint,
+/// keyed by its BEGIN command's index.
+///
+/// The **region** is what the walk acquires the bucket for: the union
+/// of the primitives in the group's span and its nested groups'
+/// footprints (a nested filter group contributes its dilated record
+/// bounds; a nested effect group its footprint - mapped through its
+/// matrix for transform groups). Effect groups that CLIP use their
+/// record bounds instead (content outside the rrect is dropped). The
+/// **footprint** is what the group's PARENT must cover: the region
+/// again for filter and plain effect groups, the mapped region (the
+/// AABB of the matrix-mapped corners) for a transform group - the
+/// parent's own region must contain where this group's composite
+/// lands, and a parent transform group's region is its LOCAL
+/// (untransformed) extent, so the mapping applies exactly once, by
+/// the group that owns the matrix.
+///
+/// rev 16 (ticket 51): effect-group BEGINs track regardless of the
+/// plan's inline/isolated flag - a translation-only fast-path group
+/// still offsets its children inside the parent (the parent must
+/// cover the translated footprint), and a promoted inline group
+/// (scene_update_property turned its translation into a matrix)
+/// acquires its bucket from this same table. Filter groups keep the
+/// isolated-only accounting (an unmatched filter marker renders
+/// inline - its children union individually).
+fn group_content_extents(snapshot: &Snapshot) -> Vec<(usize, [f32; 4], [f32; 4])> {
     #[derive(Clone, Copy)]
     struct Acc {
         min_x: f32,
@@ -2386,84 +2567,109 @@ fn group_content_extents(snapshot: &Snapshot) -> Vec<(usize, [f32; 4])> {
             }
         }
     }
-    let mut result: Vec<(usize, [f32; 4])> = Vec::new();
-    let mut stack: Vec<(usize, Acc)> = Vec::new();
+    #[derive(Clone, Copy, PartialEq)]
+    enum MarkerKind {
+        Filter,
+        Effect,
+    }
+    let empty_acc = || Acc {
+        min_x: 0.0,
+        min_y: 0.0,
+        max_x: 0.0,
+        max_y: 0.0,
+        empty: true,
+    };
+    let record_bounds_of = |bits: &crate::scene::GpuiGoSceneBounds| {
+        [
+            f32::from_bits(bits.x),
+            f32::from_bits(bits.y),
+            f32::from_bits(bits.w),
+            f32::from_bits(bits.h),
+        ]
+    };
+    let mut result: Vec<(usize, [f32; 4], [f32; 4])> = Vec::new();
+    let mut stack: Vec<(MarkerKind, usize, Acc)> = Vec::new();
     for (index, command) in snapshot.commands.iter().enumerate() {
         match command.command_kind {
             command_kind::BATCH => {
                 if let Some(extent) = batch_bounds(snapshot, command) {
-                    if let Some((_, acc)) = stack.last_mut() {
+                    if let Some((_, _, acc)) = stack.last_mut() {
                         acc.union_bounds(extent[0], extent[1], extent[2], extent[3]);
                     }
                 }
             }
-            command_kind::BEGIN_FILTER | command_kind::BEGIN_EFFECT => {
+            command_kind::BEGIN_FILTER => {
                 if command.filter_target == 1 {
-                    stack.push((
-                        index,
-                        Acc {
-                            min_x: 0.0,
-                            min_y: 0.0,
-                            max_x: 0.0,
-                            max_y: 0.0,
-                            empty: true,
-                        },
-                    ));
+                    stack.push((MarkerKind::Filter, index, empty_acc()));
                 }
             }
+            command_kind::BEGIN_EFFECT => {
+                stack.push((MarkerKind::Effect, index, empty_acc()));
+            }
             command_kind::END_FILTER | command_kind::END_EFFECT => {
-                if command.filter_target == 1 {
-                    if let Some((begin_index, acc)) = stack.pop() {
-                        let is_filter = command.command_kind == command_kind::END_FILTER;
-                        let record_bounds = if is_filter {
-                            snapshot
-                                .boundaries
-                                .get(command.boundary_index as usize)
-                                .map(|record| {
-                                    let dilation = GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS
-                                        * record.max_blur_radius();
-                                    [
-                                        f32::from_bits(record.bounds.x) - dilation,
-                                        f32::from_bits(record.bounds.y) - dilation,
-                                        f32::from_bits(record.bounds.w) + 2.0 * dilation,
-                                        f32::from_bits(record.bounds.h) + 2.0 * dilation,
-                                    ]
-                                })
-                        } else {
-                            snapshot
-                                .effects
-                                .get(command.boundary_index as usize)
-                                .map(|record| {
-                                    let clips = (record.flags
-                                        & (crate::scene::effect_flags::CLIP_TO_BOUNDS
-                                            | crate::scene::effect_flags::ROUNDED_CLIP_ONLY))
-                                        != 0;
-                                    if clips {
-                                        [
-                                            f32::from_bits(record.bounds.x),
-                                            f32::from_bits(record.bounds.y),
-                                            f32::from_bits(record.bounds.w),
-                                            f32::from_bits(record.bounds.h),
-                                        ]
-                                    } else {
-                                        acc.extent([
-                                            f32::from_bits(record.bounds.x),
-                                            f32::from_bits(record.bounds.y),
-                                            f32::from_bits(record.bounds.w),
-                                            f32::from_bits(record.bounds.h),
-                                        ])
-                                    }
-                                })
-                        };
-                        let extent = match record_bounds {
-                            Some(bounds) => bounds,
-                            None => acc.extent([0.0, 0.0, 0.0, 0.0]),
-                        };
-                        result.push((begin_index, extent));
-                        if let Some((_, parent)) = stack.last_mut() {
-                            parent.union_bounds(extent[0], extent[1], extent[2], extent[3]);
+                let is_filter = command.command_kind == command_kind::END_FILTER;
+                let wants_pop = stack.last().is_some_and(|(kind, _, _)| {
+                    *kind == if is_filter { MarkerKind::Filter } else { MarkerKind::Effect }
+                }) && (command.filter_target == 1 || !is_filter);
+                if !wants_pop {
+                    continue;
+                }
+                let Some((_, begin_index, acc)) = stack.pop() else {
+                    continue;
+                };
+                let (region, footprint) = if is_filter {
+                    let record_bounds = snapshot
+                        .boundaries
+                        .get(command.boundary_index as usize)
+                        .map(|record| {
+                            let dilation = GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS
+                                * record.max_blur_radius();
+                            let base = record_bounds_of(&record.bounds);
+                            [
+                                base[0] - dilation,
+                                base[1] - dilation,
+                                base[2] + 2.0 * dilation,
+                                base[3] + 2.0 * dilation,
+                            ]
+                        })
+                        .unwrap_or([0.0, 0.0, 0.0, 0.0]);
+                    (record_bounds, record_bounds)
+                } else {
+                    match snapshot.effects.get(command.boundary_index as usize) {
+                        None => {
+                            let extent = acc.extent([0.0, 0.0, 0.0, 0.0]);
+                            (extent, extent)
+                        }
+                        Some(record) => {
+                            let clips = (record.flags
+                                & (crate::scene::effect_flags::CLIP_TO_BOUNDS
+                                    | crate::scene::effect_flags::ROUNDED_CLIP_ONLY))
+                                != 0;
+                            let base = record_bounds_of(&record.bounds);
+                            let region = if clips {
+                                base
+                            } else {
+                                acc.extent(base)
+                            };
+                            // The parent-frame footprint: mapped through
+                            // the group's own matrix when it carries a
+                            // transform (the identity-mapped region for
+                            // the plain translation, which
+                            // map_bounds_corners computes exactly as the
+                            // translated footprint).
+                            let footprint =
+                                if (record.flags & crate::scene::effect_flags::HAS_TRANSFORM) != 0 {
+                                    crate::scene::map_bounds_corners(region, crate::scene::effect_matrix(record))
+                                } else {
+                                    region
+                                };
+                            (region, footprint)
                         }
                     }
+                };
+                result.push((begin_index, region, footprint));
+                if let Some((_, _, parent)) = stack.last_mut() {
+                    parent.union_bounds(footprint[0], footprint[1], footprint[2], footprint[3]);
                 }
             }
             _ => {}
@@ -3118,6 +3324,10 @@ fn dx_blur_pass(
         match &extras {
             BlurPassExtras::None => {}
             BlurPassExtras::Composite(_) => {
+                // The vertex stage reads the extensions too (rev 16,
+                // ticket 51: the transformed composite's matrix lives
+                // there).
+                ctx.VSSetConstantBuffers(5, Some(&composite_extensions));
                 ctx.PSSetConstantBuffers(5, Some(&composite_extensions));
             }
             BlurPassExtras::Crop(_) => {
@@ -3256,7 +3466,10 @@ fn composite_filter_group(
         }
         extensions.count = matrix_count;
     }
-    extensions.sample_offset = lease.origin;
+    // The bucket sits at the frame's origin (ticket 51): the sampling
+    // offset is zero and the frame's coordinates are the composite's
+    // coordinates.
+    extensions.sample_offset = [0.0, 0.0];
 
     let half_vp = D3D11_VIEWPORT {
         TopLeftX: 0.0,
@@ -3373,13 +3586,23 @@ fn composite_filter_group(
     Ok(())
 }
 
-/// The R16 group composite for EFFECT groups (rev 16, ticket 50): the
-/// explicit NO-BLUR composite - one textured quad over the group's
-/// bounds under the group's opacity, rounded clip (when the group
-/// clips: `clip_to_bounds` / `rounded_clip_only`) and rectangular
-/// content mask, sampled from the pooled bucket region-relative. This
-/// is the group-opacity path (the single-primitive case never reaches
-/// it: the plan folds it into a per-primitive multiply).
+/// The R16 group composite for EFFECT groups (rev 16, ticket 50; the
+/// matrix composite is ticket 51): the explicit NO-BLUR composite - one
+/// textured quad over the group's bounds under the group's opacity,
+/// rounded clip (when the group clips: `clip_to_bounds` /
+/// `rounded_clip_only`) and rectangular content mask, sampled from the
+/// pooled bucket region-relative. This is the group-opacity path (the
+/// single-primitive case never reaches it: the plan folds it into a
+/// per-primitive multiply).
+///
+/// rev 16, ticket 51: a group carrying a 2x3 transform composites
+/// through the TRANSFORMED path - the bucket rect's corners mapped
+/// through the matrix (`transformed_blur_composite`), the local-space
+/// rounded clip and content mask evaluated at the interpolated LOCAL
+/// position, the bucket sampled at the quad's unit coordinates with
+/// linear filtering. A translation-only group (the 2x2 is the
+/// identity) takes the axis-aligned path with its rects translated -
+/// it keeps the smoothed-corner composite 50 built.
 #[allow(clippy::too_many_arguments)]
 fn composite_effect_group(
     _state: &mut RendererState,
@@ -3390,43 +3613,106 @@ fn composite_effect_group(
     source: &ActiveTarget,
     target: &ActiveTarget,
     effect: &crate::scene::GpuiGoSceneEffectRecord,
+    region: [f32; 4],
 ) -> Result<(), i32> {
     let clips = (effect.flags
         & (crate::scene::effect_flags::CLIP_TO_BOUNDS
             | crate::scene::effect_flags::ROUNDED_CLIP_ONLY))
         != 0;
+    let opacity = f32::from_bits(effect.opacity);
+    let mut extensions = CompositeExtensionsUniforms::default();
+    // The matrix composite (ticket 51): the subtree rendered into its
+    // bucket in the group's LOCAL frame (the children's local
+    // coordinates, bucket pixel p = local p), so the composite maps the
+    // bucket rect through the record's row-major 2x3 (the
+    // transform-origin and the group's parent-frame position already
+    // resolved by the caller into the matrix). The clip and the mask
+    // stay in the local frame - CSS clips inside the element, then the
+    // transform applies - and the fragment samples the bucket at the
+    // quad's unit coordinates (linear filtering).
+    let matrix_composite = (effect.flags & crate::scene::effect_flags::HAS_TRANSFORM) != 0
+        && !crate::scene::effect_translation_only(effect);
+    if matrix_composite {
+        // The quad rect: the group's LOCAL content region (the bucket's
+        // un-quantized extent). The quantization margin between the
+        // region and the bucket never reaches the target, and the
+        // wrap-addressed sampling edge stays at the content's own
+        // edge. The group's clip (when it clips) is the rrect coverage
+        // over the record's content mask - not the quad.
+        let clip = if clips {
+            FilterCompositeClip::RoundedBounds
+        } else {
+            FilterCompositeClip::ContentShape
+        };
+        let uniforms = BlurUniforms::composite(
+            quad_bounds(region),
+            quad_bounds(effect_mask_bounds(effect)),
+            snapshot_radii(&effect.corner_radii),
+            0.0,
+            opacity,
+            clip,
+            source.size,
+            source.size,
+        );
+        // The row-major 2x3 rows: the ABI record's transform layout
+        // (device = row.xy . p + row.z).
+        let [m00, m01, m10, m11, tx, ty] = crate::scene::effect_matrix(effect);
+        extensions.transform_row0 = [m00, m01, tx, 0.0];
+        extensions.transform_row1 = [m10, m11, ty, 0.0];
+        dx_blur_pass(
+            draw,
+            frame,
+            &draw.pipelines.transformed_blur_composite_vertex,
+            &draw.pipelines.transformed_blur_composite_fragment,
+            &draw.pipelines.blur_blend_composite,
+            &target.rtv,
+            &source.srv,
+            uniforms,
+            &target.viewport,
+            D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+            4,
+            false,
+            BlurPassExtras::Composite(&extensions),
+        )?;
+        return Ok(());
+    }
+    // The translation a translation-only group carries (ticket 51):
+    // every rect the axis-aligned composite draws shifts by it, so the
+    // bucket's content lands at its translated position (the bucket
+    // itself rendered the children at their local positions).
+    let (tx, ty) = if (effect.flags & crate::scene::effect_flags::HAS_TRANSFORM) != 0 {
+        crate::scene::effect_translation(effect)
+    } else {
+        (0.0, 0.0)
+    };
+    let translate = |bits: &crate::scene::GpuiGoSceneBounds| -> [f32; 4] {
+        [
+            f32::from_bits(bits.x) + tx,
+            f32::from_bits(bits.y) + ty,
+            f32::from_bits(bits.w),
+            f32::from_bits(bits.h),
+        ]
+    };
     let (composite_bounds, corner_radii, corner_smoothing, clip) = if clips {
         // The composite quad is the group's (rounded) bounds; content
         // outside the rrect is dropped - CSS overflow clipping.
         (
-            snapshot_bounds(&effect.bounds),
+            quad_bounds(translate(&effect.bounds)),
             snapshot_radii(&effect.corner_radii),
             f32::from_bits(effect.corner_smoothing),
             FilterCompositeClip::RoundedBounds,
         )
     } else {
-        // No clip: the composite quad covers the whole bucket (the
-        // content extent the walk acquired it for); nothing is lost.
+        // No clip: the composite quad is the content region at its
+        // translated position; nothing is lost.
         (
-            gpui::Bounds {
-                origin: gpui::point(
-                    gpui::ScaledPixels(source.origin[0]),
-                    gpui::ScaledPixels(source.origin[1]),
-                ),
-                size: gpui::Size {
-                    width: gpui::ScaledPixels(source.size[0]),
-                    height: gpui::ScaledPixels(source.size[1]),
-                },
-            },
+            quad_bounds([region[0] + tx, region[1] + ty, region[2], region[3]]),
             snapshot_radii(&[0, 0, 0, 0]),
             0.0,
             FilterCompositeClip::ContentShape,
         )
     };
-    let content_mask = snapshot_bounds(&effect.content_mask);
-    let opacity = f32::from_bits(effect.opacity);
-    let mut extensions = CompositeExtensionsUniforms::default();
-    extensions.sample_offset = source.origin;
+    let content_mask = quad_bounds(translate(&effect.content_mask));
 
     let composite_uniforms = BlurUniforms::composite(
         composite_bounds,
@@ -3449,6 +3735,11 @@ fn composite_effect_group(
             &draw.pipelines.blur_composite_fragment,
         )
     };
+    // The sampling origin is the TRANSLATION only: the bucket's texels
+    // ARE the frame's coordinates (the origin-0 scheme), so a pixel at
+    // the frame position p samples the bucket at p / bucket size, and
+    // the translated quad's pixel p + t samples it at (p + t - t).
+    extensions.sample_offset = [tx, ty];
     dx_blur_pass(
         draw,
         frame,
@@ -3465,6 +3756,29 @@ fn composite_effect_group(
         BlurPassExtras::Composite(&extensions),
     )?;
     Ok(())
+}
+
+/// One window-space rect as the pinned `Bounds<ScaledPixels>` (the
+/// composite uniforms' quad shape; rev 16, ticket 51).
+fn quad_bounds(rect: [f32; 4]) -> gpui::Bounds<gpui::ScaledPixels> {
+    gpui::Bounds {
+        origin: gpui::point(gpui::ScaledPixels(rect[0]), gpui::ScaledPixels(rect[1])),
+        size: gpui::Size {
+            width: gpui::ScaledPixels(rect[2]),
+            height: gpui::ScaledPixels(rect[3]),
+        },
+    }
+}
+
+/// The effect record's own rectangular content mask as a window-space
+/// rect.
+fn effect_mask_bounds(effect: &crate::scene::GpuiGoSceneEffectRecord) -> [f32; 4] {
+    [
+        f32::from_bits(effect.content_mask.x),
+        f32::from_bits(effect.content_mask.y),
+        f32::from_bits(effect.content_mask.w),
+        f32::from_bits(effect.content_mask.h),
+    ]
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -3555,7 +3869,14 @@ fn dx_blur_and_composite(
     let mut pong_srv: Option<ID3D11ShaderResourceView> = None;
     let kernel = BlurKernel::for_radius(blur_radius);
     if clip_rounded {
-        let crop = ensure_backdrop_crop(state, slot_index, slot_generation, bounds, blur_radius)?;
+        let crop = ensure_backdrop_crop(
+            state,
+            slot_index,
+            slot_generation,
+            bounds,
+            blur_radius,
+            current.size,
+        )?;
         let crop_uniforms = BackdropCropUniforms {
             origin: [
                 crop.origin[0] - current.origin[0],
@@ -3606,6 +3927,7 @@ fn dx_blur_and_composite(
             crop.origin[1] - crop.margin[1],
         ];
     }
+
     let half_vp = D3D11_VIEWPORT {
         TopLeftX: 0.0,
         TopLeftY: 0.0,
@@ -3742,6 +4064,7 @@ fn ensure_backdrop_crop(
     slot_generation: u32,
     bounds: gpui::Bounds<gpui::ScaledPixels>,
     blur_radius: f32,
+    source_size: [f32; 2],
 ) -> Result<BackdropCropRegion, i32> {
     let origin = [
         bounds.origin.x.0.floor().max(0.0),
@@ -3760,11 +4083,25 @@ fn ensure_backdrop_crop(
         (surface_state.width, surface_state.height)
     };
     let mut margin = [reach, reach];
-    // Clamp the crop inside the surface (a heavily blurred element near
-    // the edge gets a truncated margin; the blur's wrap reads there are
-    // discarded by the region-relative composite anyway).
-    margin[0] = margin[0].min(origin[0]).min((full_width as f32 - origin[0] - region[0]).max(0.0));
-    margin[1] = margin[1].min(origin[1]).min((full_height as f32 - origin[1] - region[1]).max(0.0));
+    // Clamp the crop inside its blur source (the CURRENT target: the
+    // window, or the group bucket a backdrop inside an isolated group
+    // samples - rev 16, ticket 51: the bucket is bounds-sized, so
+    // clamping to the window would let the crop read past the bucket).
+    // A heavily blurred element near the edge gets a truncated margin;
+    // the blur's wrap reads there are discarded by the
+    // region-relative composite anyway.
+    let source_width = if source_size[0] > 0.0 {
+        source_size[0]
+    } else {
+        full_width as f32
+    };
+    let source_height = if source_size[1] > 0.0 {
+        source_size[1]
+    } else {
+        full_height as f32
+    };
+    margin[0] = margin[0].min(origin[0]).min((source_width - origin[0] - region[0]).max(0.0));
+    margin[1] = margin[1].min(origin[1]).min((source_height - origin[1] - region[1]).max(0.0));
     let total = [region[0] + 2.0 * margin[0], region[1] + 2.0 * margin[1]];
     let total_w = (total[0].ceil() as u32).max(1);
     let total_h = (total[1].ceil() as u32).max(1);
@@ -3898,7 +4235,8 @@ fn render_scene_entry(
         &snapshot,
         atlas,
         appearance,
-    )
+    )?;
+    Ok(())
 }
 
 /// `renderer_surface_draw_scene`: render the finished scene into the

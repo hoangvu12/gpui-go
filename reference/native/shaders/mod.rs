@@ -88,6 +88,30 @@
 //!    underline/sprite/path pipelines keep consuming the pinned DXBC
 //!    blobs (bounds + fade only, no radii) - the recorded gap handed
 //!    to ticket 52's mask work.
+//!
+//! # rev 16 (browser-core ticket 51) divergences
+//!
+//! 5. **The transformed-group composite** (`filters.rs`): the pin's
+//!    blur-composite pass draws an axis-aligned rect only; R16's
+//!    effect groups carry a 2x3 matrix and need the quad's corners
+//!    mapped through it (the design's `transformed_rectangle_vertex`
+//!    shape). The vendored composite gains the
+//!    `transformed_blur_composite` pipeline: the vertex maps the
+//!    group's content region through the row-major 2x3 (carried in the
+//!    rev-15.1 composite extension cbuffer b5, appended after the
+//!    colour-matrix prefix as two `vec4` rows - a nested matrix struct
+//!    would violate the uniform address-space layout constraints, and
+//!    the prefix stays byte-identical), interpolates the LOCAL
+//!    position, and the fragment samples the bucket at
+//!    `local_position / target_size` with linear filtering, clipping
+//!    to the group's content mask (the rrect coverage at the LOCAL
+//!    position with the record's radii - CSS clips inside the element
+//!    and the transform applies after; the plain rounded-rect SDF,
+//!    without the pin's corner smoothing, which 52's mask work owns).
+//!    The region-relative sampling offset of every composite also
+//!    became the content REGION's origin (the bucket's
+//!    quantization margin never reaches the target) - for
+//!    window-frame groups the values are exactly R15's.
 
 #![allow(dead_code, unused_assignments, unused_imports)]
 

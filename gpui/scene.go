@@ -180,12 +180,23 @@ type FilterBoundary struct {
 // opacity (the isolated composite with the blur passes skipped - a
 // pure-opacity group over exactly one primitive folds into a
 // per-primitive multiply instead, Chromium's "at least two layers draw
-// content" rule) and the rounded clip (ClipToBounds/RoundedClipOnly:
-// the composite clips to the group's rounded bounds). The transform,
-// blend, mask and property-node fields exist on the ABI record and are
-// wired by tickets 51/52; the Go STYLING that emits groups
-// (WithElementOpacity's group path, Style.OverflowMask radii) is
+// content" rule), the rounded clip (ClipToBounds/RoundedClipOnly: the
+// composite clips to the group's rounded bounds) and the 2x3 transform
+// (browser-core ticket 51: the subtree renders into the group bucket
+// in the group's LOCAL frame - the records' own coordinates - and the
+// composite draws it under the matrix; a translation-only matrix
+// composites through the axis-aligned path at the translated rect).
+// The blend and mask fields exist on the ABI record and are wired by
+// ticket 52; the Go STYLING that emits groups (WithElementOpacity's
+// group path, Style.OverflowMask radii, the transform stack) is
 // ticket 55.
+//
+// The transform contract: the matrix maps the group's LOCAL frame to
+// the parent frame (device = M*local + translation, row-major), with
+// the CSS transform-origin and the group's parent-frame position
+// resolved by the CALLER into the matrix; the subtree's records (and
+// the group's own Bounds, ContentMask and radii) are authored in the
+// local frame.
 type EffectGroup struct {
 	Order uint32
 	// IsStart opens the group; false closes it. Start and end must
@@ -193,6 +204,16 @@ type EffectGroup struct {
 	IsStart bool
 	// HasOpacity composites the subtree once at Opacity.
 	HasOpacity bool
+	// HasTransform composites the subtree under Transform (the 2x3
+	// matrix, row-major, mapping the local frame to the parent frame;
+	// requires an invertible 2x2).
+	HasTransform bool
+	// PropertyNode marks the group updatable after finish through
+	// UpdateEffectMatrix/UpdateEffectOpacity (the design's appendix
+	// A.7); requires NodeID non-zero and HasTransform or HasOpacity.
+	PropertyNode bool
+	// NodeID is the property node id (0 = none).
+	NodeID uint32
 	// ClipToBounds clips the composite to the group's (rounded) bounds
 	// (CSS overflow; 0 lets content bleed past, like content filters).
 	ClipToBounds bool
@@ -200,12 +221,18 @@ type EffectGroup struct {
 	// to the rounded bounds (a nested rounded clip: the child clips
 	// itself, so the ancestor's rrect needs the isolated composite).
 	RoundedClipOnly bool
-	// Bounds of the group, device pixels.
+	// Bounds of the group, LOCAL-frame pixels when HasTransform (the
+	// group's border box; the pre-image of the transform), device
+	// pixels otherwise.
 	Bounds Bounds
-	// ContentMask is the group's rectangular clip, device pixels.
+	// ContentMask is the group's rectangular clip, device pixels (the
+	// local frame when HasTransform).
 	ContentMask Bounds
 	// Opacity in [0, 1] (used when HasOpacity is set).
 	Opacity float32
+	// Transform is the 2x3 matrix (row-major rotation/scale 2x2 plus
+	// translation) used when HasTransform is set.
+	Transform TransformationMatrix
 	// CornerRadii of the group's rounded clip.
 	CornerRadii Corners
 	// CornerSmoothing in [0, 1].
@@ -479,6 +506,33 @@ func (s *Scene) EndEffectGroup(g EffectGroup) error {
 // draw order (start before end at equal orders).
 func (s *Scene) EffectGroups() ([]EffectGroup, error) {
 	return s.kernel.EffectBoundaries()
+}
+
+// UpdateEffectMatrix mutates a finished scene's property-node records
+// carrying nodeID in place (rev 16, browser-core ticket 51): every
+// effect record of the node takes the new 2x3 matrix - no re-sort, no
+// re-plan, so the same scene handle re-presents with the updated
+// transform (the damage union is the returned old/new mapped bounds).
+// The node's records must carry the transform flag (insert the group
+// with HasTransform and PropertyNode). Requires Finish.
+func (s *Scene) UpdateEffectMatrix(nodeID uint32, matrix TransformationMatrix) (oldBounds, newBounds Bounds, err error) {
+	if s.kernel == nil {
+		return Bounds{}, Bounds{}, ErrSceneClosed
+	}
+	return s.kernel.UpdateEffectMatrix(nodeID, matrix)
+}
+
+// UpdateEffectOpacity mutates a finished scene's property-node records
+// carrying nodeID in place (rev 16, browser-core ticket 51): every
+// effect record of the node takes the new group opacity - no re-sort,
+// no re-plan. The node's records must carry the opacity flag. The
+// opacity never moves the group, so both returned bounds are the
+// group's mapped device bounds. Requires Finish.
+func (s *Scene) UpdateEffectOpacity(nodeID uint32, opacity float32) (oldBounds, newBounds Bounds, err error) {
+	if s.kernel == nil {
+		return Bounds{}, Bounds{}, ErrSceneClosed
+	}
+	return s.kernel.UpdateEffectOpacity(nodeID, opacity)
 }
 
 // SurfaceSourceTag tags a painted surface's source kind (payload; 0 is

@@ -299,6 +299,67 @@ func (k *SceneKernel) EffectBoundaries() ([]EffectGroup, error) {
 	return out, nil
 }
 
+// effectPropertyValues packs a property-node update value into the
+// ABI word stream (f32 bits, the record layout's order).
+func effectPropertyValues(kind uint32, matrix TransformationMatrix, opacity float32) []uint32 {
+	if kind == native.ScenePropertyMatrix {
+		return []uint32{
+			math.Float32bits(matrix.RotationScale[0][0]),
+			math.Float32bits(matrix.RotationScale[0][1]),
+			math.Float32bits(matrix.RotationScale[1][0]),
+			math.Float32bits(matrix.RotationScale[1][1]),
+			math.Float32bits(matrix.Translation[0]),
+			math.Float32bits(matrix.Translation[1]),
+		}
+	}
+	return []uint32{math.Float32bits(opacity)}
+}
+
+// UpdateEffectMatrix mutates a finished scene's property-node records
+// carrying nodeID in place (rev 16, browser-core ticket 51; the
+// design's appendix A.7): every effect record of the node takes the
+// new 2x3 matrix - no re-sort, no re-plan, the same scene handle
+// re-presents with the updated transform. The node's records must
+// carry the transform flag (insert the group with HasTransform and
+// PropertyNode). Returns the group's old and new mapped device bounds
+// (the record bounds mapped through the old and the new matrix), the
+// damage union the caller re-presents.
+func (k *SceneKernel) UpdateEffectMatrix(nodeID uint32, matrix TransformationMatrix) (oldBounds, newBounds Bounds, err error) {
+	if err := k.checkLive("UpdateEffectMatrix"); err != nil {
+		return Bounds{}, Bounds{}, err
+	}
+	old, new, err := k.scene.UpdateProperty(
+		nodeID,
+		native.ScenePropertyMatrix,
+		effectPropertyValues(native.ScenePropertyMatrix, matrix, 0),
+	)
+	if err != nil {
+		return Bounds{}, Bounds{}, fmt.Errorf("gpui: scene update effect matrix: %w", err)
+	}
+	return sceneBoundsValue(old), sceneBoundsValue(new), nil
+}
+
+// UpdateEffectOpacity mutates a finished scene's property-node records
+// carrying nodeID in place (rev 16, browser-core ticket 51): every
+// effect record of the node takes the new group opacity - no re-sort,
+// no re-plan. The node's records must carry the opacity flag. The
+// opacity never moves the group, so both returned bounds are the
+// group's mapped device bounds (unchanged by the update).
+func (k *SceneKernel) UpdateEffectOpacity(nodeID uint32, opacity float32) (oldBounds, newBounds Bounds, err error) {
+	if err := k.checkLive("UpdateEffectOpacity"); err != nil {
+		return Bounds{}, Bounds{}, err
+	}
+	old, new, err := k.scene.UpdateProperty(
+		nodeID,
+		native.ScenePropertyOpacity,
+		effectPropertyValues(native.ScenePropertyOpacity, UnitTransformation(), opacity),
+	)
+	if err != nil {
+		return Bounds{}, Bounds{}, fmt.Errorf("gpui: scene update effect opacity: %w", err)
+	}
+	return sceneBoundsValue(old), sceneBoundsValue(new), nil
+}
+
 // InsertSurface inserts a surface record with its paired opacity.
 func (k *SceneKernel) InsertSurface(bounds, contentMask Bounds, source SurfaceSourceTag, opacity float32) error {
 	if err := k.checkLive("InsertSurface"); err != nil {
@@ -594,6 +655,15 @@ func effectRecordOf(e EffectGroup) native.SceneEffectRecord {
 	rec.Bounds = sceneBoundsRecord(e.Bounds)
 	rec.ContentMask = sceneBoundsRecord(e.ContentMask)
 	rec.Opacity = math.Float32bits(e.Opacity)
+	rec.Transform = [6]uint32{
+		math.Float32bits(e.Transform.RotationScale[0][0]),
+		math.Float32bits(e.Transform.RotationScale[0][1]),
+		math.Float32bits(e.Transform.RotationScale[1][0]),
+		math.Float32bits(e.Transform.RotationScale[1][1]),
+		math.Float32bits(e.Transform.Translation[0]),
+		math.Float32bits(e.Transform.Translation[1]),
+	}
+	rec.NodeID = e.NodeID
 	for i, radius := range [4]float32{e.CornerRadii.TopLeft, e.CornerRadii.TopRight, e.CornerRadii.BottomRight, e.CornerRadii.BottomLeft} {
 		rec.CornerRadii[i] = math.Float32bits(radius)
 	}
@@ -604,6 +674,12 @@ func effectRecordOf(e EffectGroup) native.SceneEffectRecord {
 	}
 	if e.HasOpacity {
 		flags |= native.SceneEffectFlagHasOpacity
+	}
+	if e.HasTransform {
+		flags |= native.SceneEffectFlagHasTransform
+	}
+	if e.PropertyNode {
+		flags |= native.SceneEffectFlagPropertyNode
 	}
 	if e.ClipToBounds {
 		flags |= native.SceneEffectFlagClipToBounds
@@ -616,19 +692,32 @@ func effectRecordOf(e EffectGroup) native.SceneEffectRecord {
 }
 
 // effectGroupOf unpacks an ABI effect record (the Go-authored fields
-// this revision: order, bounds, mask, radii, smoothing, opacity and the
-// wired flags).
+// this revision: order, bounds, mask, radii, smoothing, opacity, the
+// transform, the property node and the wired flags).
 func effectGroupOf(rec native.SceneEffectRecord) EffectGroup {
 	flags := rec.Flags
 	return EffectGroup{
 		Order:           rec.Order,
 		IsStart:         flags&native.SceneEffectFlagIsStart != 0,
 		HasOpacity:      flags&native.SceneEffectFlagHasOpacity != 0,
+		HasTransform:    flags&native.SceneEffectFlagHasTransform != 0,
+		PropertyNode:    flags&native.SceneEffectFlagPropertyNode != 0,
+		NodeID:          rec.NodeID,
 		ClipToBounds:    flags&native.SceneEffectFlagClipToBounds != 0,
 		RoundedClipOnly: flags&native.SceneEffectFlagRoundedClipOnly != 0,
 		Bounds:          sceneBoundsValue(rec.Bounds),
 		ContentMask:     sceneBoundsValue(rec.ContentMask),
 		Opacity:         math.Float32frombits(rec.Opacity),
+		Transform: TransformationMatrix{
+			RotationScale: [2][2]float32{
+				{math.Float32frombits(rec.Transform[0]), math.Float32frombits(rec.Transform[1])},
+				{math.Float32frombits(rec.Transform[2]), math.Float32frombits(rec.Transform[3])},
+			},
+			Translation: [2]float32{
+				math.Float32frombits(rec.Transform[4]),
+				math.Float32frombits(rec.Transform[5]),
+			},
+		},
 		CornerRadii: Corners{
 			TopLeft:     math.Float32frombits(rec.CornerRadii[0]),
 			TopRight:    math.Float32frombits(rec.CornerRadii[1]),

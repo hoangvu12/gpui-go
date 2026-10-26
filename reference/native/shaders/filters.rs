@@ -143,6 +143,17 @@ pub mod blur {
         pub offset: Vec4f,
     }
 
+    // rev 16 (browser-core ticket 51) appends the transformed-group
+    // composite's 2x3 matrix after the rev-15.1 prefix, as two
+    // row-major `vec4`s (`transform_row0` = (m00, m01, tx, 0),
+    // `transform_row1` = (m10, m11, ty, 0); the vec4s keep the uniform
+    // layout 16-aligned - a nested matrix struct would violate the
+    // uniform address-space layout constraints). `target_origin` and
+    // `padding2` are layout words every composite leaves at zero: the
+    // pooled group buckets all render at their frame's origin (the
+    // fragment-position invariant), so no origin translation is
+    // needed. The unit matrix for every pass but the transformed
+    // composite. The rev-15.1 prefix stays byte-identical.
     #[repr(C)]
     #[derive(Clone, Copy, Wgsl)]
     pub struct ColorMatrixUniforms {
@@ -150,6 +161,10 @@ pub mod blur {
         pub sample_offset: Vec2f,
         pub count: u32,
         pub padding0: u32,
+        pub target_origin: Vec2f,
+        pub padding2: Vec2f,
+        pub transform_row0: Vec4f,
+        pub transform_row1: Vec4f,
     }
     uniform!(group(1), binding(3), COLOR_MATRIX_LOCALS: ColorMatrixUniforms);
 
@@ -403,6 +418,89 @@ pub mod blur {
         #[location(5)]
         #[interpolate(flat)]
         pub superellipse_power: f32,
+    }
+
+    // The transformed-group composite (rev 16, browser-core ticket 51):
+    // one textured quad under the effect group's 2x3 matrix. The
+    // subtree rendered into its bucket in LOCAL coordinates (the
+    // children's own records; the bucket renders the local frame's [0,
+    // size]); the vertex maps the bucket rect's corners through the
+    // matrix and carries the LOCAL position as a varying - the group's
+    // rectangular content mask and its rounded clip (the rrect over
+    // the content mask with the record's corner radii) live in the
+    // local frame, because CSS clips inside the element's own space
+    // and the transform applies after. The fragment samples the bucket
+    // at the interpolated LOCAL position over the bucket's size
+    // (linear filtering; the affine interpolation of the quad's
+    // corners).
+    #[derive(Clone, Copy, Wgsl)]
+    pub struct TransformedCompositeVarying {
+        #[builtin(position)]
+        pub position: Vec4f,
+        #[location(0)]
+        pub local_position: Vec2f,
+        #[location(1)]
+        pub clip_distances: Vec4f,
+    }
+
+    #[vertex]
+    pub fn vertex_transformed_blur_composite(
+        #[builtin(vertex_index)] vertex_id: u32,
+    ) -> TransformedCompositeVarying {
+        let locals = get!(BLUR_LOCALS);
+        let extensions = get!(COLOR_MATRIX_LOCALS);
+        let unit_position = rectangle_corner(vertex_id);
+        // The local position: within the group's content region (the
+        // quad), in the bucket's coordinates (the bucket holds the
+        // frame's [0, size]).
+        let local_position = Bounds::position(locals.bounds, unit_position);
+        // The row-major 2x3: device = row0.xy * p + row0.z,
+        // row1.xy * p + row1.z (the ABI record's transform layout,
+        // transform-origin resolved by the caller).
+        let device_position = vec2f(
+            extensions.transform_row0.x * local_position.x
+                + extensions.transform_row0.y * local_position.y
+                + extensions.transform_row0.z,
+            extensions.transform_row1.x * local_position.x
+                + extensions.transform_row1.y * local_position.y
+                + extensions.transform_row1.z,
+        );
+        TransformedCompositeVarying {
+            position: viewport_to_clip_position(device_position),
+            local_position,
+            clip_distances: clip_distances(local_position, locals.content_mask),
+        }
+    }
+
+    #[fragment]
+    pub fn fragment_transformed_blur_composite(input: TransformedCompositeVarying) -> Vec4f {
+        if is_clipped(input.clip_distances) {
+            return transparent();
+        }
+        let coverage = select(
+            1.0,
+            antialiased_coverage(rounded_rectangle_signed_distance(
+                input.local_position,
+                get!(BLUR_LOCALS).content_mask,
+                get!(BLUR_LOCALS).corner_radii,
+            )),
+            get!(BLUR_LOCALS).composite_clip == BlurCompositeClip::RoundedBounds,
+        );
+        // The bucket-relative sampling: the local position over the
+        // bucket's size (linear filtering).
+        let sampled = texture_sample_level(
+            BLUR_TEXTURE,
+            BLUR_SAMPLER,
+            input.local_position / get!(BLUR_LOCALS).target_size,
+            0.0,
+        );
+        let factor = coverage * get!(BLUR_LOCALS).opacity;
+        vec4f(
+            sampled.x * factor,
+            sampled.y * factor,
+            sampled.z * factor,
+            sampled.w * factor,
+        )
     }
 
     #[vertex]

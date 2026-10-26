@@ -111,6 +111,19 @@ func callSceneEffectDump(fn uintptr, scene uint64, records uintptr, capacity uin
 	return 0, hostSupported()
 }
 
+func callSceneUpdateProperty(
+	fn uintptr,
+	scene uint64,
+	nodeID uint32,
+	kind uint32,
+	values uintptr,
+	valueCount uint32,
+	outOld *SceneBounds,
+	outNew *SceneBounds,
+) (int32, error) {
+	return 0, hostSupported()
+}
+
 func callScenePathDump(
 	fn uintptr,
 	scene uint64,

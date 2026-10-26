@@ -31,9 +31,10 @@
 //!   opacities through the sort, and compiles the render plan;
 //! * the plan (the pinned `ScenePlan::build` + `BatchIterator`) merges
 //!   runs of one primitive kind into batches split by corner smoothing,
-//!   emits content-filter boundaries one at a time, pairs nested filter
-//!   groups (`MAX_FILTER_GROUP_DEPTH` = 2: the first two nested groups
-//!   get dedicated offscreen targets, deeper groups render inline) and
+//!   emits content-filter boundaries and effect-group markers one at a
+//!   time, pairs nested groups of either kind on ONE shared stack
+//!   (rev 16: no depth cap - every matched group gets a pool target
+//!   slot; the renderer's pool budget is the demotion point) and
 //!   collects the resource requirements;
 //! * `replay` re-inserts a range of a previous scene's paint operations
 //!   into the target scene (orders recomputed against the TARGET's
@@ -101,7 +102,21 @@ use lyon::math::Transform as LyonTransform;
 /// `color_matrix` 20 → 160 words, one slot per colour function with
 /// the [0,1] clamp between — the rev-15 composed payload could not
 /// express Chrome's per-function clamping); no table slots changed.
-pub const GPUI_GO_SCENE_SERVICE_VERSION: u32 = 6;
+pub const GPUI_GO_SCENE_SERVICE_VERSION: u32 = 7;
+
+/// Property kinds of `scene_update_property` (rev 16, ticket 51: the
+/// design's appendix A.7). A kind updates the records' stored value
+/// in place - no re-sort, no re-plan (orders and indices never move).
+pub mod scene_property_kind {
+    /// The 2x3 transform matrix: six f32 values, row-major
+    /// `[m00, m01, m10, m11, tx, ty]` (the record's `transform`
+    /// layout; requires an invertible 2x2, like the insert rule).
+    /// Requires the node's records to carry `has_transform`.
+    pub const MATRIX: u32 = 0;
+    /// The group opacity: one f32 value in [0, 1]. Requires the node's
+    /// records to carry `has_opacity`.
+    pub const OPACITY: u32 = 1;
+}
 
 /// Scene service status codes. 0 is success, negative values are
 /// caller/argument errors, 100+ are internal failures.
@@ -1152,8 +1167,9 @@ impl Default for GpuiGoSceneCommandRecord {
 pub mod effect_flags {
     /// 1 = the record opens the group (a start marker); 0 = it closes.
     pub const IS_START: u32 = 1;
-    /// The group carries a 2x3 transform (ticket 51 wires the matrix
-    /// composite; the record carries and validates the matrix now).
+    /// The group composites its subtree under the 2x3 matrix (ticket
+    /// 51: the subtree renders into the group's LOCAL-frame bucket and
+    /// the composite maps it through the record's `transform`).
     pub const HAS_TRANSFORM: u32 = 2;
     /// The group composites its subtree once at `opacity` (group
     /// opacity - the R16 core case).
@@ -1164,8 +1180,8 @@ pub mod effect_flags {
     /// The group composites `dst_in` against the mask source (ticket 52
     /// wires the mask).
     pub const HAS_MASK: u32 = 16;
-    /// The group is a property node updatable after finish (ticket 51
-    /// wires `scene_update_property`).
+    /// The group is a property node updatable after finish through
+    /// `scene_update_property` (ticket 51).
     pub const PROPERTY_NODE: u32 = 32;
     /// The group exists only to clip its subtree to the rounded bounds
     /// (a nested rounded clip - the child clips itself, so the
@@ -1195,12 +1211,18 @@ pub mod effect_flags {
 /// raises the order floor), and both kinds share one group stack in
 /// the compiled plan (command kinds 3/4).
 ///
-/// This revision wires `has_opacity` (the explicit no-blur
-/// `composite_group` path) and the rounded clip (`clip_to_bounds` /
-/// `rounded_clip_only`, clipped by the rrect at the composite). The
-/// transform, blend, mask and property-node fields are CARRIED and
-/// VALIDATED now and wired by tickets 51/52; a `has_transform` group
-/// composites through the identity matrix this revision.
+/// Ticket 50 wired `has_opacity` (the explicit no-blur `composite_group`
+/// path) and the rounded clip (`clip_to_bounds` / `rounded_clip_only`,
+/// clipped by the rrect at the composite). Ticket 51 wired the
+/// transform (`has_transform`: the subtree renders in the group's
+/// LOCAL frame - the records' own coordinates, the group's own
+/// bounds/mask/radii with them - and the composite maps the local
+/// content region through the row-major 2x3 with linear filtering; a
+/// translation-only matrix composites through the axis-aligned path at
+/// the translated rect) and the property node
+/// (`scene_update_property`, the appendix A.7 in-place update with the
+/// old/new mapped bounds). The blend and mask fields are CARRIED and
+/// VALIDATED now and wired by ticket 52.
 ///
 /// Layout (x86-64, `#[repr(C)]`): `order` @0, `flags` @4, `bounds` @8,
 /// `content_mask` @24 (a plain 16-byte bounds record - the group clip
@@ -1380,7 +1402,7 @@ const _: () = assert!(core::mem::size_of::<GpuiGoSceneEffectRecord>() == 116);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneEffectRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneContentMask>() == 56);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneContentMask>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneTable>() == 312);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneTable>() == 320);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneTable>() == 8);
 
 // ---------------------------------------------------------------------------
@@ -2585,6 +2607,21 @@ impl SceneState {
                         .expect("effect marker is in the merged stream");
                     let is_start = (effect.flags & effect_flags::IS_START) != 0;
                     if is_start {
+                        // rev 16, ticket 51: a matched effect group with
+                        // a transform ALWAYS isolates - the translation
+                        // included (the composite is a lossless blit at
+                        // the translated rect for integral offsets).
+                        // The design §3.4 "translation-only skips the
+                        // group" economy is a GO-side paint decision
+                        // (the element offset the paint context already
+                        // applies - the records carry the translated
+                        // positions and no group is inserted), not a
+                        // native walk mechanism: rendering the children
+                        // at an offset through the viewport would break
+                        // the shaders' fragment invariant (SV_Position
+                        // must equal the records' coordinate space),
+                        // the same root cause as 50's handed-off
+                        // sprite-bucket gap.
                         let target = if matched[position] {
                             FilterRenderTarget::Isolated(open_isolated)
                         } else {
@@ -3635,6 +3672,64 @@ fn check_effect(rec: &GpuiGoSceneEffectRecord) -> Result<(), i32> {
     Ok(())
 }
 
+/// The effect group's 2x3 matrix, row-major `[m00, m01, m10, m11, tx,
+/// ty]` (the record's `transform` field, f32 bits). Maps LOCAL
+/// (untransformed window-space) points to device points: `device =
+/// M·p + t` with the transform-origin resolved by the caller (rev 16,
+/// ticket 51).
+pub(crate) fn effect_matrix(rec: &GpuiGoSceneEffectRecord) -> [f32; 6] {
+    [
+        f32::from_bits(rec.transform[0]),
+        f32::from_bits(rec.transform[1]),
+        f32::from_bits(rec.transform[2]),
+        f32::from_bits(rec.transform[3]),
+        f32::from_bits(rec.transform[4]),
+        f32::from_bits(rec.transform[5]),
+    ]
+}
+
+/// The effect group's translation `(tx, ty)` (the matrix's last
+/// column).
+pub(crate) fn effect_translation(rec: &GpuiGoSceneEffectRecord) -> (f32, f32) {
+    (f32::from_bits(rec.transform[4]), f32::from_bits(rec.transform[5]))
+}
+
+/// Whether the effect group's 2x2 is the identity (a translation-only
+/// transform - the design §3.4 fast-path economy case). Non-finite
+/// matrices never reach here (the insert validation rejects them).
+pub(crate) fn effect_translation_only(rec: &GpuiGoSceneEffectRecord) -> bool {
+    let [m00, m01, m10, m11, _, _] = effect_matrix(rec);
+    m00 == 1.0 && m11 == 1.0 && m01 == 0.0 && m10 == 0.0
+}
+
+/// Maps a window-space rect's four corners through the 2x3 matrix
+/// `[m00, m01, m10, m11, tx, ty]` (device = M·p + t) and returns the
+/// mapped footprint's axis-aligned bounds - the group's device-space
+/// composite region, the extent pre-pass's footprint and the
+/// `scene_update_property` bounds answer.
+pub(crate) fn map_bounds_corners(bounds: [f32; 4], matrix: [f32; 6]) -> [f32; 4] {
+    let [m00, m01, m10, m11, tx, ty] = matrix;
+    let corners = [
+        (bounds[0], bounds[1]),
+        (bounds[0] + bounds[2], bounds[1]),
+        (bounds[0], bounds[1] + bounds[3]),
+        (bounds[0] + bounds[2], bounds[1] + bounds[3]),
+    ];
+    let mut min_x = f32::INFINITY;
+    let mut min_y = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    let mut max_y = f32::NEG_INFINITY;
+    for (x, y) in corners {
+        let dx = m00 * x + m01 * y + tx;
+        let dy = m10 * x + m11 * y + ty;
+        min_x = min_x.min(dx);
+        min_y = min_y.min(dy);
+        max_x = max_x.max(dx);
+        max_y = max_y.max(dy);
+    }
+    [min_x, min_y, max_x - min_x, max_y - min_y]
+}
+
 fn check_quad(rec: &GpuiGoSceneQuadRecord) -> Result<(), i32> {
     check_record_size(rec.record_size, core::mem::size_of::<GpuiGoSceneQuadRecord>() as u32)?;
     if rec.order != 0 {
@@ -4042,6 +4137,180 @@ fn scene_effect_dump_body(
             for (slot, effect) in out.iter_mut().zip(state.effects.iter()) {
                 *slot = *effect;
             }
+        }
+        Ok(())
+    });
+    match result {
+        Ok(()) => scene_status::OK,
+        Err(code) => code,
+    }
+}
+
+/// `scene_update_property` (rev 16, ticket 51, the design's appendix
+/// A.7): mutates every FINISHED effect record carrying `node_id` in
+/// place - the new matrix or opacity, no re-sort, no re-plan (the
+/// paint order never changes on a transform/opacity tick, the same
+/// invariant cc relies on when ticking compositor animations) - and
+/// reports the group's OLD and NEW device-space bounds (mapped
+/// through the old/new matrix; the record bounds when the node has no
+/// transform), the damage union the caller re-presents. The plan is
+/// untouched: the render walk consults the CURRENT record (a
+/// translation-only group the plan inlined for promotes back to an
+/// isolated bucket at draw time when the update turns its matrix on).
+///
+/// Errors: `ERR_NOT_FINISHED` before `scene_finish`, `ERR_NULL_ARG`
+/// for null values, `ERR_BAD_VALUE` for an unknown kind, a wrong
+/// value count, a zero node id, a stale id (no record carries it), a
+/// missing required record flag (`has_transform` for the matrix kind,
+/// `has_opacity` for the opacity kind) or a value the insert
+/// validation would reject (a non-finite or non-invertible matrix, an
+/// opacity outside [0, 1]).
+fn scene_update_property_body(
+    handle: u64,
+    node_id: u32,
+    kind: u32,
+    values: *const u32,
+    value_count: u32,
+    out_old: *mut GpuiGoSceneBounds,
+    out_new: *mut GpuiGoSceneBounds,
+) -> i32 {
+    if values.is_null() {
+        return scene_status::ERR_NULL_ARG;
+    }
+    if node_id == 0 {
+        return scene_status::ERR_BAD_VALUE;
+    }
+    let expected_count = match kind {
+        scene_property_kind::MATRIX => 6usize,
+        scene_property_kind::OPACITY => 1usize,
+        _ => return scene_status::ERR_BAD_VALUE,
+    };
+    if value_count as usize != expected_count {
+        return scene_status::ERR_BAD_VALUE;
+    }
+    let mut words = [0u32; 6];
+    unsafe {
+        std::ptr::copy_nonoverlapping(values, words.as_mut_ptr(), expected_count);
+    }
+    // The value validation mirrors the insert rules (check_effect):
+    // the matrix needs a finite, invertible 2x2 (and finite
+    // translation, so the mapped bounds stay representable); the
+    // opacity lies in [0, 1].
+    match kind {
+        scene_property_kind::MATRIX => {
+            let matrix = [
+                f32::from_bits(words[0]),
+                f32::from_bits(words[1]),
+                f32::from_bits(words[2]),
+                f32::from_bits(words[3]),
+                f32::from_bits(words[4]),
+                f32::from_bits(words[5]),
+            ];
+            for value in matrix {
+                if !value.is_finite() {
+                    return scene_status::ERR_BAD_VALUE;
+                }
+            }
+            let determinant = matrix[0] * matrix[3] - matrix[1] * matrix[2];
+            if determinant == 0.0 || !determinant.is_finite() {
+                return scene_status::ERR_BAD_VALUE;
+            }
+        }
+        _ => {
+            let opacity = f32::from_bits(words[0]);
+            if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
+                return scene_status::ERR_BAD_VALUE;
+            }
+        }
+    }
+    let result = with_scene(handle, |state| {
+        if !state.is_finished {
+            return Err(scene_status::ERR_NOT_FINISHED);
+        }
+        // The group's shared snapshot answers the bounds: the FIRST
+        // record carrying the id (a well-formed pair inserts the start
+        // marker first; every record of the pair carries the same
+        // fields).
+        let Some(first) = state.effects.iter().position(|rec| rec.node_id == node_id) else {
+            return Err(scene_status::ERR_BAD_VALUE);
+        };
+        let record_bounds = [
+            f32::from_bits(state.effects[first].bounds.x),
+            f32::from_bits(state.effects[first].bounds.y),
+            f32::from_bits(state.effects[first].bounds.w),
+            f32::from_bits(state.effects[first].bounds.h),
+        ];
+        let mapped_bounds = |matrix: [f32; 6]| -> GpuiGoSceneBounds {
+            let mapped = map_bounds_corners(record_bounds, matrix);
+            GpuiGoSceneBounds {
+                x: mapped[0].to_bits(),
+                y: mapped[1].to_bits(),
+                w: mapped[2].to_bits(),
+                h: mapped[3].to_bits(),
+            }
+        };
+        let raw_bounds = || GpuiGoSceneBounds {
+            x: state.effects[first].bounds.x,
+            y: state.effects[first].bounds.y,
+            w: state.effects[first].bounds.w,
+            h: state.effects[first].bounds.h,
+        };
+        let (old_bounds, new_bounds) = match kind {
+            scene_property_kind::MATRIX => {
+                if (state.effects[first].flags & effect_flags::HAS_TRANSFORM) == 0 {
+                    return Err(scene_status::ERR_BAD_VALUE);
+                }
+                let old = mapped_bounds(effect_matrix(&state.effects[first]));
+                let new = mapped_bounds([
+                    f32::from_bits(words[0]),
+                    f32::from_bits(words[1]),
+                    f32::from_bits(words[2]),
+                    f32::from_bits(words[3]),
+                    f32::from_bits(words[4]),
+                    f32::from_bits(words[5]),
+                ]);
+                for record in state.effects.iter_mut() {
+                    if record.node_id != node_id {
+                        continue;
+                    }
+                    if (record.flags & effect_flags::HAS_TRANSFORM) == 0 {
+                        // The pair's end marker carries the same
+                        // snapshot: a node whose records disagree is
+                        // malformed; refuse rather than half-mutate.
+                        return Err(scene_status::ERR_BAD_VALUE);
+                    }
+                    record.transform = words;
+                }
+                (old, new)
+            }
+            _ => {
+                if (state.effects[first].flags & effect_flags::HAS_OPACITY) == 0 {
+                    return Err(scene_status::ERR_BAD_VALUE);
+                }
+                // The opacity never moves the bounds: the mapped
+                // device bounds of the (unchanged) transform.
+                let bounds = if (state.effects[first].flags & effect_flags::HAS_TRANSFORM) != 0 {
+                    mapped_bounds(effect_matrix(&state.effects[first]))
+                } else {
+                    raw_bounds()
+                };
+                for record in state.effects.iter_mut() {
+                    if record.node_id != node_id {
+                        continue;
+                    }
+                    if (record.flags & effect_flags::HAS_OPACITY) == 0 {
+                        return Err(scene_status::ERR_BAD_VALUE);
+                    }
+                    record.opacity = words[0];
+                }
+                (bounds, bounds)
+            }
+        };
+        if !out_old.is_null() {
+            unsafe { *out_old = old_bounds };
+        }
+        if !out_new.is_null() {
+            unsafe { *out_new = new_bounds };
         }
         Ok(())
     });
@@ -5563,28 +5832,20 @@ fn render_snapshot_of_state(state: &SceneState) -> SceneRenderSnapshot {
 
 
 /// The scene service table installed in reserved slot 3 of
-/// `GpuiGoAbiTable`. All 27 function pointers come first (216 bytes;
-/// version 4 appended `insert_batch` @208, shifting every scalar below
-/// by 8), then 17 self-check scalars (68 bytes); total size 288 (284
-/// rounded up), alignment 8. Version-3 offsets for reference (x86-64):
-/// pointers @0..208, `service_version` @208, `size_of_table` @212,
-/// `align_of_table` @216, `size_of_quad_record` @220,
-/// `size_of_shadow_record` @224, `size_of_underline_record` @228,
-/// `size_of_filter_record` @232, `size_of_surface_record` @236,
-/// `size_of_monochrome_sprite_record` @240,
-/// `size_of_polychrome_sprite_record` @244,
-/// `size_of_command_record` @248, `size_of_requirements_record` @252,
-/// `size_of_meta_record` @256, `size_of_path_record` @260,
-/// `size_of_path_vertex_record` @264, `size_of_path_command_record`
-/// @268, `max_filters` @272; total size 280 (276 rounded up to the
-/// table's 8-byte alignment), alignment 8.
+/// `GpuiGoAbiTable`. All function pointers come first (alignment 8),
+/// then the self-check scalars.
 ///
 /// Version 6 (rev 16, ticket 50) appended `insert_effect` and
 /// `effect_dump` after `insert_batch` (pointers @216 and @224; 29
-/// pointers total, 232 bytes) and three trailing self-check scalars:
-/// `size_of_effect_record` @296, `size_of_content_mask` @300,
-/// `max_scene_groups` @304; total size 312 (308 rounded up), alignment
-/// 8.
+/// pointers total) and three trailing self-check scalars:
+/// `size_of_effect_record`, `size_of_content_mask`,
+/// `max_scene_groups`.
+///
+/// Version 7 (rev 16, ticket 51) appended `update_property` after
+/// `effect_dump` (pointer @232; 30 pointers, 240 bytes, the
+/// self-check scalars moving to @240..320); total size 320, alignment
+/// 8. The only entry addition of the version - no records, no
+/// scalars changed.
 #[repr(C)]
 pub struct GpuiGoSceneTable {
     /// `scene_create`.
@@ -5669,6 +5930,22 @@ pub struct GpuiGoSceneTable {
     pub effect_dump: Option<
         unsafe extern "system" fn(u64, *mut GpuiGoSceneEffectRecord, u32, *mut u32) -> i32,
     >,
+    /// `scene_update_property` (service version 7, rev 16 ticket 51;
+    /// the design's appendix A.7): mutates a finished scene's effect
+    /// records carrying the node id in place (the matrix or the
+    /// opacity) and reports the old and new mapped device bounds. No
+    /// re-sort, no re-plan.
+    pub update_property: Option<
+        unsafe extern "system" fn(
+            u64,
+            u32,
+            u32,
+            *const u32,
+            u32,
+            *mut GpuiGoSceneBounds,
+            *mut GpuiGoSceneBounds,
+        ) -> i32,
+    >,
     /// Scene ABI version (see [`GPUI_GO_SCENE_SERVICE_VERSION`]).
     pub service_version: u32,
     /// `size_of::<GpuiGoSceneTable>()` self-check.
@@ -5742,6 +6019,7 @@ pub(crate) static SCENE_TABLE: GpuiGoSceneTable = GpuiGoSceneTable {
     insert_batch: Some(scene_insert_batch),
     insert_effect: Some(scene_insert_effect),
     effect_dump: Some(scene_effect_dump),
+    update_property: Some(scene_update_property),
     service_version: GPUI_GO_SCENE_SERVICE_VERSION,
     size_of_table: core::mem::size_of::<GpuiGoSceneTable>() as u32,
     align_of_table: core::mem::align_of::<GpuiGoSceneTable>() as u32,
@@ -6024,6 +6302,37 @@ unsafe extern "system" fn scene_effect_dump(
 ) -> i32 {
     let outcome = catch_unwind(AssertUnwindSafe(|| {
         scene_effect_dump_body(handle, records, capacity, out_count)
+    }));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            scene_status::ERR_PANIC
+        }
+    }
+}
+
+/// `scene_update_property` (rev 16, ticket 51): the panic-boundary
+/// wrapper over [`scene_update_property_body`].
+unsafe extern "system" fn scene_update_property(
+    handle: u64,
+    node_id: u32,
+    kind: u32,
+    values: *const u32,
+    value_count: u32,
+    out_old: *mut GpuiGoSceneBounds,
+    out_new: *mut GpuiGoSceneBounds,
+) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        scene_update_property_body(
+            handle,
+            node_id,
+            kind,
+            values,
+            value_count,
+            out_old,
+            out_new,
+        )
     }));
     match outcome {
         Ok(code) => code,

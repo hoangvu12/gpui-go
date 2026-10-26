@@ -73,6 +73,9 @@ define_pipelines! {
     SMOOTHED_SHADOWS: "smoothed_shadows", vertex_smoothed_shadow, fragment_smoothed_shadow, TriangleStrip, Instances, Rectangle;
     BLUR_COMPOSITE: "blur_composite", vertex_blur_composite, fragment_blur_composite, TriangleStrip, Blur, Rectangle;
     SMOOTHED_BLUR_COMPOSITE: "smoothed_blur_composite", vertex_smoothed_blur_composite, fragment_smoothed_blur_composite, TriangleStrip, Blur, Rectangle;
+    // rev 16 (ticket 51): the transformed-group composite - the quad
+    // under the effect group's 2x3 matrix (local-space subtree).
+    TRANSFORMED_BLUR_COMPOSITE: "transformed_blur_composite", vertex_transformed_blur_composite, fragment_transformed_blur_composite, TriangleStrip, Blur, Rectangle;
     BACKDROP_CROP: "backdrop_crop", vertex_backdrop_crop, fragment_backdrop_crop, TriangleList, Blur, FullscreenTriangle;
 }
 

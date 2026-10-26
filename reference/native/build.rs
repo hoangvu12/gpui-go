@@ -79,6 +79,11 @@ fn write_vendored_bytecode(out_dir: &std::path::Path) {
             source: &shaders::blur::WGSL_SOURCE,
         },
         VendoredPipeline {
+            pipeline: &TRANSFORMED_BLUR_COMPOSITE,
+            pipeline_path: "TRANSFORMED_BLUR_COMPOSITE",
+            source: &shaders::blur::WGSL_SOURCE,
+        },
+        VendoredPipeline {
             pipeline: &BACKDROP_CROP,
             pipeline_path: "BACKDROP_CROP",
             source: &shaders::blur::WGSL_SOURCE,

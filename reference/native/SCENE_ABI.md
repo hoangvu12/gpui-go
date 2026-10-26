@@ -7,13 +7,51 @@ reserved slot 3 of the bootstrap `GpuiGoAbiTable` (see
 path/draw extension). The Go mirror lives in
 `internal/native/scene.go`.
 
+**Scene service version 7 (rev 16, browser-core ticket 51, native
+revision 151 - ticket 54 bumps the revision):** the transform and
+property-node half of the R16 effect group lands. The ONLY change is
+the table entry `scene_update_property` (slot 29, after
+`effect_dump`); no records or scalars changed, so the table grows 312
+-> 320 bytes. A `has_transform` effect group now composites under its
+2x3 matrix (the subtree renders into the group's LOCAL frame - the
+records' own coordinates - and the composite maps it through the
+row-major `[m00, m01, m10, m11, tx, ty]`; the transform-origin and the
+group's parent-frame position are resolved by the CALLER into the
+matrix, CSS-style; translation-only matrices composite through the
+axis-aligned path at the translated rect). `scene_update_property`
+mutates a FINISHED scene's effect records in place:
+
+```
+i32 scene_update_property(u64 scene, u32 node_id, u32 kind,
+    const u32* values, u32 value_count,
+    GpuiGoSceneBounds* out_old, GpuiGoSceneBounds* out_new)
+```
+
+- `kind` 0 = matrix (six f32 words, the record's `transform` layout;
+  the node's records must carry `has_transform`), 1 = opacity (one
+  f32 word in [0,1]; the records must carry `has_opacity`);
+- every effect record with `node_id` is mutated - no re-sort, no
+  re-plan (the plan's commands and orders never move; the render walk
+  consults the current records, so the same scene handle re-presents
+  with the updated value);
+- `out_old`/`out_new` receive the group's device bounds mapped
+  through the old and the new matrix (the record bounds mapped by the
+  corners' AABB; the raw record bounds when the node has no
+  transform) - the damage union the caller re-presents (the Go frame
+  loop of ticket 60). Both pointers may be null (no report);
+- errors: `ERR_NOT_FINISHED` before `scene_finish`, `ERR_NULL_ARG`
+  for null values, `ERR_BAD_VALUE` for a zero node id, an unknown
+  kind, a wrong value count, a stale id (no record carries it), a
+  missing required flag, or a value the insert validation would
+  reject (a non-finite or singular 2x2, an opacity outside [0,1]).
+
 **Scene service version 6 (rev 16, browser-core ticket 50, native
-revision 151 - ticket 54 bumps the revision):** the R16 group machinery
-lands. The design doc's "scene service v5" became this version 6
-because ticket 77 had already taken 5. Everything below is
-append-only; the pre-R16 record meanings are unchanged and a
-zero-radii, zero-fade mask behaves exactly as the old 16-byte bounds
-mask (group-free scenes render pixel-identically):
+revision 151):** the R16 group machinery lands. The design doc's
+"scene service v5" became this version 6 because ticket 77 had
+already taken 5. Everything below is append-only; the pre-R16 record
+meanings are unchanged and a zero-radii, zero-fade mask behaves
+exactly as the old 16-byte bounds mask (group-free scenes render
+pixel-identically):
 
 - the **effect group** primitive class 10: `GpuiGoSceneEffectRecord`
   (116 bytes) with `insert_effect` / `effect_dump` (table slots 27/28)
@@ -184,7 +222,7 @@ service table's self-check fields before any call.
 |---|---|---|
 | `GpuiGoSceneBounds` | 16 | x @0, y @4, w @8, h @12 (f32 bits) |
 | `GpuiGoSceneContentMask` | 56 | bounds @0 (16), fade_out[4] @16 (left, top, right, bottom, f32 bits; a zero distance leaves that edge opaque), corner_radii[4] @32 (TL, TR, BR, BL, f32 bits), corner_smoothing @48 (f32 bits), mask_padding @52 (must be zero - the mask's HLSL structured-buffer size rounds up to its 8-byte alignment; the record IS the vendored quad/shadow pipelines' instance layout) |
-| `GpuiGoSceneEffectRecord` | 116 | order @0, flags @4 (bit 0 `is_start`, 1 `has_transform`, 2 `has_opacity`, 3 `has_blend`, 4 `has_mask`, 5 `property_node`, 6 `rounded_clip_only`, 7 `clip_to_bounds`), bounds @8, content_mask @24 (a plain 16-byte bounds record - the group's rrect comes from corner_radii/clip_to_bounds), transform[6] @40 (row-major m00, m01, m10, m11, tx, ty, f32 bits), opacity @64 ([0,1] f32 bits), blend_mode @68 (0..16, see the design's A.1), mask_kind @72 (0 none this revision; 1 gradient, 2 atlas tile, 3 coverage arrive with ticket 52), mask_reference @76, mask_mode @80 (0 alpha, 1 luminance), node_id @84 (0 = none), corner_radii[4] @88, corner_smoothing @104, reserved @108 (0), record_size @112 |
+| `GpuiGoSceneEffectRecord` | 116 | order @0, flags @4 (bit 0 `is_start`, 1 `has_transform`, 2 `has_opacity`, 3 `has_blend`, 4 `has_mask`, 5 `property_node`, 6 `rounded_clip_only`, 7 `clip_to_bounds`), bounds @8, content_mask @24 (a plain 16-byte bounds record - the group's rrect comes from corner_radii/clip_to_bounds), transform[6] @40 (row-major m00, m01, m10, m11, tx, ty, f32 bits - the LOCAL-to-parent map: `device = m00*p.x + m01*p.y + tx`, `m10*p.x + m11*p.y + ty`, requiring an invertible 2x2 when `has_transform` is set), opacity @64 ([0,1] f32 bits - the composite's multiplier, ALWAYS applied; set 1 for groups that do not fade), blend_mode @68 (0..16, see the design's A.1), mask_kind @72 (0 none this revision; 1 gradient, 2 atlas tile, 3 coverage arrive with ticket 52), mask_reference @76, mask_mode @80 (0 alpha, 1 luminance), node_id @84 (0 = none), corner_radii[4] @88, corner_smoothing @104, reserved @108 (0), record_size @112 |
 | `GpuiGoSceneColor` | 20 | tag @0 (0 = solid), h @4, s @8, l @12, a @16 (f32 bits; h is degrees/360 in `[0,1]`) |
 | `GpuiGoSceneBackground` | 72 | tag @0 (0 = solid, 1 = linear gradient), color_space @4 (0 = sRGB, 1 = Oklab), h @8, s @12, l @16, a @20, angle @24, stop0_h @28, stop0_s @32, stop0_l @36, stop0_a @40, stop0_percentage @44, stop1_h @48, stop1_s @52, stop1_l @56, stop1_a @60, stop1_percentage @64, reserved @68 (all f32 bits; the stops' percentages are the CSS positions along the gradient line and must differ) |
 | `GpuiGoSceneQuadRecord` | 280 | order @0, border_style @4, border_dashed_length @8, border_dashed_gap @12, bounds @16, content_mask @32 (56 bytes), background @88, border_color @160, corner_radii[4] @232, border_widths[4] @248, corner_smoothing @264, padding @268, layout_padding @272 (zero), record_size @276. The PINNED field order (the vec2f-bearing fields land on 8-byte-aligned offsets - exactly why the pin's order is what it is): the record IS the vendored quad pipeline's instance layout, uploaded directly |
@@ -260,8 +298,9 @@ returning an i32 status):
 | 26 | `insert_batch` | `(u64, *const u32 words, u32 word_count, *mut u32 out_applied) -> i32` (version 4, gpui-perf ticket 05; see above) |
 | 27 | `insert_effect` | `(u64, *const GpuiGoSceneEffectRecord) -> i32` (version 6, rev 16: the effect-group marker insert; the record's `flags.IS_START` decides start/end; the batch ops 12/13 carry the same payload) |
 | 28 | `effect_dump` | `(u64, *mut GpuiGoSceneEffectRecord, u32 capacity, *mut u32 out_count) -> i32` (version 6: the finished scene's effect records with kernel-assigned orders; the plan_dump capacity protocol) |
+| 29 | `update_property` | `(u64 scene, u32 node_id, u32 kind /* 0 matrix, 1 opacity */, *const u32 values, u32 value_count, *mut GpuiGoSceneBounds out_old, *mut GpuiGoSceneBounds out_new) -> i32` (version 7, rev 16 ticket 51: mutates the finished scene's property-node effect records in place - no re-sort, no re-plan - and reports the old/new mapped device bounds; the design's appendix A.7) |
 
-Self-check scalars: `service_version` (6), `size_of_table` (312),
+Self-check scalars: `service_version` (7), `size_of_table` (320),
 `align_of_table` (8), `size_of_quad_record` (280),
 `size_of_shadow_record` (216), `size_of_underline_record` (112),
 `size_of_filter_record` (820), `size_of_surface_record` (96),

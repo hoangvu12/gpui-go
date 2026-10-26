@@ -17,17 +17,34 @@ rounded clip), and the backdrop crop carries its own crop-sized
 half-resolution blur pair (ticket 77's partial-region backdrop zoom
 fix - a full-window backdrop keeps identical sizes and pixels).
 
-**Recorded deviation (ticket 50):** the pool's buckets are
-WINDOW-SIZED this revision, not bounds-sized. The bounds-sized
-bucketing (256-px quantization, the offset-viewport plumbing and the
-region-relative composite) landed structurally, but the small-bucket
-path has a pinned-sprite-pipeline issue this ticket did not resolve
-(the polychrome sprite batch draws nothing into a target smaller than
-the window; the vendored quad/shadow pipelines work). Tickets 51/52 -
-the transform work that needs local-space targets anyway - finish the
-sizing. Until then every bucket = the window: exactly the R15
-group-target shape, so all R15 fixtures stay pixel-identical by
-construction.
+**Ticket 51 finishes the bounds-sized buckets (the 50 deviation
+resolved):** the pool's buckets are now BOUNDS-SIZED, quantized to the
+256-px granularity and clamped to the window. The root cause of 50's
+sprite gap: the sketched offset-viewport scheme (children at window
+coordinates, the viewport shifted by the bucket origin) breaks every
+pipeline whose fragment compares SV_Position against the records'
+coordinate space - the polychrome sprite's rounded-rect SDF and the
+content-mask fades, the vendored quads'/shadows' border/radius
+geometry, the underline wave all read window-space records against
+target-frame pixels and the per-pixel geometry drops the whole
+primitive (a rounded quad draws nothing; 50's plain-quad control
+passed only through the borderless early-out). The buckets therefore
+render at their FRAME'S ORIGIN with the GLOBALS' viewport size set to
+the bucket: the children keep their true coordinates, every
+fragment's SV_Position stays in the records' frame (the pin's own
+invariant, which its pre_draw establishes for the window), and the
+composite draws the group's CONTENT REGION (the bucket's un-quantized
+extent) sampling the bucket at (region-relative position) / bucket
+size. A transform group's bucket is its LOCAL extent (the subtree's
+records are local-frame, mapped by the composite's 2x3); a
+window-frame group's bucket spans the frame's [0, extent max] (the
+region's distance from the origin inflates it - the price of the
+invariant); FILTER groups keep window-sized buckets (R15's exact blur
+textures and scratch - a bounds-sized filter bucket would wrap the
+gaussian at the region edge and shift the R15 blur fixtures' edge
+pixels; ticket 53's region-limited blur owns that change). The
+composite's 2x3 rides the vendored blur-composite extension cbuffer
+(b5, appended fields; the rev-15.1 prefix is byte-identical).
 
 **Renderer service version 4 (gpui-perf ticket 05, native revision 13):**
 every swap chain (both modes, and the device-loss rebuild) is created
