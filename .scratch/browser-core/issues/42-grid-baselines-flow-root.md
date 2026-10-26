@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 11 (Claude Code); R16 integration branch native/r16
+Status: resolved
+Assignee: orchestrator 11 (Claude Code); worker chat 02be753f; R16 integration branch native/r16
 Blocked by: 39
 Triage: ready-for-agent
 
@@ -20,6 +20,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-27, orchestrator 11: verified on `native/r16` (36a329e..ae84f31); it reaches main with ticket 54. Clean tree, no artifacts committed. The test DLL `2fbaa85a…` matches the shared target's build output. With the manifest swapped in: `go vet ./...` clean; the broad batch set plus the native spec packages gives 74 packages ok, failing only portfixture TestFx0004 (known), the 7 loader tests that fail by construction under the swap, and two known flakes that pass alone (clipspec contention, gpui/script TestFrameOverheadIsUnder1msAtTheProbeSize under load). Spot-check: flex_layout_algorithm.cc:2018-2026 at 0d4dcd4f (baseline offset = max ascent - item ascent) matches. Gaps accepted: text paints at the raw-metric baseline while Chrome paints at the strut's (up to ~0.6 px); a first line mixing font sizes reports the base font's strut baseline.
 
 - 2026-10-26, orchestrator 11 (the approach): fold into the rev 16 rebuild on `native/r16`. Feed the measured first baseline (rev 15's measure response) into Taffy's algorithms by driving them through our own implementation of Taffy 0.13's low-level tree traits (LayoutPartialTree and friends), so a measured leaf returns `first_baselines` instead of the hardcoded `Point::NONE`; keep every existing layout fixture byte-identical. Grid track lists, justify-items/self and flow-root already work since rev 15; check grid-template-areas.
 
