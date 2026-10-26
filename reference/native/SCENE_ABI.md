@@ -5,7 +5,8 @@ reserved slot 3 of the bootstrap `GpuiGoAbiTable` (see
 `reference/native/src/lib.rs`) and advertised with capability bit 3
 (`scene-kernel-v1`, and since ticket16 bit 7 `scene-draw-paths` for the
 path/draw extension). The Go mirror lives in
-`internal/native/scene.go`.
+`internal/native/scene.go`. The CURRENT service version is 9 (rev 16,
+browser-core ticket 53; see the version paragraphs below).
 
 **Scene service version 8 (rev 16, browser-core ticket 52, native
 revision 151 - ticket 54 bumps the revision):** the mask, blend,
@@ -40,6 +41,31 @@ count word + the 10-word op rows). Record changes, all append-only:
   bit-exact);
 - the meta record appends `gradient_count`/`coverage_count`/
   `filter_chain_count` after `record_size` (60 -> 72 bytes).
+
+**Scene service version 9 (rev 16, browser-core ticket 53, native
+revision 151 - ticket 54 bumps the revision):** the path tessellation
+LRU cache (the design's §3.12) and its observability entry. The ONLY
+table change is `scene_tess_cache_stats` (slot 34, after
+`insert_filter_op_chain`) - 35 pointers, 384 bytes; no records or
+scalars changed. `path_script` now consults a process-global LRU of
+128 entries keyed on the EXACT command+pool bytes plus the style's
+fill tolerance (the tolerance is part of the STYLE command's bytes
+already; hashing it again makes the key's independence explicit): a
+repeated script returns its cached vertices and bounds without
+re-running lyon - bit-exact by construction, since the same bytes
+produced the cached result - and deterministic input means
+deterministic output. Over the cap the least recently used entry
+evicts. The stats entry is stateless (like `path_script`) and reports
+the cumulative hits, misses and evictions plus the live entry count;
+the renderer service's per-surface debug-stats entry reports the same
+hit counter for the render-side measurement (the Go
+`PathBuilder.Build` path's two-call capacity protocol means one Build
+through the Go client is one miss followed by one hit):
+
+```
+i32 scene_tess_cache_stats(u32* out_hits, u32* out_misses,
+    u32* out_evictions, u32* out_entries)
+```
 
 **Scene service version 7 (rev 16, browser-core ticket 51, native
 revision 151 - ticket 54 bumps the revision):** the transform and
@@ -301,8 +327,10 @@ R15 plan).
 
 ## Table
 
-`GpuiGoSceneTable`: 26 function pointers then 17 self-check scalars;
-size 280, alignment 8. Function entries (all `extern "system"`, all
+`GpuiGoSceneTable`: 35 function pointers then 25 self-check scalars;
+size 384, alignment 8 (version 9, rev 16 ticket 53; the version
+paragraphs above carry the growth history). Function entries (all
+`extern "system"`, all
 returning an i32 status):
 
 | Slot | Entry | Signature |
@@ -341,8 +369,9 @@ returning an i32 status):
 | 31 | `gradient_dump` | `(u64, *mut GpuiGoSceneGradientRecord, *mut GpuiGoSceneGradientStop, u32 record_capacity, u32 stop_capacity, *mut u32 out_record_count, *mut u32 out_stop_count) -> i32` (version 8: the finished scene's gradient records + the concatenated stops; the path_dump capacity protocol) |
 | 32 | `insert_coverage` | `(u64, *const GpuiGoSceneCoverageRecord, *mut u32 out_index) -> i32` (version 8: one clip-path coverage entry - a path reference + device bounds; out_index receives the coverage index, null allowed) |
 | 33 | `insert_filter_op_chain` | `(u64, *const GpuiGoSceneFilterOpRecord, u32 op_count, *mut u32 out_index) -> i32` (version 8: one drop-shadow op chain; out_index receives the chain index, null allowed) |
+| 34 | `tess_cache_stats` | `(*mut u32 out_hits, *mut u32 out_misses, *mut u32 out_evictions, *mut u32 out_entries) -> i32` (version 9, rev 16 ticket 53: the path tessellation LRU cache's cumulative counters and entry count; stateless, every out pointer allowed null) |
 
-Self-check scalars: `service_version` (8), `size_of_table` (376),
+Self-check scalars: `service_version` (9), `size_of_table` (384),
 `align_of_table` (8), `size_of_quad_record` (280),
 `size_of_shadow_record` (216), `size_of_underline_record` (112),
 `size_of_filter_record` (820), `size_of_surface_record` (96),
@@ -449,7 +478,12 @@ resolution, then the operation. A rejected insert publishes nothing.
   pinned `with_style`/`dash_array` builder chain; a lyon build failure
   maps to `ERR_BAD_VALUE`. Command validation covers record sizes,
   known kind tags, finite floats, enum tag ranges, boolean tags and
-  word-pool indices; reserved data words must be zero.
+  word-pool indices; reserved data words must be zero. rev 16
+  (browser-core ticket 53): the tessellation consults the process-
+  global LRU cache (128 entries, keyed on the exact command+pool bytes
+  and the style's fill tolerance) BEFORE running lyon - a repeated
+  script returns its cached result; over the cap the least recently
+  used entry evicts, observably through `tess_cache_stats`.
 - `path_dump` (ticket16) bulk-dumps the finished scene's path records
   (with the assigned orders and per-path vertex counts) and the
   concatenated vertex array; both capacities are checked with the

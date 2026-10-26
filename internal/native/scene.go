@@ -74,8 +74,10 @@ const (
 // ticket 51) appended the update_property entry (the design's
 // appendix A.7: the finished-scene property-node mutation with the
 // old/new mapped bounds) - the only addition, no records or scalars
-// changed.
-const sceneServiceVersion uint32 = 8
+// changed. Version 9 (rev 16, browser-core ticket 53) appended
+// tess_cache_stats (the path tessellation LRU cache's hits, misses,
+// evictions and entry count).
+const sceneServiceVersion uint32 = 9
 
 // Property kinds of Scene.UpdateProperty (rev 16, ticket 51; the
 // native scene_property_kind mirror).
@@ -1121,6 +1123,7 @@ type sceneTable struct {
 	gradientDump             uintptr
 	insertCoverage           uintptr
 	insertFilterOpChain      uintptr
+	tessCacheStats           uintptr
 	serviceVersion           uint32
 	sizeOfTable              uint32
 	alignOfTable             uint32
@@ -1236,7 +1239,7 @@ func validateSceneTable(t *sceneTable, path string) error {
 		t.length, t.meta, t.dump, t.planDump, t.requirements, t.panicProbe,
 		t.insertPath, t.pathDump, t.pathScript, t.insertBatch, t.insertEffect,
 		t.effectDump, t.updateProperty, t.insertGradient, t.gradientDump,
-		t.insertCoverage, t.insertFilterOpChain,
+		t.insertCoverage, t.insertFilterOpChain, t.tessCacheStats,
 	}
 	names := [...]string{
 		"scene_create", "scene_clear", "scene_dispose", "scene_push_layer",
@@ -1250,7 +1253,7 @@ func validateSceneTable(t *sceneTable, path string) error {
 		"scene_insert_path", "scene_path_dump", "scene_path_script",
 		"scene_insert_batch", "scene_insert_effect", "scene_effect_dump",
 		"scene_update_property", "scene_insert_gradient", "scene_gradient_dump",
-		"scene_insert_coverage", "scene_insert_filter_op_chain",
+		"scene_insert_coverage", "scene_insert_filter_op_chain", "scene_tess_cache_stats",
 	}
 	for i, slot := range slots {
 		if slot == 0 {
@@ -1907,6 +1910,38 @@ func (s *SceneService) TessellatePath(commands []PathCommandRecord, words []uint
 		return nil, SceneBounds{}, sceneStatusError(code, "scene_path_script")
 	}
 	return vertices, outBounds, nil
+}
+
+// TessCacheStats reports the path tessellation LRU cache's counters
+// (rev 16, browser-core ticket 53): the cumulative hits, misses and
+// evictions plus the live entry count. The cache is process-global
+// (path_script is stateless), so the counters are cumulative across
+// every scene and the Go PathBuilder.Build callers. Note the two-call
+// capacity protocol of TessellatePath: one Build() through this client
+// is one miss (the capacity probe tessellates and caches) followed by
+// one hit (the data call).
+type TessCacheStats struct {
+	Hits      uint32
+	Misses    uint32
+	Evictions uint32
+	Entries   uint32
+}
+
+// TessCacheStats reads the tessellation cache's counters through the
+// scene service's stateless stats entry.
+func (s *SceneService) TessCacheStats() (TessCacheStats, error) {
+	if s.lib.released.Load() {
+		return TessCacheStats{}, ErrClosed
+	}
+	var stats TessCacheStats
+	code, err := callSceneTessCacheStats(s.table.tessCacheStats, &stats.Hits, &stats.Misses, &stats.Evictions, &stats.Entries)
+	if err != nil {
+		return TessCacheStats{}, err
+	}
+	if code != sceneStatusOK {
+		return TessCacheStats{}, sceneStatusError(code, "scene_tess_cache_stats")
+	}
+	return stats, nil
 }
 
 // Finish sorts the primitive arrays and compiles the render plan (the

@@ -54,9 +54,12 @@
 //!   command, one explicit `Flush`, `GetData` polling) — the contract's
 //!   added service-seam protocol, not pinned behavior.
 
+use std::cell::Cell;
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::rc::Rc;
 use std::slice;
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use gpui_render::{
     InstanceRange,
@@ -1153,25 +1156,27 @@ impl InstancePipeline {
                 D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP
             }
         };
-        let draw_constants = [Some(frame.globals.draw_constants_buffer.clone())];
-        let view = [self.view.clone()];
+        let binds = frame.binds.clone();
         unsafe {
-            ctx.VSSetShaderResources(DATA_REGISTER, Some(&view));
-            ctx.PSSetShaderResources(DATA_REGISTER, Some(&view));
-            ctx.IASetPrimitiveTopology(topology);
-            ctx.RSSetViewports(Some(slice::from_ref(&frame.viewport)));
+            binds.bind_data_srv(ctx, self.view.as_ref());
+            binds.bind_topology(ctx, topology);
+            binds.bind_viewport(ctx, &frame.viewport);
             if use_variant {
                 let variant = self.variant.as_ref().ok_or(renderer_status::ERR_DEVICE)?;
-                ctx.VSSetShader(&variant.vertex, None);
-                ctx.PSSetShader(&variant.fragment, None);
+                binds.bind_vertex_shader(ctx, &variant.vertex);
+                binds.bind_pixel_shader(ctx, &variant.fragment);
             } else {
-                ctx.VSSetShader(&self.vertex, None);
-                ctx.PSSetShader(&self.fragment, None);
+                binds.bind_vertex_shader(ctx, &self.vertex);
+                binds.bind_pixel_shader(ctx, &self.fragment);
             }
-            ctx.VSSetConstantBuffers(0, Some(&frame.globals.cbuffers()));
-            ctx.PSSetConstantBuffers(0, Some(&frame.globals.cbuffers()));
-            ctx.VSSetConstantBuffers(self.draw_constants_register, Some(&draw_constants));
-            ctx.OMSetBlendState(&self.blend_state, None, 0xFFFFFFFF);
+            binds.bind_cbuffer_pair(ctx, &frame.globals);
+            binds.bind_cbuffer_data(
+                ctx,
+                self.draw_constants_register,
+                &frame.globals.draw_constants_buffer,
+                BindStages::Vertex,
+            );
+            binds.bind_blend_state(ctx, &self.blend_state);
             if let Some(texture) = texture {
                 // rev 15: a pixelated batch samples nearest-neighbour.
                 let sampler = if pixelated {
@@ -1179,11 +1184,14 @@ impl InstancePipeline {
                 } else {
                     frame.globals.sampler.clone()
                 };
-                ctx.PSSetSamplers(PRIMARY_SAMPLER_REGISTER, Some(slice::from_ref(&sampler)));
+                if let Some(sampler) = sampler.as_ref() {
+                    binds.bind_primary_sampler(ctx, sampler);
+                }
                 // The vertex stage reads the atlas dimensions for tile
                 // coordinates.
-                ctx.VSSetShaderResources(PRIMARY_TEXTURE_REGISTER, Some(texture));
-                ctx.PSSetShaderResources(PRIMARY_TEXTURE_REGISTER, Some(texture));
+                let texture_ref = texture[0].as_ref();
+                binds.bind_primary_srv_vertex(ctx, texture_ref);
+                binds.bind_primary_srv_pixel(ctx, texture_ref);
             }
             // `StartInstanceLocation` stays zero: the shader adds the
             // base itself.
@@ -1574,16 +1582,327 @@ pub(super) struct DrawTargets {
 }
 
 // ---------------------------------------------------------------------------
+// The redundant state-bind tracker (rev 16, browser-core ticket 53,
+// the design's §3.12)
+// ---------------------------------------------------------------------------
+
+/// The cumulative state-bind counter: every topology, viewport,
+/// shader, cbuffer, blend-state, sampler and texture binding the
+/// tracker actually issued. The renderer's debug-stats entry reports
+/// it (device-global, like the tracker itself — the shared immediate
+/// context keeps one pipeline state across surfaces and frames, and
+/// the tracker is the only writer).
+static STATE_BIND_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+/// `draw_with_variant` and `dx_blur_pass` rebind their full pipeline
+/// state on every draw (`draw.rs`'s batch loop). The tracker caches the
+/// last-bound value of every state slot those two paths bind and skips
+/// the bind when it cannot have changed — pure renderer-internal, zero
+/// pixel impact (the skipped bind is a no-op by definition), observable
+/// only through [`STATE_BIND_COUNT`].
+///
+/// The tracker is per-FRAME (created in `render_scene`): between frames
+/// the present path, readbacks and other surfaces touch the context
+/// without the tracker, so cross-frame reuse would be unsound. Within a
+/// frame, every raw bind of a TRACKED slot elsewhere in the walk
+/// invalidates it (the tracker only ever under-binds: a skipped bind is
+/// always preceded by an identical tracked one on the same context
+/// state).
+///
+/// VS and PS texture slots at the same register are tracked
+/// SEPARATELY: the blur passes bind the primary texture at the pixel
+/// stage only, so a shared slot would let a later vertex-stage bind
+/// ride on a pixel-stage one (a real state change skipped).
+struct BindTracker {
+    /// The last-bound primitive topology (0 = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED = nothing bound).
+    topology: Cell<u32>,
+    /// The last-bound viewport (x, y, w, h); None = invalidated.
+    viewport: Cell<Option<[f32; 4]>>,
+    /// The last-bound vertex shader (raw; null = none).
+    vertex_shader: Cell<*mut std::ffi::c_void>,
+    /// The last-bound pixel shader (raw; null = none).
+    pixel_shader: Cell<*mut std::ffi::c_void>,
+    /// The last-bound output-merger blend state (raw; null = none).
+    blend_state: Cell<*mut std::ffi::c_void>,
+    /// The b0/b1 cbuffer PAIR (the globals+font buffers, always bound
+    /// together; the pair's identity is the globals buffer).
+    cbuffer_pair: Cell<*mut std::ffi::c_void>,
+    /// The per-draw data cbuffer (the instance pipelines' draw-constants
+    /// or the blur params), the register it was bound at and the stages
+    /// covered (the slot is register- and stage-checked: a bind at
+    /// another register, or at a stage the cache does not cover, says
+    /// nothing about the requested one).
+    cbuffer_data: Cell<*mut std::ffi::c_void>,
+    cbuffer_data_register: Cell<u32>,
+    cbuffer_data_stages: Cell<u32>,
+    /// The composite-extension cbuffer (b5, fixed register).
+    cbuffer_extensions: Cell<*mut std::ffi::c_void>,
+    /// The backdrop-crop cbuffer (b6, fixed register).
+    cbuffer_crop: Cell<*mut std::ffi::c_void>,
+    /// The primary sampler (s2, fixed register).
+    primary_sampler: Cell<*mut std::ffi::c_void>,
+    /// The primary texture's VERTEX-stage slot (t2).
+    primary_srv_vs: Cell<*mut std::ffi::c_void>,
+    /// The primary texture's PIXEL-stage slot (t2).
+    primary_srv_ps: Cell<*mut std::ffi::c_void>,
+    /// The instance-data SRV pair at the DATA register (t2; the batch
+    /// loop binds it at both stages together).
+    data_srv: Cell<*mut std::ffi::c_void>,
+}
+
+impl BindTracker {
+    fn new() -> Self {
+        BindTracker {
+            topology: Cell::new(0),
+            viewport: Cell::new(None),
+            vertex_shader: Cell::new(std::ptr::null_mut()),
+            pixel_shader: Cell::new(std::ptr::null_mut()),
+            blend_state: Cell::new(std::ptr::null_mut()),
+            cbuffer_pair: Cell::new(std::ptr::null_mut()),
+            cbuffer_data: Cell::new(std::ptr::null_mut()),
+            cbuffer_data_register: Cell::new(u32::MAX),
+            cbuffer_data_stages: Cell::new(0),
+            cbuffer_extensions: Cell::new(std::ptr::null_mut()),
+            cbuffer_crop: Cell::new(std::ptr::null_mut()),
+            primary_sampler: Cell::new(std::ptr::null_mut()),
+            primary_srv_vs: Cell::new(std::ptr::null_mut()),
+            primary_srv_ps: Cell::new(std::ptr::null_mut()),
+            data_srv: Cell::new(std::ptr::null_mut()),
+        }
+    }
+
+    /// Clears every cached slot (the raw-bind invalidation: a bind the
+    /// tracker did not issue may have changed the context state).
+    fn invalidate(&self) {
+        self.topology.set(0);
+        self.viewport.set(None);
+        self.vertex_shader.set(std::ptr::null_mut());
+        self.pixel_shader.set(std::ptr::null_mut());
+        self.blend_state.set(std::ptr::null_mut());
+        self.cbuffer_pair.set(std::ptr::null_mut());
+        self.cbuffer_data.set(std::ptr::null_mut());
+        self.cbuffer_data_register.set(u32::MAX);
+        self.cbuffer_data_stages.set(0);
+        self.cbuffer_extensions.set(std::ptr::null_mut());
+        self.cbuffer_crop.set(std::ptr::null_mut());
+        self.primary_sampler.set(std::ptr::null_mut());
+        self.primary_srv_vs.set(std::ptr::null_mut());
+        self.primary_srv_ps.set(std::ptr::null_mut());
+        self.data_srv.set(std::ptr::null_mut());
+    }
+
+    fn count_bind() {
+        STATE_BIND_COUNT.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Binds the topology when it changed.
+    fn bind_topology(&self, ctx: &ID3D11DeviceContext, topology: D3D_PRIMITIVE_TOPOLOGY) {
+        if self.topology.get() != topology.0 as u32 {
+            unsafe { ctx.IASetPrimitiveTopology(topology) };
+            self.topology.set(topology.0 as u32);
+            Self::count_bind();
+        }
+    }
+
+    /// Binds the viewport when it changed.
+    fn bind_viewport(&self, ctx: &ID3D11DeviceContext, viewport: &D3D11_VIEWPORT) {
+        let rect = [
+            viewport.TopLeftX,
+            viewport.TopLeftY,
+            viewport.Width,
+            viewport.Height,
+        ];
+        if self.viewport.get() != Some(rect) {
+            unsafe { ctx.RSSetViewports(Some(slice::from_ref(viewport))) };
+            self.viewport.set(Some(rect));
+            Self::count_bind();
+        }
+    }
+
+    fn bind_vertex_shader(&self, ctx: &ID3D11DeviceContext, shader: &ID3D11VertexShader) {
+        let raw = Interface::as_raw(shader);
+        if self.vertex_shader.get() != raw {
+            unsafe { ctx.VSSetShader(shader, None) };
+            self.vertex_shader.set(raw);
+            Self::count_bind();
+        }
+    }
+
+    fn bind_pixel_shader(&self, ctx: &ID3D11DeviceContext, shader: &ID3D11PixelShader) {
+        let raw = Interface::as_raw(shader);
+        if self.pixel_shader.get() != raw {
+            unsafe { ctx.PSSetShader(shader, None) };
+            self.pixel_shader.set(raw);
+            Self::count_bind();
+        }
+    }
+
+    fn bind_blend_state(&self, ctx: &ID3D11DeviceContext, blend: &ID3D11BlendState) {
+        let raw = Interface::as_raw(blend);
+        if self.blend_state.get() != raw {
+            unsafe { ctx.OMSetBlendState(blend, None, 0xFFFFFFFF) };
+            self.blend_state.set(raw);
+            Self::count_bind();
+        }
+    }
+
+    /// Binds the globals+font cbuffer pair at register 0 (both stages
+    /// together, the pair identified by the globals buffer).
+    fn bind_cbuffer_pair(&self, ctx: &ID3D11DeviceContext, globals: &GlobalElements) {
+        let raw = Interface::as_raw(&globals.globals_buffer);
+        if self.cbuffer_pair.get() != raw {
+            let cbuffers = globals.cbuffers();
+            unsafe {
+                ctx.VSSetConstantBuffers(0, Some(&cbuffers));
+                ctx.PSSetConstantBuffers(0, Some(&cbuffers));
+            }
+            self.cbuffer_pair.set(raw);
+            Self::count_bind();
+        }
+    }
+
+    /// Binds one cbuffer at the DATA register (the draw-constants or
+    /// the blur params), register- and stage-checked: the bind is
+    /// skipped only when the cache covers the requested register,
+    /// buffer AND stages.
+    fn bind_cbuffer_data(
+        &self,
+        ctx: &ID3D11DeviceContext,
+        register: u32,
+        buffer: &ID3D11Buffer,
+        stages: BindStages,
+    ) {
+        let raw = Interface::as_raw(buffer);
+        let mask = stages as u32;
+        let covered = self.cbuffer_data_register.get() == register
+            && self.cbuffer_data.get() == raw
+            && (self.cbuffer_data_stages.get() & mask) == mask;
+        if !covered {
+            let bound = [Some(buffer.clone())];
+            unsafe {
+                if stages != BindStages::Pixel {
+                    ctx.VSSetConstantBuffers(register, Some(&bound));
+                }
+                if stages != BindStages::Vertex {
+                    ctx.PSSetConstantBuffers(register, Some(&bound));
+                }
+            }
+            self.cbuffer_data.set(raw);
+            self.cbuffer_data_register.set(register);
+            // The issued bind covers exactly the requested stages (the
+            // other stage's slot keeps whatever it held).
+            self.cbuffer_data_stages.set(mask);
+            Self::count_bind();
+        }
+    }
+
+    /// Binds the composite-extension cbuffer (b5, both stages).
+    fn bind_cbuffer_extensions(&self, ctx: &ID3D11DeviceContext, buffer: &ID3D11Buffer) {
+        let raw = Interface::as_raw(buffer);
+        if self.cbuffer_extensions.get() != raw {
+            let bound = [Some(buffer.clone())];
+            unsafe {
+                ctx.VSSetConstantBuffers(5, Some(&bound));
+                ctx.PSSetConstantBuffers(5, Some(&bound));
+            }
+            self.cbuffer_extensions.set(raw);
+            Self::count_bind();
+        }
+    }
+
+    /// Binds the backdrop-crop cbuffer (b6, pixel stage).
+    fn bind_cbuffer_crop(&self, ctx: &ID3D11DeviceContext, buffer: &ID3D11Buffer) {
+        let raw = Interface::as_raw(buffer);
+        if self.cbuffer_crop.get() != raw {
+            let bound = [Some(buffer.clone())];
+            unsafe { ctx.PSSetConstantBuffers(6, Some(&bound)) };
+            self.cbuffer_crop.set(raw);
+            Self::count_bind();
+        }
+    }
+
+    fn bind_primary_sampler(&self, ctx: &ID3D11DeviceContext, sampler: &ID3D11SamplerState) {
+        let raw = Interface::as_raw(sampler);
+        if self.primary_sampler.get() != raw {
+            let bound = [Some(sampler.clone())];
+            unsafe { ctx.PSSetSamplers(PRIMARY_SAMPLER_REGISTER, Some(&bound)) };
+            self.primary_sampler.set(raw);
+            Self::count_bind();
+        }
+    }
+
+    /// Binds the primary texture's SRV at the vertex stage.
+    fn bind_primary_srv_vertex(
+        &self,
+        ctx: &ID3D11DeviceContext,
+        srv: Option<&ID3D11ShaderResourceView>,
+    ) {
+        let raw = srv.map(Interface::as_raw).unwrap_or(std::ptr::null_mut());
+        if self.primary_srv_vs.get() != raw {
+            let bound = [srv.cloned()];
+            unsafe { ctx.VSSetShaderResources(PRIMARY_TEXTURE_REGISTER, Some(&bound)) };
+            self.primary_srv_vs.set(raw);
+            Self::count_bind();
+        }
+    }
+
+    /// Binds the primary texture's SRV at the pixel stage (None = the
+    /// post-pass unbind).
+    fn bind_primary_srv_pixel(
+        &self,
+        ctx: &ID3D11DeviceContext,
+        srv: Option<&ID3D11ShaderResourceView>,
+    ) {
+        let raw = srv.map(Interface::as_raw).unwrap_or(std::ptr::null_mut());
+        if self.primary_srv_ps.get() != raw {
+            let bound = [srv.cloned()];
+            unsafe { ctx.PSSetShaderResources(PRIMARY_TEXTURE_REGISTER, Some(&bound)) };
+            self.primary_srv_ps.set(raw);
+            Self::count_bind();
+        }
+    }
+
+    /// Binds the instance-data SRV pair at the DATA register (both
+    /// stages together).
+    fn bind_data_srv(&self, ctx: &ID3D11DeviceContext, srv: Option<&ID3D11ShaderResourceView>) {
+        let raw = srv.map(Interface::as_raw).unwrap_or(std::ptr::null_mut());
+        if self.data_srv.get() != raw {
+            let bound = [srv.cloned()];
+            unsafe {
+                ctx.VSSetShaderResources(DATA_REGISTER, Some(&bound));
+                ctx.PSSetShaderResources(DATA_REGISTER, Some(&bound));
+            }
+            self.data_srv.set(raw);
+            Self::count_bind();
+        }
+    }
+}
+
+/// The cbuffer stages a tracked bind covers.
+#[derive(Clone, Copy, PartialEq)]
+#[repr(u32)]
+enum BindStages {
+    Vertex = 1,
+    Pixel = 2,
+    Both = 3,
+}
+
+// ---------------------------------------------------------------------------
 // Frame-wide bindings (the pin's FrameBindings)
 // ---------------------------------------------------------------------------
 
 /// Frame-wide state that every batch draw binds alongside its own
 /// pipeline (the pin's `FrameBindings`, owning a clone of the global
 /// elements so the draw walk can mutably update the instance buffers).
+/// The state-bind tracker rides along (rev 16, ticket 53): every
+/// tracked draw consults it, every raw bind outside the two tracked
+/// paths invalidates it.
 struct FrameBindings<'a> {
     device_context: &'a ID3D11DeviceContext,
     viewport: D3D11_VIEWPORT,
     globals: GlobalElements,
+    /// The per-frame state-bind tracker (§3.12).
+    binds: Rc<BindTracker>,
 }
 
 // ---------------------------------------------------------------------------
@@ -2295,18 +2614,26 @@ fn render_scene(
         device_context: &ctx,
         viewport,
         globals: draw.globals.clone(),
+        binds: Rc::new(BindTracker::new()),
     };
+    // `pre_draw` bound the viewport and the target outside the tracker
+    // (it takes no frame): a fresh per-frame tracker is empty anyway,
+    // and the invalidation documents the rule — every raw bind of a
+    // tracked slot resets the cache (§3.12).
+    frame.binds.invalidate();
 
     // rev 16 (ticket 52): the clip-path coverage rasterization (see the
     // comment above) - the composites sample the resolved target.
     if coverage_rasterized {
         rasterize_coverage(state, draw, slot_index, slot_generation, &frame, snapshot)?;
         // Restore the base target binding (the rasterization drew into
-        // the coverage MSAA target).
+        // the coverage MSAA target; the raw viewport bind invalidates
+        // the tracker - §3.12).
         unsafe {
             ctx.OMSetRenderTargets(Some(slice::from_ref(&current.rtv)), None);
             ctx.RSSetViewports(Some(slice::from_ref(&current.viewport)));
         }
+        frame.binds.invalidate();
     }
 
     let mut path_rasterization_vertices: Vec<PathRasterizationVertex> = Vec::new();
@@ -2610,6 +2937,9 @@ fn render_scene(
                                 ctx.RSSetViewports(Some(slice::from_ref(&current.viewport)));
                             }
                         }
+                        // The raw viewport bind invalidates the tracker
+                        // (§3.12).
+                        frame.binds.invalidate();
                     }
                     None => {
                         // The pool demoted the group to inline: no target
@@ -3723,6 +4053,10 @@ fn draw_surfaces(
         };
         update_buffer(ctx, &draw.pipelines.surfaces.params_buffer, &[uniforms])?;
 
+        // The surface pipeline binds its full state RAW (a two-plane
+        // texture pair at the primary slot included): the tracker's
+        // cache cannot survive it (§3.12).
+        frame.binds.invalidate();
         unsafe {
             ctx.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
             ctx.RSSetViewports(Some(std::slice::from_ref(viewport)));
@@ -3804,14 +4138,7 @@ fn dx_blur_pass(
 ) -> Result<(), i32> {
     let ctx = frame.device_context;
     update_buffer(ctx, &draw.pipelines.blur_params_buffer, &[params])?;
-    let null_srv: [Option<ID3D11ShaderResourceView>; 1] = [None];
-    let cbuffers = frame.globals.cbuffers();
-    let blur_params = [Some(draw.pipelines.blur_params_buffer.clone())];
-    // The rev-15 extension buffers (b5/b6): the composite's colour
-    // matrix and sampling offset, and the backdrop crop's fold. The
-    // pinned passes bind nothing (their shaders declare neither).
-    let composite_extensions = [Some(draw.pipelines.composite_extensions_buffer.clone())];
-    let backdrop_crop = [Some(draw.pipelines.backdrop_crop_buffer.clone())];
+    let binds = frame.binds.clone();
     match &extras {
         BlurPassExtras::None => {}
         BlurPassExtras::Composite(uniforms) => {
@@ -3833,43 +4160,39 @@ fn dx_blur_pass(
     unsafe {
         // Unbind any SRV at the blur slot; the target must not be bound
         // as input.
-        ctx.PSSetShaderResources(PRIMARY_TEXTURE_REGISTER, Some(&null_srv));
+        binds.bind_primary_srv_pixel(ctx, None);
         if clear {
             let rtv = target_rtv.as_ref().ok_or(renderer_status::ERR_DEVICE)?;
             ctx.ClearRenderTargetView(rtv, &[0.0; 4]);
         }
         ctx.OMSetRenderTargets(Some(slice::from_ref(target_rtv)), None);
-        ctx.RSSetViewports(Some(slice::from_ref(viewport)));
-        ctx.IASetPrimitiveTopology(topology);
-        ctx.VSSetShader(vertex, None);
-        ctx.PSSetShader(fragment, None);
-        ctx.VSSetConstantBuffers(0, Some(&cbuffers));
-        ctx.PSSetConstantBuffers(0, Some(&cbuffers));
-        ctx.VSSetConstantBuffers(DATA_REGISTER, Some(&blur_params));
-        ctx.PSSetConstantBuffers(DATA_REGISTER, Some(&blur_params));
+        binds.bind_viewport(ctx, viewport);
+        binds.bind_topology(ctx, topology);
+        binds.bind_vertex_shader(ctx, vertex);
+        binds.bind_pixel_shader(ctx, fragment);
+        binds.bind_cbuffer_pair(ctx, &frame.globals);
+        binds.bind_cbuffer_data(ctx, DATA_REGISTER, &draw.pipelines.blur_params_buffer, BindStages::Both);
         match &extras {
             BlurPassExtras::None => {}
             BlurPassExtras::Composite(_) => {
                 // The vertex stage reads the extensions too (rev 16,
                 // ticket 51: the transformed composite's matrix lives
                 // there).
-                ctx.VSSetConstantBuffers(5, Some(&composite_extensions));
-                ctx.PSSetConstantBuffers(5, Some(&composite_extensions));
+                binds.bind_cbuffer_extensions(ctx, &draw.pipelines.composite_extensions_buffer);
             }
             BlurPassExtras::Crop(_) => {
-                ctx.PSSetConstantBuffers(6, Some(&backdrop_crop));
+                binds.bind_cbuffer_crop(ctx, &draw.pipelines.backdrop_crop_buffer);
             }
         }
-        ctx.PSSetSamplers(
-            PRIMARY_SAMPLER_REGISTER,
-            Some(slice::from_ref(&frame.globals.sampler)),
-        );
-        ctx.PSSetShaderResources(PRIMARY_TEXTURE_REGISTER, Some(slice::from_ref(source_srv)));
-        ctx.OMSetBlendState(blend, None, 0xFFFFFFFF);
+        if let Some(sampler) = frame.globals.sampler.as_ref() {
+            binds.bind_primary_sampler(ctx, sampler);
+        }
+        binds.bind_primary_srv_pixel(ctx, source_srv.as_ref());
+        binds.bind_blend_state(ctx, blend);
         ctx.DrawInstanced(vertex_count, 1, 0, 0);
         // Unbind the source so the target can be rebound as a render
         // target next.
-        ctx.PSSetShaderResources(PRIMARY_TEXTURE_REGISTER, Some(&null_srv));
+        binds.bind_primary_srv_pixel(ctx, None);
     }
     Ok(())
 }

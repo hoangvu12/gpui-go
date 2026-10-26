@@ -80,7 +80,7 @@
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 use gpui::{Path as GpuiPath, PathBuilder, PathStyle, Pixels, point, px};
 use lyon::tessellation::{FillOptions, FillRule, LineCap, LineJoin, StrokeOptions};
@@ -118,7 +118,10 @@ use lyon::math::Transform as LyonTransform;
 /// `has_blend` composite are wired (the renderer resolves them); the
 /// filter record appends `op_chain_index`/`op_chain_count` (0/0 = R15
 /// semantics, bit-exact) and the meta record appends the table counts.
-pub const GPUI_GO_SCENE_SERVICE_VERSION: u32 = 8;
+/// Version 9 (rev 16, browser-core ticket 53) appended
+/// `scene_tess_cache_stats` (the path tessellation LRU cache's
+/// observability - 35 pointers; no records changed).
+pub const GPUI_GO_SCENE_SERVICE_VERSION: u32 = 9;
 
 /// Property kinds of `scene_update_property` (rev 16, ticket 51: the
 /// design's appendix A.7). A kind updates the records' stored value
@@ -1667,7 +1670,7 @@ const _: () = assert!(core::mem::size_of::<GpuiGoSceneCoverageRecord>() == 24);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneCoverageRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneFilterOpRecord>() == 40);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneFilterOpRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneTable>() == 376);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneTable>() == 384);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneTable>() == 8);
 
 // ---------------------------------------------------------------------------
@@ -6125,6 +6128,169 @@ fn line_cap_of(tag: u32) -> LineCap {
     }
 }
 
+// ---------------------------------------------------------------------------
+// The path tessellation LRU cache (rev 16, browser-core ticket 53, the
+// design's §3.12)
+// ---------------------------------------------------------------------------
+
+/// The tessellation cache's entry cap (the design's 128): the number of
+/// distinct command scripts whose tessellated vertices are retained.
+pub const TESS_CACHE_MAX_ENTRIES: usize = 128;
+
+/// The cache's cumulative hit counter (the observability seam: the
+/// renderer's debug-stats entry reads it, and the scene service's
+/// `scene_tess_cache_stats` entry reports it).
+static TESS_CACHE_HITS: AtomicUsize = AtomicUsize::new(0);
+/// The cache's cumulative miss counter (every tessellation that ran).
+static TESS_CACHE_MISSES: AtomicUsize = AtomicUsize::new(0);
+/// The cumulative eviction counter (entries dropped by the LRU cap).
+static TESS_CACHE_EVICTIONS: AtomicUsize = AtomicUsize::new(0);
+
+/// One cached tessellation: the exact key (the command records, the
+/// word pool and the style's fill tolerance — the design's "keyed on
+/// the exact command+pool bytes and tolerance"; the tolerance is
+/// already part of the STYLE command's bytes, hashing it again only
+/// makes the key's independence explicit) plus its result.
+struct TessCacheEntry {
+    key: Vec<u8>,
+    vertices: Vec<GpuiGoScenePathVertexRecord>,
+    bounds: GpuiGoSceneBounds,
+    /// The LRU clock (bumped on use; the smallest value evicts).
+    last_used: u64,
+}
+
+/// The process-global tessellation LRU (`path_script` is stateless —
+/// no scene handle — so the cache is keyed purely on the call's
+/// input bytes). Deterministic input means deterministic output: the
+/// cached vertices are the bytes the pinned PathBuilder produced for
+/// exactly these commands, so a hit is bit-identical by construction.
+#[derive(Default)]
+struct TessCache {
+    entries: Vec<TessCacheEntry>,
+    clock: u64,
+}
+
+static TESS_CACHE: OnceLock<Mutex<TessCache>> = OnceLock::new();
+
+fn tess_cache() -> &'static Mutex<TessCache> {
+    TESS_CACHE.get_or_init(|| Mutex::new(TessCache::default()))
+}
+
+/// The cache key: the command records' raw bytes, the word pool's
+/// bytes and the style's fill tolerance bits (the style record's
+/// `data[1]` when the script carries one; 0 otherwise — a stroke
+/// script's key is its commands alone).
+fn tess_cache_key(
+    commands: &[GpuiGoPathCommandRecord],
+    words: &[u32],
+) -> Vec<u8> {
+    let mut key = Vec::with_capacity(
+        commands.len() * std::mem::size_of::<GpuiGoPathCommandRecord>()
+            + words.len() * 4
+            + 12,
+    );
+    for command in commands {
+        key.extend_from_slice(&command.kind.to_le_bytes());
+        for word in command.data {
+            key.extend_from_slice(&word.to_le_bytes());
+        }
+        key.extend_from_slice(&command.record_size.to_le_bytes());
+    }
+    for word in words {
+        key.extend_from_slice(&word.to_le_bytes());
+    }
+    // The fill tolerance from the style (the design's key component).
+    let mut tolerance = 0u32;
+    for command in commands {
+        if command.kind == path_command_kind::STYLE
+            && command.data[0] == path_style_tag::FILL
+        {
+            tolerance = command.data[1];
+        }
+    }
+    key.extend_from_slice(&tolerance.to_le_bytes());
+    key
+}
+
+/// Looks the key up in the LRU, bumping the entry's recency and the
+/// hit counter on success.
+fn tess_cache_get(cache: &mut TessCache, key: &[u8]) -> Option<(Vec<GpuiGoScenePathVertexRecord>, GpuiGoSceneBounds)> {
+    cache.clock = cache.clock.wrapping_add(1);
+    let now = cache.clock;
+    let position = cache.entries.iter().position(|entry| entry.key == key)?;
+    let entry = &mut cache.entries[position];
+    entry.last_used = now;
+    Some((entry.vertices.clone(), entry.bounds))
+}
+
+/// Inserts a fresh tessellation, evicting the least recently used
+/// entries over the cap.
+fn tess_cache_put(
+    cache: &mut TessCache,
+    key: Vec<u8>,
+    vertices: Vec<GpuiGoScenePathVertexRecord>,
+    bounds: GpuiGoSceneBounds,
+) {
+    cache.clock = cache.clock.wrapping_add(1);
+    while cache.entries.len() >= TESS_CACHE_MAX_ENTRIES {
+        // Evict the least recently used entry (the smallest clock).
+        let oldest = cache
+            .entries
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, entry)| entry.last_used)
+            .map(|(index, _)| index);
+        match oldest {
+            Some(index) => {
+                cache.entries.remove(index);
+                TESS_CACHE_EVICTIONS.fetch_add(1, Ordering::Relaxed);
+            }
+            None => break,
+        }
+    }
+    cache.entries.push(TessCacheEntry {
+        key,
+        vertices,
+        bounds,
+        last_used: cache.clock,
+    });
+}
+
+/// `scene_tess_cache_stats` (service version 9, rev 16 ticket 53):
+/// the tessellation cache's cumulative hits, misses and evictions and
+/// the live entry count — the scenespec observability seam (the
+/// renderer's per-surface debug stats reports the same hit counter
+/// for the render-side measurement).
+pub(super) fn tess_cache_stats_body(
+    out_hits: *mut u32,
+    out_misses: *mut u32,
+    out_evictions: *mut u32,
+    out_entries: *mut u32,
+) -> i32 {
+    let (hits, misses, evictions, entries) = {
+        let cache = tess_cache().lock().unwrap_or_else(|poison| poison.into_inner());
+        (
+            TESS_CACHE_HITS.load(Ordering::Relaxed) as u32,
+            TESS_CACHE_MISSES.load(Ordering::Relaxed) as u32,
+            TESS_CACHE_EVICTIONS.fetch_add(0, Ordering::Relaxed) as u32,
+            cache.entries.len() as u32,
+        )
+    };
+    if !out_hits.is_null() {
+        unsafe { *out_hits = hits };
+    }
+    if !out_misses.is_null() {
+        unsafe { *out_misses = misses };
+    }
+    if !out_evictions.is_null() {
+        unsafe { *out_evictions = evictions };
+    }
+    if !out_entries.is_null() {
+        unsafe { *out_entries = entries };
+    }
+    scene_status::OK
+}
+
 /// The pinned-PathBuilder tessellation entry: replay a validated
 /// command script onto the pinned `gpui::PathBuilder` (the same lyon
 /// code the reference oracle uses), build the tessellated
@@ -6135,6 +6301,12 @@ fn line_cap_of(tag: u32) -> LineCap {
 /// The style and dash-array setters are applied before `build()` exactly
 /// like the pinned builder chain (`with_style`/`dash_array`); a build
 /// failure (lyon error) maps to [`scene_status::ERR_BAD_VALUE`].
+///
+/// rev 16 (browser-core ticket 53): the tessellation consults an LRU
+/// cache (128 entries) keyed on the exact command+pool bytes and the
+/// style's fill tolerance — a repeated script returns its cached
+/// vertices without re-running lyon (bit-exact by construction: the
+/// same bytes produced them).
 fn scene_path_script_body(
     commands: *const GpuiGoPathCommandRecord,
     command_count: u32,
@@ -6174,6 +6346,32 @@ fn scene_path_script_body(
             return code;
         }
     }
+
+    // rev 16 (ticket 53): the LRU consult FIRST — a repeated script
+    // skips lyon entirely and returns the cached vertices.
+    let cache_key = tess_cache_key(commands, words);
+    {
+        let mut cache = tess_cache().lock().unwrap_or_else(|poison| poison.into_inner());
+        if let Some((vertices, bounds)) = tess_cache_get(&mut cache, &cache_key) {
+            drop(cache);
+            TESS_CACHE_HITS.fetch_add(1, Ordering::Relaxed);
+            let needed = vertices.len() as u32;
+            unsafe {
+                *out_vertex_count = needed;
+                *out_bounds = bounds;
+            }
+            if needed > vertex_capacity {
+                return scene_status::ERR_CAPACITY;
+            }
+            if needed > 0 {
+                let out =
+                    unsafe { std::slice::from_raw_parts_mut(out_vertices, needed as usize) };
+                out.copy_from_slice(&vertices);
+            }
+            return scene_status::OK;
+        }
+    }
+    TESS_CACHE_MISSES.fetch_add(1, Ordering::Relaxed);
 
     let mut builder = PathBuilder::default();
     let mut style: Option<PathStyle> = None;
@@ -6222,6 +6420,14 @@ fn scene_path_script_body(
         w: f32::from(path.bounds.size.width).to_bits(),
         h: f32::from(path.bounds.size.height).to_bits(),
     };
+
+    // Insert the fresh tessellation into the LRU (the next identical
+    // script is a hit; over the cap the least recently used entries
+    // evict, observably through `scene_tess_cache_stats`).
+    {
+        let mut cache = tess_cache().lock().unwrap_or_else(|poison| poison.into_inner());
+        tess_cache_put(&mut cache, cache_key, vertices.clone(), bounds);
+    }
 
     let needed = vertices.len() as u32;
     unsafe {
@@ -6911,6 +7117,13 @@ pub struct GpuiGoSceneTable {
             *mut u32,
         ) -> i32,
     >,
+    /// `scene_tess_cache_stats` (service version 9, rev 16 ticket 53):
+    /// the path tessellation LRU cache's cumulative hits, misses and
+    /// evictions plus the live entry count (stateless; the same hit
+    /// counter the renderer's debug stats reports).
+    pub tess_cache_stats: Option<
+        unsafe extern "system" fn(*mut u32, *mut u32, *mut u32, *mut u32) -> i32,
+    >,
     /// Scene ABI version (see [`GPUI_GO_SCENE_SERVICE_VERSION`]).
     pub service_version: u32,
     /// `size_of::<GpuiGoSceneTable>()` self-check.
@@ -7004,6 +7217,7 @@ pub(crate) static SCENE_TABLE: GpuiGoSceneTable = GpuiGoSceneTable {
     gradient_dump: Some(scene_gradient_dump),
     insert_coverage: Some(scene_insert_coverage),
     insert_filter_op_chain: Some(scene_insert_filter_op_chain),
+    tess_cache_stats: Some(scene_tess_cache_stats),
     service_version: GPUI_GO_SCENE_SERVICE_VERSION,
     size_of_table: core::mem::size_of::<GpuiGoSceneTable>() as u32,
     align_of_table: core::mem::align_of::<GpuiGoSceneTable>() as u32,
@@ -7607,6 +7821,26 @@ unsafe extern "system" fn scene_path_script(
             out_vertex_count,
             out_bounds,
         )
+    }));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            scene_status::ERR_PANIC
+        }
+    }
+}
+
+unsafe extern "system" fn scene_tess_cache_stats(
+    out_hits: *mut u32,
+    out_misses: *mut u32,
+    out_evictions: *mut u32,
+    out_entries: *mut u32,
+) -> i32 {
+    // Stateless like `path_script`; a contained panic maps to
+    // ERR_PANIC without marking anything.
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        tess_cache_stats_body(out_hits, out_misses, out_evictions, out_entries)
     }));
     match outcome {
         Ok(code) => code,

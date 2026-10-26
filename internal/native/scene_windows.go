@@ -457,3 +457,29 @@ func callScenePathScript(
 	runtime.KeepAlive(outBounds)
 	return callStatus(r1), nil
 }
+
+// callSceneTessCacheStats covers the tessellation LRU cache's stats
+// slot (rev 16, ticket 53; stateless like path_script).
+func callSceneTessCacheStats(
+	fn uintptr,
+	outHits *uint32,
+	outMisses *uint32,
+	outEvictions *uint32,
+	outEntries *uint32,
+) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_tess_cache_stats")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(unsafe.Pointer(outHits)),
+		uintptr(unsafe.Pointer(outMisses)),
+		uintptr(unsafe.Pointer(outEvictions)),
+		uintptr(unsafe.Pointer(outEntries)),
+	)
+	runtime.KeepAlive(outHits)
+	runtime.KeepAlive(outMisses)
+	runtime.KeepAlive(outEvictions)
+	runtime.KeepAlive(outEntries)
+	return callStatus(r1), nil
+}

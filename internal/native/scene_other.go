@@ -188,3 +188,13 @@ func callScenePathScript(
 ) (int32, error) {
 	return 0, hostSupported()
 }
+
+func callSceneTessCacheStats(
+	fn uintptr,
+	outHits *uint32,
+	outMisses *uint32,
+	outEvictions *uint32,
+	outEntries *uint32,
+) (int32, error) {
+	return 0, hostSupported()
+}
