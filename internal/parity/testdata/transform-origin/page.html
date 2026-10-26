@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 320px;
+		height: 240px;
+	}
+	.centre, .corner {
+		box-sizing: border-box;
+		position: absolute;
+		left: 40px;
+		top: 30px;
+		width: 80px;
+		height: 40px;
+	}
+	.centre {
+		background: #00aa00;
+		transform: rotate(90deg);
+	}
+	.corner {
+		background: #0066ff;
+		transform: rotate(90deg);
+		transform-origin: 0 0;
+	}
+</style>
+</head>
+<body data-id="root">
+	<div class="centre" data-id="centre"></div>
+	<div class="corner" data-id="corner"></div>
+</body>
+</html>

@@ -47,6 +47,7 @@ import (
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/textwrap"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/tooltip"
 	"github.com/hoangvu12/gpui-go/internal/parity/fixtures/tracer"
+	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/transform"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/transition"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/tsxslots"
 	_ "github.com/hoangvu12/gpui-go/internal/parity/fixtures/userselect"

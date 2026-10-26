@@ -540,6 +540,24 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.Opacity90()
 	case "opacity-95":
 		b.Opacity95()
+	case "origin-bottom":
+		b.OriginBottom()
+	case "origin-bottom-left":
+		b.OriginBottomLeft()
+	case "origin-bottom-right":
+		b.OriginBottomRight()
+	case "origin-center":
+		b.OriginCenter()
+	case "origin-left":
+		b.OriginLeft()
+	case "origin-right":
+		b.OriginRight()
+	case "origin-top":
+		b.OriginTop()
+	case "origin-top-left":
+		b.OriginTopLeft()
+	case "origin-top-right":
+		b.OriginTopRight()
 	case "outline-dashed":
 		b.OutlineDashed()
 	case "outline-none":
@@ -913,4 +931,4 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 }
 
 // methodClassCount is the number of classes applyMethodClass knows.
-const methodClassCount = 450
+const methodClassCount = 459

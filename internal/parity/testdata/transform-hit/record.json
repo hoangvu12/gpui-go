@@ -1,0 +1,162 @@
+{
+  "name": "transform-hit",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-26T20:47:16Z",
+  "viewport": {
+    "width": 320,
+    "height": 240
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "parent": {
+      "x": 70,
+      "y": 150,
+      "width": 120,
+      "height": 60
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 320,
+      "height": 240
+    }
+  },
+  "events": [
+    {
+      "kind": "pointerenter",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerenter",
+      "target": "rot",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "rot",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "rot",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerleave",
+      "target": "rot",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerenter",
+      "target": "scaled",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "scaled",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "scaled",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerleave",
+      "target": "scaled",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerenter",
+      "target": "parent",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerenter",
+      "target": "child",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "child",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "parent",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "child",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "parent",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerleave",
+      "target": "child",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "pointerleave",
+      "target": "parent",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "mousedown",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    }
+  ],
+  "screenshot": "chrome.png"
+}

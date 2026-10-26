@@ -465,6 +465,22 @@ until the owning spec tickets land, and each should get a fixture the day it is 
   Chrome's 48-device-px LCD cap) are tracked by report 04 §2(b) and Q21. Text-heavy
   fixtures calibrate from the ink statistics (`parity.MeasureInk`).
 
+Ticket 56 (transforms with hit testing) landed `fixtures/transform`: the
+hit-test fixture `transform-hit` (clicks on rotated, scaled and nested
+elements through the inverse matrix — the spec's risk, written first),
+one Tier-A-exact box+pixel fixture per transform kind
+(`transform-translate`/`scale`/`rotate`/`skew`), the `transform-origin`
+pair, and the mid-flight `transform-transition` sample. One recorded
+limitation the fixtures avoid (documented in
+gpui/transform_paint.go): an element's transform composes ABOVE an
+ancestor's overflow clip, not inside it — a transformed element inside
+a scroller clips its subtree's records pre-transform and hit-tests the
+ancestor's mask at the raw pointer, so a rotated element can paint and
+hit-test past a scroller's edge where Chrome would clip the transformed
+result. Transforms on elements participating in a parent paragraph are
+inert (CSS applies `transform` to transformable elements only; the
+fragments path has no matrix seam).
+
 Divergences fixed by browser-core tickets get their fixture when they land: ticket 10
 (hover) removed two pin behaviours — hover clearing on key presses (D12) and hover
 sticking at the window edge — and added `OnPointerEnter`/`OnPointerLeave` plus the

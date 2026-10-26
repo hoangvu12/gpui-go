@@ -1,0 +1,26 @@
+{
+  "name": "transform-skew",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-26T20:47:03Z",
+  "viewport": {
+    "width": 320,
+    "height": 240
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "box": {
+      "x": 20,
+      "y": 30,
+      "width": 120,
+      "height": 40
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 320,
+      "height": 240
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

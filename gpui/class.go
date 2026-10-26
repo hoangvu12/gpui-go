@@ -565,6 +565,7 @@ var classStages = []classStage{
 	blurClass,
 	gradientClass,
 	filterClass,
+	transformClass,
 	unsupportedClass,
 	colorClass,
 }
@@ -1570,6 +1571,149 @@ var filterPercentScale = map[string]float32{
 // hueRotateScale is Tailwind v3's hue-rotate scale in degrees.
 var hueRotateScale = map[string]float32{"0": 0, "15": 15, "30": 30, "60": 60, "90": 90, "180": 180}
 
+// transformClass applies the CSS-transform families with values
+// (browser-core ticket 56): translate-x-*, translate-y-*, scale-*,
+// scale-x-*, scale-y-*, rotate-*, skew-x-* and skew-y-*. Consecutive
+// transform classes APPEND to the transform list in class order - the
+// CSS spelling of `transform: translate(16px) rotate(45deg)` - like the
+// fluent methods (.TranslateX(Px(16)).Rotate(45)); a later
+// .Transform(...) call replaces the whole list. The origin classes
+// (origin-center, origin-top-left, ...) are method classes the
+// generated switch applies.
+func transformClass(b *StyleBuilder, u string) (bool, string) {
+	body, neg := strings.CutPrefix(u, "-")
+	// The 3D transform families (rotate-x-*, rotate-y-*, perspective)
+	// get their own reason before the 2D families read them as the
+	// rotate family with a bad value.
+	for _, prefix := range []string{"rotate-x", "rotate-y", "perspective", "transform-3d", "backface"} {
+		if body == prefix || strings.HasPrefix(body, prefix+"-") {
+			return true, "3D transforms are not supported; translate-*, scale-*, rotate-*, skew-* and origin-* are 2D"
+		}
+	}
+	var family string
+	for _, candidate := range []string{"translate-x", "translate-y", "scale-x", "scale-y", "scale", "rotate", "skew-x", "skew-y"} {
+		if rest, ok := strings.CutPrefix(body, candidate+"-"); ok {
+			// The longer prefixes first so translate-x-4 does not read
+			// as another family.
+			_ = rest
+			family = candidate
+			break
+		}
+	}
+	if family == "" {
+		return false, ""
+	}
+	value, ok := strings.CutPrefix(body, family+"-")
+	if !ok {
+		return false, ""
+	}
+	switch family {
+	case "translate-x", "translate-y":
+		// A length like the spacing families: the 0.25rem scale, px,
+		// full (100%), a fraction (translate-x-1/2) or an arbitrary
+		// [12px]/[1.5rem]/[50%]. A negative value moves the other way.
+		length, reason := transformLengthValue(value, neg)
+		if reason != "" {
+			return true, reason
+		}
+		if family == "translate-x" {
+			b.TranslateX(length)
+		} else {
+			b.TranslateY(length)
+		}
+		return true, ""
+	case "scale", "scale-x", "scale-y":
+		// A plain number is a percentage (scale-95 = 0.95); an
+		// arbitrary value is the raw factor (scale-[1.7]).
+		factor, ok := transformScaleValue(value)
+		if !ok {
+			return true, family + "-… takes a percentage like " + family + "-95, or an arbitrary factor like [1.7]"
+		}
+		if neg {
+			factor = -factor
+		}
+		switch family {
+		case "scale":
+			b.ScaleUniform(factor)
+		case "scale-x":
+			b.ScaleX(factor)
+		default:
+			b.ScaleY(factor)
+		}
+		return true, ""
+	case "rotate", "skew-x", "skew-y":
+		// A plain number or bracketed degrees: rotate-45, skew-x-3,
+		// rotate-[45deg].
+		degrees, ok := transformAngleValue(value)
+		if !ok {
+			return true, family + "-… takes degrees like " + family + "-45, or an arbitrary angle like [45deg]"
+		}
+		if neg {
+			degrees = -degrees
+		}
+		switch family {
+		case "rotate":
+			b.Rotate(degrees)
+		case "skew-x":
+			b.SkewX(degrees)
+		default:
+			b.SkewY(degrees)
+		}
+		return true, ""
+	}
+	return false, ""
+}
+
+// transformLengthValue parses a translate class value: the spacing
+// scale (a multiple of 0.25rem), px, full, a fraction or an arbitrary
+// length. neg mirrors the leading minus onto the value.
+func transformLengthValue(value string, neg bool) (DefiniteLength, string) {
+	d, ok := definiteValue(value)
+	if !ok {
+		return DefiniteLength{}, "translate-… takes a length like translate-x-4 (the 0.25rem scale), px, full, a fraction like 1/2, or [12px], [1.5rem], [50%]"
+	}
+	if neg {
+		d.Value = -d.Value
+	}
+	return d, ""
+}
+
+// transformScaleValue parses a scale class value: a plain number (the
+// percentage, scale-95 = 0.95) or an arbitrary raw factor
+// (scale-[1.7]).
+func transformScaleValue(v string) (float32, bool) {
+	if inner, ok := arbitrary(v); ok {
+		n, ok := parseNumber(inner)
+		if !ok {
+			return 0, false
+		}
+		return n, true
+	}
+	n, ok := parseNumber(v)
+	if !ok {
+		return 0, false
+	}
+	return n / 100, true
+}
+
+// transformAngleValue parses an angle class value: a plain number
+// (degrees) or an arbitrary [45deg].
+func transformAngleValue(v string) (float32, bool) {
+	if inner, ok := arbitrary(v); ok {
+		if d, ok := strings.CutSuffix(inner, "deg"); ok {
+			if n, ok := parseNumber(d); ok {
+				return n, true
+			}
+		}
+		return 0, false
+	}
+	n, ok := parseNumber(v)
+	if !ok {
+		return 0, false
+	}
+	return n, true
+}
+
 // filterClass applies the CSS colour filter utilities: grayscale,
 // sepia and invert (bare = the full amount, -0 none), the scaled
 // brightness-*, contrast-* and saturate-*, hue-rotate-*, and their
@@ -1709,7 +1853,8 @@ var unsupportedClasses = []struct {
 }{
 	{[]string{"z"}, "GPUI has no z-index: siblings paint in tree order; render overlays last, or wrap them in gpui.Deferred"},
 	{[]string{"transition", "duration", "ease", "delay", "animate"}, "GPUI styles have no CSS transitions or animations: state styles switch instantly (animate with gpui.WithAnimation)"},
-	{[]string{"translate", "rotate", "scale", "skew", "origin", "transform"}, "GPUI elements have no CSS transforms; position with margins or insets"},
+	{[]string{"transform"}, "the bare transform class is not needed; the transform utilities (translate-*, scale-*, rotate-*, skew-*) apply themselves, and .Transform(…) replaces the whole list"},
+	{[]string{"perspective", "transform-3d", "backface"}, "3D transforms are not supported; translate-*, scale-*, rotate-*, skew-* and origin-* are 2D"},
 	{[]string{"space-x", "space-y"}, "space-* is not supported; use gap-* on the flex parent"},
 	{[]string{"divide"}, "divide-* is not supported; give each child after the first a border-t (or border-l), or put separator elements between them"},
 	{[]string{"pointer-events"}, "pointer-events-* is not supported"},

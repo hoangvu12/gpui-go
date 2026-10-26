@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 320px;
+		height: 240px;
+	}
+	#rot {
+		box-sizing: border-box;
+		position: absolute;
+		left: 40px;
+		top: 30px;
+		width: 80px;
+		height: 80px;
+		background: #00aa00;
+		transform: rotate(30deg);
+	}
+	#scaled {
+		box-sizing: border-box;
+		position: absolute;
+		left: 200px;
+		top: 40px;
+		width: 40px;
+		height: 40px;
+		background: #0066ff;
+		transform: scale(1.8);
+	}
+	#parent {
+		box-sizing: border-box;
+		position: absolute;
+		left: 40px;
+		top: 140px;
+		width: 120px;
+		height: 60px;
+		background: #cccccc;
+		transform: translate(30px, 10px);
+	}
+	#child {
+		box-sizing: border-box;
+		position: absolute;
+		left: 10px;
+		top: 5px;
+		width: 50px;
+		height: 50px;
+		background: #ff4444;
+		transform: rotate(-20deg);
+	}
+</style>
+</head>
+<body data-id="root">
+	<div id="rot" data-id="rot"></div>
+	<div id="scaled" data-id="scaled"></div>
+	<div id="parent" data-id="parent">
+		<div id="child" data-id="child"></div>
+	</div>
+</body>
+</html>

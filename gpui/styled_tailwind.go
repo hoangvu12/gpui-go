@@ -281,3 +281,61 @@ func (s *Styled[Self]) RenderingPixelated[_ lazy]() Self {
 func (s *Styled[Self]) RenderingAuto[_ lazy]() Self {
 	return s.ImageRendering(ImageRenderingAuto)
 }
+
+// The transform-origin keywords (origin-*, browser-core ticket 56): the
+// Tailwind classes of the CSS transform-origin keywords, each setting
+// the same field TransformOrigin would.
+
+// OriginCenter sets transform-origin to the border box's centre
+// (origin-center, the CSS initial 50% 50%).
+func (s *Styled[Self]) OriginCenter[_ lazy]() Self {
+	return s.TransformOrigin(Fraction(0.5), Fraction(0.5))
+}
+
+// OriginTop sets transform-origin to the horizontal centre, top edge
+// (origin-top).
+func (s *Styled[Self]) OriginTop[_ lazy]() Self {
+	return s.TransformOrigin(Fraction(0.5), Fraction(0))
+}
+
+// OriginTopRight sets transform-origin to the top right corner
+// (origin-top-right).
+func (s *Styled[Self]) OriginTopRight[_ lazy]() Self {
+	return s.TransformOrigin(Fraction(1), Fraction(0))
+}
+
+// OriginRight sets transform-origin to the right edge, vertical centre
+// (origin-right).
+func (s *Styled[Self]) OriginRight[_ lazy]() Self {
+	return s.TransformOrigin(Fraction(1), Fraction(0.5))
+}
+
+// OriginBottomRight sets transform-origin to the bottom right corner
+// (origin-bottom-right).
+func (s *Styled[Self]) OriginBottomRight[_ lazy]() Self {
+	return s.TransformOrigin(Fraction(1), Fraction(1))
+}
+
+// OriginBottom sets transform-origin to the horizontal centre, bottom
+// edge (origin-bottom).
+func (s *Styled[Self]) OriginBottom[_ lazy]() Self {
+	return s.TransformOrigin(Fraction(0.5), Fraction(1))
+}
+
+// OriginBottomLeft sets transform-origin to the bottom left corner
+// (origin-bottom-left).
+func (s *Styled[Self]) OriginBottomLeft[_ lazy]() Self {
+	return s.TransformOrigin(Fraction(0), Fraction(1))
+}
+
+// OriginLeft sets transform-origin to the left edge, vertical centre
+// (origin-left).
+func (s *Styled[Self]) OriginLeft[_ lazy]() Self {
+	return s.TransformOrigin(Fraction(0), Fraction(0.5))
+}
+
+// OriginTopLeft sets transform-origin to the top left corner
+// (origin-top-left).
+func (s *Styled[Self]) OriginTopLeft[_ lazy]() Self {
+	return s.TransformOrigin(Fraction(0), Fraction(0))
+}

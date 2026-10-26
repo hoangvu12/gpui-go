@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 320px;
+		height: 240px;
+	}
+	#go {
+		box-sizing: border-box;
+		position: absolute;
+		left: 40px;
+		top: 120px;
+		width: 40px;
+		height: 40px;
+		background: #cccccc;
+	}
+	#scale, #rotate {
+		box-sizing: border-box;
+		position: absolute;
+		top: 30px;
+		width: 40px;
+		height: 40px;
+	}
+	#scale {
+		left: 40px;
+		background: #00aa00;
+		transform: scale(1);
+		transition: transform 400ms linear;
+	}
+	#rotate {
+		left: 160px;
+		background: #0066ff;
+		transform: rotate(0deg);
+		transition: transform 400ms linear;
+	}
+	body.on #scale { transform: scale(1.75); }
+	body.on #rotate { transform: rotate(90deg); }
+</style>
+</head>
+<body data-id="root">
+	<div id="scale" data-id="scale"></div>
+	<div id="rotate" data-id="rotate"></div>
+	<div id="go" data-id="go"></div>
+	<script>
+		document.getElementById("go").addEventListener("click", () => {
+			document.body.classList.toggle("on");
+		});
+	</script>
+</body>
+</html>

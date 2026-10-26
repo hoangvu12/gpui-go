@@ -1,0 +1,26 @@
+{
+  "name": "transform-rotate",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-26T20:47:01Z",
+  "viewport": {
+    "width": 320,
+    "height": 240
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "box": {
+      "x": 60,
+      "y": 10,
+      "width": 40,
+      "height": 80
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 320,
+      "height": 240
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

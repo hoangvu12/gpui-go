@@ -2004,6 +2004,19 @@ type divPrepaintState struct {
 	// offset, exactly like scrollOffset below — the port's drawables
 	// re-resolve their bounds at paint.
 	stickyOffset Point
+	// transformShift is the translation-only CSS transform's shift
+	// (browser-core ticket 56, transform_paint.go): the sticky-shift
+	// mechanism again — the element's own bounds and the children's
+	// element offset move by it, no scene group. Zero for matrix-scoped
+	// or untransformed elements.
+	transformShift Point
+	// transformMatrix is the element's composed window-to-window CSS
+	// transform matrix (browser-core ticket 56): non-nil when paint must
+	// bracket the subtree in a scene effect group — or when the
+	// transform collapsed (singular: paint skips the subtree, the hit
+	// test rejects everything). Nil for the shift path and untransformed
+	// elements.
+	transformMatrix *TransformationMatrix
 	// scrollOffset is the clamped scroll offset the children prepainted
 	// under (div.rs:2876-2878, 2460); paint re-applies it because the
 	// port's drawables re-resolve their bounds at paint.
@@ -2344,6 +2357,44 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 		style := resolveStyleTransitions(global, d.computeStyleInternal(nil, es, w, app), w, app)
 		if es != nil && (d.hoverStyle != nil || d.groupHoverStyle != nil) && es.hoverState == nil {
 			es.hoverState = &ElementHoverState{}
+		}
+		// browser-core 56: the element's CSS transform scope
+		// (transform_paint.go). The matrix resolves against the border box
+		// here — the same resolution the paint reuses — and opens one of
+		// two scopes around the hitbox, the debug bounds and the children:
+		// a translation-only transform shifts the element's own bounds and
+		// the children's element offset (the sticky-shift mechanism, no
+		// scene group); anything else pushes the composed matrix onto the
+		// frame's transform scope, so the hitboxes inserted from here down
+		// map the pointer through the inverse. The bounds rebind BEFORE
+		// the overflow mask, the hitbox and the anchor/sticky records so
+		// the whole prepaint of the subtree sees the scope.
+		matrix, transformState := elementTransform(&style, bounds, layout.contentsInParentParagraph, RemSize(w))
+		transform := splitTransform(matrix, transformState)
+		state.transformShift = transform.shift
+		state.transformMatrix = transform.matrix
+		if transform.shift.X != 0 || transform.shift.Y != 0 {
+			bounds = offsetBounds(bounds, transform.shift.X, transform.shift.Y)
+			frame := currentFrame(w)
+			previousOffset := frame.elementOffset
+			frame.elementOffset = Point{X: previousOffset.X + transform.shift.X, Y: previousOffset.Y + transform.shift.Y}
+			defer func() { frame.elementOffset = previousOffset }()
+			// Chrome's getBoundingClientRect of a translated element is the
+			// translated border box: re-record the debug bounds at the
+			// shifted position (the earlier entry was the layout position).
+			if state.debugBounds {
+				recordDebugBounds(w, d.debugSelector, bounds)
+			}
+		}
+		if transform.matrix != nil {
+			pushTransformScope(w, *transform.matrix)
+			defer popTransformScope(w)
+			// getBoundingClientRect reports the transformed border box (the
+			// AABB of the mapped corners): re-record the debug bounds through
+			// the matrix (the earlier entry was the layout position).
+			if state.debugBounds {
+				recordDebugBounds(w, d.debugSelector, mapBoundsThrough(*transform.matrix, bounds))
+			}
 		}
 		hidden := style.Visibility == VisibilityHidden
 		// Inertness (browser-core ticket 14): this element's own Inert()
@@ -2694,20 +2745,30 @@ func (d *DivElement) paint(global *GlobalElementID, inspector *InspectorElementI
 	// the prepainted bounds; the scroll offset below re-applies the
 	// same way) and the children resolve under the shift, exactly as
 	// they prepainted (sticky.go).
-	if prepaint.stickyOffset.X != 0 || prepaint.stickyOffset.Y != 0 {
+	// browser-core 56: the translation-only CSS transform's shift
+	// re-applies the same way (transform_paint.go) — the prepaint
+	// resolved the transform against the border box and shifted this
+	// element's bounds and the children's element offset; paint repeats
+	// both halves.
+	shift := Point{
+		X: prepaint.stickyOffset.X + prepaint.transformShift.X,
+		Y: prepaint.stickyOffset.Y + prepaint.transformShift.Y,
+	}
+	if shift.X != 0 || shift.Y != 0 {
 		bounds = Bounds{
-			Origin: Point{X: bounds.Origin.X + prepaint.stickyOffset.X, Y: bounds.Origin.Y + prepaint.stickyOffset.Y},
+			Origin: Point{X: bounds.Origin.X + shift.X, Y: bounds.Origin.Y + shift.Y},
 			Size:   bounds.Size,
 		}
 	}
-	withElementOffsetVoid(w, prepaint.stickyOffset, func(w *Window) {
+	withElementOffsetVoid(w, shift, func(w *Window) {
 		d.paintInFlow(global, inspector, bounds, layout, prepaint, hitbox, w, app)
 	})
 }
 
-// paintInFlow is paint's body under the sticky shift (browser-core
-// 34): the pinned div.rs:2485-2525 Div::paint + div.rs:2986-3125
-// Interactivity::paint + style.rs:874-1015 Style::paint.
+// paintInFlow is paint's body under the sticky and transform shifts
+// (browser-core 34 and 56): the pinned div.rs:2485-2525 Div::paint +
+// div.rs:2986-3125 Interactivity::paint + style.rs:874-1015
+// Style::paint.
 func (d *DivElement) paintInFlow(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *divFrameState, prepaint *divPrepaintState, hitbox *Hitbox, w *Window, app *App) {
 	WithOptionalElementState(w, global, func(slot *InteractiveElementState, w *Window) (struct{}, *InteractiveElementState) {
 		es := interactiveStateOf(global, slot)
@@ -2724,68 +2785,80 @@ func (d *DivElement) paintInFlow(global *GlobalElementID, inspector *InspectorEl
 		// native backdrop pass samples the current target; a group's
 		// bucket would blur nothing - see opacityCompositesAsGroup).
 		WithElementOpacityVoid(w, style.Opacity, bounds, opacityCompositesAsGroup(&style), func(w *Window) {
-			style.paint(bounds, w, app, func(w *Window) {
-				WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
-					WithRoundedContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
-						if hitbox != nil {
-							if drag := app.ActiveDrag(); drag != nil {
-								if drag.CursorStyle != nil {
-									w.SetWindowCursorStyle(*drag.CursorStyle)
+			// browser-core 56: the element's whole painted box — background,
+			// borders, shadows, outline and children — brackets in one scene
+			// effect group under the prepaint-resolved matrix (a CSS
+			// transform moves the element as a unit; a collapsed transform —
+			// scale 0 — paints nothing). The translation-only transform
+			// already shifted the bounds and the element offset in
+			// d.paint, so its matrix is nil here.
+			if transformCollapsed(prepaint.transformMatrix) {
+				return
+			}
+			withElementTransformPaint(w, prepaint.transformMatrix, bounds, func(w *Window) {
+				style.paint(bounds, w, app, func(w *Window) {
+					WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
+						WithRoundedContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
+							if hitbox != nil {
+								if drag := app.ActiveDrag(); drag != nil {
+									if drag.CursorStyle != nil {
+										w.SetWindowCursorStyle(*drag.CursorStyle)
+									}
+								} else if style.MouseCursor != nil {
+									w.SetCursorStyle(*style.MouseCursor, hitbox)
 								}
-							} else if style.MouseCursor != nil {
-								w.SetCursorStyle(*style.MouseCursor, hitbox)
+								if d.group != nil {
+									groupHitboxPush(*d.group, hitbox.ID(), app)
+									defer groupHitboxPop(*d.group, app)
+								}
+								// insert_window_control_hitbox (div.rs:3068-3073).
+								if d.windowControl != nil {
+									w.InsertWindowControlHitbox(*d.windowControl, *hitbox)
+								}
+								// The click registration's path key (browser-core
+								// ticket 12): the global id path — the hitbox's
+								// ownerPath, the identity the up's click dispatch
+								// resolves its target chain by.
+								var clickPath string
+								if global != nil {
+									clickPath = global.key()
+								}
+								d.paintMouseListeners(*hitbox, clickPath, es, w, app)
+								// The contextmenu registration (browser-core
+								// ticket 17): the mouse trigger's dispatch
+								// resolves the release chain by the path key.
+								if len(d.contextMenuListeners) > 0 {
+									appendContextMenuRegistration(w, contextMenuRegistration{
+										path:      clickPath,
+										listeners: append([]func(*ContextMenuEvent, *Window, *App){}, d.contextMenuListeners...),
+									})
+								}
+								// paint_scroll_listener (div.rs:3081).
+								d.scroll.paintListener(*hitbox, &style, w)
 							}
-							if d.group != nil {
-								groupHitboxPush(*d.group, hitbox.ID(), app)
-								defer groupHitboxPop(*d.group, app)
-							}
-							// insert_window_control_hitbox (div.rs:3068-3073).
-							if d.windowControl != nil {
-								w.InsertWindowControlHitbox(*d.windowControl, *hitbox)
-							}
-							// The click registration's path key (browser-core
-							// ticket 12): the global id path — the hitbox's
-							// ownerPath, the identity the up's click dispatch
-							// resolves its target chain by.
-							var clickPath string
-							if global != nil {
-								clickPath = global.key()
-							}
-							d.paintMouseListeners(*hitbox, clickPath, es, w, app)
-							// The contextmenu registration (browser-core
-							// ticket 17): the mouse trigger's dispatch
-							// resolves the release chain by the path key.
-							if len(d.contextMenuListeners) > 0 {
-								appendContextMenuRegistration(w, contextMenuRegistration{
-									path:      clickPath,
-									listeners: append([]func(*ContextMenuEvent, *Window, *App){}, d.contextMenuListeners...),
-								})
-							}
-							// paint_scroll_listener (div.rs:3081).
-							d.scroll.paintListener(*hitbox, &style, w)
-						}
-						if style.Display == DisplayNone {
-							return
-						}
-						// The children paint under the offset they
-						// prepainted under (the port's drawables re-resolve
-						// their bounds at paint; the pin reuses the
-						// prepainted bounds), in the sticky paint order
-						// (sticky.go: sticky children after the in-flow ones,
-						// where their hitboxes already prepainted).
-						withElementOffsetVoid(w, prepaint.scrollOffset, func(w *Window) {
-							if standalone := layout.standaloneInline(); standalone != nil {
-								standalone.paintChildren(stickyChildrenLast(d.children), w, app)
+							if style.Display == DisplayNone {
 								return
 							}
-							for _, child := range stickyChildrenLast(d.children) {
-								child.Paint(w, app)
-							}
+							// The children paint under the offset they
+							// prepainted under (the port's drawables re-resolve
+							// their bounds at paint; the pin reuses the
+							// prepainted bounds), in the sticky paint order
+							// (sticky.go: sticky children after the in-flow ones,
+							// where their hitboxes already prepainted).
+							withElementOffsetVoid(w, prepaint.scrollOffset, func(w *Window) {
+								if standalone := layout.standaloneInline(); standalone != nil {
+									standalone.paintChildren(stickyChildrenLast(d.children), w, app)
+									return
+								}
+								for _, child := range stickyChildrenLast(d.children) {
+									child.Paint(w, app)
+								}
+							})
+							// browser-core 36: the overflow: auto scrollbar paints
+							// after the children, above the content, inside this
+							// content mask (scrollbar.go).
+							paintAutoScrollbar(w, prepaint.autoScrollbar)
 						})
-						// browser-core 36: the overflow: auto scrollbar paints
-						// after the children, above the content, inside this
-						// content mask (scrollbar.go).
-						paintAutoScrollbar(w, prepaint.autoScrollbar)
 					})
 				})
 			})

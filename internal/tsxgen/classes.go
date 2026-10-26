@@ -400,6 +400,28 @@ func stageArms(blur, percents, hues []string) []TSType {
 	blurArms := blurScaleArms(blur, "blur")
 	arms = append(arms, blurArms...)
 	arms = append(arms, blurScaleArms(blur, "backdrop-blur")...)
+	// The CSS-transform families (browser-core ticket 56): the translate
+	// axes take the spacing value forms, the scale families a percentage
+	// or an arbitrary factor, and rotate/skew degrees (negatives
+	// allowed).
+	translateAxes := Lits("translate-x", "translate-y")
+	arms = append(arms,
+		Template([]string{"", "-", ""}, translateAxes, ref("LengthValue")),
+		Template([]string{"-", "-", ""}, translateAxes, ref("LengthValue")),
+	)
+	scaleFamilies := Lits("scale", "scale-x", "scale-y")
+	arms = append(arms,
+		Template([]string{"", "-", ""}, scaleFamilies, numType),
+		Template([]string{"-", "-", ""}, scaleFamilies, numType),
+		Template([]string{"", "-[", "]"}, scaleFamilies, numType),
+	)
+	angleFamilies := Lits("rotate", "skew-x", "skew-y")
+	arms = append(arms,
+		Template([]string{"", "-", ""}, angleFamilies, numType),
+		Template([]string{"-", "-", ""}, angleFamilies, numType),
+		Template([]string{"", "-[", "deg]"}, angleFamilies, numType),
+		Template([]string{"-", "-[", "deg]"}, angleFamilies, numType),
+	)
 	return arms
 }
 

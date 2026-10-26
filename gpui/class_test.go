@@ -572,7 +572,8 @@ func TestCheckClassesReasons(t *testing.T) {
 		{"blur-huge", "blur-…"},
 		{"backdrop-grayscale", "backdrop-blur"},
 		{"shadow-red-500", "shadow colors"},
-		{"translate-x-1", "transforms"},
+		{"rotate-x-45", "3D transforms"},
+		{"transform", "bare transform class"},
 		{"transition", "transitions"},
 	} {
 		err := CheckClasses(tc.classes)

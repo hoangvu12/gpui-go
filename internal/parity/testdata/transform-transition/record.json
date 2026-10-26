@@ -1,0 +1,37 @@
+{
+  "name": "transform-transition",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-26T20:49:56Z",
+  "viewport": {
+    "width": 320,
+    "height": 240
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 320,
+      "height": 240
+    },
+    "scale": {
+      "x": 32.5,
+      "y": 22.5,
+      "width": 55,
+      "height": 55
+    }
+  },
+  "events": [
+    {
+      "kind": "click",
+      "target": "go",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    }
+  ],
+  "screenshot": "chrome.png"
+}

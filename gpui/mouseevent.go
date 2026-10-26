@@ -315,12 +315,37 @@ type Hitbox struct {
 	contentMask Bounds
 	// behavior is the hitbox behavior.
 	behavior HitboxBehavior
+	// transform is the element transform active at insertion
+	// (browser-core ticket 56): the composed window-to-window matrix of
+	// the element's own CSS transform and any open ancestor transform —
+	// nil when none. Contains maps the pointer through the inverse
+	// before the bounds test, so hover, click, capture and drag targets
+	// follow the transform.
+	transform *TransformationMatrix
 }
 
 // Contains tests the actual region, including the content mask,
-// without occlusion checks (Hitbox::contains).
+// without occlusion checks (Hitbox::contains). Under an element
+// transform the pointer maps through the inverse matrix before the
+// bounds test — Chromium's hit test accumulates the transform chain
+// (HitTestingTransformState::ApplyTransform pre-concats each matrix
+// with its origin applied, hit_testing_transform_state.cc:37-42) and
+// maps the location through the accumulated inverse
+// (inverse_transform.ProjectPoint, hit_testing_transform_state.cc:
+// 46-49) — while the content mask (the clipping scroller's visible
+// rectangle, window space) tests the RAW pointer: an ancestor's
+// overflow clip applies to the transformed result, not to the
+// element's local space.
 func (h *Hitbox) Contains(point Point) bool {
-	return boundsContain(h.contentMask, point) && boundsContain(h.Bounds, point)
+	local := point
+	if h.transform != nil {
+		inverse, ok := invertTransformation(*h.transform)
+		if !ok {
+			return false
+		}
+		local = applyTransformation(inverse, point)
+	}
+	return boundsContain(h.contentMask, point) && boundsContain(h.Bounds, local)
 }
 
 // HitboxID is a hitbox identity (window.rs:867 HitboxId; Hitbox's
@@ -928,6 +953,7 @@ func (w *Window) insertHitboxRecord(bounds Bounds, behavior HitboxBehavior) *hit
 		Bounds:      bounds,
 		contentMask: currentContentMask(w),
 		behavior:    behavior,
+		transform:   currentTransformScope(w),
 	}
 	record := &hitboxRecord{
 		box:       box,
