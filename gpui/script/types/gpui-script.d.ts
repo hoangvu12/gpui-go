@@ -979,10 +979,12 @@ type CoreClass =
 	`col-end-${number}` |
 	`row-start-${number}` |
 	`row-end-${number}` |
-	`grid-cols-[${string}]` |
-	`grid-rows-[${string}]` |
-	`grid-areas-[${string}]` |
-	`grid-area-[${string}]` |
+	`grid-cols-[${number}px]` |
+	`grid-cols-[${number}fr]` |
+	`grid-cols-[${number}px_${number}fr]` |
+	`grid-rows-[${number}px]` |
+	`grid-rows-[${number}fr]` |
+	`grid-rows-[${number}px_${number}fr]` |
 	`aspect-[${number}]` |
 	`aspect-[${number}/${number}]` |
 	`text-[${number}px]` |
@@ -1672,10 +1674,12 @@ type Class =
 	`col-end-${number}` |
 	`row-start-${number}` |
 	`row-end-${number}` |
-	`grid-cols-[${string}]` |
-	`grid-rows-[${string}]` |
-	`grid-areas-[${string}]` |
-	`grid-area-[${string}]` |
+	`grid-cols-[${number}px]` |
+	`grid-cols-[${number}fr]` |
+	`grid-cols-[${number}px_${number}fr]` |
+	`grid-rows-[${number}px]` |
+	`grid-rows-[${number}fr]` |
+	`grid-rows-[${number}px_${number}fr]` |
 	`aspect-[${number}]` |
 	`aspect-[${number}/${number}]` |
 	`text-[${number}px]` |

@@ -194,16 +194,22 @@ func (e *extractor) classSurface(s *Surface) error {
 	for _, g := range grid {
 		arms = append(arms, Template([]string{g, ""}, numType))
 	}
-	// The arbitrary grid track lists and the named-area classes
-	// (browser-core 42): grid-cols-[240px_1fr], grid-rows-[auto_auto],
-	// grid-areas-["head_head"_"side_main"] and grid-area-[head]. The
-	// value part is a template literal string; the class layer parses and
-	// explains rejects.
+	// The arbitrary grid track lists (browser-core 42):
+	// grid-cols-[240px 1fr] and its common spellings, typed with numeric
+	// holes so the drift tests' samples stay engine-valid (the sampler
+	// fills ${string} holes with hex-like strings, which a track list
+	// rejects). The full track-list grammar — auto, the content
+	// keywords, minmax(...) — plus the named-area classes
+	// (grid-areas-["head_head"_"side_main"], grid-area-[head]) stay
+	// load-checked only, the composed forms' rule: the engine accepts
+	// them at class time, the d.ts does not advertise them.
 	arms = append(arms,
-		Template([]string{"grid-cols-[", "]"}, strType),
-		Template([]string{"grid-rows-[", "]"}, strType),
-		Template([]string{"grid-areas-[", "]"}, strType),
-		Template([]string{"grid-area-[", "]"}, strType),
+		Template([]string{"grid-cols-[", "px]"}, numType),
+		Template([]string{"grid-cols-[", "fr]"}, numType),
+		Template([]string{"grid-cols-[", "px_", "fr]"}, numType, numType),
+		Template([]string{"grid-rows-[", "px]"}, numType),
+		Template([]string{"grid-rows-[", "fr]"}, numType),
+		Template([]string{"grid-rows-[", "px_", "fr]"}, numType, numType),
 	)
 	arms = append(arms,
 		Template([]string{"aspect-[", "]"}, numType),

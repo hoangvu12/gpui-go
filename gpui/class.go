@@ -1184,8 +1184,13 @@ func gridClass(b *StyleBuilder, u string) (bool, string) {
 		if !ok {
 			continue
 		}
-		// The arbitrary track list: grid-cols-[240px_1fr].
+		// The arbitrary track list: grid-cols-[240px_1fr] and
+		// grid-rows-[auto_auto]. The placement prefixes keep their count
+		// form only.
 		if inner, ok := arbitrary(v); ok {
+			if g.prefix != "grid-cols-" && g.prefix != "grid-rows-" {
+				return true, g.prefix + "… takes a count, not a bracketed value"
+			}
 			tracks, err := parseTrackListText(tailwindUnescape(inner))
 			if err != nil {
 				return true, g.prefix + "[…] takes a track list, like [240px_1fr]: " + err.Error()

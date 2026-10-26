@@ -410,8 +410,12 @@ func parseTrackSide(token string, minSide bool) (TrackSizing, error) {
 		}
 		return FrTrackSizing(factor), nil
 	}
-	value := strings.TrimSuffix(token, "px")
-	number, err := parseTrackNumber(value)
+	// A track length is a number with a px unit (css-grid-1: a bare
+	// number is not a track size).
+	if !strings.HasSuffix(token, "px") {
+		return TrackSizing{}, fmt.Errorf("gpui: %q: expected a length like 12px, a keyword or an fr", token)
+	}
+	number, err := parseTrackNumber(strings.TrimSuffix(token, "px"))
 	if err != nil {
 		return TrackSizing{}, fmt.Errorf("gpui: %q: %w", token, err)
 	}
