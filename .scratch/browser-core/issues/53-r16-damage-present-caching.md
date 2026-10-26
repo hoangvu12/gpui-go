@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 11 (Claude Code); R16 integration branch native/r16
+Status: resolved
+Assignee: orchestrator 11 (Claude Code); worker chat 110ce9a2; R16 integration branch native/r16
 Blocked by: 39, 49
 Triage: ready-for-agent
 
@@ -30,6 +30,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-26, orchestrator 11: verified on `native/r16` (233ae0c..7024579); it reaches main with ticket 54. Clean tree, no artifacts committed. The test DLL `c4de6b39…` matches the shared target's build output. With the manifest swapped in for the test run: `go vet` clean; the 13-path test set gives 52 packages ok, failing only portfixture TestFx0004 (known) and the 7 internal/native loader tests that fail by construction under the swap. Spot-check: cc/paint/filter_operation.cc:333-339 at 0d4dcd4f (`MapStdDeviation` returns sigma x 3, the blur damage dilation) matches. Recorded outcome: Present1 is accepted in hwnd mode; in DirectComposition mode the readback check fails on this machine, so mode 0 presents full after one probe (the design's Q5 fallback). The 8 px merge gap is a local choice (zgui's checkout was absent).
 
 - 2026-10-26, orchestrator note (from the worker's hand-off): the zgui-head checkout was NOT present under `%TEMP%\research-src\` (only `chromium/`), so zgui's merge rule was implemented from the design's §8.1 relay (merge nearby rects, cap at 16, full redraw on new/resized) with the merge gap set to 8px (documented in `RENDERER_ABI.md`); the cap and the no-threshold rule are testable regardless. The Chromium citations (the copy+Present1 pattern, the pixel-moving-filter expansion, the 3σ dilation) were re-verified at the pinned checkout.
 
