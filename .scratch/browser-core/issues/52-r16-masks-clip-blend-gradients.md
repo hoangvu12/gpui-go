@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 11 (Claude Code); R16 integration branch native/r16
+Status: resolved
+Assignee: orchestrator 11 (Claude Code); worker chat dd783a05; R16 integration branch native/r16
 Blocked by: 39, 49
 Triage: ready-for-agent
 
@@ -29,6 +29,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-26, orchestrator 11: verified on `native/r16` (3ba4e83..ff62d25); it reaches main with ticket 54. Clean tree, no artifacts committed. The test DLL `561fd4a2…` matches the shared target's build output. With the manifest swapped in for the test run: `go vet` clean; the same 13-path test set gives 52 packages ok, failing only portfixture TestFx0004 (known) and the 7 internal/native loader tests that fail by construction under the swap. Spot-check: shadow_data.h:88 at 0d4dcd4f (`BlurAsSigma` = BlurRadiusToStdDev of the blur value, the drop-shadow σ rule) matches. Recorded deviations accepted: the atlas mask references a whole polychrome texture, not a tile id; the table gradients are not dithered; a coverage mask on a transform group samples the window-frame raster (for 54); no pixel gate for a smoothed content mask until 55 can author one.
 
 ## Answer
 Landed on `native/r16` (rev 16, scene service v8 / renderer v5, native revision 151 — 54 sets 16), in four commits (3ba4e83, 8f1a5b4, 78de4d7, dccfdbc).
