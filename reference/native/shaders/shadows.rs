@@ -5,6 +5,10 @@ pub mod shadow {
     use wgsl_rs::std::*;
 
     #[derive(Clone, Copy, Wgsl)]
+    // rev 16 (browser-core ticket 50): the struct mirrors the ABI
+    // record `GpuiGoSceneShadowRecord` field for field (208 bytes,
+    // including the trailing record-size word) - the draw path uploads
+    // the scene's records directly as this instance array.
     pub struct Shadow {
         pub order: u32,
         pub blur_radius: f32,
@@ -16,6 +20,7 @@ pub mod shadow {
         pub element_corner_radii: Corners,
         pub inset: ShaderBool,
         pub corner_smoothing: f32,
+        pub record_size: u32,
     }
     storage!(group(1), binding(0), SHADOWS: RuntimeArray<Shadow>);
 

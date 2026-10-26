@@ -168,8 +168,104 @@ type FilterBoundary struct {
 	// ColorMatrixCount is the number of carried colour functions
 	// (0..8; slots at and beyond it are zero).
 	ColorMatrixCount uint32
+	// OpChainIndex is the appended drop-shadow op-chain reference (rev
+	// 16, ticket 52; the design's appendix A.5): the scene-level chain
+	// index, inserted through Scene.InsertFilterOpChain before the
+	// boundary. 0/0 is the R15 legacy chain - bit-exact.
+	OpChainIndex uint32
+	// OpChainCount is the op count (0 = R15 legacy).
+	OpChainCount uint32
 	// IsStart opens the group; false closes it.
 	IsStart bool
+}
+
+// EffectGroup is an effect-group marker (rev 16, browser-core ticket
+// 50): the Chromium effect-node payload the R16 group mechanism
+// carries. A matched start/end pair brackets the group's subtree; the
+// plan compiles it into begin/end effect commands sharing ONE group
+// stack with the R15 filter boundaries. This revision wires group
+// opacity (the isolated composite with the blur passes skipped - a
+// pure-opacity group over exactly one primitive folds into a
+// per-primitive multiply instead, Chromium's "at least two layers draw
+// content" rule), the rounded clip (ClipToBounds/RoundedClipOnly: the
+// composite clips to the group's rounded bounds) and the 2x3 transform
+// (browser-core ticket 51: the subtree renders into the group bucket
+// in the group's LOCAL frame - the records' own coordinates - and the
+// composite draws it under the matrix; a translation-only matrix
+// composites through the axis-aligned path at the translated rect).
+// The blend and mask fields exist on the ABI record and are wired by
+// ticket 52; the Go STYLING that emits groups (WithElementOpacity's
+// group path, Style.OverflowMask radii, the transform stack) is
+// ticket 55.
+//
+// The transform contract: the matrix maps the group's LOCAL frame to
+// the parent frame (device = M*local + translation, row-major), with
+// the CSS transform-origin and the group's parent-frame position
+// resolved by the CALLER into the matrix; the subtree's records (and
+// the group's own Bounds, ContentMask and radii) are authored in the
+// local frame.
+type EffectGroup struct {
+	Order uint32
+	// IsStart opens the group; false closes it. Start and end must
+	// carry the same snapshot.
+	IsStart bool
+	// HasOpacity composites the subtree once at Opacity.
+	HasOpacity bool
+	// HasTransform composites the subtree under Transform (the 2x3
+	// matrix, row-major, mapping the local frame to the parent frame;
+	// requires an invertible 2x2).
+	HasTransform bool
+	// PropertyNode marks the group updatable after finish through
+	// UpdateEffectMatrix/UpdateEffectOpacity (the design's appendix
+	// A.7); requires NodeID non-zero and HasTransform or HasOpacity.
+	PropertyNode bool
+	// NodeID is the property node id (0 = none).
+	NodeID uint32
+	// ClipToBounds clips the composite to the group's (rounded) bounds
+	// (CSS overflow; 0 lets content bleed past, like content filters).
+	ClipToBounds bool
+	// RoundedClipOnly marks a group that exists only to clip its subtree
+	// to the rounded bounds (a nested rounded clip: the child clips
+	// itself, so the ancestor's rrect needs the isolated composite).
+	RoundedClipOnly bool
+	// HasBlend composites the subtree with BlendMode instead of
+	// source-over (rev 16, ticket 52: the group takes the offscreen
+	// route and blends against a backdrop copy in the shader - the W3C
+	// compositing formulas; plus-lighter is the premultiplied
+	// clamp(source + backdrop)).
+	HasBlend bool
+	// BlendMode is 0 (source-over) .. 16 (plus-lighter), the W3C
+	// compositing-1 blend-mode tags (used when HasBlend is set).
+	BlendMode BlendMode
+	// HasMask composites the subtree dst_in against a mask source (rev
+	// 16, ticket 52): MaskKind 1 (gradient), 2 (atlas texture) or 3
+	// (coverage), alpha or luminance per MaskMode. An unresolvable mask
+	// hides the group.
+	HasMask bool
+	// MaskKind is 0 (none), 1 (gradient table), 2 (atlas texture), 3
+	// (coverage entry).
+	MaskKind MaskKind
+	// MaskReference is the mask source reference: the gradient table
+	// index, the atlas texture index or the coverage entry index.
+	MaskReference uint32
+	// MaskMode is 0 (alpha) or 1 (luminance).
+	MaskMode MaskMode
+	// Bounds of the group, LOCAL-frame pixels when HasTransform (the
+	// group's border box; the pre-image of the transform), device
+	// pixels otherwise.
+	Bounds Bounds
+	// ContentMask is the group's rectangular clip, device pixels (the
+	// local frame when HasTransform).
+	ContentMask Bounds
+	// Opacity in [0, 1] (used when HasOpacity is set).
+	Opacity float32
+	// Transform is the 2x3 matrix (row-major rotation/scale 2x2 plus
+	// translation) used when HasTransform is set.
+	Transform TransformationMatrix
+	// CornerRadii of the group's rounded clip.
+	CornerRadii Corners
+	// CornerSmoothing in [0, 1].
+	CornerSmoothing float32
 }
 
 // ---------------------------------------------------------------------------
@@ -309,7 +405,18 @@ type SceneMeta struct {
 	PolychromeSpriteCount uint32
 	// PathCount is the path primitive count (ticket16).
 	PathCount  uint32
-	IsFinished bool
+	// EffectCount is the effect-group marker count (rev 16, ticket 50).
+	EffectCount uint32
+	// GradientCount is the gradient table entry count (rev 16, ticket
+	// 52).
+	GradientCount uint32
+	// CoverageCount is the coverage-mask entry count (rev 16, ticket
+	// 52).
+	CoverageCount uint32
+	// FilterChainCount is the filter-op chain count (rev 16, ticket
+	// 52: the drop-shadow chains).
+	FilterChainCount uint32
+	IsFinished       bool
 }
 
 // ---------------------------------------------------------------------------
@@ -415,6 +522,57 @@ func (s *Scene) InsertBackdropFilter(f BackdropFilter) error {
 // with_filter_layer snapshots once); unmatched starts render inline.
 func (s *Scene) InsertFilterBoundary(b FilterBoundary) error {
 	return s.kernel.InsertFilterBoundary(b)
+}
+
+// BeginEffectGroup inserts the start marker of an effect group (rev
+// 16, ticket 50). The group's bounds, mask, radii and opacity bracket
+// the subtree painted between the pair; the plan isolates the group
+// (or folds it into a per-primitive multiply when the subtree is
+// exactly one primitive and the group is pure opacity).
+func (s *Scene) BeginEffectGroup(g EffectGroup) error {
+	g.IsStart = true
+	return s.kernel.InsertEffect(g)
+}
+
+// EndEffectGroup closes the innermost effect group with the SAME
+// snapshot as its begin (the caller re-supplies the parameters,
+// mirroring the filter-group rule).
+func (s *Scene) EndEffectGroup(g EffectGroup) error {
+	g.IsStart = false
+	return s.kernel.InsertEffect(g)
+}
+
+// EffectGroups returns the finished scene's effect-group markers in
+// draw order (start before end at equal orders).
+func (s *Scene) EffectGroups() ([]EffectGroup, error) {
+	return s.kernel.EffectBoundaries()
+}
+
+// UpdateEffectMatrix mutates a finished scene's property-node records
+// carrying nodeID in place (rev 16, browser-core ticket 51): every
+// effect record of the node takes the new 2x3 matrix - no re-sort, no
+// re-plan, so the same scene handle re-presents with the updated
+// transform (the damage union is the returned old/new mapped bounds).
+// The node's records must carry the transform flag (insert the group
+// with HasTransform and PropertyNode). Requires Finish.
+func (s *Scene) UpdateEffectMatrix(nodeID uint32, matrix TransformationMatrix) (oldBounds, newBounds Bounds, err error) {
+	if s.kernel == nil {
+		return Bounds{}, Bounds{}, ErrSceneClosed
+	}
+	return s.kernel.UpdateEffectMatrix(nodeID, matrix)
+}
+
+// UpdateEffectOpacity mutates a finished scene's property-node records
+// carrying nodeID in place (rev 16, browser-core ticket 51): every
+// effect record of the node takes the new group opacity - no re-sort,
+// no re-plan. The node's records must carry the opacity flag. The
+// opacity never moves the group, so both returned bounds are the
+// group's mapped device bounds. Requires Finish.
+func (s *Scene) UpdateEffectOpacity(nodeID uint32, opacity float32) (oldBounds, newBounds Bounds, err error) {
+	if s.kernel == nil {
+		return Bounds{}, Bounds{}, ErrSceneClosed
+	}
+	return s.kernel.UpdateEffectOpacity(nodeID, opacity)
 }
 
 // SurfaceSourceTag tags a painted surface's source kind (payload; 0 is

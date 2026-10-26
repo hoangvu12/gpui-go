@@ -1,0 +1,44 @@
+{
+  "name": "textwrap-balance",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-26T14:15:44Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "row-balanced": {
+      "x": 16,
+      "y": 96,
+      "width": 380,
+      "height": 68
+    },
+    "row-heading": {
+      "x": 16,
+      "y": 16,
+      "width": 380,
+      "height": 68
+    },
+    "span-balanced": {
+      "x": 25,
+      "y": 105,
+      "width": 362,
+      "height": 50
+    },
+    "span-heading": {
+      "x": 25,
+      "y": 25,
+      "width": 362,
+      "height": 50
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

@@ -109,11 +109,13 @@ func TestTextRecordBinaryLayout(t *testing.T) {
 	if got := unsafe.Sizeof(TextFeatureRecord{}); got != 8 {
 		t.Errorf("sizeof(TextFeatureRecord) = %d, want 8", got)
 	}
-	if got := unsafe.Sizeof(TextRunRecord{}); got != 92 {
-		t.Errorf("sizeof(TextRunRecord) = %d, want 92", got)
+	// rev 16 (browser-core ticket 43): the run record grew text_align
+	// (92 -> 96) and the layout record is_rtl (56 -> 60).
+	if got := unsafe.Sizeof(TextRunRecord{}); got != 96 {
+		t.Errorf("sizeof(TextRunRecord) = %d, want 96", got)
 	}
-	if got := unsafe.Sizeof(TextLayoutRecord{}); got != 56 {
-		t.Errorf("sizeof(TextLayoutRecord) = %d, want 56", got)
+	if got := unsafe.Sizeof(TextLayoutRecord{}); got != 60 {
+		t.Errorf("sizeof(TextLayoutRecord) = %d, want 60", got)
 	}
 	if got := unsafe.Sizeof(TextLineRecord{}); got != 36 {
 		t.Errorf("sizeof(TextLineRecord) = %d, want 36", got)

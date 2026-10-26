@@ -178,14 +178,34 @@ type MeasureRequest struct {
 	AvailHeight AvailableSpace
 }
 
-// MeasureFunc measures a node synchronously, from inside ComputeLayout,
-// and returns its size in RAW logical pixels.
+// MeasuredSize is a measurement's result: the measured size in RAW
+// logical pixels, plus the measured content's optional first baseline.
 //
-// The returned value is NOT clamped or snapped here: the adapter applies
+// The baseline is what makes CSS baseline alignment work: a text leaf
+// reports the offset of its first line's baseline from the measured box's
+// top (the half-leading plus the font ascent — the same offset the paint
+// layer places the line at, Chromium's line-box baseline,
+// css-inline-3 §1.1.2). Non-text content reports none (nil) and the layout
+// algorithms fall back to the item's height, exactly like a replaced
+// element in CSS.
+type MeasuredSize struct {
+	Size
+	// FirstBaseline is the first baseline's offset from the measured
+	// box's top, in logical pixels, when the measured content has one.
+	FirstBaseline *float32
+}
+
+// MeasureFunc measures a node synchronously, from inside ComputeLayout,
+// and returns its size (and optional first baseline) in RAW logical
+// pixels.
+//
+// The returned values are NOT clamped or snapped here: the adapter applies
 // the pinned measured-size snapping (each dimension clamped to at least
 // zero, multiplied by the scale factor, then rounded up to a whole device
 // pixel) before handing the size back to the layout engine, mirroring
-// snap_measured_size_to_device_pixels (taffy.rs).
+// snap_measured_size_to_device_pixels (taffy.rs). The baseline crosses as
+// the unrounded device value (logical × scale), like definite available
+// space — CSS baselines are not pixel-snapped.
 //
 // A measure function must not block and must not call back into the same
 // layout engine: same-engine re-entry (requesting layout, computing or
@@ -193,4 +213,4 @@ type MeasureRequest struct {
 // engine-busy error before native entry. Computing a different engine is
 // allowed. A panic propagates to the trampoline's recover and fails the
 // compute; there is no error return on the happy path.
-type MeasureFunc func(req MeasureRequest) Size
+type MeasureFunc func(req MeasureRequest) MeasuredSize

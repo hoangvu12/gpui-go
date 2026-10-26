@@ -43,6 +43,27 @@ func callLayoutNodeSetMeasure(fn uintptr, engine, node, token uint64) (int32, er
 	return 0, hostSupported()
 }
 
+func callLayoutNodeSetGridTemplateAreas(
+	fn uintptr,
+	engine, node uint64,
+	rowCount, columnCount uint32,
+	areas *LayoutGridAreaRecord,
+	areaCount uint32,
+	names *byte,
+	namesBytes uint32,
+) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callLayoutNodeSetGridArea(
+	fn uintptr,
+	engine, node uint64,
+	name *byte,
+	nameLen uint32,
+) (int32, error) {
+	return 0, hostSupported()
+}
+
 func callLayoutNodeRemoveSubtree(fn uintptr, engine, node uint64) (int32, error) {
 	return 0, hostSupported()
 }

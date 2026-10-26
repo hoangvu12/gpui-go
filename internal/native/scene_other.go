@@ -103,6 +103,65 @@ func callSceneInsertPath(fn uintptr, scene uint64, rec *ScenePathRecord, vertice
 	return 0, hostSupported()
 }
 
+func callSceneInsertEffect(fn uintptr, scene uint64, rec *SceneEffectRecord) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callSceneEffectDump(fn uintptr, scene uint64, records uintptr, capacity uint32, outCount *uint32) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callSceneUpdateProperty(
+	fn uintptr,
+	scene uint64,
+	nodeID uint32,
+	kind uint32,
+	values uintptr,
+	valueCount uint32,
+	outOld *SceneBounds,
+	outNew *SceneBounds,
+) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callSceneInsertGradient(
+	fn uintptr,
+	scene uint64,
+	rec *SceneGradientRecord,
+	stops *SceneGradientStop,
+	stopCount uint32,
+	outIndex *uint32,
+) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callSceneGradientDump(
+	fn uintptr,
+	scene uint64,
+	records uintptr,
+	stops uintptr,
+	recordCapacity uint32,
+	stopCapacity uint32,
+	outRecordCount *uint32,
+	outStopCount *uint32,
+) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callSceneInsertCoverage(fn uintptr, scene uint64, rec *SceneCoverageRecord, outIndex *uint32) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callSceneInsertFilterOpChain(
+	fn uintptr,
+	scene uint64,
+	ops *SceneFilterOpRecord,
+	opCount uint32,
+	outIndex *uint32,
+) (int32, error) {
+	return 0, hostSupported()
+}
+
 func callScenePathDump(
 	fn uintptr,
 	scene uint64,
@@ -126,6 +185,16 @@ func callScenePathScript(
 	vertexCapacity uint32,
 	outVertexCount *uint32,
 	outBounds *SceneBounds,
+) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callSceneTessCacheStats(
+	fn uintptr,
+	outHits *uint32,
+	outMisses *uint32,
+	outEvictions *uint32,
+	outEntries *uint32,
 ) (int32, error) {
 	return 0, hostSupported()
 }

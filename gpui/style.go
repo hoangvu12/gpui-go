@@ -1115,6 +1115,22 @@ type Style struct {
 	// GridLocation places the item in its parent grid.
 	GridLocation *GridLocation
 
+	// GridColsList is the full column track list (browser-core 42,
+	// CSS grid-template-columns beyond the pinned repeat form: fixed
+	// lengths, fr fractions, auto and the content keywords, per track).
+	// When set, it takes the place of GridCols — the pinned form stays
+	// for compatibility with the reference surface.
+	GridColsList []GridTrack
+	// GridRowsList is the full row track list (CSS
+	// grid-template-rows). When set, it takes the place of GridRows.
+	GridRowsList []GridTrack
+	// GridAreas is the named area template (CSS
+	// grid-template-areas), parsed by ParseGridTemplateAreas.
+	GridAreas *GridAreaTemplate
+	// GridAreaName places the item by area name (CSS grid-area:
+	// <name>); it takes precedence over GridLocation when set.
+	GridAreaName string
+
 	// VerticalAlign is the vertical alignment of this box when it
 	// participates in an inline line (reference Style::vertical_align;
 	// the adapter records it per node and the inline layout consumes

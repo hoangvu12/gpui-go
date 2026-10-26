@@ -51,12 +51,29 @@ func TestFx0003ScenePaintingMatchesRecordedReference(t *testing.T) {
 		t.Skipf("recorded reference trace not present (%v); run conformance/cmd/recordreference after building the reference harness", err)
 	}
 
-	result := conformance.CompareTraces(reference, trace)
+	// rev 16 (browser-core ticket 50): the recorded reference still
+	// carries the PINNED plan (MAX_FILTER_GROUP_DEPTH = 2 - the third
+	// nested filter group of the backdrop-filter case is INLINE and the
+	// case's scene-meta counts two isolated groups). The R16 plan has NO
+	// depth cap, so the third group's begin/end carry `isolated` with
+	// target index 2 and the meta reports 3 - the ticket's documented,
+	// intentional divergence. These six fields are the ONLY accepted
+	// difference; everything else must still match the pin exactly.
+	accepted := []conformance.FieldDivergence{
+		{Seq: 59, Field: "target", Note: "the depth-3 group isolates (the pin renders it inline)"},
+		{Seq: 59, Field: "targetIndex", Note: "the depth-3 group takes pool slot 2"},
+		{Seq: 63, Field: "target", Note: "the depth-3 group's end composites"},
+		{Seq: 63, Field: "targetIndex", Note: "the depth-3 group's pool slot 2"},
+		{Seq: 73, Field: "isolatedFilterCount", Note: "three isolated filter groups (the pin caps at two)"},
+		{Seq: 73, Field: "isolatedTargetCount", Note: "the pool high-water mark is three (the pin caps at two)"},
+	}
+	result := conformance.CompareTracesWithDivergences(reference, trace, accepted)
 	if !result.Equal {
 		t.Fatalf("scene painting trace mismatch:\n%s", result.Diff)
 	}
-	if result.Diff != "" {
-		t.Fatalf("equal comparison must report an empty diff, got %q", result.Diff)
+	if len(result.Divergences) != len(accepted) {
+		t.Fatalf("expected exactly the %d documented R16 divergences, got %d: %v",
+			len(accepted), len(result.Divergences), result.Divergences)
 	}
 	if got, want := len(trace.Events), len(reference.Events); got != want {
 		t.Errorf("event count = %d, want %d", got, want)

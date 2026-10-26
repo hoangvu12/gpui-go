@@ -66,6 +66,19 @@ func callRendererSurfaceInfo(fn uintptr, surface uint64, out *SurfaceInfo) (int3
 	return callStatus(r1), nil
 }
 
+func callRendererSurfaceDebugStats(fn uintptr, surface uint64, out *DebugStatsRecord) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("renderer_surface_debug_stats")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(surface),
+		uintptr(unsafe.Pointer(out)),
+	)
+	runtime.KeepAlive(out)
+	return callStatus(r1), nil
+}
+
 func callRendererSurfacePresent(
 	fn uintptr,
 	surface uint64,
@@ -190,6 +203,66 @@ func callRendererSurfaceRenderScene(
 		uintptr(appearance),
 		uintptr(atlas),
 	)
+	return callStatus(r1), nil
+}
+
+// callRendererSurfaceDrawSceneDamage covers the damage entry's slot
+// (rev 16, ticket 53): the retained-frame scissored redraw, the
+// per-rect copy and the Present1 dirty-rect present.
+func callRendererSurfaceDrawSceneDamage(
+	fn uintptr,
+	surface uint64,
+	scene uint64,
+	appearance uint32,
+	atlas uint64,
+	rects *DamageRect,
+	count uint32,
+	flags uint32,
+	outSubmission *uint64,
+) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("renderer_surface_draw_scene_damage")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(surface),
+		uintptr(scene),
+		uintptr(appearance),
+		uintptr(atlas),
+		uintptr(unsafe.Pointer(rects)),
+		uintptr(count),
+		uintptr(flags),
+		uintptr(unsafe.Pointer(outSubmission)),
+	)
+	runtime.KeepAlive(rects)
+	runtime.KeepAlive(outSubmission)
+	return callStatus(r1), nil
+}
+
+// callRendererSurfaceReadFramePixels covers the retained-target
+// readback slot (rev 16, ticket 53; the test seam).
+func callRendererSurfaceReadFramePixels(
+	fn uintptr,
+	surface uint64,
+	buf []byte,
+	outNeeded *uint32,
+) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("renderer_surface_read_frame_pixels")
+	}
+	var bufPtr uintptr
+	if len(buf) > 0 {
+		bufPtr = uintptr(unsafe.Pointer(&buf[0]))
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(surface),
+		bufPtr,
+		uintptr(len(buf)),
+		uintptr(unsafe.Pointer(outNeeded)),
+	)
+	runtime.KeepAlive(buf)
+	runtime.KeepAlive(outNeeded)
 	return callStatus(r1), nil
 }
 

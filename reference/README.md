@@ -116,15 +116,22 @@ round trip is reachable only through the table pointer).
 
 ### Build and measure (maintainer)
 
+The PC-health rule (the user's 2026-10-25 decision): ONE cargo process
+at a time, `-j 4`, below-normal priority — other projects' agents share
+this machine. Build through `cmd`'s `start /belownormal` so the whole
+toolchain inherits the priority class, and keep the R16 build's target
+dir OUTSIDE the checkout (`gpui-r16-target`, a sibling of the worktrees):
+
 ```powershell
 cd reference
+$env:CARGO_TARGET_DIR = "C:\Users\ADMIN\Desktop\nguyenvu\gpui-r16-target"
 $env:RUSTFLAGS = "-C target-feature=+crt-static"
-cargo build --release -p gpui-go-native --target x86_64-pc-windows-msvc
-cargo test  --release -p gpui-go-native --target x86_64-pc-windows-msvc   # 16 unit tests
+cmd /c "start /belownormal /b /wait cmd /c cargo build --release -j 4 -p gpui-go-native --target x86_64-pc-windows-msvc"
+# cargo test --release -p gpui-go-native --target x86_64-pc-windows-msvc  # lib tests; see each rebuild's evidence for the known failures
 
 cd ..
 go run ./reference/native/tools/measure `
-  -dll reference/target/x86_64-pc-windows-msvc/release/gpui_go_native.dll `
+  -dll C:\Users\ADMIN\Desktop\nguyenvu\gpui-r16-target\x86_64-pc-windows-msvc\release\gpui_go_native.dll `
   -out  reference/out/native-bootstrap.json `
   -manifest internal/native/artifacts/manifest.json `
   -artifact-dir internal/native/artifacts
@@ -134,7 +141,77 @@ The measure tool records provenance to `reference/out/native-bootstrap.json`
 and refreshes the embedded pair `internal/native/artifacts/
 {gpui_go_native.dll,manifest.json}`. **Every rebuild must re-run it**: the
 MSVC linker embeds a timestamp, so identical sources produce different
-SHA-256s (observed during this ticket).
+SHA-256s (observed during ticket 77).
+
+### Recorded measurements (2026-10-26, the browser-core ticket 54 rebuild — rev 16)
+
+- Toolchain: `rustc 1.97.0` (2d8144b78 2026-07-07), host/target
+  `x86_64-pc-windows-msvc`, `RUSTFLAGS=-C target-feature=+crt-static`,
+  one cargo process, `-j 4` below-normal, a clean rebuild of the
+  native crate into `C:\Users\ADMIN\Desktop\nguyenvu\gpui-r16-target`
+  (the pinned dependency graph unchanged from the branch's interim
+  builds). `ce-source/` stays the pinned `254b5dbd…` tree
+  (unmodified).
+- DLL: 19,464,192 bytes, SHA-256
+  `8ec910d4f24df66f937b312a02345458fd218888eae15a29a906745fc225dd11`,
+  gzip-9 7,688,896 bytes. Native revision **16** (the number the R16
+  plan reserved; the branch's interim DLLs stayed at 151 while tested
+  through `GPUI_GO_NATIVE_BUNDLE`; this rebuild is the one place the
+  embedded pair is committed). Capability mask `0xFFF`. CRT outcome:
+  **static**. Services: scene **9**, renderer **6**, text **3** (the
+  vendored Parley adapter), layout **2** (the trait-driven Taffy
+  compute).
+- Changes: the R16 branch — tickets 50 (effect groups, opacity, the
+  target pool, the 52-byte content mask), 51 (the transformed
+  composite, `scene_update_property`), 52 (masks, clip-path, blend
+  modes, drop-shadow op chains, the gradient table), 53 (the retained
+  frame, `draw_scene_damage`, the dirty-rect present, the state-bind
+  tracker, the tessellation cache), 43 (word-break/overflow-wrap/
+  text-align through the vendored Parley adapter) and 42 (grid
+  template areas, the measured baseline); plus the two test updates
+  the branch needed (pathspec's rev-15 depth-cap pins, the grid
+  track test's explicit Flex). Evidence:
+  [`evidence/browser-core/ticket54-native-rebuild.json`](../evidence/browser-core/ticket54-native-rebuild.json).
+- The design §6 measurements (the compositor harness:
+  `internal/rendererspec/r54_measure_test.go`, run with
+  `R54_MEASURE_OUT`; raw JSON `evidence/browser-core/
+  ticket54-compositor.json`): on a 1280×800 off-screen window with
+  the 1,000-quad page — the property-only frame (a transform tick
+  through `UpdateEffectMatrix` + the old∪new damaged redraw on the
+  same finished handle) costs **min 1.58 ms** against the full changed
+  frame's min 4.93 ms (rebuild 1.04 + draw) and the same scene's full
+  redraw 2.17 ms — no rebuild, no re-layout, no re-paint, the design's
+  "≪ baseline" target met; a hover change (1 input rect, 0–1‰ of the
+  window) and a scroll (the full-column no-blit case 1 rect / 283‰,
+  the exposed-strip blit case 1 rect / 9‰); the pool's nesting-based
+  high-water 3 targets with 2 retained / 1 MiB and zero overflow; 35
+  state binds per frame (full and property-tick alike — the tracker's
+  batch-level savings are pinned by the r53 gate); the tess cache at
+  **98.3 % hit rate** (1,888 hits / 32 misses over 30 re-rendered
+  frames); Present1: the DComp mode's pinned readback fallback (0
+  partial / 60 full over the property ticks) and the hwnd mode
+  accepting it (60 partial / 0 full).
+- Frame time before/after (the gpui-perf harness, best of 5):
+  FrameDivs 17.09 → 16.92 ms, FrameText 130.80 → 132.72 ms,
+  FrameRefreshDivs 16.41 → 17.98 ms, FrameRefreshText 139.62 →
+  139.83 ms — no regression and no win on the group-free path (by
+  construction), with the deterministic counters equal on the div
+  scenes (5,503 allocs, ~3,060 native calls both sides); the absolute
+  times carry ~2× machine load from other agents (both runs
+  back-to-back). The text pages' +8,400 allocs is ticket 43's run
+  fields riding every run; main itself drifted +4.7× on FrameText
+  since the 2026-10-23 baseline (tickets 20/37/69–71/76), which
+  predates this branch.
+- Both suites green against the embedded artifact (no bundle, no
+  manifest swap): 95 gpui-go packages ok (the 7 internal/native
+  loader tests pass; gpui/script's frame-overhead gate passed) with
+  only the known/environmental failures (portfixture fx-0004's font
+  count, the win32 key-map test, focusspec's keyboard test — a
+  focus-contention failure reproduced identically on main's rev-15.1
+  tree); gpui-go-base through a temporary `GOWORK`:
+  basecoverage ok, 6 packages ok, and the one core-API break to port
+  (`MeasureFunc` now returns `MeasuredSize`) — recorded precisely in
+  the evidence JSON.
 
 ### Recorded measurements (2026-10-24, the browser-core ticket 77 rebuild — rev 15.1)
 

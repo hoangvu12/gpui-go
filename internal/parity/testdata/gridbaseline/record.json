@@ -1,0 +1,68 @@
+{
+  "name": "gridbaseline",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-26T17:05:26Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "flex-large": {
+      "x": 136,
+      "y": 16,
+      "width": 60,
+      "height": 40
+    },
+    "flex-medium": {
+      "x": 76,
+      "y": 20,
+      "width": 60,
+      "height": 40
+    },
+    "flex-small": {
+      "x": 16,
+      "y": 21,
+      "width": 60,
+      "height": 40
+    },
+    "flexrow": {
+      "x": 16,
+      "y": 16,
+      "width": 300,
+      "height": 45
+    },
+    "grid-large": {
+      "x": 256,
+      "y": 73,
+      "width": 60,
+      "height": 40
+    },
+    "grid-medium": {
+      "x": 136,
+      "y": 77,
+      "width": 60,
+      "height": 40
+    },
+    "grid-small": {
+      "x": 16,
+      "y": 78,
+      "width": 60,
+      "height": 40
+    },
+    "gridrow": {
+      "x": 16,
+      "y": 73,
+      "width": 360,
+      "height": 45
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

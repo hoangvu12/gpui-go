@@ -143,6 +143,29 @@ pub mod blur {
         pub offset: Vec4f,
     }
 
+    // rev 16 (browser-core ticket 51) appends the transformed-group
+    // composite's 2x3 matrix after the rev-15.1 prefix, as two
+    // row-major `vec4`s (`transform_row0` = (m00, m01, tx, 0),
+    // `transform_row1` = (m10, m11, ty, 0); the vec4s keep the uniform
+    // layout 16-aligned - a nested matrix struct would violate the
+    // uniform address-space layout constraints). `target_origin` and
+    // `padding2` are layout words every composite leaves at zero: the
+    // pooled group buckets all render at their frame's origin (the
+    // fragment-position invariant), so no origin translation is
+    // needed. The unit matrix for every pass but the transformed
+    // composite. The rev-15.1 prefix stays byte-identical.
+    //
+    // rev 16 (browser-core ticket 52) appends the mask, blend and
+    // drop-shadow fields AFTER the matrix rows (the prefix stays
+    // byte-identical): `mask_kind`/`mask_reference`/`mask_mode` drive
+    // the composite's dst_in mask sample (0 none, 1 gradient table, 2
+    // atlas texture, 3 coverage, 4 invalid - the composite draws
+    // nothing, the design §3.5's "an invalid mask hides the
+    // element"), `blend_mode` is the W3C compositing tag (0 src-over
+    // .. 16 plus-lighter; only the BLEND composite reads it),
+    // `tint_color` is the drop-shadow pass's straight sRGBA tint,
+    // `backdrop_size` the blend composite's backdrop-copy size, and
+    // `shadow_mode`/`padding3` close the struct at 752 bytes.
     #[repr(C)]
     #[derive(Clone, Copy, Wgsl)]
     pub struct ColorMatrixUniforms {
@@ -150,8 +173,31 @@ pub mod blur {
         pub sample_offset: Vec2f,
         pub count: u32,
         pub padding0: u32,
+        pub target_origin: Vec2f,
+        pub padding2: Vec2f,
+        pub transform_row0: Vec4f,
+        pub transform_row1: Vec4f,
+        pub mask_kind: u32,
+        pub mask_reference: u32,
+        pub mask_mode: u32,
+        pub blend_mode: u32,
+        pub tint_color: Vec4f,
+        pub backdrop_size: Vec2f,
+        pub shadow_mode: u32,
+        pub padding3: u32,
     }
     uniform!(group(1), binding(3), COLOR_MATRIX_LOCALS: ColorMatrixUniforms);
+
+    // rev 16 (browser-core ticket 52): the composite's mask source
+    // (t10) and the blend composite's backdrop copy (t11). The MASK
+    // texture carries whichever source the b5 mask kind names: the
+    // atlas texture for image masks, the coverage target for clip-path
+    // masks (the GRADIENT mask samples the shared ramp directly - the
+    // common module's GRADIENTS/GRADIENT_RAMP bindings). Both stay
+    // unbound on every pass that does not sample them (the same
+    // shape as the rev-15 extension cbuffers).
+    texture!(group(1), binding(8), MASK_TEXTURE: Texture2D<f32>);
+    texture!(group(1), binding(9), BACKDROP_TEXTURE: Texture2D<f32>);
 
     // rev-15 addition (browser-core ticket 39): the backdrop mirror
     // crop. CSS crops the backdrop-filter input to the element's border
@@ -285,7 +331,11 @@ pub mod blur {
                 1.0,
             );
         }
-        let factor = coverage * get!(BLUR_LOCALS).opacity;
+        // rev 16 (browser-core ticket 52): the mask composite - the
+        // sampled group colour multiplied by the mask's alpha (dst_in
+        // on the premultiplied source; a kind-0 mask leaves the factor
+        // at 1, so every non-masked composite is bit-identical).
+        let factor = coverage * get!(BLUR_LOCALS).opacity * composite_mask_alpha(position);
         vec4f(
             blurred.x * factor,
             blurred.y * factor,
@@ -366,6 +416,257 @@ pub mod blur {
         }
     }
 
+    // ------------------------------------------------------------------
+    // rev 16 (browser-core ticket 52): the composite's MASK sample and
+    // the W3C blend functions.
+    // ------------------------------------------------------------------
+
+    // The composite's MASK sample's alpha at the given sampling
+    // position (the LOCAL position for a transform composite - CSS
+    // masks inside the element's own space). The b5 `mask_kind`/
+    // `mask_reference`/`mask_mode` fields drive it: a gradient mask
+    // evaluates the referenced table entry's parameter at the position
+    // and samples the shared ramp row (the tile mode wraps it); an
+    // atlas mask samples the bound atlas texture stretched over the
+    // composite's bounds (the mask rect, the group bounds); a coverage
+    // mask samples the bound A8 coverage target at the position. Mode 0
+    // reads the sample's alpha (dst_in), mode 1 its REC-601 luminance
+    // (Chromium's luminance-to-alpha mask filter). Kind 4 (an
+    // unresolvable source) yields 0 - the design §3.5's "an invalid
+    // mask hides the element".
+    pub fn composite_mask_alpha(position: Vec2f) -> f32 {
+        let locals = get!(COLOR_MATRIX_LOCALS);
+        if locals.mask_kind == 0u32 {
+            return 1.0;
+        }
+        if locals.mask_kind == 4u32 {
+            return 0.0;
+        }
+        let sampled: Vec4f;
+        if locals.mask_kind == 1u32 {
+            // The gradient mask: the referenced table entry's parameter
+            // wrapped under its tile mode, sampled from the shared ramp
+            // row (the ramp's dimensions queried at runtime).
+            let gradient = get!(GRADIENTS)[locals.mask_reference as usize];
+            let t = gradient_table_parameter(
+                gradient.kind,
+                gradient.geometry0,
+                gradient.geometry1,
+                position,
+            );
+            let wrapped = select(
+                select(t, fract(t), gradient.tile == 1u32),
+                1.0 - abs(signed_modulo(t, 2.0) - 1.0),
+                gradient.tile == 2u32,
+            );
+            let rows = f32(texture_dimensions(GRADIENT_RAMP).y);
+            sampled = texture_sample_level(
+                GRADIENT_RAMP,
+                GRADIENT_SAMPLER,
+                vec2f(
+                    gradient_ramp_coordinate(wrapped),
+                    (f32(gradient.stop_row) + 0.5) / rows,
+                ),
+                0.0,
+            );
+        } else if locals.mask_kind == 2u32 {
+            // The atlas mask: the texture stretched over the composite's
+            // bounds (the mask rect).
+            let bounds = get!(BLUR_LOCALS).bounds;
+            let unit = (position - bounds.origin) / bounds.size;
+            sampled = texture_sample_level(MASK_TEXTURE, BLUR_SAMPLER, unit, 0.0);
+        } else {
+            // The coverage mask: the A8 coverage target at the position
+            // (its own dimensions queried at runtime).
+            let dims = texture_dimensions(MASK_TEXTURE);
+            let size = vec2f(f32(dims.x), f32(dims.y));
+            sampled = texture_sample_level(
+                MASK_TEXTURE,
+                BLUR_SAMPLER,
+                position / size,
+                0.0,
+            );
+        }
+        if locals.mask_mode == 1u32 {
+            return color_brightness(sampled.xyz());
+        }
+        sampled.w
+    }
+
+    // The W3C compositing-1 §10.1 separable blend primitives (the
+    // per-channel B(Cb, Cs) functions; no recursion - WGSL forbids it,
+    // so overlay and hard-light inline their multiply/screen arms).
+    pub fn blend_multiply(cb: f32, cs: f32) -> f32 {
+        cb * cs
+    }
+
+    pub fn blend_screen(cb: f32, cs: f32) -> f32 {
+        cb + cs - cb * cs
+    }
+
+    pub fn blend_hard_light(cb: f32, cs: f32) -> f32 {
+        if cs <= 0.5 {
+            return blend_multiply(cb, 2.0 * cs);
+        }
+        blend_screen(cb, 2.0 * cs - 1.0)
+    }
+
+    pub fn blend_soft_light(cb: f32, cs: f32) -> f32 {
+        if cs <= 0.5 {
+            return cb - (1.0 - 2.0 * cs) * cb * (1.0 - cb);
+        }
+        let mut d = sqrt(cb);
+        if cb <= 0.25 {
+            d = ((16.0 * cb - 12.0) * cb + 4.0) * cb;
+        }
+        cb + (2.0 * cs - 1.0) * (d - cb)
+    }
+
+    // One separable blend mode's per-channel B(Cb, Cs) (compositing-1
+    // §10.1; the mode tags follow the design's A.1 list).
+    pub fn blend_separable_channel(mode: u32, cb: f32, cs: f32) -> f32 {
+        if mode == 1u32 {
+            return blend_multiply(cb, cs);
+        }
+        if mode == 2u32 {
+            return blend_screen(cb, cs);
+        }
+        if mode == 3u32 {
+            return blend_hard_light(cs, cb);
+        }
+        if mode == 4u32 {
+            return min(cb, cs);
+        }
+        if mode == 5u32 {
+            return max(cb, cs);
+        }
+        if mode == 6u32 {
+            if cb == 0.0 {
+                return 0.0;
+            }
+            if cs == 1.0 {
+                return 1.0;
+            }
+            return min(1.0, cb / (1.0 - cs));
+        }
+        if mode == 7u32 {
+            if cb == 1.0 {
+                return 1.0;
+            }
+            if cs == 0.0 {
+                return 0.0;
+            }
+            return 1.0 - min(1.0, (1.0 - cb) / cs);
+        }
+        if mode == 8u32 {
+            return blend_hard_light(cb, cs);
+        }
+        if mode == 9u32 {
+            return blend_soft_light(cb, cs);
+        }
+        if mode == 10u32 {
+            return abs(cb - cs);
+        }
+        if mode == 11u32 {
+            return cb + cs - 2.0 * cb * cs;
+        }
+        cs
+    }
+
+    // The W3C compositing-1 §10.2 non-separable helpers on straight
+    // colors (Lum, ClipColor, SetLum, Sat, SetSat).
+    pub fn blend_lum(c: Vec3f) -> f32 {
+        dot(c, REC_601_LUMA_WEIGHTS)
+    }
+
+    pub fn blend_clip_color(c: Vec3f) -> Vec3f {
+        let l = blend_lum(c);
+        let n = min(min(c.x, c.y), c.z);
+        let x = max(max(c.x, c.y), c.z);
+        let mut out = c;
+        if n < 0.0 && l > n {
+            out = vec3f(l, l, l) + (c - vec3f(l, l, l)) * l / (l - n);
+        }
+        if x > 1.0 && x > l {
+            out = vec3f(l, l, l) + (c - vec3f(l, l, l)) * (1.0 - l) / (x - l);
+        }
+        out
+    }
+
+    pub fn blend_set_lum(c: Vec3f, l: f32) -> Vec3f {
+        let d = l - blend_lum(c);
+        blend_clip_color(c + vec3f(d, d, d))
+    }
+
+    pub fn blend_sat(c: Vec3f) -> f32 {
+        max(max(c.x, c.y), c.z) - min(min(c.x, c.y), c.z)
+    }
+
+    // SetSat: (C - Cmin) * s / (Cmax - Cmin) - the min channel lands at
+    // 0, the max at s and the mid on the interpolated scale (the
+    // equal-channel case flattens to 0).
+    pub fn blend_set_sat(c: Vec3f, s: f32) -> Vec3f {
+        let cmin = min(min(c.x, c.y), c.z);
+        let cmax = max(max(c.x, c.y), c.z);
+        if cmax > cmin {
+            return (c - vec3f(cmin, cmin, cmin)) * (s / (cmax - cmin));
+        }
+        vec3f(0.0, 0.0, 0.0)
+    }
+
+    // One non-separable mode's B(Cb, Cs) (compositing-1 §10.2: hue,
+    // saturation, color, luminosity).
+    pub fn blend_nonseparable(mode: u32, cb: Vec3f, cs: Vec3f) -> Vec3f {
+        if mode == 12u32 {
+            return blend_set_lum(blend_set_sat(cs, blend_sat(cb)), blend_lum(cb));
+        }
+        if mode == 13u32 {
+            return blend_set_lum(blend_set_sat(cb, blend_sat(cs)), blend_lum(cb));
+        }
+        if mode == 14u32 {
+            return blend_set_lum(cs, blend_lum(cb));
+        }
+        blend_set_lum(cb, blend_lum(cs))
+    }
+
+    // The full blend + source-over composite on PREMULTIPLIED inputs
+    // (compositing-1 §10's closed form): with straight colors
+    // Cb = P_b/αb and Cs = P_s/αs,
+    //   αo·Co = (1−αb)·P_s + αs·αb·B(Cb, Cs) + (1−αs)·P_b
+    //   αo    = αs + (1−αs)·αb
+    // Plus-lighter (mode 16) is the premultiplied clamp(P_s + P_b)
+    // (Skia kPlus, "clamp(s+d)").
+    pub fn blend_premultiplied(mode: u32, backdrop: Vec4f, source: Vec4f) -> Vec4f {
+        if mode == 16u32 {
+            return clamp(source + backdrop, vec4f(0.0, 0.0, 0.0, 0.0), vec4f(1.0, 1.0, 1.0, 1.0));
+        }
+        let alpha_backdrop = backdrop.w;
+        let alpha_source = source.w;
+        let cb = select(
+            vec3f(0.0, 0.0, 0.0),
+            backdrop.xyz() / vec3f(alpha_backdrop, alpha_backdrop, alpha_backdrop),
+            alpha_backdrop > 0.0,
+        );
+        let cs = select(
+            vec3f(0.0, 0.0, 0.0),
+            source.xyz() / vec3f(alpha_source, alpha_source, alpha_source),
+            alpha_source > 0.0,
+        );
+        let mut mixed = vec3f(
+            blend_separable_channel(mode, cb.x, cs.x),
+            blend_separable_channel(mode, cb.y, cs.y),
+            blend_separable_channel(mode, cb.z, cs.z),
+        );
+        if mode >= 12u32 && mode <= 15u32 {
+            mixed = blend_nonseparable(mode, cb, cs);
+        }
+        let out_alpha = alpha_source + (1.0 - alpha_source) * alpha_backdrop;
+        let out_color = (1.0 - alpha_backdrop) * source.xyz()
+            + vec3f(alpha_source, alpha_source, alpha_source) * alpha_backdrop * mixed
+            + (1.0 - alpha_source) * backdrop.xyz();
+        vec4f(out_color.x, out_color.y, out_color.z, out_alpha)
+    }
+
     #[fragment]
     pub fn fragment_blur_composite(input: BlurVarying) -> Vec4f {
         if is_clipped(input.clip_distances) {
@@ -403,6 +704,255 @@ pub mod blur {
         #[location(5)]
         #[interpolate(flat)]
         pub superellipse_power: f32,
+    }
+
+    // The transformed-group composite (rev 16, browser-core ticket 51):
+    // one textured quad under the effect group's 2x3 matrix. The
+    // subtree rendered into its bucket in LOCAL coordinates (the
+    // children's own records; the bucket renders the local frame's [0,
+    // size]); the vertex maps the bucket rect's corners through the
+    // matrix and carries the LOCAL position as a varying - the group's
+    // rectangular content mask and its rounded clip (the rrect over
+    // the content mask with the record's corner radii) live in the
+    // local frame, because CSS clips inside the element's own space
+    // and the transform applies after. The fragment samples the bucket
+    // at the interpolated LOCAL position over the bucket's size
+    // (linear filtering; the affine interpolation of the quad's
+    // corners).
+    #[derive(Clone, Copy, Wgsl)]
+    pub struct TransformedCompositeVarying {
+        #[builtin(position)]
+        pub position: Vec4f,
+        #[location(0)]
+        pub local_position: Vec2f,
+        #[location(1)]
+        pub clip_distances: Vec4f,
+        // rev 16, ticket 52 (closing 51's handed-off gap): the smoothed
+        // corner machinery - the prepared reaches and factors ride flat
+        // varyings exactly like the smoothed axis-aligned composite's.
+        #[location(4)]
+        #[interpolate(flat)]
+        pub horizontal_corner_reaches: Vec4f,
+        #[location(5)]
+        #[interpolate(flat)]
+        pub vertical_corner_reaches: Vec4f,
+        #[location(6)]
+        #[interpolate(flat)]
+        pub smoothing_factors: Vec4f,
+        #[location(7)]
+        #[interpolate(flat)]
+        pub superellipse_power: f32,
+    }
+
+    #[vertex]
+    pub fn vertex_transformed_blur_composite(
+        #[builtin(vertex_index)] vertex_id: u32,
+    ) -> TransformedCompositeVarying {
+        let locals = get!(BLUR_LOCALS);
+        let extensions = get!(COLOR_MATRIX_LOCALS);
+        let unit_position = rectangle_corner(vertex_id);
+        // The local position: within the group's content region (the
+        // quad), in the bucket's coordinates (the bucket holds the
+        // frame's [0, size]).
+        let local_position = Bounds::position(locals.bounds, unit_position);
+        // The row-major 2x3: device = row0.xy * p + row0.z,
+        // row1.xy * p + row1.z (the ABI record's transform layout,
+        // transform-origin resolved by the caller).
+        let device_position = vec2f(
+            extensions.transform_row0.x * local_position.x
+                + extensions.transform_row0.y * local_position.y
+                + extensions.transform_row0.z,
+            extensions.transform_row1.x * local_position.x
+                + extensions.transform_row1.y * local_position.y
+                + extensions.transform_row1.z,
+        );
+        // rev 16, ticket 52 (closing 51's handed-off gap): the smoothed
+        // corner preparation over the CONTENT MASK's size (the rect the
+        // clip coverage evaluates; a zero smoothing returns the plain
+        // radii and zero factors).
+        let prepared = prepare_corners(
+            locals.content_mask.size,
+            locals.corner_radii,
+            locals.corner_smoothing,
+            true,
+        );
+        TransformedCompositeVarying {
+            position: viewport_to_clip_position(device_position),
+            local_position,
+            clip_distances: clip_distances(local_position, locals.content_mask),
+            horizontal_corner_reaches: prepared.horizontal_reaches,
+            vertical_corner_reaches: prepared.vertical_reaches,
+            smoothing_factors: prepared.smoothing_factors,
+            superellipse_power: prepared.superellipse_power,
+        }
+    }
+
+    #[fragment]
+    pub fn fragment_transformed_blur_composite(input: TransformedCompositeVarying) -> Vec4f {
+        if is_clipped(input.clip_distances) {
+            return transparent();
+        }
+        let locals = get!(BLUR_LOCALS);
+        // rev 16, ticket 52: the rounded clip's coverage - the smoothed
+        // corner SDF when the record carries smoothing (the prepared
+        // varyings), the plain rrect otherwise; evaluated at the LOCAL
+        // position (CSS clips inside the element, then the transform
+        // applies). A zero smoothing keeps the plain path bit-exact.
+        let signed_distance = select(
+            rounded_rectangle_signed_distance(
+                input.local_position,
+                locals.content_mask,
+                locals.corner_radii,
+            ),
+            prepared_corner_signed_distance(
+                input.local_position,
+                locals.content_mask,
+                locals.corner_radii,
+                locals.corner_smoothing,
+                PreparedCorners {
+                    horizontal_reaches: input.horizontal_corner_reaches,
+                    vertical_reaches: input.vertical_corner_reaches,
+                    smoothing_factors: input.smoothing_factors,
+                    superellipse_power: input.superellipse_power,
+                },
+            ),
+            locals.corner_smoothing > 0.0,
+        );
+        let coverage = select(
+            1.0,
+            antialiased_coverage(signed_distance),
+            locals.composite_clip == BlurCompositeClip::RoundedBounds,
+        );
+        // The bucket-relative sampling: the local position over the
+        // bucket's size (linear filtering).
+        let sampled = texture_sample_level(
+            BLUR_TEXTURE,
+            BLUR_SAMPLER,
+            input.local_position / get!(BLUR_LOCALS).target_size,
+            0.0,
+        );
+        // rev 16 (browser-core ticket 52): the mask composite multiplies
+        // the sampled group colour at the LOCAL position (CSS masks
+        // inside the element's own space, then the transform applies).
+        let factor = coverage * get!(BLUR_LOCALS).opacity * composite_mask_alpha(input.local_position);
+        vec4f(
+            sampled.x * factor,
+            sampled.y * factor,
+            sampled.z * factor,
+            sampled.w * factor,
+        )
+    }
+
+    // The blend composite (rev 16, browser-core ticket 52): the group
+    // composites with a W3C blend mode instead of source-over. D3D11
+    // has no programmable fixed-function blending, so the pass samples
+    // a BACKDROP COPY (the b11-bound texture of the parent target's
+    // content, copied before this draw) and applies the blend formula
+    // in the shader, writing with NO fixed blending - outside the
+    // group's coverage the formula degenerates to exactly the
+    // backdrop, so the untouched pixels round-trip bit-exactly. The
+    // vertex is the transformed composite's shape (the matrix maps the
+    // quad's corners; the identity for an axis-aligned group - the
+    // axis-aligned and transformed blend groups share one pipeline).
+    #[derive(Clone, Copy, Wgsl)]
+    pub struct BlendCompositeVarying {
+        #[builtin(position)]
+        pub position: Vec4f,
+        #[location(0)]
+        pub local_position: Vec2f,
+        #[location(1)]
+        pub clip_distances: Vec4f,
+    }
+
+    #[vertex]
+    pub fn vertex_blend_composite(
+        #[builtin(vertex_index)] vertex_id: u32,
+    ) -> BlendCompositeVarying {
+        let locals = get!(BLUR_LOCALS);
+        let extensions = get!(COLOR_MATRIX_LOCALS);
+        let unit_position = rectangle_corner(vertex_id);
+        let local_position = Bounds::position(locals.bounds, unit_position);
+        let device_position = vec2f(
+            extensions.transform_row0.x * local_position.x
+                + extensions.transform_row0.y * local_position.y
+                + extensions.transform_row0.z,
+            extensions.transform_row1.x * local_position.x
+                + extensions.transform_row1.y * local_position.y
+                + extensions.transform_row1.z,
+        );
+        BlendCompositeVarying {
+            position: viewport_to_clip_position(device_position),
+            local_position,
+            clip_distances: clip_distances(local_position, locals.content_mask),
+        }
+    }
+
+    #[fragment]
+    pub fn fragment_blend_composite(input: BlendCompositeVarying) -> Vec4f {
+        let locals = get!(BLUR_LOCALS);
+        let extensions = get!(COLOR_MATRIX_LOCALS);
+        // The backdrop copy at the device position (the parent frame).
+        let backdrop = texture_sample_level(
+            BACKDROP_TEXTURE,
+            BLUR_SAMPLER,
+            input.position.xy() / extensions.backdrop_size,
+            0.0,
+        );
+        // Where the group does not cover (the content-mask rect's
+        // outside, the rrect's outside, the mask's zero, the opacity's
+        // zero) the formula degenerates to the backdrop - the untouched
+        // pixels round-trip EXACTLY (this pass writes with no fixed
+        // blending, so it must reproduce the parent everywhere).
+        if is_clipped(input.clip_distances) {
+            return backdrop;
+        }
+        let coverage = select(
+            1.0,
+            antialiased_coverage(rounded_rectangle_signed_distance(
+                input.local_position,
+                locals.content_mask,
+                locals.corner_radii,
+            )),
+            locals.composite_clip == BlurCompositeClip::RoundedBounds,
+        );
+        // The source: the group's bucket at the local position, its
+        // opacity and mask applied (premultiplied).
+        let source = texture_sample_level(
+            BLUR_TEXTURE,
+            BLUR_SAMPLER,
+            input.local_position / locals.target_size,
+            0.0,
+        );
+        let factor = coverage * locals.opacity * composite_mask_alpha(input.local_position);
+        let masked = source * vec4f(factor, factor, factor, factor);
+        blend_premultiplied(extensions.blend_mode, backdrop, masked)
+    }
+
+    // The drop-shadow composite (rev 16, browser-core ticket 52): the
+    // blurred silhouette of the group (the sampled source's ALPHA -
+    // the gaussian averages each channel, so the blurred alpha IS the
+    // blurred silhouette), tinted with the op's color and drawn
+    // PREMULTIPLIED beneath the content quad. The quad is the group's
+    // dilated bounds translated by the op's offset; `sample_offset`
+    // carries the offset (the translation composite's rule), so the
+    // silhouette lands at its offset position.
+    #[fragment]
+    pub fn fragment_drop_shadow_composite(input: BlurVarying) -> Vec4f {
+        if is_clipped(input.clip_distances) {
+            return transparent();
+        }
+        let sampled = texture_sample_level(
+            BLUR_TEXTURE,
+            BLUR_SAMPLER,
+            (input.position.xy() - get!(COLOR_MATRIX_LOCALS).sample_offset)
+                / get!(BLUR_LOCALS).target_size,
+            0.0,
+        );
+        let extensions = get!(COLOR_MATRIX_LOCALS);
+        let silhouette = sampled.w * get!(BLUR_LOCALS).opacity;
+        let tint = extensions.tint_color;
+        let alpha = tint.w * silhouette;
+        vec4f(tint.x * alpha, tint.y * alpha, tint.z * alpha, alpha)
     }
 
     #[vertex]

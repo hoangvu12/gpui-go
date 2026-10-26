@@ -64,6 +64,77 @@
 //!    after any blur, on the unpremultiplied sampled color, then
 //!    re-premultiplied.
 
+//! # rev 16 (browser-core ticket 50) divergences
+//!
+//! 4. **The extended content mask and the ABI-record instance layout**
+//!    (`common.rs`, `quads.rs`, `shadows.rs`): the mask grows from
+//!    bounds-only (16 bytes) to the pin's full shader shape - bounds,
+//!    per-edge `fade_out` ramp, corner radii, smoothing and one layout
+//!    pad word (56 bytes; the pad exists because the mask's bounds
+//!    member forces 8-byte alignment in the HLSL structured-buffer
+//!    layout, and a struct's size rounds up to its alignment; the fade
+//!    word order is LEFT, TOP, RIGHT, BOTTOM) - and the
+//!    `ContentMask::alpha` clip multiplies in the rounded-rectangle
+//!    SDF when the mask carries radii (the INNERMOST rounded clip,
+//!    inline; ancestor rounded clips become effect groups). The quad
+//!    and shadow instance structs mirror the ABI records field for
+//!    field (`GpuiGoSceneQuadRecord` 280 bytes - the PINNED field
+//!    order, which is the alignment-safe one, plus a trailing layout
+//!    pad; `GpuiGoSceneShadowRecord` 216, same rule), so the draw path
+//!    uploads the scene's records directly as the instance arrays -
+//!    zero per-frame conversion. A zero-radii, zero-fade mask
+//!    evaluates exactly as the pre-R16 bounds-only mask (group-free
+//!    scenes render pixel-identically). The pinned
+//!    underline/sprite/path pipelines keep consuming the pinned DXBC
+//!    blobs (bounds + fade only, no radii) - the recorded gap handed
+//!    to ticket 52's mask work.
+//!
+//! # rev 16 (browser-core ticket 51) divergences
+//!
+//! 5. **The transformed-group composite** (`filters.rs`): the pin's
+//!    blur-composite pass draws an axis-aligned rect only; R16's
+//!    effect groups carry a 2x3 matrix and need the quad's corners
+//!    mapped through it (the design's `transformed_rectangle_vertex`
+//!    shape). The vendored composite gains the
+//!    `transformed_blur_composite` pipeline: the vertex maps the
+//!    group's content region through the row-major 2x3 (carried in the
+//!    rev-15.1 composite extension cbuffer b5, appended after the
+//!    colour-matrix prefix as two `vec4` rows - a nested matrix struct
+//!    would violate the uniform address-space layout constraints, and
+//!    the prefix stays byte-identical), interpolates the LOCAL
+//!    position, and the fragment samples the bucket at
+//!    `local_position / target_size` with linear filtering, clipping
+//!    to the group's content mask (the rrect coverage at the LOCAL
+//!    position with the record's radii - CSS clips inside the element
+//!    and the transform applies after; the plain rounded-rect SDF,
+//!    without the pin's corner smoothing - closed by ticket 52 below).
+//!    The region-relative sampling offset of every composite also
+//!    became the content REGION's origin (the bucket's
+//!    quantization margin never reaches the target) - for
+//!    window-frame groups the values are exactly R15's.
+//!
+//! # rev 16 (browser-core ticket 52) divergences
+//!
+//! 6. **The gradient table, the blend modes and the mask composite**
+//!    (`common.rs`, `filters.rs`): the scene-level gradient table and
+//!    its baked 1024x1 premultiplied-sRGB ramp rows (n-stop, radial,
+//!    conic, repeating gradients - the pinned Background has only the
+//!    two-stop linear arm; the R15 record and shader stay bit-exact,
+//!    the table is tag 4 riding the record's angle field), the W3C
+//!    compositing-1 blend formulas in the composite (all 17 modes;
+//!    plus-lighter is the premultiplied clamp(source + backdrop),
+//!    Skia kPlus) against a backdrop COPY of the parent target, the
+//!    dst_in mask composite (the gradient ramp, the atlas texture or
+//!    the A8 coverage target; alpha or REC-601 luminance), and the
+//!    drop-shadow composite (the blurred alpha silhouette tinted and
+//!    offset beneath the content). The transformed composite's rounded
+//!    clip gains the smoothed-corner SDF (51's handed-off gap, now
+//!    closed). The gradient bindings (t7 table / t8 ramp / s9 clamp
+//!    sampler) and the mask/backdrop textures (t10 / t11) live above
+//!    every module's own group-1 slots; a kind-0 mask leaves the
+//!    composite factor at 1, so every non-masked composite is
+//!    bit-identical.
+
 #![allow(dead_code, unused_assignments, unused_imports)]
 
 pub mod common;

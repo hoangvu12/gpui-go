@@ -179,6 +179,164 @@ func callSceneDump(
 	return callStatus(r1), nil
 }
 
+// callSceneInsertEffect invokes scene_insert_effect (rev 16).
+func callSceneInsertEffect(fn uintptr, scene uint64, rec *SceneEffectRecord) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_insert_effect")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(scene),
+		uintptr(unsafe.Pointer(rec)),
+	)
+	runtime.KeepAlive(rec)
+	return callStatus(r1), nil
+}
+
+// callSceneEffectDump invokes scene_effect_dump (rev 16).
+func callSceneEffectDump(fn uintptr, scene uint64, records uintptr, capacity uint32, outCount *uint32) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_effect_dump")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(scene),
+		records,
+		uintptr(capacity),
+		uintptr(unsafe.Pointer(outCount)),
+	)
+	runtime.KeepAlive(outCount)
+	return callStatus(r1), nil
+}
+
+// callSceneInsertGradient invokes scene_insert_gradient (rev 16,
+// ticket 52).
+func callSceneInsertGradient(
+	fn uintptr,
+	scene uint64,
+	rec *SceneGradientRecord,
+	stops *SceneGradientStop,
+	stopCount uint32,
+	outIndex *uint32,
+) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_insert_gradient")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(scene),
+		uintptr(unsafe.Pointer(rec)),
+		uintptr(unsafe.Pointer(stops)),
+		uintptr(stopCount),
+		uintptr(unsafe.Pointer(outIndex)),
+	)
+	runtime.KeepAlive(rec)
+	runtime.KeepAlive(stops)
+	runtime.KeepAlive(outIndex)
+	return callStatus(r1), nil
+}
+
+// callSceneGradientDump invokes scene_gradient_dump (rev 16, ticket
+// 52).
+func callSceneGradientDump(
+	fn uintptr,
+	scene uint64,
+	records uintptr,
+	stops uintptr,
+	recordCapacity uint32,
+	stopCapacity uint32,
+	outRecordCount *uint32,
+	outStopCount *uint32,
+) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_gradient_dump")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(scene),
+		records,
+		stops,
+		uintptr(recordCapacity),
+		uintptr(stopCapacity),
+		uintptr(unsafe.Pointer(outRecordCount)),
+		uintptr(unsafe.Pointer(outStopCount)),
+	)
+	runtime.KeepAlive(outRecordCount)
+	runtime.KeepAlive(outStopCount)
+	return callStatus(r1), nil
+}
+
+// callSceneInsertCoverage invokes scene_insert_coverage (rev 16,
+// ticket 52).
+func callSceneInsertCoverage(fn uintptr, scene uint64, rec *SceneCoverageRecord, outIndex *uint32) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_insert_coverage")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(scene),
+		uintptr(unsafe.Pointer(rec)),
+		uintptr(unsafe.Pointer(outIndex)),
+	)
+	runtime.KeepAlive(rec)
+	runtime.KeepAlive(outIndex)
+	return callStatus(r1), nil
+}
+
+// callSceneInsertFilterOpChain invokes
+// scene_insert_filter_op_chain (rev 16, ticket 52).
+func callSceneInsertFilterOpChain(
+	fn uintptr,
+	scene uint64,
+	ops *SceneFilterOpRecord,
+	opCount uint32,
+	outIndex *uint32,
+) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_insert_filter_op_chain")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(scene),
+		uintptr(unsafe.Pointer(ops)),
+		uintptr(opCount),
+		uintptr(unsafe.Pointer(outIndex)),
+	)
+	runtime.KeepAlive(ops)
+	runtime.KeepAlive(outIndex)
+	return callStatus(r1), nil
+}
+
+// callSceneUpdateProperty invokes scene_update_property (rev 16,
+// ticket 51).
+func callSceneUpdateProperty(
+	fn uintptr,
+	scene uint64,
+	nodeID uint32,
+	kind uint32,
+	values uintptr,
+	valueCount uint32,
+	outOld *SceneBounds,
+	outNew *SceneBounds,
+) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_update_property")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(scene),
+		uintptr(nodeID),
+		uintptr(kind),
+		values,
+		uintptr(valueCount),
+		uintptr(unsafe.Pointer(outOld)),
+		uintptr(unsafe.Pointer(outNew)),
+	)
+	runtime.KeepAlive(outOld)
+	runtime.KeepAlive(outNew)
+	return callStatus(r1), nil
+}
+
 func callScenePlanDump(
 	fn uintptr,
 	scene uint64,
@@ -297,5 +455,31 @@ func callScenePathScript(
 	runtime.KeepAlive(outVertices)
 	runtime.KeepAlive(outVertexCount)
 	runtime.KeepAlive(outBounds)
+	return callStatus(r1), nil
+}
+
+// callSceneTessCacheStats covers the tessellation LRU cache's stats
+// slot (rev 16, ticket 53; stateless like path_script).
+func callSceneTessCacheStats(
+	fn uintptr,
+	outHits *uint32,
+	outMisses *uint32,
+	outEvictions *uint32,
+	outEntries *uint32,
+) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_tess_cache_stats")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(unsafe.Pointer(outHits)),
+		uintptr(unsafe.Pointer(outMisses)),
+		uintptr(unsafe.Pointer(outEvictions)),
+		uintptr(unsafe.Pointer(outEntries)),
+	)
+	runtime.KeepAlive(outHits)
+	runtime.KeepAlive(outMisses)
+	runtime.KeepAlive(outEvictions)
+	runtime.KeepAlive(outEntries)
 	return callStatus(r1), nil
 }

@@ -1288,6 +1288,10 @@ unsafe extern "system" fn a11y_panic_probe() -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // The ActionHandler trait must be in scope for the queue tests'
+    // do_action calls (rev 16, ticket 50: the pre-existing test-only
+    // compile error - the trait moved out of the prelude upstream).
+    use accesskit::ActionHandler;
 
     #[test]
     fn role_and_action_maps_round_trip() {
@@ -1382,6 +1386,9 @@ mod tests {
 
     #[test]
     fn panic_probe_reports_containment() {
-        assert_eq!(a11y_panic_probe(), a11y_status::ERR_PANIC);
+        // The export is unsafe (an extern "system" fn); the test-only
+        // call needed an unsafe block (rev 16, ticket 50: the
+        // pre-existing test-only compile error).
+        assert_eq!(unsafe { a11y_panic_probe() }, a11y_status::ERR_PANIC);
     }
 }

@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		padding: 16px;
+		box-sizing: border-box;
+		font: 16px/40px "Segoe UI", system-ui, sans-serif;
+		color: #0f172a;
+	}
+	.grid {
+		box-sizing: border-box;
+		display: grid;
+		grid-template-columns: 240px 1fr;
+		background: #e2e8f0;
+	}
+	.cell {
+		box-sizing: border-box;
+		background: #dbeafe;
+	}
+
+	.baserow {
+		box-sizing: border-box;
+		align-items: baseline;
+		background: #e2e8f0;
+	}
+	#flexrow {
+		display: flex;
+		width: 300px;
+	}
+	#gridrow {
+		display: grid;
+		grid-template-columns: 120px 120px 120px;
+		width: 360px;
+	}
+	.baserow span {
+		box-sizing: border-box;
+		width: 60px;
+		background: #dbeafe;
+	}
+	.s12 { font-size: 12px; }
+	.s16 { font-size: 16px; }
+	.s24 { font-size: 24px; }
+</style>
+</head>
+<body data-id="root">
+	<div class="baserow" data-id="flexrow" id="flexrow">
+		<span class="s12" data-id="flex-small">small</span>
+		<span class="s16" data-id="flex-medium">medium</span>
+		<span class="s24" data-id="flex-large">large</span>
+	</div>
+	<div class="baserow" data-id="gridrow" id="gridrow">
+		<span class="s12" data-id="grid-small">small</span>
+		<span class="s16" data-id="grid-medium">medium</span>
+		<span class="s24" data-id="grid-large">large</span>
+	</div>
+</body>
+</html>

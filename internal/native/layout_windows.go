@@ -120,6 +120,54 @@ func callLayoutNodeSetMeasure(fn uintptr, engine, node, token uint64) (int32, er
 	return callStatus(r1), nil
 }
 
+func callLayoutNodeSetGridTemplateAreas(
+	fn uintptr,
+	engine, node uint64,
+	rowCount, columnCount uint32,
+	areas *LayoutGridAreaRecord,
+	areaCount uint32,
+	names *byte,
+	namesBytes uint32,
+) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("node_set_grid_template_areas")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(engine),
+		uintptr(node),
+		uintptr(rowCount),
+		uintptr(columnCount),
+		uintptr(unsafe.Pointer(areas)),
+		uintptr(areaCount),
+		uintptr(unsafe.Pointer(names)),
+		uintptr(namesBytes),
+	)
+	runtime.KeepAlive(areas)
+	runtime.KeepAlive(names)
+	return callStatus(r1), nil
+}
+
+func callLayoutNodeSetGridArea(
+	fn uintptr,
+	engine, node uint64,
+	name *byte,
+	nameLen uint32,
+) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("node_set_grid_area")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(engine),
+		uintptr(node),
+		uintptr(unsafe.Pointer(name)),
+		uintptr(nameLen),
+	)
+	runtime.KeepAlive(name)
+	return callStatus(r1), nil
+}
+
 func callLayoutNodeRemoveSubtree(fn uintptr, engine, node uint64) (int32, error) {
 	if fn == 0 {
 		return 0, nullSlot("node_remove_subtree")

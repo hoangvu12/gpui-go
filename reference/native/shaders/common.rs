@@ -1,5 +1,6 @@
 #[wgsl_rs::wgsl]
 mod source {
+    use super::super::corner_smoothing::*;
     use wgsl_rs::std::*;
 
     // Defined here as a literal so the Rust-to-WGSL translator emits it, not `std`.
@@ -8,6 +9,9 @@ mod source {
     pub const HALF_TURN_DEGREES: f32 = 180.0;
     pub const FULL_TURN_DEGREES: f32 = 360.0;
     pub const CSS_GRADIENT_OFFSET_DEGREES: f32 = 90.0;
+    // rev 16 (browser-core ticket 52): the conic gradient's full turn
+    // in radians (one complete conic period's sweep).
+    pub const FULL_TURN_RADIANS: f32 = 6.283185307179586;
     pub const PIXEL_ANTIALIAS_RADIUS: f32 = 0.5;
     pub const GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS: f32 = 3.0;
     pub const PATTERN_COMPONENT_SCALE: f32 = 255.0;
@@ -73,6 +77,12 @@ mod source {
         LinearGradient = 1,
         PatternSlash = 2,
         Checkerboard = 3,
+        // rev 16 (browser-core ticket 52): the R16 gradient-table arm -
+        // the background references a scene-level gradient entry by
+        // index (the index stored in the record's
+        // `gradient_angle_or_pattern_height` field as f32 bits; the
+        // geometry and baked ramp row live in the table).
+        GradientTable = 4,
     }
 
     #[repr(u32)]
@@ -131,6 +141,42 @@ mod source {
     uniform!(group(0), binding(0), GLOBALS: GlobalUniforms);
     uniform!(group(0), binding(1), FONT_RASTERIZATION: FontRasterizationUniforms);
 
+    // rev 16 (browser-core ticket 52): the scene-level gradient table
+    // and its baked ramp texture, shared by every vendored module that
+    // includes this common block (the quad and shadow pipelines'
+    // gradient-table backgrounds, and the composite pass's gradient
+    // MASKS). The bindings sit above every module's own group-1 slots
+    // (quads/shadows own binding 0, the blur module owns 0-4, the
+    // surface module 0-3) so no two declarations collide. Registers:
+    // the storage buffer at t7, the ramp texture at t8, the sampler at
+    // s9 (binding + 2, the shared group-1 offset).
+    //
+    // The instance struct is the ABI record's payload RESHAPED for the
+    // HLSL structured-buffer layout (the vec4-bearing fields land on
+    // 16-byte-aligned offsets, and the struct's size rounds up to its
+    // 16-byte alignment - a 64-byte stride): the draw path converts
+    // each `GpuiGoSceneGradientRecord` (56 bytes, geometry at word 3)
+    // into this 64-byte form.
+    #[derive(Clone, Copy, Wgsl)]
+    pub struct GradientInstance {
+        pub kind: u32,
+        pub tile: u32,
+        pub color_space: u32,
+        pub stop_count: u32,
+        // linear: (x0, y0, x1, y1); radial: (cx, cy, r0, r1);
+        // conic: (cx, cy, start_angle, rotation).
+        pub geometry0: Vec4f,
+        // radial: (aspect, 0, 0, 0); the rest zero.
+        pub geometry1: Vec4f,
+        pub stop_row: u32,
+        pub record_size: u32,
+        pub padding0: u32,
+        pub padding1: u32,
+    }
+    storage!(group(1), binding(5), GRADIENTS: RuntimeArray<GradientInstance>);
+    texture!(group(1), binding(6), GRADIENT_RAMP: Texture2D<f32>);
+    sampler!(group(1), binding(7), GRADIENT_SAMPLER: Sampler);
+
     #[repr(C)]
     #[derive(Clone, Copy, Wgsl)]
     pub struct Bounds {
@@ -138,16 +184,40 @@ mod source {
         pub size: Vec2f,
     }
 
+    // rev 16 (browser-core ticket 50): the mask's fade edges in the
+    // ABI's word order (left, top, right, bottom) - the record is the
+    // instance layout, so the struct mirrors it exactly.
+    #[repr(C)]
+    #[derive(Clone, Copy, Wgsl)]
+    pub struct MaskFade {
+        pub left: f32,
+        pub top: f32,
+        pub right: f32,
+        pub bottom: f32,
+    }
+
+    // rev 16 (browser-core ticket 50): the extended content mask - the
+    // pin's bounds + per-edge fade ramp, plus the rounded-clip corner
+    // radii and smoothing. This struct IS the ABI record
+    // `GpuiGoSceneContentMask` (52 bytes): the vendored quad/shadow
+    // pipelines' instance layout mirrors the ABI record field for
+    // field, so the draw path uploads the records directly.
     #[repr(C)]
     #[derive(Clone, Copy, Wgsl)]
     pub struct ContentMask {
         pub bounds: Bounds,
-        pub fade_out: Edges,
+        pub fade_out: MaskFade,
+        pub corner_radii: Corners,
+        pub corner_smoothing: f32,
     }
 
     impl ContentMask {
-        /// The mask's coverage at the given window-space position: 1 inside,
-        /// 0 outside, and a linear ramp to 0 across each edge's fade distance.
+        /// The mask's coverage at the given window-space position: 1
+        /// inside, 0 outside, a linear ramp to 0 across each edge's
+        /// fade distance, and - rev 16 - the rounded-corner clip when
+        /// the mask carries radii (the rounded-rectangle SDF the quad
+        /// pipeline already computes; the INNERMOST radii apply inline,
+        /// ancestors' rounded clips become effect groups).
         pub fn alpha(content_mask: ContentMask, position: Vec2f) -> f32 {
             let bounds = content_mask.bounds;
             let fade = content_mask.fade_out;
@@ -163,6 +233,34 @@ mod source {
             }
             if fade.bottom > 0.0 {
                 alpha *= saturate((bounds.origin.y + bounds.size.y - position.y) / fade.bottom);
+            }
+            if !Corners::is_zero(content_mask.corner_radii) {
+                // rev 16, ticket 52 (closing 50's handed-off gap): the
+                // smoothed-corner SDF when the mask carries smoothing
+                // (the prepared corner layout computed per fragment -
+                // the same math the smoothed pipelines run in the
+                // vertex); the plain rrect SDF otherwise, bit-exact.
+                let signed_distance = select(
+                    rounded_rectangle_signed_distance(
+                        position,
+                        bounds,
+                        content_mask.corner_radii,
+                    ),
+                    prepared_corner_signed_distance(
+                        position,
+                        bounds,
+                        content_mask.corner_radii,
+                        content_mask.corner_smoothing,
+                        prepare_corners(
+                            bounds.size,
+                            content_mask.corner_radii,
+                            content_mask.corner_smoothing,
+                            true,
+                        ),
+                    ),
+                    content_mask.corner_smoothing > 0.0,
+                );
+                alpha *= antialiased_coverage(signed_distance);
             }
             alpha
         }
@@ -643,11 +741,95 @@ mod source {
             // stay in the plain sRGB-encoded space the interpolation
             // runs in (the pinned path re-encodes them once more, which
             // only made sense together with the removed final decode).
+        } else if paint.background.tag == BackgroundTag::GradientTable {
+            // rev 16 (browser-core ticket 52): the table gradient is
+            // evaluated PER PIXEL in the fragment (the t parameter and
+            // the ramp sample vary across the primitive); the vertex's
+            // prepared colors stay transparent and the fragment's
+            // `gradient_table_color` arm owns the color.
+            prepared = PreparedPaint::new(transparent(), transparent(), transparent());
         } else {
             prepared.solid = hsla_to_rgba(paint.background.solid);
         }
 
         prepared
+    }
+
+    // rev 16 (browser-core ticket 52): the gradient table's parameter
+    // and ramp sample. The t computation follows the record's kind:
+    //   linear - the projection onto the [x0, y0] -> [x1, y1] line
+    //     (the CSS gradient line's endpoints, resolved by the caller
+    //     per Chromium's EndPointsFromAngle);
+    //   radial - the ellipse-normalized radius (the position scaled by
+    //     1/aspect on x, in ry units, minus r0 over the r0->r1 delta);
+    //   conic - the clockwise-from-up angle from the center, swept
+    //     from `start_angle` over `rotation` radians (CSS conic's
+    //     0deg-up clockwise convention).
+    // The TILE mode wraps t before the ramp is sampled: pad clamps at
+    // the row's own ends (the bake padded them), repeat applies
+    // fract (CSS repeating-*), reflect mirrors (a triangle wave).
+    pub fn gradient_table_parameter(kind: u32, geometry0: Vec4f, geometry1: Vec4f, position: Vec2f) -> f32 {
+        if kind == 1u32 {
+            // radial
+            let center = geometry0.xy();
+            let r0 = geometry0.z;
+            let r1 = geometry0.w;
+            let aspect = geometry1.x;
+            let scaled = vec2f((position.x - center.x) / aspect, position.y - center.y);
+            return (length(scaled) - r0) / (r1 - r0);
+        } else if kind == 2u32 {
+            // conic: 0 is up, clockwise positive (screen y grows down).
+            let center = geometry0.xy();
+            let start_angle = geometry0.z;
+            let rotation = geometry0.w;
+            let delta = position - center;
+            let angle = atan2(delta.x, -delta.y);
+            let swept = signed_modulo(angle - start_angle, FULL_TURN_RADIANS * 2.0);
+            return swept / rotation;
+        }
+        // linear
+        let start = geometry0.xy();
+        let end = geometry0.zw();
+        let line = end - start;
+        return dot(position - start, line) / dot(line, line);
+    }
+
+    // The ramp row's sampling coordinate for a gradient parameter
+    // under a tile mode: texel i of the 1024-wide row holds t = i/1023,
+    // so u = (t*1023 + 0.5)/1024 puts t=0 at texel 0 and t=1 at texel
+    // 1023 with the hardware's linear filtering interpolating between
+    // the baked bytes (CSS's linear interpolation rule, the design
+    // §3.8's ramp-row decision).
+    pub fn gradient_ramp_coordinate(t: f32) -> f32 {
+        (t * 1023.0 + 0.5) / 1024.0
+    }
+
+    // rev 16 (browser-core ticket 52): the gradient-table background's
+    // color at a position: read the referenced table entry, compute
+    // the kind's t, wrap it under the tile mode, sample the baked ramp
+    // row (premultiplied sRGB) and un-premultiply for the pipeline's
+    // straight-color contract. No dither: the 1024-texel ramp's
+    // quantization is far below the R15 two-stop path's banding (the
+    // dither's reason), and the spec tests' CPU references compare
+    // the exact filtered bytes.
+    pub fn gradient_table_color(paint: Paint, position: Vec2f) -> Vec4f {
+        let index = u32(paint.background.gradient_angle_or_pattern_height);
+        let gradient = get!(GRADIENTS)[index as usize];
+        let t = gradient_table_parameter(gradient.kind, gradient.geometry0, gradient.geometry1, position);
+        let wrapped = select(
+            select(t, fract(t), gradient.tile == 1u32),
+            1.0 - abs(signed_modulo(t, 2.0) - 1.0),
+            gradient.tile == 2u32,
+        );
+        let rows = f32(texture_dimensions(GRADIENT_RAMP).y);
+        let ramp = texture_sample_level(
+            GRADIENT_RAMP,
+            GRADIENT_SAMPLER,
+            vec2f(gradient_ramp_coordinate(wrapped), (f32(gradient.stop_row) + 0.5) / rows),
+            0.0,
+        );
+        let alpha = ramp.w;
+        select(transparent(), ramp / vec4f(alpha, alpha, alpha, 1.0), alpha > 0.0)
     }
 
     pub fn linear_gradient_ratio(paint: Paint, position: Vec2f) -> f32 {
@@ -767,6 +949,9 @@ mod source {
             }
             BackgroundTag::Checkerboard => {
                 color = checkerboard_color(paint, position, prepared.solid);
+            }
+            BackgroundTag::GradientTable => {
+                color = gradient_table_color(paint, position);
             }
         }
         color

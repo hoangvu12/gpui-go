@@ -156,7 +156,7 @@ func (k *SceneKernel) InsertQuad(q Quad) error {
 	}
 	rec := native.NewSceneQuadRecord()
 	rec.Bounds = sceneBoundsRecord(q.Bounds)
-	rec.ContentMask = sceneBoundsRecord(q.ContentMask)
+	rec.ContentMask = sceneContentMaskRecord(q.ContentMask)
 	rec.Background = sceneBackgroundRecord(q.Background, q.Bounds)
 	rec.BorderColor = sceneBackgroundRecord(q.BorderColor, q.Bounds)
 	for i, radius := range [4]float32{q.CornerRadii.TopLeft, q.CornerRadii.TopRight, q.CornerRadii.BottomRight, q.CornerRadii.BottomLeft} {
@@ -188,7 +188,7 @@ func (k *SceneKernel) InsertShadow(sh Shadow) error {
 	rec := native.NewSceneShadowRecord()
 	rec.BlurRadius = math.Float32bits(sh.BlurRadius)
 	rec.Bounds = sceneBoundsRecord(sh.Bounds)
-	rec.ContentMask = sceneBoundsRecord(sh.ContentMask)
+	rec.ContentMask = sceneContentMaskRecord(sh.ContentMask)
 	rec.Color = sceneBackgroundRecord(sh.Color, sh.Bounds)
 	rec.ElementBounds = sceneBoundsRecord(sh.ElementBounds)
 	for i, radius := range [4]float32{sh.CornerRadii.TopLeft, sh.CornerRadii.TopRight, sh.CornerRadii.BottomRight, sh.CornerRadii.BottomLeft} {
@@ -219,7 +219,7 @@ func (k *SceneKernel) InsertUnderline(u Underline) error {
 	rec := native.NewSceneUnderlineRecord()
 	rec.Padding = u.Padding
 	rec.Bounds = sceneBoundsRecord(u.Bounds)
-	rec.ContentMask = sceneBoundsRecord(u.ContentMask)
+	rec.ContentMask = sceneContentMaskRecord(u.ContentMask)
 	rec.Color = sceneColorRecord(u.Color)
 	rec.Thickness = math.Float32bits(u.Thickness)
 	if u.Wavy {
@@ -257,10 +257,234 @@ func (k *SceneKernel) InsertFilterBoundary(b FilterBoundary) error {
 		return fmt.Errorf("gpui: scene insert filter boundary: record order must be zero, got %d", b.Order)
 	}
 	rec := filterRecordOf(b.Order, b.Bounds, b.ContentMask, b.CornerRadii, b.CornerSmoothing, b.BlurRadius, b.ColorMatrix, b.ColorMatrixCount, b.Opacity, b.IsStart)
+	rec.OpChainIndex = b.OpChainIndex
+	rec.OpChainCount = b.OpChainCount
 	if err := k.scene.InsertFilterBoundary(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert filter boundary: %w", err)
 	}
 	return nil
+}
+
+// insertGradient inserts one gradient table entry (rev 16, ticket 52)
+// and returns the assigned table index. The stop list above the cap is
+// resampled down to 64 evenly-spaced stops with a debug-build warning
+// (the design's §8.1 answer 4); the native service bakes the
+// premultiplied-sRGB ramp row.
+func (k *SceneKernel) insertGradient(g Gradient) (uint32, error) {
+	if err := k.checkLive("InsertGradient"); err != nil {
+		return 0, err
+	}
+	if len(g.Stops) == 0 {
+		return 0, fmt.Errorf("gpui: InsertGradient: at least one stop is required")
+	}
+	stops := g.Stops
+	if len(stops) > MaxTableGradientStops {
+		GradientDebugWarnf("gpui: InsertGradient: %d stops over the %d-stop cap; resampling down to %d (the ramp-path approximation)", len(stops), MaxTableGradientStops, MaxTableGradientStops)
+		stops = ResampleTableGradientStops(stops)
+	}
+	rec := native.NewSceneGradientRecord()
+	rec.Kind = uint32(g.Kind)
+	rec.Tile = uint32(g.Tile)
+	for i, value := range g.Geometry {
+		rec.Geometry[i] = math.Float32bits(value)
+	}
+	rec.StopCount = uint32(len(stops))
+	packed := make([]native.SceneGradientStop, len(stops))
+	for i, stop := range stops {
+		packed[i] = native.SceneGradientStop{
+			Position: math.Float32bits(stop.Position),
+			Rgba:     rgbaPacked(stop.Color),
+		}
+	}
+	index, err := k.scene.InsertGradient(&rec, packed)
+	if err != nil {
+		return 0, fmt.Errorf("gpui: scene insert gradient: %w", err)
+	}
+	return index, nil
+}
+
+// rgbaPacked packs one straight sRGBA f32 color into the stop record's
+// one-byte-per-lane word (r | g<<8 | b<<16 | a<<24).
+func rgbaPacked(c Rgba) uint32 {
+	clampLane := func(value float32) uint32 {
+		if value < 0 {
+			return 0
+		}
+		if value > 1 {
+			return 255
+		}
+		return uint32(value*255.0 + 0.5)
+	}
+	return clampLane(c.R) | clampLane(c.G)<<8 | clampLane(c.B)<<16 | clampLane(c.A)<<24
+}
+
+// insertCoverage inserts one clip-path coverage entry (rev 16, ticket
+// 52) and returns the assigned coverage index.
+func (k *SceneKernel) insertCoverage(pathIndex uint32, bounds Bounds) (uint32, error) {
+	if err := k.checkLive("InsertCoverage"); err != nil {
+		return 0, err
+	}
+	rec := native.NewSceneCoverageRecord()
+	rec.PathIndex = pathIndex
+	rec.Bounds = sceneBoundsRecord(bounds)
+	index, err := k.scene.InsertCoverage(&rec)
+	if err != nil {
+		return 0, fmt.Errorf("gpui: scene insert coverage: %w", err)
+	}
+	return index, nil
+}
+
+// insertFilterOpChain inserts one drop-shadow op chain (rev 16, ticket
+// 52) and returns the assigned chain index.
+func (k *SceneKernel) insertFilterOpChain(ops []FilterOp) (uint32, error) {
+	if err := k.checkLive("InsertFilterOpChain"); err != nil {
+		return 0, err
+	}
+	if len(ops) == 0 {
+		return 0, fmt.Errorf("gpui: InsertFilterOpChain: at least one op is required")
+	}
+	records := make([]native.SceneFilterOpRecord, len(ops))
+	for i, op := range ops {
+		records[i] = native.NewSceneFilterOpRecord()
+		records[i].Offset[0] = math.Float32bits(op.OffsetX)
+		records[i].Offset[1] = math.Float32bits(op.OffsetY)
+		records[i].BlurRadius = math.Float32bits(op.BlurRadius)
+		records[i].Color = rgbaSceneColor(op.Color)
+	}
+	index, err := k.scene.InsertFilterOpChain(records)
+	if err != nil {
+		return 0, fmt.Errorf("gpui: scene insert filter op chain: %w", err)
+	}
+	return index, nil
+}
+
+// rgbaSceneColor converts one straight sRGBA f32 color into the ABI
+// scene color record (the HSL-with-alpha storage the native side
+// converts back through its own pinned conversion).
+func rgbaSceneColor(c Rgba) native.SceneColor {
+	hsla := RgbaToHsla32(c)
+	return native.SceneColorOf(hsla.H, hsla.S, hsla.L, hsla.A)
+}
+
+// RgbaToHsla32 converts a straight sRGBA f32 color into the palette's
+// HSL representation (the pinned Rgba::into_color path). The hex
+// round trip is in RgbaFromHex's 0xRRGGBBAA order (rgbaPacked's
+// one-byte-per-lane packing is the STOP RECORD's ABI order, the
+// reverse).
+func RgbaToHsla32(c Rgba) Hsla {
+	r := clampLaneByte(c.R)
+	g := clampLaneByte(c.G)
+	b := clampLaneByte(c.B)
+	a := clampLaneByte(c.A)
+	return RgbaToHsla(r<<24 | g<<16 | b<<8 | a)
+}
+
+// clampLaneByte rounds one straight color lane into its 8-bit bucket.
+func clampLaneByte(value float32) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > 1 {
+		return 255
+	}
+	return uint32(value*255.0 + 0.5)
+}
+
+// InsertEffect inserts an effect-group marker record (rev 16,
+// browser-core ticket 50). Order must be zero; the kernel assigns it.
+// The record's flags decide start/end; a group start over the native
+// MAX_SCENE_GROUPS bound (1024, shared with the filter boundaries)
+// fails with the typed limit error.
+func (k *SceneKernel) InsertEffect(e EffectGroup) error {
+	if err := k.checkLive("InsertEffect"); err != nil {
+		return err
+	}
+	if e.Order != 0 {
+		return fmt.Errorf("gpui: scene insert effect: record order must be zero, got %d (the kernel assigns the draw order)", e.Order)
+	}
+	rec := effectRecordOf(e)
+	if err := k.scene.InsertEffect(&rec); err != nil {
+		return fmt.Errorf("gpui: scene insert effect: %w", err)
+	}
+	return nil
+}
+
+// EffectBoundaries returns the finished scene's effect-group markers in
+// draw order (start before end at equal orders; rev 16).
+func (k *SceneKernel) EffectBoundaries() ([]EffectGroup, error) {
+	if err := k.checkLive("EffectBoundaries"); err != nil {
+		return nil, err
+	}
+	records, err := k.scene.EffectDump()
+	if err != nil {
+		return nil, fmt.Errorf("gpui: scene effect dump: %w", err)
+	}
+	out := make([]EffectGroup, 0, len(records))
+	for _, rec := range records {
+		out = append(out, effectGroupOf(rec))
+	}
+	return out, nil
+}
+
+// effectPropertyValues packs a property-node update value into the
+// ABI word stream (f32 bits, the record layout's order).
+func effectPropertyValues(kind uint32, matrix TransformationMatrix, opacity float32) []uint32 {
+	if kind == native.ScenePropertyMatrix {
+		return []uint32{
+			math.Float32bits(matrix.RotationScale[0][0]),
+			math.Float32bits(matrix.RotationScale[0][1]),
+			math.Float32bits(matrix.RotationScale[1][0]),
+			math.Float32bits(matrix.RotationScale[1][1]),
+			math.Float32bits(matrix.Translation[0]),
+			math.Float32bits(matrix.Translation[1]),
+		}
+	}
+	return []uint32{math.Float32bits(opacity)}
+}
+
+// UpdateEffectMatrix mutates a finished scene's property-node records
+// carrying nodeID in place (rev 16, browser-core ticket 51; the
+// design's appendix A.7): every effect record of the node takes the
+// new 2x3 matrix - no re-sort, no re-plan, the same scene handle
+// re-presents with the updated transform. The node's records must
+// carry the transform flag (insert the group with HasTransform and
+// PropertyNode). Returns the group's old and new mapped device bounds
+// (the record bounds mapped through the old and the new matrix), the
+// damage union the caller re-presents.
+func (k *SceneKernel) UpdateEffectMatrix(nodeID uint32, matrix TransformationMatrix) (oldBounds, newBounds Bounds, err error) {
+	if err := k.checkLive("UpdateEffectMatrix"); err != nil {
+		return Bounds{}, Bounds{}, err
+	}
+	old, new, err := k.scene.UpdateProperty(
+		nodeID,
+		native.ScenePropertyMatrix,
+		effectPropertyValues(native.ScenePropertyMatrix, matrix, 0),
+	)
+	if err != nil {
+		return Bounds{}, Bounds{}, fmt.Errorf("gpui: scene update effect matrix: %w", err)
+	}
+	return sceneBoundsValue(old), sceneBoundsValue(new), nil
+}
+
+// UpdateEffectOpacity mutates a finished scene's property-node records
+// carrying nodeID in place (rev 16, browser-core ticket 51): every
+// effect record of the node takes the new group opacity - no re-sort,
+// no re-plan. The node's records must carry the opacity flag. The
+// opacity never moves the group, so both returned bounds are the
+// group's mapped device bounds (unchanged by the update).
+func (k *SceneKernel) UpdateEffectOpacity(nodeID uint32, opacity float32) (oldBounds, newBounds Bounds, err error) {
+	if err := k.checkLive("UpdateEffectOpacity"); err != nil {
+		return Bounds{}, Bounds{}, err
+	}
+	old, new, err := k.scene.UpdateProperty(
+		nodeID,
+		native.ScenePropertyOpacity,
+		effectPropertyValues(native.ScenePropertyOpacity, UnitTransformation(), opacity),
+	)
+	if err != nil {
+		return Bounds{}, Bounds{}, fmt.Errorf("gpui: scene update effect opacity: %w", err)
+	}
+	return sceneBoundsValue(old), sceneBoundsValue(new), nil
 }
 
 // InsertSurface inserts a surface record with its paired opacity.
@@ -270,7 +494,7 @@ func (k *SceneKernel) InsertSurface(bounds, contentMask Bounds, source SurfaceSo
 	}
 	rec := native.NewSceneSurfaceRecord()
 	rec.Bounds = sceneBoundsRecord(bounds)
-	rec.ContentMask = sceneBoundsRecord(contentMask)
+	rec.ContentMask = sceneContentMaskRecord(contentMask)
 	rec.SourceTag = uint32(source)
 	if err := k.scene.InsertSurface(&rec, opacity); err != nil {
 		return fmt.Errorf("gpui: scene insert surface: %w", err)
@@ -317,7 +541,7 @@ func (k *SceneKernel) Quads() ([]Quad, error) {
 		out[i] = Quad{
 			Order:           rec.Order,
 			Bounds:          sceneBoundsValue(rec.Bounds),
-			ContentMask:     sceneBoundsValue(rec.ContentMask),
+			ContentMask:     sceneContentMaskValue(rec.ContentMask),
 			Background:      sceneBackgroundValue(rec.Background),
 			BorderColor:     sceneBackgroundValue(rec.BorderColor),
 			BorderStyle:     BorderStyle(rec.BorderStyle),
@@ -347,7 +571,7 @@ func (k *SceneKernel) Shadows() ([]Shadow, error) {
 			Order:              rec.Order,
 			BlurRadius:         math.Float32frombits(rec.BlurRadius),
 			Bounds:             sceneBoundsValue(rec.Bounds),
-			ContentMask:        sceneBoundsValue(rec.ContentMask),
+			ContentMask:        sceneContentMaskValue(rec.ContentMask),
 			Color:              sceneBackgroundValue(rec.Color),
 			ElementBounds:      sceneBoundsValue(rec.ElementBounds),
 			ElementCornerRadii: cornersValue(rec.ElementCornerRadii),
@@ -374,7 +598,7 @@ func (k *SceneKernel) Underlines() ([]Underline, error) {
 			Order:       rec.Order,
 			Padding:     rec.Padding,
 			Bounds:      sceneBoundsValue(rec.Bounds),
-			ContentMask: sceneBoundsValue(rec.ContentMask),
+			ContentMask: sceneContentMaskValue(rec.ContentMask),
 			Color:       sceneColorValue(rec.Color),
 			Thickness:   math.Float32frombits(rec.Thickness),
 			Wavy:        rec.Wavy == 1,
@@ -432,7 +656,7 @@ func (k *SceneKernel) Surfaces() ([]SurfaceRecord, []float32, error) {
 		out[i] = SurfaceRecord{
 			Order:       rec.Order,
 			Bounds:      sceneBoundsValue(rec.Bounds),
-			ContentMask: sceneBoundsValue(rec.ContentMask),
+			ContentMask: sceneContentMaskValue(rec.ContentMask),
 			Source:      SurfaceSourceTag(rec.SourceTag),
 		}
 		if rec.SourceTag == uint32(SurfaceSourceCaptureFrame) {
@@ -519,6 +743,10 @@ func (k *SceneKernel) Meta() (SceneMeta, error) {
 		SubpixelSpriteCount:   rec.SubpixelSpriteCount,
 		PolychromeSpriteCount: rec.PolychromeSpriteCount,
 		PathCount:             rec.PathCount,
+		EffectCount:           rec.EffectCount,
+		GradientCount:         rec.GradientCount,
+		CoverageCount:         rec.CoverageCount,
+		FilterChainCount:      rec.FilterChainCount,
 		IsFinished:            rec.IsFinished == 1,
 	}, nil
 }
@@ -531,9 +759,120 @@ func sceneBoundsRecord(b Bounds) native.SceneBounds {
 	return native.SceneBoundsOf(b.Origin.X, b.Origin.Y, b.Size.Width, b.Size.Height)
 }
 
+// sceneContentMaskRecord packs a rect-only (zero fade, zero radii)
+// content mask: the exact pre-R16 behaviour, the encoding every
+// existing Go paint path uses. The Go styling that authors mask radii
+// and fades (Style.OverflowMask, the mask-intersection rules) is
+// browser-core ticket 55.
+func sceneContentMaskRecord(b Bounds) native.SceneContentMask {
+	return native.SceneContentMaskOf(b.Origin.X, b.Origin.Y, b.Size.Width, b.Size.Height)
+}
+
+// sceneContentMaskValue unpacks a rect-only mask (the radii and fades
+// are zero from every Go-authored record this revision).
+func sceneContentMaskValue(rec native.SceneContentMask) Bounds {
+	return sceneBoundsValue(rec.Bounds)
+}
+
 func sceneBoundsValue(rec native.SceneBounds) Bounds {
 	x, y, w, h := rec.Rect()
 	return Bounds{Origin: Point{X: x, Y: y}, Size: Size{Width: w, Height: h}}
+}
+
+// effectRecordOf packs an EffectGroup into the ABI record.
+func effectRecordOf(e EffectGroup) native.SceneEffectRecord {
+	rec := native.NewSceneEffectRecord()
+	rec.Order = e.Order
+	rec.Bounds = sceneBoundsRecord(e.Bounds)
+	rec.ContentMask = sceneBoundsRecord(e.ContentMask)
+	rec.Opacity = math.Float32bits(e.Opacity)
+	rec.Transform = [6]uint32{
+		math.Float32bits(e.Transform.RotationScale[0][0]),
+		math.Float32bits(e.Transform.RotationScale[0][1]),
+		math.Float32bits(e.Transform.RotationScale[1][0]),
+		math.Float32bits(e.Transform.RotationScale[1][1]),
+		math.Float32bits(e.Transform.Translation[0]),
+		math.Float32bits(e.Transform.Translation[1]),
+	}
+	rec.NodeID = e.NodeID
+	rec.BlendMode = uint32(e.BlendMode)
+	rec.MaskKind = uint32(e.MaskKind)
+	rec.MaskReference = e.MaskReference
+	rec.MaskMode = uint32(e.MaskMode)
+	for i, radius := range [4]float32{e.CornerRadii.TopLeft, e.CornerRadii.TopRight, e.CornerRadii.BottomRight, e.CornerRadii.BottomLeft} {
+		rec.CornerRadii[i] = math.Float32bits(radius)
+	}
+	rec.CornerSmoothing = math.Float32bits(e.CornerSmoothing)
+	flags := uint32(0)
+	if e.IsStart {
+		flags |= native.SceneEffectFlagIsStart
+	}
+	if e.HasOpacity {
+		flags |= native.SceneEffectFlagHasOpacity
+	}
+	if e.HasTransform {
+		flags |= native.SceneEffectFlagHasTransform
+	}
+	if e.PropertyNode {
+		flags |= native.SceneEffectFlagPropertyNode
+	}
+	if e.ClipToBounds {
+		flags |= native.SceneEffectFlagClipToBounds
+	}
+	if e.RoundedClipOnly {
+		flags |= native.SceneEffectFlagRoundedClipOnly
+	}
+	if e.HasBlend {
+		flags |= native.SceneEffectFlagHasBlend
+	}
+	if e.HasMask {
+		flags |= native.SceneEffectFlagHasMask
+	}
+	rec.Flags = flags
+	return rec
+}
+
+// effectGroupOf unpacks an ABI effect record (the Go-authored fields
+// this revision: order, bounds, mask, radii, smoothing, opacity, the
+// transform, the property node and the wired flags).
+func effectGroupOf(rec native.SceneEffectRecord) EffectGroup {
+	flags := rec.Flags
+	return EffectGroup{
+		Order:           rec.Order,
+		IsStart:         flags&native.SceneEffectFlagIsStart != 0,
+		HasOpacity:      flags&native.SceneEffectFlagHasOpacity != 0,
+		HasTransform:    flags&native.SceneEffectFlagHasTransform != 0,
+		PropertyNode:    flags&native.SceneEffectFlagPropertyNode != 0,
+		NodeID:          rec.NodeID,
+		ClipToBounds:    flags&native.SceneEffectFlagClipToBounds != 0,
+		RoundedClipOnly: flags&native.SceneEffectFlagRoundedClipOnly != 0,
+		HasBlend:        flags&native.SceneEffectFlagHasBlend != 0,
+		BlendMode:       BlendMode(rec.BlendMode),
+		HasMask:         flags&native.SceneEffectFlagHasMask != 0,
+		MaskKind:        MaskKind(rec.MaskKind),
+		MaskReference:   rec.MaskReference,
+		MaskMode:        MaskMode(rec.MaskMode),
+		Bounds:          sceneBoundsValue(rec.Bounds),
+		ContentMask:     sceneBoundsValue(rec.ContentMask),
+		Opacity:         math.Float32frombits(rec.Opacity),
+		Transform: TransformationMatrix{
+			RotationScale: [2][2]float32{
+				{math.Float32frombits(rec.Transform[0]), math.Float32frombits(rec.Transform[1])},
+				{math.Float32frombits(rec.Transform[2]), math.Float32frombits(rec.Transform[3])},
+			},
+			Translation: [2]float32{
+				math.Float32frombits(rec.Transform[4]),
+				math.Float32frombits(rec.Transform[5]),
+			},
+		},
+		CornerRadii: Corners{
+			TopLeft:     math.Float32frombits(rec.CornerRadii[0]),
+			TopRight:    math.Float32frombits(rec.CornerRadii[1]),
+			BottomRight: math.Float32frombits(rec.CornerRadii[2]),
+			BottomLeft:  math.Float32frombits(rec.CornerRadii[3]),
+		},
+		CornerSmoothing: math.Float32frombits(rec.CornerSmoothing),
+	}
 }
 
 func sceneColorRecord(c Hsla) native.SceneColor {
@@ -553,6 +892,12 @@ func sceneColorValue(rec native.SceneColor) Hsla {
 // revision draws exactly, so it is the only one the Go Background
 // carries.
 func sceneBackgroundRecord(b Background, bounds Bounds) native.SceneBackground {
+	if b.Kind == BackgroundKindGradientTable {
+		// rev 16, ticket 52: the table-gradient arm - the table index
+		// rides the ANGLE field as f32 bits (the native validation
+		// checks it).
+		return native.SceneGradientTableBackground(b.GradientTable)
+	}
 	if b.Kind == BackgroundKindLinearGradient {
 		angle := resolveGradientAngle(&b.Gradient, bounds.Size.Width, bounds.Size.Height)
 		return native.SceneGradientBackground(
@@ -572,6 +917,12 @@ func sceneBackgroundRecord(b Background, bounds Bounds) native.SceneBackground {
 // record's reserved pattern tags) reads as a transparent solid, the
 // kernel's never-inserted state.
 func sceneBackgroundValue(rec native.SceneBackground) Background {
+	if rec.Tag == 4 {
+		// rev 16, ticket 52: the table-gradient arm (the index stored in
+		// the angle field).
+		index := uint32(math.Float32frombits(rec.Angle))
+		return Background{Kind: BackgroundKindGradientTable, GradientTable: index}
+	}
 	if rec.Tag == 1 {
 		from := native.HslaF{
 			H: math.Float32frombits(rec.Stop0H),
@@ -621,7 +972,7 @@ func filterRecordOf(order uint32, bounds, mask Bounds, radii Corners, smoothing,
 	rec := native.NewSceneFilterRecord()
 	rec.Order = order
 	rec.Bounds = sceneBoundsRecord(bounds)
-	rec.ContentMask = sceneBoundsRecord(mask)
+	rec.ContentMask = sceneContentMaskRecord(mask)
 	for i, radius := range [4]float32{radii.TopLeft, radii.TopRight, radii.BottomRight, radii.BottomLeft} {
 		rec.CornerRadii[i] = math.Float32bits(radius)
 	}
@@ -664,7 +1015,7 @@ func backdropValue(rec native.SceneFilterRecord) BackdropFilter {
 	return BackdropFilter{
 		Order:            rec.Order,
 		Bounds:           sceneBoundsValue(rec.Bounds),
-		ContentMask:      sceneBoundsValue(rec.ContentMask),
+		ContentMask:      sceneContentMaskValue(rec.ContentMask),
 		CornerRadii:      cornersValue(rec.CornerRadii),
 		CornerSmoothing:  math.Float32frombits(rec.CornerSmoothing),
 		BlurRadius:       math.Float32frombits(rec.BlurRadii[0]),
@@ -678,12 +1029,14 @@ func boundaryValue(rec native.SceneFilterRecord) FilterBoundary {
 	return FilterBoundary{
 		Order:            rec.Order,
 		Bounds:           sceneBoundsValue(rec.Bounds),
-		ContentMask:      sceneBoundsValue(rec.ContentMask),
+		ContentMask:      sceneContentMaskValue(rec.ContentMask),
 		CornerRadii:      cornersValue(rec.CornerRadii),
 		CornerSmoothing:  math.Float32frombits(rec.CornerSmoothing),
 		BlurRadius:       math.Float32frombits(rec.BlurRadii[0]),
 		ColorMatrix:      colorMatrixValue(rec),
 		ColorMatrixCount: rec.ColorMatrixCount,
+		OpChainIndex:     rec.OpChainIndex,
+		OpChainCount:     rec.OpChainCount,
 		Opacity:          math.Float32frombits(rec.Opacity),
 		IsStart:          rec.IsStart == 1,
 	}

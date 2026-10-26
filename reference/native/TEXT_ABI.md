@@ -4,19 +4,26 @@ Status: implemented by `reference/native/src/text.rs`, installed in
 reserved slot 4 of the bootstrap `GpuiGoAbiTable` (see
 `reference/native/src/lib.rs`) and advertised with capability bit 4
 (`text-parley-0-11-1`). The Go mirror lives in `internal/native/text.go`.
-**Service version 2** (the consumer-gaps font-registration ticket): the
-`text_font_add` entry (table slot 15) registers font bytes through the
-pinned `add_fonts` path, the font record's v1 `reserved` word became the
-`family_found` diagnostic, and the table gained the `max_font_bytes`
-scalar (200 → 216 bytes).
+**Service version 3** (browser-core ticket 43, rev 16): the run record
+grew the `text_align` tag (92 → 96 bytes) and the layout record grew
+`is_rtl` (56 → 60 bytes), and word-break, overflow-wrap and the align
+tag drive shaping/alignment through the **vendored adapter** (see the
+rev-16 section). The `text_font_add` entry (table slot 15) registers
+font bytes through the pinned `add_fonts` path, the font record's v1
+`reserved` word is the `family_found` diagnostic, and the table carries
+the `max_font_bytes` scalar (200 → 216 bytes).
 
 The semantics are the pinned GPUI-CE text stack at commit
 `254b5dbd47cbb5acbcc5bbdcbb322a339276c88a`: shaping, run/fragment/glyph
 production, caret, selection and hit-test geometry come from
 `gpui_ce_parley`'s `ParleyTextSystem` (Parley 0.11.1 / Fontique 0.11.1 /
-HarfRust 0.12.0 / Skrifa 0.44.0 / Swash 0.2.10), exactly as the pinned
-Windows platform constructs it — including the DirectWrite rasterizer
-since ticket10 (see the construction note below). The ENTRIES of this
+HarfRust 0.12.0 / Skrifa 0.44.0 / Swash 0.2.10) — since rev 16 as the
+**vendored byte-copy** `reference/native/src/text_vendored/` (the same
+implementation with the import rewrite and the recorded rev-16
+divergences; `text_vendored/mod.rs` is the divergence record) — exactly
+as the pinned Windows platform constructs it, including the
+DirectWrite rasterizer since ticket10 (see the construction note
+below). The ENTRIES of this
 service are CPU **geometry** only; glyph rasterization is the separate
 glyph service (reserved slot 5, GLYPH_ABI.md), which calls the same
 shared stack's public `rasterize_glyph`.
@@ -126,9 +133,9 @@ record ends in a `record_size` self-check the Go side verifies.
 | `GpuiGoTextFontRequest` | 28 / 4 | weight_bits @0 (f32), style @4 (0 normal/1 italic/2 oblique), feature_count @8, fallback_count @12, reserved[3] @16 (must be 0) |
 | `GpuiGoTextFontRecord` | 40 / 8 | font_id @0 (u64 canonical), generation @8 (u64 catalog generation), weight_bits @16, style @20, feature_count @24, fallback_count @28, family_found @32 (1 = the primary family is in the catalog; 0 = the fallback chain answered — service v2, replacing the v1 reserved word), record_size @36 |
 | `GpuiGoTextFontMetricsRecord` | 52 / 4 | units_per_em @0, ascent/descent/line_gap/underline_position/underline_thickness/cap_height/x_height @4..32, bbox x/y/w/h @32..48, record_size @48 (font units, exactly `gpui::FontMetrics`) |
-| `GpuiGoTextRunRecord` | 92 / 4 | len @0, family_offset @4, family_len @8, fallbacks_offset @12, fallbacks_len @16, weight_bits @20, style @24, feature_offset @28, feature_count @32, letter_spacing_present @36 (0/1), letter_spacing_bits @40, word_break @44 (0 normal/1 break-all/2 keep-all), overflow_wrap @48 (0 normal/1 anywhere/2 break-word), text_wrap @52 (0 wrap/1 nowrap/2 balance/3 pretty/4 stable; rev 15.1: nowrap drives the wrap policy — see the rev-15 browser text fields section), locale_offset @56, locale_len @60 (a BCP 47 substring of the strings buffer; 0 = none), font_width_present @64 (0/1), font_width_bits @68 (CSS font-width ratio, 1.0 = normal), variation_offset @72, variation_count @76 (into the shape request's variation array), opsz_present @80 (0/1; absent = CSS `auto`), opsz_bits @84, justify @88 (0/1) |
+| `GpuiGoTextRunRecord` | 96 / 4 | len @0, family_offset @4, family_len @8, fallbacks_offset @12, fallbacks_len @16, weight_bits @20, style @24, feature_offset @28, feature_count @32, letter_spacing_present @36 (0/1), letter_spacing_bits @40, word_break @44 (0 normal/1 break-all/2 keep-all), overflow_wrap @48 (0 normal/1 anywhere/2 break-word), text_wrap @52 (0 wrap/1 nowrap/2 balance/3 pretty/4 stable; rev 15.1: nowrap drives the wrap policy — see the rev-15 browser text fields section), locale_offset @56, locale_len @60 (a BCP 47 substring of the strings buffer; 0 = none), font_width_present @64 (0/1), font_width_bits @68 (CSS font-width ratio, 1.0 = normal), variation_offset @72, variation_count @76 (into the shape request's variation array), opsz_present @80 (0/1; absent = CSS `auto`), opsz_bits @84, justify @88 (0/1; the rev-15 echo), text_align @92 (rev 16: 0 none/1 start/2 end/3 justify — the behavioral channel; document-level by the any-run rule) |
 | `GpuiGoTextVariation` | 8 / 4 | tag @0 (4 ASCII chars, big-endian — the feature tags' rule), value @4 (f32 bits, finite) |
-| `GpuiGoTextLayoutRecord` | 56 / 4 | text_len @0, font_size_bits @4, wrap_present @8, wrap_bits @12, clamp_present @16, line_clamp @20, line_count @24, fragment_count @28, glyph_count @32, width_bits @36, ascent_bits @40, descent_bits @44, font_generation @48, record_size @52 |
+| `GpuiGoTextLayoutRecord` | 60 / 4 | text_len @0, font_size_bits @4, wrap_present @8, wrap_bits @12, clamp_present @16, line_clamp @20, line_count @24, fragment_count @28, glyph_count @32, width_bits @36, ascent_bits @40, descent_bits @44, font_generation @48, is_rtl @52 (rev 16: 1 = the document's base direction is RTL), record_size @56 |
 | `GpuiGoTextLineRecord` | 36 / 4 | line_index @0, text_start @4, text_end @8, fragment_start @12, fragment_end @16, advance_width_bits @20, line_height_bits @24 (echo), baseline_bits @28, record_size @32 |
 | `GpuiGoTextCaretRecord` | 56 / 4 | index @0, affinity @4 (0 downstream/1 upstream), present @8, x/y/w/h_bits @12..28, cluster_before_present/start/end @28..40, cluster_after_present/start/end @40..52, record_size @52 |
 | `GpuiGoTextHitRecord` | 16 / 4 | index @0, affinity @4, inside @8 (1 = Ok, 0 = the pinned Err edge caret), record_size @12 |
@@ -162,11 +169,11 @@ scalars; size 224, alignment 8. All entries return an i32 status.
 | 15 | `font_add` | `(data: *const u8, data_len: u32, out_generation: *mut u64) -> i32` |
 | 16 | `run_info` | `(handle: u64, run_index: u32, out: *mut RunRecord) -> i32` (rev 15: echoes one stored run record) |
 
-Self-check scalars: `service_version` (2), `size_of_table` (224),
+Self-check scalars: `service_version` (3), `size_of_table` (224),
 `align_of_table` (8), `size_of_font_request` (28), `size_of_font_record`
 (40), `align_of_font_record` (8), `size_of_metrics_record` (52),
-`size_of_run_record` (92), `size_of_feature_record` (8),
-`size_of_layout_record` (56), `size_of_line_record` (36),
+`size_of_run_record` (96), `size_of_feature_record` (8),
+`size_of_layout_record` (60), `size_of_line_record` (36),
 `size_of_caret_record` (56), `size_of_hit_record` (16),
 `size_of_selection_record` (20), `size_of_cluster_record` (16),
 `size_of_fragment_record` (32), `align_of_fragment_record` (8),
@@ -193,7 +200,10 @@ which is what this rebuild was asked to expose.
 
 **Rev 15.1 (browser-core ticket 77) per-field status** — one field now
 drives behaviour, the rest are recorded as blocked (what blocks it, the
-smallest plan, an estimate):
+smallest plan, an estimate). **Rev 16 (browser-core ticket 43) resolved
+the two BLOCKED entries below through the vendored adapter — see the
+rev-16 section after the list; the entries are kept as the rev-15.1
+record.**
 
 - **text-wrap: nowrap — WIRED** (text.rs `nowrap_requested`): CSS
   text-wrap is a wrap policy, and the pinned request *can* express
@@ -209,7 +219,8 @@ smallest plan, an estimate):
   rev-15 record's contract): the Go styling layer bisects wrap widths
   over `text_layout`; the tag crosses the ABI for that layer. Nothing
   to wire natively.
-- **word-break / overflow-wrap — BLOCKED**: Parley 0.11.1 has the
+- **word-break / overflow-wrap — BLOCKED (rev 15.1) → WIRED in rev 16**:
+  Parley 0.11.1 has the
   range-level styles (`StyleProperty::WordBreak`/`OverflowWrap`,
   parley `src/style/mod.rs:115-117`) and the builder hook
   (`set_line_break_override`, which the pinned adapter already uses to
@@ -220,7 +231,9 @@ smallest plan, an estimate):
   the run record's tags into range styles, plus a side-channel request
   entry so the pinned gpui types stay untouched. Estimate: 6-10 h with
   a new FontId-provenance check (must keep the ONE FontContext). Not
-  done in rev 15.1.
+  done in rev 15.1 — **done exactly this way in rev 16** (the vendored
+  adapter pushes the tags as range styles through
+  `layout_text_with_browser`).
 - **locale — BLOCKED**: no slot in the pinned `Font`/`TextRun`
   (`text_system.rs:489-519`), and Parley 0.11.1 has no language style
   (the shaping language would have to reach harfrust through the
@@ -236,13 +249,70 @@ smallest plan, an estimate):
   Smallest plan: a vendored adapter with an extended resolve entry that
   interns the requested instance (normalized coordinates through the
   same store — no FontId divergence). Estimate: 6-10 h. Not done.
-- **justify — BLOCKED**: the pinned `TextAlign` is Left/Center/Right
+- **justify — BLOCKED (rev 15.1) → WIRED in rev 16**: the pinned
+  `TextAlign` is Left/Center/Right
   only (`crates/gpui/src/text_system.rs`), and only the inline path
   aligns (`text_system.rs:1142-1144`); Parley's `Alignment::Justify`
   (which stretches cluster advances inside the private layout,
   parley `src/layout/alignment.rs`) is unreachable. Smallest plan: the
   vendored adapter patch growing the request's alignment. Estimate:
-  4-6 h. Not done.
+  4-6 h. Not done in rev 15.1 — **done in rev 16**: the run record's
+  `text_align` tag (start/end/justify) drives the vendored layout's
+  `Alignment` (with `Start`/`End` resolving against the base direction,
+  reported as `is_rtl` in the layout record).
+
+**Rev 16 (browser-core ticket 43) — the vendored adapter.** The service
+now shapes through `reference/native/src/text_vendored/` — a byte-copy
+of the pinned `gpui_ce_parley` implementation (`text_system.rs`,
+`store.rs`, `catalog.rs`, `paragraphs.rs`) with the import paths
+rewritten and the recorded divergences in `text_vendored/mod.rs`:
+
+- **The side-channel** (divergence 4): `layout_text_with_browser(
+  TextLayoutRequest, BrowserLayoutParams)` — the rev-15 run fields
+  reach the paragraph layout without changing the pinned gpui types.
+  Per-run `word_break`/`overflow_wrap` become Parley range styles
+  (`StyleProperty::WordBreak`/`OverflowWrap`, pushed only when they
+  differ from the default, so a field-free request is byte-identical to
+  the pinned `layout_text` — proven by
+  `text::tests::vendored_font_ids_match_the_pinned_adapter`, which
+  compares the pinned and vendored glyph streams for the same
+  document). The document-level `text_align` tag (the run record's
+  `text_align`, the any-run rule) drives Parley's `Alignment::Start`/
+  `End`/`Justify` — `Justify` stretches the whitespace clusters exactly
+  as parley's alignment pass does (every line except each paragraph's
+  last, `BreakReason::None`/`Explicit`, stays start-aligned);
+  `is_rtl` (the document's base direction, the `paragraphs[0]` rule)
+  returns in the extended result and is reported by `text_layout_info`
+  so the Go paint layer can resolve start/end.
+- **The break-all override divergence** (divergence 6): a document
+  carrying a `WordBreak::BreakAll` run DROPS the
+  `CHROMIUM_LINE_BREAK_OVERRIDE` — parley's override is un-scoped and
+  applied AFTER the segmenter, and its ASCII table sets every
+  printable-ASCII pair to no-break, so break-all could never break
+  ASCII text under it. Chrome's own break-all path consults its fast
+  pair table first and then OVERRIDES it with the break-all line-break
+  class table, which allows AL×AL breaks
+  (`ShouldBreakAfterBreakAll`,
+  `third_party/blink/renderer/platform/text/text_break_iterator.cc:
+  125-149 and :328-336` at 0d4dcd4f) — the segmenter's BreakAll rules
+  stand instead, exactly Chrome's class-table outcome. The recorded
+  cost: a mixed normal+break-all document loses the override's
+  punctuation rules for its normal runs.
+- **The FontId-provenance guarantee**: the service constructs the
+  VENDORED system (same construction path, same fallback families, the
+  same pinned `GlyphRasterizer` trait implementation), and the glyph
+  service rasterizes through the SAME stack instance — there is no
+  second `FontContext`/`FontStore` anywhere in the process, so the
+  FontIds the text service reports are the FontIds the glyph service
+  rasterizes. The test additionally proves the vendored store
+  interns like the pinned store for the same request sequence
+  (resolve path and shaping-time fallback discovery).
+- **Still blocked (unchanged from rev 15.1)**: locale (an upstream
+  parley language feature first) and font width / variation settings /
+  optical size (the vendored store's interning is reachable now, but
+  the resolve path still needs the extended entry — estimate 6-10 h,
+  folded into a later ticket). The layout-side baseline stays recorded
+  in LAYOUT_ABI.md (ticket 42).
 
 The layout-side baseline field is recorded in LAYOUT_ABI.md (Taffy
 0.13's leaf compute hardcodes `first_baselines: Point::NONE`; wiring

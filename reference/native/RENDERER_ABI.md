@@ -1,5 +1,137 @@
 # gpui-go native renderer service ABI (v2)
 
+**Renderer service version 6 (rev 16, browser-core ticket 53, native
+revision 16, set by ticket 54's rebuild):** the retained frame,
+the damage redraw and the dirty-rect present (the design's §3.11). The
+table appends TWO entries after `surface_debug_stats` (21 function
+pointers, table size 224) plus two scalars (`size_of_damage_rect`,
+`max_damage_regions` = zgui's 16-region cap):
+
+```
+i32 renderer_surface_draw_scene_damage(u64 surface, u64 scene,
+    u32 appearance, u64 atlas, const GpuiGoRectRecord* rects,
+    u32 count, u32 flags /* bit 0 force full */, u64* out_submission)
+
+i32 renderer_surface_read_frame_pixels(u64 surface, u8* out_bytes,
+    u32 capacity, u32* out_needed)
+```
+
+`GpuiGoRectRecord` = `{x, y, w, h}` i32, 16 bytes. The damage entry:
+the offscreen scene texture becomes the RETAINED FRAME TARGET (it
+persists per surface across frames and always holds the last
+presented frame - a new/resized/recovered surface, a clear-present or
+a legacy direct-to-swapchain draw invalidates it and forces a full
+redraw, tracked per surface). The rects are clamped to the viewport,
+EXPANDED across every blur/drop-shadow group, mask, transform and
+backdrop whose region they intersect (viz's
+`ExpandDamageForPixelMovingFilters` rule; the blur dilation is the
+pin's composite dilation 3*radius; drop-shadow ops use their shadow
+quad; masks/transforms their group footprint), MERGED (nearby rects,
+the 8-px merge gap) and CAPPED at 16 regions (zgui's `MAX_REGIONS` -
+over the cap, or an empty clamp result, redraws fully; there is NO
+percentage-of-window threshold). The render: a SCISSORED redraw of
+the damage union into the retained target (the scissor-enabled
+rasterizer state; the clear is a scissored constant pass - a 1x1
+texture through the downsample pipeline, both clear colors exact;
+groups whose region intersects the damage box render their buckets
+UNSCISzerED so the blur's kernel reach and the composites' bilinear
+support read the full content). The present: each damage rect is
+copied from the retained target into the back buffer
+(`CopySubresourceRegion` - DXGI requires the app to have written
+every pixel of each dirty rect; the retained target makes the copy
+independent of buffer age, Chromium's own Windows pattern,
+`software_output_device_win_swapchain.cc:241-273`), then `Present1`
+with those dirty rects. A Present1 failure falls back to a full
+present. In DirectComposition mode (mode 0) the partial present is
+used only after the ONE-SHOT readback test passes (the next back
+buffer must hold the composed frame); a failure falls back to full
+presents permanently (the design's Q5 answer; on the R16 test
+machine the DComp verification fails and the fallback fires, while
+the hwnd mode accepts Present1 - Chromium's own software path).
+
+`renderer_surface_read_frame_pixels` is the TEST SEAM: the staging
+readback of the RETAINED FRAME TARGET (the last presented frame,
+independent of the swap chain's rotation) - the damaged-vs-full
+redraw equivalence gates read it; ERR_DEVICE before the first damage
+draw creates the target.
+
+**Ticket 53 also extends the debug-stats record (append-only after
+`record_size`, 16 -> 36 bytes):** `state_bind_count` (the §3.12
+tracker's cumulative issued binds - DEVICE-GLOBAL like the tracker,
+the shared immediate context keeps one pipeline state across
+surfaces and frames), `tess_cache_hits` (the scene service's
+global counter), `damage_fraction` (the LAST frame's merged damage
+area over the window area, per-mille, 1000 = full) and
+`full_present_count`/`partial_present_count` (the damage entry's
+cumulative presents, per-surface).
+
+**Ticket 53 finishes 51's handed-off filter-bucket gap:** FILTER
+groups move to BOUNDS-SIZED buckets too (the region's far corner,
+quantized, clamped to the window - a region reaching the window edge
+keeps R15's window-sized bucket and its window blur pair), because
+the blur chains are now REGION-LIMITED: the downsample/gaussian
+passes shade only the composite region plus the kernel reach (the
+scissor - NOT a viewport offset: the fullscreen blur passes sample
+viewport-relative texture coordinates, so an offset viewport samples
+wrong texels), reading the full source, so the in-region values are
+bit-identical to the full-window chain (the gaussian is local, every
+in-region read stays inside the shaded region plus the reach margin
+the regions carry). The bucket carries the margin the chain reads:
+the content extent, the record bounds dilated by 9*radius (the
+composite's 3σ plus the chain's read reach) and each drop-shadow
+op's shadow quad dilated by its own reach. The R15 blur fixtures stay
+bit-exact (the parity filters/shadow/gradient packages re-verified).
+The §3.12 state-bind tracker (draw_with_variant/dx_blur_pass bind
+only what changed; every raw bind of a tracked slot elsewhere
+invalidates) rides the same version: zero pixel impact, observable
+through `state_bind_count`.
+
+**Renderer service version 5 (rev 16, browser-core ticket 50, native
+revision 16, set by ticket 54's rebuild):** the R16 group machinery.
+The design's "renderer service v5" is this version. The table appends
+`surface_debug_stats` after `surface_frame_latency_handle` (18 function
+pointers, table size 200) with its record `GpuiGoDebugStatsRecord` (16
+bytes: `pool_target_count`, `pool_bytes`, `pool_overflow_count`,
+`record_size`) - the per-surface group-target pool observability the
+R16 design requires ("over the budget a group renders inline,
+observably"). The draw path grows the R16 composite: groups composite through
+POOLED targets with no depth cap (the pool is retained across frames,
+pruned of entries no group used, capped at 64 targets / 256 MB per
+surface with the inline demotion above), effect groups composite
+through the explicit no-blur `composite_group` path (opacity +
+rounded clip), and the backdrop crop carries its own crop-sized
+half-resolution blur pair (ticket 77's partial-region backdrop zoom
+fix - a full-window backdrop keeps identical sizes and pixels).
+
+**Ticket 51 finishes the bounds-sized buckets (the 50 deviation
+resolved):** the pool's buckets are now BOUNDS-SIZED, quantized to the
+256-px granularity and clamped to the window. The root cause of 50's
+sprite gap: the sketched offset-viewport scheme (children at window
+coordinates, the viewport shifted by the bucket origin) breaks every
+pipeline whose fragment compares SV_Position against the records'
+coordinate space - the polychrome sprite's rounded-rect SDF and the
+content-mask fades, the vendored quads'/shadows' border/radius
+geometry, the underline wave all read window-space records against
+target-frame pixels and the per-pixel geometry drops the whole
+primitive (a rounded quad draws nothing; 50's plain-quad control
+passed only through the borderless early-out). The buckets therefore
+render at their FRAME'S ORIGIN with the GLOBALS' viewport size set to
+the bucket: the children keep their true coordinates, every
+fragment's SV_Position stays in the records' frame (the pin's own
+invariant, which its pre_draw establishes for the window), and the
+composite draws the group's CONTENT REGION (the bucket's un-quantized
+extent) sampling the bucket at (region-relative position) / bucket
+size. A transform group's bucket is its LOCAL extent (the subtree's
+records are local-frame, mapped by the composite's 2x3); a
+window-frame group's bucket spans the frame's [0, extent max] (the
+region's distance from the origin inflates it - the price of the
+invariant); FILTER groups keep window-sized buckets (R15's exact blur
+textures and scratch - a bounds-sized filter bucket would wrap the
+gaussian at the region edge and shift the R15 blur fixtures' edge
+pixels; ticket 53's region-limited blur owns that change). The
+composite's 2x3 rides the vendored blur-composite extension cbuffer
+(b5, appended fields; the rev-15.1 prefix is byte-identical).
+
 **Renderer service version 4 (gpui-perf ticket 05, native revision 13):**
 every swap chain (both modes, and the device-loss rebuild) is created
 with `DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT` (and
@@ -12,10 +144,14 @@ gained `surface_frame_latency_handle(surface: u64, out_handle: *mut u64)
 `IDXGISwapChain2`), so the caller waits outside the renderer lock and
 closes it. Table size 184. Deviation from the pin, which creates its
 swap chains with `Flags: 0` and default latency. Present stays
-`Present(0, 0)`; `Present1` dirty rects are not used (see the ticket 05
-answer: the flip-model back buffer is three frames old and the draw
-path redraws the whole target, so a dirty-rect hint has no damage
-source to be correct against).
+`Present(0, 0)` for the legacy draw path; `Present1` dirty rects are
+not used WITHOUT a damage source (see the ticket 05 answer: the
+flip-model back buffer is three frames old and the legacy draw path
+redraws the whole target, so a dirty-rect hint has nothing to be
+correct against) - ticket 53's damage entry IS the damage source: it
+keeps the retained frame target, copies the damage rects into the
+back buffer and presents them through `Present1` (see the version 6
+paragraph above).
 
 Design contract for ticket07, extended by ticket16 (the scene draw
 pipeline). This document is the authoritative
@@ -131,15 +267,18 @@ rule); polling resolves its real state.
 ## Service table
 
 Reserved slot 2 holds the address of the static `#[repr(C)
-GpuiGoRendererTable` (128 bytes, alignment 8): 11 function pointers,
-then 10 self-check scalars — `service_version` (2), `size_of_table`,
-`align_of_table`, `size_of_surface_info`, `size_of_submission_state`,
+GpuiGoRendererTable`: 21 function pointers then 15 self-check scalars —
+`service_version` (6 since rev 16 ticket 53), `size_of_table` (224),
+`align_of_table` (8), `size_of_surface_info`, `size_of_submission_state`,
 `size_of_retire_record`, `size_of_device_info`,
 `max_pending_submissions` (64), `max_instance_buffer_bytes` (256 MB,
 the pin's instance-buffer ceiling), `path_multisample_count` (4, the
-pin's MSAA path sample count). The Go loader copies the table out of
-DLL memory, validates every size/alignment against its mirrors and
-rejects null function slots before any call.
+pin's MSAA path sample count), `size_of_debug_stats` (36, rev 16
+ticket 53), `size_of_damage_rect` (16, version 6),
+`max_damage_regions` (16, zgui's cap, version 6). The
+Go loader copies the table out of DLL memory, validates every
+size/alignment against its mirrors and rejects null function slots
+before any call.
 
 ```c
 i32 renderer_surface_create(u64 hwnd, u32 mode /* 0 dcomp-premultiplied, 1 hwnd-alpha-ignore */,
@@ -164,7 +303,27 @@ i32 renderer_surface_render_scene(u64 surface, u64 scene,          // ticket16: 
                                   u32 appearance, u64 atlas);      // (the readback test path)
 i32 renderer_surface_read_pixels(u64 surface, u8* out_bytes,       // ticket16: staging readback
                                  u32 capacity, u32* out_needed);    // (BGRA->RGBA swapped)
+i32 renderer_surface_debug_stats(u64 surface,                      // version 5, rev 16: the group
+                                 GpuiGoDebugStatsRecord* out);     // target pool observability
+i32 renderer_surface_draw_scene_damage(u64 surface, u64 scene,    // version 6, rev 16 ticket 53:
+    u32 appearance, u64 atlas,                                     // the retained-frame damage
+    const GpuiGoRectRecord* rects, u32 count,                      // redraw + Present1
+    u32 flags /* bit 0 force full */, u64* out_submission);
+i32 renderer_surface_read_frame_pixels(u64 surface, u8* out_bytes, // version 6: the retained
+    u32 capacity, u32* out_needed);                                // target's readback (test seam)
 ```
+
+`GpuiGoDebugStatsRecord` (36 bytes, alignment 4; the ticket-53 fields
+appended after `record_size`):
+`pool_target_count` (the retained group targets), `pool_bytes` (the
+committed bytes, targets plus their half-res blur scratch),
+`pool_overflow_count` (the CUMULATIVE count of groups the budget
+demoted to inline - never reset), `record_size`, `state_bind_count`
+(the §3.12 tracker's cumulative issued binds, device-global),
+`tess_cache_hits` (the scene service's global counter),
+`damage_fraction` (the last frame's merged damage area over the
+window area, per-mille), `full_present_count`,
+`partial_present_count` (the damage entry's cumulative presents).
 
 ### The scene draw entries (ticket16)
 

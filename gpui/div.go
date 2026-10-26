@@ -47,7 +47,9 @@ import (
 // ---------------------------------------------------------------------------
 
 // TextAlign is the text alignment within its element (the reference
-// TextAlign; Left is the default).
+// TextAlign plus browser-core 43's CSS start/end/justify values).
+// Left is the default (Chrome's own default is start, which equals left
+// for LTR text).
 type TextAlign uint8
 
 const (
@@ -57,6 +59,66 @@ const (
 	TextAlignCenter
 	// TextAlignRight aligns text to the end of the line.
 	TextAlignRight
+	// TextAlignStart aligns to the start edge of the line box in the
+	// text's direction: left for LTR, right for RTL (CSS text-align:
+	// start, browser-core 43). The layout's base direction (the shaped
+	// summary's IsRTL) resolves it at paint time.
+	TextAlignStart
+	// TextAlignEnd aligns to the end edge of the line box in the text's
+	// direction: right for LTR, left for RTL (CSS text-align: end).
+	TextAlignEnd
+	// TextAlignJustify justifies the lines' contents between the line
+	// box's edges: the whitespace clusters stretch inside the native
+	// layout, every line except each paragraph's last (CSS text-align:
+	// justify — Parley's Alignment::Justify through the rev-16
+	// side-channel).
+	TextAlignJustify
+)
+
+// WordBreak is CSS word-break (browser-core 43): where line breaks may
+// fall within words. Normal is the default.
+type WordBreak uint8
+
+const (
+	// WordBreakNormal applies the customary break rules.
+	WordBreakNormal WordBreak = iota
+	// WordBreakBreakAll allows breaks between any two characters —
+	// typographically preferred only in CJK contexts, and the emergency
+	// break class for unbreakable runs (CSS word-break: break-all).
+	WordBreakBreakAll
+	// WordBreakKeepAll forbids breaks inside words — chiefly the CJK
+	// ideograph breaks normal allows (CSS word-break: keep-all).
+	WordBreakKeepAll
+)
+
+// OverflowWrap is CSS overflow-wrap (browser-core 43): the emergency
+// breaking of words that would overflow the line. Normal is the default.
+type OverflowWrap uint8
+
+const (
+	// OverflowWrapNormal never breaks an unbreakable word.
+	OverflowWrapNormal OverflowWrap = iota
+	// OverflowWrapAnywhere allows a break at an arbitrary point in an
+	// overflowing word (CSS overflow-wrap: anywhere).
+	OverflowWrapAnywhere
+	// OverflowWrapBreakWord is like anywhere at the shaper — the CSS
+	// difference is min-content sizing, which the caller owns (CSS
+	// overflow-wrap: break-word).
+	OverflowWrapBreakWord
+)
+
+// TextWrap is CSS text-wrap (browser-core 43): the paragraph's wrap
+// policy. Wrap is the default; the Go layer drives balance (and the
+// white-space modes drive nowrap, as before).
+type TextWrap uint8
+
+const (
+	// TextWrapWrap wraps normally (CSS text-wrap: wrap).
+	TextWrapWrap TextWrap = iota
+	// TextWrapBalance wraps at the narrowest width that keeps the
+	// unbalanced line count — Chromium's bisection, Go-side over
+	// text_layout relayouts (CSS text-wrap: balance).
+	TextWrapBalance
 )
 
 // WhiteSpace controls text wrapping (the reference WhiteSpace plus
@@ -142,6 +204,15 @@ type TextStyle struct {
 	// that resolves auto against the ancestors is
 	// userSelectAllowsSelection (user_select.go).
 	UserSelect UserSelect
+	// WordBreak is CSS word-break (browser-core 43); the runs carry it
+	// into the native range styles.
+	WordBreak WordBreak
+	// OverflowWrap is CSS overflow-wrap (browser-core 43).
+	OverflowWrap OverflowWrap
+	// TextWrap is CSS text-wrap (browser-core 43): balance drives the
+	// Go-side bisection; the white-space modes keep driving nowrap as
+	// before.
+	TextWrap TextWrap
 }
 
 // DefaultTextStyle returns the reference TextStyle::default()
@@ -193,6 +264,12 @@ type TextStyleRefinement struct {
 	// forbids selection on the subtree, Text re-enables it under a None,
 	// and Auto resolves from the ancestors.
 	UserSelect Optional[UserSelect]
+	// WordBreak sets CSS word-break (browser-core 43).
+	WordBreak Optional[WordBreak]
+	// OverflowWrap sets CSS overflow-wrap (browser-core 43).
+	OverflowWrap Optional[OverflowWrap]
+	// TextWrap sets CSS text-wrap (browser-core 43).
+	TextWrap Optional[TextWrap]
 }
 
 // Refine applies the explicitly supplied fields onto style (the derived
@@ -221,6 +298,9 @@ func (r *TextStyleRefinement) Refine(style *TextStyle) {
 	refinePointer(&style.LetterSpacingEm, r.LetterSpacingEm)
 	refinePointer(&style.TextTransform, r.TextTransform)
 	refineValue(&style.UserSelect, r.UserSelect)
+	refineValue(&style.WordBreak, r.WordBreak)
+	refineValue(&style.OverflowWrap, r.OverflowWrap)
+	refineValue(&style.TextWrap, r.TextWrap)
 }
 
 // Merge applies the present fields of other onto r (the derived
@@ -253,6 +333,9 @@ func (r *TextStyleRefinement) Merge(other *TextStyleRefinement) {
 	mergeOptional(&r.LetterSpacingEm, other.LetterSpacingEm)
 	mergeOptional(&r.TextTransform, other.TextTransform)
 	mergeOptional(&r.UserSelect, other.UserSelect)
+	mergeOptional(&r.WordBreak, other.WordBreak)
+	mergeOptional(&r.OverflowWrap, other.OverflowWrap)
+	mergeOptional(&r.TextWrap, other.TextWrap)
 }
 
 // IsSome reports whether any field is present (the derived
@@ -264,7 +347,8 @@ func (r *TextStyleRefinement) IsSome() bool {
 		r.Underline.present || r.Strikethrough.present || r.WhiteSpace.present ||
 		r.TextOverflow.present || r.TextAlign.present || r.LineClamp.present ||
 		r.LetterSpacing.present || r.LetterSpacingEm.present ||
-		r.TextTransform.present || r.UserSelect.present
+		r.TextTransform.present || r.UserSelect.present ||
+		r.WordBreak.present || r.OverflowWrap.present || r.TextWrap.present
 }
 
 // Clone returns an independent copy (the slice-valued fields copied).
@@ -467,6 +551,10 @@ type shapedText interface {
 	// lineRange returns one visual line's byte range (the
 	// VisualLine::text_range fact).
 	lineRange(lineIndex int) (start, end int)
+	// isRTL reports the document's base direction (browser-core 43, rev
+	// 16 — the shaped summary's IsRTL): the paint layer resolves
+	// text-align start/end against it.
+	isRTL() bool
 	// selectionRects returns the piece-local rectangles covering a
 	// byte range (the inline geometry source: the reference
 	// platform_layout.selection_bounds feeding inline_geometry).
@@ -663,6 +751,11 @@ type stringLayoutState struct {
 type shapedCell struct {
 	shaped    shapedText
 	wrapWidth *float32
+	// baseline is the measured document's first baseline (the offset
+	// the paint layer places line 0 at; browser-core 42) — cached with
+	// the shape so a cache hit answers a baseline query without
+	// re-shaping. Nil when the document has no line box.
+	baseline *float32
 	// minContent marks a cell shaped for a MIN-CONTENT query: wrapped
 	// at width zero, with the min-content size (the longest word by the
 	// word count), not the pinned min(wrap, width) size. The cell is a
@@ -688,6 +781,31 @@ type shapedCell struct {
 	// collapse (nil when the display text is the source text): the
 	// selection geometry queries map source offsets through it.
 	collapse *collapseMap
+}
+
+func firstTextBaseline(shaped shapedText, lineHeight float32) *float32 {
+	if shaped == nil || shaped.lineCount() == 0 {
+		// No line box (the empty text's self-collapsing rule): no
+		// baseline — the algorithms fall back to the item's height.
+		return nil
+	}
+	// Chrome's strut math (browser-core 42): the font's FIXED (rounded)
+	// ascent and descent, and the leading split with the ASCENT side
+	// floored — inline_box_state.cc:182/202 take
+	// FontMetrics::FixedAscent/FixedDescent for the strut, and
+	// line_utils.cc CalculateLeadingSpace floors
+	// (line_height - fixed_height) / 2 onto the ascent side (the
+	// remainder on the descent side). A definite line-height L places
+	// the first baseline at round(A) + floor((L - round(A) -
+	// round(D)) / 2): measured at Segoe UI 12/16/24px under line-height
+	// 40 — baselines 25 / 26 / 30, the baseline-aligned flex and grid
+	// rows putting the 12px and 16px items 5px and 4px below the 24px
+	// one and growing to 45 (Chrome 155 headless, the recorder's
+	// device-metrics override at scale 2).
+	ascent := roundToNearest(shaped.ascent())
+	descent := roundToNearest(shaped.descent())
+	baseline := ascent + floor32((lineHeight-ascent-descent)/2)
+	return &baseline
 }
 
 // textElement is the Text element: a string displayed as one shaped,
@@ -748,7 +866,7 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 	// published inline content carry the transformed text (byte length
 	// preserved, so the covering runs stay valid).
 	text := applyTextTransformPreservingByteLen(t.text, textStyle.TextTransform)
-	measure := func(req MeasureRequest) Size {
+	measure := func(req MeasureRequest) MeasuredSize {
 		// The pinned measure closure: wrap at the known width or the
 		// definite available width (WhiteSpace::Normal); a max-content
 		// query measures unwrapped. D2 (browser-core 32) adds the
@@ -791,11 +909,11 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		if cell.shaped != nil && truncation.Width == nil && cell.truncateWidth == nil {
 			if minContent {
 				if cell.minContent {
-					return cell.size
+					return MeasuredSize{Size: cell.size, FirstBaseline: cell.baseline}
 				}
 			} else if !cell.minContent &&
 				(!hasWrap && cell.wrapWidth == nil || hasWrap && cell.wrapWidth != nil && wrap == *cell.wrapWidth) {
-				return cell.size
+				return MeasuredSize{Size: cell.size, FirstBaseline: cell.baseline}
 			}
 		}
 		// The wrap width is boxed only when the text shapes (gpui-perf
@@ -827,10 +945,13 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		if truncation.Width != nil {
 			effective, runs = applyTextTruncation(effective, runs, wrapWidth, textStyle.LineClamp, truncation,
 				func(candidate string, candidateRuns []TextRun, wrapWidth *float32) (shapedText, error) {
-					return shapeStyledRuns(seam, candidate, fontSize, candidateRuns, wrapWidth, nil, nil)
+					return shapeStyledRuns(seam, candidate, fontSize, candidateRuns, wrapWidth, nil, nil, textStyle.TextAlign, false)
 				})
 		}
-		shaped, err := shapeStyledRuns(seam, effective, fontSize, runs, wrapWidth, textLineClamp(textStyle), whiteSpaceTabSize(textStyle.WhiteSpace))
+		// text-wrap: balance (browser-core 43): the style's tag drives the
+		// shaping seam's bisection (the tab mode is the white-space's).
+		balanced := textStyle.TextWrap == TextWrapBalance
+		shaped, err := shapeStyledRuns(seam, effective, fontSize, runs, wrapWidth, textLineClamp(textStyle), whiteSpaceTabSize(textStyle.WhiteSpace), textStyle.TextAlign, balanced)
 		if err != nil {
 			panic(fmt.Sprintf("gpui: text element shaping failed: %v", err))
 		}
@@ -846,6 +967,9 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 			// empty-line self-collapsing block,
 			// inline_layout_algorithm.cc:1488-1492), not one empty row.
 			size = Size{}
+			cell.baseline = nil
+		} else {
+			cell.baseline = firstTextBaseline(shaped, lineHeight)
 		}
 		cell.shaped = shaped
 		cell.wrapWidth = wrapWidth
@@ -855,7 +979,7 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		cell.size = size
 		cell.source = text
 		cell.collapse = collapse
-		return size
+		return MeasuredSize{Size: size, FirstBaseline: cell.baseline}
 	}
 	layoutID, err := requestMeasuredLayoutOf(w, textNodeStyle(), measure)
 	if err != nil {
@@ -1309,6 +1433,42 @@ func (d *DivElement) GridTemplateCols(template GridTemplate) *DivElement {
 // GridTemplateRows sets the row track template (grid-template-rows).
 func (d *DivElement) GridTemplateRows(template GridTemplate) *DivElement {
 	d.StyleMut().GridRows = Some(template)
+	return d
+}
+
+// GridColsList sets the full column track list (browser-core 42, CSS
+// grid-template-columns: 240px 1fr — each track a minmax pair; see
+// PxTrack/FrTrack/AutoTrack/MinContentTrack/MaxContentTrack/
+// MinMaxTrack). It replaces the pinned repeat form.
+func (d *DivElement) GridColsList(tracks ...GridTrack) *DivElement {
+	d.StyleMut().GridColsList = Some(tracks)
+	return d
+}
+
+// GridRowsList sets the full row track list (CSS grid-template-rows).
+// It replaces the pinned repeat form.
+func (d *DivElement) GridRowsList(tracks ...GridTrack) *DivElement {
+	d.StyleMut().GridRowsList = Some(tracks)
+	return d
+}
+
+// GridTemplateAreas sets the named area template (browser-core 42, CSS
+// grid-template-areas): one quoted row string per argument —
+// GridTemplateAreas("head head", "side main"). A parse failure panics
+// (the builder contract).
+func (d *DivElement) GridTemplateAreas(rows ...string) *DivElement {
+	template, err := ParseGridTemplateAreas(joinAreaRows(rows))
+	if err != nil {
+		panic(fmt.Sprintf("gpui: GridTemplateAreas: %v", err))
+	}
+	d.StyleMut().GridAreas = Some(template)
+	return d
+}
+
+// GridArea places this item into its parent grid by area name
+// (browser-core 42, CSS grid-area: <name>).
+func (d *DivElement) GridArea(name string) *DivElement {
+	d.StyleMut().GridAreaName = Some(name)
 	return d
 }
 

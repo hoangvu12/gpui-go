@@ -320,7 +320,9 @@ func TestPaintPathEmptyClippedPathDrops(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Filter-group plan records at nesting depth 3+
+// Filter-group plan records at nesting depth 3+ (rev 16, ticket 50:
+// the MAX_FILTER_GROUP_DEPTH cap is gone — every matched group gets an
+// isolated pool target slot, nesting-based)
 // ---------------------------------------------------------------------------
 
 func TestFilterGroupPlanRecordsBeyondDepthTwo(t *testing.T) {
@@ -330,9 +332,12 @@ func TestFilterGroupPlanRecordsBeyondDepthTwo(t *testing.T) {
 	}
 	defer scene.Dispose()
 
-	// Three nested groups with OVERLAPPING bounds (the whole scene): the
-	// pinned plan isolates the first two (targets 0 and 1) and renders
-	// the third inline — no invented third isolation target.
+	// Three nested groups with OVERLAPPING bounds (the whole scene). Rev
+	// 15 isolated the first two and rendered the third inline (the
+	// MAX_FILTER_GROUP_DEPTH cap); rev 16 removed the cap — every matched
+	// group gets an isolated pool target slot (ticket 50), so all three
+	// isolate and the requirements' isolated target count is the nesting
+	// high-water mark (3).
 	full := gpui.Bounds{Origin: gpui.Point{}, Size: gpui.Size{Width: 100, Height: 100}}
 	ctx := gpui.NewPaintContext(1.0, full, 1.0)
 	radii := gpui.Corners{}
@@ -364,7 +369,8 @@ func TestFilterGroupPlanRecordsBeyondDepthTwo(t *testing.T) {
 		t.Fatalf("Commands: %v", err)
 	}
 	// The expected command stream: begin Isolated(0), begin Isolated(1),
-	// begin Inline, end Inline, end Isolated(1), end Isolated(0).
+	// begin Isolated(2), end Isolated(2), end Isolated(1), end
+	// Isolated(0) — every matched group isolates in rev 16.
 	want := []struct {
 		kind     gpui.SceneCommandKind
 		isolated bool
@@ -372,8 +378,8 @@ func TestFilterGroupPlanRecordsBeyondDepthTwo(t *testing.T) {
 	}{
 		{gpui.SceneCommandKindBeginFilter, true, 0},
 		{gpui.SceneCommandKindBeginFilter, true, 1},
-		{gpui.SceneCommandKindBeginFilter, false, 0},
-		{gpui.SceneCommandKindEndFilter, false, 0},
+		{gpui.SceneCommandKindBeginFilter, true, 2},
+		{gpui.SceneCommandKindEndFilter, true, 2},
 		{gpui.SceneCommandKindEndFilter, true, 1},
 		{gpui.SceneCommandKindEndFilter, true, 0},
 	}
@@ -392,6 +398,9 @@ func TestFilterGroupPlanRecordsBeyondDepthTwo(t *testing.T) {
 		}
 	}
 	// The end commands carry their matched start's boundary index.
+	if commands[3].BoundaryIndex != commands[2].BoundaryIndex {
+		t.Errorf("end Isolated(2) boundaryIndex = %d, want the matched begin's %d", commands[3].BoundaryIndex, commands[2].BoundaryIndex)
+	}
 	if commands[4].BoundaryIndex != commands[1].BoundaryIndex {
 		t.Errorf("end Isolated(1) boundaryIndex = %d, want the matched begin's %d", commands[4].BoundaryIndex, commands[1].BoundaryIndex)
 	}
@@ -403,18 +412,18 @@ func TestFilterGroupPlanRecordsBeyondDepthTwo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Requirements: %v", err)
 	}
-	if requirements.IsolatedTargetCount != 2 {
-		t.Errorf("isolatedTargetCount = %d, want 2 (MAX_FILTER_GROUP_DEPTH)", requirements.IsolatedTargetCount)
+	if requirements.IsolatedTargetCount != 3 {
+		t.Errorf("isolatedTargetCount = %d, want 3 (rev 16: the nesting high-water mark; the rev-15 MAX_FILTER_GROUP_DEPTH cap is gone)", requirements.IsolatedTargetCount)
 	}
-	if requirements.IsolatedFilterCount != 2 {
-		t.Errorf("isolatedFilterCount = %d, want 2", requirements.IsolatedFilterCount)
+	if requirements.IsolatedFilterCount != 3 {
+		t.Errorf("isolatedFilterCount = %d, want 3", requirements.IsolatedFilterCount)
 	}
 	if !requirements.UsesOffscreenTarget {
 		t.Errorf("usesOffscreenTarget = false, want true")
 	}
 }
 
-func TestFilterGroupDepthFourStillInline(t *testing.T) {
+func TestFilterGroupDepthFourAllIsolate(t *testing.T) {
 	scene, err := gpui.NewScene()
 	if err != nil {
 		t.Fatalf("NewScene: %v", err)
@@ -441,9 +450,12 @@ func TestFilterGroupDepthFourStillInline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Requirements: %v", err)
 	}
-	// Groups three and four render inline; the target pool stays at two.
-	if requirements.IsolatedTargetCount != 2 {
-		t.Errorf("isolatedTargetCount = %d, want 2 even at depth 4", requirements.IsolatedTargetCount)
+	// Rev 16 removed the depth cap: all four groups isolate, and the
+	// nesting high-water mark is 4 (the pool's per-surface budget — 64
+	// targets / 256 MB — is the real rev-16 limit, with the observable
+	// inline fallback beyond it; ticket 50).
+	if requirements.IsolatedTargetCount != 4 {
+		t.Errorf("isolatedTargetCount = %d, want 4 even at depth 4 (rev 16: no MAX_FILTER_GROUP_DEPTH)", requirements.IsolatedTargetCount)
 	}
 	commands, err := scene.Commands()
 	if err != nil {
@@ -457,8 +469,8 @@ func TestFilterGroupDepthFourStillInline(t *testing.T) {
 			inline++
 		}
 	}
-	if isolated != 4 || inline != 4 {
-		t.Errorf("isolated/inline commands = %d/%d, want 4/4 (begins and ends of two isolated groups, two inline)", isolated, inline)
+	if isolated != 8 || inline != 0 {
+		t.Errorf("isolated/inline commands = %d/%d, want 8/0 (every matched group isolates in rev 16)", isolated, inline)
 	}
 }
 

@@ -550,9 +550,9 @@ func scrollClass(u string) (x, y, auto, ok bool) {
 type classStage func(b *StyleBuilder, u string) (handled bool, reason string)
 
 // classStages run in order after the method classes. unsupportedClass
-// runs before colorClass so that text-justify and outline-none get their
-// reason rather than "unknown color"; gradientClass runs before
-// unsupportedClass so from-/via-/to-/bg-linear-* get gradient reasons.
+// runs before colorClass so that outline-none gets its reason rather
+// than "unknown color"; gradientClass runs before unsupportedClass so
+// from-/via-/to-/bg-linear-* get gradient reasons.
 var classStages = []classStage{
 	specialClass,
 	lengthClass,
@@ -560,6 +560,7 @@ var classStages = []classStage{
 	borderClass,
 	opacityClass,
 	gridClass,
+	gridAreaClass,
 	aspectClass,
 	blurClass,
 	gradientClass,
@@ -1161,7 +1162,10 @@ func opacityClass(b *StyleBuilder, u string) (bool, string) {
 	return true, ""
 }
 
-// gridClass applies grid templates and placements with a count.
+// gridClass applies grid templates and placements with a count, and
+// the arbitrary track lists (browser-core 42): grid-cols-[240px_1fr]
+// and grid-rows-[auto_auto] — the underscores unescape to spaces like
+// every Tailwind arbitrary value, then parse as a CSS track list.
 func gridClass(b *StyleBuilder, u string) (bool, string) {
 	for _, g := range []struct {
 		prefix string
@@ -1180,14 +1184,74 @@ func gridClass(b *StyleBuilder, u string) (bool, string) {
 		if !ok {
 			continue
 		}
+		// The arbitrary track list: grid-cols-[240px_1fr] and
+		// grid-rows-[auto_auto]. The placement prefixes keep their count
+		// form only.
+		if inner, ok := arbitrary(v); ok {
+			if g.prefix != "grid-cols-" && g.prefix != "grid-rows-" {
+				return true, g.prefix + "… takes a count, not a bracketed value"
+			}
+			tracks, err := parseTrackListText(tailwindUnescape(inner))
+			if err != nil {
+				return true, g.prefix + "[…] takes a track list, like [240px_1fr]: " + err.Error()
+			}
+			if len(tracks) > 256 {
+				return true, g.prefix + "[…] takes at most 256 tracks"
+			}
+			if g.prefix == "grid-cols-" {
+				b.GridColsList(tracks...)
+			} else {
+				b.GridRowsList(tracks...)
+			}
+			return true, ""
+		}
 		n, ok := parseCount(v)
 		if !ok || n == 0 || n > math.MaxInt16 {
-			return true, g.prefix + "… takes a count; grid templates other than repeat(n) are not supported"
+			return true, g.prefix + "… takes a count or a track list, like [240px_1fr] (other grid templates than repeat(n) need the brackets)"
 		}
 		g.apply(int16(n))
 		return true, ""
 	}
 	return false, ""
+}
+
+// gridAreaClass applies the named grid area surface (browser-core 42):
+// grid-areas-["head_head"_"side_main"] sets the container's template
+// (the underscores unescape to spaces, restoring the CSS quoted rows)
+// and grid-area-[head] places the item in the named area.
+func gridAreaClass(b *StyleBuilder, u string) (bool, string) {
+	if inner, ok := strings.CutPrefix(u, "grid-areas-"); ok {
+		value, ok := arbitrary(inner)
+		if !ok {
+			// A bare word is not a template: the class needs the brackets.
+			return true, "grid-areas-… takes a bracketed template, like [\"head_head\"_\"side_main\"]"
+		}
+		template, err := ParseGridTemplateAreas(tailwindUnescape(value))
+		if err != nil {
+			return true, "grid-areas-[…]: " + err.Error()
+		}
+		b.GridTemplateAreasValue(template)
+		return true, ""
+	}
+	if inner, ok := strings.CutPrefix(u, "grid-area-"); ok {
+		name, ok := arbitrary(inner)
+		if !ok {
+			return true, "grid-area-… takes a bracketed area name, like [head]"
+		}
+		if name == "" || !validGridAreaName(name) {
+			return true, "grid-area-[…] takes an area name"
+		}
+		b.GridArea(name)
+		return true, ""
+	}
+	return false, ""
+}
+
+// tailwindUnescape converts a Tailwind arbitrary value's underscores
+// back to spaces (the documented unescaping; a leading underscore keeps
+// a literal underscore, which grid values never need).
+func tailwindUnescape(inner string) string {
+	return strings.ReplaceAll(inner, "_", " ")
 }
 
 // aspectClass applies aspect-[4/3] and aspect-[1.5].
@@ -1650,7 +1714,6 @@ var unsupportedClasses = []struct {
 	{[]string{"divide"}, "divide-* is not supported; give each child after the first a border-t (or border-l), or put separator elements between them"},
 	{[]string{"pointer-events"}, "pointer-events-* is not supported"},
 	{[]string{"inline-table", "table", "list-item"}, "this display type is not supported; use flex, grid, block, inline, inline-flex, inline-block, inline-grid, contents or flow-root"},
-	{[]string{"text-justify"}, "justified text is not supported"},
 	{[]string{"no-underline"}, "no-underline is not supported; leave underline out, or call .TextDecorationNone()"},
 	{[]string{"outline-solid", "outline-dotted", "outline-double", "outline-hidden"}, "only outline, outline-<n>, outline-offset-<n>, outline-<color>, outline-none and outline-dashed are supported (the scene's border records are solid and dashed only; outline-hidden has no port spelling — outline-none is the plain opt-out)"},
 	{[]string{"ring-offset"}, "ring offsets are not supported"},
@@ -1666,7 +1729,7 @@ var unsupportedClasses = []struct {
 	{[]string{"place-content", "place-items", "place-self", "justify-items", "justify-self"}, "use items-*, justify-*, content-* and self-* instead"},
 	{[]string{"box-border", "box-content", "box-decoration"}, "box sizing is always border-box; drop it"},
 	{[]string{"whitespace-break-spaces"}, "only whitespace-normal, whitespace-nowrap, whitespace-pre, whitespace-pre-line and whitespace-pre-wrap are supported (browser-core 38); break-spaces is not"},
-	{[]string{"break-words", "break-all", "break-keep", "break-normal", "hyphens", "text-balance", "text-pretty"}, "text wrapping modes other than whitespace-normal / whitespace-nowrap are not supported"},
+	{[]string{"break-normal", "hyphens", "text-pretty"}, "only break-all, break-keep, break-words/wrap-break-word, wrap-anywhere and text-balance are supported (browser-core 43); break-normal is the default, hyphens and text-wrap: pretty are not"},
 	{[]string{"antialiased", "subpixel-antialiased"}, "GPUI chooses text antialiasing itself; drop it"},
 	{[]string{"list"}, "list styles are not supported"},
 	{[]string{"appearance", "resize", "accent", "caret"}, "form-control styling is not supported; GPUI has no native form controls"},

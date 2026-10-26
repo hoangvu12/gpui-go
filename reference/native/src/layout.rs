@@ -45,19 +45,35 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use taffy::compute::{
+    compute_block_layout, compute_cached_layout, compute_flexbox_layout, compute_grid_layout,
+    compute_hidden_layout, compute_leaf_layout, compute_root_layout, BlockContext,
+};
 use taffy::geometry::{Line, Point as TaffyPoint, Rect as TaffyRect, Size as TaffySize};
 use taffy::prelude::{max_content, min_content, TaffyGridLine, TaffyGridSpan};
 use taffy::style::{
     AlignContent, AlignItems, AvailableSpace, Dimension, Display, FlexDirection, FlexWrap,
-    LengthPercentage, LengthPercentageAuto, Overflow, Position, Style as TaffyStyle,
+    GridTemplateArea, GridTemplateAreas, LengthPercentage, LengthPercentageAuto, Overflow, Position,
+    Style as TaffyStyle,
 };
 use taffy::style_helpers::{fr, length, minmax, repeat};
-use taffy::tree::NodeId;
-use taffy::TaffyTree;
+use taffy::tree::{
+    Layout, LayoutBlockContainer, LayoutFlexboxContainer, LayoutGridContainer, LayoutInput,
+    LayoutOutput, LayoutPartialTree, NodeId, RunMode, TraversePartialTree,
+};
+use taffy::util::ResolveOrZero;
+use taffy::{CacheTree, TaffyTree};
 
 /// Layout service ABI version (independent of the bootstrap table's
 /// `abi_version`; bumped only on layout-record/table layout changes).
-pub const GPUI_GO_LAYOUT_SERVICE_VERSION: u32 = 1;
+///
+/// v2 (browser-core ticket 42): the table grew two entries —
+/// `layout_node_set_grid_template_areas` and `layout_node_set_grid_area`
+/// (named grid areas and named placements; 15 → 17 function pointers,
+/// 168 → 184 bytes) — and the compute path drives Taffy 0.13's
+/// low-level tree traits through an owned view, which changes no
+/// record layouts.
+pub const GPUI_GO_LAYOUT_SERVICE_VERSION: u32 = 2;
 
 /// Layout service status codes. 0 is success, negative values are
 /// caller/argument errors, 100+ are internal failures.
@@ -455,6 +471,40 @@ pub struct GpuiGoTrackRecord {
 /// Maximum track components in one axis (rev 15).
 pub const MAX_GRID_TRACKS: u32 = 256;
 
+/// One named grid area (rev 16, browser-core ticket 42): a rectangle of
+/// the grid's explicit area template, in 1-based grid LINE numbers (the
+/// start line and the end line of the area; Taffy's `GridTemplateArea`
+/// coordinate convention, which the `NamedLineResolver` feeds straight
+/// into line numbers). The template may be larger than the union of the
+/// areas (unnamed `.` cells), so the row/column counts travel with the
+/// set, not per area.
+///
+/// Layout: `row_start` @0, `row_end` @4, `column_start` @8,
+/// `column_end` @12, `name_offset` @16, `name_len` @20; size 24, align 4.
+/// The name is the UTF-8 slice `[name_offset, name_offset + name_len)`
+/// of the names buffer passed with the array.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct GpuiGoGridAreaRecord {
+    /// The 1-based grid line the area starts at (row axis).
+    pub row_start: u32,
+    /// The 1-based grid line the area ends at (row axis, exclusive).
+    pub row_end: u32,
+    /// The 1-based grid line the area starts at (column axis).
+    pub column_start: u32,
+    /// The 1-based grid line the area ends at (column axis, exclusive).
+    pub column_end: u32,
+    /// Byte offset of the area's name in the names buffer.
+    pub name_offset: u32,
+    /// Byte length of the area's name.
+    pub name_len: u32,
+}
+
+/// Maximum bytes of one grid area name (rev 16).
+pub const MAX_GRID_AREA_NAME: u32 = 256;
+/// Maximum areas in one template (rev 16).
+pub const MAX_GRID_AREAS: u32 = 256;
+
 // Compile-time layout pins; the Go loader mirrors these exactly.
 const _: () = assert!(std::mem::size_of::<GpuiLen>() == 8);
 const _: () = assert!(std::mem::align_of::<GpuiLen>() == 4);
@@ -470,10 +520,12 @@ const _: () = assert!(std::mem::size_of::<GpuiGoLayoutRecord>() == 80);
 const _: () = assert!(std::mem::align_of::<GpuiGoLayoutRecord>() == 4);
 const _: () = assert!(std::mem::size_of::<GpuiGoLayoutStyleRecord>() == 352);
 const _: () = assert!(std::mem::align_of::<GpuiGoLayoutStyleRecord>() == 4);
-const _: () = assert!(std::mem::size_of::<GpuiGoLayoutTable>() == 168);
+const _: () = assert!(std::mem::size_of::<GpuiGoLayoutTable>() == 184);
 const _: () = assert!(std::mem::align_of::<GpuiGoLayoutTable>() == 8);
 const _: () = assert!(std::mem::size_of::<GpuiGoTrackRecord>() == 16);
 const _: () = assert!(std::mem::align_of::<GpuiGoTrackRecord>() == 4);
+const _: () = assert!(std::mem::size_of::<GpuiGoGridAreaRecord>() == 24);
+const _: () = assert!(std::mem::align_of::<GpuiGoGridAreaRecord>() == 4);
 
 // ---------------------------------------------------------------------------
 // Handle packing
@@ -884,6 +936,14 @@ struct EngineState {
     /// reset, invalidating all existing node handles).
     node_generation: u32,
     taffy: TaffyTree<MeasureContext>,
+    /// The computed unrounded layout per node (rev 16, browser-core
+    /// ticket 42): the trait-driven compute writes layouts through the
+    /// tree view's `set_unrounded_layout`, and `TaffyTree`'s own layout
+    /// slots are unreachable from outside the crate (its setters are
+    /// `pub(crate)`), so the service owns the store. Rounding is
+    /// disabled, so this is exactly what `TaffyTree::layout` used to
+    /// report: the values the algorithms set, in device pixels.
+    layouts: HashMap<NodeId, Layout>,
     /// node sequence -> taffy node.
     nodes: HashMap<u64, NodeId>,
     /// taffy node -> node sequence.
@@ -895,9 +955,9 @@ struct EngineState {
     failed: bool,
     /// rev 15: the first baseline each measured node's last measure
     /// response reported (device pixels from the measured box's top).
-    /// Taffy 0.13 cannot feed it into the algorithms, so it is stashed
-    /// here and reported through the layout record's `first_baseline`
-    /// echo for measured leaves.
+    /// rev 16 also feeds these into the layout algorithms (the measured
+    /// leaf's `LayoutOutput.first_baselines`), while the layout record
+    /// keeps reporting them through the `first_baseline` echo.
     measured_baselines: HashMap<NodeId, f32>,
 }
 
@@ -919,6 +979,7 @@ impl EngineState {
         EngineState {
             node_generation: 1,
             taffy,
+            layouts: HashMap::new(),
             nodes: HashMap::new(),
             reverse: HashMap::new(),
             next_node_seq: 0,
@@ -1048,18 +1109,422 @@ enum ComputeFailure {
 }
 
 // ---------------------------------------------------------------------------
+// The trait-driven compute (rev 16, browser-core ticket 42)
+// ---------------------------------------------------------------------------
+
+/// Compute-scoped state the tree view carries through Taffy's algorithms.
+///
+/// Taffy 0.13's algorithms are generic over its low-level tree traits
+/// (`LayoutPartialTree` and friends), but the only in-crate implementation
+/// that drives them for a stored tree — `TaffyView` — is `pub(crate)`, and
+/// `compute_layout_with_measure`'s measure closure can only answer a
+/// `Size<f32>`: the measured leaf's baseline cannot enter the algorithms
+/// through the high-level API (`compute/leaf.rs:157` hardcodes
+/// `first_baselines: Point::NONE` for every leaf). The service therefore
+/// drives the algorithms itself through an owned view over the SAME
+/// `TaffyTree` storage, mirroring `TaffyView`'s dispatch exactly (the
+/// trait method bodies below are copies of `taffy_tree.rs`'s, delegated
+/// through `TaffyTree`'s public trait impls where the fields are private)
+/// with one deliberate divergence: a measured leaf's `LayoutOutput`
+/// carries the baseline its measure response reported, in
+/// `first_baselines.y`, offset by the leaf's resolved top padding and
+/// border so the value is relative to the node's border box — exactly the
+/// contract CSS flexbox/grid baseline alignment consumes
+/// (css-flexbox-1 §8.3, css-grid-1 §11.5.1; Chromium's
+/// `LayoutFlexibleBox`/`GridTrackSizingAlgorithm` read the item's first
+/// baseline the same way).
+struct ComputeScope {
+    /// The engine handle (echoed in measure requests).
+    engine: u64,
+    /// The compute token (echoed in measure requests).
+    compute_token: u64,
+    /// The raw trampoline address (0 = unregistered).
+    trampoline: usize,
+    /// Latched failure for the rest of this compute.
+    failure: Option<ComputeFailure>,
+    /// Whether any measured callback was invoked (the out_flags bit).
+    callbacks_invoked: bool,
+    /// The first baseline each measured node's LAST measure response
+    /// reported (device px, from the measured box's top) — moved out of
+    /// the engine state for the compute and restored after.
+    baselines: HashMap<NodeId, f32>,
+    /// The computed unrounded layout per node — moved out of the engine
+    /// state for the compute and restored after. Written by
+    /// `set_unrounded_layout`.
+    layouts: HashMap<NodeId, Layout>,
+}
+
+/// The measure call a measured leaf makes: exactly the closure
+/// `compute_body` used to hand `compute_layout_with_measure`, lifted
+/// into a function so the view's leaf dispatch can call it. Returns the
+/// measured size (device pixels; a zero size for unmeasured leaves and
+/// while a failure is latched) and stashes the reported first baseline.
+#[allow(clippy::too_many_arguments)]
+fn run_measure(
+    scope: &mut ComputeScope,
+    node_id: NodeId,
+    context: Option<&MeasureContext>,
+    known_dimensions: TaffySize<Option<f32>>,
+    available_space: TaffySize<AvailableSpace>,
+) -> TaffySize<f32> {
+    let Some(context) = context else {
+        // Unmeasured leaves: the pinned gpui closure returns the
+        // default size for nodes without a measure context.
+        return TaffySize::default();
+    };
+    // Suppress further user callbacks once a failure is latched.
+    if scope.failure.is_some() {
+        return TaffySize::zero();
+    }
+    if scope.trampoline == 0 {
+        scope.failure = Some(ComputeFailure::MissingTrampoline);
+        return TaffySize::zero();
+    }
+    let trampoline_fn: GpuiGoLayoutTrampoline =
+        unsafe { std::mem::transmute(scope.trampoline) };
+    let (avail_width_tag, avail_width_bits) = avail_parts(&available_space.width);
+    let (avail_height_tag, avail_height_bits) = avail_parts(&available_space.height);
+    let mut request = GpuiMeasureRequest {
+        engine: scope.engine,
+        node: context.node_handle,
+        callback_token: context.callback_token,
+        compute_token: scope.compute_token,
+        known_width_present: known_dimensions.width.is_some() as u32,
+        known_height_present: known_dimensions.height.is_some() as u32,
+        avail_width_tag,
+        avail_height_tag,
+        known_width_bits: known_dimensions.width.map(f32::to_bits).unwrap_or(0),
+        known_height_bits: known_dimensions.height.map(f32::to_bits).unwrap_or(0),
+        avail_width_bits,
+        avail_height_bits,
+        reserved: [0; 2],
+    };
+    let mut response = GpuiMeasureResponse {
+        status: -1,
+        width_bits: 0,
+        height_bits: 0,
+        baseline_present: 0,
+        baseline_bits: 0,
+    };
+    let call_code = unsafe { trampoline_fn(&mut request, &mut response) };
+    scope.callbacks_invoked = true;
+    if call_code != 0 || response.status != 0 {
+        scope.failure = Some(ComputeFailure::CallbackFailed);
+        return TaffySize::zero();
+    }
+    let width = f32::from_bits(response.width_bits);
+    let height = f32::from_bits(response.height_bits);
+    if !width.is_finite() || !height.is_finite() {
+        // A non-finite measured size would poison the layout; treat it
+        // as a callback failure.
+        scope.failure = Some(ComputeFailure::CallbackFailed);
+        return TaffySize::zero();
+    }
+    // rev 15: stash the reported first baseline (validated finite; a
+    // non-finite one is a callback failure like a non-finite size).
+    if response.baseline_present != 0 {
+        let baseline = f32::from_bits(response.baseline_bits);
+        if !baseline.is_finite() || baseline < 0.0 {
+            scope.failure = Some(ComputeFailure::CallbackFailed);
+            return TaffySize::zero();
+        }
+        scope.baselines.insert(node_id, baseline);
+    }
+    TaffySize { width, height }
+}
+
+/// Child iterator for the view: lazily walks `TaffyTree`'s children
+/// through its public `TraversePartialTree` impl (the slice itself is
+/// behind private fields, so the iterator indexes one child at a time).
+/// The borrow discipline matches `TaffyTreeChildIter`'s: the iterator
+/// holds a shared borrow of the tree for its lifetime.
+struct GpuiChildIter<'a> {
+    tree: &'a TaffyTree<MeasureContext>,
+    parent: NodeId,
+    next: usize,
+    count: usize,
+}
+
+impl Iterator for GpuiChildIter<'_> {
+    type Item = NodeId;
+
+    fn next(&mut self) -> Option<NodeId> {
+        if self.next >= self.count {
+            return None;
+        }
+        let child = TraversePartialTree::get_child_id(self.tree, self.parent, self.next);
+        self.next += 1;
+        Some(child)
+    }
+}
+
+/// The layout tree view: `TaffyTree` storage plus the compute scope.
+/// Mirrors taffy 0.13's `TaffyView` (the `pub(crate)` adapter behind
+/// `TaffyTree::compute_layout_with_measure`) with the baseline
+/// divergence recorded above.
+struct GpuiLayoutView<'t, 'c> {
+    /// The engine's tree (styles, children, caches, measure contexts).
+    taffy: &'t mut TaffyTree<MeasureContext>,
+    /// The compute-scoped state (trampoline, failure latch, baselines,
+    /// layouts).
+    scope: &'c mut ComputeScope,
+}
+
+impl<'t, 'c> GpuiLayoutView<'t, 'c> {
+    /// The unified dispatch both `LayoutPartialTree::compute_child_layout`
+    /// and `LayoutBlockContainer::compute_block_child_layout` delegate
+    /// to — a copy of `TaffyView::compute_child_layout`'s body with the
+    /// measured-baseline divergence in the leaf arm.
+    fn compute_child_layout_impl(
+        &mut self,
+        node_id: NodeId,
+        inputs: LayoutInput,
+        block_ctx: Option<&mut BlockContext<'_>>,
+    ) -> LayoutOutput {
+        // If RunMode is PerformHiddenLayout then this indicates that an
+        // ancestor node is `Display::None` and thus that we should lay
+        // out this node using hidden layout regardless of it's own
+        // display style.
+        if inputs.run_mode == RunMode::PerformHiddenLayout {
+            return compute_hidden_layout(self, node_id);
+        }
+
+        // We run the following wrapped in "compute_cached_layout", which
+        // will check the cache for an entry matching the node and inputs
+        // and return that entry if it exists, else call the passed
+        // closure and store its result. A cache hit replays a
+        // `LayoutOutput` whole — including the baseline the leaf arm
+        // patched in — so baselines flow through the cache unchanged.
+        compute_cached_layout(self, node_id, inputs, |tree, node_id, inputs| {
+            let display_mode = tree
+                .taffy
+                .style(node_id)
+                .expect("gpui-go: taffy style lookup failed")
+                .display;
+            let has_children = TraversePartialTree::child_count(tree.taffy, node_id) > 0;
+
+            // Dispatch to a layout algorithm based on the node's display
+            // style and whether the node has children or not.
+            match (display_mode, has_children) {
+                (Display::None, _) => compute_hidden_layout(tree, node_id),
+                (Display::Block, true) => compute_block_layout(tree, node_id, inputs, block_ctx),
+                (Display::FlowRoot, true) => compute_block_layout(tree, node_id, inputs, None),
+                (Display::Flex, true) => compute_flexbox_layout(tree, node_id, inputs),
+                (Display::Grid, true) => compute_grid_layout(tree, node_id, inputs),
+                (_, false) => {
+                    // The leaf arm: `compute_leaf_layout` applies
+                    // padding/border/min/max/aspect-ratio around the
+                    // measured size but hardcodes
+                    // `first_baselines: Point::NONE`. The style and the
+                    // measure context are copied out first: the closure
+                    // below needs the scope mutably while the style
+                    // reference would keep the tree borrowed.
+                    let style = tree
+                        .taffy
+                        .style(node_id)
+                        .expect("gpui-go: taffy style lookup failed")
+                        .clone();
+                    let context = tree
+                        .taffy
+                        .get_node_context_mut(node_id)
+                        .map(|context| *context);
+                    let mut output = compute_leaf_layout(
+                        inputs,
+                        &style,
+                        |_, _| 0.0,
+                        |known_dimensions, available_space| {
+                            run_measure(
+                                tree.scope,
+                                node_id,
+                                context.as_ref(),
+                                known_dimensions,
+                                available_space,
+                            )
+                        },
+                    );
+                    // THE REV-16 DIVERGENCE: feed the measured first
+                    // baseline into the algorithms. The stash carries
+                    // the node's last measure response in this compute
+                    // (the cache path above returns a patched output
+                    // without re-measuring); `compute_leaf_layout`
+                    // resolved the leaf's padding and border the same
+                    // way for its own size math — against the parent's
+                    // width, the CSS percentage rule — so the border-box
+                    // offset below matches the size the leaf reported.
+                    if let Some(&baseline) = tree.scope.baselines.get(&node_id) {
+                        let parent_width = inputs.parent_size.width;
+                        let padding = style.padding.resolve_or_zero(parent_width, |_, _| 0.0);
+                        let border = style.border.resolve_or_zero(parent_width, |_, _| 0.0);
+                        output.first_baselines.y = Some(padding.top + border.top + baseline);
+                    }
+                    output
+                }
+            }
+        })
+    }
+}
+
+// TraversePartialTree impl: delegate to TaffyTree's public impl.
+impl TraversePartialTree for GpuiLayoutView<'_, '_> {
+    type ChildIter<'a>
+        = GpuiChildIter<'a>
+    where
+        Self: 'a;
+
+    fn child_ids(&self, parent_node_id: NodeId) -> Self::ChildIter<'_> {
+        GpuiChildIter {
+            tree: self.taffy,
+            parent: parent_node_id,
+            next: 0,
+            count: TraversePartialTree::child_count(self.taffy, parent_node_id),
+        }
+    }
+
+    fn child_count(&self, parent_node_id: NodeId) -> usize {
+        TraversePartialTree::child_count(self.taffy, parent_node_id)
+    }
+
+    fn get_child_id(&self, parent_node_id: NodeId, child_index: usize) -> NodeId {
+        TraversePartialTree::get_child_id(self.taffy, parent_node_id, child_index)
+    }
+}
+
+// LayoutPartialTree impl: the core of the low-level API.
+impl LayoutPartialTree for GpuiLayoutView<'_, '_> {
+    type CoreContainerStyle<'a>
+        = &'a TaffyStyle
+    where
+        Self: 'a;
+
+    type CustomIdent = String;
+
+    fn get_core_container_style(&self, node_id: NodeId) -> Self::CoreContainerStyle<'_> {
+        self.taffy
+            .style(node_id)
+            .expect("gpui-go: taffy style lookup failed")
+    }
+
+    fn resolve_calc_value(&self, _val: *const (), _basis: f32) -> f32 {
+        // `into_taffy_style` never produces calc values.
+        0.0
+    }
+
+    fn set_unrounded_layout(&mut self, node_id: NodeId, layout: &Layout) {
+        // TaffyTree's own unrounded-layout slots are `pub(crate)`; the
+        // service's store is the report path (rounding is disabled, so
+        // unrounded == final).
+        self.scope.layouts.insert(node_id, *layout);
+    }
+
+    fn compute_child_layout(&mut self, node_id: NodeId, inputs: LayoutInput) -> LayoutOutput {
+        self.compute_child_layout_impl(node_id, inputs, None)
+    }
+}
+
+// CacheTree impl: delegate to TaffyTree's public impl.
+impl CacheTree for GpuiLayoutView<'_, '_> {
+    fn cache_get(&self, node_id: NodeId, input: &LayoutInput) -> Option<LayoutOutput> {
+        CacheTree::cache_get(self.taffy, node_id, input)
+    }
+
+    fn cache_store(&mut self, node_id: NodeId, input: &LayoutInput, layout_output: LayoutOutput) {
+        CacheTree::cache_store(self.taffy, node_id, input, layout_output)
+    }
+
+    fn cache_clear(&mut self, node_id: NodeId) {
+        CacheTree::cache_clear(self.taffy, node_id)
+    }
+}
+
+// LayoutBlockContainer impl (block layout, including flow-root).
+impl LayoutBlockContainer for GpuiLayoutView<'_, '_> {
+    type BlockContainerStyle<'a>
+        = &'a TaffyStyle
+    where
+        Self: 'a;
+    type BlockItemStyle<'a>
+        = &'a TaffyStyle
+    where
+        Self: 'a;
+
+    fn get_block_container_style(&self, node_id: NodeId) -> Self::BlockContainerStyle<'_> {
+        self.get_core_container_style(node_id)
+    }
+
+    fn get_block_child_style(&self, child_node_id: NodeId) -> Self::BlockItemStyle<'_> {
+        self.get_core_container_style(child_node_id)
+    }
+
+    fn compute_block_child_layout(
+        &mut self,
+        node_id: NodeId,
+        inputs: LayoutInput,
+        block_ctx: Option<&mut BlockContext<'_>>,
+    ) -> LayoutOutput {
+        self.compute_child_layout_impl(node_id, inputs, block_ctx)
+    }
+}
+
+// LayoutFlexboxContainer impl.
+impl LayoutFlexboxContainer for GpuiLayoutView<'_, '_> {
+    type FlexboxContainerStyle<'a>
+        = &'a TaffyStyle
+    where
+        Self: 'a;
+    type FlexboxItemStyle<'a>
+        = &'a TaffyStyle
+    where
+        Self: 'a;
+
+    fn get_flexbox_container_style(&self, node_id: NodeId) -> Self::FlexboxContainerStyle<'_> {
+        self.get_core_container_style(node_id)
+    }
+
+    fn get_flexbox_child_style(&self, child_node_id: NodeId) -> Self::FlexboxItemStyle<'_> {
+        self.get_core_container_style(child_node_id)
+    }
+}
+
+// LayoutGridContainer impl (grid layout; the default
+// `set_detailed_grid_info` is a no-op — the record surface reports the
+// per-node layout, not the grid's track table).
+impl LayoutGridContainer for GpuiLayoutView<'_, '_> {
+    type GridContainerStyle<'a>
+        = &'a TaffyStyle
+    where
+        Self: 'a;
+    type GridItemStyle<'a>
+        = &'a TaffyStyle
+    where
+        Self: 'a;
+
+    fn get_grid_container_style(&self, node_id: NodeId) -> Self::GridContainerStyle<'_> {
+        self.get_core_container_style(node_id)
+    }
+
+    fn get_grid_child_style(&self, child_node_id: NodeId) -> Self::GridItemStyle<'_> {
+        self.get_core_container_style(child_node_id)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Service table
 // ---------------------------------------------------------------------------
 
 /// The layout service table installed in reserved slot 1 of
-/// `GpuiGoAbiTable`. All 14 function pointers come first (112 bytes), then
-/// 11 self-check scalars (44 bytes). Offsets (x86-64): pointers @0..112,
-/// `service_version` @112, `size_of_table` @116, `align_of_table` @120,
-/// `size_of_style_record` @124, `size_of_layout_record` @128,
-/// `size_of_avail` @132, `size_of_avail_size` @136,
-/// `size_of_measure_request` @140, `align_of_measure_request` @144,
-/// `size_of_measure_response` @148, `align_of_measure_response` @152;
-/// total size 160 (4 bytes of tail padding), alignment 8.
+/// `GpuiGoAbiTable`. All 17 function pointers come first (136 bytes),
+/// then 11 self-check scalars (44 bytes). Offsets (x86-64): pointers
+/// @0..136, `service_version` @136, `size_of_table` @140,
+/// `align_of_table` @144, `size_of_style_record` @148,
+/// `size_of_layout_record` @152, `size_of_avail` @156,
+/// `size_of_avail_size` @160, `size_of_measure_request` @164,
+/// `align_of_measure_request` @168, `size_of_measure_response` @172,
+/// `align_of_measure_response` @176; total size 184, alignment 8.
+///
+/// rev 16 (browser-core ticket 42) appended the two grid-area entries
+/// at the END of the pointer block (after `set_trampoline`), keeping
+/// every earlier slot's offset unchanged; the size went 168 → 184
+/// bytes and the service version 1 → 2.
 #[repr(C)]
 pub struct GpuiGoLayoutTable {
     /// `layout_engine_create`.
@@ -1106,6 +1571,23 @@ pub struct GpuiGoLayoutTable {
     >,
     /// `layout_set_trampoline`.
     pub set_trampoline: Option<unsafe extern "system" fn(GpuiGoLayoutTrampoline) -> i32>,
+    /// `layout_node_set_grid_template_areas` (rev 16): defines the
+    /// container's named area template (CSS grid-template-areas).
+    pub node_set_grid_template_areas: Option<
+        unsafe extern "system" fn(
+            u64,
+            u64,
+            u32,
+            u32,
+            *const GpuiGoGridAreaRecord,
+            u32,
+            *const u8,
+            u32,
+        ) -> i32,
+    >,
+    /// `layout_node_set_grid_area` (rev 16): places a grid item by
+    /// area name (CSS `grid-area: <name>`).
+    pub node_set_grid_area: Option<unsafe extern "system" fn(u64, u64, *const u8, u32) -> i32>,
     /// Layout ABI version (see [`GPUI_GO_LAYOUT_SERVICE_VERSION`]).
     pub service_version: u32,
     /// `size_of::<GpuiGoLayoutTable>()` self-check.
@@ -1146,6 +1628,8 @@ pub(crate) static LAYOUT_TABLE: GpuiGoLayoutTable = GpuiGoLayoutTable {
     node_child: Some(layout_node_child),
     dump: Some(layout_dump),
     set_trampoline: Some(layout_set_trampoline),
+    node_set_grid_template_areas: Some(layout_node_set_grid_template_areas),
+    node_set_grid_area: Some(layout_node_set_grid_area),
     service_version: GPUI_GO_LAYOUT_SERVICE_VERSION,
     size_of_table: std::mem::size_of::<GpuiGoLayoutTable>() as u32,
     align_of_table: std::mem::align_of::<GpuiGoLayoutTable>() as u32,
@@ -1207,10 +1691,12 @@ fn engine_reset_body(engine: u64) -> i32 {
     };
     state.node_generation = next_generation;
     state.taffy.clear();
+    state.layouts.clear();
     state.nodes.clear();
     state.reverse.clear();
     state.next_node_seq = 0;
     state.failed = false;
+    state.measured_baselines.clear();
     layout_status::OK
 }
 
@@ -1449,6 +1935,211 @@ fn track_sizing_from(
     Ok(minmax(min, max))
 }
 
+/// The `layout_node_set_grid_template_areas` body (rev 16): defines the
+/// container's named area template from validated area records (CSS
+/// `grid-template-areas`, parsed by the Go adapter into rectangles in
+/// 1-based grid line numbers). `area_count` 0 clears the template; the
+/// names live in one UTF-8 buffer, each record slicing it by
+/// `name_offset`/`name_len`.
+#[allow(clippy::too_many_arguments)]
+fn node_set_grid_template_areas_body(
+    engine: u64,
+    node: u64,
+    row_count: u32,
+    column_count: u32,
+    areas: *const GpuiGoGridAreaRecord,
+    area_count: u32,
+    names: *const u8,
+    names_bytes: u32,
+) -> i32 {
+    if area_count > MAX_GRID_AREAS {
+        return layout_status::ERR_BAD_VALUE;
+    }
+    if row_count > u16::MAX as u32 || column_count > u16::MAX as u32 {
+        return layout_status::ERR_BAD_VALUE;
+    }
+    let area_slice: &[GpuiGoGridAreaRecord] = if area_count == 0 {
+        // Clearing: the names are ignored (and may be null).
+        &[]
+    } else {
+        if areas.is_null() || names.is_null() {
+            return layout_status::ERR_NULL_ARG;
+        }
+        // SAFETY: the caller owns the arrays for the call's duration;
+        // the count is bounds-checked above.
+        unsafe { std::slice::from_raw_parts(areas, area_count as usize) }
+    };
+    let name_bytes: &[u8] = if names_bytes == 0 {
+        if area_count != 0 {
+            return layout_status::ERR_BAD_VALUE;
+        }
+        &[]
+    } else {
+        if names.is_null() {
+            return layout_status::ERR_NULL_ARG;
+        }
+        unsafe { std::slice::from_raw_parts(names, names_bytes as usize) }
+    };
+
+    // Validate every record before touching the tree.
+    let mut records: Vec<GridTemplateArea<String>> = Vec::with_capacity(area_slice.len());
+    for area in area_slice.iter() {
+        let offset = area.name_offset as usize;
+        let len = area.name_len as usize;
+        if len == 0 || len > MAX_GRID_AREA_NAME as usize {
+            return layout_status::ERR_BAD_VALUE;
+        }
+        if offset > name_bytes.len() || len > name_bytes.len() - offset {
+            return layout_status::ERR_BAD_VALUE;
+        }
+        let name = match std::str::from_utf8(&name_bytes[offset..offset + len]) {
+            Ok(name) => name,
+            Err(_) => return layout_status::ERR_BAD_VALUE,
+        };
+        // A NUL would survive into nothing harmful, but CSS
+        // custom-idents never carry one; reject it to keep the template
+        // debuggable.
+        if name.contains('\0') {
+            return layout_status::ERR_BAD_VALUE;
+        }
+        // 1-based line numbers: start in 1..=u16::MAX, end in (start..=u16::MAX]
+        // — the practical cap is far lower (MAX_GRID_TRACKS), so an end
+        // line of 65536 is out of the representable range, not clamped.
+        let (row_start, row_end, column_start, column_end) = (
+            area.row_start,
+            area.row_end,
+            area.column_start,
+            area.column_end,
+        );
+        if row_start == 0
+            || row_start > u16::MAX as u32
+            || row_end <= row_start
+            || row_end > u16::MAX as u32
+            || column_start == 0
+            || column_start > u16::MAX as u32
+            || column_end <= column_start
+            || column_end > u16::MAX as u32
+        {
+            return layout_status::ERR_BAD_VALUE;
+        }
+        let record = GridTemplateArea {
+            name: name.to_string(),
+            row_start: row_start as u16,
+            row_end: row_end as u16,
+            column_start: column_start as u16,
+            column_end: column_end as u16,
+        };
+        // Duplicate names are caller errors: CSS rejects a template whose
+        // areas are non-rectangular, and the Go parser folds each name into
+        // exactly one rectangle before the call.
+        if records.iter().any(|existing: &GridTemplateArea<String>| existing.name == record.name) {
+            return layout_status::ERR_BAD_VALUE;
+        }
+        records.push(record);
+    }
+
+    let shared = match resolve_engine(engine) {
+        Ok(shared) => shared,
+        Err(code) => return code,
+    };
+    if shared.busy.load(Ordering::SeqCst) {
+        return layout_status::ERR_ENGINE_BUSY;
+    }
+    let mut state = lock_state(&shared);
+    if state.failed {
+        return layout_status::ERR_ENGINE_FAILED;
+    }
+    let node_id = match state.resolve_node(node) {
+        Ok(node_id) => node_id,
+        Err(code) => return code,
+    };
+    let mut style = state
+        .taffy
+        .style(node_id)
+        .expect("gpui-go: taffy style lookup failed")
+        .clone();
+    style.grid_template_areas = if area_count == 0 {
+        None
+    } else {
+        Some(GridTemplateAreas { areas: records, row_count: row_count as u16, column_count: column_count as u16 })
+    };
+    state
+        .taffy
+        .set_style(node_id, style)
+        .expect("gpui-go: taffy set_style failed");
+    layout_status::OK
+}
+
+/// The `layout_node_set_grid_area` body (rev 16): places a grid item by
+/// area name (CSS `grid-area: <name>`) — all four placements become the
+/// named line, which Taffy's `NamedLineResolver` resolves through the
+/// implicit `<name>-start`/`<name>-end` lines the container's template
+/// areas define. An empty name restores the Auto placements.
+fn node_set_grid_area_body(engine: u64, node: u64, name: *const u8, name_len: u32) -> i32 {
+    if name_len > MAX_GRID_AREA_NAME {
+        return layout_status::ERR_BAD_VALUE;
+    }
+    let placement: Option<String> = if name_len == 0 {
+        if !name.is_null() {
+            return layout_status::ERR_BAD_VALUE;
+        }
+        None
+    } else {
+        if name.is_null() {
+            return layout_status::ERR_NULL_ARG;
+        }
+        let bytes = unsafe { std::slice::from_raw_parts(name, name_len as usize) };
+        let decoded = match std::str::from_utf8(bytes) {
+            Ok(decoded) => decoded,
+            Err(_) => return layout_status::ERR_BAD_VALUE,
+        };
+        if decoded.contains('\0') {
+            return layout_status::ERR_BAD_VALUE;
+        }
+        Some(decoded.to_string())
+    };
+
+    let shared = match resolve_engine(engine) {
+        Ok(shared) => shared,
+        Err(code) => return code,
+    };
+    if shared.busy.load(Ordering::SeqCst) {
+        return layout_status::ERR_ENGINE_BUSY;
+    }
+    let mut state = lock_state(&shared);
+    if state.failed {
+        return layout_status::ERR_ENGINE_FAILED;
+    }
+    let node_id = match state.resolve_node(node) {
+        Ok(node_id) => node_id,
+        Err(code) => return code,
+    };
+    let mut style = state
+        .taffy
+        .style(node_id)
+        .expect("gpui-go: taffy style lookup failed")
+        .clone();
+    match placement {
+        Some(name) => {
+            // grid-area: <name> — the shorthand sets all four placements
+            // to the named line; the resolver maps start edges to
+            // <name>-start and end edges to <name>-end.
+            let line = taffy::style::GridPlacement::NamedLine(name, 0);
+            style.grid_row = Line { start: line.clone(), end: line.clone() };
+            style.grid_column = Line { start: line.clone(), end: line };
+        }
+        None => {
+            style.grid_row = Line { start: taffy::style::GridPlacement::Auto, end: taffy::style::GridPlacement::Auto };
+            style.grid_column = Line { start: taffy::style::GridPlacement::Auto, end: taffy::style::GridPlacement::Auto };
+        }
+    }
+    state
+        .taffy
+        .set_style(node_id, style)
+        .expect("gpui-go: taffy set_style failed");
+    layout_status::OK
+}
+
 fn node_set_measure_body(engine: u64, node: u64, callback_token: u64) -> i32 {
     let shared = match resolve_engine(engine) {
         Ok(shared) => shared,
@@ -1512,6 +2203,11 @@ fn node_remove_subtree_body(engine: u64, node: u64) -> i32 {
             .taffy
             .remove(*node_id)
             .expect("gpui-go: taffy remove failed");
+        // The service's own layout/baseline stores drop with the node (a
+        // SlotMap key may be reused by a later node, which must not read
+        // the removed node's values).
+        state.layouts.remove(node_id);
+        state.measured_baselines.remove(node_id);
         if let Some(&sequence) = state.reverse.get(node_id) {
             state.reverse.remove(node_id);
             state.nodes.remove(&sequence);
@@ -1569,99 +2265,35 @@ fn compute_body(
         Err(code) => return code,
     };
 
-    let mut callbacks_invoked = false;
-    let mut failure: Option<ComputeFailure> = None;
-    let trampoline = TRAMPOLINE.load(Ordering::Acquire);
-    // rev 15: the measure closure fills this map (taken out of the
-    // engine state so the taffy borrow stays exclusive), and it is
-    // restored below.
-    let mut baselines = std::mem::take(&mut state.measured_baselines);
-    baselines.clear();
+    // rev 16: the compute drives Taffy 0.13's algorithms through the
+    // service's own tree view (see `GpuiLayoutView`): the measure
+    // closure became `run_measure`, a measured leaf's first baseline
+    // enters the algorithms through `LayoutOutput.first_baselines`, and
+    // the computed layouts land in the service's own store (TaffyTree's
+    // layout slots are unreachable outside the crate). The baseline and
+    // layout stores are moved out of the engine state so the tree borrow
+    // stays exclusive, and restored below.
+    let mut scope = ComputeScope {
+        engine,
+        compute_token,
+        trampoline: TRAMPOLINE.load(Ordering::Acquire),
+        failure: None,
+        callbacks_invoked: false,
+        baselines: std::mem::take(&mut state.measured_baselines),
+        layouts: std::mem::take(&mut state.layouts),
+    };
+    scope.baselines.clear();
 
-    state
-        .taffy
-        .compute_layout_with_measure(
-            root_node,
-            available_space,
-            |known_dimensions,
-             available_space,
-             _node_id,
-             node_context,
-             _style| {
-                let Some(context) = node_context else {
-                    // Unmeasured leaves: the pinned gpui closure returns the
-                    // default size for nodes without a measure context.
-                    return TaffySize::default();
-                };
-                // Suppress further user callbacks once a failure is latched.
-                if failure.is_some() {
-                    return TaffySize::zero();
-                }
-                if trampoline == 0 {
-                    failure = Some(ComputeFailure::MissingTrampoline);
-                    return TaffySize::zero();
-                }
-                let trampoline_fn: GpuiGoLayoutTrampoline =
-                    unsafe { std::mem::transmute(trampoline) };
-                let (avail_width_tag, avail_width_bits) =
-                    avail_parts(&available_space.width);
-                let (avail_height_tag, avail_height_bits) =
-                    avail_parts(&available_space.height);
-                let mut request = GpuiMeasureRequest {
-                    engine,
-                    node: context.node_handle,
-                    callback_token: context.callback_token,
-                    compute_token,
-                    known_width_present: known_dimensions.width.is_some() as u32,
-                    known_height_present: known_dimensions.height.is_some() as u32,
-                    avail_width_tag,
-                    avail_height_tag,
-                    known_width_bits: known_dimensions.width.map(f32::to_bits).unwrap_or(0),
-                    known_height_bits: known_dimensions.height.map(f32::to_bits).unwrap_or(0),
-                    avail_width_bits,
-                    avail_height_bits,
-                    reserved: [0; 2],
-                };
-                let mut response = GpuiMeasureResponse {
-                    status: -1,
-                    width_bits: 0,
-                    height_bits: 0,
-                    baseline_present: 0,
-                    baseline_bits: 0,
-                };
-                let call_code = unsafe { trampoline_fn(&mut request, &mut response) };
-                callbacks_invoked = true;
-                if call_code != 0 || response.status != 0 {
-                    failure = Some(ComputeFailure::CallbackFailed);
-                    return TaffySize::zero();
-                }
-                let width = f32::from_bits(response.width_bits);
-                let height = f32::from_bits(response.height_bits);
-                if !width.is_finite() || !height.is_finite() {
-                    // A non-finite measured size would poison the layout;
-                    // treat it as a callback failure.
-                    failure = Some(ComputeFailure::CallbackFailed);
-                    return TaffySize::zero();
-                }
-                // rev 15: stash the reported first baseline (validated
-                // finite; a non-finite one is a callback failure like a
-                // non-finite size).
-                if response.baseline_present != 0 {
-                    let baseline = f32::from_bits(response.baseline_bits);
-                    if !baseline.is_finite() || baseline < 0.0 {
-                        failure = Some(ComputeFailure::CallbackFailed);
-                        return TaffySize::zero();
-                    }
-                    baselines.insert(_node_id, baseline);
-                }
-                TaffySize { width, height }
-            },
-        )
-        .expect("gpui-go: taffy compute_layout failed");
+    {
+        let mut view = GpuiLayoutView { taffy: &mut state.taffy, scope: &mut scope };
+        compute_root_layout(&mut view, root_node, available_space);
+    }
 
-    state.measured_baselines = baselines;
+    state.measured_baselines = scope.baselines;
+    state.layouts = scope.layouts;
+    let callbacks_invoked = scope.callbacks_invoked;
     unsafe { *out_flags = u32::from(callbacks_invoked) };
-    match failure {
+    match scope.failure {
         Some(ComputeFailure::CallbackFailed) => {
             state.failed = true;
             layout_status::ERR_CALLBACK
@@ -1672,10 +2304,12 @@ fn compute_body(
 }
 
 fn layout_record_from(node: NodeId, state: &EngineState) -> GpuiGoLayoutRecord {
-    let layout = state
-        .taffy
-        .layout(node)
-        .expect("gpui-go: taffy layout lookup failed");
+    // rev 16: the service's own layout store (the trait-driven compute
+    // writes through the tree view's `set_unrounded_layout`; TaffyTree's
+    // own slots are unreachable from outside the crate). A node that was
+    // never laid out reads the zero layout `TaffyTree` initializes its
+    // nodes with.
+    let layout = state.layouts.get(&node).copied().unwrap_or_else(Layout::new);
     // rev 15: Taffy's stored Layout drops baselines entirely (only the
     // compute-internal LayoutOutput carries them), so the measured
     // leaves' stashed measure-response baselines are the report.
@@ -1980,6 +2614,57 @@ unsafe extern "system" fn layout_node_set_grid_tracks(
 ) -> i32 {
     let outcome = catch_unwind(AssertUnwindSafe(|| {
         node_set_grid_tracks_body(engine, node, axis, tracks, track_count)
+    }));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            mark_engine_failed(engine);
+            layout_status::ERR_PANIC
+        }
+    }
+}
+
+unsafe extern "system" fn layout_node_set_grid_template_areas(
+    engine: u64,
+    node: u64,
+    row_count: u32,
+    column_count: u32,
+    areas: *const GpuiGoGridAreaRecord,
+    area_count: u32,
+    names: *const u8,
+    names_bytes: u32,
+) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        node_set_grid_template_areas_body(
+            engine,
+            node,
+            row_count,
+            column_count,
+            areas,
+            area_count,
+            names,
+            names_bytes,
+        )
+    }));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            mark_engine_failed(engine);
+            layout_status::ERR_PANIC
+        }
+    }
+}
+
+unsafe extern "system" fn layout_node_set_grid_area(
+    engine: u64,
+    node: u64,
+    name: *const u8,
+    name_len: u32,
+) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        node_set_grid_area_body(engine, node, name, name_len)
     }));
     match outcome {
         Ok(code) => code,
@@ -2547,13 +3232,14 @@ mod tests {
             std::mem::size_of::<GpuiMeasureResponse>()
         );
         // Every function slot is populated.
-        let slots: [usize; 14] = [
+        let slots: [usize; 17] = [
             LAYOUT_TABLE.engine_create.map(|f| f as usize).unwrap_or(0),
             LAYOUT_TABLE.engine_reset.map(|f| f as usize).unwrap_or(0),
             LAYOUT_TABLE.engine_dispose.map(|f| f as usize).unwrap_or(0),
             LAYOUT_TABLE.node_create.map(|f| f as usize).unwrap_or(0),
             LAYOUT_TABLE.node_set_style.map(|f| f as usize).unwrap_or(0),
             LAYOUT_TABLE.node_set_measure.map(|f| f as usize).unwrap_or(0),
+            LAYOUT_TABLE.node_set_grid_tracks.map(|f| f as usize).unwrap_or(0),
             LAYOUT_TABLE.node_remove_subtree.map(|f| f as usize).unwrap_or(0),
             LAYOUT_TABLE.compute.map(|f| f as usize).unwrap_or(0),
             LAYOUT_TABLE.node_layout.map(|f| f as usize).unwrap_or(0),
@@ -2562,6 +3248,8 @@ mod tests {
             LAYOUT_TABLE.node_child.map(|f| f as usize).unwrap_or(0),
             LAYOUT_TABLE.dump.map(|f| f as usize).unwrap_or(0),
             LAYOUT_TABLE.set_trampoline.map(|f| f as usize).unwrap_or(0),
+            LAYOUT_TABLE.node_set_grid_template_areas.map(|f| f as usize).unwrap_or(0),
+            LAYOUT_TABLE.node_set_grid_area.map(|f| f as usize).unwrap_or(0),
         ];
         for (index, slot) in slots.iter().enumerate() {
             assert!(*slot != 0, "layout table slot {index} is null");
@@ -2925,5 +3613,363 @@ mod tests {
             let layout = node_layout(engine, measured_node);
             assert_eq!((layout.size_w, layout.size_h), (80.0, 40.0));
         });
+    }
+
+    /// A trampoline reporting a first baseline per node: the small node
+    /// (60x20, baseline 5) and the large one (60x40, baseline 30).
+    unsafe extern "system" fn mixed_baseline_trampoline(
+        request: *mut GpuiMeasureRequest,
+        response: *mut GpuiMeasureResponse,
+    ) -> i32 {
+        unsafe {
+            let node = (*request).node;
+            let (width, height, baseline) = if node % 2 == 0 {
+                (60.0_f32, 20.0_f32, 5.0_f32)
+            } else {
+                (60.0_f32, 40.0_f32, 30.0_f32)
+            };
+            (*response).status = 0;
+            (*response).width_bits = width.to_bits();
+            (*response).height_bits = height.to_bits();
+            (*response).baseline_present = 1;
+            (*response).baseline_bits = baseline.to_bits();
+        }
+        0
+    }
+
+    #[test]
+    fn measured_baseline_drives_flex_row_baseline_alignment() {
+        with_trampoline(mixed_baseline_trampoline, || {
+            let engine = create_engine();
+            let mut root_record = minimal_record();
+            root_record.size = GpuiSizeL { width: px(200.0), height: absent_len() };
+            // align-items: baseline — the pre-rev-16 pin fell back to the
+            // items' bottom edges here.
+            root_record.align_items_present = 1;
+            root_record.align_items = 5; // baseline
+
+            // Measured leaves: even sequence numbers are 60x20 (baseline
+            // 5), odd ones 60x40 (baseline 30).
+            let small = create_node(engine, &minimal_record());
+            assert_eq!(node_set_measure_body(engine, small, 0x51), layout_status::OK);
+            let large = create_node(engine, &minimal_record());
+            assert_eq!(node_set_measure_body(engine, large, 0x52), layout_status::OK);
+            let root = create_node_with_children(engine, &root_record, &[small, large]);
+
+            let (code, flags) = compute(engine, root, definite_avail(200.0, 200.0));
+            assert_eq!(code, layout_status::OK);
+            assert_eq!(flags & 1, 1);
+
+            let small_layout = node_layout(engine, small);
+            let large_layout = node_layout(engine, large);
+            // Both items' baselines sit at max_baseline = 30: the small
+            // item shifts DOWN by 25 (30 - 5), the large one by 0.
+            assert_eq!((small_layout.location_x, small_layout.size_w, small_layout.size_h), (0.0, 60.0, 20.0));
+            assert_eq!(small_layout.location_y, 25.0, "the small item aligns its baseline (5) to the row's (30)");
+            assert_eq!((large_layout.location_x, large_layout.size_w, large_layout.size_h), (60.0, 60.0, 40.0));
+            assert_eq!(large_layout.location_y, 0.0);
+
+            // The layout record's first_baseline echo reports the raw
+            // measure-response baselines (from the measured box's top).
+            assert_eq!(small_layout.first_baseline_present, 1);
+            assert_eq!(f32::from_bits(small_layout.first_baseline_bits), 5.0);
+            assert_eq!(large_layout.first_baseline_present, 1);
+            assert_eq!(f32::from_bits(large_layout.first_baseline_bits), 30.0);
+
+            // The container's auto height reflects the baseline-aligned
+            // line: max baseline 30 + the largest below-baseline distance
+            // (the small item's 20 - 5 = 15) = 45.
+            let root_layout = node_layout(engine, root);
+            assert_eq!(root_layout.size_h, 45.0);
+        });
+    }
+
+    #[test]
+    fn measured_baseline_offset_by_leaf_padding_and_border() {
+        with_trampoline(mixed_baseline_trampoline, || {
+            let engine = create_engine();
+            let mut root_record = minimal_record();
+            root_record.size = GpuiSizeL { width: px(200.0), height: px(200.0) };
+            root_record.align_items_present = 1;
+            root_record.align_items = 5; // baseline
+
+            // The small leaf carries 4px top padding and a 2px top border:
+            // its border-box baseline is 5 + 4 + 2 = 11, so it aligns at
+            // 30 - 11 = 19 below the row top.
+            let mut small_record = minimal_record();
+            small_record.padding.top = px(4.0);
+            small_record.border_top = 2.0_f32.to_bits();
+            let small = create_node(engine, &small_record);
+            assert_eq!(node_set_measure_body(engine, small, 0x61), layout_status::OK);
+            let large = create_node(engine, &minimal_record());
+            assert_eq!(node_set_measure_body(engine, large, 0x62), layout_status::OK);
+            let root = create_node_with_children(engine, &root_record, &[small, large]);
+
+            let (code, _) = compute(engine, root, definite_avail(200.0, 200.0));
+            assert_eq!(code, layout_status::OK);
+
+            let small_layout = node_layout(engine, small);
+            // The border-box baseline is 5 + 4 padding + 2 border = 11,
+            // so the item shifts down to align 11 to the row's 30.
+            assert_eq!(small_layout.location_y, 19.0, "baseline 5 offset by padding 4 + border 2 = 11, aligned to 30");
+        });
+    }
+
+    #[test]
+    fn grid_track_list_lays_out_columns() {
+        // The engine registry is process-global (the lifecycle test
+        // asserts slot reuse), so engine-creating tests serialize.
+        let _guard = TRAMPOLINE_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let engine = create_engine();
+
+        let mut item = minimal_record();
+        item.size = GpuiSizeL { width: px(20.0), height: px(30.0) };
+        let a = create_node(engine, &item);
+        let b = create_node(engine, &item);
+
+        let mut root_record = minimal_record();
+        root_record.display = 2; // grid
+        root_record.size = GpuiSizeL { width: px(400.0), height: px(120.0) };
+        let root = create_node_with_children(engine, &root_record, &[a, b]);
+
+        // grid-template-columns: 240px 1fr — one fixed track plus one fr
+        // filling the remaining 160px.
+        let tracks = [
+            GpuiGoTrackRecord {
+                min_tag: 0,
+                min_bits: 240.0_f32.to_bits(),
+                max_tag: 0,
+                max_bits: 240.0_f32.to_bits(),
+            },
+            GpuiGoTrackRecord { min_tag: 3, min_bits: 0, max_tag: 4, max_bits: 1.0_f32.to_bits() },
+        ];
+        assert_eq!(
+            node_set_grid_tracks_body(engine, root, 1, tracks.as_ptr(), 2),
+            layout_status::OK
+        );
+
+        let (code, flags) = compute(engine, root, definite_avail(400.0, 120.0));
+        assert_eq!(code, layout_status::OK);
+        assert_eq!(flags & 1, 0, "no measured callbacks in a plain grid");
+
+        // Auto placement fills row-wise: a in column 1, b in column 2.
+        // Both keep their definite 20x30 size (stretch only applies to
+        // auto-sized items); the auto row is the max content height.
+        let a_layout = node_layout(engine, a);
+        assert_eq!((a_layout.location_x, a_layout.location_y), (0.0, 0.0));
+        assert_eq!((a_layout.size_w, a_layout.size_h), (20.0, 30.0));
+        let b_layout = node_layout(engine, b);
+        assert_eq!((b_layout.location_x, b_layout.location_y), (240.0, 0.0));
+        assert_eq!((b_layout.size_w, b_layout.size_h), (20.0, 30.0));
+
+        // A second compute of the same root (the cache + the service's
+        // layout store interplay): the definite style size wins over the
+        // smaller available space, so nothing moves.
+        let (code, _) = compute(engine, root, definite_avail(360.0, 120.0));
+        assert_eq!(code, layout_status::OK);
+        let b_layout = node_layout(engine, b);
+        assert_eq!((b_layout.location_x, b_layout.location_y), (240.0, 0.0));
+        assert_eq!((b_layout.size_w, b_layout.size_h), (20.0, 30.0));
+        assert_eq!(node_layout(engine, root).size_w, 400.0);
+    }
+
+    #[test]
+    fn grid_template_areas_place_named_items() {
+        // The engine registry is process-global (the lifecycle test
+        // asserts slot reuse), so engine-creating tests serialize.
+        let _guard = TRAMPOLINE_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let engine = create_engine();
+
+        let mut item = minimal_record();
+        item.size = GpuiSizeL { width: px(20.0), height: px(30.0) };
+        let header = create_node(engine, &item);
+        let side = create_node(engine, &item);
+        let main = create_node(engine, &item);
+
+        let mut root_record = minimal_record();
+        root_record.display = 2; // grid
+        root_record.size = GpuiSizeL { width: px(300.0), height: px(200.0) };
+        let root =
+            create_node_with_children(engine, &root_record, &[header, side, main]);
+
+        // grid-template-areas: "head head" "side main" — 2 rows, 2
+        // columns; `head` spans both columns of row 1.
+        let names = b"headsidemain";
+        let areas = [
+            GpuiGoGridAreaRecord {
+                row_start: 1,
+                row_end: 2,
+                column_start: 1,
+                column_end: 3,
+                name_offset: 0,
+                name_len: 4,
+            },
+            GpuiGoGridAreaRecord {
+                row_start: 2,
+                row_end: 3,
+                column_start: 1,
+                column_end: 2,
+                name_offset: 4,
+                name_len: 4,
+            },
+            GpuiGoGridAreaRecord {
+                row_start: 2,
+                row_end: 3,
+                column_start: 2,
+                column_end: 3,
+                name_offset: 8,
+                name_len: 4,
+            },
+        ];
+        assert_eq!(
+            node_set_grid_template_areas_body(
+                engine,
+                root,
+                2,
+                2,
+                areas.as_ptr(),
+                3,
+                names.as_ptr(),
+                names.len() as u32,
+            ),
+            layout_status::OK
+        );
+        assert_eq!(
+            node_set_grid_area_body(engine, header, b"head".as_ptr(), 4),
+            layout_status::OK
+        );
+        assert_eq!(
+            node_set_grid_area_body(engine, side, b"side".as_ptr(), 4),
+            layout_status::OK
+        );
+        assert_eq!(
+            node_set_grid_area_body(engine, main, b"main".as_ptr(), 4),
+            layout_status::OK
+        );
+
+        // Two 150px column tracks (auto rows).
+        let tracks = [GpuiGoTrackRecord {
+            min_tag: 0,
+            min_bits: 150.0_f32.to_bits(),
+            max_tag: 0,
+            max_bits: 150.0_f32.to_bits(),
+        }];
+        assert_eq!(
+            node_set_grid_tracks_body(engine, root, 1, tracks.as_ptr(), 1),
+            layout_status::OK
+        );
+
+        let (code, _) = compute(engine, root, definite_avail(300.0, 200.0));
+        assert_eq!(code, layout_status::OK);
+
+        // head: row 1, columns 1-2 (two 150px tracks: 0 and 150).
+        let header_layout = node_layout(engine, header);
+        assert_eq!((header_layout.location_x, header_layout.location_y), (0.0, 0.0));
+        assert_eq!((header_layout.size_w, header_layout.size_h), (20.0, 30.0));
+        // side: row 2, column 1. The root's definite 200px height
+        // stretches the two auto rows to 100px each (align-content's
+        // grid default), so row 2 starts at y=100.
+        let side_layout = node_layout(engine, side);
+        assert_eq!((side_layout.location_x, side_layout.location_y), (0.0, 100.0));
+        // main: row 2, column 2.
+        let main_layout = node_layout(engine, main);
+        assert_eq!((main_layout.location_x, main_layout.location_y), (150.0, 100.0));
+
+        // A missing area name is a caller error, and so is a duplicate
+        // name in the template.
+        assert_eq!(
+            node_set_grid_area_body(engine, main, b"nope".as_ptr(), 4),
+            layout_status::OK,
+            "an unknown area name is accepted at set time; the placement falls back to Taffy's named-line fallback"
+        );
+        let duplicate = [GpuiGoGridAreaRecord {
+            row_start: 1,
+            row_end: 2,
+            column_start: 1,
+            column_end: 2,
+            name_offset: 0,
+            name_len: 4,
+        }];
+        let two = [duplicate[0], duplicate[0]];
+        assert_eq!(
+            node_set_grid_template_areas_body(
+                engine,
+                root,
+                2,
+                2,
+                two.as_ptr(),
+                2,
+                names.as_ptr(),
+                names.len() as u32,
+            ),
+            layout_status::ERR_BAD_VALUE
+        );
+        // Bounds: a zero start line and an end before the start.
+        let bad_zero = [GpuiGoGridAreaRecord {
+            row_start: 0,
+            row_end: 1,
+            column_start: 1,
+            column_end: 2,
+            name_offset: 0,
+            name_len: 4,
+        }];
+        assert_eq!(
+            node_set_grid_template_areas_body(
+                engine,
+                root,
+                1,
+                1,
+                bad_zero.as_ptr(),
+                1,
+                names.as_ptr(),
+                names.len() as u32,
+            ),
+            layout_status::ERR_BAD_VALUE
+        );
+        let bad_span = [GpuiGoGridAreaRecord {
+            row_start: 2,
+            row_end: 1,
+            column_start: 1,
+            column_end: 2,
+            name_offset: 0,
+            name_len: 4,
+        }];
+        assert_eq!(
+            node_set_grid_template_areas_body(
+                engine,
+                root,
+                1,
+                1,
+                bad_span.as_ptr(),
+                1,
+                names.as_ptr(),
+                names.len() as u32,
+            ),
+            layout_status::ERR_BAD_VALUE
+        );
+        // Clearing: count 0 with no names buffer.
+        assert_eq!(
+            node_set_grid_template_areas_body(
+                engine,
+                root,
+                0,
+                0,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                0
+            ),
+            layout_status::OK
+        );
+        // Clearing the area placements restores Auto.
+        assert_eq!(
+            node_set_grid_area_body(engine, header, std::ptr::null(), 0),
+            layout_status::OK
+        );
+        let (code, _) = compute(engine, root, definite_avail(300.0, 200.0));
+        assert_eq!(code, layout_status::OK);
+        // header is now auto-placed: first cell.
+        let header_layout = node_layout(engine, header);
+        assert_eq!((header_layout.location_x, header_layout.location_y), (0.0, 0.0));
     }
 }

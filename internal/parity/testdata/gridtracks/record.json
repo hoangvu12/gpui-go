@@ -1,0 +1,68 @@
+{
+  "name": "gridtracks",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-26T17:04:50Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "a1": {
+      "x": 16,
+      "y": 16,
+      "width": 240,
+      "height": 40
+    },
+    "a2": {
+      "x": 256,
+      "y": 16,
+      "width": 220,
+      "height": 60
+    },
+    "a3": {
+      "x": 16,
+      "y": 76,
+      "width": 240,
+      "height": 40
+    },
+    "a4": {
+      "x": 256,
+      "y": 76,
+      "width": 220,
+      "height": 40
+    },
+    "b1": {
+      "x": 16,
+      "y": 128,
+      "width": 240,
+      "height": 40
+    },
+    "b2": {
+      "x": 256,
+      "y": 128,
+      "width": 120,
+      "height": 40
+    },
+    "grid-a": {
+      "x": 16,
+      "y": 16,
+      "width": 460,
+      "height": 100
+    },
+    "grid-b": {
+      "x": 16,
+      "y": 128,
+      "width": 360,
+      "height": 40
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

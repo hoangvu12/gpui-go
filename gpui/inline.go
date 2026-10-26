@@ -572,6 +572,11 @@ type inlineParagraph struct {
 type inlineParagraphMeasurement struct {
 	wrapWidth *float32
 	layout    *inlineLayout
+	// baseline is the paragraph's first baseline (browser-core 42):
+	// the first row's baseline offset within the layout — the CSS
+	// baseline a flex/grid row aligns the paragraph on. Nil when the
+	// layout has no rows.
+	baseline *float32
 }
 
 // inlineDivFrameState is a Block/Inline div's inline frame state (the
@@ -712,6 +717,12 @@ func (c *inlineParagraphCollector) paintRuns(record *inlineTextContent) []TextRu
 		styled := c.textStyle.ToRun(run.Len)
 		styled.Font = run.Font
 		styled.LetterSpacing = run.LetterSpacing
+		// The browser text fields ride the published run (browser-core
+		// 43): the text element's own resolved tags — the innermost
+		// style, not the paragraph's ambient — own the word breaking.
+		styled.WordBreak = run.WordBreak
+		styled.OverflowWrap = run.OverflowWrap
+		styled.TextWrap = run.TextWrap
 		runs[i] = styled
 	}
 	return runs
@@ -789,7 +800,7 @@ func (c *inlineParagraphCollector) finishParagraph() {
 	paragraphStyle := DefaultStyle()
 	// The pinned paragraph node style: Style { display: Block, ..Default }.
 	paragraphStyle.Display = DisplayBlock
-	layoutID, err := requestMeasuredLayoutOf(c.window, paragraphStyle, func(req MeasureRequest) Size {
+	layoutID, err := requestMeasuredLayoutOf(c.window, paragraphStyle, func(req MeasureRequest) MeasuredSize {
 		// The pinned wrap evaluation: Nowrap never wraps; Normal wraps
 		// at the known width, else the definite available width, else
 		// not at all (content-based measurement) — plus the D2
@@ -817,7 +828,7 @@ func (c *inlineParagraphCollector) finishParagraph() {
 		// answers a max-content or definite query.
 		if cached := paragraph.cachedMeasurement(wrapWidth); cached != nil {
 			paragraph.measurement = cached
-			return cached.layout.size
+			return MeasuredSize{Size: cached.layout.size, FirstBaseline: cached.baseline}
 		}
 		layout, err := frameTextSystem(c.window).layoutInline(inlineLayoutRequest{
 			text:             measuredDocument.text,
@@ -836,9 +847,28 @@ func (c *inlineParagraphCollector) finishParagraph() {
 			panic(fmt.Sprintf("gpui: inline paragraph layout: %v", err))
 		}
 		measured := &inlineParagraphMeasurement{wrapWidth: wrapWidth, layout: &layout}
+		if len(layout.lines) > 0 {
+			// The paragraph's first baseline (browser-core 42): Chrome's
+			// strut math on the paragraph's base font — the FIXED (rounded)
+			// ascent and descent with the leading's ascent side floored
+			// (inline_box_state.cc:182/202 FixedAscent/FixedDescent, and
+			// line_utils.cc CalculateLeadingSpace's floor — see
+			// firstTextBaseline for the measured numbers). A single-font
+			// row's baseline is exactly this (the strut's ascent
+			// contribution dominates the run's raw ascent); the row's own
+			// internal baseline (baseInlineLineBounds) keeps the raw
+			// metrics for paint, so the ink may sit up to a sub-pixel from
+			// the box baseline — the recorded gap a mixed first line would
+			// widen (a run taller than the strut wins the line's baseline
+			// in Chrome; the paragraph reports the strut's).
+			ascent := roundToNearest(textMetrics.Ascent)
+			descent := roundToNearest(abs32(textMetrics.Descent))
+			baseline := ascent + floor32((lineHeight-ascent-descent)/2)
+			measured.baseline = &baseline
+		}
 		paragraph.storeMeasurement(wrapWidth, measured)
 		paragraph.measurement = measured
-		return layout.size
+		return MeasuredSize{Size: layout.size, FirstBaseline: measured.baseline}
 	})
 	if err != nil {
 		panic(fmt.Sprintf("gpui: inline paragraph request_layout: %v", err))

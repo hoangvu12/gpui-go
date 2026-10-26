@@ -73,6 +73,17 @@ define_pipelines! {
     SMOOTHED_SHADOWS: "smoothed_shadows", vertex_smoothed_shadow, fragment_smoothed_shadow, TriangleStrip, Instances, Rectangle;
     BLUR_COMPOSITE: "blur_composite", vertex_blur_composite, fragment_blur_composite, TriangleStrip, Blur, Rectangle;
     SMOOTHED_BLUR_COMPOSITE: "smoothed_blur_composite", vertex_smoothed_blur_composite, fragment_smoothed_blur_composite, TriangleStrip, Blur, Rectangle;
+    // rev 16 (ticket 51): the transformed-group composite - the quad
+    // under the effect group's 2x3 matrix (local-space subtree).
+    TRANSFORMED_BLUR_COMPOSITE: "transformed_blur_composite", vertex_transformed_blur_composite, fragment_transformed_blur_composite, TriangleStrip, Blur, Rectangle;
+    // rev 16 (ticket 52): the blend composite - the W3C blend formula
+    // against the backdrop copy (no fixed blending; the transformed
+    // composite's vertex shape, identity for axis-aligned groups).
+    BLEND_COMPOSITE: "blend_composite", vertex_blend_composite, fragment_blend_composite, TriangleStrip, Blur, Rectangle;
+    // rev 16 (ticket 52): the drop-shadow composite - the blurred
+    // silhouette tinted and drawn beneath the content quad (the plain
+    // composite vertex, premultiplied blending).
+    DROP_SHADOW_COMPOSITE: "drop_shadow_composite", vertex_blur_composite, fragment_drop_shadow_composite, TriangleStrip, Blur, Rectangle;
     BACKDROP_CROP: "backdrop_crop", vertex_backdrop_crop, fragment_backdrop_crop, TriangleList, Blur, FullscreenTriangle;
 }
 

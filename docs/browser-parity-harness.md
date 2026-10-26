@@ -936,3 +936,49 @@ imecompose, keycode, keyorder, outline, tabnav, textpaint); tooltip-look
 dropped its pin and was re-recorded — its Tier C measured mean dropped from
 2.47 to 0.59, the closer match D1 predicts for a page that leaves the line
 height at its initial value.
+
+Ticket 43 (word-break, overflow-wrap, text-wrap: balance and
+text-align: start/end/justify, the rev-16 native rebuild) wired the
+browser text fields through the VENDORED Parley adapter
+(`reference/native/src/text_vendored/` — a byte-copy of the pinned
+`gpui_ce_parley` implementation with the rev-16 side-channel; the
+process keeps ONE FontContext/FontStore so the FontIds the text service
+reports are the FontIds the glyph service rasterizes, and
+`text::tests::vendored_font_ids_match_the_pinned_adapter` proves the
+interning matches the pinned adapter). The run record's word-break and
+overflow-wrap tags become Parley range styles (a document carrying
+`break-all` drops the Chromium ASCII pair override — parley's un-scoped
+override suppresses the BreakAll segmenter's boundaries, while Chrome's
+own break-all class table allows AL×AL breaks,
+`text_break_iterator.cc:125-149,328-336`); the text-align tag drives
+Parley's `Alignment::Start/End/Justify` with the document's base
+direction reported as `is_rtl` in the layout record; text-wrap:
+balance is the Go-side bisection over the shaping handle's relayouts
+(`gpui/text_balance.go`, Chromium's
+`ParagraphLineBreaker::AttemptParagraphBalancing`,
+`paragraph_line_breaker.cc` at 0d4dcd4f: the narrowest-width bisection
+keeping `num_lines`, the single-line guard, `kMaxLinesForBalance` = 6,
+the 1px epsilon and the 0.8 × average lower bound — the
+ScoreLineBreaker primary path is the recorded deviation: the port
+always bisects). The style layer carries the fields on the runs
+(`TextStyle.WordBreak`/`OverflowWrap`/`TextWrap`, `ToRunAt`) and the
+document alignment (`TextLayoutRequest.Align` — start/end resolve
+against the shaped summary's `IsRTL` at paint time, justify paints from
+the line origin with the stretch native); the paragraph's runs keep
+their tags through the collector, the collapse remap and the segment
+slicing, and a pure-text single-segment paragraph carries the native
+alignment. `fixtures/textwrap` is the fixture set (`textwrap-url` —
+the long URL under overflow-wrap anywhere/break-word and word-break
+break-all; `textwrap-cjk` — ideographs under keep-all, Microsoft YaHei
+pinned on both sides; `textwrap-balance` — the balanced heading, the
+text-leaf measure path (the port's inline paragraph assembler does not
+balance: the recorded gap); `textwrap-justify` — the justified
+paragraph through both the paragraph and the leaf paths): the
+line-breaking fixtures discriminate at Tier A (the row heights are the
+line counts) and the balance/justify fixtures at Tier C (their line
+counts stay, so only the pixels move), each with a wrong-view test
+dropping the classes. Two recorded gaps: parley's keep-all breaks after
+U+3005 (the ideographic iteration mark) where Chrome does not — the CJK
+fixture's text avoids the character — and the CJK text's sub-pixel
+raster drift measures ~2× the Latin fixtures' (the tolerances are
+calibrated at 2× the measured values, as every fixture's are).

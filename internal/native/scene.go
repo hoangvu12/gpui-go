@@ -59,8 +59,37 @@ const (
 // version 5 (rev 15.1, browser-core ticket 77) grew the filter record
 // to 780 bytes (8 filters per chain, one matrix slot per colour
 // function with the per-function clamp — the native side's scene.rs
-// doc has the full note).
-const sceneServiceVersion uint32 = 5
+// doc has the full note); version 6 (rev 16, browser-core ticket 50)
+// added the effect-group primitive (SceneEffectRecord,
+// InsertEffect/EffectDump, the batch ops 12/13 and the plan command
+// kinds 3/4), grew every content mask from 16 to 52 bytes
+// (SceneContentMask: bounds + per-edge fade_out (LEFT, TOP, RIGHT,
+// BOTTOM) + corner radii + smoothing; a zero-radii, zero-fade mask
+// behaves exactly as the old bounds-only mask), removed the filter
+// group depth cap in favour of the pool-index plan with the
+// MAX_SCENE_GROUPS = 1024 sanity bound, and grew the requirements
+// record (isolated_effect_count) and the meta record (effect_count).
+// The design doc's "scene service v5" became this version 6 because
+// ticket 77 had already taken 5. Version 7 (rev 16, browser-core
+// ticket 51) appended the update_property entry (the design's
+// appendix A.7: the finished-scene property-node mutation with the
+// old/new mapped bounds) - the only addition, no records or scalars
+// changed. Version 9 (rev 16, browser-core ticket 53) appended
+// tess_cache_stats (the path tessellation LRU cache's hits, misses,
+// evictions and entry count).
+const sceneServiceVersion uint32 = 9
+
+// Property kinds of Scene.UpdateProperty (rev 16, ticket 51; the
+// native scene_property_kind mirror).
+const (
+	// ScenePropertyMatrix updates the node's 2x3 transform (six f32
+	// values, row-major [m00, m01, m10, m11, tx, ty]; the records must
+	// carry SceneEffectFlagHasTransform).
+	ScenePropertyMatrix uint32 = 0
+	// ScenePropertyOpacity updates the node's group opacity (one f32
+	// value in [0, 1]; the records must carry SceneEffectFlagHasOpacity).
+	ScenePropertyOpacity uint32 = 1
+)
 
 func sceneStatusName(code int32) string {
 	switch code {
@@ -181,6 +210,47 @@ func (b SceneBounds) Rect() (x, y, w, h float32) {
 	return math.Float32frombits(b.X), math.Float32frombits(b.Y), math.Float32frombits(b.W), math.Float32frombits(b.H)
 }
 
+// SceneContentMask mirrors GpuiGoSceneContentMask (rev 16, ticket 50):
+// the pin's shader-side content mask finally carried by the ABI - the
+// clip bounds, the linear per-edge fade ramp, and the rounded-corner
+// clip (radii + smoothing; the innermost radii apply INLINE in the
+// vendored quad/shadow pipelines, ancestors' rounded clips become
+// effect groups). 56 bytes, alignment 4 (52 bytes of fields plus the
+// one-word layout pad the HLSL structured-buffer layout requires -
+// the mask's bounds member forces 8-byte alignment, so the struct's
+// size rounds up; the pad must be zero); replaces the 16-byte
+// bounds-only mask in every record that has one. A zero-radii,
+// zero-fade mask behaves exactly as the pre-R16 bounds-only mask.
+type SceneContentMask struct {
+	// Bounds is the clip bounds (the rect intersection).
+	Bounds SceneBounds
+	// FadeOut is the per-edge fade distances: LEFT, TOP, RIGHT, BOTTOM
+	// (f32 bits; a zero distance leaves that edge fully opaque).
+	FadeOut [4]uint32
+	// CornerRadii is the rounded-clip radii: top-left, top-right,
+	// bottom-right, bottom-left (f32 bits).
+	CornerRadii [4]uint32
+	// CornerSmoothing is the corner smoothing in [0, 1] (f32 bits).
+	CornerSmoothing uint32
+	// MaskPadding is the layout pad the HLSL structured-buffer layout
+	// requires (the mask's bounds member forces 8-byte alignment, so
+	// the struct's size rounds up); must be zero.
+	MaskPadding uint32
+}
+
+// SceneContentMaskOf packs a rect-only (zero fade, zero radii) mask -
+// the exact pre-R16 behaviour, the encoding every existing Go paint
+// path uses (the Go styling that authors radii and fades is
+// browser-core ticket 55).
+func SceneContentMaskOf(x, y, w, h float32) SceneContentMask {
+	return SceneContentMask{Bounds: SceneBoundsOf(x, y, w, h)}
+}
+
+// IsRounded reports whether the mask clips with rounded corners.
+func (m SceneContentMask) IsRounded() bool {
+	return m.CornerRadii[0] != 0 || m.CornerRadii[1] != 0 || m.CornerRadii[2] != 0 || m.CornerRadii[3] != 0
+}
+
 // SceneColor mirrors GpuiGoSceneColor: tag plus the HSL-with-alpha
 // components as f32 bits. Tag 0 is the only supported value (the pinned
 // Background's solid form). 20 bytes, alignment 4.
@@ -270,6 +340,16 @@ type HslaF struct {
 // [0, 1] fraction with the position along the gradient line; the
 // positions must differ). The color space defaults to sRGB (CSS's
 // legacy interpolation).
+// SceneGradientTableBackground builds the R16 gradient-table arm of the
+// background record (rev 16, ticket 52): the table index rides the
+// ANGLE field as f32 bits; every other payload word is zero.
+func SceneGradientTableBackground(index uint32) SceneBackground {
+	return SceneBackground{
+		Tag:   4,
+		Angle: math.Float32bits(float32(index)),
+	}
+}
+
 func SceneGradientBackground(angle float32, from HslaF, fromPos float32, to HslaF, toPos float32) SceneBackground {
 	return SceneBackground{
 		Tag:             1,
@@ -385,13 +465,14 @@ func ScenePathVertexOf(x, y, s, t float32) ScenePathVertexRecord {
 }
 
 // ScenePathRecord mirrors GpuiGoScenePathRecord: the path primitive
-// record (order must be 0 on insert). 116 bytes, alignment 4 (rev 15:
-// the color is a full background record). The vertices travel as the
+// record (order must be 0 on insert). 156 bytes, alignment 4 (rev 15:
+// the color is a full background record; rev 16: the extended content
+// mask). The vertices travel as the
 // parallel bulk array of InsertPath and PathDump.
 type ScenePathRecord struct {
 	Order       uint32
 	Bounds      SceneBounds
-	ContentMask SceneBounds
+	ContentMask SceneContentMask
 	Color       SceneBackground
 	VertexCount uint32
 	RecordSize  uint32
@@ -405,23 +486,31 @@ func NewScenePathRecord() ScenePathRecord {
 	}
 }
 
-// SceneQuadRecord mirrors GpuiGoSceneQuadRecord: 236 bytes, alignment 4
-// (rev 15: the background and border are full background records).
+// SceneQuadRecord mirrors GpuiGoSceneQuadRecord: 272 bytes, alignment 4
+// (rev 15: the background and border are full background records; rev
+// 16: the extended content mask).
 // Order must be 0 on insert; the kernel assigns it (mirrored in dumps).
 type SceneQuadRecord struct {
 	Order              uint32
+	BorderStyle        uint32 // 0 solid, 1 dashed
+	BorderDashedLength uint32
+	BorderDashedGap    uint32
 	Bounds             SceneBounds
-	ContentMask        SceneBounds
+	ContentMask        SceneContentMask
 	Background         SceneBackground
 	BorderColor        SceneBackground
 	CornerRadii        [4]uint32 // top-left, top-right, bottom-right, bottom-left
 	BorderWidths       [4]uint32 // top, right, bottom, left
-	BorderStyle        uint32    // 0 solid, 1 dashed
-	BorderDashedLength uint32
-	BorderDashedGap    uint32
 	CornerSmoothing    uint32
 	Padding            uint32
-	RecordSize         uint32
+	// LayoutPadding is the trailing layout pad (the record's HLSL
+	// structured-buffer size rounds up to its 8-byte alignment); must
+	// be zero. The field order mirrors the pinned struct: the record IS
+	// the vendored quad pipeline's instance layout, and the
+	// vec2f-bearing fields (bounds, the mask's bounds) must sit on
+	// 8-byte-aligned offsets.
+	LayoutPadding uint32
+	RecordSize    uint32
 }
 
 // NewSceneQuadRecord returns a validated empty quad record (every field
@@ -430,21 +519,27 @@ func NewSceneQuadRecord() SceneQuadRecord {
 	return SceneQuadRecord{RecordSize: uint32(unsafe.Sizeof(SceneQuadRecord{}))}
 }
 
-// SceneShadowRecord mirrors GpuiGoSceneShadowRecord: 172 bytes,
+// SceneShadowRecord mirrors GpuiGoSceneShadowRecord: 208 bytes,
 // alignment 4 (rev 15: the color is a full background record and drop
-// shadows clip out of the element's rounded bounds).
+// shadows clip out of the element's rounded bounds; rev 16: the
+// extended content mask).
 type SceneShadowRecord struct {
 	Order              uint32
 	BlurRadius         uint32
 	Bounds             SceneBounds
 	CornerRadii        [4]uint32
-	ContentMask        SceneBounds
+	ContentMask        SceneContentMask
 	Color              SceneBackground
 	ElementBounds      SceneBounds
 	ElementCornerRadii [4]uint32
 	Inset              uint32 // 0 drop, 1 inset
 	CornerSmoothing    uint32
-	RecordSize         uint32
+	// LayoutPadding is the trailing layout pad (the record's HLSL
+	// structured-buffer size rounds up to its 8-byte alignment); must
+	// be zero. The record IS the vendored shadow pipeline's instance
+	// layout.
+	LayoutPadding uint32
+	RecordSize    uint32
 }
 
 // NewSceneShadowRecord returns a validated empty shadow record.
@@ -452,13 +547,13 @@ func NewSceneShadowRecord() SceneShadowRecord {
 	return SceneShadowRecord{RecordSize: uint32(unsafe.Sizeof(SceneShadowRecord{}))}
 }
 
-// SceneUnderlineRecord mirrors GpuiGoSceneUnderlineRecord: 72 bytes,
-// alignment 4.
+// SceneUnderlineRecord mirrors GpuiGoSceneUnderlineRecord: 112 bytes,
+// alignment 4 (rev 16: the extended content mask).
 type SceneUnderlineRecord struct {
 	Order       uint32
 	Padding     uint32
 	Bounds      SceneBounds
-	ContentMask SceneBounds
+	ContentMask SceneContentMask
 	Color       SceneColor
 	Thickness   uint32
 	Wavy        uint32 // 0 straight, 1 wavy
@@ -471,12 +566,13 @@ func NewSceneUnderlineRecord() SceneUnderlineRecord {
 }
 
 // SceneFilterRecord mirrors GpuiGoSceneFilterRecord (backdrop filters and
-// filter boundaries): 188 bytes, alignment 4 (rev 15: per-filter kind
-// tags and one composed colour-matrix payload).
+// filter boundaries): 820 bytes, alignment 4 (rev 15: per-filter kind
+// tags and one composed colour-matrix payload; rev 15.1: one matrix
+// slot per colour function; rev 16: the extended content mask).
 type SceneFilterRecord struct {
 	Order           uint32
 	Bounds          SceneBounds
-	ContentMask     SceneBounds
+	ContentMask     SceneContentMask
 	CornerRadii     [4]uint32
 	CornerSmoothing uint32
 	BlurRadii       [8]uint32
@@ -500,6 +596,13 @@ type SceneFilterRecord struct {
 	// matrices (must equal the tag-1 entry count).
 	ColorMatrixCount uint32
 	RecordSize       uint32
+	// OpChainIndex is the appended drop-shadow op-chain reference (rev
+	// 16, ticket 52, the design's appendix A.5): the scene-level chain
+	// the group's drop-shadow ops live in. 0/0 (the default) is the R15
+	// legacy chain - bit-exact.
+	OpChainIndex uint32
+	// OpChainCount is the op count (0 = R15 legacy).
+	OpChainCount uint32
 }
 
 // ColorMatrixRows returns the i-th matrix slot as four rows of five
@@ -520,12 +623,12 @@ func NewSceneFilterRecord() SceneFilterRecord {
 	return SceneFilterRecord{RecordSize: uint32(unsafe.Sizeof(SceneFilterRecord{}))}
 }
 
-// SceneSurfaceRecord mirrors GpuiGoSceneSurfaceRecord: 56 bytes,
-// alignment 4.
+// SceneSurfaceRecord mirrors GpuiGoSceneSurfaceRecord: 96 bytes,
+// alignment 4 (rev 16: the extended content mask).
 type SceneSurfaceRecord struct {
 	Order          uint32
 	Bounds         SceneBounds
-	ContentMask    SceneBounds
+	ContentMask    SceneContentMask
 	SourceTag      uint32
 	SourceReserved [3]uint32
 	RecordSize     uint32
@@ -557,14 +660,22 @@ const (
 	SceneSpriteTextureSubpixel   uint32 = 2
 )
 
+// MaxGradientStops is the gradient table's stop cap (rev 16, ticket
+// 52; the user's 2026-10-24 decision - the design text's 32 was raised
+// to 64: zgui's ramp cap). Above it the GO layer resamples down to 64
+// and warns in debug builds; the native service rejects the insert
+// with ErrSceneLimit.
+const MaxGradientStops = 64
+
 // SceneSpriteRecord mirrors GpuiGoSceneSpriteRecord (the pinned
-// MonochromeSprite/SubpixelSprite field set): 124 bytes, alignment 4
-// (rev 15: the pixelated sampling flag).
+// MonochromeSprite/SubpixelSprite field set): 164 bytes, alignment 4
+// (rev 15: the pixelated sampling flag; rev 16: the extended content
+// mask).
 type SceneSpriteRecord struct {
 	Order          uint32
 	Padding        uint32
 	Bounds         SceneBounds
-	ContentMask    SceneBounds
+	ContentMask    SceneContentMask
 	Color          SceneColor
 	Tile           SceneTileRecord
 	Transformation [6]uint32 // rotation-scale 2x2 then translation xy, f32 bits
@@ -586,15 +697,15 @@ func NewSceneSpriteRecord() SceneSpriteRecord {
 }
 
 // ScenePolychromeSpriteRecord mirrors GpuiGoScenePolychromeSpriteRecord
-// (the pinned PolychromeSprite): 104 bytes, alignment 4 (rev 15: the
-// pixelated sampling flag).
+// (the pinned PolychromeSprite): 144 bytes, alignment 4 (rev 15: the
+// pixelated sampling flag; rev 16: the extended content mask).
 type ScenePolychromeSpriteRecord struct {
 	Order           uint32
 	Grayscale       uint32
 	Opacity         uint32
 	CornerSmoothing uint32
 	Bounds          SceneBounds
-	ContentMask     SceneBounds
+	ContentMask     SceneContentMask
 	CornerRadii     [4]uint32
 	Tile            SceneTileRecord
 	// Pixelated is 0 (bilinear, the pinned default) or 1 (point
@@ -623,6 +734,14 @@ const (
 	SceneCommandBatch       uint32 = 0
 	SceneCommandBeginFilter uint32 = 1
 	SceneCommandEndFilter   uint32 = 2
+	// SceneCommandBeginEffect begins an effect group (rev 16, ticket
+	// 50): the command carries the effect record index in BoundaryIndex
+	// and the pool target slot in TargetIndex (FilterTarget 1).
+	SceneCommandBeginEffect uint32 = 3
+	// SceneCommandEndEffect finishes an effect group: BoundaryIndex is
+	// the opening record's index, ClosingBoundaryIndex the closing
+	// marker's.
+	SceneCommandEndEffect uint32 = 4
 )
 
 // Scene batch primitive kinds (the reserved path kind is never emitted
@@ -638,6 +757,11 @@ const (
 	SceneBatchSurfaces        uint32 = 7
 	SceneBatchBackdropFilters uint32 = 8
 	SceneBatchFilterBoundary  uint32 = 9
+
+	// SceneBatchEffectBoundary is the effect-group marker tag (rev 16;
+	// never a batch command - markers compile to begin/end effect
+	// commands).
+	SceneBatchEffectBoundary uint32 = 10
 )
 
 // SceneCommandRecord mirrors GpuiGoSceneCommandRecord: 56 bytes,
@@ -659,8 +783,10 @@ type SceneCommandRecord struct {
 	RecordSize               uint32
 }
 
-// SceneRequirementsRecord mirrors GpuiGoSceneRequirementsRecord: 44
-// bytes, alignment 4.
+// SceneRequirementsRecord mirrors GpuiGoSceneRequirementsRecord: 48
+// bytes, alignment 4 (rev 16 appended isolated_effect_count; the
+// isolated_target_count is the pool high-water mark over BOTH group
+// kinds).
 type SceneRequirementsRecord struct {
 	CommandCount                 uint32
 	InstanceBatchCount           uint32
@@ -673,10 +799,244 @@ type SceneRequirementsRecord struct {
 	UsesPathTarget               uint32
 	UsesOffscreenTarget          uint32
 	RecordSize                   uint32
+	// IsolatedEffectCount is the isolated effect groups composited
+	// (rev 16, ticket 50).
+	IsolatedEffectCount uint32
 }
 
-// SceneMetaRecord mirrors GpuiGoSceneMetaRecord: 52 bytes, alignment 4
-// (ticket10 added the three sprite counts before IsFinished).
+// Effect-group flag bits of SceneEffectRecord::Flags (rev 16, ticket
+// 50; bits 8 and up are reserved zero).
+const (
+	// SceneEffectFlagIsStart opens the group (a start marker).
+	SceneEffectFlagIsStart uint32 = 1
+	// SceneEffectFlagHasTransform carries a 2x3 transform (ticket 51
+	// wires the matrix composite).
+	SceneEffectFlagHasTransform uint32 = 2
+	// SceneEffectFlagHasOpacity composites the subtree once at Opacity
+	// (group opacity - the R16 core case).
+	SceneEffectFlagHasOpacity uint32 = 4
+	// SceneEffectFlagHasBlend composites with BlendMode (ticket 52).
+	SceneEffectFlagHasBlend uint32 = 8
+	// SceneEffectFlagHasMask composites dst_in against a mask source
+	// (ticket 52).
+	SceneEffectFlagHasMask uint32 = 16
+	// SceneEffectFlagPropertyNode marks a property node (ticket 51).
+	SceneEffectFlagPropertyNode uint32 = 32
+	// SceneEffectFlagRoundedClipOnly clips the subtree to the rounded
+	// bounds (a nested rounded clip).
+	SceneEffectFlagRoundedClipOnly uint32 = 64
+	// SceneEffectFlagClipToBounds clips the composite to the group's
+	// rounded bounds (0 lets content bleed, like content filters).
+	SceneEffectFlagClipToBounds uint32 = 128
+)
+
+// SceneEffectRecord mirrors GpuiGoSceneEffectRecord (rev 16, ticket
+// 50; primitive class 10): the effect-group marker carrying the whole
+// Chromium effect-node payload - group opacity, the 2x3 transform,
+// blend mode, mask reference, corner radii and the property-node id.
+// Start and end records pair through the SAME boundary machinery as
+// filter boundaries, and both kinds share one group stack in the plan
+// (command kinds 3/4). This revision wires opacity and the rounded
+// clip; the transform/blend/mask/property-node fields are carried and
+// validated (MaskKind must be 0) and wired by tickets 51/52.
+// 116 bytes, alignment 4.
+type SceneEffectRecord struct {
+	Order       uint32
+	Flags       uint32
+	Bounds      SceneBounds
+	ContentMask SceneBounds
+	// Transform is the row-major 2x3 [m00, m01, m10, m11, tx, ty] (f32
+	// bits; requires an invertible 2x2 when HasTransform is set).
+	Transform [6]uint32
+	// Opacity is the group opacity in [0, 1] (f32 bits).
+	Opacity uint32
+	// BlendMode is 0 (src-over) .. 16 (plus-lighter).
+	BlendMode uint32
+	// MaskKind is 0 (none) this revision; 1 gradient, 2 atlas tile, 3
+	// coverage arrive with ticket 52.
+	MaskKind uint32
+	// MaskReference is the mask source reference (0 when MaskKind is 0).
+	MaskReference uint32
+	// MaskMode is 0 (alpha) or 1 (luminance).
+	MaskMode uint32
+	// NodeID is the property-node id (0 = none; non-zero when
+	// PropertyNode is set).
+	NodeID uint32
+	// CornerRadii is the group's rounded-clip radii (TL, TR, BR, BL,
+	// f32 bits).
+	CornerRadii [4]uint32
+	// CornerSmoothing is in [0, 1] (f32 bits).
+	CornerSmoothing uint32
+	Reserved        uint32
+	RecordSize      uint32
+}
+
+// SceneGradientStop mirrors GpuiGoSceneGradientStop (rev 16, ticket
+// 52; the design's appendix A.3): one gradient stop - the position in
+// [0, 1] along the gradient's parameter and an RGBA8 straight sRGB
+// color packed one byte per lane, r | g<<8 | b<<16 | a<<24. The CSS
+// color-stop fixup is the CALLER's; the service interpolates the fixed
+// stops. 8 bytes, alignment 4.
+type SceneGradientStop struct {
+	// Position is the stop's position along the gradient parameter
+	// (f32 bits).
+	Position uint32
+	// Rgba is the stop's straight sRGBA color, one byte per lane.
+	Rgba uint32
+}
+
+// Gradient kind tags of SceneGradientRecord::Kind (rev 16, ticket 52).
+const (
+	// SceneGradientKindLinear is a linear gradient along the record's
+	// [x0, y0, x1, y1] line.
+	SceneGradientKindLinear uint32 = 0
+	// SceneGradientKindRadial is a radial gradient (circle or ellipse)
+	// around [cx, cy].
+	SceneGradientKindRadial uint32 = 1
+	// SceneGradientKindConic is a conic gradient sweeping from
+	// start_angle.
+	SceneGradientKindConic uint32 = 2
+)
+
+// Gradient tile-mode tags of SceneGradientRecord::Tile (rev 16, ticket
+// 52): the wrap rule applied to the parameter before the ramp is
+// sampled.
+const (
+	// SceneGradientTilePad clamps at the ramp's own end colors (the
+	// default).
+	SceneGradientTilePad uint32 = 0
+	// SceneGradientTileRepeat wraps with fract(t) - CSS repeating-*.
+	SceneGradientTileRepeat uint32 = 1
+	// SceneGradientTileReflect mirrors around the ends (a triangle
+	// wave).
+	SceneGradientTileReflect uint32 = 2
+)
+
+// SceneGradientRecord mirrors GpuiGoSceneGradientRecord (rev 16,
+// ticket 52; the design's appendix A.3): one scene-level gradient
+// table entry - the kind, tile mode, geometry and stop count; the
+// service bakes the stops into a 1024x1 premultiplied-sRGB ramp row
+// (row index = the gradient's own table index, assigned at insert).
+// The stops travel as the parallel bulk array of InsertGradient. 56
+// bytes, alignment 4.
+type SceneGradientRecord struct {
+	// Kind is a gradient kind tag.
+	Kind uint32
+	// Tile is a gradient tile-mode tag.
+	Tile uint32
+	// ColorSpace is 0 (sRGB, this revision's only space; 1 Oklab is
+	// reserved and rejected).
+	ColorSpace uint32
+	// Geometry is the kind-specific geometry, f32 bits, device pixels:
+	// linear [x0, y0, x1, y1], radial [cx, cy, r0, r1, aspect], conic
+	// [cx, cy, start_angle, rotation]; the rest zero.
+	Geometry [8]uint32
+	// StopCount is the stop count (1..=64).
+	StopCount uint32
+	// StopRow is the ramp row index (0 on insert; the service assigns
+	// the gradient's table index, 1:1).
+	StopRow    uint32
+	RecordSize uint32
+}
+
+// NewSceneGradientRecord returns a validated empty linear gradient
+// record (stop_row 0; the service assigns it).
+func NewSceneGradientRecord() SceneGradientRecord {
+	return SceneGradientRecord{
+		Kind:       SceneGradientKindLinear,
+		Tile:       SceneGradientTilePad,
+		RecordSize: uint32(unsafe.Sizeof(SceneGradientRecord{})),
+	}
+}
+
+// SceneCoverageRecord mirrors GpuiGoSceneCoverageRecord (rev 16,
+// ticket 52; the design's appendix A.4): one clip-path coverage entry -
+// a reference to one of the scene's path records plus its device
+// bounds. The renderer rasterizes the referenced path into the
+// per-surface coverage target when the frame's effect groups reference
+// the entry (mask kind 3). 24 bytes, alignment 4.
+type SceneCoverageRecord struct {
+	// PathIndex is the referenced path record's index in the scene's
+	// path array.
+	PathIndex uint32
+	// Bounds is the path's device bounds.
+	Bounds     SceneBounds
+	RecordSize uint32
+}
+
+// NewSceneCoverageRecord returns a validated empty coverage entry.
+func NewSceneCoverageRecord() SceneCoverageRecord {
+	return SceneCoverageRecord{
+		RecordSize: uint32(unsafe.Sizeof(SceneCoverageRecord{})),
+	}
+}
+
+// Filter-op kinds of SceneFilterOpRecord::Kind (rev 16, ticket 52; the
+// design's appendix A.5).
+const (
+	// SceneFilterOpBlur is R15's chain blur (re-stated for reference -
+	// not insertable; the R15 filter tags carry the chain's blurs).
+	SceneFilterOpBlur uint32 = 0
+	// SceneFilterOpColorMatrix is R15's chain matrix (re-stated for
+	// reference - not insertable).
+	SceneFilterOpColorMatrix uint32 = 1
+	// SceneFilterOpDropShadow is a CSS drop-shadow(): the only
+	// insertable kind this revision.
+	SceneFilterOpDropShadow uint32 = 2
+)
+
+// SceneFilterOpRecord mirrors GpuiGoSceneFilterOpRecord (rev 16,
+// ticket 52; the design's appendix A.5): one drop-shadow op - offset,
+// the CSS blur radius (the renderer derives sigma = radius/2) and the
+// shadow color. 40 bytes, alignment 4.
+type SceneFilterOpRecord struct {
+	// Kind is a filter-op kind tag (only DropShadow is insertable).
+	Kind uint32
+	// Offset is the shadow offset dx, dy (device pixels, f32 bits).
+	Offset [2]uint32
+	// BlurRadius is the CSS blur radius (device pixels, f32 bits).
+	BlurRadius uint32
+	// Color is the shadow color (a solid SceneColor).
+	Color      SceneColor
+	RecordSize uint32
+}
+
+// NewSceneFilterOpRecord returns a validated empty drop-shadow op.
+func NewSceneFilterOpRecord() SceneFilterOpRecord {
+	return SceneFilterOpRecord{
+		Kind:       SceneFilterOpDropShadow,
+		RecordSize: uint32(unsafe.Sizeof(SceneFilterOpRecord{})),
+	}
+}
+
+// Batch op kinds (rev 16, ticket 52): the packed batch stream's
+// gradient, coverage and op-chain entries.
+const (
+	// SceneBatchOpGradient is one SceneGradientRecord (14 words)
+	// followed by its stop rows (2 words each).
+	SceneBatchOpGradient uint32 = 14
+	// SceneBatchOpCoverage is one SceneCoverageRecord (6 words).
+	SceneBatchOpCoverage uint32 = 15
+	// SceneBatchOpFilterOpChain is one op-count word followed by that
+	// many SceneFilterOpRecord rows (10 words each).
+	SceneBatchOpFilterOpChain uint32 = 16
+)
+
+// NewSceneEffectRecord returns a validated empty effect record (the
+// pinned unit transform and full opacity).
+func NewSceneEffectRecord() SceneEffectRecord {
+	return SceneEffectRecord{
+		Transform: [6]uint32{
+			unitF32Bits, 0, 0, unitF32Bits, 0, 0,
+		},
+		Opacity:    oneF32Bits,
+		RecordSize: uint32(unsafe.Sizeof(SceneEffectRecord{})),
+	}
+}
+
+// SceneMetaRecord mirrors GpuiGoSceneMetaRecord: 60 bytes, alignment 4
+// (ticket10 added the three sprite counts before IsFinished; rev 16
+// appended effect_count before IsFinished).
 type SceneMetaRecord struct {
 	OpCount               uint32
 	LayerPushCount        uint32
@@ -690,9 +1050,20 @@ type SceneMetaRecord struct {
 	SubpixelSpriteCount   uint32
 	PolychromeSpriteCount uint32
 	// PathCount is the path primitive count (ticket16).
-	PathCount  uint32
-	IsFinished uint32
-	RecordSize uint32
+	PathCount uint32
+	// EffectCount is the effect-group marker count (rev 16, ticket 50).
+	EffectCount uint32
+	IsFinished  uint32
+	RecordSize  uint32
+	// GradientCount is the gradient table entry count (rev 16, ticket
+	// 52; appended after RecordSize).
+	GradientCount uint32
+	// CoverageCount is the coverage-mask entry count (rev 16, ticket
+	// 52).
+	CoverageCount uint32
+	// FilterChainCount is the filter-op chain count (rev 16, ticket
+	// 52: the drop-shadow chains).
+	FilterChainCount uint32
 }
 
 // Scene dump kinds.
@@ -712,10 +1083,11 @@ const (
 // Service table mirror and validation
 // ---------------------------------------------------------------------------
 
-// sceneTable mirrors the native GpuiGoSceneTable: 27 function pointers
-// then 17 self-check scalars; 288 bytes, alignment 8 (ticket16 added
+// sceneTable mirrors the native GpuiGoSceneTable: 30 function pointers
+// then the self-check scalars; 320 bytes, alignment 8 (ticket16 added
 // the three path entries and the three path record sizes; version 4
-// appended insert_batch).
+// appended insert_batch; version 6 appended insert_effect/effect_dump
+// and the effect record scalars; version 7 appended update_property).
 type sceneTable struct {
 	create                   uintptr
 	clear                    uintptr
@@ -744,6 +1116,14 @@ type sceneTable struct {
 	pathDump                 uintptr
 	pathScript               uintptr
 	insertBatch              uintptr
+	insertEffect             uintptr
+	effectDump               uintptr
+	updateProperty           uintptr
+	insertGradient           uintptr
+	gradientDump             uintptr
+	insertCoverage           uintptr
+	insertFilterOpChain      uintptr
+	tessCacheStats           uintptr
 	serviceVersion           uint32
 	sizeOfTable              uint32
 	alignOfTable             uint32
@@ -761,6 +1141,14 @@ type sceneTable struct {
 	sizeOfPathVertexRecord   uint32
 	sizeOfPathCommandRecord  uint32
 	maxFilters               uint32
+	sizeOfEffectRecord       uint32
+	sizeOfContentMask        uint32
+	maxSceneGroups           uint32
+	sizeOfGradientRecord     uint32
+	sizeOfGradientStop       uint32
+	maxGradientStops         uint32
+	sizeOfCoverageRecord     uint32
+	sizeOfFilterOpRecord     uint32
 }
 
 func sceneTableFromSlot(slot uintptr) *sceneTable {
@@ -819,13 +1207,39 @@ func validateSceneTable(t *sceneTable, path string) error {
 	if t.sizeOfPathCommandRecord != uint32(unsafe.Sizeof(PathCommandRecord{})) {
 		return abi("scene size_of_path_command_record", fmt.Sprint(unsafe.Sizeof(PathCommandRecord{})), fmt.Sprint(t.sizeOfPathCommandRecord))
 	}
+	if t.sizeOfEffectRecord != uint32(unsafe.Sizeof(SceneEffectRecord{})) {
+		return abi("scene size_of_effect_record", fmt.Sprint(unsafe.Sizeof(SceneEffectRecord{})), fmt.Sprint(t.sizeOfEffectRecord))
+	}
+	if t.sizeOfContentMask != uint32(unsafe.Sizeof(SceneContentMask{})) {
+		return abi("scene size_of_content_mask", fmt.Sprint(unsafe.Sizeof(SceneContentMask{})), fmt.Sprint(t.sizeOfContentMask))
+	}
+	if t.maxSceneGroups == 0 {
+		return &CapabilityError{Path: path, Detail: "scene max_scene_groups is zero"}
+	}
+	if t.sizeOfGradientRecord != uint32(unsafe.Sizeof(SceneGradientRecord{})) {
+		return abi("scene size_of_gradient_record", fmt.Sprint(unsafe.Sizeof(SceneGradientRecord{})), fmt.Sprint(t.sizeOfGradientRecord))
+	}
+	if t.sizeOfGradientStop != uint32(unsafe.Sizeof(SceneGradientStop{})) {
+		return abi("scene size_of_gradient_stop", fmt.Sprint(unsafe.Sizeof(SceneGradientStop{})), fmt.Sprint(t.sizeOfGradientStop))
+	}
+	if t.maxGradientStops != MaxGradientStops {
+		return abi("scene max_gradient_stops", fmt.Sprint(MaxGradientStops), fmt.Sprint(t.maxGradientStops))
+	}
+	if t.sizeOfCoverageRecord != uint32(unsafe.Sizeof(SceneCoverageRecord{})) {
+		return abi("scene size_of_coverage_record", fmt.Sprint(unsafe.Sizeof(SceneCoverageRecord{})), fmt.Sprint(t.sizeOfCoverageRecord))
+	}
+	if t.sizeOfFilterOpRecord != uint32(unsafe.Sizeof(SceneFilterOpRecord{})) {
+		return abi("scene size_of_filter_op_record", fmt.Sprint(unsafe.Sizeof(SceneFilterOpRecord{})), fmt.Sprint(t.sizeOfFilterOpRecord))
+	}
 	slots := [...]uintptr{
 		t.create, t.clear, t.dispose, t.pushLayer, t.popLayer, t.raiseOrderFloor,
 		t.insertQuad, t.insertShadow, t.insertUnderline, t.insertBackdrop,
 		t.insertBoundary, t.insertSurface, t.insertMonochromeSprite,
 		t.insertSubpixelSprite, t.insertPolychromeSprite, t.replay, t.finish,
 		t.length, t.meta, t.dump, t.planDump, t.requirements, t.panicProbe,
-		t.insertPath, t.pathDump, t.pathScript, t.insertBatch,
+		t.insertPath, t.pathDump, t.pathScript, t.insertBatch, t.insertEffect,
+		t.effectDump, t.updateProperty, t.insertGradient, t.gradientDump,
+		t.insertCoverage, t.insertFilterOpChain, t.tessCacheStats,
 	}
 	names := [...]string{
 		"scene_create", "scene_clear", "scene_dispose", "scene_push_layer",
@@ -837,7 +1251,9 @@ func validateSceneTable(t *sceneTable, path string) error {
 		"scene_len", "scene_meta", "scene_dump", "scene_plan_dump",
 		"scene_requirements", "scene_panic_probe",
 		"scene_insert_path", "scene_path_dump", "scene_path_script",
-		"scene_insert_batch",
+		"scene_insert_batch", "scene_insert_effect", "scene_effect_dump",
+		"scene_update_property", "scene_insert_gradient", "scene_gradient_dump",
+		"scene_insert_coverage", "scene_insert_filter_op_chain", "scene_tess_cache_stats",
 	}
 	for i, slot := range slots {
 		if slot == 0 {
@@ -1050,6 +1466,266 @@ func (sc *Scene) InsertFilterBoundary(rec *SceneFilterRecord) error {
 	return enqueueBatch(sc, "scene_insert_filter_boundary", sceneBatchBoundary, rec)
 }
 
+// InsertEffect inserts an effect-group marker (rev 16, ticket 50):
+// Flags' IsStart bit decides start/end. Start and end must carry the
+// same snapshot (the pinned with_filter_layer rule); unmatched starts
+// render inline. The group start that would exceed MAX_SCENE_GROUPS
+// (1024, shared with the filter boundaries) fails with ErrSceneLimit
+// before native entry is attempted at the flush.
+func (sc *Scene) InsertEffect(rec *SceneEffectRecord) error {
+	if rec == nil {
+		return sceneStatusError(sceneErrNullArg, "scene_insert_effect")
+	}
+	if err := checkEffectRecord("scene_insert_effect", rec); err != nil {
+		return err
+	}
+	kind := sceneBatchEffectEnd
+	if rec.Flags&SceneEffectFlagIsStart != 0 {
+		kind = sceneBatchEffectStart
+	}
+	return enqueueBatch(sc, "scene_insert_effect", kind, rec)
+}
+
+// EffectDump bulk-dumps the finished scene's effect records with their
+// kernel-assigned orders (rev 16, ticket 50). Requires Finish; a
+// too-small capacity retries once with the reported count.
+func (sc *Scene) EffectDump() ([]SceneEffectRecord, error) {
+	if err := sc.flushBatch(); err != nil {
+		return nil, err
+	}
+	want := uint32(16)
+	for attempt := 0; attempt < 2; attempt++ {
+		out := make([]SceneEffectRecord, want)
+		var count uint32
+		var recPtr uintptr
+		if want > 0 {
+			recPtr = uintptr(unsafe.Pointer(&out[0]))
+		}
+		code, err := sc.withScene("scene_effect_dump", func() (int32, error) {
+			return callSceneEffectDump(sc.svc.table.effectDump, uint64(sc.handle), recPtr, want, &count)
+		})
+		if err != nil {
+			return nil, err
+		}
+		if code == sceneErrCapacity {
+			want = count
+			continue
+		}
+		if code != sceneStatusOK {
+			return nil, sceneStatusError(code, "scene_effect_dump")
+		}
+		return out[:count], nil
+	}
+	return nil, sceneStatusError(sceneErrCapacity, "scene_effect_dump capacity retry failed")
+}
+
+// InsertGradient inserts one gradient table entry with its bulk stop
+// array (rev 16, ticket 52): the service bakes the 1024x1
+// premultiplied-sRGB ramp row and assigns StopRow (the gradient's own
+// table index, returned). The gradient table is a scene-level table
+// the quads' tag-4 backgrounds and the effect groups' gradient masks
+// reference by index.
+func (sc *Scene) InsertGradient(rec *SceneGradientRecord, stops []SceneGradientStop) (uint32, error) {
+	if rec == nil {
+		return 0, sceneStatusError(sceneErrNullArg, "scene_insert_gradient")
+	}
+	if err := checkGradientRecord("scene_insert_gradient", rec, stops); err != nil {
+		return 0, err
+	}
+	if err := sc.flushBatch(); err != nil {
+		return 0, err
+	}
+	var stopsPtr *SceneGradientStop
+	if len(stops) > 0 {
+		stopsPtr = &stops[0]
+	}
+	var index uint32
+	code, err := sc.withScene("scene_insert_gradient", func() (int32, error) {
+		return callSceneInsertGradient(sc.svc.table.insertGradient, uint64(sc.handle), rec, stopsPtr, uint32(len(stops)), &index)
+	})
+	if err != nil {
+		return 0, err
+	}
+	if code != sceneStatusOK {
+		return 0, sceneStatusError(code, "scene_insert_gradient")
+	}
+	return index, nil
+}
+
+// GradientDump bulk-dumps the finished scene's gradient records and
+// the concatenated stop array (rev 16, ticket 52; the
+// path_dump capacity protocol - both capacities retry once with the
+// reported counts).
+func (sc *Scene) GradientDump() ([]SceneGradientRecord, []SceneGradientStop, error) {
+	if err := sc.flushBatch(); err != nil {
+		return nil, nil, err
+	}
+	wantRecords, wantStops := uint32(16), uint32(64)
+	for attempt := 0; attempt < 2; attempt++ {
+		records := make([]SceneGradientRecord, wantRecords)
+		stops := make([]SceneGradientStop, wantStops)
+		var recordCount, stopCount uint32
+		var recPtr, stopPtr uintptr
+		if wantRecords > 0 {
+			recPtr = uintptr(unsafe.Pointer(&records[0]))
+		}
+		if wantStops > 0 {
+			stopPtr = uintptr(unsafe.Pointer(&stops[0]))
+		}
+		code, err := sc.withScene("scene_gradient_dump", func() (int32, error) {
+			return callSceneGradientDump(sc.svc.table.gradientDump, uint64(sc.handle), recPtr, stopPtr, wantRecords, wantStops, &recordCount, &stopCount)
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		if code == sceneErrCapacity {
+			wantRecords, wantStops = recordCount, stopCount
+			continue
+		}
+		if code != sceneStatusOK {
+			return nil, nil, sceneStatusError(code, "scene_gradient_dump")
+		}
+		return records[:recordCount], stops[:stopCount], nil
+	}
+	return nil, nil, sceneStatusError(sceneErrCapacity, "scene_gradient_dump capacity retry failed")
+}
+
+// InsertCoverage inserts one clip-path coverage entry (rev 16, ticket
+// 52): a path reference plus its device bounds. The renderer
+// rasterizes the referenced path into the per-surface coverage target
+// when the frame's effect groups reference the entry (mask kind 3).
+func (sc *Scene) InsertCoverage(rec *SceneCoverageRecord) (uint32, error) {
+	if rec == nil {
+		return 0, sceneStatusError(sceneErrNullArg, "scene_insert_coverage")
+	}
+	if err := checkCoverageRecord("scene_insert_coverage", rec); err != nil {
+		return 0, err
+	}
+	if err := sc.flushBatch(); err != nil {
+		return 0, err
+	}
+	var index uint32
+	code, err := sc.withScene("scene_insert_coverage", func() (int32, error) {
+		return callSceneInsertCoverage(sc.svc.table.insertCoverage, uint64(sc.handle), rec, &index)
+	})
+	if err != nil {
+		return 0, err
+	}
+	if code != sceneStatusOK {
+		return 0, sceneStatusError(code, "scene_insert_coverage")
+	}
+	return index, nil
+}
+
+// InsertFilterOpChain inserts one drop-shadow op chain (rev 16,
+// ticket 52; the design's appendix A.5) and returns the chain index
+// the R15 filter records reference through their appended
+// OpChainIndex/OpChainCount (0/0 = the R15 legacy chain, bit-exact).
+func (sc *Scene) InsertFilterOpChain(ops []SceneFilterOpRecord) (uint32, error) {
+	if len(ops) == 0 {
+		return 0, sceneStatusError(sceneErrNullArg, "scene_insert_filter_op_chain: empty chain")
+	}
+	for i := range ops {
+		if err := checkFilterOpRecord("scene_insert_filter_op_chain", &ops[i]); err != nil {
+			return 0, err
+		}
+	}
+	if err := sc.flushBatch(); err != nil {
+		return 0, err
+	}
+	var index uint32
+	code, err := sc.withScene("scene_insert_filter_op_chain", func() (int32, error) {
+		return callSceneInsertFilterOpChain(sc.svc.table.insertFilterOpChain, uint64(sc.handle), &ops[0], uint32(len(ops)), &index)
+	})
+	if err != nil {
+		return 0, err
+	}
+	if code != sceneStatusOK {
+		return 0, sceneStatusError(code, "scene_insert_filter_op_chain")
+	}
+	return index, nil
+}
+
+// UpdateProperty mutates a finished scene's property-node records in
+// place (rev 16, ticket 51; the design's appendix A.7): every effect
+// record carrying NodeID takes the new value - the 2x3 matrix
+// (ScenePropertyMatrix, six f32 bits row-major [m00, m01, m10, m11,
+// tx, ty]; the records must carry SceneEffectFlagHasTransform) or the
+// group opacity (ScenePropertyOpacity, one f32 bit word; the records
+// must carry SceneEffectFlagHasOpacity). No re-sort, no re-plan: the
+// render walk consults the mutated records, so the same scene handle
+// re-presents with the updated value. Returns the group's old and new
+// mapped device bounds - the damage union the caller re-presents
+// (mapped through the old/new matrix; the record bounds when the node
+// has no transform).
+//
+// Requires Finish (ErrSceneNotFinished before); a stale node id, an
+// unknown kind, a wrong value count or a value the insert validation
+// would reject answers ErrSceneBadValue.
+func (sc *Scene) UpdateProperty(nodeID uint32, kind uint32, values []uint32) (oldBounds, newBounds SceneBounds, err error) {
+	if nodeID == 0 {
+		return SceneBounds{}, SceneBounds{}, sceneStatusError(sceneErrBadValue, "scene_update_property: node id is zero")
+	}
+	want := 0
+	switch kind {
+	case ScenePropertyMatrix:
+		want = 6
+	case ScenePropertyOpacity:
+		want = 1
+	default:
+		return SceneBounds{}, SceneBounds{}, sceneStatusError(sceneErrBadValue, fmt.Sprintf("scene_update_property: unknown kind %d", kind))
+	}
+	if len(values) != want {
+		return SceneBounds{}, SceneBounds{}, sceneStatusError(sceneErrBadValue, fmt.Sprintf("scene_update_property: kind %d needs %d values, got %d", kind, want, len(values)))
+	}
+	// The value validation mirrors the insert rules (the native side
+	// validates again before mutating).
+	if kind == ScenePropertyMatrix {
+		m00 := float64(math.Float32frombits(values[0]))
+		m01 := float64(math.Float32frombits(values[1]))
+		m10 := float64(math.Float32frombits(values[2]))
+		m11 := float64(math.Float32frombits(values[3]))
+		tx := float64(math.Float32frombits(values[4]))
+		ty := float64(math.Float32frombits(values[5]))
+		for _, value := range []float64{m00, m01, m10, m11, tx, ty} {
+			if math.IsNaN(value) || math.IsInf(value, 0) {
+				return SceneBounds{}, SceneBounds{}, badRecord("scene_update_property", "matrix value non-finite")
+			}
+		}
+		determinant := m00*m11 - m01*m10
+		if math.IsNaN(determinant) || math.IsInf(determinant, 0) || determinant == 0 {
+			return SceneBounds{}, SceneBounds{}, badRecord("scene_update_property", "matrix 2x2 is singular")
+		}
+	} else {
+		opacity := float64(math.Float32frombits(values[0]))
+		if math.IsNaN(opacity) || math.IsInf(opacity, 0) || opacity < 0 || opacity > 1 {
+			return SceneBounds{}, SceneBounds{}, badRecord("scene_update_property", "opacity out of range")
+		}
+	}
+	if err := sc.flushBatch(); err != nil {
+		return SceneBounds{}, SceneBounds{}, err
+	}
+	code, err := sc.withScene("scene_update_property", func() (int32, error) {
+		return callSceneUpdateProperty(
+			sc.svc.table.updateProperty,
+			uint64(sc.handle),
+			nodeID,
+			kind,
+			uintptr(unsafe.Pointer(&values[0])),
+			uint32(len(values)),
+			&oldBounds,
+			&newBounds,
+		)
+	})
+	if err != nil {
+		return SceneBounds{}, SceneBounds{}, err
+	}
+	if code != sceneStatusOK {
+		return SceneBounds{}, SceneBounds{}, sceneStatusError(code, "scene_update_property")
+	}
+	return oldBounds, newBounds, nil
+}
+
 // InsertSurface inserts a surface record with its paired opacity (the
 // pinned insert_surface path: the opacity stays paired with the surface
 // through the finish sort and replay).
@@ -1234,6 +1910,38 @@ func (s *SceneService) TessellatePath(commands []PathCommandRecord, words []uint
 		return nil, SceneBounds{}, sceneStatusError(code, "scene_path_script")
 	}
 	return vertices, outBounds, nil
+}
+
+// TessCacheStats reports the path tessellation LRU cache's counters
+// (rev 16, browser-core ticket 53): the cumulative hits, misses and
+// evictions plus the live entry count. The cache is process-global
+// (path_script is stateless), so the counters are cumulative across
+// every scene and the Go PathBuilder.Build callers. Note the two-call
+// capacity protocol of TessellatePath: one Build() through this client
+// is one miss (the capacity probe tessellates and caches) followed by
+// one hit (the data call).
+type TessCacheStats struct {
+	Hits      uint32
+	Misses    uint32
+	Evictions uint32
+	Entries   uint32
+}
+
+// TessCacheStats reads the tessellation cache's counters through the
+// scene service's stateless stats entry.
+func (s *SceneService) TessCacheStats() (TessCacheStats, error) {
+	if s.lib.released.Load() {
+		return TessCacheStats{}, ErrClosed
+	}
+	var stats TessCacheStats
+	code, err := callSceneTessCacheStats(s.table.tessCacheStats, &stats.Hits, &stats.Misses, &stats.Evictions, &stats.Entries)
+	if err != nil {
+		return TessCacheStats{}, err
+	}
+	if code != sceneStatusOK {
+		return TessCacheStats{}, sceneStatusError(code, "scene_tess_cache_stats")
+	}
+	return stats, nil
 }
 
 // Finish sorts the primitive arrays and compiles the render plan (the

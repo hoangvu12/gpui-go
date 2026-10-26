@@ -42,12 +42,19 @@ const (
 	sceneBatchPushLayer        uint32 = 9
 	sceneBatchPopLayer         uint32 = 10
 	sceneBatchRaiseOrderFloor  uint32 = 11
+	// sceneBatchEffectStart is the effect-group start marker (rev 16,
+	// ticket 50): the SceneEffectRecord payload with
+	// Flags' IsStart bit forced on.
+	sceneBatchEffectStart uint32 = 12
+	// sceneBatchEffectEnd is the effect-group end marker: the
+	// SceneEffectRecord payload with IsStart forced off.
+	sceneBatchEffectEnd uint32 = 13
 )
 
 var sceneBatchOpNames = [...]string{
 	"quad", "shadow", "underline", "backdrop filter", "filter boundary",
 	"surface", "monochrome sprite", "subpixel sprite", "polychrome sprite",
-	"push layer", "pop layer", "raise order floor",
+	"push layer", "pop layer", "raise order floor", "effect start", "effect end",
 }
 
 // sceneBatchFlushWords bounds one batch (64 KiB, about 500 sprite
@@ -240,6 +247,24 @@ func checkBackground(op string, b SceneBackground) error {
 			return badRecord(op, "gradient background carries solid payload")
 		}
 		return nil
+	case 4:
+		// rev 16, ticket 52: the gradient-table arm - the index rides the
+		// ANGLE field as f32 bits (finite, non-negative, integral, under
+		// the table bound; the RENDERER resolves the reference).
+		if b.ColorSpace != 0 {
+			return badRecord(op, "gradient-table background requires the sRGB space")
+		}
+		index := float64(math.Float32frombits(b.Angle))
+		if math.IsNaN(index) || math.IsInf(index, 0) || index < 0 ||
+			index != math.Trunc(index) || index >= 256 {
+			return badRecord(op, "gradient-table background index out of range")
+		}
+		if b.H != 0 || b.S != 0 || b.L != 0 || b.A != 0 ||
+			b.Stop0H != 0 || b.Stop0S != 0 || b.Stop0L != 0 || b.Stop0A != 0 || b.Stop0Percentage != 0 ||
+			b.Stop1H != 0 || b.Stop1S != 0 || b.Stop1L != 0 || b.Stop1A != 0 || b.Stop1Percentage != 0 {
+			return badRecord(op, "gradient-table background carries payload")
+		}
+		return nil
 	default:
 		return badRecord(op, "unsupported background tag")
 	}
@@ -257,6 +282,103 @@ func finiteBits(bits uint32) bool {
 	return !math.IsInf(f, 0) && !math.IsNaN(f)
 }
 
+// checkContentMask validates the extended content mask (rev 16,
+// ticket 50): non-negative finite fades and radii, smoothing in
+// [0, 1]. A zero-everything mask (the pre-R16 shape) always passes.
+func checkContentMask(op string, mask SceneContentMask) error {
+	for _, bits := range mask.FadeOut {
+		f := float64(math.Float32frombits(bits))
+		if math.IsNaN(f) || math.IsInf(f, 0) || f < 0 {
+			return badRecord(op, "content mask fade distance negative or non-finite")
+		}
+	}
+	for _, bits := range mask.CornerRadii {
+		f := float64(math.Float32frombits(bits))
+		if math.IsNaN(f) || math.IsInf(f, 0) || f < 0 {
+			return badRecord(op, "content mask corner radius negative or non-finite")
+		}
+	}
+	smoothing := float64(math.Float32frombits(mask.CornerSmoothing))
+	if math.IsNaN(smoothing) || math.IsInf(smoothing, 0) || smoothing < 0 || smoothing > 1 {
+		return badRecord(op, "content mask corner smoothing out of range")
+	}
+	return nil
+}
+
+// checkEffectRecord validates the effect-group record (rev 16, ticket
+// 50; the design appendix A.1 rules): known flag bits only, an
+// invertible 2x2 when HasTransform is set, the none-kind mask this
+// revision, the property-node id non-zero and paired with a transform
+// or opacity, opacity in [0, 1], finite radii and smoothing in [0, 1].
+func checkEffectRecord(op string, rec *SceneEffectRecord) error {
+	if err := checkCommon(op, rec.RecordSize, unsafe.Sizeof(*rec), rec.Order); err != nil {
+		return err
+	}
+	known := SceneEffectFlagIsStart | SceneEffectFlagHasTransform |
+		SceneEffectFlagHasOpacity | SceneEffectFlagHasBlend |
+		SceneEffectFlagHasMask | SceneEffectFlagPropertyNode |
+		SceneEffectFlagRoundedClipOnly | SceneEffectFlagClipToBounds
+	if rec.Flags&^known != 0 {
+		return badRecord(op, "effect flags carry unknown bits")
+	}
+	if rec.Flags&SceneEffectFlagHasTransform != 0 {
+		m00 := float64(math.Float32frombits(rec.Transform[0]))
+		m01 := float64(math.Float32frombits(rec.Transform[1]))
+		m10 := float64(math.Float32frombits(rec.Transform[2]))
+		m11 := float64(math.Float32frombits(rec.Transform[3]))
+		for _, value := range []float64{m00, m01, m10, m11} {
+			if math.IsNaN(value) || math.IsInf(value, 0) {
+				return badRecord(op, "effect transform is non-finite")
+			}
+		}
+		determinant := m00*m11 - m01*m10
+		if math.IsNaN(determinant) || math.IsInf(determinant, 0) || determinant == 0 {
+			return badRecord(op, "effect transform 2x2 is singular")
+		}
+	}
+	if rec.BlendMode > 16 {
+		return badRecord(op, "effect blend mode out of range")
+	}
+	// rev 16, ticket 52: the mask kinds 1-3 are wired - the composite
+	// resolves the reference at RENDER time (an unresolvable mask hides
+	// the element), so only the kind/mode tags validate here.
+	if rec.MaskKind > 3 {
+		return badRecord(op, "effect mask kind out of range")
+	}
+	if rec.MaskKind == 0 && (rec.MaskReference != 0 || rec.MaskMode != 0) {
+		return badRecord(op, "effect none-kind mask must carry zero reference and mode")
+	}
+	if rec.MaskKind != 0 && rec.MaskMode > 1 {
+		return badRecord(op, "effect mask mode out of range")
+	}
+	if rec.Flags&SceneEffectFlagPropertyNode != 0 {
+		if rec.NodeID == 0 {
+			return badRecord(op, "effect property node requires a non-zero node id")
+		}
+		if rec.Flags&(SceneEffectFlagHasTransform|SceneEffectFlagHasOpacity) == 0 {
+			return badRecord(op, "effect property node requires a transform or an opacity")
+		}
+	}
+	opacity := float64(math.Float32frombits(rec.Opacity))
+	if math.IsNaN(opacity) || math.IsInf(opacity, 0) || opacity < 0 || opacity > 1 {
+		return badRecord(op, "effect opacity out of range")
+	}
+	for _, bits := range rec.CornerRadii {
+		f := float64(math.Float32frombits(bits))
+		if math.IsNaN(f) || math.IsInf(f, 0) || f < 0 {
+			return badRecord(op, "effect corner radius negative or non-finite")
+		}
+	}
+	smoothing := float64(math.Float32frombits(rec.CornerSmoothing))
+	if math.IsNaN(smoothing) || math.IsInf(smoothing, 0) || smoothing < 0 || smoothing > 1 {
+		return badRecord(op, "effect corner smoothing out of range")
+	}
+	if rec.Reserved != 0 {
+		return badRecord(op, "effect reserved word must be zero")
+	}
+	return nil
+}
+
 func checkQuadRecord(rec *SceneQuadRecord) error {
 	const op = "scene_insert_quad"
 	if err := checkCommon(op, rec.RecordSize, unsafe.Sizeof(*rec), rec.Order); err != nil {
@@ -268,7 +390,10 @@ func checkQuadRecord(rec *SceneQuadRecord) error {
 	if err := checkBackground(op, rec.Background); err != nil {
 		return err
 	}
-	return checkBackground(op, rec.BorderColor)
+	if err := checkBackground(op, rec.BorderColor); err != nil {
+		return err
+	}
+	return checkContentMask(op, rec.ContentMask)
 }
 
 func checkShadowRecord(rec *SceneShadowRecord) error {
@@ -279,7 +404,10 @@ func checkShadowRecord(rec *SceneShadowRecord) error {
 	if err := checkBool01(op, rec.Inset); err != nil {
 		return err
 	}
-	return checkBackground(op, rec.Color)
+	if err := checkBackground(op, rec.Color); err != nil {
+		return err
+	}
+	return checkContentMask(op, rec.ContentMask)
 }
 
 func checkUnderlineRecord(rec *SceneUnderlineRecord) error {
@@ -290,7 +418,10 @@ func checkUnderlineRecord(rec *SceneUnderlineRecord) error {
 	if err := checkBool01(op, rec.Wavy); err != nil {
 		return err
 	}
-	return checkColor(op, rec.Color)
+	if err := checkColor(op, rec.Color); err != nil {
+		return err
+	}
+	return checkContentMask(op, rec.ContentMask)
 }
 
 func checkFilterRecord(op string, rec *SceneFilterRecord, maxFilters uint32) error {
@@ -346,6 +477,16 @@ func checkFilterRecord(op string, rec *SceneFilterRecord, maxFilters uint32) err
 				return badRecord(op, "matrix slot beyond the count must be zero")
 			}
 		}
+	}
+	// rev 16, ticket 52: the appended drop-shadow op-chain reference -
+	// 0/0 is the R15 legacy shape; a count demands an index (the chain
+	// resolves at SNAPSHOT time: an out-of-range index reads as empty,
+	// the R15 semantics).
+	if rec.OpChainCount == 0 && rec.OpChainIndex != 0 {
+		return badRecord(op, "filter op-chain count zero with a non-zero index")
+	}
+	if rec.OpChainCount > 8 {
+		return badRecord(op, "filter op-chain count over the maximum")
 	}
 	return nil
 }
@@ -421,4 +562,107 @@ func checkPolychromeSpriteRecord(rec *ScenePolychromeSpriteRecord) error {
 		}
 	}
 	return checkTile(op, &rec.Tile, SceneSpriteTexturePolychrome)
+}
+
+// checkGradientRecord validates a gradient table entry (rev 16,
+// ticket 52): known kind and tile tags, the sRGB space, finite
+// geometry with the kind's non-degeneracy rule, the stop count in
+// 1..=64, and stops that are finite, ordered non-decreasing within
+// [0, 1].
+func checkGradientRecord(op string, rec *SceneGradientRecord, stops []SceneGradientStop) error {
+	if err := checkCommon(op, rec.RecordSize, unsafe.Sizeof(*rec), 0); err != nil {
+		return err
+	}
+	if rec.Kind > SceneGradientKindConic {
+		return badRecord(op, "gradient kind out of range")
+	}
+	if rec.Tile > SceneGradientTileReflect {
+		return badRecord(op, "gradient tile mode out of range")
+	}
+	if rec.ColorSpace != 0 {
+		return badRecord(op, "gradient color space must be sRGB this revision")
+	}
+	for _, bits := range rec.Geometry {
+		if !finiteBits(bits) {
+			return badRecord(op, "gradient geometry is non-finite")
+		}
+	}
+	switch rec.Kind {
+	case SceneGradientKindLinear:
+		x0 := math.Float32frombits(rec.Geometry[0])
+		y0 := math.Float32frombits(rec.Geometry[1])
+		x1 := math.Float32frombits(rec.Geometry[2])
+		y1 := math.Float32frombits(rec.Geometry[3])
+		if x1 == x0 && y1 == y0 {
+			return badRecord(op, "linear gradient line is degenerate")
+		}
+	case SceneGradientKindRadial:
+		r0 := math.Float32frombits(rec.Geometry[2])
+		r1 := math.Float32frombits(rec.Geometry[3])
+		aspect := math.Float32frombits(rec.Geometry[4])
+		if r1 == r0 || aspect <= 0 {
+			return badRecord(op, "radial gradient radii or aspect are degenerate")
+		}
+	case SceneGradientKindConic:
+		rotation := math.Float32frombits(rec.Geometry[3])
+		if rotation <= 0 {
+			return badRecord(op, "conic gradient sweep must be positive")
+		}
+	}
+	if rec.StopRow != 0 {
+		return badRecord(op, "gradient stop row must be zero on insert")
+	}
+	if len(stops) == 0 || len(stops) > int(MaxGradientStops) {
+		return badRecord(op, "gradient stop count out of range (1..=64)")
+	}
+	if rec.StopCount != uint32(len(stops)) {
+		return badRecord(op, "gradient stop count disagrees with the stop array")
+	}
+	previous := math.Inf(-1)
+	for _, stop := range stops {
+		position := float64(math.Float32frombits(stop.Position))
+		if math.IsNaN(position) || math.IsInf(position, 0) || position < 0 || position > 1 {
+			return badRecord(op, "gradient stop position out of range")
+		}
+		if position < previous {
+			return badRecord(op, "gradient stop positions must be non-decreasing")
+		}
+		previous = position
+	}
+	return nil
+}
+
+// checkCoverageRecord validates a coverage entry (rev 16, ticket 52):
+// finite bounds (the path index resolves at render time).
+func checkCoverageRecord(op string, rec *SceneCoverageRecord) error {
+	if err := checkCommon(op, rec.RecordSize, unsafe.Sizeof(*rec), 0); err != nil {
+		return err
+	}
+	for _, bits := range []uint32{rec.Bounds.X, rec.Bounds.Y, rec.Bounds.W, rec.Bounds.H} {
+		if !finiteBits(bits) {
+			return badRecord(op, "coverage bounds are non-finite")
+		}
+	}
+	return nil
+}
+
+// checkFilterOpRecord validates one drop-shadow op (rev 16, ticket 52):
+// the drop-shadow kind only, finite offset and radius, a solid color.
+func checkFilterOpRecord(op string, rec *SceneFilterOpRecord) error {
+	if err := checkCommon(op, rec.RecordSize, unsafe.Sizeof(*rec), 0); err != nil {
+		return err
+	}
+	if rec.Kind != SceneFilterOpDropShadow {
+		return badRecord(op, "filter op kind must be drop-shadow")
+	}
+	for _, bits := range rec.Offset {
+		if !finiteBits(bits) {
+			return badRecord(op, "filter op offset is non-finite")
+		}
+	}
+	radius := float64(math.Float32frombits(rec.BlurRadius))
+	if math.IsNaN(radius) || math.IsInf(radius, 0) || radius < 0 {
+		return badRecord(op, "filter op blur radius out of range")
+	}
+	return checkColor(op, rec.Color)
 }

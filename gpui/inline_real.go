@@ -146,6 +146,17 @@ func (s *realShapedText) lineRange(lineIndex int) (int, int) {
 	return record.TextStart, record.TextEnd
 }
 
+// isRTL implements shapedText: the document's base direction from the
+// shaping summary (browser-core 43, rev 16 — the layout record's
+// is_rtl).
+func (s *realShapedText) isRTL() bool {
+	summary, err := s.line.Summary()
+	if err != nil {
+		return false
+	}
+	return summary.IsRTL
+}
+
 // selectionRects implements shapedText: the native selection rectangles
 // covering a byte range (the reference platform_layout.selection_bounds
 // feeding inline_geometry).
@@ -181,6 +192,13 @@ type inlineSegment struct {
 	// white-space mode preserves tabs (browser-core 38); nil keeps the
 	// pin's DirectWrite stops.
 	tabSizeSpaces *uint32
+	// nativeAlign is the alignment the segment's native shape carries
+	// (browser-core 43): only a pure-text single-segment paragraph sets
+	// it — the paragraph's own align, so justify stretches each row's
+	// piece inside the native layout — while every other document
+	// keeps TextAlignLeft and the Go row geometry aligns (see
+	// layoutInline).
+	nativeAlign TextAlign
 }
 
 // inlineAssemblyRow is one row under assembly: its pieces and boxes
@@ -196,6 +214,23 @@ type inlineAssemblyRow struct {
 // adaptation record).
 func (r *realWindowTextSystem) layoutInline(request inlineLayoutRequest) (inlineLayout, error) {
 	segments := splitInlineSegments(request)
+	// browser-core 43: a pure-text single-segment paragraph (one text
+	// child, no inline boxes) can carry the native alignment — the
+	// paragraph's own align tag, so justify stretches every wrapped
+	// row's piece inside the native layout and start/end resolve
+	// against the document's base direction there. A mixed document
+	// (several segments, or boxes) would mis-justify — each segment
+	// would stretch against its own remaining row budget — so its
+	// segments keep the field-free shape and the Go row geometry below
+	// aligns (left/center/right, and start/end against the first
+	// piece's direction).
+	nativeAlign := TextAlignLeft
+	if len(segments) == 1 && len(request.boxes) == 0 {
+		nativeAlign = request.textAlign
+	}
+	for i := range segments {
+		segments[i].nativeAlign = nativeAlign
+	}
 
 	var rows []*inlineAssemblyRow
 	pieces := []inlinePaintPiece{}
@@ -275,7 +310,7 @@ func (r *realWindowTextSystem) layoutInline(request inlineLayoutRequest) (inline
 			budget = &remaining_budget
 		}
 
-		shaped, err := r.shapeRuns(remaining, segment.fontSize, runs, budget, nil, segment.tabSizeSpaces)
+		shaped, err := r.shapeRuns(remaining, segment.fontSize, runs, budget, nil, segment.tabSizeSpaces, segment.nativeAlign, false)
 		if err != nil {
 			return inlineLayout{}, err
 		}
@@ -371,13 +406,21 @@ func (r *realWindowTextSystem) layoutInline(request inlineLayoutRequest) (inline
 	// The row geometry: alignment within the wrap width, the text
 	// extents from the pieces' native metrics, then the shared vertical
 	// alignment pass.
+	//
+	// browser-core 43: start/end resolve against the document's base
+	// direction — the first piece's shaped direction (parley derives it
+	// from the text) — and justify takes no Go-side offset (a
+	// single-segment paragraph's rows were stretched inside the native
+	// layout; its last row is start-aligned there).
+	isRTL := len(pieces) > 0 && pieces[0].shaped != nil && pieces[0].shaped.isRTL()
+	resolvedAlign := resolvedTextAlign(request.textAlign, isRTL)
 	lines := make([]InlineVisualLine, len(rows))
 	lineMetrics := make([]InlineTextMetrics, len(rows))
 	textBounds := make([][2]float32, len(rows))
 	maxWidth := float32(0)
 	for rowIndex, row := range rows {
 		width := row.width
-		switch request.textAlign {
+		switch resolvedAlign {
 		case TextAlignRight:
 			if request.wrapWidth != nil {
 				lines[rowIndex].Origin.X = *request.wrapWidth - width
@@ -443,7 +486,7 @@ func (r *realWindowTextSystem) layoutInline(request inlineLayoutRequest) (inline
 	layout := inlineLayout{
 		lines:           lines,
 		boxes:           boxes,
-		alignmentOffset: inlineAlignmentOffset(request.textAlign, lines),
+		alignmentOffset: inlineAlignmentOffset(resolvedAlign, lines),
 		size:            Size{Width: maxWidth, Height: 0},
 		pieces:          pieces,
 	}
@@ -521,7 +564,8 @@ func (r *realWindowTextSystem) layoutInline(request inlineLayoutRequest) (inline
 // repeat across frames reuses its pieces' lines instead of re-shaping
 // them. tabSizeSpaces selects the browser's tab-size stops when the
 // segment's white-space mode preserves tabs (browser-core 38).
-func (r *realWindowTextSystem) shapeRuns(text string, fontSize float32, runs []TextRun, wrapWidth *float32, lineClamp *uint32, tabSizeSpaces *uint32) (shapedText, error) {
+func (r *realWindowTextSystem) shapeRuns(text string, fontSize float32, runs []TextRun, wrapWidth *float32, lineClamp *uint32, tabSizeSpaces *uint32, align TextAlign, balance bool) (shapedText, error) {
+
 	line, err := r.lines.layoutWrappedLine(r.system, TextLayoutRequest{
 		Text:          text,
 		FontSize:      fontSize,
@@ -529,6 +573,8 @@ func (r *realWindowTextSystem) shapeRuns(text string, fontSize float32, runs []T
 		WrapWidth:     wrapWidth,
 		LineClamp:     lineClamp,
 		TabSizeSpaces: tabSizeSpaces,
+		Align:         align,
+		Balance:       balance,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("shapeRuns (text %q len %d, runs %+v, size %v, wrap %v): %w", text, len(text), runs, fontSize, wrapWidth, err)
@@ -621,7 +667,13 @@ func sliceInlineRuns(runs []TextRun, start, end int) []TextRun {
 		if length <= 0 {
 			continue
 		}
-		sliced = append(sliced, TextRun{Len: length, Font: run.Font, LetterSpacing: run.LetterSpacing})
+		sliced = append(sliced, TextRun{
+			Len: length, Font: run.Font, LetterSpacing: run.LetterSpacing,
+			// The browser text fields ride the slice (browser-core 43):
+			// a segment's runs keep their word-break / overflow-wrap /
+			// text-wrap tags.
+			WordBreak: run.WordBreak, OverflowWrap: run.OverflowWrap, TextWrap: run.TextWrap,
+		})
 	}
 	if len(sliced) == 0 && end > start {
 		// Runs that fail to cover the range still shape it as one run

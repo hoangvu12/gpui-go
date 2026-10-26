@@ -4,6 +4,13 @@ pub mod quad {
     use super::super::corner_smoothing::*;
     use wgsl_rs::std::*;
 
+    // rev 16 (browser-core ticket 50): the struct mirrors the ABI record
+    // `GpuiGoSceneQuadRecord` field for field - the draw path uploads the
+    // scene's records directly as this instance array, so the extended
+    // content mask (52 bytes) rides the record. The field order follows
+    // the PINNED struct (the vec2f-bearing fields land on 8-byte-aligned
+    // offsets, exactly why the pin's order is what it is); the trailing
+    // record_size word pads the record to the same 272-byte size.
     #[derive(Clone, Copy, Wgsl)]
     pub struct Quad {
         pub order: u32,
@@ -18,6 +25,7 @@ pub mod quad {
         pub border_widths: Edges,
         pub corner_smoothing: f32,
         pub padding: u32,
+        pub record_size: u32,
     }
     storage!(group(1), binding(0), QUADS: RuntimeArray<Quad>);
 

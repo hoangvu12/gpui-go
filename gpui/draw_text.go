@@ -245,7 +245,7 @@ func maskSpriteRecord(order, padding uint32, bounds, mask Bounds, color Hsla, ti
 	rec := native.NewSceneSpriteRecord()
 	rec.Padding = padding
 	rec.Bounds = sceneBoundsRecord(bounds)
-	rec.ContentMask = sceneBoundsRecord(mask)
+	rec.ContentMask = sceneContentMaskRecord(mask)
 	rec.Color = sceneColorRecord(color)
 	rec.Tile = tile.sceneTile()
 	rec.Transformation = [6]uint32{
@@ -282,7 +282,7 @@ func (k *SceneKernel) insertPolychromeSprite(sprite PolychromeSprite) error {
 	rec.Opacity = math.Float32bits(sprite.Opacity)
 	rec.CornerSmoothing = math.Float32bits(sprite.CornerSmoothing)
 	rec.Bounds = sceneBoundsRecord(sprite.Bounds)
-	rec.ContentMask = sceneBoundsRecord(sprite.ContentMask)
+	rec.ContentMask = sceneContentMaskRecord(sprite.ContentMask)
 	rec.CornerRadii = [4]uint32{
 		math.Float32bits(sprite.CornerRadii.TopLeft),
 		math.Float32bits(sprite.CornerRadii.TopRight),
@@ -308,7 +308,7 @@ func (k *SceneKernel) monochromeSprites() ([]MonochromeSprite, error) {
 			Order:          rec.Order,
 			Padding:        rec.Padding,
 			Bounds:         sceneBoundsValue(rec.Bounds),
-			ContentMask:    sceneBoundsValue(rec.ContentMask),
+			ContentMask:    sceneContentMaskValue(rec.ContentMask),
 			Color:          sceneColorValue(rec.Color),
 			Tile:           atlasTileOf(rec.Tile),
 			Transformation: transformationOf(rec.Transformation),
@@ -329,7 +329,7 @@ func (k *SceneKernel) subpixelSprites() ([]SubpixelSprite, error) {
 			Order:          rec.Order,
 			Padding:        rec.Padding,
 			Bounds:         sceneBoundsValue(rec.Bounds),
-			ContentMask:    sceneBoundsValue(rec.ContentMask),
+			ContentMask:    sceneContentMaskValue(rec.ContentMask),
 			Color:          sceneColorValue(rec.Color),
 			Tile:           atlasTileOf(rec.Tile),
 			Transformation: transformationOf(rec.Transformation),
@@ -353,7 +353,7 @@ func (k *SceneKernel) polychromeSprites() ([]PolychromeSprite, error) {
 			Opacity:         math.Float32frombits(rec.Opacity),
 			CornerSmoothing: math.Float32frombits(rec.CornerSmoothing),
 			Bounds:          sceneBoundsValue(rec.Bounds),
-			ContentMask:     sceneBoundsValue(rec.ContentMask),
+			ContentMask:     sceneContentMaskValue(rec.ContentMask),
 			CornerRadii: Corners{
 				TopLeft:     math.Float32frombits(rec.CornerRadii[0]),
 				TopRight:    math.Float32frombits(rec.CornerRadii[1]),

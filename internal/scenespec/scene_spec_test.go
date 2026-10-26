@@ -256,13 +256,16 @@ func TestNestedFilterGroupsBoundIsolationTargets(t *testing.T) {
 	if len(commands) != 9 {
 		t.Fatalf("command count = %d, want 9", len(commands))
 	}
+	// rev 16 (browser-core ticket 50): no depth cap - ALL THREE groups
+	// isolate (the pre-R16 third group rendered inline; that divergence
+	// is the ticket's point).
 	wantTargets := [][2]bool{
-		{true, true},   // begin: isolated(0)
-		{true, true},   // begin: isolated(1)
-		{false, false}, // begin: inline
-		{false, false}, // end: inline
-		{true, true},   // end: isolated(1)
-		{true, true},   // end: isolated(0)
+		{true, true}, // begin: isolated(0)
+		{true, true}, // begin: isolated(1)
+		{true, true}, // begin: isolated(2)
+		{true, true}, // end: isolated(2)
+		{true, true}, // end: isolated(1)
+		{true, true}, // end: isolated(0)
 	}
 	// The begins are commands 0, 2, 4 (interleaved with quads) and the
 	// ends are 6, 7, 8 — but the batch iterator interleaves by ORDER:
@@ -302,19 +305,27 @@ func TestNestedFilterGroupsBoundIsolationTargets(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !requirements.UsesOffscreenTarget {
-		t.Errorf("usesOffscreenTarget = false, want true (two isolated groups)")
+		t.Errorf("usesOffscreenTarget = false, want true (the isolated groups)")
 	}
-	if requirements.IsolatedFilterCount != 2 || requirements.IsolatedTargetCount != 2 {
-		t.Errorf("isolated filters/targets = %d/%d, want 2/2", requirements.IsolatedFilterCount, requirements.IsolatedTargetCount)
+	if requirements.IsolatedFilterCount != 3 || requirements.IsolatedTargetCount != 3 {
+		t.Errorf("isolated filters/targets = %d/%d, want 3/3 (rev 16: no depth cap)", requirements.IsolatedFilterCount, requirements.IsolatedTargetCount)
 	}
 }
 
+// wantIdx maps each filter command to its pool target slot: the begins
+// take nesting slots 0..2 and the ends mirror their pairs.
 func wantIdx(i int) uint32 {
 	switch i {
-	case 0, 5:
+	case 0:
 		return 0
-	case 1, 4:
+	case 1:
 		return 1
+	case 2, 3:
+		return 2
+	case 4:
+		return 1
+	case 5:
+		return 0
 	default:
 		return 0
 	}
@@ -875,8 +886,8 @@ func TestScenePanicContainment(t *testing.T) {
 	// fix-up to 11, the consumer-gaps font-registration rebuild (the text
 	// service v2) to 12; the cumulative capability mask is 0xFFF (the
 	// additive pattern: every landed service raises both).
-	if identity.NativeRevision != 151 {
-		t.Errorf("native revision = %d, want 151 (rev 15.1, the browser-core ticket 77 rebuild — the u32 encoding of the point release; 16 stays reserved for the R16 rebuild)", identity.NativeRevision)
+	if identity.NativeRevision != 16 {
+		t.Errorf("native revision = %d, want 16 (rev 16, the browser-core ticket 54 R16 rebuild — the number the R16 plan reserved)", identity.NativeRevision)
 	}
 	if identity.Capabilities&0xFFF != 0xFFF {
 		t.Errorf("capabilities mask = %#x, want the ten assigned bits set", identity.Capabilities)
