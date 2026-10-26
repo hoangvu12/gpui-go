@@ -1165,6 +1165,101 @@ func (s *Styled[Self]) Transition[_ lazy](rules ...TransitionRule) Self {
 	return s.self
 }
 
+// ---- Transforms (CSS transform, browser-core ticket 56) ----
+
+// Transform replaces the element's whole transform list — CSS
+// `transform: <functions>` (browser-core ticket 56). The functions
+// compose left to right about TransformOrigin against the border box;
+// transforms never affect layout. Build functions with Translate,
+// Scale, Rotate and Skew.
+func (s *Styled[Self]) Transform[_ lazy](functions ...TransformFunction) Self {
+	s.StyleMut().Transform = Some(slices.Clone(functions))
+	return s.self
+}
+
+// Translate appends translate(<x>, <y>) to the transform list: the two
+// lengths are px, rems or fractions of the element's own border box.
+func (s *Styled[Self]) Translate[_ lazy](x, y DefiniteLength) Self {
+	return s.appendTransform(Translate(x, y))
+}
+
+// TranslatePx appends translate(<x>px, <y>px) to the transform list
+// (logical pixels — the common imperative spelling).
+func (s *Styled[Self]) TranslatePx[_ lazy](x, y float32) Self {
+	return s.appendTransform(Translate(DefinitePx(x), DefinitePx(y)))
+}
+
+// TranslateX appends translate(<x>, 0) to the transform list.
+func (s *Styled[Self]) TranslateX[_ lazy](x DefiniteLength) Self {
+	return s.appendTransform(TranslateX(x))
+}
+
+// TranslateY appends translate(0, <y>) to the transform list.
+func (s *Styled[Self]) TranslateY[_ lazy](y DefiniteLength) Self {
+	return s.appendTransform(TranslateY(y))
+}
+
+// Scale appends scale(<x>, <y>) to the transform list — unitless
+// factors.
+func (s *Styled[Self]) Scale[_ lazy](x, y float32) Self {
+	return s.appendTransform(Scale(x, y))
+}
+
+// ScaleUniform appends scale(<f>, <f>) to the transform list.
+func (s *Styled[Self]) ScaleUniform[_ lazy](factor float32) Self {
+	return s.appendTransform(ScaleUniform(factor))
+}
+
+// ScaleX appends scale(<x>, 1) to the transform list.
+func (s *Styled[Self]) ScaleX[_ lazy](x float32) Self {
+	return s.appendTransform(ScaleX(x))
+}
+
+// ScaleY appends scale(1, <y>) to the transform list.
+func (s *Styled[Self]) ScaleY[_ lazy](y float32) Self {
+	return s.appendTransform(ScaleY(y))
+}
+
+// Rotate appends rotate(<degrees>) to the transform list (clockwise on
+// screen).
+func (s *Styled[Self]) Rotate[_ lazy](degrees float32) Self {
+	return s.appendTransform(Rotate(degrees))
+}
+
+// Skew appends skew(<x-degrees>, <y-degrees>) to the transform list.
+func (s *Styled[Self]) Skew[_ lazy](xDegrees, yDegrees float32) Self {
+	return s.appendTransform(Skew(xDegrees, yDegrees))
+}
+
+// SkewX appends skew(<x-degrees>, 0) to the transform list.
+func (s *Styled[Self]) SkewX[_ lazy](xDegrees float32) Self {
+	return s.appendTransform(SkewX(xDegrees))
+}
+
+// SkewY appends skew(0, <y-degrees>) to the transform list.
+func (s *Styled[Self]) SkewY[_ lazy](yDegrees float32) Self {
+	return s.appendTransform(SkewY(yDegrees))
+}
+
+// appendTransform appends one function to the transform list (the
+// list-building spelling, like Blur appends to the filter chain).
+func (s *Styled[Self]) appendTransform(f TransformFunction) Self {
+	st := s.StyleMut()
+	list, _ := st.Transform.Get()
+	st.Transform = Some(append(slices.Clip(slices.Clone(list)), f))
+	return s.self
+}
+
+// TransformOrigin sets the CSS transform-origin — the point the
+// transform functions rotate, scale and skew about — resolved against
+// the border box. The default is the CSS initial 50% 50% (the centre);
+// a percentage is a fraction of the border box (Fraction(0) is 0%,
+// Fraction(1) is 100%).
+func (s *Styled[Self]) TransformOrigin[_ lazy](x, y DefiniteLength) Self {
+	s.StyleMut().TransformOrigin = Some(TransformOrigin{X: x, Y: y})
+	return s.self
+}
+
 // ---- Grid (styled.rs:917-1054) ----
 
 // GridCols sets the column template (styled.rs:917: min size Zero).

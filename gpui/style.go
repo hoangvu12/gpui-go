@@ -1223,6 +1223,20 @@ type Style struct {
 	// nothing and costs nothing. The rules are NOT inherited and a
 	// refinement replaces the whole list.
 	Transition []TransitionRule
+	// Transform is the element's CSS transform property (browser-core
+	// ticket 56): a list of transform functions composed left to right
+	// about TransformOrigin against the border box at prepaint/paint.
+	// Transforms never affect layout; the paint brackets the element's
+	// whole box in a scene effect group under the composed matrix (a
+	// translation-only transform shifts the element offset instead),
+	// and hit testing maps the pointer through the inverse. Nil (the
+	// default) is `none`. A refinement replaces the whole list.
+	Transform []TransformFunction
+	// TransformOrigin is the CSS transform-origin (browser-core ticket
+	// 56), resolved against the border box; nil is the CSS initial
+	// 50% 50% (the centre). A percentage origin is a fraction of the
+	// border box.
+	TransformOrigin *TransformOrigin
 	// Debug draws a red outline around the element (style.rs:401; the
 	// pinned field is cfg(debug_assertions), the port always carries it).
 	Debug bool

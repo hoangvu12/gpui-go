@@ -730,6 +730,15 @@ type CoreClass =
 	"opacity-90" |
 	"opacity-95" |
 	"ordinal" |
+	"origin-bottom" |
+	"origin-bottom-left" |
+	"origin-bottom-right" |
+	"origin-center" |
+	"origin-left" |
+	"origin-right" |
+	"origin-top" |
+	"origin-top-left" |
+	"origin-top-right" |
 	"outline" |
 	"outline-[0]" |
 	"outline-dashed" |
@@ -1070,7 +1079,16 @@ type CoreClass =
 	`-bg-linear-[${number}grad]` |
 	`-bg-linear-[${number}turn]` |
 	`blur-[${number}px]` |
-	`backdrop-blur-[${number}px]`;
+	`backdrop-blur-[${number}px]` |
+	`${"translate-x" | "translate-y"}-${LengthValue}` |
+	`-${"translate-x" | "translate-y"}-${LengthValue}` |
+	`${"scale" | "scale-x" | "scale-y"}-${number}` |
+	`-${"scale" | "scale-x" | "scale-y"}-${number}` |
+	`${"scale" | "scale-x" | "scale-y"}-[${number}]` |
+	`${"rotate" | "skew-x" | "skew-y"}-${number}` |
+	`-${"rotate" | "skew-x" | "skew-y"}-${number}` |
+	`${"rotate" | "skew-x" | "skew-y"}-[${number}deg]` |
+	`-${"rotate" | "skew-x" | "skew-y"}-[${number}deg]`;
 
 /**
  * The Tailwind classes the engine's class layer accepts (generated
@@ -1425,6 +1443,15 @@ type Class =
 	"opacity-90" |
 	"opacity-95" |
 	"ordinal" |
+	"origin-bottom" |
+	"origin-bottom-left" |
+	"origin-bottom-right" |
+	"origin-center" |
+	"origin-left" |
+	"origin-right" |
+	"origin-top" |
+	"origin-top-left" |
+	"origin-top-right" |
 	"outline" |
 	"outline-[0]" |
 	"outline-dashed" |
@@ -1766,6 +1793,15 @@ type Class =
 	`-bg-linear-[${number}turn]` |
 	`blur-[${number}px]` |
 	`backdrop-blur-[${number}px]` |
+	`${"translate-x" | "translate-y"}-${LengthValue}` |
+	`-${"translate-x" | "translate-y"}-${LengthValue}` |
+	`${"scale" | "scale-x" | "scale-y"}-${number}` |
+	`-${"scale" | "scale-x" | "scale-y"}-${number}` |
+	`${"scale" | "scale-x" | "scale-y"}-[${number}]` |
+	`${"rotate" | "skew-x" | "skew-y"}-${number}` |
+	`-${"rotate" | "skew-x" | "skew-y"}-${number}` |
+	`${"rotate" | "skew-x" | "skew-y"}-[${number}deg]` |
+	`-${"rotate" | "skew-x" | "skew-y"}-[${number}deg]` |
 	`${Variant}:${string}` |
 	`!${string}` |
 	`${string}!`;
@@ -1881,6 +1917,10 @@ interface CSSProperties {
 	opacity?: number;
 	/** overflowY: scroll, auto, hidden. */
 	overflowY?: "scroll" | "auto" | "hidden";
+	/** transform: space-separated CSS functions, like "translate(8px, 4px) rotate(45deg) scale(1.5)" (translate, translateX, translateY, scale, rotate, skew, skewX, skewY; px, rem and % lengths, numbers and degrees). */
+	transform?: string;
+	/** transformOrigin: two keywords or lengths, like "50% 50%", "top left" or "10px 20px". */
+	transformOrigin?: string;
 }
 
 // Children are elements, text, numbers, bindings, arrays and

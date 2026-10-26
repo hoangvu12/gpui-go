@@ -196,3 +196,41 @@ func TestSurfaceFixtureCoversEveryStyleKey(t *testing.T) {
 		}
 	}
 }
+
+// TestParseStyleTransforms checks the transform style keys the TSX
+// surface accepts (browser-core ticket 56): the function-list spelling
+// and the origin keywords, and a rejection that names the property.
+func TestParseStyleTransforms(t *testing.T) {
+	rt := goja.New()
+	mustStyle := func(key, value string) style {
+		t.Helper()
+		o := rt.NewObject()
+		if err := o.Set(key, rt.ToValue(value)); err != nil {
+			t.Fatal(err)
+		}
+		s, err := parseStyle(o)
+		if err != nil {
+			t.Fatalf("style %s: %v", key, err)
+		}
+		return s
+	}
+	s := mustStyle("transform", "translate(8px, 4px) rotate(45deg) scale(1.5) skewX(3deg)")
+	if len(s.transform) != 4 {
+		t.Fatalf("transform parsed %d functions, want 4", len(s.transform))
+	}
+	if s.transform[1].X != 45 || s.transform[1].Kind != gpui.TransformRotate {
+		t.Errorf("rotate function = %+v", s.transform[1])
+	}
+	s = mustStyle("transformOrigin", "top left")
+	if s.transformOrigin.X != gpui.Fraction(0) || s.transformOrigin.Y != gpui.Fraction(0) {
+		t.Errorf("origin = %+v, want (0, 0)", s.transformOrigin)
+	}
+	// A bad function names itself.
+	o := rt.NewObject()
+	if err := o.Set("transform", rt.ToValue("perspective(400px)")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parseStyle(o); err == nil {
+		t.Error("parseStyle accepted perspective()")
+	}
+}

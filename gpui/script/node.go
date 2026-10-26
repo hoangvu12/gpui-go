@@ -101,6 +101,8 @@ type style struct {
 	pad                                           [4]float32
 	bg, color, borderColor                        gpui.Hsla
 	radius, fontSize, fontWeight, opacity, border float32
+	transform                                     []gpui.TransformFunction
+	transformOrigin                               gpui.TransformOrigin
 }
 
 // style bits, one per supported CSS property.
@@ -124,6 +126,8 @@ const (
 	sFontWeight
 	sOpacity
 	sOverflowY
+	sTransform
+	sTransformOrigin
 )
 
 // overflowYScroll reports whether overflowY asked for scrolling
@@ -273,6 +277,20 @@ func parseStyle(o *goja.Object) (style, error) {
 			default:
 				return style{}, fmt.Errorf("style overflowY: %q is not supported (use \"scroll\", \"auto\" or \"hidden\")", str)
 			}
+		case "transform":
+			s.set |= sTransform
+			fns, err := gpui.ParseTransformList(str)
+			if err != nil {
+				return style{}, fmt.Errorf("style transform: %v", err)
+			}
+			s.transform = fns
+		case "transformOrigin":
+			s.set |= sTransformOrigin
+			origin, err := gpui.ParseTransformOrigin(str)
+			if err != nil {
+				return style{}, fmt.Errorf("style transformOrigin: %v", err)
+			}
+			s.transformOrigin = origin
 		default:
 			return style{}, fmt.Errorf("style: %q is not a supported CSS property here", k)
 		}
@@ -380,6 +398,12 @@ func (s *style) apply(d *gpui.DivElement) *gpui.DivElement {
 	}
 	if s.set&sOverflowY != 0 && s.overflowY {
 		d = d.OverflowYScroll()
+	}
+	if s.set&sTransform != 0 {
+		d = d.Transform(s.transform...)
+	}
+	if s.set&sTransformOrigin != 0 {
+		d = d.TransformOrigin(s.transformOrigin.X, s.transformOrigin.Y)
 	}
 	return d
 }

@@ -35,6 +35,8 @@ export function App() {
 				fontSize: 16,
 				opacity: 0.9,
 				overflowY: "auto",
+				transform: "translate(4px, 2px) rotate(0.25deg) scale(0.999)",
+				transformOrigin: "top left",
 			}}
 			onMouseDown={(e) => logEvent("mousedown", "root:" + e.button)}
 			onClick={() => clicks.set(clicks.get() + 1)}

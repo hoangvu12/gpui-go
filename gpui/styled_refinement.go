@@ -208,6 +208,15 @@ type StyleRefinement struct {
 	// cascade-level lists replace, not merge).
 	Transition Optional[[]TransitionRule]
 
+	// Transform is the CSS transform property's refinement (browser-
+	// core ticket 56): a present list replaces the whole target list
+	// (CSS transform lists replace, like the transition rules).
+	Transform Optional[[]TransformFunction]
+	// TransformOrigin is the CSS transform-origin's refinement; a
+	// present value replaces the target (nil target = the CSS initial
+	// 50% 50%).
+	TransformOrigin Optional[TransformOrigin]
+
 	GridCols     Optional[GridTemplate]
 	GridRows     Optional[GridTemplate]
 	GridLocation Optional[GridLocation]
@@ -393,6 +402,10 @@ func (s *Style) refineBoxed(r *StyleRefinement, boxes *styleBoxes) {
 	if rules, ok := r.Transition.Get(); ok {
 		s.Transition = slices.Clone(rules)
 	}
+	if functions, ok := r.Transform.Get(); ok {
+		s.Transform = slices.Clone(functions)
+	}
+	refinePointer(&s.TransformOrigin, r.TransformOrigin)
 	refinePointer(&s.GridCols, r.GridCols)
 	refinePointer(&s.GridRows, r.GridRows)
 	refinePointer(&s.GridLocation, r.GridLocation)
@@ -500,6 +513,10 @@ func (r *StyleRefinement) Refine(other *StyleRefinement) {
 	if rules, ok := other.Transition.Get(); ok {
 		r.Transition = Some(slices.Clone(rules))
 	}
+	if functions, ok := other.Transform.Get(); ok {
+		r.Transform = Some(slices.Clone(functions))
+	}
+	mergeOptional(&r.TransformOrigin, other.TransformOrigin)
 	mergeOptional(&r.GridCols, other.GridCols)
 	mergeOptional(&r.GridRows, other.GridRows)
 	mergeOptional(&r.GridLocation, other.GridLocation)
@@ -527,6 +544,9 @@ func (r StyleRefinement) Clone() StyleRefinement {
 	}
 	if v, ok := r.Transition.Get(); ok {
 		out.Transition = Some(slices.Clone(v))
+	}
+	if v, ok := r.Transform.Get(); ok {
+		out.Transform = Some(slices.Clone(v))
 	}
 	out.Text = r.Text.Clone()
 	return out

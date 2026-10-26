@@ -140,6 +140,10 @@ func styleValueType(name string, body []ast.Stmt) (TSType, string, error) {
 	var node ast.Node = &ast.BlockStmt{List: body}
 	kind := ""
 	switch {
+	case containsCall(node, "ParseTransformList"):
+		kind = "transformList"
+	case containsCall(node, "ParseTransformOrigin"):
+		kind = "transformOrigin"
 	case containsCall(node, "Fields"):
 		kind = "lengthList"
 	case containsCall(node, "ParseHex"):
@@ -179,6 +183,10 @@ func styleValueType(name string, body []ast.Stmt) (TSType, string, error) {
 		return colorType, doc, nil
 	case "lengthList":
 		return lengthListType(), doc, nil
+	case "transformList":
+		return strType, doc, nil
+	case "transformOrigin":
+		return strType, doc, nil
 	}
 	panic("unreachable")
 }
@@ -248,25 +256,27 @@ func enumDoc(name string, values []string) string {
 // styleDocs are the one-line docs the .d.ts carries (the value shapes
 // parseStyle's comments already explain; unknown keys get none).
 var styleDocs = map[string]string{
-	"display":        `display: "flex" or "block".`,
-	"flexDirection":  `flexDirection: "row" or "column".`,
-	"alignItems":     `alignItems: "center", "start" or "end".`,
-	"justifyContent": `justifyContent: "center", "start", "end" or "space-between".`,
-	"flex":           `flex: 1 (the only flex value the engine applies).`,
-	"gap":            `gap: a px length (8 or "8px").`,
-	"width":          `width: a px length, or "100%".`,
-	"height":         `height: a px length, or "100%".`,
-	"minHeight":      `minHeight: a px length.`,
-	"padding":        `padding: one, two or four px lengths ("8", "8 16", "8 16 8 16").`,
-	"background":     `background: a CSS hex color (#rrggbb).`,
-	"color":          `color: a CSS hex color.`,
-	"borderColor":    `borderColor: a CSS hex color.`,
-	"border":         `border: a px length.`,
-	"borderRadius":   `borderRadius: a px length.`,
-	"fontSize":       `fontSize: a px length.`,
-	"fontWeight":     `fontWeight: a number (100–900).`,
-	"opacity":        `opacity: a number (0–1).`,
-	"overflowY":      `overflowY: "scroll", "auto" or "hidden".`,
+	"display":         `display: "flex" or "block".`,
+	"flexDirection":   `flexDirection: "row" or "column".`,
+	"alignItems":      `alignItems: "center", "start" or "end".`,
+	"justifyContent":  `justifyContent: "center", "start", "end" or "space-between".`,
+	"flex":            `flex: 1 (the only flex value the engine applies).`,
+	"gap":             `gap: a px length (8 or "8px").`,
+	"width":           `width: a px length, or "100%".`,
+	"height":          `height: a px length, or "100%".`,
+	"minHeight":       `minHeight: a px length.`,
+	"padding":         `padding: one, two or four px lengths ("8", "8 16", "8 16 8 16").`,
+	"background":      `background: a CSS hex color (#rrggbb).`,
+	"color":           `color: a CSS hex color.`,
+	"borderColor":     `borderColor: a CSS hex color.`,
+	"border":          `border: a px length.`,
+	"borderRadius":    `borderRadius: a px length.`,
+	"fontSize":        `fontSize: a px length.`,
+	"fontWeight":      `fontWeight: a number (100–900).`,
+	"opacity":         `opacity: a number (0–1).`,
+	"overflowY":       `overflowY: "scroll", "auto" or "hidden".`,
+	"transform":       `transform: space-separated CSS functions, like "translate(8px, 4px) rotate(45deg) scale(1.5)" (translate, translateX, translateY, scale, rotate, skew, skewX, skewY; px, rem and % lengths, numbers and degrees).`,
+	"transformOrigin": `transformOrigin: two keywords or lengths, like "50% 50%", "top left" or "10px 20px".`,
 }
 
 // globalSignatures fills in each global's declared signature. The

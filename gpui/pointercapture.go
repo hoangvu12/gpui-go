@@ -422,6 +422,17 @@ func localPositionOf(position Point, hitbox *Hitbox) Point {
 	if hitbox == nil {
 		return Point{}
 	}
+	// An element transform maps the element-local space too
+	// (browser-core ticket 56): the DOM's offsetX/offsetY of a
+	// transformed element are the pre-image of the pointer (the same
+	// inverse mapping Hitbox.Contains applies), so a slider inside a
+	// rotated parent still reads coordinates in the element's own
+	// space.
+	if hitbox.transform != nil {
+		if inverse, ok := invertTransformation(*hitbox.transform); ok {
+			position = applyTransformation(inverse, position)
+		}
+	}
 	return Point{
 		X: position.X - hitbox.Bounds.Origin.X,
 		Y: position.Y - hitbox.Bounds.Origin.Y,

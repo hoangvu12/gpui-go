@@ -1235,6 +1235,17 @@ type frameDrawState struct {
 	// elementOffset is the current absolute element offset
 	// (window.element_offset_stack tail).
 	elementOffset Point
+	// transformScopes is the open element-transform stack of the
+	// prepaint phase (browser-core ticket 56): each entry is the
+	// COMPOSED window-to-window matrix at that depth (the parent's
+	// matrix left-multiplied by the element's own), so the top of the
+	// stack is the matrix a hitbox inserted right now carries — the
+	// hit test then maps the pointer through the inverse, and nested
+	// transforms compose exactly as CSS composes them down the tree.
+	// Balanced around each transformed element's subtree prepaint;
+	// empty for frames without transforms (one nil check at hitbox
+	// insertion).
+	transformScopes []TransformationMatrix
 	// text is the window's text system seam.
 	text windowTextSystem
 	// debugBounds is this frame's debug-selector bounds

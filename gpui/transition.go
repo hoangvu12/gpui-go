@@ -69,11 +69,19 @@ const (
 	// TransitionBorderColor animates a solid BorderColor (CSS
 	// border-color).
 	TransitionBorderColor
+	// TransitionTransform animates the CSS transform list
+	// (browser-core ticket 56): two lists of the SAME length and
+	// function kinds interpolate per function — CSS's
+	// list-interpolation rule (css-transforms-1: matching functions
+	// interpolate each pair of arguments as numbers, lengths or
+	// angles) — and anything else applies discretely (CSS would fall
+	// back to matrix interpolation; that fallback is not ported).
+	TransitionTransform
 )
 
 // transitionSlotCount is the number of concrete animated properties
 // (TransitionAll is not a slot; it covers them all).
-const transitionSlotCount = 5
+const transitionSlotCount = 6
 
 // String renders the CSS spelling of the property.
 func (p TransitionProperty) String() string {
@@ -90,6 +98,8 @@ func (p TransitionProperty) String() string {
 		return "height"
 	case TransitionBorderColor:
 		return "border-color"
+	case TransitionTransform:
+		return "transform"
 	}
 	return "all"
 }
@@ -108,13 +118,15 @@ func (p TransitionProperty) slot() (int, bool) {
 		return 3, true
 	case TransitionBorderColor:
 		return 4, true
+	case TransitionTransform:
+		return 5, true
 	}
 	return 0, false
 }
 
 // slotProperty is the concrete property of a slot.
 func slotProperty(slot int) TransitionProperty {
-	return []TransitionProperty{TransitionOpacity, TransitionBackground, TransitionWidth, TransitionHeight, TransitionBorderColor}[slot]
+	return []TransitionProperty{TransitionOpacity, TransitionBackground, TransitionWidth, TransitionHeight, TransitionBorderColor, TransitionTransform}[slot]
 }
 
 // TransitionRule is one entry of the transition style property — CSS
@@ -184,12 +196,16 @@ func matchTransitionRule(rules []TransitionRule, property TransitionProperty) (T
 // ---------------------------------------------------------------------------
 
 // animatedValue is one animatable style value in its resolved form: a
-// number (opacity, a length in logical pixels) or a colour. A value that
-// does not interpolate (an absent property, a gradient, a percentage
-// length) reports interpolable false, and the property applies discretely.
+// number (opacity, a length in logical pixels), a colour, or a
+// transform-function list. A value that does not interpolate (an
+// absent property, a gradient, a percentage length, a transform list
+// whose functions do not match) reports interpolable false, and the
+// property applies discretely.
 type animatedValue struct {
-	num   float32
-	color Hsla
+	num    float32
+	color  Hsla
+	fns    []TransformFunction
+	hasFns bool
 }
 
 // readAnimated resolves property out of style (rem resolves rem lengths).
@@ -230,6 +246,12 @@ func readAnimated(property TransitionProperty, style *Style, rem float32) (anima
 			return animatedValue{num: px}, true
 		}
 		return animatedValue{}, false
+	case TransitionTransform:
+		// CSS's initial transform is `none` — the empty list. A list
+		// interpolates with another list of the same length and
+		// function kinds; anything else is discrete (the matrix
+		// fallback is not ported).
+		return animatedValue{fns: style.Transform, hasFns: style.Transform != nil}, true
 	}
 	return animatedValue{}, false
 }
@@ -249,7 +271,40 @@ func definiteLengthPixels(length DefiniteLength, rem float32) (float32, bool) {
 }
 
 // equal compares two animated values of the same property.
-func (v animatedValue) equal(o animatedValue) bool { return v == o }
+func (v animatedValue) equal(o animatedValue) bool {
+	if v.hasFns || o.hasFns {
+		return v.hasFns == o.hasFns && len(v.fns) == len(o.fns) && transformListsEqual(v.fns, o.fns)
+	}
+	return v.num == o.num && v.color == o.color && !v.hasFns && !o.hasFns
+}
+
+// transformListsEqual compares two transform-function lists of the same
+// length function-by-function (kind and arguments).
+func transformListsEqual(a, b []TransformFunction) bool {
+	for i := range a {
+		if a[i].Kind != b[i].Kind || a[i].X != b[i].X || a[i].Y != b[i].Y ||
+			a[i].TranslateX != b[i].TranslateX || a[i].TranslateY != b[i].TranslateY {
+			return false
+		}
+	}
+	return true
+}
+
+// transformListsMatch reports whether two lists can interpolate: the
+// same length and the same function kinds (css-transforms-1's list
+// interpolation rule; anything else would need the matrix fallback,
+// which the port applies discretely).
+func transformListsMatch(a, b []TransformFunction) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Kind != b[i].Kind {
+			return false
+		}
+	}
+	return true
+}
 
 // lerp interpolates: numbers linearly; colours channel-wise through
 // gamma-encoded sRGB (CSS Color 4's sRGB interpolation of legacy
@@ -267,6 +322,30 @@ func (v animatedValue) lerp(property TransitionProperty, o animatedValue, t floa
 			B: lerpMotion32(from.B, to.B, t),
 			A: lerpMotion32(from.A, to.A, t),
 		})}
+	case TransitionTransform:
+		// Matching function lists interpolate each pair of arguments as
+		// numbers (scale), lengths (translate — a px/rem/fraction mix
+		// interpolates as the resolved numbers; the port lerps the raw
+		// values, so a unit change mid-transition jumps at the start,
+		// CSS's calc-mix approximation) and angles (rotate, skew). Callers
+		// guarantee the lists match (interpolable false otherwise).
+		if len(v.fns) != len(o.fns) {
+			return v
+		}
+		out := make([]TransformFunction, len(v.fns))
+		for i := range v.fns {
+			a, b := v.fns[i], o.fns[i]
+			if a.Kind != b.Kind {
+				return v
+			}
+			f := a
+			f.X = lerpMotion32(a.X, b.X, t)
+			f.Y = lerpMotion32(a.Y, b.Y, t)
+			f.TranslateX = DefiniteLength{Kind: a.TranslateX.Kind, Value: lerpMotion32(a.TranslateX.Value, b.TranslateX.Value, t)}
+			f.TranslateY = DefiniteLength{Kind: a.TranslateY.Kind, Value: lerpMotion32(a.TranslateY.Value, b.TranslateY.Value, t)}
+			out[i] = f
+		}
+		return animatedValue{fns: out, hasFns: true}
 	default:
 		return animatedValue{num: lerpMotion32(v.num, o.num, t)}
 	}
@@ -295,6 +374,12 @@ func writeAnimated(property TransitionProperty, style *Style, v animatedValue) {
 		style.Size.Width = Length{Definite: DefiniteLength{Kind: DefiniteLengthPx, Value: v.num}}
 	case TransitionHeight:
 		style.Size.Height = Length{Definite: DefiniteLength{Kind: DefiniteLengthPx, Value: v.num}}
+	case TransitionTransform:
+		if !v.hasFns {
+			style.Transform = nil
+			return
+		}
+		style.Transform = append([]TransformFunction(nil), v.fns...)
 	}
 }
 
@@ -466,6 +551,13 @@ func diffTransitions(state *transitionElementState, style *Style, now time.Durat
 		property := slotProperty(i)
 		target, interpolable := readAnimated(property, style, rem)
 		rule, hasRule := matchTransitionRule(style.Transition, property)
+
+		// A transform whose before-change list does not match the target
+		// structurally applies discretely (no matrix interpolation).
+		if property == TransitionTransform && interpolable && state.has[i] &&
+			!transformListsMatch(state.targets[i].fns, target.fns) {
+			interpolable = false
+		}
 
 		// No rule, a non-interpolable value, or a combined duration that
 		// is not positive: the value applies without a run
