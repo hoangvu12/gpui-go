@@ -15,7 +15,7 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 **HANDOFF 2026-10-24 (orchestrator 8 → orchestrator 9).** History: `%TEMP%\gpui-go-handoff-orchestrator9.md`; the predecessor was Roboco chat 08b88b23.
 
 **ORCHESTRATOR 11 STATUS (2026-10-26). Latest.** Claude Code, Opus 5.5; Roboco chat b8bb5b81. It took over from orchestrator 10 (chat d041f254; handoff doc `%TEMP%\gpui-go-handoff-orchestrator11.md`). Rules: orchestrator 10's handoff doc, unchanged.
-- **Resolved (69 of 78, counting 50-53 and 43 on native/r16):** 76 (default position static; merged in both repos, worker chat a660cce4). EVERY Go-only ticket is now resolved. Worktrees `gpui-go-wt-core-76` and `gpui-go-base-wt-76` and both `core/76-position-static` branches are removed.
+- **Resolved (70 of 78, counting 50-53, 43 and 42 on native/r16):** 76 (default position static; merged in both repos, worker chat a660cce4). EVERY Go-only ticket is now resolved. Worktrees `gpui-go-wt-core-76` and `gpui-go-base-wt-76` and both `core/76-position-static` branches are removed.
 - New rare flake: gpui-go-base `TestRealTheEndOfTheTextAndItsSeparatorsRevealTheLastLine` panicked once with "conflicting reentrant access" in the window trampoline (36 clean re-runs); same class as authorspec's TestRealTwoWindowCounterSharedModel. Follow-up, not a ticket yet.
 - **Native phase (user-approved):** R16 on ONE integration branch `native/r16` (worktree `gpui-go-wt-r16`), one worker at a time: 50 → 51 → 52 → 53, then 42/43 (vendored Parley adapter / text-run fields), then 54 (the rev 16 rebuild, approved by the user's 2026-10-25 decision). Shared `CARGO_TARGET_DIR=C:\Users\ADMIN\Desktop\nguyenvu\gpui-r16-target` (keep it; incremental). Interim DLLs are NOT committed: workers test through `GPUI_GO_NATIVE_BUNDLE=C:\Users\ADMIN\Desktop\nguyenvu\gpui-r16-bundle`; only 54 refreshes `internal/native/artifacts`. One cargo build at a time, `-j 4`, below-normal priority.
 - **50 resolved ON native/r16** (f347ad9 + 092c4bf; the ticket file and map gist there; it reaches main with 54). Verify interim work by copying `gpui-r16-bundle\manifest.json` over `internal/native/artifacts/manifest.json` (the loader requires the manifests to agree), running the tests with `GPUI_GO_NATIVE_BUNDLE`, then `git checkout` the manifest. Under the swap 7 internal/native loader tests fail by construction.
@@ -24,7 +24,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - **52 resolved ON native/r16** (3ba4e83..ff62d25 + 36d097e).
 - **53 resolved ON native/r16** (233ae0c..7024579 + f5d3a04). All four R16 native tickets are in.
 - **43 resolved ON native/r16** (8402b74..c288e90 + 4d18b95; the broad set passed against the bundle).
-- **Running:** 42 (worker chat 02be753f, `native/r16`; approach in the ticket: our own Taffy low-level tree traits so leaves report first baselines). Then 54.
+- **42 resolved ON native/r16** (36a329e..ae84f31 + fd2582c). All native code is in.
+- **Running:** 54 (worker chat 95babf81, `native/r16`): revision 16, final build, refresh the embedded artifact, whole suites of both repos (gpui-go-base via a temporary go.work), the measurements. The worker does NOT merge; the orchestrator verifies, then merges `native/r16` into main and runs gpui-go-base's suite. Then 55-61 (Go-only, parallel).
 - Open questions re-asked to the user 2026-10-26 (Tab wrap, reduced motion, plugin memory, gpui-go-base repo); answers pending.
 
 **ORCHESTRATOR 10 STATUS (2026-10-25). History now.** Claude Code, Opus 5.5; Roboco chat d041f254. It took over from orchestrator 9 (chat b38c2f03; handoff doc `%TEMP%\gpui-go-handoff-orchestrator10.md`). Rules: orchestrator 8's block plus the native decision above.
