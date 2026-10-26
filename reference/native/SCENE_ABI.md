@@ -9,7 +9,7 @@ path/draw extension). The Go mirror lives in
 browser-core ticket 53; see the version paragraphs below).
 
 **Scene service version 8 (rev 16, browser-core ticket 52, native
-revision 151 - ticket 54 bumps the revision):** the mask, blend,
+revision 16, set by ticket 54's rebuild):** the mask, blend,
 gradient and drop-shadow half of the R16 effect group lands. The table
 appends four entries after `update_property`: `scene_insert_gradient`
 (slot 30: one gradient table entry + its bulk stop array; the service
@@ -43,7 +43,7 @@ count word + the 10-word op rows). Record changes, all append-only:
   `filter_chain_count` after `record_size` (60 -> 72 bytes).
 
 **Scene service version 9 (rev 16, browser-core ticket 53, native
-revision 151 - ticket 54 bumps the revision):** the path tessellation
+revision 16, set by ticket 54's rebuild):** the path tessellation
 LRU cache (the design's §3.12) and its observability entry. The ONLY
 table change is `scene_tess_cache_stats` (slot 34, after
 `insert_filter_op_chain`) - 35 pointers, 384 bytes; no records or
@@ -68,7 +68,7 @@ i32 scene_tess_cache_stats(u32* out_hits, u32* out_misses,
 ```
 
 **Scene service version 7 (rev 16, browser-core ticket 51, native
-revision 151 - ticket 54 bumps the revision):** the transform and
+revision 16, set by ticket 54's rebuild):** the transform and
 property-node half of the R16 effect group landed. The ONLY change was
 the table entry `scene_update_property` (slot 29, after
 `effect_dump`); no records or scalars changed, so the table grew 312
@@ -106,7 +106,7 @@ i32 scene_update_property(u64 scene, u32 node_id, u32 kind,
   reject (a non-finite or singular 2x2, an opacity outside [0,1]).
 
 **Scene service version 6 (rev 16, browser-core ticket 50, native
-revision 151):** the R16 group machinery lands. The design doc's
+revision 16, set by ticket 54's rebuild):** the R16 group machinery lands. The design doc's
 "scene service v5" became this version 6 because ticket 77 had
 already taken 5. Everything below is append-only; the pre-R16 record
 meanings are unchanged and a zero-radii, zero-fade mask behaves

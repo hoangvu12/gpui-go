@@ -1,0 +1,139 @@
+{
+  "schema": "gpui-go/r54-compositor-measure@1",
+  "date": "2026-10-26T18:15:29Z",
+  "window_px": [
+    1280,
+    800
+  ],
+  "note": "wall-time measurements on one shown-never-activated window per surface mode; the page is the gpui-perf FrameDivs analog (1,000 18px quads) with a 36-quad transform property-node group and a 22-quad scroll column; min/mean over the recorded frames after warmup; the damage rect counts are the CALLER's inputs (the native side clamps, expands, merges and caps them); state binds are the device-global tracker's delta over the frames",
+  "measurements": {
+    "full_frame_rebuild_and_redraw": {
+      "desc": "full frame: rebuild + full redraw (forceFull)",
+      "timing": {
+        "n": 20,
+        "mean_ms": 8.578610000000001,
+        "min_ms": 4.926
+      },
+      "input_damage_rects": 1,
+      "full_presents": 20,
+      "partial_presents": 0,
+      "damage_fraction_per_mille": 1000,
+      "state_binds_per_frame": 35
+    },
+    "full_redraw_same_scene": {
+      "desc": "full redraw of the same finished scene (forceFull)",
+      "timing": {
+        "n": 30,
+        "mean_ms": 4.955986666666666,
+        "min_ms": 2.1666
+      },
+      "input_damage_rects": 1,
+      "full_presents": 30,
+      "partial_presents": 0,
+      "damage_fraction_per_mille": 1000,
+      "state_binds_per_frame": 35
+    },
+    "hover_change": {
+      "desc": "hover change: rebuild with one recolored quad + damaged redraw",
+      "timing": {
+        "n": 30,
+        "mean_ms": 5.26065,
+        "min_ms": 3.1575
+      },
+      "input_damage_rects": 1,
+      "full_presents": 30,
+      "partial_presents": 0,
+      "damage_fraction_per_mille": 0,
+      "state_binds_per_frame": 35
+    },
+    "identity": {
+      "bytes": 19464192,
+      "capabilities": "0xfff",
+      "native_revision": 16,
+      "sha256": "8ec910d4f24df66f937b312a02345458fd218888eae15a29a906745fc225dd11",
+      "source": "cache"
+    },
+    "pool_high_water": {
+      "desc": "3 nested opacity groups + 2 disjoint siblings (5 isolated) over a full-page scene",
+      "isolated_groups_in_scene": 5,
+      "requirements_isolated_target_count": 3,
+      "pool_targets_retained": 2,
+      "pool_bytes_retained": 1048576,
+      "pool_overflow_count": 0
+    },
+    "property_only_frame_dcomp": {
+      "desc": "property-only frame: UpdateEffectMatrix + damaged redraw (old ∪ new)",
+      "timing": {
+        "n": 60,
+        "mean_ms": 3.462685,
+        "min_ms": 1.5759999999999998
+      },
+      "input_damage_rects": 2,
+      "full_presents": 60,
+      "partial_presents": 0,
+      "damage_fraction_per_mille": 37,
+      "state_binds_per_frame": 35
+    },
+    "property_only_frame_hwnd": {
+      "desc": "property-only frame in hwnd mode (Present1's accepted mode)",
+      "timing": {
+        "n": 60,
+        "mean_ms": 4.483808333333333,
+        "min_ms": 2.6174000000000004
+      },
+      "input_damage_rects": 2,
+      "full_presents": 0,
+      "partial_presents": 60,
+      "damage_fraction_per_mille": 37,
+      "state_binds_per_frame": 35
+    },
+    "scene_rebuild_only": {
+      "desc": "scene rebuild only (no draw)",
+      "timing": {
+        "n": 20,
+        "mean_ms": 1.4415900000000001,
+        "min_ms": 1.0366
+      },
+      "input_damage_rects": 0,
+      "full_presents": 0,
+      "partial_presents": 0,
+      "damage_fraction_per_mille": 0,
+      "state_binds_per_frame": 0
+    },
+    "scroll_exposed_strip": {
+      "desc": "scroll: rebuild with the column shifted + exposed-strip damage",
+      "timing": {
+        "n": 30,
+        "mean_ms": 7.016046666666667,
+        "min_ms": 3.7539000000000002
+      },
+      "input_damage_rects": 1,
+      "full_presents": 30,
+      "partial_presents": 0,
+      "damage_fraction_per_mille": 9,
+      "state_binds_per_frame": 35
+    },
+    "scroll_full_column": {
+      "desc": "scroll: rebuild with the column shifted + full-column damage",
+      "timing": {
+        "n": 30,
+        "mean_ms": 8.86755,
+        "min_ms": 4.2895
+      },
+      "input_damage_rects": 1,
+      "full_presents": 30,
+      "partial_presents": 0,
+      "damage_fraction_per_mille": 283,
+      "state_binds_per_frame": 35
+    },
+    "tess_cache": {
+      "desc": "32 square paths re-rendered 30 frames (PathBuilder.Build each frame)",
+      "paths_per_frame": 32,
+      "frames": 30,
+      "hits": 1888,
+      "misses": 32,
+      "evictions": 0,
+      "hit_rate": 0.9833333333333333
+    }
+  }
+}

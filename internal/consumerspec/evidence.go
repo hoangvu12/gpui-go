@@ -19,14 +19,17 @@ import (
 // Pinned evidence identity of the shipped native artifact
 // ---------------------------------------------------------------------------
 
-// The artifact identity recorded for the current native build (rev
-// 15.1 — native revision 151, the u32 encoding of the point release; 16
-// stays reserved for ticket 54's R16 "rebuilt as native rev 16"), the
-// browser-core ticket 77 rebuild). These constants are
-// the evidence values the delivery checks compare the module's embedded
-// artifact against; they cite:
+// The artifact identity recorded for the current native build (rev 16,
+// the browser-core ticket 54 R16 rebuild; native revision 16 — the
+// number the R16 plan reserved for "rebuilt as native rev 16", which
+// ticket 77's point release could not take and encoded as 151). These
+// constants are the evidence values the delivery checks compare the
+// module's embedded artifact against; they cite:
 //
-//   - evidence/browser-core/ticket77-native-rebuild.json (this rebuild's
+//   - evidence/browser-core/ticket54-native-rebuild.json (this rebuild's
+//     recording: 19,464,192 bytes; sha256 8ec910d4…, static CRT,
+//     native revision 16, capability mask 0xFFF), which supersedes
+//   - evidence/browser-core/ticket77-native-rebuild.json (the previous
 //     recording: 19,107,328 bytes; sha256 ef337ad3…, static CRT,
 //     native revision 151, capability mask 0xFFF), which supersedes
 //   - evidence/browser-core/ticket39-native-rebuild.json (the previous
@@ -47,12 +50,12 @@ import (
 // loudly instead of accepting a silent identity drift.
 const (
 	// EvidenceArtifactSHA256 is the recorded SHA-256 of the DLL.
-	EvidenceArtifactSHA256 = "ef337ad3051a382b7c9d98e5c10c9926f72df6e7d3c0d4d2a1012ec7cb322f4b"
+	EvidenceArtifactSHA256 = "8ec910d4f24df66f937b312a02345458fd218888eae15a29a906745fc225dd11"
 	// EvidenceArtifactBytes is the recorded DLL size.
-	EvidenceArtifactBytes = 19107328
+	EvidenceArtifactBytes = 19464192
 	// EvidenceNativeRevision is the recorded native bridge revision
-	// (151 = rev 15.1, the integer encoding of the point release).
-	EvidenceNativeRevision = 151
+	// (16 = rev 16, the R16 rebuild).
+	EvidenceNativeRevision = 16
 	// EvidenceCECommit is the pinned gpui-CE commit of the artifact.
 	EvidenceCECommit = "254b5dbd47cbb5acbcc5bbdcbb322a339276c88a"
 	// EvidenceCRTOutcome is the recorded static-CRT outcome string.

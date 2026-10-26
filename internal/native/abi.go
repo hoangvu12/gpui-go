@@ -56,8 +56,19 @@ const (
 	// (ticket 41's &[*uniforms] reference bug made colour filters and the
 	// backdrop crop GPU no-ops), the synthetic italic shears by Chrome's
 	// exact -0.25 instead of DirectWrite's oblique angle, and text-wrap:
-	// nowrap drives the wrap policy.
-	nativeRevision uint32 = 151
+	// nowrap drives the wrap policy. The browser-core R16 rebuild
+	// (ticket 54) bumped it to 16 — the number the R16 plan reserved all
+	// along — landing tickets 50-53 (the effect-group records and plan
+	// pairing with the group-target pool and content mask, the
+	// transformed composite and scene_update_property, the gradient
+	// table, blend modes, masks, clip-path coverage and the drop-shadow
+	// op chain, the retained frame with draw_scene_damage and the
+	// dirty-rect present, the state-bind tracker and the tessellation
+	// LRU cache; scene v9, renderer v6), ticket 43 (the vendored Parley
+	// adapter: word-break/overflow-wrap and the document align tag;
+	// text v3) and ticket 42 (the trait-driven Taffy compute with grid
+	// template areas and the measured-baseline patch; layout v2).
+	nativeRevision uint32 = 16
 	// maxBufferLen mirrors GPUI_GO_MAX_BUFFER_LEN.
 	maxBufferLen = 4096
 	// maxTextLen mirrors the text service's MAX_TEXT_BYTES (1 MiB text

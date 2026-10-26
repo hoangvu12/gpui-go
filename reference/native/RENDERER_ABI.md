@@ -1,7 +1,7 @@
 # gpui-go native renderer service ABI (v2)
 
 **Renderer service version 6 (rev 16, browser-core ticket 53, native
-revision 151 - ticket 54 bumps the revision):** the retained frame,
+revision 16, set by ticket 54's rebuild):** the retained frame,
 the damage redraw and the dirty-rect present (the design's §3.11). The
 table appends TWO entries after `surface_debug_stats` (21 function
 pointers, table size 224) plus two scalars (`size_of_damage_rect`,
@@ -87,7 +87,7 @@ invalidates) rides the same version: zero pixel impact, observable
 through `state_bind_count`.
 
 **Renderer service version 5 (rev 16, browser-core ticket 50, native
-revision 151 - ticket 54 bumps the revision):** the R16 group machinery.
+revision 16, set by ticket 54's rebuild):** the R16 group machinery.
 The design's "renderer service v5" is this version. The table appends
 `surface_debug_stats` after `surface_frame_latency_handle` (18 function
 pointers, table size 200) with its record `GpuiGoDebugStatsRecord` (16

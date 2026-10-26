@@ -129,8 +129,22 @@ pub const GPUI_GO_ABI_VERSION: u32 = 1;
 /// backdrop crop were GPU no-ops), the synthetic italic shears by
 /// Chrome's exact −0.25 instead of DirectWrite's oblique angle
 /// (measured −0.34), and CSS text-wrap: nowrap drives the wrap policy
-/// through the pinned layout request.
-pub const GPUI_GO_NATIVE_REVISION: u32 = 151;
+/// through the pinned layout request. The browser-core R16 rebuild
+/// (ticket 54) bumps it to 16 — the number the R16 plan reserved all
+/// along ("rebuilt as native rev 16") — landing tickets 50-53 on the
+/// integration branch: the effect-group record and plan pairing with
+/// the group-target pool and the 52-byte content mask (50), the
+/// transformed composite and `scene_update_property` (51), the
+/// gradient table, blend modes, masks, clip-path coverage and the
+/// drop-shadow op chain (52), and the retained frame with
+/// `draw_scene_damage`, the dirty-rect present, the state-bind tracker
+/// and the path-tessellation LRU cache (53) — scene service v9,
+/// renderer service v6; plus ticket 43 (the vendored Parley adapter
+/// carrying word-break/overflow-wrap and the document align tag; text
+/// service v3) and ticket 42 (the trait-driven Taffy compute with
+/// grid template areas and the measured-baseline patch; layout
+/// service v2).
+pub const GPUI_GO_NATIVE_REVISION: u32 = 16;
 
 /// gpui-CE source pin this artifact family is built against (ASCII hex,
 /// zero-padded to 40 bytes in the table).

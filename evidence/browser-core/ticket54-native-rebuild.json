@@ -1,0 +1,80 @@
+{
+ "ticket": "browser-core 54: the R16 integrate, build rev 16 and measure rebuild (native revision 16, the number the R16 plan reserved)",
+ "date": "2026-10-26",
+ "revision_choice": "native revision 16 — the number the R16 plan reserved from the start (ticket 54: 'rebuilt as native rev 16'). The branch's interim DLLs (tickets 50-53, 43, 42) kept native revision 151 while they were tested through GPUI_GO_NATIVE_BUNDLE with the manifest swap reverted before every commit; this ticket is the one place the embedded pair internal/native/artifacts/{gpui_go_native.dll,manifest.json} and reference/out/native-bootstrap.json are refreshed and committed, and the revision pin moved at every site (lib.rs GPUI_GO_NATIVE_REVISION, abi.go nativeRevision, the measure tool's constant, consumerspec EvidenceNativeRevision, the glyphspec/scenespec identity gates, the ABI docs).",
+ "approval": "the user approved the rebuild on 2026-10-25 ('feel free to do native tickets after every go only is done, but make sure to make it fast somehow without making my pc to freeze'), recorded in the ticket: one cargo build at a time, -j 4, below-normal priority — the build below ran exactly so (one cargo process, -j 4, start /belownormal, the separate target dir C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-r16-target).",
+ "dll": {
+  "before": {
+   "native_revision": 151,
+   "sha256": "ef337ad3051a382b7c9d98e5c10c9926f72df6e7d3c0d4d2a1012ec7cb322f4b",
+   "bytes": 19107328
+  },
+  "after": {
+   "native_revision": 16,
+   "sha256": "8ec910d4f24df66f937b312a02345458fd218888eae15a29a906745fc225dd11",
+   "bytes": 19464192,
+   "gzip9_bytes": 7688896,
+   "gzip9_sha256": "1050d085a7910808bbb529f18a532a49b4eee2071095602b49e14b9232e09f92",
+   "capabilities_mask": "0xFFF",
+   "crt_outcome": "static: no VCRUNTIME/MSVCP/UCRT/api-ms-win-crt imports present; only OS system components are imported",
+   "toolchain": "rustc 1.97.0 (2d8144b78 2026-07-07), x86_64-pc-windows-msvc, RUSTFLAGS=-C target-feature=+crt-static, cargo -j 4 below-normal, CARGO_TARGET_DIR=C:\\Users\\ADMIN\\Desktop\\nguyenvu\\gpui-r16-target, a clean rebuild of the native crate (cargo clean -p gpui-go-native first; the pinned dependency graph unchanged from the branch's interim builds)",
+   "ce_source": "the same pinned 254b5dbd47cbb5acbcc5bbdcbb322a339276c88a tree (unmodified; gitignored)",
+   "built_at": "2026-10-26T18:07:38Z",
+   "services": {
+    "scene": "9 (tickets 50-53: the effect-group records and plan pairing with the 52-byte content mask, scene_update_property, the gradient/coverage/filter-op tables with the 1024x1 ramp, the tessellation LRU cache and its stats entry; table 384 bytes, 35 pointers)",
+    "renderer": "6 (tickets 50/53: the group-target pool, the transformed/blend composites, surface_debug_stats, draw_scene_damage with the damage expansion/merge/cap, read_frame_pixels, the extended 36-byte debug stats; table 224 bytes, 21 pointers)",
+    "text": "3 (ticket 43: the vendored Parley adapter carrying word-break/overflow_wrap/text_align/is_rtl; the run record 96 bytes, the layout record 60)",
+    "layout": "2 (ticket 42: the trait-driven Taffy compute with grid template areas/area, the measured baseline patched into the algorithms; 17 pointers)"
+   }
+  }
+ },
+ "changes": [
+  "the R16 branch itself: tickets 50 (groups, opacity, rounded masks, the target pool), 51 (the transformed composite, scene_update_property), 52 (masks, clip-path, blend modes, drop-shadow op chains, the gradient table), 53 (the retained frame, draw_scene_damage, dirty-rect present, the state-bind tracker, the tess cache), 43 (the vendored Parley text adapter) and 42 (the trait-driven Taffy layout compute) — all landed and verified on native/r16 through interim bundles; this ticket integrates them as the committed rev-16 artifact",
+  "the revision pin at every site: reference/native/src/lib.rs GPUI_GO_NATIVE_REVISION, internal/native/abi.go nativeRevision, reference/native/tools/measure/main.go, internal/consumerspec/evidence.go (EvidenceNativeRevision + the SHA/bytes pins), the glyphspec/scenespec identity gates, SCENE_ABI.md / RENDERER_ABI.md / the design doc's appendix-A header",
+  "the refreshed embedded pair + reference/out/native-bootstrap.json through the measure tool (the CRT/mask checks above are its output)",
+  "two test updates the R16 branch needed: internal/pathspec's depth gates still pinned rev 15's MAX_FILTER_GROUP_DEPTH (ticket 50 removed it: every matched group isolates, nesting-based — TestFilterGroupPlanRecordsBeyondDepthTwo now expects three isolated targets at depth 3, TestFilterGroupDepthFourAllIsolate four at depth 4) and gpui/grid_tracks_test.go needed the display codemod's explicit .Flex() (ticket 42 committed it unpinned)"
+ ],
+ "measurements": {
+  "method": "design §6, recorded against the gpui-perf harness (gpui/perf_bench_test.go TestPerfFrameReport: best of 5 runs by ns/frame, hostless test windows on the real text system) for the frame times, and the new env-gated compositor harness (internal/rendererspec/r54_measure_test.go TestR54MeasureCompositor, R54_MEASURE_OUT) for the §6 counters; raw JSON: evidence/perf/ticket54-before.json, evidence/perf/ticket54-after.json, evidence/browser-core/ticket54-compositor.json",
+  "machine_note": "other projects' agents shared this machine during both frame-time runs, so the absolute wall times are ~2x the 2026-10-23 recording (combined-final.json: 7.52/27.59 ms); the before and after runs ran back-to-back under the same load, and the deterministic counters (allocs, native calls) are load-independent and unchanged — the comparison holds, the absolute numbers carry the load",
+  "frame_time_best_of_5": {
+   "FrameDivs": {"before_rev151_ms": 17.09, "after_rev16_ms": 16.92, "allocs_before_after": "5503/5503", "native_calls_before_after": "3057/3060"},
+   "FrameText": {"before_rev151_ms": 130.80, "after_rev16_ms": 132.72, "allocs_before_after": "80808/89208", "native_calls_before_after": "8758/8770"},
+   "FrameRefreshDivs": {"before_rev151_ms": 16.41, "after_rev16_ms": 17.98, "allocs_before_after": "5423/5423", "native_calls_before_after": "3057/3060"},
+   "FrameRefreshText": {"before_rev151_ms": 139.62, "after_rev16_ms": 139.83, "allocs_before_after": "80802/89195", "native_calls_before_after": "8758/8770"},
+   "verdict": "rev 16 costs the same as rev 15.1 on the group-free frame path (by construction: group-free scenes render identically; the wall-time deltas are within the shared-load noise, the deterministic counters are equal on the div scenes). The text pages' +8400 allocs/frame is ticket 43's run fields (word_break/overflow_wrap/text_wrap) riding every run through ToRunAt — no wall-time regression measured; main itself regressed FrameText ~4.7x vs the 2026-10-23 baseline (tickets 20/37/69-71/76 landed after ddff695: selectable text, CSS-normal line height, block display), which predates this branch."
+  },
+  "property_only_frame": {
+   "full_frame_rebuild_and_redraw": {"min_ms": 4.926, "mean_ms": 8.579, "n": 20, "note": "1,059 quads rebuilt and fully redrawn (1,000 grid + 22 scroll column + 36 in the group + the background) — the ABI-level changed frame"},
+   "scene_rebuild_only": {"min_ms": 1.037, "mean_ms": 1.442, "n": 20},
+   "full_redraw_same_scene": {"min_ms": 2.167, "mean_ms": 4.956, "n": 30, "state_binds_per_frame": 35},
+   "property_tick_dcomp": {"min_ms": 1.576, "mean_ms": 3.463, "n": 60, "input_rects": 2, "damage_fraction_per_mille": 37, "partial_presents": 0, "full_presents": 60, "note": "UpdateEffectMatrix + the old-union-new damaged redraw on the SAME finished handle; the DComp surface's Present1 is rejected by the pinned readback fallback on this machine, so every frame presents full (the damage scissor still saves the raster work)"},
+   "property_tick_hwnd": {"min_ms": 2.617, "mean_ms": 4.484, "n": 60, "input_rects": 2, "damage_fraction_per_mille": 37, "partial_presents": 60, "full_presents": 0, "note": "the hwnd mode accepts Present1 — 60/60 partial presents"},
+   "verdict": "the property-only frame (min 1.58 ms) is ~3x cheaper than the full changed frame (min 4.93 ms) and well under the full redraw of the same scene (min 2.17 ms) — no rebuild, no re-layout, no re-paint, exactly the design's 'frame cost << baseline frame' target; the DComp-mode present fallback (Chromium's own DComp observation, pinned by TestR53Present1InBothSurfaceModes) is what keeps the dcomp tick from dropping further"
+  },
+  "damage": {
+   "hover_change": {"input_rects": 1, "damage_fraction_per_mille": 0, "min_ms": 3.158, "mean_ms": 5.261, "note": "one 18x18 quad recolored = 0.3 per-mille of the 1280x800 window (rounds to 0); the frame cost is rebuild-dominated — the damage path saves the raster+present, the paint rebuild is ticket 60's fast path to remove"},
+   "scroll_full_column": {"input_rects": 1, "damage_fraction_per_mille": 283, "min_ms": 4.290, "mean_ms": 8.868, "note": "the no-blit reality: the whole 600x460 column redraws"},
+   "scroll_exposed_strip": {"input_rects": 1, "damage_fraction_per_mille": 9, "min_ms": 3.754, "mean_ms": 7.016, "note": "the blit-compositor case: only the 600x16 exposed strip is passed; the native side redraws only what it is told"}
+  },
+  "pool": {"requirements_isolated_target_count": 3, "pool_targets_retained": 2, "pool_bytes_retained": 1048576, "pool_overflow_count": 0, "note": "a scene of 3 nested opacity groups + 2 disjoint single-quad groups (the fold candidates): the nesting-based high-water mark is 3, the pool retains 2 targets / 1,048,576 bytes after the frame, no overflow"},
+  "state_binds": {"per_full_redraw_frame": 35, "per_property_tick_frame": 35, "note": "the tracked frame issues 35 binds for the 29-batch plan (the r53 gate pins the tracker's savings: 16 same-family batches re-render far below the 112-bind untracked cost)"},
+  "tess_cache": {"hits": 1888, "misses": 32, "evictions": 0, "hit_rate": 0.9833, "note": "32 square paths re-rendered 30 frames (PathBuilder.Build every frame): the first frame misses once per path (the capacity probe), every later build hits twice (probe + data)"},
+  "presents": {"dcomp_mode": "0 partial / 60 full over the property ticks (the pinned readback fallback — Chromium's own DComp observation)", "hwnd_mode": "60 partial / 0 full (Present1 accepted every tick)", "cpu_time_note": "the per-frame CPU wall times above include the present (the draw call returns after Present1/Present); a full-present frame's call is the full_redraw timing, a partial-present frame's the property_tick timing"}
+ },
+ "suites": {
+  "gpui_go": "go vet ./... ok; go build ./... ok; displaycodemod -check ok (after pinning grid_tracks_test.go); positioncodemod -check ok; GOFLAGS=-p=4 go test -p 1 -count=1 ./... (final run, no GPUI_GO_NATIVE_BUNDLE, no manifest swap): 95 packages ok — the 7 internal/native loader tests all pass against the embedded rev-16 pair, gpui/script's frame-overhead gate passed. The only failures: portfixture TestFx0004 (the KNOWN pre-existing font count 94 vs 95), gpui TestWin32TranslateKeyDownCarriesCodeAndLocation (the KNOWN pre-existing win32 key-map drift, fails alone), and internal/focusspec TestRealWindowKeyboardTranslation (an ENVIRONMENTAL focus-contention failure — it passed in the first suite run and fails identically on main's rev-15.1 tree under the same machine state, reproduced in the before-export); pathspec's two rev-15 depth-cap tests were FIXED in this ticket (ticket 50's rule).",
+  "gpui_go_base": "tested against this branch through a temporary GOWORK outside both repos (no go.mod edit, nothing committed there): conformance/cmd/basecoverage -check ok (ledger current, GAPS 0); go test -p 1 -count=1: 6 packages ok (basecoverage, dataurl, rope, segment, strftime, sumtree) and 4 build failures (the root package + the base-gallery/base-showcase/zterm examples) — ALL one core API change: ticket 42 changed gpui.MeasureFunc from func(req gpui.MeasureRequest) gpui.Size to func(req gpui.MeasureRequest) gpui.MeasuredSize (Size + optional FirstBaseline), and base's text_inline_flow.go:288 passes the old closure to gpui.RequestElementMeasuredLayout. Base's fix (reported, not committed per instructions): return gpui.MeasuredSize{Size: l.size} / gpui.MeasuredSize{Size: layout.size} at the closure's two returns (FirstBaseline can stay nil — the rev-15 bottom-edge fallback)."
+ },
+ "open_items": [
+  "52's handed-off gap: the pinned underline/sprite/path pipelines' rounded-mask gap — they clip rect+fade only (shaders/mod.rs divergence 4); vendoring those pipelines is the fix",
+  "52: the atlas mask stretches the whole polychrome texture over the group's bounds (no tile-id lookup; 55 can allocate dedicated mask textures or extend the atlas)",
+  "52: the gradient table is not dithered (the 1024-texel ramp's quantization is below the two-stop path's banding; the R15 path's dither is untouched)",
+  "52: a coverage mask on a TRANSFORM group samples the window-frame rasterization (a local-frame mask would need per-frame rasterization in the group's bucket)",
+  "51/52: a window-frame group's bucket is inflated by its region's distance from the origin (the frame-origin invariant's price; a group at (0,0) is truly bounds-sized)",
+  "42: the strut-baseline paint drift (the measured baseline is Chrome's strut math but the paint layer's underline/strut geometry can still drift from it)",
+  "58: the Go damage computation (pass its rects into Surface.DrawSceneDamage; the paint-flashing overlay reads the same merged regions; capture-backed scene surfaces update outside the scene's knowledge — their bounds belong in 58's rule)",
+  "60: the frame-loop fast path (Scene.UpdateEffectMatrix/UpdateEffectOpacity -> old/new bounds dilated ~2px -> Surface.DrawSceneDamage; the measurements above are its ceiling)",
+  "55: the Go styling for the R16 native surface (mask-image, clip-path, mix-blend-mode/isolation, the >2-stop gradient classes, filter: drop-shadow(), the transform groups) and the smoothed-content-mask pixel gate once it authors quad masks"
+ ]
+}

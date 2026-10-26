@@ -80,10 +80,19 @@ const (
 	// upload fix (colour filters and the backdrop crop were GPU
 	// no-ops), the exact -0.25 synthetic-italic shear, the per-function
 	// colour-matrix payload with the [0,1] clamp between functions, and
-	// text-wrap: nowrap driving the wrap policy.
+	// text-wrap: nowrap driving the wrap policy. The browser-core R16
+	// rebuild (ticket 54) bumped it to 16 — the number the R16 plan
+	// reserved all along — landing tickets 50-53 (effect groups, the
+	// group-target pool and content masks, the transformed composite
+	// and scene_update_property, the gradient table, blend modes,
+	// masks, clip-path coverage and drop-shadow op chains, the retained
+	// frame with draw_scene_damage, the dirty-rect present, the
+	// state-bind tracker and the tessellation LRU cache; scene v9,
+	// renderer v6), ticket 43 (the vendored Parley adapter; text v3) and
+	// ticket 42 (the trait-driven Taffy compute; layout v2).
 	// Keep these in sync with reference/native/src/lib.rs
 	// (GPUI_GO_NATIVE_REVISION and the capabilities module).
-	nativeRevision = 151
+	nativeRevision = 16
 
 	// bit 0 bootstrap, bit 1 layout-taffy-0-13-0, bit 2 renderer-d3d11,
 	// bit 3 scene-kernel-v1, bit 4 text-parley-0-11-1, bit 5

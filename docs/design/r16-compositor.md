@@ -150,7 +150,7 @@ Ticket 54 then integrates, rebuilds rev 16 (user approval required), re-runs the
 6. **ABI growth / R15 rebase.** Scene service v5 and renderer v5 grow tables and records; every record keeps `record_size` self-checks (the ABI's existing mismatch catcher). R15 fields are append-only. The integration branch is cut after R15 merges to avoid a parallel-ABI fork.
 7. **`Present1` on a composition swap chain** (mode 0). Verified by test; full-present fallback if it fails (open question Q5).
 
-## 6. Measured before and after (recorded at ticket 54, `evidence/perf/`)
+## 6. Measured before and after (recorded at ticket 54: `evidence/browser-core/ticket54-native-rebuild.json`, raw `ticket54-compositor.json` + `evidence/perf/ticket54-{before,after}.json`)
 
 Baseline first (before the integration branch is cut), then after rev 16, same harness:
 
@@ -194,7 +194,7 @@ These answers were checked against zgui (`%TEMP%\research-src\zgui-head`), gpui-
 
 ## Appendix A: record layouts
 
-All `#[repr(C)]`, u32 words, f32 values as IEEE-754 bits, alignment 4, every record ends with a `record_size` self-check (the ABI's existing convention). Offsets in words. **The design's "scene service v5" became version 6** (ticket 77's 780-byte filter record had already taken 5; ticket 50 recorded the renumber); the renderer service is **5**; the native revision stays **151** until ticket 54 sets **16**.
+All `#[repr(C)]`, u32 words, f32 values as IEEE-754 bits, alignment 4, every record ends with a `record_size` self-check (the ABI's existing convention). Offsets in words. **The design's "scene service v5" became version 6** (ticket 77's 780-byte filter record had already taken 5; ticket 50 recorded the renumber); the renderer service is **6** (the design's "5" plus ticket 53's damage entries); the native revision is **16** — ticket 54's rebuild set it (the integration branch's interim DLLs kept 151 while they were tested through `GPUI_GO_NATIVE_BUNDLE`).
 
 ### A.1 `GpuiGoSceneEffectRecord` — the effect group marker (new primitive class 10)
 
