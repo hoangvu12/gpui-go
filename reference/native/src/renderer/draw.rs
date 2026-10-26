@@ -4550,6 +4550,16 @@ fn composite_effect_group(
         match (backdrop_rtv, parent_srv) {
             (Some(backdrop_rtv), Some(parent_srv)) => {
                 copy_blend_backdrop(draw, frame, target, &Some(parent_srv), &Some(backdrop_rtv))?;
+                // Unbind the backdrop RTV from the output-merger stage
+                // BEFORE binding its SRV: D3D11 forbids one resource as
+                // input and output simultaneously (the copy pass left
+                // the backdrop bound as the render target, and the
+                // runtime would silently unbind the conflicting SRV -
+                // the blend fragment would sample nothing). The
+                // composite pass sets its own target right after.
+                unsafe {
+                    frame.device_context.OMSetRenderTargets(None, None);
+                }
                 // The blend fragment samples the backdrop COPY at the
                 // device position - bind its SRV at t11.
                 let backdrop_srv = surface_state_after_copy(

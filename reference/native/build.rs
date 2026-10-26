@@ -113,6 +113,12 @@ fn write_vendored_bytecode(out_dir: &std::path::Path) {
         .unwrap_or_else(|error| panic!("failed to validate {}: {error}", pipeline.label));
 
         let hlsl = write_hlsl(&legacy_module, &legacy_info, &wgsl, pipeline);
+        if std::env::var("GPUI_DUMP_HLSL").is_ok() {
+            let _ = std::fs::write(
+                std::path::Path::new(out_dir).join(format!("{}.hlsl", pipeline.label)),
+                &hlsl,
+            );
+        }
         let _ = write_dx11_bytecode(out_dir, pipeline.label, &hlsl, pipeline);
         // The blobs land at OUT_DIR/<label>.vs_5_0.dxbc and
         // <label>.ps_5_0.dxbc; `renderer/draw.rs` embeds them with

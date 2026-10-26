@@ -786,7 +786,10 @@ mod source {
     // color at a position: read the referenced table entry, compute
     // the kind's t, wrap it under the tile mode, sample the baked ramp
     // row (premultiplied sRGB) and un-premultiply for the pipeline's
-    // straight-color contract. The dither matches the R15 gradient's.
+    // straight-color contract. No dither: the 1024-texel ramp's
+    // quantization is far below the R15 two-stop path's banding (the
+    // dither's reason), and the spec tests' CPU references compare
+    // the exact filtered bytes.
     pub fn gradient_table_color(paint: Paint, position: Vec2f) -> Vec4f {
         let index = u32(paint.background.gradient_angle_or_pattern_height);
         let gradient = get!(GRADIENTS)[index as usize];
@@ -804,8 +807,7 @@ mod source {
             0.0,
         );
         let alpha = ramp.w;
-        let straight = select(transparent(), ramp / vec4f(alpha, alpha, alpha, 1.0), alpha > 0.0);
-        straight + gradient_dither(position)
+        select(transparent(), ramp / vec4f(alpha, alpha, alpha, 1.0), alpha > 0.0)
     }
 
     pub fn linear_gradient_ratio(paint: Paint, position: Vec2f) -> f32 {
