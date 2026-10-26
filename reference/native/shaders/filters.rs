@@ -727,6 +727,21 @@ pub mod blur {
         pub local_position: Vec2f,
         #[location(1)]
         pub clip_distances: Vec4f,
+        // rev 16, ticket 52 (closing 51's handed-off gap): the smoothed
+        // corner machinery - the prepared reaches and factors ride flat
+        // varyings exactly like the smoothed axis-aligned composite's.
+        #[location(4)]
+        #[interpolate(flat)]
+        pub horizontal_corner_reaches: Vec4f,
+        #[location(5)]
+        #[interpolate(flat)]
+        pub vertical_corner_reaches: Vec4f,
+        #[location(6)]
+        #[interpolate(flat)]
+        pub smoothing_factors: Vec4f,
+        #[location(7)]
+        #[interpolate(flat)]
+        pub superellipse_power: f32,
     }
 
     #[vertex]
@@ -751,10 +766,24 @@ pub mod blur {
                 + extensions.transform_row1.y * local_position.y
                 + extensions.transform_row1.z,
         );
+        // rev 16, ticket 52 (closing 51's handed-off gap): the smoothed
+        // corner preparation over the CONTENT MASK's size (the rect the
+        // clip coverage evaluates; a zero smoothing returns the plain
+        // radii and zero factors).
+        let prepared = prepare_corners(
+            locals.content_mask.size,
+            locals.corner_radii,
+            locals.corner_smoothing,
+            true,
+        );
         TransformedCompositeVarying {
             position: viewport_to_clip_position(device_position),
             local_position,
             clip_distances: clip_distances(local_position, locals.content_mask),
+            horizontal_corner_reaches: prepared.horizontal_reaches,
+            vertical_corner_reaches: prepared.vertical_reaches,
+            smoothing_factors: prepared.smoothing_factors,
+            superellipse_power: prepared.superellipse_power,
         }
     }
 
@@ -763,14 +792,36 @@ pub mod blur {
         if is_clipped(input.clip_distances) {
             return transparent();
         }
+        let locals = get!(BLUR_LOCALS);
+        // rev 16, ticket 52: the rounded clip's coverage - the smoothed
+        // corner SDF when the record carries smoothing (the prepared
+        // varyings), the plain rrect otherwise; evaluated at the LOCAL
+        // position (CSS clips inside the element, then the transform
+        // applies). A zero smoothing keeps the plain path bit-exact.
+        let signed_distance = select(
+            rounded_rectangle_signed_distance(
+                input.local_position,
+                locals.content_mask,
+                locals.corner_radii,
+            ),
+            prepared_corner_signed_distance(
+                input.local_position,
+                locals.content_mask,
+                locals.corner_radii,
+                locals.corner_smoothing,
+                PreparedCorners {
+                    horizontal_reaches: input.horizontal_corner_reaches,
+                    vertical_reaches: input.vertical_corner_reaches,
+                    smoothing_factors: input.smoothing_factors,
+                    superellipse_power: input.superellipse_power,
+                },
+            ),
+            locals.corner_smoothing > 0.0,
+        );
         let coverage = select(
             1.0,
-            antialiased_coverage(rounded_rectangle_signed_distance(
-                input.local_position,
-                get!(BLUR_LOCALS).content_mask,
-                get!(BLUR_LOCALS).corner_radii,
-            )),
-            get!(BLUR_LOCALS).composite_clip == BlurCompositeClip::RoundedBounds,
+            antialiased_coverage(signed_distance),
+            locals.composite_clip == BlurCompositeClip::RoundedBounds,
         );
         // The bucket-relative sampling: the local position over the
         // bucket's size (linear filtering).

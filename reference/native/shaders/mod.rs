@@ -107,11 +107,33 @@
 //!    to the group's content mask (the rrect coverage at the LOCAL
 //!    position with the record's radii - CSS clips inside the element
 //!    and the transform applies after; the plain rounded-rect SDF,
-//!    without the pin's corner smoothing, which 52's mask work owns).
+//!    without the pin's corner smoothing - closed by ticket 52 below).
 //!    The region-relative sampling offset of every composite also
 //!    became the content REGION's origin (the bucket's
 //!    quantization margin never reaches the target) - for
 //!    window-frame groups the values are exactly R15's.
+//!
+//! # rev 16 (browser-core ticket 52) divergences
+//!
+//! 6. **The gradient table, the blend modes and the mask composite**
+//!    (`common.rs`, `filters.rs`): the scene-level gradient table and
+//!    its baked 1024x1 premultiplied-sRGB ramp rows (n-stop, radial,
+//!    conic, repeating gradients - the pinned Background has only the
+//!    two-stop linear arm; the R15 record and shader stay bit-exact,
+//!    the table is tag 4 riding the record's angle field), the W3C
+//!    compositing-1 blend formulas in the composite (all 17 modes;
+//!    plus-lighter is the premultiplied clamp(source + backdrop),
+//!    Skia kPlus) against a backdrop COPY of the parent target, the
+//!    dst_in mask composite (the gradient ramp, the atlas texture or
+//!    the A8 coverage target; alpha or REC-601 luminance), and the
+//!    drop-shadow composite (the blurred alpha silhouette tinted and
+//!    offset beneath the content). The transformed composite's rounded
+//!    clip gains the smoothed-corner SDF (51's handed-off gap, now
+//!    closed). The gradient bindings (t7 table / t8 ramp / s9 clamp
+//!    sampler) and the mask/backdrop textures (t10 / t11) live above
+//!    every module's own group-1 slots; a kind-0 mask leaves the
+//!    composite factor at 1, so every non-masked composite is
+//!    bit-identical.
 
 #![allow(dead_code, unused_assignments, unused_imports)]
 

@@ -1,5 +1,6 @@
 #[wgsl_rs::wgsl]
 mod source {
+    use super::super::corner_smoothing::*;
     use wgsl_rs::std::*;
 
     // Defined here as a literal so the Rust-to-WGSL translator emits it, not `std`.
@@ -234,11 +235,32 @@ mod source {
                 alpha *= saturate((bounds.origin.y + bounds.size.y - position.y) / fade.bottom);
             }
             if !Corners::is_zero(content_mask.corner_radii) {
-                alpha *= antialiased_coverage(rounded_rectangle_signed_distance(
-                    position,
-                    bounds,
-                    content_mask.corner_radii,
-                ));
+                // rev 16, ticket 52 (closing 50's handed-off gap): the
+                // smoothed-corner SDF when the mask carries smoothing
+                // (the prepared corner layout computed per fragment -
+                // the same math the smoothed pipelines run in the
+                // vertex); the plain rrect SDF otherwise, bit-exact.
+                let signed_distance = select(
+                    rounded_rectangle_signed_distance(
+                        position,
+                        bounds,
+                        content_mask.corner_radii,
+                    ),
+                    prepared_corner_signed_distance(
+                        position,
+                        bounds,
+                        content_mask.corner_radii,
+                        content_mask.corner_smoothing,
+                        prepare_corners(
+                            bounds.size,
+                            content_mask.corner_radii,
+                            content_mask.corner_smoothing,
+                            true,
+                        ),
+                    ),
+                    content_mask.corner_smoothing > 0.0,
+                );
+                alpha *= antialiased_coverage(signed_distance);
             }
             alpha
         }

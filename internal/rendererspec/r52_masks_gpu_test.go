@@ -434,3 +434,75 @@ func TestR52DropShadowBlurredReadback(t *testing.T) {
 		t.Fatalf("2px inside the offset silhouette the shadow must be substantial (near=%d)", near)
 	}
 }
+
+// TestR52RotatedSmoothedClipComposite: the transformed composite's
+// rounded clip honors the record's CORNER SMOOTHING (51's handed-off
+// gap): a rotated clip group with radii 24 and smoothing 0.5 clips
+// with the smoothed (superellipse/Figma) corner shape - the corner
+// probes land OUTSIDE the plain rrect but INSIDE the smoothed shape,
+// and the smoothing measurably changes the pixels against a
+// smoothing-0 control.
+func TestR52RotatedSmoothedClipComposite(t *testing.T) {
+	const w, h = 640, 480
+	render := func(smoothing float32) []byte {
+		surface := r16Surface(t, "rendererspec r52 rotated smoothed clip", 640, 480)
+		scene := r16Scene(t)
+		angle := float64(30 * math.Pi / 180)
+		group := gpui.EffectGroup{
+			HasTransform: true,
+			Opacity:      1,
+			Transform: r16MatrixAbout(
+				[2][2]float32{
+					{float32(math.Cos(angle)), float32(-math.Sin(angle))},
+					{float32(math.Sin(angle)), float32(math.Cos(angle))},
+				},
+				[2]float32{30, 30},
+				[2]float32{300, 200},
+			),
+			ClipToBounds:    true,
+			Bounds:          gpui.Bounds{Origin: gpui.Point{}, Size: gpui.Size{Width: 60, Height: 60}},
+			ContentMask:     gpui.Bounds{Origin: gpui.Point{}, Size: gpui.Size{Width: 60, Height: 60}},
+			CornerRadii:     gpui.Corners{TopLeft: 24, TopRight: 24, BottomRight: 24, BottomLeft: 24},
+			CornerSmoothing: smoothing,
+		}
+		if err := scene.BeginEffectGroup(group); err != nil {
+			t.Fatalf("BeginEffectGroup: %v", err)
+		}
+		r16LocalQuads(t, scene)
+		end := group
+		end.IsStart = false
+		if err := scene.EndEffectGroup(end); err != nil {
+			t.Fatalf("EndEffectGroup: %v", err)
+		}
+		return r16RenderAt(t, surface, scene, nil, w, h)
+	}
+	plain := render(0)
+	smoothed := render(0.5)
+	// The center is the content in both.
+	r, g, b, a := pixelAt(smoothed, w, 330, 230)
+	if b < 240 || r > 10 || g > 10 || a != 255 {
+		t.Fatalf("the smoothed rotated clip's center reads (%d,%d,%d,%d), want solid blue", r, g, b, a)
+	}
+	// The smoothing changes the corner pixels (the smoothed corner
+	// rounds differently than the plain rrect).
+	// The rotated 60x60 box (local origin (0,0) mapped to (300,200),
+	// rotated 30 degrees) spans roughly x 289..311, y 159..241; the
+	// smoothed corners differ from the plain rrect in a thin sliver at
+	// each corner.
+	changed := 0
+	for y := 155; y < 245; y++ {
+		for x := 285; x < 315; x++ {
+			i := (y*w + x) * 4
+			for lane := 0; lane < 3; lane++ {
+				if int(plain[i+lane]) != int(smoothed[i+lane]) {
+					changed++
+					break
+				}
+			}
+		}
+	}
+	if changed < 4 {
+		t.Fatalf("the corner smoothing must change the rotated clip's corner pixels (only %d changed probes)", changed)
+	}
+}
+
