@@ -45,3 +45,58 @@ func (s *Styled[Self]) NoIsolate[_ lazy]() Self {
 	s.StyleMut().Isolation = Some(false)
 	return s.self
 }
+
+// The Tailwind mix-blend-* methods (browser-core ticket 57): each
+// zero-argument method is its class (mix-blend-multiply →
+// MixBlendMultiply), the naming rule of docs/tailwind.md.
+
+// MixBlendNormal sets mix-blend-mode: normal (source-over, the default).
+func (s *Styled[Self]) MixBlendNormal[_ lazy]() Self { return s.MixBlendMode(BlendNormal) }
+
+// MixBlendMultiply sets mix-blend-mode: multiply.
+func (s *Styled[Self]) MixBlendMultiply[_ lazy]() Self { return s.MixBlendMode(BlendMultiply) }
+
+// MixBlendScreen sets mix-blend-mode: screen.
+func (s *Styled[Self]) MixBlendScreen[_ lazy]() Self { return s.MixBlendMode(BlendScreen) }
+
+// MixBlendOverlay sets mix-blend-mode: overlay.
+func (s *Styled[Self]) MixBlendOverlay[_ lazy]() Self { return s.MixBlendMode(BlendOverlay) }
+
+// MixBlendDarken sets mix-blend-mode: darken.
+func (s *Styled[Self]) MixBlendDarken[_ lazy]() Self { return s.MixBlendMode(BlendDarken) }
+
+// MixBlendLighten sets mix-blend-mode: lighten.
+func (s *Styled[Self]) MixBlendLighten[_ lazy]() Self { return s.MixBlendMode(BlendLighten) }
+
+// MixBlendColorDodge sets mix-blend-mode: color-dodge.
+func (s *Styled[Self]) MixBlendColorDodge[_ lazy]() Self { return s.MixBlendMode(BlendColorDodge) }
+
+// MixBlendColorBurn sets mix-blend-mode: color-burn.
+func (s *Styled[Self]) MixBlendColorBurn[_ lazy]() Self { return s.MixBlendMode(BlendColorBurn) }
+
+// MixBlendHardLight sets mix-blend-mode: hard-light.
+func (s *Styled[Self]) MixBlendHardLight[_ lazy]() Self { return s.MixBlendMode(BlendHardLight) }
+
+// MixBlendSoftLight sets mix-blend-mode: soft-light.
+func (s *Styled[Self]) MixBlendSoftLight[_ lazy]() Self { return s.MixBlendMode(BlendSoftLight) }
+
+// MixBlendDifference sets mix-blend-mode: difference.
+func (s *Styled[Self]) MixBlendDifference[_ lazy]() Self { return s.MixBlendMode(BlendDifference) }
+
+// MixBlendExclusion sets mix-blend-mode: exclusion.
+func (s *Styled[Self]) MixBlendExclusion[_ lazy]() Self { return s.MixBlendMode(BlendExclusion) }
+
+// MixBlendHue sets mix-blend-mode: hue.
+func (s *Styled[Self]) MixBlendHue[_ lazy]() Self { return s.MixBlendMode(BlendHue) }
+
+// MixBlendSaturation sets mix-blend-mode: saturation.
+func (s *Styled[Self]) MixBlendSaturation[_ lazy]() Self { return s.MixBlendMode(BlendSaturation) }
+
+// MixBlendColor sets mix-blend-mode: color.
+func (s *Styled[Self]) MixBlendColor[_ lazy]() Self { return s.MixBlendMode(BlendColor) }
+
+// MixBlendLuminosity sets mix-blend-mode: luminosity.
+func (s *Styled[Self]) MixBlendLuminosity[_ lazy]() Self { return s.MixBlendMode(BlendLuminosity) }
+
+// MixBlendPlusLighter sets mix-blend-mode: plus-lighter.
+func (s *Styled[Self]) MixBlendPlusLighter[_ lazy]() Self { return s.MixBlendMode(BlendPlusLighter) }

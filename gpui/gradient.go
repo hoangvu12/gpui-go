@@ -139,10 +139,6 @@ func LinearGradientToBackground(direction GradientDirection, from, to GradientSt
 // stops, interpolated in sRGB. The R16 gradient redesign (browser-core
 // ticket 52) owns lifting them.
 var (
-	// ErrGradientViaUnsupported reports a Tailwind via-* class: a
-	// middle stop makes three, and the rev-15 scene record carries
-	// exactly two stops.
-	ErrGradientViaUnsupported = errors.New("via-* needs a three-stop gradient: the scene record (rev 15) carries exactly two stops (ticket 52, the R16 gradient redesign)")
 	// ErrGradientInterpolationUnsupported reports a non-sRGB
 	// interpolation request (Tailwind's oklab default and friends):
 	// the record's Oklab arm is the pinned 2.2-curve non-premultiplied
