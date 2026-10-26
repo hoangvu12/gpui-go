@@ -1,6 +1,9 @@
 package gpui
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // This file is the R16 group-styling half of browser-core ticket 55:
 // the style-level content mask with the rounded-corner clip
@@ -154,6 +157,24 @@ func (s *Style) InkBounds(bounds Bounds, rem float32) Bounds {
 		ink.Right = max32(ink.Right, outline)
 		ink.Bottom = max32(ink.Bottom, outline)
 		ink.Left = max32(ink.Left, outline)
+	}
+	// The filter chain's drop-shadow ops (browser-core ticket 57): the
+	// shadow's own ink — the alpha silhouette blurred at sigma =
+	// radius/2 (3-sigma covers the gaussian), offset — feeds the same
+	// bounds (Chromium's FEDropShadow::MapEffect unions the blurred
+	// offset rect with the source, fe_drop_shadow.cc:46-54, through
+	// the box-blur kernel extent ShadowData::RectOutsets shapes,
+	// shadow_data.cc:43-51: left = extent - dx, right = extent + dx,
+	// … clamped at zero by the union with the base rect).
+	for _, f := range s.Filter {
+		if f.Function != FilterFunctionDropShadow || f.IsIdentity() {
+			continue
+		}
+		extent := float32(math.Ceil(float64(1.5 * f.BlurRadius)))
+		ink.Top = max32(ink.Top, max32(extent-f.OffsetY, 0))
+		ink.Bottom = max32(ink.Bottom, max32(extent+f.OffsetY, 0))
+		ink.Left = max32(ink.Left, max32(extent-f.OffsetX, 0))
+		ink.Right = max32(ink.Right, max32(extent+f.OffsetX, 0))
 	}
 	return Bounds{
 		Origin: Point{X: bounds.Origin.X - ink.Left, Y: bounds.Origin.Y - ink.Top},

@@ -1482,7 +1482,8 @@ func (c Corners) OutsetWithCornerCorrection(size Size, outset float32) Corners {
 // filter_colors.go for their Chromium-sourced matrices.
 type Filter struct {
 	// BlurRadius is the gaussian blur radius in logical pixels
-	// (FilterFunctionBlur).
+	// (FilterFunctionBlur; also FilterFunctionDropShadow's blur radius,
+	// the CSS length the shadow rule halves into sigma).
 	BlurRadius float32
 	// Function selects the CSS filter function (FilterFunctionBlur for
 	// the pinned blur, the zero value).
@@ -1490,12 +1491,33 @@ type Filter struct {
 	// Amount is the colour function's argument: the [0,1] fraction for
 	// grayscale/sepia/invert/opacity, the unclamped multiplier for
 	// saturate/brightness/contrast, or the degrees for hue-rotate.
-	// Zero for blur.
+	// Zero for blur and drop-shadow.
 	Amount float32
+	// OffsetX and OffsetY are drop-shadow()'s offset in logical pixels
+	// (FilterFunctionDropShadow; zero otherwise).
+	OffsetX, OffsetY float32
+	// Color is drop-shadow()'s shadow color (FilterFunctionDropShadow;
+	// zero otherwise — a transparent color makes the shadow identity).
+	Color Hsla
 }
 
 // Blur returns the gaussian blur filter (Filter::Blur).
 func Blur(radius float32) Filter { return Filter{BlurRadius: radius} }
+
+// DropShadow returns the drop-shadow filter (CSS filter:
+// drop-shadow(x y blur color); Chromium builds FEDropShadow,
+// filter_effect_builder.cc:293-301 — the shadow is the group's alpha,
+// blurred at sigma = blur/2, tinted, offset, composited UNDER the
+// group's content). Multiple drop-shadows stack in chain order.
+func DropShadow(offsetX, offsetY, blurRadius float32, color Hsla) Filter {
+	return Filter{
+		BlurRadius: blurRadius,
+		Function:   FilterFunctionDropShadow,
+		OffsetX:    offsetX,
+		OffsetY:    offsetY,
+		Color:      color,
+	}
+}
 
 // IsIdentity reports whether the filter has no visible effect
 // (style.rs:495 Filter::is_identity: radius <= 0 for blur; the CSS
@@ -1507,6 +1529,11 @@ func (f Filter) IsIdentity() bool {
 		return f.Amount == 1
 	case FilterFunctionGrayscale, FilterFunctionSepia, FilterFunctionInvert, FilterFunctionHueRotate:
 		return f.Amount == 0
+	case FilterFunctionDropShadow:
+		// A transparent shadow color paints nothing; any other color
+		// draws the silhouette (a zero blur/offset shadow is a hard
+		// copy, still visible).
+		return f.Color.A == 0
 	default:
 		return blurRadiusIsIdentity(f.BlurRadius)
 	}

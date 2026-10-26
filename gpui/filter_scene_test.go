@@ -170,3 +170,91 @@ func quadFor(bounds Bounds) PaintQuad {
 		BorderDashedGap:    DefaultBorderDashedGap,
 	}
 }
+
+// Ticket 57's drop-shadow arm: the op chain composes into the boundary
+// record's op-chain reference (rev 16's appended fields — 0/0 is the
+// R15 legacy chain, bit-exact) and the group's bounds dilate by the
+// shadow's ink.
+func TestFilterBoundaryCarriesDropShadowOpChain(t *testing.T) {
+	scene, err := NewScene()
+	if err != nil {
+		t.Fatalf("NewScene: %v", err)
+	}
+	t.Cleanup(func() { _ = scene.Dispose() })
+
+	bounds := Bounds{Origin: Point{X: 10, Y: 10}, Size: Size{Width: 120, Height: 48}}
+	mask := Bounds{Origin: Point{}, Size: Size{Width: 640, Height: 400}}
+	ctx := NewPaintContext(2.0, mask, 1.0)
+
+	// drop-shadow(4px 6px 8px black) alone: an op chain with one op,
+	// no blur and no matrices.
+	black := Hsla{A: 1}
+	chain := composeFilterChain([]Filter{DropShadow(4, 6, 8, black)})
+	if chain.BlurRadius != 0 || chain.ColorMatrixCount != 0 {
+		t.Fatalf("chain = %+v, want no blur and no matrices", chain)
+	}
+	if len(chain.DropShadowOps) != 1 {
+		t.Fatalf("chain ops = %d, want 1", len(chain.DropShadowOps))
+	}
+	op := chain.DropShadowOps[0]
+	if op.OffsetX != 4 || op.OffsetY != 6 || op.BlurRadius != 8 {
+		t.Fatalf("op = %+v, want the CSS values (4, 6, 8)", op)
+	}
+	if op.Color != hslaToRgba(black) {
+		t.Fatalf("op color = %+v, want the RGBA black", op.Color)
+	}
+
+	// The styled path: WithFilterLayerChain resolves the ops (scaled to
+	// device pixels) and the boundary pair carries the reference.
+	err = scene.WithFilterLayerChain(bounds, chain, Corners{}, 0, ctx, func() error {
+		return scene.PaintQuad(PaintQuad{Bounds: bounds, Background: SolidBackground(black)}, 0, ctx)
+	})
+	if err != nil {
+		t.Fatalf("WithFilterLayerChain: %v", err)
+	}
+	if err := scene.Finish(); err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+	meta, err := scene.Meta()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.FilterChainCount != 1 {
+		t.Fatalf("filter chains = %d, want 1 (the drop-shadow ops)", meta.FilterChainCount)
+	}
+	boundaries, err := scene.FilterBoundaries()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(boundaries) != 2 {
+		t.Fatalf("boundaries = %d, want the pair", len(boundaries))
+	}
+	start, end := boundaries[0], boundaries[1]
+	if !start.IsStart || end.IsStart {
+		t.Fatalf("boundaries = %+v, want start then end", boundaries)
+	}
+	if start.OpChainIndex != 0 || start.OpChainCount != 1 {
+		t.Errorf("op chain = (%d, %d), want (0, 1)", start.OpChainIndex, start.OpChainCount)
+	}
+	if end.OpChainIndex != 0 || end.OpChainCount != 1 {
+		t.Errorf("end op chain = (%d, %d), want the same snapshot", end.OpChainIndex, end.OpChainCount)
+	}
+
+	// A transparent drop-shadow is the identity: no chain at all.
+	if !(DropShadow(0, 0, 8, Hsla{A: 0}).IsIdentity()) {
+		t.Error("a transparent drop-shadow color is the identity")
+	}
+	if DropShadow(0, 0, 0, black).IsIdentity() {
+		t.Error("a zero-blur zero-offset shadow is visible (the silhouette)")
+	}
+
+	// The group bounds dilate by the shadow's ink: 8px blur -> 12px
+	// extent (3-sigma with sigma = radius/2), offset (4, 6) -> left 8,
+	// right 16, top 6, bottom 18 (ShadowData::RectOutsets' shape).
+	style := DefaultStyle()
+	style.Filter = []Filter{DropShadow(4, 6, 8, black)}
+	ink := style.InkBounds(bounds, 16)
+	if ink != (Bounds{Origin: Point{X: 2, Y: 4}, Size: Size{Width: 144, Height: 72}}) {
+		t.Errorf("ink bounds = %v, want the border box dilated by (8, 16, 6, 18)", ink)
+	}
+}
