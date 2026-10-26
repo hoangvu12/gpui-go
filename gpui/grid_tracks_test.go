@@ -155,11 +155,11 @@ func TestGridStyleBuildersAndClasses(t *testing.T) {
 	}
 
 	// The classes parse to the same fields.
-	div := Div().Class("grid-cols-[240px_1fr]")
+	div := Div().Flex().Class("grid-cols-[240px_1fr]")
 	if tracks, ok := div.StyleMut().GridColsList.Get(); !ok || len(tracks) != 2 || tracks[0].Min.Length != 240 || tracks[1].Max.Kind != TrackFr {
 		t.Fatalf("grid-cols class tracks = %v", div.StyleMut().GridColsList)
 	}
-	div = Div().Class("grid-rows-[auto_auto]")
+	div = Div().Flex().Class("grid-rows-[auto_auto]")
 	if tracks, ok := div.StyleMut().GridRowsList.Get(); !ok || len(tracks) != 2 || tracks[0].Min.Kind != TrackAuto || tracks[1].Max.Kind != TrackAuto {
 		t.Fatalf("grid-rows class tracks = %v", div.StyleMut().GridRowsList)
 	}
