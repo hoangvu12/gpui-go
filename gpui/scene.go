@@ -405,7 +405,18 @@ type SceneMeta struct {
 	PolychromeSpriteCount uint32
 	// PathCount is the path primitive count (ticket16).
 	PathCount  uint32
-	IsFinished bool
+	// EffectCount is the effect-group marker count (rev 16, ticket 50).
+	EffectCount uint32
+	// GradientCount is the gradient table entry count (rev 16, ticket
+	// 52).
+	GradientCount uint32
+	// CoverageCount is the coverage-mask entry count (rev 16, ticket
+	// 52).
+	CoverageCount uint32
+	// FilterChainCount is the filter-op chain count (rev 16, ticket
+	// 52: the drop-shadow chains).
+	FilterChainCount uint32
+	IsFinished       bool
 }
 
 // ---------------------------------------------------------------------------

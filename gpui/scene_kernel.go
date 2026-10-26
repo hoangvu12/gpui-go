@@ -367,10 +367,27 @@ func rgbaSceneColor(c Rgba) native.SceneColor {
 }
 
 // RgbaToHsla32 converts a straight sRGBA f32 color into the palette's
-// HSL representation (the pinned Rgba::into_color path).
+// HSL representation (the pinned Rgba::into_color path). The hex
+// round trip is in RgbaFromHex's 0xRRGGBBAA order (rgbaPacked's
+// one-byte-per-lane packing is the STOP RECORD's ABI order, the
+// reverse).
 func RgbaToHsla32(c Rgba) Hsla {
-	hex := rgbaPacked(c)
-	return RgbaToHsla(hex)
+	r := clampLaneByte(c.R)
+	g := clampLaneByte(c.G)
+	b := clampLaneByte(c.B)
+	a := clampLaneByte(c.A)
+	return RgbaToHsla(r<<24 | g<<16 | b<<8 | a)
+}
+
+// clampLaneByte rounds one straight color lane into its 8-bit bucket.
+func clampLaneByte(value float32) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > 1 {
+		return 255
+	}
+	return uint32(value*255.0 + 0.5)
 }
 
 // InsertEffect inserts an effect-group marker record (rev 16,
@@ -726,6 +743,10 @@ func (k *SceneKernel) Meta() (SceneMeta, error) {
 		SubpixelSpriteCount:   rec.SubpixelSpriteCount,
 		PolychromeSpriteCount: rec.PolychromeSpriteCount,
 		PathCount:             rec.PathCount,
+		EffectCount:           rec.EffectCount,
+		GradientCount:         rec.GradientCount,
+		CoverageCount:         rec.CoverageCount,
+		FilterChainCount:      rec.FilterChainCount,
 		IsFinished:            rec.IsFinished == 1,
 	}, nil
 }
@@ -1014,6 +1035,8 @@ func boundaryValue(rec native.SceneFilterRecord) FilterBoundary {
 		BlurRadius:       math.Float32frombits(rec.BlurRadii[0]),
 		ColorMatrix:      colorMatrixValue(rec),
 		ColorMatrixCount: rec.ColorMatrixCount,
+		OpChainIndex:     rec.OpChainIndex,
+		OpChainCount:     rec.OpChainCount,
 		Opacity:          math.Float32frombits(rec.Opacity),
 		IsStart:          rec.IsStart == 1,
 	}

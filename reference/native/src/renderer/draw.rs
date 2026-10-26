@@ -4032,6 +4032,14 @@ fn draw_drop_shadow_op(
     let mut extensions = CompositeExtensionsUniforms::default();
     extensions.tint_color = [tint.red, tint.green, tint.blue, tint.alpha];
     extensions.sample_offset = [dx, dy];
+    if std::env::var("GPUI_DBG_SHADOW").is_ok() {
+        eprintln!(
+            "drop-shadow: sigma={} off=({},{}) shadow_bounds=({},{},{},{}) shadow_source_size={:?} source_size={:?} tint={:?}",
+            sigma, dx, dy,
+            shadow_bounds.origin.x.0, shadow_bounds.origin.y.0, shadow_bounds.size.width.0, shadow_bounds.size.height.0,
+            shadow_source_size, source_size, extensions.tint_color
+        );
+    }
     dx_blur_pass(
         draw,
         frame,
