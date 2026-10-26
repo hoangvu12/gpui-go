@@ -1143,8 +1143,10 @@ type Style struct {
 	// Hidden keeps the layout space but skips paint, div.rs:3021).
 	Visibility Visibility
 	// OverflowFade is the per-edge fade distance of overflow masking
-	// (style.rs:248). Stored and refined; the port's content mask has no
-	// fade component yet, so it is not applied at paint.
+	// (style.rs:248): content within the distance of a clipped edge
+	// fades out linearly toward it (rev 16, browser-core ticket 57 —
+	// the pin's ContentMask fade_out, now painted through the clip
+	// scope's records).
 	OverflowFade AbsoluteLengthEdges
 	// AllowConcurrentScroll lets both axes scroll at once (style.rs:252).
 	AllowConcurrentScroll bool
@@ -1961,6 +1963,20 @@ func (s *Style) OverflowMask(bounds Bounds, remSize float32) *ClipMask {
 		rect = fromCorners(Point{X: minX, Y: minY}, Point{X: maxX, Y: maxY})
 	}
 	mask := ClipMask{Bounds: rect}
+	// The per-edge fade (rev 16, browser-core ticket 57): the
+	// overflow_fade distances on each CLIPPED axis, zeroed on a visible
+	// one (style.rs:836-843 — the pin's rule). The fade rides the
+	// records painted inside the clip scope (the pin's ContentMask
+	// fade_out ramps) — Style.OverflowFade finally paints.
+	mask.Fade = s.OverflowFade.ToPixels(remSize)
+	if xVisible {
+		mask.Fade.Left = 0
+		mask.Fade.Right = 0
+	}
+	if yVisible {
+		mask.Fade.Top = 0
+		mask.Fade.Bottom = 0
+	}
 	// The rounded corner clip (rev 16, browser-core ticket 55): when
 	// BOTH axes clip, the mask carries the INNER border radii - the
 	// padding-box corner rounding, Chromium's overflow clip (the

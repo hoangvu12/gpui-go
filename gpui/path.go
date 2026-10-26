@@ -444,7 +444,17 @@ func (s *Scene) InsertPath(path *Path, color Background, contentMask Bounds) err
 	if path == nil {
 		return fmt.Errorf("gpui: InsertPath: nil path")
 	}
-	return s.kernel.InsertPath(pathRecordOf(path, color, contentMask))
+	return s.kernel.InsertPath(pathRecordOf(path, color, contentMask, Edges{}))
+}
+
+// InsertPathFaded is InsertPath with the content mask's per-edge fade
+// distances (device pixels; rev 16, browser-core ticket 57 — the
+// pinned path pipeline evaluates the fade ramps of its mask).
+func (s *Scene) InsertPathFaded(path *Path, color Background, contentMask Bounds, maskFade Edges) error {
+	if path == nil {
+		return fmt.Errorf("gpui: InsertPathFaded: nil path")
+	}
+	return s.kernel.InsertPath(pathRecordOf(path, color, contentMask, maskFade))
 }
 
 // PaintPath paints the tessellated path at the current z-index (the
@@ -467,6 +477,7 @@ func (s *Scene) PaintPath(path *Path, color Background, ctx *PaintContext) error
 	}
 	scaled := scalePath(path, ctx.ScaleFactor)
 	mask := scaleBounds(ctx.Mask, ctx.ScaleFactor)
+	fade := scaleEdges(ctx.MaskFade, ctx.ScaleFactor)
 	// The color carries the element opacity: the gradient arm scales
 	// each stop's alpha (Background::opacity), the solid arm keeps the
 	// palette-Hsla path (alpha only, the pin's path).
@@ -476,7 +487,7 @@ func (s *Scene) PaintPath(path *Path, color Background, ctx *PaintContext) error
 	} else {
 		shaded = Background{Kind: BackgroundKindSolid, Solid: OpacityHsla(color.Solid, ctx.ElementOpacity)}
 	}
-	return s.InsertPath(scaled, shaded, mask)
+	return s.InsertPathFaded(scaled, shaded, mask, fade)
 }
 
 // scalePath scales a logical-pixel path into device pixels (the pinned
@@ -507,10 +518,11 @@ func scaleBounds(bounds Bounds, factor float32) Bounds {
 	}
 }
 
-func pathRecordOf(path *Path, color Background, contentMask Bounds) *PathRecord {
+func pathRecordOf(path *Path, color Background, contentMask Bounds, maskFade Edges) *PathRecord {
 	return &PathRecord{
 		Bounds:      path.Bounds,
 		ContentMask: contentMask,
+		MaskFade:    maskFade,
 		Color:       color,
 		Vertices:    path.Vertices,
 	}
@@ -531,6 +543,10 @@ type PathRecord struct {
 	Bounds Bounds
 	// ContentMask is the clip bounds, device pixels.
 	ContentMask Bounds
+	// MaskFade is the content mask's per-edge fade distances, device
+	// pixels (rev 16, browser-core ticket 57; zero fades keep the
+	// pre-R16 rect-only mask bit-exact).
+	MaskFade Edges
 	// Color is the path fill (the pinned Path's Background: a solid or
 	// a gradient).
 	Color Background
@@ -556,7 +572,7 @@ func (k *SceneKernel) InsertPath(rec *PathRecord) error {
 	}
 	nativeRec := native.NewScenePathRecord()
 	nativeRec.Bounds = sceneBoundsRecord(rec.Bounds)
-	nativeRec.ContentMask = sceneContentMaskRecord(rec.ContentMask)
+	nativeRec.ContentMask = sceneContentMaskFadedOf(rec.ContentMask, rec.MaskFade)
 	nativeRec.Color = sceneBackgroundRecord(rec.Color, rec.Bounds)
 	nativeRec.VertexCount = uint32(len(rec.Vertices))
 	vertices := make([]native.ScenePathVertexRecord, len(rec.Vertices))
@@ -604,6 +620,7 @@ func (k *SceneKernel) Paths() ([]PathRecord, [][]PathVertex, error) {
 			Order:       rec.Order,
 			Bounds:      Bounds{Origin: Point{X: x, Y: y}, Size: Size{Width: w, Height: height}},
 			ContentMask: Bounds{Origin: Point{X: maskX, Y: maskY}, Size: Size{Width: maskW, Height: maskH}},
+			MaskFade:    maskFadeValue(rec.ContentMask),
 			Color:       sceneBackgroundValue(rec.Color),
 		}
 	}

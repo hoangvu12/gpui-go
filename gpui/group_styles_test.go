@@ -281,3 +281,113 @@ func TestBackdropFilteredElementKeepsOpacityMultiply(t *testing.T) {
 		t.Errorf("quad background = %+v, want the multiplied %+v", got, want)
 	}
 }
+
+// TestOverflowMaskCarriesEdgeFades pins Style.OverflowMask's fade arm
+// (rev 16, browser-core ticket 57): the OverflowFade distances ride the
+// clip mask on each CLIPPED axis and zero out on a visible one (the
+// pin's style.rs:836-843 rule). OverflowFade finally paints.
+func TestOverflowMaskCarriesEdgeFades(t *testing.T) {
+	style := func() *gpui.Style {
+		s := gpui.DefaultStyle()
+		s.OverflowX = gpui.OverflowHidden
+		s.OverflowY = gpui.OverflowHidden
+		s.OverflowFade = gpui.AbsoluteLengthEdges{
+			Top:    gpui.Px(12),
+			Right:  gpui.Px(8),
+			Bottom: gpui.Px(12),
+			Left:   gpui.Px(8),
+		}
+		return &s
+	}
+	bounds := gpui.Bounds{Origin: gpui.Point{X: 10, Y: 10}, Size: gpui.Size{Width: 100, Height: 80}}
+
+	mask := style().OverflowMask(bounds, 16)
+	if mask == nil {
+		t.Fatal("overflow hidden x/y: mask = nil")
+	}
+	want := gpui.Edges{Top: 12, Right: 8, Bottom: 12, Left: 8}
+	if mask.Fade != want {
+		t.Errorf("mask fade = %v, want %v", mask.Fade, want)
+	}
+	if !mask.HasFade() {
+		t.Error("mask.HasFade() should be true")
+	}
+
+	// One axis visible: that axis's fades zero out (the pin's rule).
+	yVisible := style()
+	yVisible.OverflowY = gpui.OverflowVisible
+	mask = yVisible.OverflowMask(bounds, 16)
+	if mask.Fade != (gpui.Edges{Top: 0, Right: 8, Bottom: 0, Left: 8}) {
+		t.Errorf("y-visible mask fade = %v, want the horizontal fades only", mask.Fade)
+	}
+}
+
+// TestOverflowFadePaintsThroughTheRecordMasks: a clipped box with
+// overflow fades paints its children's records with the per-edge fade
+// ramps (the pin's ContentMask fade_out, ticket 57) — the child quad's
+// mask carries the scaled fades, the element's OWN background (painted
+// outside the overflow scope, the pin's Style::paint order) carries
+// none, and no effect group is involved (the rect clip + the inline
+// fades).
+func TestOverflowFadePaintsThroughTheRecordMasks(t *testing.T) {
+	box := gpui.Div().Flex().W(gpui.Px(100)).H(gpui.Px(80)).Bg(red).OverflowHidden().
+		OverflowFadeY(gpui.Px(12)).
+		Child(gpui.Div().Flex().Size(gpui.Px(100)).H(gpui.Px(90)).Bg(green).FlexShrink(0))
+	_, scene := drawStyled(t, gpui.Div().Flex().P(gpui.Px(20)).Child(box).IntoElement())
+
+	groups, err := scene.EffectGroups()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 0 {
+		t.Fatalf("effect groups = %d, want none (a rect clip with fades clips inline): %+v", len(groups), groups)
+	}
+	quads := quadsOf(t, scene)
+	var child, parent gpui.Quad
+	for _, q := range quads {
+		if q.Background == painted(green) {
+			child = q
+		}
+		if q.Background == painted(red) {
+			parent = q
+		}
+	}
+	if child.Order == 0 || parent.Order == 0 {
+		t.Fatalf("parent/child quads not found: %d quads", len(quads))
+	}
+	// 12 logical px of fade on the top and bottom edges -> 24 device.
+	if child.MaskFade != (gpui.Edges{Top: 24, Bottom: 24}) {
+		t.Errorf("child mask fade = %v, want top/bottom 24 device px", child.MaskFade)
+	}
+	if parent.MaskFade != (gpui.Edges{}) {
+		t.Errorf("parent's own background carries fade %v, want none (the fade scopes the children)", parent.MaskFade)
+	}
+}
+
+// TestOverflowFadeUnderARoundedClip: a rounded overflow clip with fades
+// emits the rounded_clip_only group as before, and the records inside
+// the group carry the fades (the group's composite clips the rounded
+// bounds; the fades ride the bucket's records).
+func TestOverflowFadeUnderARoundedClip(t *testing.T) {
+	card := gpui.Div().Flex().W(gpui.Px(100)).H(gpui.Px(80)).Rounded(gpui.Px(16)).OverflowHidden().
+		OverflowFadeY(gpui.Px(10)).
+		Child(gpui.Div().Flex().Size(gpui.Px(100)).H(gpui.Px(90)).Bg(green).FlexShrink(0))
+	_, scene := drawStyled(t, gpui.Div().Flex().P(gpui.Px(20)).Child(card).IntoElement())
+	groups, err := scene.EffectGroups()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 2 {
+		t.Fatalf("effect groups = %d, want the rounded-clip pair: %+v", len(groups), groups)
+	}
+	quads := quadsOf(t, scene)
+	for _, q := range quads {
+		if q.Background == painted(green) {
+			if q.MaskFade != (gpui.Edges{Top: 20, Bottom: 20}) {
+				t.Errorf("child mask fade = %v, want top/bottom 20 device px", q.MaskFade)
+			}
+			return
+		}
+	}
+	t.Fatal("the child quad was not found")
+}

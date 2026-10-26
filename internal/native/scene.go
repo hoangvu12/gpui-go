@@ -248,8 +248,8 @@ func SceneContentMaskOf(x, y, w, h float32) SceneContentMask {
 // SceneContentMaskRounded packs a content mask with the rounded-corner
 // clip (rev 16, browser-core ticket 55): the rect plus the corner radii
 // (top-left, top-right, bottom-right, bottom-left) and the smoothing.
-// The fade edges stay zero - the Go styling authors no fades yet
-// (ticket 57). Zero radii pack exactly the rect-only mask.
+// Zero radii pack exactly the rect-only mask. The fade edges stay zero
+// — use SceneContentMaskFaded (ticket 57) for those.
 func SceneContentMaskRounded(x, y, w, h float32, radii [4]float32, smoothing float32) SceneContentMask {
 	return SceneContentMask{
 		Bounds: SceneBoundsOf(x, y, w, h),
@@ -260,6 +260,23 @@ func SceneContentMaskRounded(x, y, w, h float32, radii [4]float32, smoothing flo
 			math.Float32bits(radii[3]),
 		},
 		CornerSmoothing: math.Float32bits(smoothing),
+	}
+}
+
+// SceneContentMaskFaded packs a rect-only content mask with the
+// per-edge fade distances (rev 16, browser-core ticket 57): the
+// linear edge ramps of the pin's shader-side ContentMask (fade order
+// LEFT, TOP, RIGHT, BOTTOM; a zero distance leaves the edge opaque).
+// Zero fades pack exactly the rect-only mask — the pre-R16 encoding.
+func SceneContentMaskFaded(x, y, w, h float32, fade [4]float32) SceneContentMask {
+	return SceneContentMask{
+		Bounds: SceneBoundsOf(x, y, w, h),
+		FadeOut: [4]uint32{
+			math.Float32bits(fade[0]),
+			math.Float32bits(fade[1]),
+			math.Float32bits(fade[2]),
+			math.Float32bits(fade[3]),
+		},
 	}
 }
 

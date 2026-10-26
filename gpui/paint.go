@@ -492,6 +492,12 @@ func snapBorderWidths(edges Edges, scale float32) Edges {
 	}
 }
 
+// scaleEdges multiplies each edge width by the scale factor (the
+// pinned Edges::scale — the content mask's fade distances).
+func scaleEdges(e Edges, scale float32) Edges {
+	return Edges{Top: e.Top * scale, Right: e.Right * scale, Bottom: e.Bottom * scale, Left: e.Left * scale}
+}
+
 // scaleCorners multiplies each corner radius by the scale factor (the
 // pinned Corners::scale).
 func scaleCorners(c Corners, scale float32) Corners {
@@ -532,10 +538,11 @@ func offsetBounds(b Bounds, dx, dy float32) Bounds {
 // smoothing: snapped bounds, snapped content mask, scaled radii,
 // stroke-snapped border widths, opacity folded into the colors, and the
 // border-only split deferred to PaintQuadStrips.
-func paintQuadFor(pq PaintQuad, mask Bounds, scale, elementOpacity float32, cornerSmoothing float32) Quad {
+func paintQuadFor(pq PaintQuad, mask Bounds, fade Edges, scale, elementOpacity float32, cornerSmoothing float32) Quad {
 	return Quad{
 		Bounds:          snapBounds(pq.Bounds, scale),
 		ContentMask:     snappedContentMask(mask, scale),
+		MaskFade:        scaleEdges(fade, scale),
 		Background:      pq.Background.Opacity(elementOpacity),
 		BorderColor:     pq.BorderColor.Opacity(elementOpacity),
 		CornerRadii:     scaleCorners(pq.CornerRadii, scale),
@@ -661,12 +668,13 @@ func intersectLogical(a, b Bounds) Bounds { return intersectBounds(a, b) }
 // given shadow-shape radii (the pinned callers pass the element's
 // radii; PaintBoxShadow passes the CSS spread-adjusted radii), and the
 // opacity folded into the color.
-func dropShadowFor(elementBounds Bounds, shadow BoxShadow, mask Bounds, scale, elementOpacity float32, elementRadii, shapeRadii Corners, cornerSmoothing float32) Shadow {
+func dropShadowFor(elementBounds Bounds, shadow BoxShadow, mask Bounds, fade Edges, scale, elementOpacity float32, elementRadii, shapeRadii Corners, cornerSmoothing float32) Shadow {
 	shadowBounds := dilate(offsetBounds(elementBounds, shadow.OffsetX, shadow.OffsetY), shadow.SpreadRadius)
 	return Shadow{
 		BlurRadius:         shadow.BlurRadius * scale,
 		Bounds:             coverBounds(shadowBounds, scale),
 		ContentMask:        snappedContentMask(mask, scale),
+		MaskFade:           scaleEdges(fade, scale),
 		CornerRadii:        scaleCorners(shapeRadii, scale),
 		Color:              shadow.Color.Opacity(elementOpacity),
 		ElementBounds:      coverBounds(elementBounds, scale),
@@ -680,7 +688,7 @@ func dropShadowFor(elementBounds Bounds, shadow BoxShadow, mask Bounds, scale, e
 // mirroring the pinned paint_inset_shadows_with_corner_smoothing: the
 // hole ((bounds + offset) dilated by -spread) with cover bounds, hole
 // corner radii clamped at zero per corner, blur scaled, inset true.
-func insetShadowFor(elementBounds Bounds, shadow BoxShadow, mask Bounds, scale, elementOpacity float32, elementRadii Corners, cornerSmoothing float32) Shadow {
+func insetShadowFor(elementBounds Bounds, shadow BoxShadow, mask Bounds, fade Edges, scale, elementOpacity float32, elementRadii Corners, cornerSmoothing float32) Shadow {
 	hole := dilate(offsetBounds(elementBounds, shadow.OffsetX, shadow.OffsetY), -shadow.SpreadRadius)
 	holeRadii := Corners{
 		TopLeft:     max32(elementRadii.TopLeft-shadow.SpreadRadius, 0),
@@ -692,6 +700,7 @@ func insetShadowFor(elementBounds Bounds, shadow BoxShadow, mask Bounds, scale, 
 		BlurRadius:         shadow.BlurRadius * scale,
 		Bounds:             coverBounds(hole, scale),
 		ContentMask:        snappedContentMask(mask, scale),
+		MaskFade:           scaleEdges(fade, scale),
 		CornerRadii:        scaleCorners(holeRadii, scale),
 		Color:              shadow.Color.Opacity(elementOpacity),
 		ElementBounds:      coverBounds(elementBounds, scale),
@@ -705,7 +714,7 @@ func insetShadowFor(elementBounds Bounds, shadow BoxShadow, mask Bounds, scale, 
 // paint_underline: stroke-snapped thickness (wavy height = 3x thickness),
 // origin rounded per component, width stroke-snapped, and the color
 // taking the palette-Hsla opacity path (alpha only).
-func underlineFor(origin Point, width float32, style UnderlineStyle, mask Bounds, scale, elementOpacity float32) Underline {
+func underlineFor(origin Point, width float32, style UnderlineStyle, mask Bounds, fade Edges, scale, elementOpacity float32) Underline {
 	thickness := snapStroke(style.Thickness, scale)
 	height := thickness
 	if style.Wavy {
@@ -724,6 +733,7 @@ func underlineFor(origin Point, width float32, style UnderlineStyle, mask Bounds
 			Size: Size{Width: snapStroke(width, scale), Height: height},
 		},
 		ContentMask: snappedContentMask(mask, scale),
+		MaskFade:    scaleEdges(fade, scale),
 		Color:       OpacityHsla(color, elementOpacity),
 		Thickness:   thickness,
 		Wavy:        style.Wavy,

@@ -95,6 +95,11 @@ type MonochromeSprite struct {
 	Bounds Bounds
 	// ContentMask is the clip bounds, device pixels.
 	ContentMask Bounds
+	// MaskFade is the content mask's per-edge fade distances, device
+	// pixels (rev 16, browser-core ticket 57; zero fades keep the
+	// pre-R16 rect-only mask bit-exact — the pinned sprite pipelines
+	// evaluate the fade ramps).
+	MaskFade Edges
 	// Color is the mask color (the coverage tint).
 	Color Hsla
 	// Tile is the atlas tile this sprite samples.
@@ -115,6 +120,11 @@ type SubpixelSprite struct {
 	Bounds Bounds
 	// ContentMask is the clip bounds, device pixels.
 	ContentMask Bounds
+	// MaskFade is the content mask's per-edge fade distances, device
+	// pixels (rev 16, browser-core ticket 57; zero fades keep the
+	// pre-R16 rect-only mask bit-exact — the pinned sprite pipelines
+	// evaluate the fade ramps).
+	MaskFade Edges
 	// Color is the LCD blend color.
 	Color Hsla
 	// Tile is the atlas tile this sprite samples.
@@ -144,6 +154,11 @@ type PolychromeSprite struct {
 	Bounds Bounds
 	// ContentMask is the clip bounds, device pixels.
 	ContentMask Bounds
+	// MaskFade is the content mask's per-edge fade distances, device
+	// pixels (rev 16, browser-core ticket 57; zero fades keep the
+	// pre-R16 rect-only mask bit-exact — the pinned sprite pipelines
+	// evaluate the fade ramps).
+	MaskFade Edges
 	// CornerRadii, device pixels.
 	CornerRadii Corners
 	// Tile is the atlas tile this sprite samples.
@@ -213,7 +228,7 @@ func (k *SceneKernel) insertMonochromeSprite(sprite MonochromeSprite) error {
 	if !spriteTileKindValid(sprite.Tile, AtlasTextureMonochrome) {
 		return fmt.Errorf("gpui: scene insert monochrome sprite: tile kind %d does not match the monochrome pool (never reinterpret one format as another)", sprite.Tile.TextureKind)
 	}
-	rec := maskSpriteRecord(sprite.Order, sprite.Padding, sprite.Bounds, sprite.ContentMask, sprite.Color, sprite.Tile, sprite.Transformation)
+	rec := maskSpriteRecord(sprite.Order, sprite.Padding, sprite.Bounds, sprite.ContentMask, sprite.MaskFade, sprite.Color, sprite.Tile, sprite.Transformation)
 	if err := k.scene.InsertMonochromeSprite(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert monochrome sprite: %w", err)
 	}
@@ -232,7 +247,7 @@ func (k *SceneKernel) insertSubpixelSprite(sprite SubpixelSprite) error {
 	if !spriteTileKindValid(sprite.Tile, AtlasTextureSubpixel) {
 		return fmt.Errorf("gpui: scene insert subpixel sprite: tile kind %d does not match the subpixel pool (never reinterpret one format as another)", sprite.Tile.TextureKind)
 	}
-	rec := maskSpriteRecord(sprite.Order, sprite.Padding, sprite.Bounds, sprite.ContentMask, sprite.Color, sprite.Tile, sprite.Transformation)
+	rec := maskSpriteRecord(sprite.Order, sprite.Padding, sprite.Bounds, sprite.ContentMask, sprite.MaskFade, sprite.Color, sprite.Tile, sprite.Transformation)
 	if err := k.scene.InsertSubpixelSprite(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert subpixel sprite: %w", err)
 	}
@@ -241,11 +256,11 @@ func (k *SceneKernel) insertSubpixelSprite(sprite SubpixelSprite) error {
 
 // maskSpriteRecord packs the shared monochrome/subpixel field set into
 // the native record.
-func maskSpriteRecord(order, padding uint32, bounds, mask Bounds, color Hsla, tile AtlasTile, transformation TransformationMatrix) native.SceneSpriteRecord {
+func maskSpriteRecord(order, padding uint32, bounds, mask Bounds, fade Edges, color Hsla, tile AtlasTile, transformation TransformationMatrix) native.SceneSpriteRecord {
 	rec := native.NewSceneSpriteRecord()
 	rec.Padding = padding
 	rec.Bounds = sceneBoundsRecord(bounds)
-	rec.ContentMask = sceneContentMaskRecord(mask)
+	rec.ContentMask = sceneContentMaskFadedOf(mask, fade)
 	rec.Color = sceneColorRecord(color)
 	rec.Tile = tile.sceneTile()
 	rec.Transformation = [6]uint32{
@@ -282,7 +297,7 @@ func (k *SceneKernel) insertPolychromeSprite(sprite PolychromeSprite) error {
 	rec.Opacity = math.Float32bits(sprite.Opacity)
 	rec.CornerSmoothing = math.Float32bits(sprite.CornerSmoothing)
 	rec.Bounds = sceneBoundsRecord(sprite.Bounds)
-	rec.ContentMask = sceneContentMaskRecord(sprite.ContentMask)
+	rec.ContentMask = sceneContentMaskFadedOf(sprite.ContentMask, sprite.MaskFade)
 	rec.CornerRadii = [4]uint32{
 		math.Float32bits(sprite.CornerRadii.TopLeft),
 		math.Float32bits(sprite.CornerRadii.TopRight),
@@ -309,6 +324,7 @@ func (k *SceneKernel) monochromeSprites() ([]MonochromeSprite, error) {
 			Padding:        rec.Padding,
 			Bounds:         sceneBoundsValue(rec.Bounds),
 			ContentMask:    sceneContentMaskValue(rec.ContentMask),
+			MaskFade:       maskFadeValue(rec.ContentMask),
 			Color:          sceneColorValue(rec.Color),
 			Tile:           atlasTileOf(rec.Tile),
 			Transformation: transformationOf(rec.Transformation),
@@ -330,6 +346,7 @@ func (k *SceneKernel) subpixelSprites() ([]SubpixelSprite, error) {
 			Padding:        rec.Padding,
 			Bounds:         sceneBoundsValue(rec.Bounds),
 			ContentMask:    sceneContentMaskValue(rec.ContentMask),
+			MaskFade:       maskFadeValue(rec.ContentMask),
 			Color:          sceneColorValue(rec.Color),
 			Tile:           atlasTileOf(rec.Tile),
 			Transformation: transformationOf(rec.Transformation),
@@ -354,6 +371,7 @@ func (k *SceneKernel) polychromeSprites() ([]PolychromeSprite, error) {
 			CornerSmoothing: math.Float32frombits(rec.CornerSmoothing),
 			Bounds:          sceneBoundsValue(rec.Bounds),
 			ContentMask:     sceneContentMaskValue(rec.ContentMask),
+			MaskFade:        maskFadeValue(rec.ContentMask),
 			CornerRadii: Corners{
 				TopLeft:     math.Float32frombits(rec.CornerRadii[0]),
 				TopRight:    math.Float32frombits(rec.CornerRadii[1]),
@@ -747,12 +765,14 @@ func (s *Scene) paintGlyphFromAtlas(
 		},
 	}
 	mask := snappedContentMask(ctx.Mask, ctx.ScaleFactor)
+	fade := scaleEdges(ctx.MaskFade, ctx.ScaleFactor)
 
 	switch meta.format {
 	case RasterFormatAlphaMask:
 		return s.InsertMonochromeSprite(MonochromeSprite{
 			Bounds:         bounds,
 			ContentMask:    mask,
+			MaskFade:       fade,
 			Color:          OpacityHsla(maskColor, opacity),
 			Tile:           tile,
 			Transformation: UnitTransformation(),
@@ -761,6 +781,7 @@ func (s *Scene) paintGlyphFromAtlas(
 		return s.InsertSubpixelSprite(SubpixelSprite{
 			Bounds:         bounds,
 			ContentMask:    mask,
+			MaskFade:       fade,
 			Color:          OpacityHsla(maskColor, opacity),
 			Tile:           tile,
 			Transformation: UnitTransformation(),
@@ -770,6 +791,7 @@ func (s *Scene) paintGlyphFromAtlas(
 			Opacity:     opacity,
 			Bounds:      bounds,
 			ContentMask: mask,
+			MaskFade:    fade,
 			Tile:        tile,
 		})
 	default:

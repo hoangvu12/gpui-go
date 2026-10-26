@@ -30,11 +30,48 @@ import "fmt"
 type ClipMask struct {
 	// Bounds is the clip rectangle, logical pixels.
 	Bounds Bounds
+	// Fade is the clip's per-edge fade distance, logical pixels (rev
+	// 16, browser-core ticket 57): content within the distance of an
+	// edge fades out linearly toward it (the pin's ContentMask
+	// fade_out, Style.OverflowFade's paint). A zero distance leaves
+	// the edge opaque.
+	Fade Edges
 	// CornerRadii of the rounded clip, logical pixels (zero = a plain
 	// rectangular clip).
 	CornerRadii Corners
 	// CornerSmoothing of the rounded clip in [0, 1].
 	CornerSmoothing float32
+}
+
+// HasFade reports whether the mask fades any edge.
+func (m ClipMask) HasFade() bool {
+	return m.Fade.Top != 0 || m.Fade.Right != 0 || m.Fade.Bottom != 0 || m.Fade.Left != 0
+}
+
+// intersectMaskFade intersects two content masks' per-edge fades with
+// the pin's rule (window.rs ContentMask::intersect, window.rs
+// 2128-2170): the mask whose edge actually clips (the closer
+// coordinate) contributes its fade, and when both clip at the same
+// coordinate the stronger (larger) fade wins. aMask pairs with aFade,
+// bMask with bFade.
+func intersectMaskFade(aMask Bounds, aFade Edges, bMask Bounds, bFade Edges) Edges {
+	return Edges{
+		Top:    edgeFade(aMask.Top(), bMask.Top(), aFade.Top, bFade.Top, func(a, b float32) bool { return a > b }),
+		Right:  edgeFade(aMask.Right(), bMask.Right(), aFade.Right, bFade.Right, func(a, b float32) bool { return a < b }),
+		Bottom: edgeFade(aMask.Bottom(), bMask.Bottom(), aFade.Bottom, bFade.Bottom, func(a, b float32) bool { return a < b }),
+		Left:   edgeFade(aMask.Left(), bMask.Left(), aFade.Left, bFade.Left, func(a, b float32) bool { return a > b }),
+	}
+}
+
+// edgeFade is intersectMaskFade's per-edge rule.
+func edgeFade(a, b, aFade, bFade float32, aClipsCloser func(a, b float32) bool) float32 {
+	if aClipsCloser(a, b) {
+		return aFade
+	}
+	if aClipsCloser(b, a) {
+		return bFade
+	}
+	return max32(aFade, bFade)
 }
 
 // IsRounded reports whether the mask clips with rounded corners.
