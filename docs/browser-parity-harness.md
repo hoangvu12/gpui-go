@@ -481,6 +481,16 @@ result. Transforms on elements participating in a parent paragraph are
 inert (CSS applies `transform` to transformable elements only; the
 fragments path has no matrix seam).
 
+Ticket 61 (the FLIP helper) landed no fixture: Chrome has no FLIP
+primitive to record against — a browser FLIP is page-authored CSS
+(JavaScript diffs geometry, sets a transform, and lets a CSS transition
+play it to identity), not a browser feature. The helper is pinned by
+gpui/flip_test.go's test-clock gates (the reorder, the interruption, the
+reduced-motion kill, the optional scale), which drive the same clock the
+replay's fixtures drive; a fixture would be a page-authored transition
+with a hand-diffed geometry script, which the recorder's transcript
+format cannot express.
+
 Divergences fixed by browser-core tickets get their fixture when they land: ticket 10
 (hover) removed two pin behaviours — hover clearing on key presses (D12) and hover
 sticking at the window edge — and added `OnPointerEnter`/`OnPointerLeave` plus the

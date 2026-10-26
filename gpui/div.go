@@ -1309,6 +1309,10 @@ type DivElement struct {
 	// trackedScrollHandle is the tracked scroll handle (div.rs:2582
 	// tracked_scroll_handle; Base ticket 07, scroll_element.go).
 	trackedScrollHandle *ScrollHandle
+	// flip is the FLIP group this element animates layout changes
+	// through (browser-core ticket 61, flip.go); nil when the element
+	// does not participate.
+	flip *Flip
 	// scroll is this frame's resolved scroll slice (div.rs:2584-2585
 	// scroll_offset / ongoing_scroll, assigned at request layout,
 	// div.rs:2735-2755); nil when the element does not scroll.
@@ -1509,6 +1513,18 @@ func (d *DivElement) Extend(elements []AnyElement) *DivElement {
 // and queryable through the test window).
 func (d *DivElement) DebugSelector(selector string) *DivElement {
 	d.debugSelector = selector
+	return d
+}
+
+// Flip places this element in the FLIP group f (browser-core ticket 61,
+// flip.go): when the group is armed and the element's laid-out box
+// moves, the element carries the inverse of the change as its CSS
+// transform and eases it to identity over the group's policy, so it
+// slides from where it last showed to its new position instead of
+// jumping. The element requires an ID (the FLIP bookkeeping keys on
+// the element's id path, like the Transition style).
+func (d *DivElement) Flip(f *Flip) *DivElement {
+	d.flip = f
 	return d
 }
 
@@ -2357,6 +2373,18 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 		style := resolveStyleTransitions(global, d.computeStyleInternal(nil, es, w, app), w, app)
 		if es != nil && (d.hoverStyle != nil || d.groupHoverStyle != nil) && es.hoverState == nil {
 			es.hoverState = &ElementHoverState{}
+		}
+		// browser-core 61: the FLIP placement (flip.go) — records the
+		// element's laid-out border box, starts a move when an armed
+		// generation changed it, and writes the sampled inverse transform
+		// into the style BEFORE the transform scope below resolves it, so
+		// the element's paint, hitbox, children and debug bounds all carry
+		// the move. A div without a Flip pays one nil check here. An
+		// element participating in a parent paragraph gets no placement:
+		// the fragments path has no transform seam (ticket 56's recorded
+		// limitation), so a move there would spin frames invisibly.
+		if !layout.contentsInParentParagraph {
+			d.flip.place(global, &style, bounds, RemSize(w), w, app)
 		}
 		// browser-core 56: the element's CSS transform scope
 		// (transform_paint.go). The matrix resolves against the border box
