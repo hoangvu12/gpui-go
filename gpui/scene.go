@@ -44,6 +44,19 @@ type Quad struct {
 	Bounds Bounds
 	// ContentMask is the clip bounds, device pixels.
 	ContentMask Bounds
+	// MaskRadii is the content mask's rounded-corner clip radii, device
+	// pixels (rev 16, browser-core ticket 55): the vendored quad
+	// pipeline clips the quad by the rounded-rectangle SDF of the mask
+	// bounds with these radii. Zero radii (the zero value) keep the
+	// pre-R16 rect-only mask bit-exact - the encoding every existing
+	// record uses. The style path routes rounded clips through
+	// rounded_clip_only effect groups (a single composite clip); these
+	// fields are the record-level inline encoding.
+	MaskRadii Corners
+	// MaskCornerSmoothing is the content mask's corner smoothing in
+	// [0, 1] (the mask's own smoothing, evaluated by the vendored quad
+	// pipeline's smoothed SDF; 0 is the plain rrect).
+	MaskCornerSmoothing float32
 	// Background color of the quad.
 	Background Background
 	// BorderColor is the background painted into the quad's borders.
@@ -76,6 +89,14 @@ type Shadow struct {
 	CornerRadii Corners
 	// ContentMask is the clip bounds.
 	ContentMask Bounds
+	// MaskRadii is the content mask's rounded-corner clip radii, device
+	// pixels (rev 16, browser-core ticket 55; the vendored shadow
+	// pipeline clips by the rrect SDF - zero radii keep the pre-R16
+	// rect-only mask).
+	MaskRadii Corners
+	// MaskCornerSmoothing is the content mask's corner smoothing in
+	// [0, 1].
+	MaskCornerSmoothing float32
 	// Color of the shadow.
 	Color Background
 	// ElementBounds is the shadow's un-dilated frame.
@@ -195,8 +216,9 @@ type FilterBoundary struct {
 // composites through the axis-aligned path at the translated rect).
 // The blend and mask fields exist on the ABI record and are wired by
 // ticket 52; the Go STYLING that emits groups (WithElementOpacity's
-// group path, Style.OverflowMask radii, the transform stack) is
-// ticket 55.
+// group path and the rounded-clip groups of Style.OverflowMask's
+// radii) landed with browser-core ticket 55 (group_styles.go); the
+// transform stack is ticket 56.
 //
 // The transform contract: the matrix maps the group's LOCAL frame to
 // the parent frame (device = M*local + translation, row-major), with
@@ -404,7 +426,7 @@ type SceneMeta struct {
 	SubpixelSpriteCount   uint32
 	PolychromeSpriteCount uint32
 	// PathCount is the path primitive count (ticket16).
-	PathCount  uint32
+	PathCount uint32
 	// EffectCount is the effect-group marker count (rev 16, ticket 50).
 	EffectCount uint32
 	// GradientCount is the gradient table entry count (rev 16, ticket

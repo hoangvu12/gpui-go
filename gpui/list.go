@@ -301,7 +301,7 @@ func (u *UniformListElement) Prepaint(global *GlobalElementID, inspector *Inspec
 
 	state := uniformListPrepaintState{}
 	layout.items = nil
-	WithContentMaskVoid(w, style.OverflowMask(bounds, rem), func(w *Window) {
+	WithRoundedContentMaskVoid(w, style.OverflowMask(bounds, rem), func(w *Window) {
 		box := w.InsertHitbox(bounds, HitboxNormal)
 		state.hitbox = &box
 		// The uniform list's range is its own virtualized extent (pitch x
@@ -374,7 +374,7 @@ func (u *UniformListElement) Prepaint(global *GlobalElementID, inspector *Inspec
 			return
 		}
 		items := u.renderItems(first, last, w, app)
-		WithContentMaskVoid(w, scrollMaskOf(&style, bounds, rem), func(w *Window) {
+		WithRoundedContentMaskVoid(w, scrollMaskOf(&style, bounds, rem), func(w *Window) {
 			for i, element := range items {
 				ix := first + i
 				if ix >= last {
@@ -403,11 +403,11 @@ func (u *UniformListElement) Prepaint(global *GlobalElementID, inspector *Inspec
 func (u *UniformListElement) Paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *uniformListFrameState, prepaint *uniformListPrepaintState, w *Window, app *App) {
 	style := u.style
 	rem := RemSize(w)
-	WithContentMaskVoid(w, style.OverflowMask(bounds, rem), func(w *Window) {
+	WithRoundedContentMaskVoid(w, style.OverflowMask(bounds, rem), func(w *Window) {
 		if prepaint.hitbox != nil {
 			u.scroll.paintListener(*prepaint.hitbox, &style, w)
 		}
-		WithContentMaskVoid(w, scrollMaskOf(&style, bounds, rem), func(w *Window) {
+		WithRoundedContentMaskVoid(w, scrollMaskOf(&style, bounds, rem), func(w *Window) {
 			for _, item := range layout.items {
 				WithAbsoluteElementOffsetVoid(w, item.origin, func(w *Window) {
 					item.element.Paint(w, app)

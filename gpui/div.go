@@ -2368,7 +2368,7 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 		}
 		suppressed := hidden || hiddenPrepaintDepth(w) > 0 || inert
 		WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
-			WithContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
+			WithRoundedContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
 				// should_insert_hitbox's scroll_offset.is_some() arm
 				// (div.rs:2892) joins interact.go's predicate here.
 				if d.shouldInsertHitbox(&style, w) || d.scroll != nil {
@@ -2716,10 +2716,17 @@ func (d *DivElement) paintInFlow(global *GlobalElementID, inspector *InspectorEl
 		if style.Visibility == VisibilityHidden {
 			return struct{}{}, es
 		}
-		WithElementOpacityVoid(w, style.Opacity, func(w *Window) {
+		// D9 (rev 16, browser-core ticket 55): the element opacity
+		// composites the subtree as one effect group - the overlapping
+		// children blend inside the group before the group blends with
+		// the page, the browser's paint model. An element with a
+		// backdrop-filter chain keeps the per-primitive multiply (the
+		// native backdrop pass samples the current target; a group's
+		// bucket would blur nothing - see opacityCompositesAsGroup).
+		WithElementOpacityVoid(w, style.Opacity, bounds, opacityCompositesAsGroup(&style), func(w *Window) {
 			style.paint(bounds, w, app, func(w *Window) {
 				WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
-					WithContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
+					WithRoundedContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
 						if hitbox != nil {
 							if drag := app.ActiveDrag(); drag != nil {
 								if drag.CursorStyle != nil {
@@ -2925,11 +2932,14 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 		// border widths, with the radii reduced by the border (clamped at
 		// zero). Recorded deviation from the pin (consumer gap 09): the
 		// reference casts inner shadows from the border box, where the
-		// border quad — painted after — covers any band narrower than the
-		// border, so a hard `inset 0 1px 0` line on a 1px-bordered panel
-		// never shows; the padding edge is where CSS (and a 1:1 HTML
-		// port) draws it. A borderless element's padding box IS its border
-		// box, so its records keep the pinned geometry exactly.
+		// border quad covers any band narrower than the border, so a hard
+		// `inset 0 1px 0` line on a 1px-bordered panel never shows; the
+		// padding edge is where CSS (and a 1:1 HTML port) draws it. A
+		// borderless element's padding box IS its border box, so its
+		// records keep the pinned geometry exactly. (The border painted
+		// below the inset shadows keeps the CSS order — css-backgrounds-3
+		// §box-shadow: "painted above the background, but below the
+		// content and border" — rev 16, browser-core ticket 55.)
 		insetBounds := bounds
 		insetRadii := radii
 		if widths := s.borderEdges(rem); widths.Top != 0 || widths.Right != 0 || widths.Bottom != 0 || widths.Left != 0 {
@@ -2966,11 +2976,23 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 			}
 		}
 
-		continuation(w)
-
+		// The border quad (rev 16, browser-core ticket 55): CSS paints
+		// the element's borders in the BACKGROUND phase, before the
+		// foreground - the children (paint_phase.h:33-35: "Background
+		// phase: backgrounds and borders of all blocks are painted", all
+		// before the foreground; box_fragment_painter.cc's
+		// PaintBoxDecorationBackgroundWithRectImpl paints the border as
+		// the background phase's LAST step, after the drop shadows, the
+		// background and the inset shadows - and the whole decoration
+		// phase precedes the contents). The pin painted the border after
+		// the continuation, so a child overflowing the border box was
+		// covered by the border; the browser paints the child over the
+		// border (inner box-shadows stay below the border,
+		// css-backgrounds-3 §box-shadow: "painted above the background,
+		// but below the content and border").
 		if s.isBorderVisible() {
 			borderColor := *s.BorderColor
-			mustPaint(currentFrame(w).scene.PaintQuad(PaintQuad{
+			mustPaint(frame.scene.PaintQuad(PaintQuad{
 				Bounds:             bounds,
 				CornerRadii:        radii,
 				Background:         borderColor.Opacity(0),
@@ -2979,8 +3001,10 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 				BorderStyle:        s.BorderStyle,
 				BorderDashedLength: s.BorderDashedLength,
 				BorderDashedGap:    s.BorderDashedGap,
-			}, smoothing, currentFrame(w).paint), "border")
+			}, smoothing, frame.paint), "border")
 		}
+
+		continuation(w)
 
 		// The outline (CSS css-ui-4 §outline, browser-core ticket 48):
 		// the element's last decoration, painted ABOVE the content —

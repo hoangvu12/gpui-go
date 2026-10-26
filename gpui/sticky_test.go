@@ -508,7 +508,7 @@ func (l *stickyHookList) RequestLayout(global *GlobalElementID, inspector *Inspe
 func (l *stickyHookList) Prepaint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *hookFrame, w *Window, app *App) hookPrepaint {
 	state := hookPrepaint{}
 	contentSize := Size{Width: bounds.Size.Width, Height: l.pitch * float32(l.sections)}
-	WithContentMaskVoid(w, l.listStyle.OverflowMask(bounds, RemSize(w)), func(w *Window) {
+	WithRoundedContentMaskVoid(w, l.listStyle.OverflowMask(bounds, RemSize(w)), func(w *Window) {
 		box := w.InsertHitbox(bounds, HitboxNormal)
 		state.hitbox = &box
 		// The hook list's own virtualized extent as a scroller with no
@@ -556,7 +556,7 @@ func (l *stickyHookList) Prepaint(global *GlobalElementID, inspector *InspectorE
 // Paint implements Element: the items repaint at their recorded
 // origins (the uniform list's WithAbsoluteElementOffsetVoid shape).
 func (l *stickyHookList) Paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, layout *hookFrame, prepaint *hookPrepaint, w *Window, app *App) {
-	WithContentMaskVoid(w, l.listStyle.OverflowMask(bounds, RemSize(w)), func(w *Window) {
+	WithRoundedContentMaskVoid(w, l.listStyle.OverflowMask(bounds, RemSize(w)), func(w *Window) {
 		if prepaint.hitbox != nil {
 			layout.scroll.paintListener(*prepaint.hitbox, &l.listStyle, w)
 		}

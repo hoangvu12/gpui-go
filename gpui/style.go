@@ -1937,8 +1937,8 @@ func (s *Style) borderEdges(remSize float32) Edges {
 }
 
 // pinned fade distances are not carried (the port's content mask has
-// no fade component).
-func (s *Style) OverflowMask(bounds Bounds, remSize float32) *Bounds {
+// no fade component; the fade styles are ticket 57).
+func (s *Style) OverflowMask(bounds Bounds, remSize float32) *ClipMask {
 	xVisible := s.OverflowX == OverflowVisible
 	yVisible := s.OverflowY == OverflowVisible
 	if xVisible && yVisible {
@@ -1951,14 +1951,43 @@ func (s *Style) OverflowMask(bounds Bounds, remSize float32) *Bounds {
 	maxX -= borders.Right
 	minY += borders.Top
 	maxY -= borders.Bottom
-	var mask Bounds
+	var rect Bounds
 	switch {
 	case xVisible && !yVisible:
-		mask = fromCorners(Point{X: minX, Y: bounds.Origin.Y}, Point{X: maxX, Y: bounds.Bottom()})
+		rect = fromCorners(Point{X: minX, Y: bounds.Origin.Y}, Point{X: maxX, Y: bounds.Bottom()})
 	case !xVisible && yVisible:
-		mask = fromCorners(Point{X: bounds.Origin.X, Y: minY}, Point{X: bounds.Right(), Y: maxY})
+		rect = fromCorners(Point{X: bounds.Origin.X, Y: minY}, Point{X: bounds.Right(), Y: maxY})
 	default:
-		mask = fromCorners(Point{X: minX, Y: minY}, Point{X: maxX, Y: maxY})
+		rect = fromCorners(Point{X: minX, Y: minY}, Point{X: maxX, Y: maxY})
+	}
+	mask := ClipMask{Bounds: rect}
+	// The rounded corner clip (rev 16, browser-core ticket 55): when
+	// BOTH axes clip, the mask carries the INNER border radii - the
+	// padding-box corner rounding, Chromium's overflow clip (the
+	// ContouredInnerBorder of the border rrect: the outer radii minus
+	// the border widths per corner, clamped at zero,
+	// core/paint/contoured_border_geometry.cc:209-219, applied through
+	// UpdateInnerBorderRadiusClip,
+	// core/paint/paint_property_tree_builder.cc:3257-3293). When one
+	// axis stays visible the clip region is NOT rounded (css-overflow
+	// §corner-clipping: "when one of overflow-x or overflow-y computes
+	// to clip and the other computes to visible, the clipping region
+	// is not rounded" - NeedsInnerBorderRadiusClip,
+	// paint_property_tree_builder.cc:3108-3112). The paint path turns a
+	// rounded mask into a rounded_clip_only effect group
+	// (group_styles.go); a zero-radii mask stays the plain rectangular
+	// clip of every pre-R16 scene.
+	if !xVisible && !yVisible {
+		radii := s.CornerRadii.ToPixels(remSize).ConstrainRadiiForQuadSize(bounds.Size)
+		mask.CornerRadii = Corners{
+			TopLeft:     max32(radii.TopLeft-max32(borders.Top, borders.Left), 0),
+			TopRight:    max32(radii.TopRight-max32(borders.Top, borders.Right), 0),
+			BottomRight: max32(radii.BottomRight-max32(borders.Bottom, borders.Right), 0),
+			BottomLeft:  max32(radii.BottomLeft-max32(borders.Bottom, borders.Left), 0),
+		}.ConstrainRadiiForQuadSize(rect.Size)
+		if s.CornerSmoothing != nil {
+			mask.CornerSmoothing = *s.CornerSmoothing
+		}
 	}
 	return &mask
 }

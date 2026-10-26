@@ -1188,6 +1188,13 @@ type frameDrawState struct {
 	// contentMask is the current content mask (window.content_mask_stack
 	// tail; the base mask is the window bounds).
 	contentMask Bounds
+	// paintPhase reports that the draw's paint walk is running (the
+	// request and prepaint phases are over): only then do the R16 group
+	// scopes insert their effect-group markers - a marker pair inserted
+	// during prepaint would bracket nothing (the paint-phase children
+	// sort above the pair's order floor) and silently drop the clip
+	// (browser-core ticket 55).
+	paintPhase bool
 	// containingBlockScopes is the open containing-block scope stack of
 	// the request-layout phase (browser-core ticket 33, spec D3;
 	// containingblock.go): the innermost scope belongs to the nearest
@@ -1615,17 +1622,79 @@ func WithContentMask[R any](w *Window, mask *Bounds, f func(*Window) R) R {
 	return f(w)
 }
 
-// WithElementOpacity multiplies an element opacity into the window's
-// paint context around f (window.rs with_element_opacity; the reference
-// takes Option<f32> — nil is a no-op).
-func WithElementOpacity[R any](w *Window, opacity *float32, f func(*Window) R) R {
+// WithRoundedContentMask is WithContentMask's R16 form (browser-core
+// ticket 55): the clip mask carries the rounded-corner clip, and during
+// the PAINT phase a rounded mask brackets f's subtree in a
+// rounded_clip_only effect group whose composite clips to the rounded
+// rectangle - see withRoundedClipScope. A nil mask or a zero-radii mask
+// behaves exactly as WithContentMask (the plain rectangular
+// intersection), so the style paths can hand Style.OverflowMask's
+// result over wholesale; the frame's rectangular mask narrows as
+// before in both phases, and a mask opened during PREPAINT brackets
+// nothing (paintPhase) - the intersection alone.
+func WithRoundedContentMask[R any](w *Window, mask *ClipMask, f func(*Window) R) R {
 	frame := currentFrame(w)
-	if opacity == nil {
+	if mask == nil {
 		return f(w)
 	}
-	previous := frame.paint
-	frame.paint = frame.paint.WithElementOpacity(*opacity)
-	defer func() { frame.paint = previous }()
+	intersected := intersectBounds(mask.Bounds, frame.contentMask)
+	previous := frame.contentMask
+	frame.contentMask = intersected
+	frame.paint.Mask = intersected
+	defer func() {
+		frame.contentMask = previous
+		frame.paint.Mask = previous
+	}()
+	if !mask.IsRounded() || !frame.paintPhase {
+		return f(w)
+	}
+	return withRoundedClipScope(w, *mask, intersected, f)
+}
+
+// WithElementOpacity scopes an element opacity around f (window.rs
+// with_element_opacity; the reference takes Option<f32> - nil is a
+// no-op). D9 / rev 16 (browser-core ticket 55): with isolateGroup the
+// opacity composites the element's subtree as ONE R16 effect group -
+// the bracket the native plan isolates (or folds into a per-primitive
+// colour multiply when the subtree draws exactly one primitive,
+// Chromium's "at least two layers in subtree draw content" surface
+// rule, cc/trees/property_tree_builder.cc:395-403) - and the paint
+// context is NOT multiplied: the group's composite applies the opacity
+// once, so overlapping children blend inside the group before the
+// group blends with the page, the browser's paint model (the classic
+// overlap artifact of the per-primitive multiply, report 01 §2). The
+// fold makes the single-primitive case pixel-identical to the
+// per-primitive multiply, so only the overlapping-subtree pixels
+// change - the D9 divergence, pinned by the parity fixtures.
+// isolateGroup false keeps the per-primitive multiply (the pin's
+// with_element_opacity): the backdrop-filter exception (see
+// opacityCompositesAsGroup) and any caller without the element bounds.
+func WithElementOpacity[R any](w *Window, opacity *float32, bounds Bounds, isolateGroup bool, f func(*Window) R) R {
+	frame := currentFrame(w)
+	if opacity == nil || *opacity >= 1 {
+		return f(w)
+	}
+	if !isolateGroup || !frame.paintPhase {
+		previous := frame.paint
+		frame.paint = frame.paint.WithElementOpacity(*opacity)
+		defer func() { frame.paint = previous }()
+		return f(w)
+	}
+	scale := frame.paint.ScaleFactor
+	group := EffectGroup{
+		HasOpacity:  true,
+		Opacity:     *opacity,
+		Bounds:      snapBounds(bounds, scale),
+		ContentMask: snappedContentMask(frame.paint.Mask, scale),
+	}
+	if err := frame.scene.BeginEffectGroup(group); err != nil {
+		panic(fmt.Sprintf("gpui: WithElementOpacity: effect group: %v", err))
+	}
+	defer func() {
+		if err := frame.scene.EndEffectGroup(group); err != nil {
+			panic(fmt.Sprintf("gpui: WithElementOpacity: effect group end: %v", err))
+		}
+	}()
 	return f(w)
 }
 
@@ -1692,9 +1761,18 @@ func WithContentMaskVoid(w *Window, mask *Bounds, f func(*Window)) {
 	})
 }
 
+// WithRoundedContentMaskVoid is the void form of
+// WithRoundedContentMask.
+func WithRoundedContentMaskVoid(w *Window, mask *ClipMask, f func(*Window)) {
+	WithRoundedContentMask(w, mask, func(w *Window) struct{} {
+		f(w)
+		return struct{}{}
+	})
+}
+
 // WithElementOpacityVoid is the void form of WithElementOpacity.
-func WithElementOpacityVoid(w *Window, opacity *float32, f func(*Window)) {
-	WithElementOpacity(w, opacity, func(w *Window) struct{} {
+func WithElementOpacityVoid(w *Window, opacity *float32, bounds Bounds, isolateGroup bool, f func(*Window)) {
+	WithElementOpacity(w, opacity, bounds, isolateGroup, func(w *Window) struct{} {
 		f(w)
 		return struct{}{}
 	})

@@ -374,13 +374,18 @@ const wheelPixelsPerLine float32 = 100.0 / 3.0
 // scrollMaskOf is R:style.rs:857-871 Style::scroll_mask: the content mask
 // of a list-like scroll container — the vertical axis always clips, the
 // horizontal axis follows overflow.x, inset by a visible border.
-func scrollMaskOf(style *Style, bounds Bounds, rem float32) *Bounds {
+func scrollMaskOf(style *Style, bounds Bounds, rem float32) *ClipMask {
 	scroll := DefaultStyle()
 	scroll.OverflowX = style.OverflowX
 	scroll.OverflowY = OverflowScroll
 	scroll.BorderColor = style.BorderColor
 	scroll.BorderWidths = style.BorderWidths
 	scroll.OverflowFade = style.OverflowFade
+	// The rounded overflow clip rides along (rev 16, ticket 55): a
+	// rounded list clips its scrolled rows through the rounded_clip_only
+	// group like any other overflowing box.
+	scroll.CornerRadii = style.CornerRadii
+	scroll.CornerSmoothing = style.CornerSmoothing
 	return scroll.OverflowMask(bounds, rem)
 }
 

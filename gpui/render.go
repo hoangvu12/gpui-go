@@ -407,6 +407,11 @@ func drawRoots(w *Window, app *App, ds *windowDrawState, frame *frameDrawState) 
 		return p.element, p.has
 	}()
 
+	// browser-core ticket 55: the paint phase begins here (the
+	// group scopes below insert their effect-group markers only now;
+	// the prepaint phases above must not - see frameDrawState
+	// .paintPhase).
+	frame.paintPhase = true
 	root.Paint(w, app)
 
 	// paint_inspector (window.rs 3467-3468), paint_deferred_draws (3470),
