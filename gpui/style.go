@@ -1187,6 +1187,27 @@ type Style struct {
 	// default focus ring (see interact.go's computeStyleInternal);
 	// outline-style: none opts out.
 	Outline OutlineStyle
+	// MaskImage is the element's mask (CSS mask-image, browser-core
+	// ticket 57): a gradient mask composites the element's whole
+	// rendered image dst_in against the gradient's alpha (or
+	// luminance). Nil (the default) masks nothing.
+	MaskImage *MaskImage
+	// ClipPath is the element's clip-path (CSS clip-path, browser-core
+	// ticket 57): a basic shape in element-local coordinates - the
+	// element's rendering (and its hit testing) clips to the shape. Nil
+	// (the default) clips nothing.
+	ClipPath *ClipPath
+	// MixBlendMode is the element's compositing blend mode (CSS
+	// mix-blend-mode, browser-core ticket 57): the element's rendered
+	// image composites with the mode against its backdrop (the W3C
+	// compositing-1 formulas). Nil (the default) is normal
+	// (source-over).
+	MixBlendMode *BlendMode
+	// Isolation isolates the element's subtree for blending (CSS
+	// isolation: isolate, browser-core ticket 57): the group boundary
+	// that stops descendant blend modes from compositing past this
+	// element. False (the default) is the CSS auto.
+	Isolation bool
 	// Filter applies to the element's own content (style.rs:373).
 	Filter []Filter
 	// BackdropFilter applies to the content behind the element

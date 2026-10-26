@@ -122,6 +122,45 @@ func withRoundedClipScope[R any](w *Window, mask ClipMask, intersected Bounds, f
 	return f(w)
 }
 
+// InkBounds is the element's ink bounds (the border box dilated by the
+// drop shadows' and the outer ring's extent, and the outline's outset —
+// Chromium's filter reference box, the layer's visual overflow:
+// PaintLayer::LocalBoundingBox → VisualOverflowRect,
+// paint_layer.cc:2199-2205, fed by ComputedStyle::BoxDecorationOutsets
+// and the outline extent, outline_painter.cc:1073-1082): the group
+// bounds of the element's filter and blend groups (the composite must
+// cover the shadow ink; the pin passed the element bounds and cut the
+// blurred shadow at the border).
+func (s *Style) InkBounds(bounds Bounds, rem float32) Bounds {
+	var ink Edges
+	for _, shadow := range s.BoxShadow {
+		if shadow.Inset {
+			continue
+		}
+		o := shadow.inkOutsets()
+		ink.Top = max32(ink.Top, o.Top)
+		ink.Right = max32(ink.Right, o.Right)
+		ink.Bottom = max32(ink.Bottom, o.Bottom)
+		ink.Left = max32(ink.Left, o.Left)
+	}
+	if s.Ring.Width > 0 {
+		ink.Top = max32(ink.Top, s.Ring.Width)
+		ink.Right = max32(ink.Right, s.Ring.Width)
+		ink.Bottom = max32(ink.Bottom, s.Ring.Width)
+		ink.Left = max32(ink.Left, s.Ring.Width)
+	}
+	if outline := s.Outline.inkOutset(s.BorderWidths.ToPixels(rem)); outline > 0 {
+		ink.Top = max32(ink.Top, outline)
+		ink.Right = max32(ink.Right, outline)
+		ink.Bottom = max32(ink.Bottom, outline)
+		ink.Left = max32(ink.Left, outline)
+	}
+	return Bounds{
+		Origin: Point{X: bounds.Origin.X - ink.Left, Y: bounds.Origin.Y - ink.Top},
+		Size:   Size{Width: bounds.Size.Width + ink.Left + ink.Right, Height: bounds.Size.Height + ink.Top + ink.Bottom},
+	}
+}
+
 // opacityCompositesAsGroup reports whether an element with the given
 // style and a non-identity opacity composites as an R16 opacity group
 // (D9, rev 16, ticket 55). Every style qualifies but one: an element

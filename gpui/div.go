@@ -2379,6 +2379,11 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 					// ancestor walk (mouseevent.go defaultMouseFocus).
 					state.hitboxRecord = w.insertInertHitboxRecord(bounds, d.hitboxBehavior, inert)
 					if state.hitboxRecord != nil {
+						// The clip-path shapes pointer events too
+						// (browser-core ticket 57: css-masking-1 — the
+						// hit test answers point-in-shape, so a click
+						// outside the shape falls through).
+						state.hitboxRecord.clipPath = style.ClipPath
 						// The mouse-focus default's ancestor walk reads the
 						// handle (mouseevent.go defaultMouseFocus); a hidden
 						// element carries none (IsMouseFocusable requires
@@ -2723,7 +2728,13 @@ func (d *DivElement) paintInFlow(global *GlobalElementID, inspector *InspectorEl
 		// backdrop-filter chain keeps the per-primitive multiply (the
 		// native backdrop pass samples the current target; a group's
 		// bucket would blur nothing - see opacityCompositesAsGroup).
-		WithElementOpacityVoid(w, style.Opacity, bounds, opacityCompositesAsGroup(&style), func(w *Window) {
+		// A mix-blend-mode element's blend group carries the element
+		// opacity instead of this scope (browser-core ticket 57:
+		// Chromium's effect node holds state.opacity and
+		// state.blend_mode together, paint_property_tree_builder.cc:
+		// 2285-2289 — one composite, not two nested groups); see
+		// withBlendScope and styleElementOpacity.
+		WithElementOpacityVoid(w, styleElementOpacity(&style), bounds, opacityCompositesAsGroup(&style), func(w *Window) {
 			style.paint(bounds, w, app, func(w *Window) {
 				WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
 					WithRoundedContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
@@ -3026,82 +3037,77 @@ func (s *Style) paintBox(bounds Bounds, w *Window, app *App, continuation func(*
 		}
 	}
 
-	if len(s.Filter) == 0 {
-		paintUnit(w)
-		return
-	}
-	chain := composeFilterChain(s.Filter)
-	if chain.IsEmpty() {
-		paintUnit(w)
-		return
-	}
-	// with_filter_layer_with_corner_smoothing (window.rs:4537), rev 15:
-	// one group per chain carrying the whole composed payload — the
-	// blurs as one quadrature-composed radius and the colour functions
-	// as one 4x5 matrix in CSS chain order (browser-core ticket 41; the
-	// port once nested one group per filter, which the depth cap of 2
-	// silently degraded for chains of three or more). An identity chain
-	// runs inline with no group.
-	//
-	// Recorded divergence toward CSS (D8) at this Style paint path, and
-	// one verified non-divergence:
-	//   - the group's bounds are the element's INK bounds — the border box
-	//     dilated by the drop shadows' and the outer ring's extent — so
-	//     the group's composite covers the blurred shadow instead of
-	//     cutting it at the element bounds (+3σ). Chromium's filter
-	//     reference box is the layer's visual overflow, which the
-	//     box-shadow ink feeds (PaintLayer::LocalBoundingBox →
-	//     VisualOverflowRect, paint_layer.cc:2199-2205, from
-	//     ComputedStyle::BoxDecorationOutsets, computed_style.cc:
-	//     2697-2709). The pin passed the element bounds.
-	//   - the blur's σ is the CSS length (filter-effects-1 §funcdef-
-	//     filter-blur: the length is the standard deviation; Chromium
-	//     FEGaussianBlur(std_deviation = the raw length),
-	//     filter_effect_builder.cc:284-291). The pin's kernel computes
-	//     σ = 0.5 × the record radius in half-resolution TEXELS
-	//     (blur.rs:17; the blur passes run on the downsampled ping/pong
-	//     textures, draw.rs), so the effective device-pixel σ IS the
-	//     record radius — CSS radius × scale, already the CSS value.
-	//     No divergence: the pin's radius passes through (the spec's
-	//     D8 "the pin uses σ = radius/2" read the texel conversion
-	//     without the half-resolution factor; the shadow-filter Chrome
-	//     fixture measured the pin value at 0.42 mean channel diff vs
-	//     9.73 for the doubled radius).
-	var ink Edges
-	for _, shadow := range s.BoxShadow {
-		if shadow.Inset {
-			continue
+	// The R16 group scopes (rev 16, browser-core ticket 57):
+	// isolation around the blend group, the blend group carrying the
+	// element opacity (paintInFlow skips its own opacity scope for a
+	// blended element — one effect node holds opacity and blend,
+	// Chromium paint_property_tree_builder.cc:2285-2289), the mask
+	// composite around the clip-path coverage, both around the content
+	// filter group — the effect-tree order
+	// blend(opacity(mask(clip_path(filter(content))))). No mask, no
+	// clip-path, no blend, no isolation: the exact pre-57 path (every
+	// scope is a no-op).
+	paintFiltered := func(w *Window) {
+		if len(s.Filter) == 0 {
+			paintUnit(w)
+			return
 		}
-		o := shadow.inkOutsets()
-		ink.Top = max32(ink.Top, o.Top)
-		ink.Right = max32(ink.Right, o.Right)
-		ink.Bottom = max32(ink.Bottom, o.Bottom)
-		ink.Left = max32(ink.Left, o.Left)
+		chain := composeFilterChain(s.Filter)
+		if chain.IsEmpty() {
+			paintUnit(w)
+			return
+		}
+		// with_filter_layer_with_corner_smoothing (window.rs:4537), rev
+		// 15: one group per chain carrying the whole composed payload —
+		// the blurs as one quadrature-composed radius and the colour
+		// functions as one 4x5 matrix in CSS chain order (browser-core
+		// ticket 41; the port once nested one group per filter, which
+		// the depth cap of 2 silently degraded for chains of three or
+		// more). An identity chain runs inline with no group.
+		//
+		// Recorded divergence toward CSS (D8) at this Style paint path,
+		// and one verified non-divergence:
+		//   - the group's bounds are the element's INK bounds — the
+		//     border box dilated by the drop shadows' and the outer
+		//     ring's extent — so the group's composite covers the blurred
+		//     shadow instead of cutting it at the element bounds (+3σ).
+		//     Chromium's filter reference box is the layer's visual
+		//     overflow, which the box-shadow ink feeds
+		//     (PaintLayer::LocalBoundingBox → VisualOverflowRect,
+		//     paint_layer.cc:2199-2205, from
+		//     ComputedStyle::BoxDecorationOutsets, computed_style.cc:
+		//     2697-2709). The pin passed the element bounds (the ink
+		//     computation is Style.InkBounds, group_styles.go).
+		//   - the blur's σ is the CSS length (filter-effects-1 §funcdef-
+		//     filter-blur: the length is the standard deviation; Chromium
+		//     FEGaussianBlur(std_deviation = the raw length),
+		//     filter_effect_builder.cc:284-291). The pin's kernel computes
+		//     σ = 0.5 × the record radius in half-resolution TEXELS
+		//     (blur.rs:17; the blur passes run on the downsampled
+		//     ping/pong textures, draw.rs), so the effective device-pixel
+		//     σ IS the record radius — CSS radius × scale, already the
+		//     CSS value. No divergence: the pin's radius passes through
+		//     (the spec's D8 "the pin uses σ = radius/2" read the texel
+		//     conversion without the half-resolution factor; the
+		//     shadow-filter Chrome fixture measured the pin value at 0.42
+		//     mean channel diff vs 9.73 for the doubled radius).
+		groupBounds := s.InkBounds(bounds, rem)
+		frame2 := currentFrame(w)
+		if err := frame2.scene.WithFilterLayerChain(groupBounds, chain, radii, smoothing, frame2.paint, func() error {
+			paintUnit(w)
+			return nil
+		}); err != nil {
+			panic(fmt.Sprintf("gpui: DivElement filter paint: %v", err))
+		}
 	}
-	if s.Ring.Width > 0 {
-		ink.Top = max32(ink.Top, s.Ring.Width)
-		ink.Right = max32(ink.Right, s.Ring.Width)
-		ink.Bottom = max32(ink.Bottom, s.Ring.Width)
-		ink.Left = max32(ink.Left, s.Ring.Width)
-	}
-	// The outline's extent feeds the same ink bounds (the outline
-	// grows VisualOverflowRect like the shadow ink,
-	// outline_painter.cc:1073-1082).
-	if outline := s.Outline.inkOutset(s.BorderWidths.ToPixels(rem)); outline > 0 {
-		ink.Top = max32(ink.Top, outline)
-		ink.Right = max32(ink.Right, outline)
-		ink.Bottom = max32(ink.Bottom, outline)
-		ink.Left = max32(ink.Left, outline)
-	}
-	groupBounds := Bounds{
-		Origin: Point{X: bounds.Origin.X - ink.Left, Y: bounds.Origin.Y - ink.Top},
-		Size:   Size{Width: bounds.Size.Width + ink.Left + ink.Right, Height: bounds.Size.Height + ink.Top + ink.Bottom},
-	}
-	frame2 := currentFrame(w)
-	if err := frame2.scene.WithFilterLayerChain(groupBounds, chain, radii, smoothing, frame2.paint, func() error {
-		paintUnit(w)
-		return nil
-	}); err != nil {
-		panic(fmt.Sprintf("gpui: DivElement filter paint: %v", err))
-	}
+
+	withIsolationScope(w, s.Isolation, func() {
+		withBlendScope(w, s.MixBlendMode, s.Opacity, s.InkBounds(bounds, rem), func() {
+			withMaskImageScope(w, s.MaskImage, bounds, func() {
+				withClipPathScope(w, s.ClipPath, bounds, func() {
+					paintFiltered(w)
+				})
+			})
+		})
+	})
 }

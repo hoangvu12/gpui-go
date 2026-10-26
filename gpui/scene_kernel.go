@@ -59,6 +59,13 @@ func sceneService() (*native.SceneService, error) {
 // guard before native entry (the service pattern).
 type SceneKernel struct {
 	scene *native.Scene
+	// pathCount tracks the path records inserted so far (browser-core
+	// ticket 57): the clip-path coverage seam needs the next path
+	// record's insertion index — the index the native renderer resolves
+	// the coverage entry's path reference against once the finish sort
+	// orders the array (a full-window-bounded path record's sorted
+	// index is its insertion index; see withClipPathScope).
+	pathCount int
 }
 
 // newSceneKernel creates a fresh native scene for the process-wide

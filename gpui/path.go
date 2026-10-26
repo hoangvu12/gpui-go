@@ -447,6 +447,18 @@ func (s *Scene) InsertPath(path *Path, color Background, contentMask Bounds) err
 	return s.kernel.InsertPath(pathRecordOf(path, color, contentMask, Edges{}))
 }
 
+// NextPathIndex is the insertion index the next path record inserted
+// into this scene will occupy — the reference a clip-path coverage
+// entry carries (browser-core ticket 57; the native renderer resolves
+// it against the post-sort path array, which equals the insertion order
+// for the full-window-bounded records the coverage seam inserts).
+func (s *Scene) NextPathIndex() uint32 {
+	if s.kernel == nil {
+		return 0
+	}
+	return s.kernel.nextPathIndex()
+}
+
 // InsertPathFaded is InsertPath with the content mask's per-edge fade
 // distances (device pixels; rev 16, browser-core ticket 57 — the
 // pinned path pipeline evaluates the fade ramps of its mask).
@@ -582,7 +594,14 @@ func (k *SceneKernel) InsertPath(rec *PathRecord) error {
 	if err := k.scene.InsertPath(&nativeRec, vertices); err != nil {
 		return fmt.Errorf("gpui: scene insert path: %w", err)
 	}
+	k.pathCount++
 	return nil
+}
+
+// nextPathIndex is the insertion index the NEXT path record will occupy
+// (the coverage seam's reference; see SceneKernel.pathCount).
+func (k *SceneKernel) nextPathIndex() uint32 {
+	return uint32(k.pathCount)
 }
 
 // Paths returns the finished scene's path records with their
