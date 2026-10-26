@@ -68,8 +68,16 @@ const (
 // surface_frame_latency_handle entry; version 5 (rev 16, browser-core
 // ticket 50) appended surface_debug_stats and its record - the
 // per-surface group-target pool observability (the design's
-// "renderer service v5").
-const rendererServiceVersion uint32 = 5
+// "renderer service v5"). Version 6 (rev 16, browser-core ticket 53)
+// appended the damage pair - surface_draw_scene_damage (the retained
+// frame's scissored redraw, the per-rect copy and the Present1
+// dirty-rect present with the full-present fallback) and
+// surface_read_frame_pixels (the retained target's readback, the
+// test seam) - plus the size_of_damage_rect/max_damage_regions
+// scalars, and extended the debug-stats record with the state-bind
+// count, the tess-cache hits, the damage fraction and the full vs
+// partial present counts.
+const rendererServiceVersion uint32 = 6
 
 func rendererStatusName(code int32) string {
 	switch code {
@@ -307,10 +315,13 @@ type RetireRecord struct {
 }
 
 // DebugStatsRecord mirrors GpuiGoDebugStatsRecord (rev 16, browser-core
-// ticket 50; 16 bytes, alignment 4): the per-surface group-target pool
-// observability. The record is extensible - ticket 53's stats entry
-// appends the state-bind count, the tessellation-cache hit rate and
-// the damage fraction (with another version bump).
+// ticket 53; 36 bytes, alignment 4): the per-surface group-target pool
+// observability plus the state-bind counter (device-global, the §3.12
+// tracker), the tessellation cache's cumulative hits (scene-global),
+// the last frame's damage fraction (per-mille of the window area) and
+// the damage entry's cumulative full/partial present counts. The
+// ticket-53 fields are appended after RecordSize (the ABI's
+// append-after-self-check convention).
 type DebugStatsRecord struct {
 	// PoolTargetCount is the retained group targets.
 	PoolTargetCount uint32
@@ -321,6 +332,35 @@ type DebugStatsRecord struct {
 	// demoted to inline (never reset).
 	PoolOverflowCount uint32
 	RecordSize        uint32
+	// StateBindCount is the state-bind tracker's cumulative issued
+	// binds (§3.12; device-global like the tracker - the shared
+	// immediate context keeps one pipeline state across surfaces and
+	// frames).
+	StateBindCount uint32
+	// TessCacheHits is the path tessellation cache's cumulative hits
+	// (the scene service's global counter; SceneService.TessCacheStats
+	// reports the same value with the misses and evictions).
+	TessCacheHits uint32
+	// DamageFraction is the LAST frame's merged damage area over the
+	// window area, in per-mille (1000 = a full redraw).
+	DamageFraction uint32
+	// FullPresentCount is the damage entry's cumulative full presents
+	// (the fallback, the forced-full frames, the first/resize/recovery
+	// redraws).
+	FullPresentCount uint32
+	// PartialPresentCount is the damage entry's cumulative partial
+	// (Present1 dirty-rect) presents.
+	PartialPresentCount uint32
+}
+
+// DamageRect mirrors GpuiGoRectRecord (rev 16, ticket 53): one damage
+// rectangle of DrawSceneDamage - x, y, w, h in device pixels, clamped
+// to the viewport natively. 16 bytes, alignment 4.
+type DamageRect struct {
+	X int32
+	Y int32
+	W int32
+	H int32
 }
 
 // DeviceInfoRecord mirrors GpuiGoDeviceInfoRecord (64 bytes, alignment 8).
@@ -392,9 +432,16 @@ type rendererTable struct {
 	// surfaceLatencyHandle is surface_frame_latency_handle (version 4).
 	surfaceLatencyHandle uintptr
 	// surfaceDebugStats is renderer_surface_debug_stats (version 5,
-	// rev 16: the group-target pool observability).
-	surfaceDebugStats   uintptr
-	serviceVersion      uint32
+	// rev 16: the group-target pool observability; version 6 extends
+	// the record with the state-bind/tess/damage counters).
+	surfaceDebugStats uintptr
+	// surfaceDrawSceneDamage is renderer_surface_draw_scene_damage
+	// (version 6, rev 16 ticket 53: the retained-frame damage entry).
+	surfaceDrawSceneDamage uintptr
+	// surfaceReadFramePixels is renderer_surface_read_frame_pixels
+	// (version 6: the retained target's readback, the test seam).
+	surfaceReadFramePixels uintptr
+	serviceVersion         uint32
 	sizeOfTable         uint32
 	alignOfTable        uint32
 	sizeOfSurfaceInfo   uint32
@@ -407,6 +454,11 @@ type rendererTable struct {
 	maxInstanceBuffer   uint32
 	pathMultisample     uint32
 	sizeOfDebugStats    uint32
+	// sizeOfDamageRect mirrors size_of_damage_rect (version 6).
+	sizeOfDamageRect uint32
+	// maxDamageRegions mirrors max_damage_regions (zgui's 16-region
+	// rule; version 6).
+	maxDamageRegions uint32
 }
 
 // rendererTableFromSlot reinterprets a reserved-slot word (the address of
@@ -455,6 +507,12 @@ func validateRendererTable(t *rendererTable, path string) error {
 	if t.sizeOfDebugStats != uint32(unsafe.Sizeof(DebugStatsRecord{})) {
 		return abi("renderer size_of_debug_stats", fmt.Sprint(unsafe.Sizeof(DebugStatsRecord{})), fmt.Sprint(t.sizeOfDebugStats))
 	}
+	if t.sizeOfDamageRect != uint32(unsafe.Sizeof(DamageRect{})) {
+		return abi("renderer size_of_damage_rect", fmt.Sprint(unsafe.Sizeof(DamageRect{})), fmt.Sprint(t.sizeOfDamageRect))
+	}
+	if t.maxDamageRegions == 0 {
+		return &CapabilityError{Path: path, Detail: "renderer max_damage_regions is zero"}
+	}
 	if t.surfaceDebugStats == 0 {
 		return &CapabilityError{Path: path, Detail: "renderer table slot surface_debug_stats is null"}
 	}
@@ -462,11 +520,13 @@ func validateRendererTable(t *rendererTable, path string) error {
 		t.surfaceCreate, t.surfaceResize, t.surfaceInfo, t.surfacePresent,
 		t.surfaceDestroy, t.submissionPoll, t.submissionRetire, t.deviceInfo,
 		t.surfaceDrawScene, t.surfaceRenderScene, t.surfaceReadPixels,
+		t.surfaceDrawSceneDamage, t.surfaceReadFramePixels,
 	}
 	names := [...]string{
 		"surface_create", "surface_resize", "surface_info", "surface_present",
 		"surface_destroy", "submission_poll", "submission_retire", "device_info",
 		"surface_draw_scene", "surface_render_scene", "surface_read_pixels",
+		"surface_draw_scene_damage", "surface_read_frame_pixels",
 	}
 	for i, slot := range slots {
 		if slot == 0 {
@@ -707,6 +767,86 @@ func (s *RendererService) RenderScene(surface SurfaceHandle, scene SceneHandle, 
 		return rendererStatusError(code, "renderer_surface_render_scene")
 	}
 	return nil
+}
+
+// DrawSceneDamage renders the finished scene into the surface's
+// RETAINED FRAME TARGET scissored to the damage (rev 16, browser-core
+// ticket 53, the design's §3.11): the rects are clamped to the
+// viewport, expanded across every blur/drop-shadow group, mask,
+// transform and backdrop whose region they intersect, merged and
+// capped at 16 regions (zgui's rule; a merge that still exceeds it -
+// or a stale retained target, or forceFull - redraws fully; there is
+// NO percentage threshold). Each damage rect is then copied into the
+// back buffer and presented through Present1 with the dirty rects
+// (full-present fallback on failure; in DComp mode partial present is
+// used only after the one-shot readback verification passes). The
+// returned submission token follows the same acceptance/completion
+// protocol as DrawScene; a present failure still returns the token
+// with the error (the partial-submit rule).
+func (s *RendererService) DrawSceneDamage(surface SurfaceHandle, scene SceneHandle, appearance BackgroundAppearance, atlas AtlasHandle, rects []DamageRect, forceFull bool) (SubmissionHandle, error) {
+	if s.lib.released.Load() {
+		return 0, ErrClosed
+	}
+	var rectPtr *DamageRect
+	if len(rects) > 0 {
+		rectPtr = &rects[0]
+	}
+	flags := uint32(0)
+	if forceFull {
+		flags = 1
+	}
+	var handle uint64
+	code, err := callRendererSurfaceDrawSceneDamage(
+		s.table.surfaceDrawSceneDamage,
+		uint64(surface),
+		uint64(scene),
+		uint32(appearance),
+		uint64(atlas),
+		rectPtr,
+		uint32(len(rects)),
+		flags,
+		&handle,
+	)
+	if err != nil {
+		return 0, err
+	}
+	if code == rendererErrPresent {
+		return SubmissionHandle(handle), rendererStatusError(code, "renderer_surface_draw_scene_damage")
+	}
+	if code != rendererStatusOK {
+		return 0, rendererStatusError(code, "renderer_surface_draw_scene_damage")
+	}
+	return SubmissionHandle(handle), nil
+}
+
+// ReadFramePixels reads the surface's RETAINED FRAME TARGET (the last
+// presented frame the damage entry composites from) through a staging
+// texture, returning BGRA→RGBA-swapped RGBA bytes (width*height*4).
+// It is the test seam for the damaged-vs-full equivalence gates; the
+// back-buffer readback is ReadPixels. Fails with ErrRendererDevice
+// when the surface has no retained target yet.
+func (s *RendererService) ReadFramePixels(surface SurfaceHandle, buf []byte) ([]byte, error) {
+	if s.lib.released.Load() {
+		return nil, ErrClosed
+	}
+	var needed uint32
+	if _, err := callRendererSurfaceReadFramePixels(s.table.surfaceReadFramePixels, uint64(surface), nil, &needed); err != nil {
+		return nil, err
+	}
+	if needed == 0 {
+		return nil, rendererStatusError(rendererErrBadValue, "renderer_surface_read_frame_pixels: zero-sized retained target")
+	}
+	if len(buf) < int(needed) {
+		buf = make([]byte, needed)
+	}
+	code, err := callRendererSurfaceReadFramePixels(s.table.surfaceReadFramePixels, uint64(surface), buf, &needed)
+	if err != nil {
+		return nil, err
+	}
+	if code != rendererStatusOK {
+		return nil, rendererStatusError(code, "renderer_surface_read_frame_pixels")
+	}
+	return buf[:needed], nil
 }
 
 // ReadPixels reads the surface's current back buffer back through a

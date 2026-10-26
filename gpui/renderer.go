@@ -1264,6 +1264,93 @@ const (
 	BackgroundTransparent = native.BackgroundTransparent
 )
 
+// DrawSceneDamage renders the finished scene into the surface's
+// RETAINED FRAME TARGET scissored to the damage rects (rev 16,
+// browser-core ticket 53, the design's §3.11): the rects are clamped
+// to the viewport, expanded across every blur/drop-shadow group, mask,
+// transform and backdrop whose region they intersect (the 3σ blur
+// dilation), merged and capped at 16 regions (zgui's rule - over it,
+// or a stale retained target, or forceFull, redraws fully; there is
+// NO percentage threshold). Each damage rect is copied into the back
+// buffer and presented through Present1 with the dirty rects (a
+// full-present fallback on failure; in DirectComposition mode the
+// partial present is used only after the native readback verification
+// passes). The returned submission follows the same protocol as
+// DrawScene. This is the native half of property-only frames (ticket
+// 60 drives it from the frame loop; ticket 58 computes the rects).
+func (s *Surface) DrawSceneDamage(scene *Scene, atlas *Atlas, appearance BackgroundAppearance, rects []native.DamageRect, forceFull bool) (*Submission, error) {
+	if scene == nil {
+		return nil, fmt.Errorf("gpui: DrawSceneDamage: nil scene")
+	}
+	var atlasHandle native.AtlasHandle
+	if atlas != nil {
+		atlasHandle = atlas.handle
+	}
+	r := s.renderer
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return nil, errors.New("gpui: renderer is closed")
+	}
+	// Sync the surface extent with the window at this safe point (the
+	// stale-extent rule).
+	if s.window != nil && s.window.Alive() {
+		if width, height, scale, err := deviceExtent(s.window); err == nil {
+			if err := r.resizeSurfaceLocked(s, width, height, scale); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err := scene.FinishIfNeeded(); err != nil {
+		return nil, fmt.Errorf("gpui: DrawSceneDamage: %w", err)
+	}
+	// The same typed atlas-seam guard as DrawScene.
+	needsAtlas, err := sceneNeedsSpriteAtlas(scene)
+	if err != nil {
+		return nil, fmt.Errorf("gpui: DrawSceneDamage window %d: %w", s.windowID, err)
+	}
+	if needsAtlas {
+		if atlas == nil {
+			return nil, fmt.Errorf("gpui: DrawSceneDamage window %d: %w: pass the window's GlyphAtlas() (a nil atlas presents only sprite-free scenes)", s.windowID, ErrSceneSpriteAtlas)
+		}
+		if err := sceneAtlasServesSprites(scene, atlas); err != nil {
+			return nil, fmt.Errorf("gpui: DrawSceneDamage window %d: %w", s.windowID, err)
+		}
+	}
+	handle, err := r.svc.DrawSceneDamage(s.handle, native.SceneHandle(scene.Handle()), native.BackgroundAppearance(appearance), atlasHandle, rects, forceFull)
+	if err != nil && r.isRecoveryRefusal(err) {
+		r.ledger.recordSkipped(s.windowID, r.isForeground())
+		return nil, fmt.Errorf("gpui: DrawSceneDamage window %d: %w", s.windowID, ErrRendererRecovering)
+	}
+	if err != nil && needsAtlas && errors.Is(err, native.ErrRendererBadHandle) {
+		return nil, fmt.Errorf("gpui: DrawSceneDamage window %d: %w: the atlas does not resolve this scene's sprite textures (%w); pass the window's GlyphAtlas()", s.windowID, ErrSceneSpriteAtlas, err)
+	}
+	if err != nil && !errors.Is(err, native.ErrRendererPresent) {
+		return nil, fmt.Errorf("gpui: DrawSceneDamage window %d: %w", s.windowID, err)
+	}
+	presentFailed := err != nil
+	id := r.ledger.accept(handle, s.windowID, presentFailed, r.isForeground())
+	r.inFlightWindow[handle] = s.windowID
+	r.inFlightCount[s.windowID]++
+	sub := &Submission{renderer: r, id: id, handle: handle, partialErr: err}
+	return sub, err
+}
+
+// ReadFramePixels reads the surface's RETAINED FRAME TARGET (the last
+// presented frame the damage entry composites from; rev 16, ticket
+// 53): BGRA→RGBA-swapped RGBA bytes of the surface extent. The test
+// seam for the damaged-vs-full-redraw equivalence gates - the back
+// buffer rotates with the swap chain, the retained target does not.
+func (s *Surface) ReadFramePixels() ([]byte, error) {
+	r := s.renderer
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return nil, errors.New("gpui: renderer is closed")
+	}
+	return r.svc.ReadFramePixels(s.handle, nil)
+}
+
 // DrawScene renders the finished scene into the window's back buffer,
 // presents it and returns the tracked submission (ticket16: the pin's
 // DirectXRenderer::draw = render + present, with the ledger's

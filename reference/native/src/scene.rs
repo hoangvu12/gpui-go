@@ -6176,6 +6176,13 @@ fn tess_cache() -> &'static Mutex<TessCache> {
     TESS_CACHE.get_or_init(|| Mutex::new(TessCache::default()))
 }
 
+/// The cache's cumulative hit count (the renderer debug-stats entry
+/// reads it through the crate boundary; the scene service's own stats
+/// entry reports the same value).
+pub(crate) fn tess_cache_hits() -> u32 {
+    TESS_CACHE_HITS.load(Ordering::Relaxed) as u32
+}
+
 /// The cache key: the command records' raw bytes, the word pool's
 /// bytes and the style's fill tolerance bits (the style record's
 /// `data[1]` when the script carries one; 0 otherwise — a stroke

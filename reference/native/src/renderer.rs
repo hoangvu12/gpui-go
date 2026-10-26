@@ -165,7 +165,16 @@ use windows::Win32::System::LibraryLoader::LoadLibraryA;
 /// CUMULATIVE pool-overflow counter - the design's "over the budget a
 /// group renders inline, observably" decision; 18 pointers, table size
 /// 192). The design's "renderer service v5" is this version.
-pub const GPUI_GO_RENDERER_SERVICE_VERSION: u32 = 5;
+/// Version 6 (rev 16, browser-core ticket 53) appends the damage pair:
+/// `surface_draw_scene_damage` (the retained-frame scissored redraw,
+/// the per-rect copy into the back buffer and the `Present1` dirty-rect
+/// present, with the full-present fallback) and
+/// `surface_read_frame_pixels` (the retained target's readback - the
+/// test seam), plus two scalars (`size_of_damage_rect`,
+/// `max_damage_regions`); the debug-stats record appends the state-bind
+/// count, the tess-cache hits, the damage fraction and the full/partial
+/// present counts (20 pointers, table size 208).
+pub const GPUI_GO_RENDERER_SERVICE_VERSION: u32 = 6;
 
 /// The swap-chain flags of every surface (gpui-perf ticket 05): the
 /// frame-latency waitable object. The pin creates its swap chains with
@@ -408,8 +417,18 @@ const _: () = assert!(std::mem::align_of::<GpuiGoDeviceStateRecord>() == 4);
 /// The per-surface renderer debug stats (rev 16, ticket 50): the group
 /// target pool observability. The record is extensible - ticket 53's
 /// stats entry appends the state-bind count, the tessellation-cache hit
-/// rate and the damage fraction (with another version bump); this
-/// revision reports the pool alone. 16 bytes, alignment 4.
+/// rate and the damage fraction (with another version bump). 16 bytes, alignment 4.
+///
+/// rev 16, ticket 53: the extension landed - the fields are APPENDED
+/// after `record_size` (the filter-record convention; the self-check's
+/// value catches old mirrors): the state-bind count (the §3.12
+/// tracker's cumulative issued binds; DEVICE-GLOBAL like the tracker
+/// itself - the shared immediate context keeps one pipeline state
+/// across surfaces and frames), the tessellation-cache hits
+/// (process-global, the scene service's counter), the damage fraction
+/// (the LAST frame's merged damage area over the window area, in
+/// per-mille: 1000 = a full redraw) and the cumulative full/partial
+/// present counts of the damage entry (per-surface). 36 bytes.
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
 pub struct GpuiGoDebugStatsRecord {
@@ -424,18 +443,72 @@ pub struct GpuiGoDebugStatsRecord {
     pub pool_overflow_count: u32,
     /// `size_of::<GpuiGoDebugStatsRecord>()` self-check.
     pub record_size: u32,
+    /// The state-bind tracker's cumulative issued binds (§3.12;
+    /// device-global - the tracker mirrors the shared context).
+    pub state_bind_count: u32,
+    /// The path tessellation cache's cumulative hits (the scene
+    /// service's global counter, the same value
+    /// `scene_tess_cache_stats` reports).
+    pub tess_cache_hits: u32,
+    /// The LAST frame's merged damage area over the window area, in
+    /// per-mille (1000 = a full redraw; the §6 measurement vehicle).
+    pub damage_fraction: u32,
+    /// The cumulative FULL presents of the damage entry (the fallback
+    /// and the forced-full frames).
+    pub full_present_count: u32,
+    /// The cumulative PARTIAL (Present1 dirty-rect) presents of the
+    /// damage entry.
+    pub partial_present_count: u32,
 }
 
 impl GpuiGoDebugStatsRecord {
     /// A stats record with the self-check field set.
-    fn with_self_check(stats: (u32, u32, u32)) -> Self {
+    fn with_self_check(stats: DebugStatsSnapshot) -> Self {
         GpuiGoDebugStatsRecord {
-            pool_target_count: stats.0,
-            pool_bytes: stats.1,
-            pool_overflow_count: stats.2,
+            pool_target_count: stats.pool_target_count,
+            pool_bytes: stats.pool_bytes,
+            pool_overflow_count: stats.pool_overflow_count,
             record_size: std::mem::size_of::<GpuiGoDebugStatsRecord>() as u32,
+            state_bind_count: stats.state_bind_count,
+            tess_cache_hits: stats.tess_cache_hits,
+            damage_fraction: stats.damage_fraction,
+            full_present_count: stats.full_present_count,
+            partial_present_count: stats.partial_present_count,
         }
     }
+}
+
+/// One damage rectangle of `renderer_surface_draw_scene_damage` (the
+/// design's appendix B): `{x, y, w, h}` in device pixels, i32, clamped
+/// to the viewport natively. 16 bytes, alignment 4.
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub struct GpuiGoRectRecord {
+    /// The rect's left edge, device pixels.
+    pub x: i32,
+    /// The rect's top edge, device pixels.
+    pub y: i32,
+    /// The rect's width, device pixels.
+    pub w: i32,
+    /// The rect's height, device pixels.
+    pub h: i32,
+}
+
+const _: () = assert!(std::mem::size_of::<GpuiGoRectRecord>() == 16);
+const _: () = assert!(std::mem::align_of::<GpuiGoRectRecord>() == 4);
+const _: () = assert!(std::mem::size_of::<GpuiGoDebugStatsRecord>() == 36);
+
+/// The debug-stats snapshot the draw module assembles (pool + the
+/// retained-frame/`damage counters + the global counters).
+pub(crate) struct DebugStatsSnapshot {
+    pub pool_target_count: u32,
+    pub pool_bytes: u32,
+    pub pool_overflow_count: u32,
+    pub state_bind_count: u32,
+    pub tess_cache_hits: u32,
+    pub damage_fraction: u32,
+    pub full_present_count: u32,
+    pub partial_present_count: u32,
 }
 
 #[repr(C)]
@@ -518,7 +591,7 @@ const _: () = assert!(std::mem::size_of::<GpuiGoRetireRecord>() == 20);
 const _: () = assert!(std::mem::align_of::<GpuiGoRetireRecord>() == 4);
 const _: () = assert!(std::mem::size_of::<GpuiGoDeviceInfoRecord>() == 64);
 const _: () = assert!(std::mem::align_of::<GpuiGoDeviceInfoRecord>() == 8);
-const _: () = assert!(std::mem::size_of::<GpuiGoRendererTable>() == 200);
+const _: () = assert!(std::mem::size_of::<GpuiGoRendererTable>() == 224);
 const _: () = assert!(std::mem::align_of::<GpuiGoRendererTable>() == 8);
 
 // ---------------------------------------------------------------------------
@@ -627,6 +700,46 @@ enum SubmissionState {
     Failed { reason: i32 },
 }
 
+/// The per-surface retained-frame bookkeeping (rev 16, ticket 53, the
+/// design's §3.11): the RETAINED TARGET itself is the per-surface
+/// offscene scene texture (`DrawTargets::blur`'s `scene_color` - the
+/// target the filter route already keeps; the damage entry ensures it
+/// exists for every scene), so this record tracks only its VALIDITY
+/// and the observability counters. The validity invariant: `valid`
+/// holds exactly when the scene texture holds the last PRESENTED
+/// frame - set by a damage draw (full or partial) or a legacy draw
+/// that routed through the offscene target; cleared by a resize, a
+/// device rebuild/recovery, a clear-present, or a legacy draw that
+/// rendered directly into the swap chain.
+#[derive(Default)]
+pub(crate) struct RetainedFrameState {
+    /// Whether the retained target holds the last presented frame.
+    pub valid: bool,
+    /// The cumulative full presents (the fallback, the forced-full
+    /// frames and the first/resize/recovery full redraws).
+    pub full_present_count: u32,
+    /// The cumulative partial (Present1 dirty-rect) presents.
+    pub partial_present_count: u32,
+    /// The last frame's merged damage area over the window area, in
+    /// per-mille (1000 = full).
+    pub damage_fraction: u32,
+    /// The DComp-mode (mode 0) partial-present verification: `None` =
+    /// untested (the first partial attempt runs the readback test),
+    /// `Some(true)` = verified (the runtime preserves the non-dirty
+    /// region), `Some(false)` = failed (every later frame presents
+    /// full, per the design's Q5 answer). Mode-1 (hwnd) surfaces
+    /// never consult it - Chromium's own hwnd path is the reference.
+    pub dcomp_partial: Option<bool>,
+}
+
+impl RetainedFrameState {
+    /// Marks the retained target stale (a resize, rebuild, recovery,
+    /// clear-present or a direct-to-swapchain legacy draw).
+    pub fn invalidate(&mut self) {
+        self.valid = false;
+    }
+}
+
 /// One surface: a swap chain in one of the two pinned modes plus its
 /// tracked submissions.
 struct SurfaceState {
@@ -644,6 +757,10 @@ struct SurfaceState {
     /// blur intermediate targets (dropped on resize like the pin's
     /// `recreate_resources`).
     draw_targets: draw::DrawTargets,
+    /// The retained-frame bookkeeping (rev 16, ticket 53): the validity
+    /// of the offscene scene texture as "the last presented frame" and
+    /// the damage/present counters.
+    pub(crate) retained: RetainedFrameState,
     /// The DComp visual tree of a mode-0 surface. Retained (never read
     /// after creation) so the swap chain stays attached to the window for
     /// the surface's lifetime, exactly like the pin's DirectXRenderer
@@ -1301,12 +1418,18 @@ fn pack_device_info(facts: &DeviceFacts, buf: &mut [u8]) -> (Option<GpuiGoDevice
 // ---------------------------------------------------------------------------
 
 /// The renderer service table installed in reserved slot 2 of
-/// `GpuiGoAbiTable`. All 8 function pointers come first (64 bytes), then 8
-/// self-check scalars (32 bytes). Offsets (x86-64): pointers @0..64,
-/// `service_version` @64, `size_of_table` @68, `align_of_table` @72,
-/// `size_of_surface_info` @76, `size_of_submission_state` @80,
-/// `size_of_retire_record` @84, `size_of_device_info` @88,
-/// `max_pending_submissions` @92; total size 96, alignment 8.
+/// `GpuiGoAbiTable`. The function pointers come first, then the
+/// self-check scalars. Version 6 (rev 16, ticket 53): 21 pointers
+/// (168 bytes) then 14 scalars (56 bytes); total size 224, alignment 8.
+/// Offsets (x86-64): pointers @0..168, `service_version` @168,
+/// `size_of_table` @172, `align_of_table` @176,
+/// `size_of_surface_info` @180, `size_of_submission_state` @184,
+/// `size_of_retire_record` @188, `size_of_device_info` @192,
+/// `size_of_device_state` @196, `size_of_rebuild_record` @200,
+/// `max_pending_submissions` @204, `max_instance_buffer_bytes` @208,
+/// `path_multisample_count` @212, `size_of_debug_stats` @216,
+/// `size_of_damage_rect` @220, `max_damage_regions` @224 - rounded to
+/// 224 with the 4-byte tail pad.
 #[repr(C)]
 pub struct GpuiGoRendererTable {
     /// `renderer_surface_create`.
@@ -1383,9 +1506,42 @@ pub struct GpuiGoRendererTable {
         Option<unsafe extern "system" fn(surface: u64, out_handle: *mut u64) -> i32>,
     /// `renderer_surface_debug_stats` (version 5, rev 16 ticket 50): the
     /// per-surface group-target pool observability (retained targets,
-    /// committed bytes, the cumulative overflow counter).
+    /// committed bytes, the cumulative overflow counter). Version 6
+    /// (ticket 53) extends the record with the state-bind count, the
+    /// tess-cache hits, the damage fraction and the present counters.
     pub surface_debug_stats:
         Option<unsafe extern "system" fn(surface: u64, out: *mut GpuiGoDebugStatsRecord) -> i32>,
+    /// `renderer_surface_draw_scene_damage` (version 6, rev 16 ticket
+    /// 53, the design's §3.11 and appendix B): the retained-frame
+    /// damage entry - a scissored redraw of the damage union into the
+    /// retained target, the per-rect copy into the back buffer and a
+    /// `Present1` dirty-rect present, with the full-present fallback
+    /// (flags bit 0 force-full, a new/resized/recovered surface, more
+    /// than 16 merged regions, or a Present1/verification failure).
+    pub surface_draw_scene_damage: Option<
+        unsafe extern "system" fn(
+            surface: u64,
+            scene: u64,
+            appearance: u32,
+            atlas: u64,
+            rects: *const GpuiGoRectRecord,
+            count: u32,
+            flags: u32,
+            out_submission: *mut u64,
+        ) -> i32,
+    >,
+    /// `renderer_surface_read_frame_pixels` (version 6, ticket 53): the
+    /// staging readback of the RETAINED FRAME TARGET (the test seam for
+    /// the damaged-vs-full equivalence gates; the surface's back buffer
+    /// readback is `surface_read_pixels`).
+    pub surface_read_frame_pixels: Option<
+        unsafe extern "system" fn(
+            surface: u64,
+            out_bytes: *mut u8,
+            capacity: u32,
+            out_needed: *mut u32,
+        ) -> i32,
+    >,
     /// Renderer ABI version (see [`GPUI_GO_RENDERER_SERVICE_VERSION`]).
     pub service_version: u32,
     /// `size_of::<GpuiGoRendererTable>()` self-check.
@@ -1415,6 +1571,12 @@ pub struct GpuiGoRendererTable {
     pub path_multisample_count: u32,
     /// `size_of::<GpuiGoDebugStatsRecord>()` self-check (rev 16).
     pub size_of_debug_stats: u32,
+    /// `size_of::<GpuiGoRectRecord>()` self-check (version 6, ticket 53).
+    pub size_of_damage_rect: u32,
+    /// The damage-region cap `MAX_DAMAGE_REGIONS` (zgui's 16-region
+    /// rule; a merge that still exceeds it falls back to a full
+    /// redraw) - mirrored for the Go side.
+    pub max_damage_regions: u32,
 }
 
 pub(crate) static RENDERER_TABLE: GpuiGoRendererTable = GpuiGoRendererTable {
@@ -1436,6 +1598,8 @@ pub(crate) static RENDERER_TABLE: GpuiGoRendererTable = GpuiGoRendererTable {
     device_mark_drawable: Some(renderer_device_mark_drawable),
     surface_frame_latency_handle: Some(renderer_surface_frame_latency_handle),
     surface_debug_stats: Some(renderer_surface_debug_stats),
+    surface_draw_scene_damage: Some(renderer_surface_draw_scene_damage),
+    surface_read_frame_pixels: Some(renderer_surface_read_frame_pixels),
     service_version: GPUI_GO_RENDERER_SERVICE_VERSION,
     size_of_table: std::mem::size_of::<GpuiGoRendererTable>() as u32,
     align_of_table: std::mem::align_of::<GpuiGoRendererTable>() as u32,
@@ -1449,6 +1613,8 @@ pub(crate) static RENDERER_TABLE: GpuiGoRendererTable = GpuiGoRendererTable {
     max_instance_buffer_bytes: MAX_INSTANCE_BUFFER_SIZE as u32,
     path_multisample_count: PATH_MULTISAMPLE_COUNT,
     size_of_debug_stats: std::mem::size_of::<GpuiGoDebugStatsRecord>() as u32,
+    size_of_damage_rect: std::mem::size_of::<GpuiGoRectRecord>() as u32,
+    max_damage_regions: draw::MAX_DAMAGE_REGIONS as u32,
 };
 
 // ---------------------------------------------------------------------------
@@ -1622,6 +1788,7 @@ fn surface_create_body(
             render_target_view,
             viewport,
             draw_targets: draw::DrawTargets::default(),
+            retained: RetainedFrameState::default(),
             composition,
             latency_waitable,
             submissions: HashMap::new(),
@@ -1692,6 +1859,10 @@ fn surface_resize_body(surface: u64, width: u32, height: u32) -> i32 {
     // Intermediate textures are size-dependent and recreated lazily if
     // a later scene needs them (the pin's `recreate_resources`).
     surface_state.draw_targets = draw::DrawTargets::default();
+    // rev 16, ticket 53: a resize drops the retained frame target with
+    // them - the next damage draw is a full redraw (the design's
+    // "full redraw on a resized surface" rule).
+    surface_state.retained.invalidate();
     surface_state.resize_generation = surface_state
         .resize_generation
         .checked_add(1)
@@ -1739,8 +1910,11 @@ fn surface_info_body(surface: u64, out: *mut GpuiGoSurfaceInfoRecord) -> i32 {
 /// `renderer_surface_debug_stats` (rev 16, ticket 50): the per-surface
 /// group-target pool observability - the retained target count, the
 /// committed bytes and the CUMULATIVE overflow counter (the budget's
-/// "renders inline, observably" contract). Read under the renderer
-/// global lock like every surface query.
+/// "renders inline, observably" contract). rev 16, ticket 53: the
+/// record extends with the state-bind count (device-global), the
+/// tess-cache hits (scene-global) and the per-surface damage/present
+/// counters. Read under the renderer global lock like every surface
+/// query.
 fn surface_debug_stats_body(surface: u64, out: *mut GpuiGoDebugStatsRecord) -> i32 {
     if out.is_null() {
         return renderer_status::ERR_NULL_ARG;
@@ -1751,7 +1925,18 @@ fn surface_debug_stats_body(surface: u64, out: *mut GpuiGoDebugStatsRecord) -> i
         Ok(surface) => surface,
         Err(code) => return code,
     };
-    let stats = surface.draw_targets.group_pool.stats();
+    let (pool_target_count, pool_bytes, pool_overflow_count) =
+        surface.draw_targets.group_pool.stats();
+    let stats = DebugStatsSnapshot {
+        pool_target_count,
+        pool_bytes,
+        pool_overflow_count,
+        state_bind_count: draw::state_bind_count(),
+        tess_cache_hits: crate::scene::tess_cache_hits(),
+        damage_fraction: surface.retained.damage_fraction,
+        full_present_count: surface.retained.full_present_count,
+        partial_present_count: surface.retained.partial_present_count,
+    };
     unsafe { *out = GpuiGoDebugStatsRecord::with_self_check(stats) };
     renderer_status::OK
 }
@@ -1799,6 +1984,9 @@ fn surface_present_body(surface: u64, rgba_bits: *const u32, out_submission: *mu
 
     // The pin's pre_draw order: clear, then bind targets and viewport.
     // (ClearRenderTargetView does not require the target to be bound.)
+    // rev 16, ticket 53: the clear wrote the back buffer directly, so
+    // the retained target no longer matches the presented frame.
+    surface_state.retained.invalidate();
     unsafe {
         device.context.ClearRenderTargetView(render_target_view, &clear_color);
         device
@@ -2318,6 +2506,55 @@ unsafe extern "system" fn renderer_surface_render_scene(
     }
 }
 
+unsafe extern "system" fn renderer_surface_draw_scene_damage(
+    surface: u64,
+    scene: u64,
+    appearance: u32,
+    atlas: u64,
+    rects: *const GpuiGoRectRecord,
+    count: u32,
+    flags: u32,
+    out_submission: *mut u64,
+) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        draw::surface_draw_scene_damage_body(
+            surface,
+            scene,
+            appearance,
+            atlas,
+            rects,
+            count,
+            flags,
+            out_submission,
+        )
+    }));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            renderer_status::ERR_PANIC
+        }
+    }
+}
+
+unsafe extern "system" fn renderer_surface_read_frame_pixels(
+    surface: u64,
+    out_bytes: *mut u8,
+    capacity: u32,
+    out_needed: *mut u32,
+) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        draw::surface_read_frame_pixels_body(surface, out_bytes, capacity, out_needed)
+    }));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            renderer_status::ERR_PANIC
+        }
+    }
+}
+
 unsafe extern "system" fn renderer_surface_read_pixels(
     surface: u64,
     out_bytes: *mut u8,
@@ -2469,6 +2706,11 @@ fn device_rebuild_body(out: *mut GpuiGoRebuildRecord) -> i32 {
             surface.render_target_view.take();
             surface.render_target.take();
             surface.draw_targets = draw::DrawTargets::default();
+            // rev 16, ticket 53: the old device's retained target died
+            // with it; the recovery gate also forces the first full
+            // redraw (the pin's skip_draws).
+            surface.retained.invalidate();
+            surface.retained.dcomp_partial = None;
         }
     }
     // The shared device handles are cloned once (AddRef'd) so the
@@ -2700,8 +2942,19 @@ mod tests {
             RENDERER_TABLE.device_inject_loss.map(|f| f as usize).unwrap_or(0),
             RENDERER_TABLE.device_rebuild.map(|f| f as usize).unwrap_or(0),
             RENDERER_TABLE.device_mark_drawable.map(|f| f as usize).unwrap_or(0),
+            RENDERER_TABLE.surface_draw_scene_damage.map(|f| f as usize).unwrap_or(0),
+            RENDERER_TABLE.surface_read_frame_pixels.map(|f| f as usize).unwrap_or(0),
         ];
         assert!(slots.iter().all(|slot| *slot != 0));
+        assert_eq!(
+            RENDERER_TABLE.size_of_debug_stats as usize,
+            std::mem::size_of::<GpuiGoDebugStatsRecord>()
+        );
+        assert_eq!(
+            RENDERER_TABLE.size_of_damage_rect as usize,
+            std::mem::size_of::<GpuiGoRectRecord>()
+        );
+        assert_eq!(RENDERER_TABLE.max_damage_regions, 16);
     }
 
     #[test]

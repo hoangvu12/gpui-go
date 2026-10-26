@@ -88,7 +88,8 @@ use windows::Win32::Graphics::DirectWrite::{
     IDWriteRenderingParams1,
 };
 use windows::Win32::Graphics::Dxgi::Common::*;
-use windows::Win32::Graphics::Dxgi::DXGI_PRESENT;
+use windows::Win32::Foundation::RECT;
+use windows::Win32::Graphics::Dxgi::{DXGI_PRESENT, DXGI_PRESENT_PARAMETERS};
 
 use crate::scene::{
     GpuiGoSceneCommandRecord, GpuiGoSceneSurfaceRecord, SceneRenderSnapshot,
@@ -127,6 +128,271 @@ pub const GROUP_TARGET_POOL_MAX_BYTES: u64 = 256 * 1024 * 1024;
 /// buckets (clamped to the window), so sibling groups of nearby sizes
 /// reuse one backing.
 pub const GROUP_TARGET_BUCKET_GRANULARITY: u32 = 256;
+
+// ---------------------------------------------------------------------------
+// The damage machinery (rev 16, browser-core ticket 53, the design's
+// §3.11)
+// ---------------------------------------------------------------------------
+
+/// The damage-region cap (zgui's `MAX_REGIONS` rule, the design's §8.1
+/// answer 3): the merged damage that still exceeds 16 regions falls
+/// back to a FULL redraw (there is no percentage-of-window threshold -
+/// zgui merges rects and caps the region count, and the cost is
+/// measured at ticket 54 instead).
+pub const MAX_DAMAGE_REGIONS: usize = 16;
+
+/// The rect-merge gap: two rects whose bounds inflated by this many
+/// pixels intersect merge into one region (zgui's "merge nearby
+/// rects"; the merged region always covers the true damage, so
+/// merging only ever redraws MORE, never less).
+const DAMAGE_MERGE_GAP: i32 = 8;
+
+/// The caller-supplied damage rect count bound (a malformed count is
+/// an `ERR_BAD_VALUE`, never a silent full redraw).
+const MAX_DAMAGE_INPUT_RECTS: u32 = 256;
+
+/// One clamped, merged damage region in device pixels (integer edges;
+/// the scissor, the copy and the Present1 dirty rects all use it).
+#[derive(Clone, Copy, PartialEq, Debug)]
+struct DamageRect {
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+}
+
+impl DamageRect {
+    fn area(&self) -> i64 {
+        self.w as i64 * self.h as i64
+    }
+    fn right(&self) -> i32 {
+        self.x + self.w
+    }
+    fn bottom(&self) -> i32 {
+        self.y + self.h
+    }
+    /// The union bounding box of two rects.
+    fn union_bounds(&self, other: &DamageRect) -> DamageRect {
+        let x = self.x.min(other.x);
+        let y = self.y.min(other.y);
+        let right = self.right().max(other.right());
+        let bottom = self.bottom().max(other.bottom());
+        DamageRect { x, y, w: right - x, h: bottom - y }
+    }
+    /// Whether the two rects (inflated by the merge gap) are near
+    /// enough to merge.
+    fn merges_with(&self, other: &DamageRect) -> bool {
+        let gap = DAMAGE_MERGE_GAP;
+        self.x - gap < other.right()
+            && other.x - gap < self.right()
+            && self.y - gap < other.bottom()
+            && other.y - gap < self.bottom()
+    }
+    /// Whether a float rect intersects this region (both exclusive of
+    /// the far edge, with a small epsilon for float edges).
+    fn intersects_f32(&self, rect: &[f32; 4]) -> bool {
+        let (x, y, w, h) = (rect[0], rect[1], rect[2], rect[3]);
+        if w <= 0.0 || h <= 0.0 {
+            return false;
+        }
+        (x as f32) < self.right() as f32
+            && (x + w) as f32 > self.x as f32
+            && (y as f32) < self.bottom() as f32
+            && (y + h) as f32 > self.y as f32
+    }
+    fn from_f32(rect: &[f32; 4], window: (u32, u32)) -> Option<DamageRect> {
+        let (x, y, w, h) = (rect[0], rect[1], rect[2], rect[3]);
+        if !w.is_finite() || !h.is_finite() || !x.is_finite() || !y.is_finite() {
+            return None;
+        }
+        let right = (x + w).floor().max(0.0).min(window.0 as f32) as i32;
+        let bottom = (y + h).floor().max(0.0).min(window.1 as f32) as i32;
+        let left = x.floor().max(0.0).min(window.0 as f32) as i32;
+        let top = y.floor().max(0.0).min(window.1 as f32) as i32;
+        let w = right - left;
+        let h = bottom - top;
+        if w <= 0 || h <= 0 {
+            return None;
+        }
+        Some(DamageRect { x: left, y: top, w, h })
+    }
+}
+
+/// One group's (or backdrop's) damage-influence pair (the §3.11
+/// expansion rule): damage intersecting the `trigger` rect pulls the
+/// `region` rect into the damage (viz's `ExpandDamageForPixelMoving`
+/// unions the pass's mapped output rect into the damage when it
+/// intersects; the blur/drop-shadow groups' region is the composite's
+/// dilated quad, masks and transforms take the group's bounds - the
+/// mapped footprint).
+#[derive(Clone, Copy)]
+struct DamageInfluence {
+    trigger: [f32; 4],
+    region: [f32; 4],
+}
+
+/// Collects every group/backdrop influence region of a snapshot (the
+/// expansion pre-pass). Filter groups: the record bounds dilated by
+/// 3*max_blur (the composite quad, the pin's dilation) plus each
+/// drop-shadow op's shadow quad (the record bounds dilated by the
+/// CONTENT 3σ and the op's own 3σ, translated by the op's offset -
+/// `draw_drop_shadow_op`'s quad). Effect groups: the parent-frame
+/// footprint `group_content_extents` computes (the mapped bounds for a
+/// transform, the bounds for a clip/mask group, the content extent
+/// otherwise). Backdrop-filter records (the R15 batch primitives):
+/// the trigger is the bounds dilated by the blur reach (the backdrop's
+/// cropped input region), the region the bounds themselves (the
+/// composite's output).
+fn damage_influences(snapshot: &Snapshot, group_extents: &[(usize, [f32; 4], [f32; 4])]) -> Vec<DamageInfluence> {
+    let mut out = Vec::new();
+    for (_, region, footprint) in group_extents {
+        out.push(DamageInfluence { trigger: *footprint, region: *region });
+    }
+    for record in snapshot.boundaries.iter() {
+        if record.is_start == 0 {
+            // Only start markers describe groups; ends are pairs.
+            continue;
+        }
+        // Filter-group start markers: the drop-shadow ops' shadow
+        // quads also move pixels (§3.9 draws them beyond the content).
+        let ops = resolve_filter_op_chain(snapshot, record);
+        if ops.is_empty() {
+            continue;
+        }
+        let base = [
+            f32::from_bits(record.bounds.x),
+            f32::from_bits(record.bounds.y),
+            f32::from_bits(record.bounds.w),
+            f32::from_bits(record.bounds.h),
+        ];
+        let content_blur = record.max_blur_radius();
+        for op in ops {
+            let sigma = drop_shadow_sigma(op);
+            let dilation = GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS
+                * (content_blur + sigma);
+            let (dx, dy) = (
+                f32::from_bits(op.offset[0]),
+                f32::from_bits(op.offset[1]),
+            );
+            let quad = [
+                base[0] - dilation + dx,
+                base[1] - dilation + dy,
+                base[2] + 2.0 * dilation,
+                base[3] + 2.0 * dilation,
+            ];
+            out.push(DamageInfluence { trigger: quad, region: quad });
+        }
+    }
+    for filter in snapshot.backdrops.iter() {
+        let base = [
+            f32::from_bits(filter.bounds.x),
+            f32::from_bits(filter.bounds.y),
+            f32::from_bits(filter.bounds.w),
+            f32::from_bits(filter.bounds.h),
+        ];
+        if base[2] <= 0.0 || base[3] <= 0.0 {
+            continue;
+        }
+        let reach =
+            GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * filter.max_blur_radius();
+        let trigger = [
+            base[0] - reach,
+            base[1] - reach,
+            base[2] + 2.0 * reach,
+            base[3] + 2.0 * reach,
+        ];
+        out.push(DamageInfluence { trigger, region: base });
+    }
+    out
+}
+
+/// Clamps the caller's rects to the viewport, drops the empty ones,
+/// EXPANDS the damage across the groups/backdrops whose influence
+/// regions intersect it (the §3.11 rule, iterated to a fixpoint - an
+/// expanded region can itself intersect the next group), then merges
+/// nearby rects. Returns None when nothing valid remains (the caller
+/// falls back to a full redraw - never a silently empty frame).
+fn compute_damage_regions(
+    snapshot: &Snapshot,
+    group_extents: &[(usize, [f32; 4], [f32; 4])],
+    rects: &[super::GpuiGoRectRecord],
+    window: (u32, u32),
+) -> Option<Vec<DamageRect>> {
+    let mut regions: Vec<DamageRect> = Vec::new();
+    for rect in rects {
+        let floats = [
+            rect.x as f32,
+            rect.y as f32,
+            rect.w as f32,
+            rect.h as f32,
+        ];
+        if let Some(clamped) = DamageRect::from_f32(&floats, window) {
+            regions.push(clamped);
+        }
+    }
+    if regions.is_empty() {
+        return None;
+    }
+    // The expansion: damage intersecting an influence trigger unions
+    // the influence's region in (bounded fixpoint iterations - the
+    // region count is bounded by the input plus the influences).
+    let influences = damage_influences(snapshot, group_extents);
+    if !influences.is_empty() {
+        let cap = regions.len() + influences.len() * 4 + 16;
+        for _ in 0..(influences.len() + 1) {
+            let mut changed = false;
+            for influence in influences.iter() {
+                // Already covered: some region fully contains the
+                // influence's region (the expansion would add
+                // nothing).
+                let covered = regions.iter().any(|region| {
+                    region.x as f32 <= influence.region[0]
+                        && region.y as f32 <= influence.region[1]
+                        && region.right() as f32
+                            >= influence.region[0] + influence.region[2]
+                        && region.bottom() as f32
+                            >= influence.region[1] + influence.region[3]
+                });
+                if covered {
+                    continue;
+                }
+                if regions.iter().any(|region| region.intersects_f32(&influence.trigger)) {
+                    if let Some(expanded) =
+                        DamageRect::from_f32(&influence.region, window)
+                    {
+                        regions.push(expanded);
+                        changed = true;
+                    }
+                }
+            }
+            if !changed || regions.len() > cap {
+                break;
+            }
+        }
+    }
+    // The merge: nearby rects become one region (a merged region only
+    // ever covers more area than the true damage - the redraw and the
+    // copy stay correct).
+    loop {
+        let mut merged: Vec<DamageRect> = Vec::with_capacity(regions.len());
+        let mut changed = false;
+        'outer: for region in regions.iter() {
+            for target in merged.iter_mut() {
+                if target.merges_with(region) {
+                    *target = target.union_bounds(region);
+                    changed = true;
+                    continue 'outer;
+                }
+            }
+            merged.push(*region);
+        }
+        regions = merged;
+        if !changed {
+            break;
+        }
+    }
+    Some(regions)
+}
 
 /// One pooled offscreen group target (bounds-sized, bucketed). The
 /// half-resolution pair is created lazily when a FILTER group's blur
@@ -1277,10 +1543,33 @@ pub(super) struct DrawPipelines {
     ramp_srv: Option<ID3D11ShaderResourceView>,
     /// The ramp texture's current row count.
     ramp_rows: u32,
+    /// The scissor-enabled rasterizer state of the damage walk (rev 16,
+    /// ticket 53): the pin's state with `ScissorEnable` on - bound for
+    /// the scissored damage redraw, restored to the pin's state after.
+    scissor_rasterizer: ID3D11RasterizerState,
+    /// The pin's plain (scissor-off) rasterizer state, kept for the
+    /// damage walk's restore (the guard rebinds it at the walk's end,
+    /// panic-safe).
+    plain_rasterizer: ID3D11RasterizerState,
+    /// The 1x1 opaque-white constant texture (the damage path's
+    /// scissored clear of the OPAQUE appearance).
+    clear_white_srv: Option<ID3D11ShaderResourceView>,
+    /// The 1x1 transparent-black constant texture (the TRANSPARENT
+    /// appearance's scissored clear).
+    clear_transparent_srv: Option<ID3D11ShaderResourceView>,
 }
 
 impl DrawPipelines {
     fn new(device: &ID3D11Device) -> Result<Self, i32> {
+        // rev 16 (ticket 53): the scissor-enabled rasterizer state (the
+        // damage walk's), the pin's plain state (its restore) and the
+        // two 1x1 constant textures of the scissored clear (the
+        // appearance's clear colors - both exact under a 1x1 bilinear
+        // sample).
+        let scissor_rasterizer = create_scissor_rasterizer_state(device)?;
+        let plain_rasterizer = create_plain_rasterizer_state(device)?;
+        let clear_white_srv = create_constant_texture(device, &[255u8, 255, 255, 255])?;
+        let clear_transparent_srv = create_constant_texture(device, &[0u8, 0, 0, 0])?;
         // rev 16 (ticket 50): the quad and shadow pipelines' instance
         // stride is the ABI RECORD's size - the vendored shader structs
         // mirror `GpuiGoSceneQuadRecord`/`GpuiGoSceneShadowRecord` field
@@ -1450,6 +1739,10 @@ impl DrawPipelines {
             ramp_texture: Some(ramp_texture),
             ramp_srv,
             ramp_rows: 1,
+            scissor_rasterizer,
+            plain_rasterizer,
+            clear_white_srv,
+            clear_transparent_srv,
         })
     }
 }
@@ -1516,6 +1809,10 @@ impl PathResources {
 /// matched group of either kind gets an isolated pool target, with no
 /// depth cap).
 pub(super) struct BlurResources {
+    /// The offscene scene color TEXTURE (rev 16, ticket 53: the retained
+    /// frame target's own resource - the per-rect damage copies read
+    /// it; the RTV/SRV pair below renders and samples it).
+    pub(super) scene_color_texture: ID3D11Texture2D,
     scene_color_rtv: Option<ID3D11RenderTargetView>,
     scene_color_srv: Option<ID3D11ShaderResourceView>,
     ping_rtv: Option<ID3D11RenderTargetView>,
@@ -1528,10 +1825,12 @@ impl BlurResources {
     fn new(device: &ID3D11Device, width: u32, height: u32) -> Result<Self, i32> {
         let half_w = downsampled_dimension(width);
         let half_h = downsampled_dimension(height);
-        let (_, scene_color_rtv, scene_color_srv) = create_color_target(device, width, height)?;
+        let (scene_color_texture, scene_color_rtv, scene_color_srv) =
+            create_color_target(device, width, height)?;
         let (_, ping_rtv, ping_srv) = create_color_target(device, half_w, half_h)?;
         let (_, pong_rtv, pong_srv) = create_color_target(device, half_w, half_h)?;
         Ok(Self {
+            scene_color_texture,
             scene_color_rtv,
             scene_color_srv,
             ping_rtv,
@@ -1593,6 +1892,12 @@ pub(super) struct DrawTargets {
 /// context keeps one pipeline state across surfaces and frames, and
 /// the tracker is the only writer).
 static STATE_BIND_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+/// The tracker's cumulative issued binds (the renderer debug-stats
+/// entry reads it; device-global like the tracker itself).
+pub(super) fn state_bind_count() -> u32 {
+    STATE_BIND_COUNT.load(Ordering::Relaxed) as u32
+}
 
 /// `draw_with_variant` and `dx_blur_pass` rebind their full pipeline
 /// state on every draw (`draw.rs`'s batch loop). The tracker caches the
@@ -1887,6 +2192,48 @@ enum BindStages {
     Both = 3,
 }
 
+/// The walk's ambient scissor state (rev 16, ticket 53): the rect
+/// currently armed through the scissor-enabled rasterizer state (None
+/// = the pin's plain state, no scissor). The damage walk sets the
+/// damage box; the group-bucket rule and the region-limited blur
+/// passes set and restore their own rects through `set`.
+///
+/// The blur chain's region limiting uses the SCISSOR (not a viewport
+/// offset): the fullscreen blur passes sample through viewport-
+/// relative texture coordinates, so an offset viewport would sample
+/// the wrong texels; the scissor keeps the sampling math identical
+/// and only bounds the shaded fragments.
+struct ScissorState {
+    armed: Cell<Option<RECT>>,
+    plain: ID3D11RasterizerState,
+    scissor: ID3D11RasterizerState,
+}
+
+impl ScissorState {
+    /// The rect currently armed (None = no scissor).
+    fn current(&self) -> Option<RECT> {
+        self.armed.get()
+    }
+
+    /// Arms (or disarms) the scissor: `Some(rect)` binds the
+    /// scissor-enabled rasterizer state with the rect; `None` restores
+    /// the pin's plain state.
+    fn set(&self, ctx: &ID3D11DeviceContext, rect: Option<RECT>) {
+        self.armed.set(rect);
+        unsafe {
+            match rect {
+                Some(rect) => {
+                    ctx.RSSetState(&self.scissor);
+                    ctx.RSSetScissorRects(Some(&[rect]));
+                }
+                None => {
+                    ctx.RSSetState(&self.plain);
+                }
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Frame-wide bindings (the pin's FrameBindings)
 // ---------------------------------------------------------------------------
@@ -1903,6 +2250,9 @@ struct FrameBindings<'a> {
     globals: GlobalElements,
     /// The per-frame state-bind tracker (§3.12).
     binds: Rc<BindTracker>,
+    /// The walk's ambient scissor state (§3.11: the damage box, the
+    /// group-bucket rule, the region-limited blur passes).
+    scissor: Rc<ScissorState>,
 }
 
 // ---------------------------------------------------------------------------
@@ -2325,6 +2675,15 @@ impl BlendBackdropTarget {
 /// The pin's `set_rasterizer_state` (solid fill, no culling, MSAA line
 /// rasterization enabled).
 fn set_rasterizer_state(device: &ID3D11Device, device_context: &ID3D11DeviceContext) -> Result<(), i32> {
+    let rasterizer_state = create_plain_rasterizer_state(device)?;
+    unsafe { device_context.RSSetState(&rasterizer_state) };
+    Ok(())
+}
+
+/// The pin's rasterizer state (solid fill, no culling, MSAA line
+/// enabled, scissor OFF): bound at draw-global creation and restored
+/// by the damage walk's guard.
+fn create_plain_rasterizer_state(device: &ID3D11Device) -> Result<ID3D11RasterizerState, i32> {
     let desc = D3D11_RASTERIZER_DESC {
         FillMode: D3D11_FILL_SOLID,
         CullMode: D3D11_CULL_NONE,
@@ -2337,13 +2696,79 @@ fn set_rasterizer_state(device: &ID3D11Device, device_context: &ID3D11DeviceCont
         MultisampleEnable: true.into(),
         AntialiasedLineEnable: false.into(),
     };
-    let rasterizer_state = unsafe {
+    unsafe {
         let mut state = None;
         device.CreateRasterizerState(&desc, Some(&mut state)).map_err(|e| e.code().0)?;
-        state.ok_or(renderer_status::ERR_DEVICE)?
+        state.ok_or(renderer_status::ERR_DEVICE)
+    }
+}
+
+/// The pin's rasterizer state with the scissor ENABLED (rev 16,
+/// ticket 53): the damage walk binds it with the damage union's
+/// scissor rect so every batch, composite and group-bucket render of
+/// the scissored redraw stays inside the damage. The walk restores
+/// the pin's state (scissor off) at its end.
+fn create_scissor_rasterizer_state(device: &ID3D11Device) -> Result<ID3D11RasterizerState, i32> {
+    let desc = D3D11_RASTERIZER_DESC {
+        FillMode: D3D11_FILL_SOLID,
+        CullMode: D3D11_CULL_NONE,
+        FrontCounterClockwise: false.into(),
+        DepthBias: 0,
+        DepthBiasClamp: 0.0,
+        SlopeScaledDepthBias: 0.0,
+        DepthClipEnable: true.into(),
+        ScissorEnable: true.into(),
+        MultisampleEnable: true.into(),
+        AntialiasedLineEnable: false.into(),
     };
-    unsafe { device_context.RSSetState(&rasterizer_state) };
-    Ok(())
+    unsafe {
+        let mut state = None;
+        device.CreateRasterizerState(&desc, Some(&mut state)).map_err(|e| e.code().0)?;
+        state.ok_or(renderer_status::ERR_DEVICE)
+    }
+}
+
+/// One 1x1 BGRA constant texture (the damage path's scissored clear:
+/// the downsample pipeline draws its full-viewport triangle sampling
+/// the constant - a 1x1 bilinear sample is the texel exactly, and the
+/// two clear colors (white, transparent black) are invariant under
+/// the premultiplication math).
+fn create_constant_texture(
+    device: &ID3D11Device,
+    color: &[u8; 4],
+) -> Result<Option<ID3D11ShaderResourceView>, i32> {
+    let desc = D3D11_TEXTURE2D_DESC {
+        Width: 1,
+        Height: 1,
+        MipLevels: 1,
+        ArraySize: 1,
+        Format: DXGI_FORMAT_B8G8R8A8_UNORM,
+        SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+        Usage: D3D11_USAGE_DEFAULT,
+        BindFlags: D3D11_BIND_SHADER_RESOURCE.0 as u32,
+        CPUAccessFlags: 0,
+        MiscFlags: 0,
+    };
+    unsafe {
+        let mut texture: Option<ID3D11Texture2D> = None;
+        device
+            .CreateTexture2D(
+                &desc,
+                Some(&D3D11_SUBRESOURCE_DATA {
+                    pSysMem: color.as_ptr() as *const core::ffi::c_void,
+                    SysMemPitch: 4,
+                    SysMemSlicePitch: 4,
+                }),
+                Some(&mut texture),
+            )
+            .map_err(|e| e.code().0)?;
+        let texture = texture.ok_or(renderer_status::ERR_DEVICE)?;
+        let mut srv: Option<ID3D11ShaderResourceView> = None;
+        device
+            .CreateShaderResourceView(&texture, None, Some(&mut srv))
+            .map_err(|e| e.code().0)?;
+        Ok(srv)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2478,6 +2903,120 @@ fn set_target_globals(
     )
 }
 
+/// The damage walk's panic-safe scissor restore (rev 16, ticket 53):
+/// disarms the scissor (the pin's plain rasterizer state) when the
+/// walk ends - a contained panic mid-walk must not leave the shared
+/// context with the scissor armed for the next frame.
+struct ScissorRestoreGuard<'a> {
+    ctx: &'a ID3D11DeviceContext,
+    state: Rc<ScissorState>,
+}
+
+impl Drop for ScissorRestoreGuard<'_> {
+    fn drop(&mut self) {
+        self.state.set(self.ctx, None);
+    }
+}
+
+/// The damage walk's `pre_draw` (rev 16, ticket 53): the same globals
+/// and font uniform uploads as `pre_draw`, WITHOUT the clear (the
+/// retained target keeps the last presented frame outside the damage
+/// union - the scissored clear runs where the base target is bound,
+/// through the 1x1 constant texture and the downsample pipeline's
+/// full-viewport triangle, both exact).
+fn damage_pre_draw(
+    ctx: &ID3D11DeviceContext,
+    draw: &mut DrawGlobal,
+    viewport: &D3D11_VIEWPORT,
+) -> Result<(), i32> {
+    let font = font_info();
+    update_buffer(
+        ctx,
+        &draw.globals.globals_buffer,
+        &[GlobalUniforms {
+            viewport_size: vec2f(viewport.Width, viewport.Height),
+            premultiplied_alpha: gpui_render::shaders::common::ShaderBool::Disabled,
+            padding: 0,
+        }],
+    )?;
+    update_buffer(
+        ctx,
+        &draw.globals.font_buffer,
+        &[FontRasterizationUniforms {
+            gamma_ratios: vec4f(
+                font.gamma_ratios[0],
+                font.gamma_ratios[1],
+                font.gamma_ratios[2],
+                font.gamma_ratios[3],
+            ),
+            grayscale_enhanced_contrast: font.grayscale_enhanced_contrast,
+            subpixel_enhanced_contrast: font.subpixel_enhanced_contrast,
+            uses_blue_green_red_subpixel_order:
+                gpui_render::shaders::common::ShaderBool::from(font.is_bgr),
+            padding: 0,
+        }],
+    )?;
+    Ok(())
+}
+
+/// The damage walk's SCISSORED clear of the retained target: the
+/// downsample pipeline draws its full-viewport triangle (viewport =
+/// the damage union box) sampling the 1x1 constant texture of the
+/// appearance's clear color, with the replace blend. `ClearRenderTargetView`
+/// would wipe the retained frame outside the damage; this pass writes
+/// exactly the union box (both clear colors - white and transparent
+/// black - are exact under a 1x1 bilinear sample and invariant under
+/// the premultiplication math, so the written bytes equal the legacy
+/// clear's).
+fn damage_scissored_clear(
+    draw: &DrawGlobal,
+    ctx: &ID3D11DeviceContext,
+    viewport: &D3D11_VIEWPORT,
+    appearance: u32,
+    target_rtv: &Option<ID3D11RenderTargetView>,
+    damage_box: DamageRect,
+) -> Result<(), i32> {
+    let clear_srv = if appearance == background_appearance::OPAQUE {
+        draw.pipelines.clear_white_srv.clone()
+    } else {
+        draw.pipelines.clear_transparent_srv.clone()
+    };
+    let frame = FrameBindings {
+        device_context: ctx,
+        viewport: *viewport,
+        globals: draw.globals.clone(),
+        binds: Rc::new(BindTracker::new()),
+        scissor: Rc::new(ScissorState {
+            armed: Cell::new(None),
+            plain: draw.pipelines.plain_rasterizer.clone(),
+            scissor: draw.pipelines.scissor_rasterizer.clone(),
+        }),
+    };
+    let clear_viewport = D3D11_VIEWPORT {
+        TopLeftX: damage_box.x as f32,
+        TopLeftY: damage_box.y as f32,
+        Width: damage_box.w as f32,
+        Height: damage_box.h as f32,
+        MinDepth: 0.0,
+        MaxDepth: 1.0,
+    };
+    dx_blur_pass(
+        draw,
+        &frame,
+        &draw.pipelines.blur_downsample_vertex,
+        &draw.pipelines.blur_downsample_fragment,
+        &draw.pipelines.blur_blend_replace,
+        target_rtv,
+        &clear_srv,
+        BlurUniforms::copy([1.0, 1.0]),
+        &clear_viewport,
+        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        3,
+        false,
+        BlurPassExtras::None,
+    )
+}
+
 /// One draw pass over a finished scene's render plan (the pin's
 /// `render`): uploads the frame's instance buffers, walks the compiled
 /// command stream in order, and manages the offscene/isolated group
@@ -2491,6 +3030,8 @@ fn render_scene(
     snapshot: &Snapshot,
     atlas: u64,
     appearance: u32,
+    group_extents: &[(usize, [f32; 4], [f32; 4])],
+    damage: Option<&[DamageRect]>,
 ) -> Result<(), i32> {
     let device_shared = state.device.as_ref().ok_or(renderer_status::ERR_DEVICE)?;
     let device = device_shared.device.clone();
@@ -2499,15 +3040,28 @@ fn render_scene(
     let swapchain_rtv = surface_state.render_target_view.clone();
     let viewport = surface_state.viewport;
     let window = (surface_state.width, surface_state.height);
+    // rev 16 (ticket 53): the damage walk - the base target is the
+    // RETAINED scene texture, the redraw is scissored to the damage
+    // union and the caller copies/presents per rect (no dx_blit).
+    let damage_mode = damage.is_some();
 
-    pre_draw(&ctx, &draw.globals, &viewport, &swapchain_rtv, appearance)?;
+    if damage_mode {
+        // The damage preamble: the globals/font uploads of `pre_draw`
+        // WITHOUT the full clear (the scissored clear runs where the
+        // base target is bound).
+        damage_pre_draw(&ctx, draw, &viewport)?;
+    } else {
+        pre_draw(&ctx, &draw.globals, &viewport, &swapchain_rtv, appearance)?;
+    }
     upload_scene_buffers(&device, &ctx, draw, snapshot)?;
 
     // Only route through the offscreen scene texture when the scene
     // contains backdrop filters or content-filter groups (R15's rule);
     // effect groups render through the pooled bucket targets directly,
-    // so a group-only scene stays on the swapchain path.
-    let use_offscreen = snapshot.requirements.uses_offscreen_target != 0;
+    // so a group-only scene stays on the swapchain path. The DAMAGE
+    // walk always routes through it (the retained target IS the base,
+    // and the per-rect copy replaces the blit).
+    let use_offscreen = damage_mode || snapshot.requirements.uses_offscreen_target != 0;
     if snapshot.requirements.uses_path_target != 0 {
         ensure_path_resources(state, slot_index, slot_generation, &device)?;
     }
@@ -2547,8 +3101,8 @@ fn render_scene(
     // The pre-pass over the command stream: every ISOLATED effect
     // group's content extent (the union of its span's primitive bounds
     // and its nested groups' composite extents - the bucket and the
-    // composite quad for a group that does not clip).
-    let group_extents = group_content_extents(snapshot);
+    // composite quad for a group that does not clip) - computed by the
+    // CALLER (the damage entry shares it with the region computation).
 
     let mut active_render_target: Option<ID3D11RenderTargetView>;
     let base = ActiveTarget {
@@ -2563,11 +3117,28 @@ fn render_scene(
         size: [window.0 as f32, window.1 as f32],
     };
     if use_offscreen {
-        unsafe {
-            if let Some(rtv) = scene_rtv.as_ref() {
-                ctx.ClearRenderTargetView(rtv, &[0.0; 4]);
-                let bound = Some(rtv.clone());
-                ctx.OMSetRenderTargets(Some(slice::from_ref(&bound)), None);
+        if !damage_mode {
+            unsafe {
+                if let Some(rtv) = scene_rtv.as_ref() {
+                    ctx.ClearRenderTargetView(rtv, &[0.0; 4]);
+                    let bound = Some(rtv.clone());
+                    ctx.OMSetRenderTargets(Some(slice::from_ref(&bound)), None);
+                }
+            }
+        } else {
+            // The damage walk: the SCISSORED clear (the retained content
+            // outside the union survives) then the base binding at the
+            // full-window viewport.
+            let box_rect = damage
+                .and_then(|rects| rects.iter().copied().reduce(|acc, rect| acc.union_bounds(&rect)))
+                .ok_or(renderer_status::ERR_DEVICE)?;
+            damage_scissored_clear(draw, &ctx, &viewport, appearance, &scene_rtv, box_rect)?;
+            unsafe {
+                if let Some(rtv) = scene_rtv.as_ref() {
+                    let bound = Some(rtv.clone());
+                    ctx.OMSetRenderTargets(Some(slice::from_ref(&bound)), None);
+                    ctx.RSSetViewports(Some(slice::from_ref(&viewport)));
+                }
             }
         }
         active_render_target = scene_rtv.clone();
@@ -2607,6 +3178,10 @@ fn render_scene(
         /// sampling the bucket at (region-relative position) / bucket
         /// size - the quantization margin never reaches the target.
         region: [f32; 4],
+        /// The scissor rect in effect when the group began (the damage
+        /// walk's group rule, ticket 53: the END restores it before
+        /// compositing).
+        parent_scissor: RECT,
     }
     let mut group_stack: Vec<GroupFrame> = Vec::new();
 
@@ -2615,12 +3190,47 @@ fn render_scene(
         viewport,
         globals: draw.globals.clone(),
         binds: Rc::new(BindTracker::new()),
+        scissor: Rc::new(ScissorState {
+            armed: Cell::new(None),
+            plain: draw.pipelines.plain_rasterizer.clone(),
+            scissor: draw.pipelines.scissor_rasterizer.clone(),
+        }),
     };
     // `pre_draw` bound the viewport and the target outside the tracker
     // (it takes no frame): a fresh per-frame tracker is empty anyway,
     // and the invalidation documents the rule — every raw bind of a
     // tracked slot resets the cache (§3.12).
     frame.binds.invalidate();
+
+    // rev 16 (ticket 53): arm the damage scissor - the union bounding
+    // box of the merged regions. Every draw of the walk (batches,
+    // composites, group buckets) is culled outside it; the walk's end
+    // restores the pin's state. The box covers MORE than the true
+    // damage (merged regions only), so the redraw is idempotent there.
+    let damage_box: Option<DamageRect> = damage.and_then(|rects| {
+        rects.iter().copied().reduce(|acc, rect| acc.union_bounds(&rect))
+    });
+    let damage_box_rect = damage_box.map(|box_rect| RECT {
+        left: box_rect.x,
+        top: box_rect.y,
+        right: box_rect.right(),
+        bottom: box_rect.bottom(),
+    });
+    frame.scissor.set(&ctx, damage_box_rect);
+    // The walk's current scissor rect (the damage box in the damage
+    // walk; unused in the legacy walk - the scissor state is off).
+    let mut current_scissor = damage_box_rect.unwrap_or(RECT {
+        left: 0,
+        top: 0,
+        right: window.0 as i32,
+        bottom: window.1 as i32,
+    });
+    let _ = &mut current_scissor;
+    // The panic-safe restore: the scissor disarms when the walk ends.
+    let _guard = ScissorRestoreGuard {
+        ctx: &ctx,
+        state: frame.scissor.clone(),
+    };
 
     // rev 16 (ticket 52): the clip-path coverage rasterization (see the
     // comment above) - the composites sample the resolved target.
@@ -2874,11 +3484,22 @@ fn render_scene(
                         ])
                 };
                 // The bucket's extent (the frame's [0, max]): the
-                // window for filter groups (R15-exact); the region's
-                // far corner otherwise (quantized up, clamped to the
-                // window).
+                // region's far corner (quantized up, clamped to the
+                // window) for BOTH kinds - ticket 53 finishes 51's
+                // hand-off: FILTER groups move to bounds-sized buckets
+                // too, because the blur chain is now REGION-LIMITED
+                // (its viewports bind to the dilated composite region
+                // ± the kernel reach) and the bucket carries the
+                // margin the chain reads: the content extent, the
+                // record bounds dilated by 9*radius (the composite's
+                // 3σ plus the chain's read reach) and each drop-shadow
+                // op's read region (the shadow quad dilated by its own
+                // kernel reach). A group whose region reaches the
+                // window edge clamps to the window - exactly R15's
+                // window-sized bucket and its window blur pair, so the
+                // R15 blur fixtures stay bit-exact by construction.
                 let bucket_extent = if is_filter {
-                    [window.0 as f32, window.1 as f32]
+                    filter_bucket_extent(snapshot, command, &group_extents, &record, region, window)
                 } else {
                     [region[0] + region[2], region[1] + region[3]]
                 };
@@ -2895,12 +3516,38 @@ fn render_scene(
                 };
                 match lease {
                     Some(lease) => {
+                        // rev 16 (ticket 53): the damage walk's group
+                        // rule - a group whose region intersects the
+                        // damage box renders its bucket UNSCISzerED
+                        // (its scissor rect becomes the bucket's full
+                        // extent): the blur reads the bucket beyond the
+                        // composite quad (the kernel reach), and the
+                        // transform composite's bilinear support reads
+                        // past the quad's edge, so a partially-rendered
+                        // bucket would diverge from a full redraw
+                        // there. Groups fully outside the box keep the
+                        // damage scissor (nothing draws anyway).
+                        let render_bucket_full = damage_box.is_some_and(|box_rect| {
+                            box_rect.intersects_f32(&region)
+                        });
+                        let bucket_scissor = if render_bucket_full {
+                            RECT {
+                                left: 0,
+                                top: 0,
+                                right: lease.size[0] as i32,
+                                bottom: lease.size[1] as i32,
+                            }
+                        } else {
+                            current_scissor
+                        };
                         group_stack.push(GroupFrame {
                             parent: current.clone(),
                             lease: Some(lease.clone()),
                             tag: command.boundary_index as usize,
                             region,
+                            parent_scissor: current_scissor,
                         });
+                        current_scissor = bucket_scissor;
                         current = ActiveTarget {
                             rtv: lease.rtv.clone(),
                             srv: lease.srv.clone(),
@@ -2937,6 +3584,12 @@ fn render_scene(
                                 ctx.RSSetViewports(Some(slice::from_ref(&current.viewport)));
                             }
                         }
+                        // rev 16 (ticket 53): the bucket's scissor (the
+                        // full bucket for a group intersecting the damage
+                        // box, the damage box otherwise).
+                        if damage_mode {
+                            frame.scissor.set(&ctx, Some(current_scissor));
+                        }
                         // The raw viewport bind invalidates the tracker
                         // (§3.12).
                         frame.binds.invalidate();
@@ -2951,6 +3604,7 @@ fn render_scene(
                             lease: None,
                             tag: command.boundary_index as usize,
                             region,
+                            parent_scissor: current_scissor,
                         });
                     }
                 }
@@ -2984,10 +3638,20 @@ fn render_scene(
                 // BEFORE compositing: the composite's vertex divides by
                 // the globals' viewport size and rasterizes through the
                 // PARENT's viewport, so the bucket's globals must not
-                // leak into its own draw.
+                // leak into its own draw. rev 16 (ticket 53): the
+                // damage walk restores the parent's SCISSOR too - the
+                // composite draws scissored to the damage box (the
+                // group's expanded region lies inside it; groups only
+                // partially inside keep their out-of-box pixels from
+                // the previous frame, which is correct - the caller's
+                // damage covers the changed content).
                 current = parent.clone();
                 active_render_target = current.rtv.clone();
                 frame.viewport = current.viewport;
+                if damage_mode {
+                    current_scissor = entry.parent_scissor;
+                    frame.scissor.set(&ctx, Some(current_scissor));
+                }
                 set_target_globals(&ctx, &frame.globals, current.size)?;
                 if let Some(lease) = entry.lease {
                     let source = ActiveTarget {
@@ -3062,8 +3726,10 @@ fn render_scene(
     // only the capture views this scene still references.
     retain_surface_views(draw, &snapshot.surfaces);
 
-    // Present the offscreen scene by blitting it into the swapchain.
-    if use_offscreen {
+    // Present the offscreen scene by blitting it into the swapchain
+    // (the LEGACY walk only - the damage walk's caller copies the
+    // damage rects and presents them itself).
+    if use_offscreen && !damage_mode {
         dx_blit(
             state,
             draw,
@@ -3082,9 +3748,92 @@ fn render_scene(
     // are retained across frames.
     {
         let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
+        // rev 16 (ticket 53): the retained-frame validity. The damage
+        // walk wrote the retained target (the scissored redraw - the
+        // union covers every region it drew); a legacy walk through
+        // the offscreen route wrote the FULL frame into it; a legacy
+        // walk that rendered directly into the swap chain left it
+        // stale (the next damage draw falls back to a full redraw).
+        if damage_mode || use_offscreen {
+            surface_state.retained.valid = true;
+        } else {
+            surface_state.retained.valid = false;
+        }
         surface_state.draw_targets.group_pool.prune_unused();
     }
     Ok(())
+}
+
+/// The filter group's bounds-sized bucket extent (rev 16, ticket 53,
+/// finishing 51's hand-off): the far corner of the union of the
+/// group's content extent (from the pre-pass), the record bounds
+/// dilated by 9*max_blur (the composite's 3σ dilation PLUS the blur
+/// chain's read reach beyond the composite region: the gaussian taps
+/// span ~3σ per axis and the separable passes stack two), and each
+/// drop-shadow op's shadow quad dilated by the op's own kernel reach
+/// and translated by the op's offset. The bucket spans the frame's
+/// [0, far corner] (the pin's coordinate invariant - children render
+/// at their true frame coordinates), so a group at a nonzero origin
+/// carries the distance from the origin, exactly like the window-frame
+/// effect groups of 51.
+fn filter_bucket_extent(
+    snapshot: &Snapshot,
+    command: &GpuiGoSceneCommandRecord,
+    group_extents: &[(usize, [f32; 4], [f32; 4])],
+    record: &crate::scene::GpuiGoSceneBounds,
+    region: [f32; 4],
+    window: (u32, u32),
+) -> [f32; 2] {
+    let blur_radius = snapshot
+        .boundaries
+        .get(command.boundary_index as usize)
+        .map(|boundary| boundary.max_blur_radius())
+        .unwrap_or(0.0);
+    // The content extent's far corner (the region already carries it
+    // for non-filter groups; the filter region is the DILATED record
+    // bounds, so the content extent needs the pre-pass entry).
+    let content_extent = group_extents
+        .iter()
+        .find(|(index, ..)| *index == command_index(snapshot, command))
+        .map(|(_, extent, _)| *extent)
+        .unwrap_or(region);
+    let base = [
+        f32::from_bits(record.x),
+        f32::from_bits(record.y),
+        f32::from_bits(record.w),
+        f32::from_bits(record.h),
+    ];
+    let mut max_x = (content_extent[0] + content_extent[2])
+        .max(region[0] + region[2]);
+    let mut max_y = (content_extent[1] + content_extent[3])
+        .max(region[1] + region[3]);
+    // The blur chain's read margin: the composite region (the record
+    // dilated by 3*radius) plus the chain's own reach (another
+    // 2*3*radius across the separable passes and the downsample's
+    // 2x2 footprint) - 9*radius in total plus a few texels of bilinear
+    // support, clamped to the window so a region reaching the edge
+    // keeps R15's window-sized bucket (and its window blur pair).
+    let blur_margin = 3.0 * blur_radius * 3.0 + 16.0;
+    max_x = max_x.max(base[0] + base[2] + blur_margin);
+    max_y = max_y.max(base[1] + base[3] + blur_margin);
+    // The drop-shadow ops' read regions (the shadow quad plus the
+    // chain's reach, translated by the op's offset).
+    if let Some(boundary) = snapshot.boundaries.get(command.boundary_index as usize) {
+        for op in resolve_filter_op_chain(snapshot, boundary) {
+            let sigma = drop_shadow_sigma(op);
+            let (dx, dy) = (
+                f32::from_bits(op.offset[0]),
+                f32::from_bits(op.offset[1]),
+            );
+            let op_margin = GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * (blur_radius + sigma * 3.0) + 16.0;
+            max_x = max_x.max(base[0] + base[2] + op_margin + dx.abs());
+            max_y = max_y.max(base[1] + base[3] + op_margin + dy.abs());
+        }
+    }
+    [
+        max_x.min(window.0 as f32),
+        max_y.min(window.1 as f32),
+    ]
 }
 
 /// The command's index within the snapshot's command stream (the group
@@ -4121,6 +4870,89 @@ pub(super) fn clear_surface_views(state: &mut RendererState) -> u32 {
 /// composite) draw sampling `source_srv` into `target_rtv` with `params`
 /// in the blur constant buffer (DATA_REGISTER).
 #[allow(clippy::too_many_arguments)]
+/// The region-limited blur pass's region rect in HALF-RES texel space
+/// (rev 16, ticket 53): the full-res region (already dilated by the
+/// caller with the chain's read reach) mapped to half-res texels,
+/// clamped to the half-res texture. The passes limit through the
+/// SCISSOR, not a viewport offset - the fullscreen blur passes sample
+/// through viewport-relative texture coordinates, so an offset
+/// viewport would sample the wrong texels; the scissor keeps the
+/// sampling math identical to the full-window chain and only bounds
+/// the shaded fragments, so the in-region values are bit-identical.
+fn region_half_rect(
+    region: [f32; 4],
+    dilation: f32,
+    blur_size: [f32; 2],
+) -> RECT {
+    let left = ((region[0] - dilation) / 2.0).floor().max(0.0);
+    let top = ((region[1] - dilation) / 2.0).floor().max(0.0);
+    let right = ((region[0] + region[2] + dilation) / 2.0)
+        .ceil()
+        .min(blur_size[0]);
+    let bottom = ((region[1] + region[3] + dilation) / 2.0)
+        .ceil()
+        .min(blur_size[1]);
+    RECT {
+        left: left as i32,
+        top: top as i32,
+        right: (right.max(left) as i32),
+        bottom: (bottom.max(top) as i32),
+    }
+}
+
+/// One region-limited blur chain pass (rev 16, ticket 53): the FULL
+/// viewport (the sampling math stays the full chain's) with the
+/// scissor bound to the region rect, restored to the walk's ambient
+/// scissor after the pass. Reading the full source, shading only the
+/// region - the gaussian's fragment cost is the point of the
+/// limiting.
+#[allow(clippy::too_many_arguments)]
+fn dx_blur_pass_region(
+    draw: &DrawGlobal,
+    frame: &FrameBindings<'_>,
+    vertex: &ID3D11VertexShader,
+    fragment: &ID3D11PixelShader,
+    blend: &ID3D11BlendState,
+    target_rtv: &Option<ID3D11RenderTargetView>,
+    source_srv: &Option<ID3D11ShaderResourceView>,
+    params: BlurUniforms,
+    blur_size: [f32; 2],
+    topology: D3D_PRIMITIVE_TOPOLOGY,
+    vertex_count: u32,
+    clear: bool,
+    extras: BlurPassExtras<'_>,
+    region: RECT,
+) -> Result<(), i32> {
+    let ctx = frame.device_context;
+    let saved = frame.scissor.current();
+    frame.scissor.set(ctx, Some(region));
+    let full_vp = D3D11_VIEWPORT {
+        TopLeftX: 0.0,
+        TopLeftY: 0.0,
+        Width: blur_size[0],
+        Height: blur_size[1],
+        MinDepth: 0.0,
+        MaxDepth: 1.0,
+    };
+    let result = dx_blur_pass(
+        draw,
+        frame,
+        vertex,
+        fragment,
+        blend,
+        target_rtv,
+        source_srv,
+        params,
+        &full_vp,
+        topology,
+        vertex_count,
+        clear,
+        extras,
+    );
+    frame.scissor.set(ctx, saved);
+    result
+}
+
 fn dx_blur_pass(
     draw: &DrawGlobal,
     frame: &FrameBindings<'_>,
@@ -4258,15 +5090,33 @@ fn draw_drop_shadow_op(
     let shadow_source: Option<ID3D11ShaderResourceView>;
     let shadow_source_size: [f32; 2];
     if let Some(kernel) = BlurKernel::for_radius(sigma) {
-        let half_vp = D3D11_VIEWPORT {
-            TopLeftX: 0.0,
-            TopLeftY: 0.0,
-            Width: blur_size[0],
-            Height: blur_size[1],
-            MinDepth: 0.0,
-            MaxDepth: 1.0,
-        };
-        dx_blur_pass(
+        // rev 16 (ticket 53): the shadow chain is REGION-LIMITED like
+        // the content chain - the shadow quad plus the kernel reach
+        // for the gaussian pair and twice it for the downsample (the
+        // same in-region bit-exactness rule).
+        let shadow_region = [
+            bounds.origin.x.0
+                - GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * (content_blur_radius + sigma)
+                + dx,
+            bounds.origin.y.0
+                - GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * (content_blur_radius + sigma)
+                + dy,
+            bounds.size.width.0
+                + 2.0 * GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * (content_blur_radius + sigma),
+            bounds.size.height.0
+                + 2.0 * GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * (content_blur_radius + sigma),
+        ];
+        let hv_region = region_half_rect(
+            shadow_region,
+            2.0 * GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * sigma + 4.0,
+            blur_size,
+        );
+        let downsample_region = region_half_rect(
+            shadow_region,
+            4.0 * GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * sigma + 8.0,
+            blur_size,
+        );
+        dx_blur_pass_region(
             draw,
             frame,
             &draw.pipelines.blur_downsample_vertex,
@@ -4275,13 +5125,14 @@ fn draw_drop_shadow_op(
             ping_rtv,
             blur_source,
             BlurUniforms::downsample(source_size, blur_size),
-            &half_vp,
+            blur_size,
             D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
             3,
-            true,
+            false,
             BlurPassExtras::None,
+            downsample_region,
         )?;
-        dx_blur_pass(
+        dx_blur_pass_region(
             draw,
             frame,
             &draw.pipelines.blur_vertex,
@@ -4290,13 +5141,14 @@ fn draw_drop_shadow_op(
             pong_rtv,
             ping_srv,
             BlurUniforms::gaussian(BlurAxis::Horizontal, blur_size, kernel),
-            &half_vp,
+            blur_size,
             D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
             3,
-            true,
+            false,
             BlurPassExtras::None,
+            hv_region,
         )?;
-        dx_blur_pass(
+        dx_blur_pass_region(
             draw,
             frame,
             &draw.pipelines.blur_vertex,
@@ -4305,11 +5157,12 @@ fn draw_drop_shadow_op(
             ping_rtv,
             pong_srv,
             BlurUniforms::gaussian(BlurAxis::Vertical, blur_size, kernel),
-            &half_vp,
+            blur_size,
             D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
             3,
-            true,
+            false,
             BlurPassExtras::None,
+            hv_region,
         )?;
         shadow_source = ping_srv.clone();
         shadow_source_size = blur_size;
@@ -4503,14 +5356,32 @@ fn composite_filter_group(
     // coordinates.
     extensions.sample_offset = [0.0, 0.0];
 
-    let half_vp = D3D11_VIEWPORT {
-        TopLeftX: 0.0,
-        TopLeftY: 0.0,
-        Width: blur_size[0],
-        Height: blur_size[1],
-        MinDepth: 0.0,
-        MaxDepth: 1.0,
-    };
+    // rev 16 (ticket 53): the REGION-LIMITED blur chain. The composite
+    // samples the blurred texture only within its quad (the record
+    // bounds dilated by 3*radius), so the chain shades only that region
+    // plus the kernel reach: the two separable gaussians read ~3σ per
+    // axis past their position, and the second reads the first, so the
+    // downsample region carries twice the reach plus a few texels of
+    // bilinear support. Reading the full source, shading only the
+    // region (through the scissor - the fullscreen passes sample
+    // viewport-relative) - the in-region values are bit-identical to
+    // the full-window chain.
+    let composite_region = [
+        bounds.origin.x.0 - GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * blur_radius,
+        bounds.origin.y.0 - GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * blur_radius,
+        bounds.size.width.0 + 2.0 * GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * blur_radius,
+        bounds.size.height.0 + 2.0 * GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * blur_radius,
+    ];
+    let hv_region = region_half_rect(
+        composite_region,
+        2.0 * GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * blur_radius + 4.0,
+        blur_size,
+    );
+    let downsample_region = region_half_rect(
+        composite_region,
+        4.0 * GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * blur_radius + 8.0,
+        blur_size,
+    );
 
     // Downsample source -> ping, then separable gaussian ping -> pong ->
     // ping. A matrix-only chain (no blur kernel) composites the bucket
@@ -4542,7 +5413,7 @@ fn composite_filter_group(
         )?;
     }
     if let Some(kernel) = kernel {
-        dx_blur_pass(
+        dx_blur_pass_region(
             draw,
             frame,
             &draw.pipelines.blur_downsample_vertex,
@@ -4551,13 +5422,14 @@ fn composite_filter_group(
             &ping_rtv,
             &blur_source,
             BlurUniforms::downsample(source_size, blur_size),
-            &half_vp,
+            blur_size,
             D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
             3,
-            true,
+            false,
             BlurPassExtras::None,
+            downsample_region,
         )?;
-        dx_blur_pass(
+        dx_blur_pass_region(
             draw,
             frame,
             &draw.pipelines.blur_vertex,
@@ -4566,13 +5438,14 @@ fn composite_filter_group(
             &pong_rtv,
             &ping_srv,
             BlurUniforms::gaussian(BlurAxis::Horizontal, blur_size, kernel),
-            &half_vp,
+            blur_size,
             D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
             3,
-            true,
+            false,
             BlurPassExtras::None,
+            hv_region,
         )?;
-        dx_blur_pass(
+        dx_blur_pass_region(
             draw,
             frame,
             &draw.pipelines.blur_vertex,
@@ -4581,11 +5454,12 @@ fn composite_filter_group(
             &ping_rtv,
             &pong_srv,
             BlurUniforms::gaussian(BlurAxis::Vertical, blur_size, kernel),
-            &half_vp,
+            blur_size,
             D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
             3,
-            true,
+            false,
             BlurPassExtras::None,
+            hv_region,
         )?;
         composited_srv = ping_srv;
     } else if rec.color_matrix_count > 0 || !ops.is_empty() {
@@ -5598,6 +6472,20 @@ fn render_scene_entry(
     appearance: u32,
     atlas: u64,
 ) -> Result<(), i32> {
+    render_scene_entry_inner(surface, scene, appearance, atlas, None)
+}
+
+/// The render half, damage-aware (rev 16, ticket 53): `None` walks the
+/// legacy path; `Some(regions)` runs the scissored damage redraw into
+/// the retained target (the caller computed the merged/expanded
+/// regions and made the full-vs-partial decision).
+fn render_scene_entry_inner(
+    surface: u64,
+    scene: u64,
+    appearance: u32,
+    atlas: u64,
+    damage: Option<&[DamageRect]>,
+) -> Result<(), i32> {
     if appearance != background_appearance::OPAQUE
         && appearance != background_appearance::TRANSPARENT
     {
@@ -5620,6 +6508,7 @@ fn render_scene_entry(
     let (slot_index, slot_generation) = super::surface_handle_parts(surface);
     let DrawLease { state, value } = &mut lease;
     let draw = value.as_mut().ok_or(renderer_status::ERR_DEVICE)?;
+    let group_extents = group_content_extents(&snapshot);
     render_scene(
         state,
         draw,
@@ -5628,6 +6517,8 @@ fn render_scene_entry(
         &snapshot,
         atlas,
         appearance,
+        &group_extents,
+        damage,
     )?;
     Ok(())
 }
@@ -5662,6 +6553,501 @@ pub(super) fn surface_draw_scene_body(
 
 /// `renderer_surface_render_scene`: render without presenting (the
 /// pin's `render`, the readback test path — no submission token).
+/// `renderer_surface_draw_scene_damage` (rev 16, ticket 53, the design's
+/// §3.11 and appendix B): the retained-frame damage entry. The damage
+/// rects are clamped to the viewport, EXPANDED across every
+/// blur/drop-shadow group, mask, transform and backdrop whose region
+/// they intersect (viz's `ExpandDamageForPixelMovingFilters` rule with
+/// the pin's 3σ blur dilation), merged (zgui's nearby-rect merge) and
+/// capped at [`MAX_DAMAGE_REGIONS`] = 16 (zgui's `MAX_REGIONS`; a merge
+/// that still exceeds it falls back to a full redraw - there is NO
+/// percentage-of-window threshold). A full redraw also fires when the
+/// surface is new/resized/recovered (the retained target is stale),
+/// when the caller forces it (flags bit 0), or when nothing valid
+/// remains after clamping.
+///
+/// The render: a SCISSORED redraw of the damage union into the
+/// retained target (the offscene scene texture, which persists across
+/// frames and always holds the last presented frame). The present:
+/// each damage rect is copied from the retained target into the back
+/// buffer (`CopySubresourceRegion` — DXGI requires the app to have
+/// written every pixel of each dirty rect; the retained target makes
+/// the copy independent of buffer age, Chromium's own Windows
+/// pattern, `software_output_device_win_swapchain.cc:241-273`), then
+/// `Present1` with those dirty rects. In DirectComposition mode the
+/// partial present is used only after the ONE-SHOT readback test
+/// passes (the runtime must preserve the non-dirty region); a failure
+/// falls back to full presents permanently (the design's Q5 answer).
+/// A Present1 failure falls back to a full present for the frame.
+pub(super) fn surface_draw_scene_damage_body(
+    surface: u64,
+    scene: u64,
+    appearance: u32,
+    atlas: u64,
+    rects: *const super::GpuiGoRectRecord,
+    count: u32,
+    flags: u32,
+    out_submission: *mut u64,
+) -> i32 {
+    if out_submission.is_null() {
+        return renderer_status::ERR_NULL_ARG;
+    }
+    if appearance != background_appearance::OPAQUE
+        && appearance != background_appearance::TRANSPARENT
+    {
+        return renderer_status::ERR_BAD_VALUE;
+    }
+    if flags & !0x1 != 0 {
+        return renderer_status::ERR_BAD_VALUE;
+    }
+    if count > MAX_DAMAGE_INPUT_RECTS {
+        return renderer_status::ERR_BAD_VALUE;
+    }
+    if count > 0 && rects.is_null() {
+        return renderer_status::ERR_NULL_ARG;
+    }
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        draw_scene_damage_inner(
+            surface, scene, appearance, atlas, rects, count, flags, out_submission,
+        )
+    }));
+    match result {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            renderer_status::ERR_PANIC
+        }
+    }
+}
+
+/// The damage entry's body (already argument-validated).
+fn draw_scene_damage_inner(
+    surface: u64,
+    scene: u64,
+    appearance: u32,
+    atlas: u64,
+    rects: *const super::GpuiGoRectRecord,
+    count: u32,
+    flags: u32,
+    out_submission: *mut u64,
+) -> i32 {
+    // Snapshot the scene FIRST (its own lock; no lock nesting).
+    let snapshot: SceneRenderSnapshot =
+        match scene_render_snapshot(scene) {
+            Ok(snapshot) => snapshot,
+            Err(_) => return renderer_status::ERR_SCENE,
+        };
+    let mut state = lock_global();
+    if state.recovering {
+        return renderer_status::ERR_RECOVERING;
+    }
+    if ensure_device(&mut state).is_err() {
+        return renderer_status::ERR_DEVICE;
+    }
+    if ensure_draw_global(&mut state).is_err() {
+        return renderer_status::ERR_DEVICE;
+    }
+    // The retained validity + the surface mode decide the fallbacks
+    // before any GPU work.
+    let (window, mode, retained_valid) = {
+        let (slot_index, slot_generation) = super::surface_handle_parts(surface);
+        match resolve_slot(&state, slot_index, slot_generation) {
+            Ok(surface_state) => (
+                (surface_state.width, surface_state.height),
+                surface_state.mode,
+                surface_state.retained.valid,
+            ),
+            Err(code) => return code,
+        }
+    };
+    // The full-redraw decision: the forced flag, a stale retained
+    // target (a new/resized/recovered surface, a clear-present, or a
+    // legacy draw that went straight to the swap chain), or a damage
+    // computation that left nothing valid.
+    let force_full = (flags & 0x1 != 0) || !retained_valid;
+    let input: &[super::GpuiGoRectRecord] = if count > 0 {
+        unsafe { slice::from_raw_parts(rects, count as usize) }
+    } else {
+        &[]
+    };
+    let group_extents = group_content_extents(&snapshot);
+    let regions: Vec<DamageRect> = if force_full {
+        vec![full_damage_rect(window)]
+    } else {
+        match compute_damage_regions(&snapshot, &group_extents, input, window) {
+            Some(mut regions) => {
+                if regions.len() > MAX_DAMAGE_REGIONS {
+                    // zgui's 16-region cap: the merge could not bring
+                    // the damage under it - repaint fully.
+                    regions = vec![full_damage_rect(window)];
+                }
+                regions
+            }
+            None => vec![full_damage_rect(window)],
+        }
+    };
+    let full = regions.len() == 1
+        && regions[0].x == 0
+        && regions[0].y == 0
+        && regions[0].w == window.0 as i32
+        && regions[0].h == window.1 as i32;
+    // The render walk (scissored to the union; the retained target is
+    // the base). The lock guard drops with the block - the present tail
+    // takes the renderer lock itself (exactly like the legacy
+    // draw-scene flow: render under the lock, present under a fresh
+    // lock).
+    {
+        let mut lease = match DrawLease::take(&mut state) {
+            Ok(lease) => lease,
+            Err(code) => return code,
+        };
+        let (slot_index, slot_generation) = super::surface_handle_parts(surface);
+        let DrawLease { state, value } = &mut lease;
+        let draw = match value.as_mut() {
+            Some(draw) => draw,
+            None => return renderer_status::ERR_DEVICE,
+        };
+        // The per-surface damage stats (the fraction BEFORE the copies).
+        {
+            let surface_state = match resolve_slot_mut(state, slot_index, slot_generation) {
+                Ok(surface_state) => surface_state,
+                Err(code) => return code,
+            };
+            let window_area = (window.0 as i64 * window.1 as i64).max(1);
+            let damage_area: i64 = regions.iter().map(|rect| rect.area()).sum();
+            let per_mille = (damage_area * 1000 + window_area / 2) / window_area;
+            surface_state.retained.damage_fraction =
+                u32::try_from(per_mille.clamp(0, 1000)).unwrap_or(1000);
+        }
+        if let Err(code) = render_scene(
+            state,
+            draw,
+            slot_index,
+            slot_generation,
+            &snapshot,
+            atlas,
+            appearance,
+            &group_extents,
+            Some(&regions),
+        ) {
+            return code;
+        }
+    }
+    drop(state);
+    // The present: the copies + Present1 (or the full copy + Present).
+    match submit_damage_frame(surface, &regions, full, mode, out_submission) {
+        Ok(code) => code,
+        Err(code) => code,
+    }
+}
+
+/// The full-window damage rect.
+fn full_damage_rect(window: (u32, u32)) -> DamageRect {
+    DamageRect { x: 0, y: 0, w: window.0 as i32, h: window.1 as i32 }
+}
+
+/// The damage present + submission tail (the caller holds nothing -
+/// this takes the renderer lock itself, exactly like
+/// `submit_draw_frame`).
+fn submit_damage_frame(
+    surface: u64,
+    regions: &[DamageRect],
+    full: bool,
+    mode: u32,
+    out_submission: *mut u64,
+) -> Result<i32, i32> {
+    let (slot_index, slot_generation) = super::surface_handle_parts(surface);
+    let mut state = lock_global();
+    let device = ensure_device(&mut state)?;
+    let surface_state = resolve_slot_mut(&mut state, slot_index, slot_generation)?;
+    // Bounded pending submissions: backpressure BEFORE accepting GPU work.
+    if surface_state.submissions.len() >= super::MAX_PENDING_SUBMISSIONS as usize {
+        return Ok(renderer_status::ERR_BUSY);
+    }
+    match surface_state.next_seq.checked_add(1) {
+        Some(next) if next <= super::SUBMISSION_SEQ_MASK => {}
+        _ => return Ok(renderer_status::ERR_BAD_VALUE),
+    }
+    let back_buffer = surface_state
+        .render_target
+        .clone()
+        .ok_or(renderer_status::ERR_DEVICE)?;
+    let retained = surface_state
+        .draw_targets
+        .blur
+        .as_ref()
+        .map(|blur| blur.scene_color_texture.clone())
+        .ok_or(renderer_status::ERR_DEVICE)?;
+    let ctx = device.context.clone();
+    let present_hr: windows::core::HRESULT;
+    if full {
+        // A full present: the whole retained target into the back
+        // buffer (a raw copy is bit-exact), then Present(0, 0).
+        unsafe { ctx.CopyResource(&back_buffer, &retained) };
+        present_hr = unsafe { surface_state.swap_chain.Present(0, DXGI_PRESENT(0)) };
+        surface_state.retained.full_present_count =
+            surface_state.retained.full_present_count.saturating_add(1);
+    } else {
+        // The partial present: copy each damage rect into the back
+        // buffer, then Present1 with the dirty rects (DXGI requires the
+        // app to have written every pixel of each dirty rect).
+        for rect in regions {
+            let box_rect = D3D11_BOX {
+                left: rect.x.max(0) as u32,
+                top: rect.y.max(0) as u32,
+                front: 0,
+                right: (rect.right().max(0)) as u32,
+                bottom: (rect.bottom().max(0)) as u32,
+                back: 1,
+            };
+            unsafe {
+                ctx.CopySubresourceRegion(
+                    &back_buffer,
+                    0,
+                    rect.x.max(0) as u32,
+                    rect.y.max(0) as u32,
+                    0,
+                    &retained,
+                    0,
+                    Some(&box_rect),
+                );
+            }
+        }
+        let mut dirty_rects: Vec<RECT> = regions
+            .iter()
+            .map(|rect| RECT {
+                left: rect.x,
+                top: rect.y,
+                right: rect.right(),
+                bottom: rect.bottom(),
+            })
+            .collect();
+        let mut params = DXGI_PRESENT_PARAMETERS::default();
+        params.DirtyRectsCount = dirty_rects.len() as u32;
+        params.pDirtyRects = dirty_rects.as_mut_ptr();
+        let verify = mode == super::surface_mode::DCOMP_PREMULTIPLIED
+            && surface_state.retained.dcomp_partial.is_none();
+        let hr = unsafe { surface_state.swap_chain.Present1(0, DXGI_PRESENT(0), &params) };
+        let hr = if hr.is_err() {
+            // Present1 failed: the FULL fallback for this frame (the
+            // copies are redone whole, then a plain present).
+            unsafe { ctx.CopyResource(&back_buffer, &retained) };
+            let fallback = unsafe { surface_state.swap_chain.Present(0, DXGI_PRESENT(0)) };
+            surface_state.retained.full_present_count =
+                surface_state.retained.full_present_count.saturating_add(1);
+            fallback
+        } else if verify {
+            // The one-shot DComp readback test: the NEXT back buffer
+            // must hold the composed frame (the runtime preserves the
+            // non-dirty region). A mismatch disables partial presents
+            // for this surface permanently - every later frame
+            // presents full (the design's Q5 answer, "otherwise
+            // present full").
+            let next_buffer = unsafe {
+                surface_state
+                    .swap_chain
+                    .GetBuffer::<ID3D11Texture2D>(0)
+                    .map_err(|e| e.code().0)?
+            };
+            let composed = textures_equal(&ctx, &device.device, &next_buffer, &retained);
+            surface_state.retained.dcomp_partial = Some(composed);
+            if composed {
+                surface_state.retained.partial_present_count =
+                    surface_state.retained.partial_present_count.saturating_add(1);
+                hr
+            } else {
+                unsafe { ctx.CopyResource(&back_buffer, &retained) };
+                let fallback = unsafe { surface_state.swap_chain.Present(0, DXGI_PRESENT(0)) };
+                surface_state.retained.full_present_count =
+                    surface_state.retained.full_present_count.saturating_add(1);
+                fallback
+            }
+        } else if mode == super::surface_mode::DCOMP_PREMULTIPLIED
+            && surface_state.retained.dcomp_partial == Some(false)
+        {
+            // The verification already rejected this surface: present
+            // full (the damage-scissored redraw still saved the GPU
+            // work).
+            unsafe { ctx.CopyResource(&back_buffer, &retained) };
+            let fallback = unsafe { surface_state.swap_chain.Present(0, DXGI_PRESENT(0)) };
+            surface_state.retained.full_present_count =
+                surface_state.retained.full_present_count.saturating_add(1);
+            fallback
+        } else {
+            surface_state.retained.partial_present_count =
+                surface_state.retained.partial_present_count.saturating_add(1);
+            hr
+        };
+        present_hr = hr;
+    }
+    finish_submission(
+        slot_index,
+        slot_generation,
+        surface_state,
+        device,
+        present_hr,
+        out_submission,
+    )
+}
+
+/// The DComp partial-present readback test: two full staging readbacks
+/// compared byte for byte (the next back buffer against the retained
+/// target). A staging failure reads as a mismatch (the safe side -
+/// fall back to full presents).
+fn textures_equal(
+    ctx: &ID3D11DeviceContext,
+    device: &ID3D11Device,
+    first: &ID3D11Texture2D,
+    second: &ID3D11Texture2D,
+) -> bool {
+    let readback = |texture: &ID3D11Texture2D| -> Option<Vec<u8>> {
+        let mut desc = D3D11_TEXTURE2D_DESC::default();
+        unsafe { texture.GetDesc(&mut desc) };
+        let staging_desc = D3D11_TEXTURE2D_DESC {
+            Usage: D3D11_USAGE_STAGING,
+            BindFlags: 0,
+            CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
+            MiscFlags: 0,
+            MipLevels: 1,
+            ArraySize: 1,
+            SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+            ..desc
+        };
+        let mut staging = None;
+        unsafe {
+            device.CreateTexture2D(&staging_desc, None, Some(&mut staging)).ok()?;
+        }
+        let staging = staging?;
+        unsafe { ctx.CopyResource(&staging, texture) };
+        let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+        unsafe { ctx.Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped)).ok()? };
+        let row_bytes = desc.Width as usize * 4;
+        let mut bytes = vec![0u8; row_bytes * desc.Height as usize];
+        unsafe {
+            let source = mapped.pData.cast::<u8>();
+            for row in 0..desc.Height as usize {
+                std::ptr::copy_nonoverlapping(
+                    source.add(row * mapped.RowPitch as usize),
+                    bytes.as_mut_ptr().add(row * row_bytes),
+                    row_bytes,
+                );
+            }
+            ctx.Unmap(&staging, 0);
+        }
+        Some(bytes)
+    };
+    match (readback(first), readback(second)) {
+        (Some(first), Some(second)) => first == second,
+        _ => false,
+    }
+}
+
+/// `renderer_surface_read_frame_pixels` (rev 16, ticket 53): the
+/// staging readback of the RETAINED FRAME TARGET - the test seam for
+/// the damaged-vs-full equivalence gates (the retained target always
+/// holds the last presented frame, independent of the swap chain's
+/// buffer rotation). The BGRA→RGBA swap matches
+/// `renderer_surface_read_pixels`. ERR_DEVICE when the surface has no
+/// retained target yet (the damage entry creates it; the legacy
+/// filter route does too).
+pub(super) fn surface_read_frame_pixels_body(
+    surface: u64,
+    out_bytes: *mut u8,
+    capacity: u32,
+    out_needed: *mut u32,
+) -> i32 {
+    if out_needed.is_null() {
+        return renderer_status::ERR_NULL_ARG;
+    }
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        let (slot_index, slot_generation) = super::surface_handle_parts(surface);
+        let mut state = lock_global();
+        let device = ensure_device(&mut state)?;
+        let surface_state = resolve_slot_mut(&mut state, slot_index, slot_generation)?;
+        let retained = surface_state
+            .draw_targets
+            .blur
+            .as_ref()
+            .map(|blur| blur.scene_color_texture.clone())
+            .ok_or(renderer_status::ERR_DEVICE)?;
+
+        let mut source_desc = D3D11_TEXTURE2D_DESC::default();
+        unsafe { retained.GetDesc(&mut source_desc) };
+        let width = source_desc.Width;
+        let height = source_desc.Height;
+        let row_bytes = width as usize * 4;
+        let needed = (row_bytes * height as usize) as u32;
+        unsafe { *out_needed = needed };
+        if needed > capacity {
+            return Ok(renderer_status::ERR_CAPACITY);
+        }
+        if capacity > 0 && out_bytes.is_null() {
+            return Ok(renderer_status::ERR_NULL_ARG);
+        }
+
+        let staging_desc = D3D11_TEXTURE2D_DESC {
+            Usage: D3D11_USAGE_STAGING,
+            BindFlags: 0,
+            CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
+            MiscFlags: 0,
+            MipLevels: 1,
+            ArraySize: 1,
+            SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+            ..source_desc
+        };
+        let mut staging = None;
+        unsafe {
+            device
+                .device
+                .CreateTexture2D(&staging_desc, None, Some(&mut staging))
+                .map_err(|e| e.code().0)?;
+        }
+        let staging = staging.ok_or(renderer_status::ERR_DEVICE)?;
+        unsafe {
+            device.context.CopyResource(&staging, &retained);
+        }
+
+        let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+        unsafe {
+            device
+                .context
+                .Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
+                .map_err(|e| e.code().0)?;
+        }
+        let mut pixels = vec![0u8; row_bytes * height as usize];
+        // SAFETY: a successful `Map` exposes `RowPitch * height`
+        // readable bytes until `Unmap`; each destination row is
+        // disjoint within the exactly-sized output allocation.
+        unsafe {
+            let source = mapped.pData.cast::<u8>();
+            for row in 0..height as usize {
+                std::ptr::copy_nonoverlapping(
+                    source.add(row * mapped.RowPitch as usize),
+                    pixels.as_mut_ptr().add(row * row_bytes),
+                    row_bytes,
+                );
+            }
+            device.context.Unmap(&staging, 0);
+        }
+        for pixel in pixels.chunks_exact_mut(4) {
+            pixel.swap(0, 2);
+        }
+        unsafe {
+            let out = std::slice::from_raw_parts_mut(out_bytes, needed as usize);
+            out.copy_from_slice(&pixels);
+        }
+        Ok(renderer_status::OK)
+    }));
+    match result {
+        Ok(Ok(code)) => code,
+        Ok(Err(code)) => code,
+        Err(payload) => {
+            drop(payload);
+            renderer_status::ERR_PANIC
+        }
+    }
+}
+
 pub(super) fn surface_render_scene_body(
     surface: u64,
     scene: u64,
@@ -5701,12 +7087,30 @@ fn submit_draw_frame(surface: u64, out_submission: *mut u64) -> Result<i32, i32>
         _ => return Ok(renderer_status::ERR_BAD_VALUE),
     }
     let present_hr = unsafe { surface_state.swap_chain.Present(0, DXGI_PRESENT(0)) };
+    finish_submission(
+        slot_index,
+        slot_generation,
+        surface_state,
+        device,
+        present_hr,
+        out_submission,
+    )
+}
 
-    // Completion marker: a D3D11_QUERY_EVENT ended AFTER the last GPU
-    // command of the submission, then ONE explicit Flush so the marker
-    // is actually submitted (each submission here is the "rendering goes
-    // idle" case; Present and Flush are submission aids, never
-    // completion evidence: only a later poll's S_OK retires).
+/// The submission tail shared by every present path (rev 16, ticket
+/// 53 factored it out of `submit_draw_frame`): the completion marker
+/// after the last GPU command, ONE explicit Flush, the tracked
+/// partial-submit record, and the typed present status. The CALLER
+/// holds the global lock and resolved the surface.
+#[allow(clippy::too_many_arguments)]
+fn finish_submission(
+    slot_index: usize,
+    slot_generation: u32,
+    surface_state: &mut SurfaceState,
+    device: super::DeviceHandles,
+    present_hr: windows::core::HRESULT,
+    out_submission: *mut u64,
+) -> Result<i32, i32> {
     let query = {
         let desc = D3D11_QUERY_DESC {
             Query: D3D11_QUERY_EVENT,
@@ -5981,5 +7385,224 @@ pub(super) fn surface_read_pixels_body(
             drop(payload);
             renderer_status::ERR_PANIC
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests (rev 16, ticket 53: the damage region machinery)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod damage_tests {
+    use super::*;
+
+    fn empty_snapshot() -> Snapshot {
+        Snapshot {
+            quads: Vec::new(),
+            shadows: Vec::new(),
+            underlines: Vec::new(),
+            monochrome_sprites: Vec::new(),
+            subpixel_sprites: Vec::new(),
+            polychrome_sprites: Vec::new(),
+            paths: Vec::new(),
+            surfaces: Vec::new(),
+            surface_opacities: Vec::new(),
+            backdrops: Vec::new(),
+            boundaries: Vec::new(),
+            effects: Vec::new(),
+            gradients: Vec::new(),
+            gradient_ramps: Vec::new(),
+            coverage: Vec::new(),
+            filter_op_chains: Vec::new(),
+            commands: Vec::new(),
+            requirements: crate::scene::GpuiGoSceneRequirementsRecord::default(),
+        }
+    }
+
+    fn blur_boundary(bounds: [f32; 4], radius: f32) -> crate::scene::GpuiGoSceneFilterRecord {
+        let mut record = crate::scene::GpuiGoSceneFilterRecord::default();
+        record.bounds = crate::scene::GpuiGoSceneBounds {
+            x: bounds[0].to_bits(),
+            y: bounds[1].to_bits(),
+            w: bounds[2].to_bits(),
+            h: bounds[3].to_bits(),
+        };
+        record.is_start = 1;
+        record.filter_count = 1;
+        record.filter_tags[0] = 0;
+        record.blur_radii[0] = radius.to_bits();
+        record
+    }
+
+    fn rect(x: i32, y: i32, w: i32, h: i32) -> super::super::GpuiGoRectRecord {
+        super::super::GpuiGoRectRecord { x, y, w, h }
+    }
+
+    /// Out-of-window rects are dropped; negative origins are clamped;
+    /// nothing valid remains -> None (the caller redraws fully).
+    #[test]
+    fn damage_regions_clamp_and_drop() {
+        let snapshot = empty_snapshot();
+        let window = (320u32, 240u32);
+        // One fully outside, one partially outside, one inside.
+        let regions = compute_damage_regions(
+            &snapshot,
+            &[],
+            &[
+                rect(400, 0, 50, 50),
+                rect(-20, -10, 60, 60),
+                rect(100, 100, 20, 20),
+            ],
+            window,
+        )
+        .expect("a valid rect remains");
+        assert_eq!(regions.len(), 2);
+        // The partially-outside rect clamps to (0, 0, 40, 50).
+        assert_eq!(regions[0], DamageRect { x: 0, y: 0, w: 40, h: 50 });
+        assert_eq!(regions[1], DamageRect { x: 100, y: 100, w: 20, h: 20 });
+        // Everything outside: None (the full fallback).
+        assert!(compute_damage_regions(
+            &snapshot,
+            &[],
+            &[rect(400, 0, 50, 50), rect(-10, -10, 5, 5)],
+            window
+        )
+        .is_none());
+        // Empty rects are dropped.
+        assert!(compute_damage_regions(&snapshot, &[], &[rect(10, 10, 0, 0)], window).is_none());
+    }
+
+    /// Overlapping and near rects merge into one region (zgui's
+    /// nearby-rect merge; the merged region only ever covers more).
+    #[test]
+    fn damage_regions_merge_nearby() {
+        let snapshot = empty_snapshot();
+        let window = (640u32, 480u32);
+        // Two rects 4px apart: within the 8px merge gap -> one region.
+        let regions = compute_damage_regions(
+            &snapshot,
+            &[],
+            &[rect(10, 10, 50, 50), rect(64, 12, 40, 40)],
+            window,
+        )
+        .expect("regions");
+        assert_eq!(regions.len(), 1, "rects within the merge gap merge");
+        assert_eq!(regions[0], DamageRect { x: 10, y: 10, w: 94, h: 50 });
+        // Two rects 40px apart: no merge.
+        let regions = compute_damage_regions(
+            &snapshot,
+            &[],
+            &[rect(10, 10, 50, 50), rect(100, 10, 40, 40)],
+            window,
+        )
+        .expect("regions");
+        assert_eq!(regions.len(), 2);
+    }
+
+    /// Damage that intersects a blur group's dilated region expands to
+    /// the whole dilated region (viz's pixel-moving-filter rule, the
+    /// pin's 3*radius dilation); damage far away does not. The filter
+    /// group's influence region comes from the walk's group-extent
+    /// pre-pass (the dilated record bounds, the same shape
+    /// `group_content_extents` computes for filter groups).
+    #[test]
+    fn damage_regions_expand_across_blur_groups() {
+        let snapshot = empty_snapshot();
+        // (begin index, region, footprint) for the blur group
+        // (200, 60, 100, 100) with radius 12: the dilated region
+        // (200-36, 60-36, 100+72, 100+72), clamped to the window
+        // (x 336 -> 320).
+        let group_extents = vec![ (
+            0usize,
+            [164.0, 24.0, 172.0, 172.0],
+            [164.0, 24.0, 172.0, 172.0],
+        )];
+        let window = (320u32, 240u32);
+        // A rect INSIDE the group's bounds: the expansion adds the
+        // dilated region (the window clamp trims the right edge).
+        let regions = compute_damage_regions(
+            &snapshot,
+            &group_extents,
+            &[rect(230, 90, 20, 20)],
+            window,
+        )
+        .expect("regions");
+        assert_eq!(regions.len(), 1, "the raw rect and the expansion merge");
+        assert_eq!(
+            regions[0],
+            DamageRect { x: 164, y: 24, w: 156, h: 172 },
+            "the blur group's dilated region (3*radius = 36, clamped to the window)"
+        );
+        // A rect far from the group: no expansion.
+        let regions = compute_damage_regions(
+            &snapshot,
+            &group_extents,
+            &[rect(10, 10, 20, 20)],
+            window,
+        )
+        .expect("regions");
+        assert_eq!(regions.len(), 1);
+        assert_eq!(regions[0], DamageRect { x: 10, y: 10, w: 20, h: 20 });
+        // A drop-shadow op's shadow quad is an influence of its own
+        // (§3.9 draws the shadow beyond the content).
+        let mut snapshot = empty_snapshot();
+        let mut boundary = blur_boundary([50.0, 50.0, 60.0, 60.0], 0.0);
+        boundary.op_chain_index = 0;
+        boundary.op_chain_count = 1;
+        let mut op = crate::scene::GpuiGoSceneFilterOpRecord::default();
+        op.kind = 2;
+        op.offset[0] = 0f32.to_bits();
+        op.offset[1] = 40f32.to_bits();
+        op.blur_radius = 8f32.to_bits();
+        snapshot.boundaries.push(boundary);
+        snapshot.filter_op_chains.push(vec![op]);
+        // Damage at the shadow's position (well below the group):
+        let sigma = 8.0 * 0.5;
+        let dilation = 3.0 * (0.0 + sigma);
+        let shadow_quad = [50.0 - dilation, 50.0 - dilation + 40.0, 60.0 + 2.0 * dilation, 60.0 + 2.0 * dilation];
+        let _ = shadow_quad;
+        let regions = compute_damage_regions(
+            &snapshot,
+            &[],
+            &[rect(60, 95, 20, 20)],
+            window,
+        )
+        .expect("regions");
+        assert_eq!(regions.len(), 1);
+        assert_eq!(
+            regions[0],
+            DamageRect { x: 38, y: 78, w: 84, h: 84 },
+            "the drop-shadow op's shadow quad (dilated by 3σ = 12, offset +40)"
+        );
+    }
+
+    /// The region-limited blur pass's region rect: clamped to the
+    /// half-res texture, never inverted.
+    #[test]
+    fn region_half_rect_clamps() {
+        let rect = region_half_rect([100.0, 60.0, 80.0, 60.0], 30.0, [60.0, 40.0]);
+        // (100-30)/2 = 35, (60-30)/2 = 15, (180+30)/2 = 105 -> 60, (120+30)/2 = 75 -> 40.
+        assert_eq!(rect, RECT { left: 35, top: 15, right: 60, bottom: 40 });
+        // A region fully outside the texture clamps to the (0, 0, 0, 0)
+        // corner without inverting.
+        let rect = region_half_rect([500.0, 500.0, 40.0, 40.0], 30.0, [60.0, 40.0]);
+        assert!(rect.right <= 0 || rect.left >= 60 || rect.bottom <= 0 || rect.top >= 40);
+        let clamped = region_half_rect([-100.0, -100.0, 40.0, 40.0], 10.0, [60.0, 40.0]);
+        assert!(clamped.left >= 0 && clamped.top >= 0);
+    }
+
+    /// The damage fraction's area accounting (the entry computes
+    /// per-mille from the merged areas).
+    #[test]
+    fn damage_rect_area_and_union() {
+        let a = DamageRect { x: 0, y: 0, w: 100, h: 100 };
+        let b = DamageRect { x: 50, y: 50, w: 100, h: 100 };
+        assert_eq!(a.area(), 10_000);
+        let union = a.union_bounds(&b);
+        assert_eq!(union, DamageRect { x: 0, y: 0, w: 150, h: 150 });
+        assert_eq!(union.area(), 22_500);
+        // The merge-gap test.
+        assert!(a.merges_with(&DamageRect { x: 105, y: 0, w: 10, h: 10 }));
+        assert!(!a.merges_with(&DamageRect { x: 120, y: 0, w: 10, h: 10 }));
     }
 }

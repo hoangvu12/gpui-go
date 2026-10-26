@@ -101,6 +101,29 @@ func callRendererSurfaceReadPixels(
 	return 0, hostSupported()
 }
 
+func callRendererSurfaceDrawSceneDamage(
+	fn uintptr,
+	surface uint64,
+	scene uint64,
+	appearance uint32,
+	atlas uint64,
+	rects *DamageRect,
+	count uint32,
+	flags uint32,
+	outSubmission *uint64,
+) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callRendererSurfaceReadFramePixels(
+	fn uintptr,
+	surface uint64,
+	buf []byte,
+	outNeeded *uint32,
+) (int32, error) {
+	return 0, hostSupported()
+}
+
 func callRendererDeviceStateCheck(fn uintptr, out *DeviceStateRecord) (int32, error) {
 	return 0, hostSupported()
 }
