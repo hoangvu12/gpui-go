@@ -176,9 +176,11 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 			abandonFrameTracking(w)
 			// The abandoned build may have rewritten cached views' ranges
 			// against the discarded frame: the next frame renders every
-			// cached view afresh (view_cache.go).
+			// cached view afresh (view_cache.go) AND the damage state is
+			// untrustworthy — the next frame is a full redraw (damage.go).
 			ds.dirtyViews = nil
 			ds.refreshing = true
+			ds.lastDamageValid = false
 		}
 	}()
 
@@ -193,6 +195,18 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 		ds.dirtyViews = nil
 	})
 	if drawErr != nil {
+		return nil, drawErr
+	}
+	// browser-core 58: compute the frame's damage — the build's
+	// replayed ranges (the reused view ranges at the same bounds and
+	// mask) are the undamaged regions; everything else damages its old
+	// and new bounds — and tint the paint-flashing overlay, both before
+	// the scene's finish: the overlay's tints must not enter this
+	// frame's damage, and the previous scene is still alive here
+	// (completeFrame disposes it once the frame publishes).
+	frame.damageRects, frame.damageFull = computeFrameDamage(w, ds, frame, scene)
+	if err := paintDamageFlashingOverlay(ds, frame, scene, frame.damageRects, frame.damageFull); err != nil {
+		drawErr = fmt.Errorf("gpui: DrawWindowFrame: %w", err)
 		return nil, drawErr
 	}
 	if err := scene.Finish(); err != nil {
@@ -244,6 +258,16 @@ func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawSt
 			_ = previous.Dispose()
 		}
 		ds.lastScene = frame.scene
+		// browser-core 58: publish the frame's damage state — the merged
+		// rects the present passes to Surface.DrawSceneDamage through
+		// Window.LastFrameDamage / PresentFrame, and the geometry keys the
+		// next frame's rule compares (damage.go).
+		ds.lastDamageRects = frame.damageRects
+		ds.lastDamageFull = frame.damageFull
+		ds.lastDamageValid = true
+		ds.lastDamageViewport = frame.viewport
+		ds.lastDamageScale = frame.scale
+		ds.lastDamageBackground = frame.paint.Background
 		ds.lastInlineFacts = frame.inlineFacts
 		ds.lastAutoScrollbarFacts = frame.autoScrollbarFacts
 		ds.lastDeferredPriorities = deferredPrioritiesOf(frame)

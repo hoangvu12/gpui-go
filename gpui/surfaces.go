@@ -135,6 +135,10 @@ func (s *Scene) PaintCaptureSurface(bounds Bounds, frame ScreenCaptureFrame, ctx
 	if err := s.kernel.scene.InsertSurface(&rec, ctx.ElementOpacity); err != nil {
 		return fmt.Errorf("gpui: scene insert surface: %w", err)
 	}
+	// browser-core 58: a capture-backed surface's content updates
+	// outside the scene's knowledge, so its bounds ALWAYS damage
+	// (damage.go; the surface record cannot see the frame update).
+	s.kernel.recordDamageRect(snappedBounds, mask, true)
 	return nil
 }
 

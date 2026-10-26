@@ -59,6 +59,14 @@ func sceneService() (*native.SceneService, error) {
 // guard before native entry (the service pattern).
 type SceneKernel struct {
 	scene *native.Scene
+	// damageLog mirrors the native paint-op log's INDEX space (the
+	// replay address space Len reports) with each op's clipped device
+	// bounds — browser-core ticket 58's damage computation reads ranges
+	// of it (damage.go). One entry per op, appended at every tracked
+	// insert (the native insertion core's drop rule replicated), so the
+	// log and the native count stay aligned; damageLogDrifted is the
+	// gate that falls back to a full redraw when they do not.
+	damageLog []sceneOpDamage
 }
 
 // newSceneKernel creates a fresh native scene for the process-wide
@@ -119,6 +127,9 @@ func (k *SceneKernel) BeginLayer(bounds Bounds) error {
 	if err := k.scene.PushLayer(sceneBoundsRecord(bounds)); err != nil {
 		return fmt.Errorf("gpui: scene push layer: %w", err)
 	}
+	// A layer push counts in the op space but paints nowhere (the
+	// layer's ops carry their own bounds).
+	k.recordDamageOpless()
 	return nil
 }
 
@@ -130,6 +141,7 @@ func (k *SceneKernel) EndLayer() error {
 	if err := k.scene.PopLayer(); err != nil {
 		return fmt.Errorf("gpui: scene pop layer: %w", err)
 	}
+	k.recordDamageOpless()
 	return nil
 }
 
@@ -173,6 +185,7 @@ func (k *SceneKernel) InsertQuad(q Quad) error {
 	if err := k.scene.InsertQuad(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert quad: %w", err)
 	}
+	k.recordDamageRect(q.Bounds, q.ContentMask, false)
 	return nil
 }
 
@@ -204,6 +217,7 @@ func (k *SceneKernel) InsertShadow(sh Shadow) error {
 	if err := k.scene.InsertShadow(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert shadow: %w", err)
 	}
+	k.recordDamageRect(sh.Bounds, sh.ContentMask, false)
 	return nil
 }
 
@@ -228,6 +242,7 @@ func (k *SceneKernel) InsertUnderline(u Underline) error {
 	if err := k.scene.InsertUnderline(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert underline: %w", err)
 	}
+	k.recordDamageRect(u.Bounds, u.ContentMask, false)
 	return nil
 }
 
@@ -244,6 +259,7 @@ func (k *SceneKernel) InsertBackdropFilter(f BackdropFilter) error {
 	if err := k.scene.InsertBackdropFilter(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert backdrop filter: %w", err)
 	}
+	k.recordDamageRect(f.Bounds, f.ContentMask, false)
 	return nil
 }
 
@@ -262,6 +278,10 @@ func (k *SceneKernel) InsertFilterBoundary(b FilterBoundary) error {
 	if err := k.scene.InsertFilterBoundary(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert filter boundary: %w", err)
 	}
+	// A boundary marker never drops, but paints nowhere itself — its
+	// group's pixels come from the children it brackets (the native
+	// damage walk expands the rects across the group; ticket 53).
+	k.recordDamageOpless()
 	return nil
 }
 
@@ -300,6 +320,8 @@ func (k *SceneKernel) insertGradient(g Gradient) (uint32, error) {
 	if err != nil {
 		return 0, fmt.Errorf("gpui: scene insert gradient: %w", err)
 	}
+	// A table row: it counts in the op space but paints nowhere.
+	k.recordDamageOpless()
 	return index, nil
 }
 
@@ -331,6 +353,8 @@ func (k *SceneKernel) insertCoverage(pathIndex uint32, bounds Bounds) (uint32, e
 	if err != nil {
 		return 0, fmt.Errorf("gpui: scene insert coverage: %w", err)
 	}
+	// A table row: it counts in the op space but paints nowhere.
+	k.recordDamageOpless()
 	return index, nil
 }
 
@@ -355,6 +379,8 @@ func (k *SceneKernel) insertFilterOpChain(ops []FilterOp) (uint32, error) {
 	if err != nil {
 		return 0, fmt.Errorf("gpui: scene insert filter op chain: %w", err)
 	}
+	// A table row: it counts in the op space but paints nowhere.
+	k.recordDamageOpless()
 	return index, nil
 }
 
@@ -406,6 +432,10 @@ func (k *SceneKernel) InsertEffect(e EffectGroup) error {
 	if err := k.scene.InsertEffect(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert effect: %w", err)
 	}
+	// A group marker never drops, but paints nowhere itself — its
+	// group's pixels come from the children it brackets (the native
+	// damage walk expands the rects across the group; ticket 53).
+	k.recordDamageOpless()
 	return nil
 }
 
@@ -499,6 +529,7 @@ func (k *SceneKernel) InsertSurface(bounds, contentMask Bounds, source SurfaceSo
 	if err := k.scene.InsertSurface(&rec, opacity); err != nil {
 		return fmt.Errorf("gpui: scene insert surface: %w", err)
 	}
+	k.recordDamageRect(bounds, contentMask, uint32(source) == uint32(SurfaceSourceCaptureFrame))
 	return nil
 }
 
@@ -513,6 +544,10 @@ func (k *SceneKernel) Replay(start, end uint32, prev *SceneKernel) error {
 	if err := k.scene.Replay(start, end, prev.scene); err != nil {
 		return fmt.Errorf("gpui: scene replay: %w", err)
 	}
+	// The copied ops keep their parameters, so their damage-log
+	// entries copy too (damage.go's rule reads them as the undamaged
+	// region of the next frame).
+	k.recordDamageReplay(start, end, prev)
 	return nil
 }
 

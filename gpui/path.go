@@ -560,6 +560,7 @@ func (k *SceneKernel) InsertPath(rec *PathRecord) error {
 	if err := k.scene.InsertPath(&nativeRec, vertices); err != nil {
 		return fmt.Errorf("gpui: scene insert path: %w", err)
 	}
+	k.recordDamageRect(rec.Bounds, rec.ContentMask, false)
 	return nil
 }
 
