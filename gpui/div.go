@@ -47,7 +47,9 @@ import (
 // ---------------------------------------------------------------------------
 
 // TextAlign is the text alignment within its element (the reference
-// TextAlign; Left is the default).
+// TextAlign plus browser-core 43's CSS start/end/justify values).
+// Left is the default (Chrome's own default is start, which equals left
+// for LTR text).
 type TextAlign uint8
 
 const (
@@ -57,6 +59,66 @@ const (
 	TextAlignCenter
 	// TextAlignRight aligns text to the end of the line.
 	TextAlignRight
+	// TextAlignStart aligns to the start edge of the line box in the
+	// text's direction: left for LTR, right for RTL (CSS text-align:
+	// start, browser-core 43). The layout's base direction (the shaped
+	// summary's IsRTL) resolves it at paint time.
+	TextAlignStart
+	// TextAlignEnd aligns to the end edge of the line box in the text's
+	// direction: right for LTR, left for RTL (CSS text-align: end).
+	TextAlignEnd
+	// TextAlignJustify justifies the lines' contents between the line
+	// box's edges: the whitespace clusters stretch inside the native
+	// layout, every line except each paragraph's last (CSS text-align:
+	// justify — Parley's Alignment::Justify through the rev-16
+	// side-channel).
+	TextAlignJustify
+)
+
+// WordBreak is CSS word-break (browser-core 43): where line breaks may
+// fall within words. Normal is the default.
+type WordBreak uint8
+
+const (
+	// WordBreakNormal applies the customary break rules.
+	WordBreakNormal WordBreak = iota
+	// WordBreakBreakAll allows breaks between any two characters —
+	// typographically preferred only in CJK contexts, and the emergency
+	// break class for unbreakable runs (CSS word-break: break-all).
+	WordBreakBreakAll
+	// WordBreakKeepAll forbids breaks inside words — chiefly the CJK
+	// ideograph breaks normal allows (CSS word-break: keep-all).
+	WordBreakKeepAll
+)
+
+// OverflowWrap is CSS overflow-wrap (browser-core 43): the emergency
+// breaking of words that would overflow the line. Normal is the default.
+type OverflowWrap uint8
+
+const (
+	// OverflowWrapNormal never breaks an unbreakable word.
+	OverflowWrapNormal OverflowWrap = iota
+	// OverflowWrapAnywhere allows a break at an arbitrary point in an
+	// overflowing word (CSS overflow-wrap: anywhere).
+	OverflowWrapAnywhere
+	// OverflowWrapBreakWord is like anywhere at the shaper — the CSS
+	// difference is min-content sizing, which the caller owns (CSS
+	// overflow-wrap: break-word).
+	OverflowWrapBreakWord
+)
+
+// TextWrap is CSS text-wrap (browser-core 43): the paragraph's wrap
+// policy. Wrap is the default; the Go layer drives balance (and the
+// white-space modes drive nowrap, as before).
+type TextWrap uint8
+
+const (
+	// TextWrapWrap wraps normally (CSS text-wrap: wrap).
+	TextWrapWrap TextWrap = iota
+	// TextWrapBalance wraps at the narrowest width that keeps the
+	// unbalanced line count — Chromium's bisection, Go-side over
+	// text_layout relayouts (CSS text-wrap: balance).
+	TextWrapBalance
 )
 
 // WhiteSpace controls text wrapping (the reference WhiteSpace plus
@@ -142,6 +204,15 @@ type TextStyle struct {
 	// that resolves auto against the ancestors is
 	// userSelectAllowsSelection (user_select.go).
 	UserSelect UserSelect
+	// WordBreak is CSS word-break (browser-core 43); the runs carry it
+	// into the native range styles.
+	WordBreak WordBreak
+	// OverflowWrap is CSS overflow-wrap (browser-core 43).
+	OverflowWrap OverflowWrap
+	// TextWrap is CSS text-wrap (browser-core 43): balance drives the
+	// Go-side bisection; the white-space modes keep driving nowrap as
+	// before.
+	TextWrap TextWrap
 }
 
 // DefaultTextStyle returns the reference TextStyle::default()
@@ -193,6 +264,12 @@ type TextStyleRefinement struct {
 	// forbids selection on the subtree, Text re-enables it under a None,
 	// and Auto resolves from the ancestors.
 	UserSelect Optional[UserSelect]
+	// WordBreak sets CSS word-break (browser-core 43).
+	WordBreak Optional[WordBreak]
+	// OverflowWrap sets CSS overflow-wrap (browser-core 43).
+	OverflowWrap Optional[OverflowWrap]
+	// TextWrap sets CSS text-wrap (browser-core 43).
+	TextWrap Optional[TextWrap]
 }
 
 // Refine applies the explicitly supplied fields onto style (the derived
@@ -221,6 +298,9 @@ func (r *TextStyleRefinement) Refine(style *TextStyle) {
 	refinePointer(&style.LetterSpacingEm, r.LetterSpacingEm)
 	refinePointer(&style.TextTransform, r.TextTransform)
 	refineValue(&style.UserSelect, r.UserSelect)
+	refineValue(&style.WordBreak, r.WordBreak)
+	refineValue(&style.OverflowWrap, r.OverflowWrap)
+	refineValue(&style.TextWrap, r.TextWrap)
 }
 
 // Merge applies the present fields of other onto r (the derived
@@ -253,6 +333,9 @@ func (r *TextStyleRefinement) Merge(other *TextStyleRefinement) {
 	mergeOptional(&r.LetterSpacingEm, other.LetterSpacingEm)
 	mergeOptional(&r.TextTransform, other.TextTransform)
 	mergeOptional(&r.UserSelect, other.UserSelect)
+	mergeOptional(&r.WordBreak, other.WordBreak)
+	mergeOptional(&r.OverflowWrap, other.OverflowWrap)
+	mergeOptional(&r.TextWrap, other.TextWrap)
 }
 
 // IsSome reports whether any field is present (the derived
@@ -264,7 +347,8 @@ func (r *TextStyleRefinement) IsSome() bool {
 		r.Underline.present || r.Strikethrough.present || r.WhiteSpace.present ||
 		r.TextOverflow.present || r.TextAlign.present || r.LineClamp.present ||
 		r.LetterSpacing.present || r.LetterSpacingEm.present ||
-		r.TextTransform.present || r.UserSelect.present
+		r.TextTransform.present || r.UserSelect.present ||
+		r.WordBreak.present || r.OverflowWrap.present || r.TextWrap.present
 }
 
 // Clone returns an independent copy (the slice-valued fields copied).
@@ -467,6 +551,10 @@ type shapedText interface {
 	// lineRange returns one visual line's byte range (the
 	// VisualLine::text_range fact).
 	lineRange(lineIndex int) (start, end int)
+	// isRTL reports the document's base direction (browser-core 43, rev
+	// 16 — the shaped summary's IsRTL): the paint layer resolves
+	// text-align start/end against it.
+	isRTL() bool
 	// selectionRects returns the piece-local rectangles covering a
 	// byte range (the inline geometry source: the reference
 	// platform_layout.selection_bounds feeding inline_geometry).
@@ -827,10 +915,13 @@ func (t *textElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 		if truncation.Width != nil {
 			effective, runs = applyTextTruncation(effective, runs, wrapWidth, textStyle.LineClamp, truncation,
 				func(candidate string, candidateRuns []TextRun, wrapWidth *float32) (shapedText, error) {
-					return shapeStyledRuns(seam, candidate, fontSize, candidateRuns, wrapWidth, nil, nil)
+					return shapeStyledRuns(seam, candidate, fontSize, candidateRuns, wrapWidth, nil, nil, textStyle.TextAlign, false)
 				})
 		}
-		shaped, err := shapeStyledRuns(seam, effective, fontSize, runs, wrapWidth, textLineClamp(textStyle), whiteSpaceTabSize(textStyle.WhiteSpace))
+		// text-wrap: balance (browser-core 43): the style's tag drives the
+		// shaping seam's bisection (the tab mode is the white-space's).
+		balanced := textStyle.TextWrap == TextWrapBalance
+		shaped, err := shapeStyledRuns(seam, effective, fontSize, runs, wrapWidth, textLineClamp(textStyle), whiteSpaceTabSize(textStyle.WhiteSpace), textStyle.TextAlign, balanced)
 		if err != nil {
 			panic(fmt.Sprintf("gpui: text element shaping failed: %v", err))
 		}

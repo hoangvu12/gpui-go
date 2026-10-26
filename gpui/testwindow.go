@@ -402,6 +402,10 @@ func (t *testInlineDocument) lineAdvance(lineIndex int) float32 { return t.advan
 // lineRange implements shapedText.
 func (t *testInlineDocument) lineRange(lineIndex int) (int, int) { return 0, len(t.text) }
 
+// isRTL implements shapedText: the deterministic stub's documents are
+// LTR.
+func (t *testInlineDocument) isRTL() bool { return false }
+
 // selectionRects implements shapedText: the caret-stop geometry of a
 // byte range (the test platform's selection_bounds).
 func (t *testInlineDocument) selectionRects(start, end int, lineHeight float32) []TextRect {
@@ -558,6 +562,10 @@ func (t *testShapedText) lineAdvance(lineIndex int) float32 { return t.advance }
 
 // lineRange implements shapedText: the stub's single line byte range.
 func (t *testShapedText) lineRange(lineIndex int) (int, int) { return 0, len(t.text) }
+
+// isRTL implements shapedText: the deterministic stub's documents are
+// LTR.
+func (t *testShapedText) isRTL() bool { return false }
 
 // selectionRects implements shapedText: the stub's caret-stop geometry
 // (the test platform's selection_bounds over pen positions).

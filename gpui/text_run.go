@@ -233,9 +233,16 @@ func (t TextStyle) ToRun(length int) TextRun {
 // folded into pixels (resolveLetterSpacing). The element-layer call
 // sites that know the resolved font size use this; ToRun keeps the
 // pin's pixel-only shape for callers without one.
+// Browser-core 43: the run also carries the style's word-break /
+// overflow-wrap / text-wrap tags so every shaping path (the text leaf,
+// StyledText, the inline paragraph's segments) pushes them into the
+// native range styles.
 func (t TextStyle) ToRunAt(length int, fontSize float32) TextRun {
 	run := t.ToRun(length)
 	run.LetterSpacing = t.resolveLetterSpacing(fontSize)
+	run.WordBreak = t.WordBreak
+	run.OverflowWrap = t.OverflowWrap
+	run.TextWrap = t.TextWrap
 	return run
 }
 

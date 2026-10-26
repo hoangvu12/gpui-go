@@ -356,9 +356,12 @@ func (l *TextLayout) layout(text string, runs []TextRun, w *Window) LayoutID {
 		effective, runs, collapse := collapseStyledRuns(effective, runs, textStyle.WhiteSpace)
 		effective, runs = applyTextTruncation(effective, runs, wrapWidth, textStyle.LineClamp, truncation,
 			func(candidate string, candidateRuns []TextRun, wrapWidth *float32) (shapedText, error) {
-				return shapeStyledRuns(seam, candidate, fontSize, candidateRuns, wrapWidth, nil, nil)
+				return shapeStyledRuns(seam, candidate, fontSize, candidateRuns, wrapWidth, nil, nil, textStyle.TextAlign, false)
 			})
-		document, err := shapeStyledRuns(seam, effective, fontSize, runs, wrapWidth, lineClamp, whiteSpaceTabSize(textStyle.WhiteSpace))
+		// text-wrap: balance (browser-core 43): the style's tag drives the
+		// shaping seam's bisection.
+		balanced := textStyle.TextWrap == TextWrapBalance
+		document, err := shapeStyledRuns(seam, effective, fontSize, runs, wrapWidth, lineClamp, whiteSpaceTabSize(textStyle.WhiteSpace), textStyle.TextAlign, balanced)
 		if err != nil {
 			panic(fmt.Sprintf("gpui: StyledText shaping failed: %v", err))
 		}

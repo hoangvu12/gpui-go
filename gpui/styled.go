@@ -538,6 +538,80 @@ func (s *Styled[Self]) TextCenter[_ lazy]() Self { return s.TextAlign(TextAlignC
 // TextRight aligns text right (styled.rs:265).
 func (s *Styled[Self]) TextRight[_ lazy]() Self { return s.TextAlign(TextAlignRight) }
 
+// TextStart aligns text to the start edge in the text's direction —
+// left for LTR, right for RTL (browser-core 43, CSS text-align: start;
+// resolved against the shaped document's base direction at paint
+// time).
+func (s *Styled[Self]) TextStart[_ lazy]() Self { return s.TextAlign(TextAlignStart) }
+
+// TextEnd aligns text to the end edge in the text's direction — right
+// for LTR, left for RTL (browser-core 43, CSS text-align: end).
+func (s *Styled[Self]) TextEnd[_ lazy]() Self { return s.TextAlign(TextAlignEnd) }
+
+// TextJustify justifies the lines: the whitespace clusters stretch
+// between the line box's edges inside the native layout, every line
+// except each paragraph's last (browser-core 43, CSS text-align:
+// justify — Tailwind's text-justify).
+func (s *Styled[Self]) TextJustify[_ lazy]() Self { return s.TextAlign(TextAlignJustify) }
+
+// WordBreak sets the CSS word-break (browser-core 43): where line
+// breaks may fall within words.
+func (s *Styled[Self]) WordBreak[_ lazy](wordBreak WordBreak) Self {
+	s.TextStyleMut().WordBreak = Some(wordBreak)
+	return s.self
+}
+
+// BreakAll allows breaks between any two characters — Tailwind's
+// break-all (CSS word-break: break-all; typographically preferred only
+// in CJK contexts, and the emergency break class for unbreakable
+// runs).
+func (s *Styled[Self]) BreakAll[_ lazy]() Self { return s.WordBreak(WordBreakBreakAll) }
+
+// BreakKeep forbids breaks inside words — chiefly the CJK ideograph
+// breaks normal allows. Tailwind's break-keep (CSS word-break:
+// keep-all).
+func (s *Styled[Self]) BreakKeep[_ lazy]() Self { return s.WordBreak(WordBreakKeepAll) }
+
+// OverflowWrap sets the CSS overflow-wrap (browser-core 43): the
+// emergency breaking of words that would overflow the line.
+func (s *Styled[Self]) OverflowWrap[_ lazy](wrap OverflowWrap) Self {
+	s.TextStyleMut().OverflowWrap = Some(wrap)
+	return s.self
+}
+
+// WrapAnywhere allows a break at an arbitrary point in an overflowing
+// word — Tailwind v4.1's wrap-anywhere (CSS overflow-wrap: anywhere).
+func (s *Styled[Self]) WrapAnywhere[_ lazy]() Self {
+	return s.OverflowWrap(OverflowWrapAnywhere)
+}
+
+// WrapBreakWord is like wrap-anywhere at the shaper — the CSS
+// difference is min-content sizing, which the caller owns. Tailwind
+// v4.1's wrap-break-word (CSS overflow-wrap: break-word).
+func (s *Styled[Self]) WrapBreakWord[_ lazy]() Self {
+	return s.OverflowWrap(OverflowWrapBreakWord)
+}
+
+// BreakWords breaks overflowing words at an arbitrary point —
+// Tailwind's break-words (the CSS overflow-wrap: break-word spelling;
+// the twin of wrap-break-word).
+func (s *Styled[Self]) BreakWords[_ lazy]() Self {
+	return s.OverflowWrap(OverflowWrapBreakWord)
+}
+
+// TextWrap sets the CSS text-wrap policy (browser-core 43): the
+// paragraph's wrap style beyond the white-space modes (normal wrapping
+// is the default; whitespace-nowrap keeps driving no-wrap as before).
+func (s *Styled[Self]) TextWrap[_ lazy](wrap TextWrap) Self {
+	s.TextStyleMut().TextWrap = Some(wrap)
+	return s.self
+}
+
+// TextBalance wraps at the narrowest width that keeps the unbalanced
+// line count — Tailwind's text-balance (CSS text-wrap: balance;
+// Chromium's bisection, Go-side over the shaping handle's relayouts).
+func (s *Styled[Self]) TextBalance[_ lazy]() Self { return s.TextWrap(TextWrapBalance) }
+
 // LetterSpacing sets the letter spacing in logical pixels
 // (styled.rs:270).
 func (s *Styled[Self]) LetterSpacing[_ lazy](spacing float32) Self {

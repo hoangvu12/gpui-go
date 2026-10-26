@@ -745,6 +745,17 @@ type TextRun struct {
 	// LetterSpacing, when non-nil, is applied between the run's glyphs
 	// (pixels).
 	LetterSpacing *float32
+	// WordBreak is CSS word-break (browser-core 43): the run's tag the
+	// native side pushes as a Parley range style. Zero (normal) keeps
+	// the pinned shaping.
+	WordBreak WordBreak
+	// OverflowWrap is CSS overflow-wrap (browser-core 43): the run's
+	// emergency-breaking tag.
+	OverflowWrap OverflowWrap
+	// TextWrap is CSS text-wrap (browser-core 43): the paragraph's wrap
+	// policy tag — balance drives the Go-side bisection, and the
+	// white-space modes keep driving nowrap.
+	TextWrap TextWrap
 }
 
 // TextLayoutRequest is one shaping document: the text, its shared font
@@ -773,6 +784,19 @@ type TextLayoutRequest struct {
 	// stops (text_tabs.go, 4 × the font size — the editor and Base's
 	// line wrapper).
 	TabSizeSpaces *uint32
+	// Align is the document's text alignment (browser-core 43):
+	// Left/Center/Right keep the pin's paint-time alignment; Start/End/
+	// Justify stamp the native align tag on every run (document-level by
+	// the any-run rule) — justify stretches the whitespace clusters
+	// inside the native layout, and start/end resolve against the
+	// document's base direction (the summary's IsRTL).
+	Align TextAlign
+	// Balance, when true, wraps at the narrowest width that keeps the
+	// unbalanced line count (browser-core 43, CSS text-wrap: balance —
+	// Chromium's bisection over the available width; see balanceLine).
+	// The shaping layer bisects over the shaping handle's relayouts, so
+	// it only engages under a definite wrap width.
+	Balance bool
 }
 
 // ShapeText shapes the request through the native text service (the
@@ -817,6 +841,12 @@ func (ts *TextSystem) ShapeText(request TextLayoutRequest) (*WrappedLine, error)
 			Features:      featuresToNative(letterSpacingLigatureFeatures(run.Font.Features, run.LetterSpacing)),
 			Fallbacks:     resolveGenericFontFamilies(run.Font.Fallbacks),
 			LetterSpacing: letterSpacing,
+			WordBreak:     uint32(run.WordBreak),
+			OverflowWrap:  uint32(run.OverflowWrap),
+			TextWrap:      textWrapTag(run.TextWrap),
+			// The document's alignment, stamped on every run — the native
+			// any-run rule reads it (browser-core 43).
+			TextAlign: textAlignTag(request.Align),
 		}
 	}
 	// The request is kept (deep-copied: the runs above, the constraint
@@ -915,6 +945,36 @@ func nativeWrapWidth(w *float32) *float32 {
 	}
 	width := max(*w, 0)
 	return &width
+}
+
+// textWrapTag maps the CSS text-wrap mode onto the native run-record
+// tag (0 wrap, 1 nowrap, 2 balance — browser-core 43). The white-space
+// nowrap path keeps suppressing the wrap width Go-side (rev 15.1's
+// rule), so the port never stamps the nowrap tag here.
+func textWrapTag(mode TextWrap) uint32 {
+	if mode == TextWrapBalance {
+		return native.TextTextWrapBalance
+	}
+	return native.TextTextWrapWrap
+}
+
+// textAlignTag maps the text alignment onto the native run-record tag
+// (browser-core 43): Left/Center/Right keep the pinned paint-time
+// alignment (tag 0 — the alignment is Go-owned, exactly the pin's
+// paint_visual_text model); Start/End/Justify reach the native layout,
+// where justify stretches the whitespace clusters and start/end
+// resolve against the base direction.
+func textAlignTag(align TextAlign) uint32 {
+	switch align {
+	case TextAlignStart:
+		return native.TextTextAlignStart
+	case TextAlignEnd:
+		return native.TextTextAlignEnd
+	case TextAlignJustify:
+		return native.TextTextAlignJustify
+	default:
+		return native.TextTextAlignNone
+	}
 }
 
 // finiteFloat32 reports whether v is neither NaN nor infinite.
@@ -1136,6 +1196,10 @@ type TextLayoutSummary struct {
 	Descent float32
 	// FontGeneration is the font catalog generation at layout time.
 	FontGeneration uint32
+	// IsRTL reports the document's base direction (browser-core 43,
+	// rev 16): the signal the paint layer resolves text-align start/end
+	// against.
+	IsRTL bool
 }
 
 // TextLine is one visual row: the pinned VisualLine facts
@@ -1355,6 +1419,7 @@ func (l *WrappedLine) refreshSummaryOf(handle native.ShapingID) error {
 		Ascent:         layout.Ascent,
 		Descent:        layout.Descent,
 		FontGeneration: layout.FontGeneration,
+		IsRTL:          layout.IsRTL,
 	}
 	if layout.WrapWidth != nil {
 		wrap := *layout.WrapWidth

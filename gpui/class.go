@@ -550,9 +550,9 @@ func scrollClass(u string) (x, y, auto, ok bool) {
 type classStage func(b *StyleBuilder, u string) (handled bool, reason string)
 
 // classStages run in order after the method classes. unsupportedClass
-// runs before colorClass so that text-justify and outline-none get their
-// reason rather than "unknown color"; gradientClass runs before
-// unsupportedClass so from-/via-/to-/bg-linear-* get gradient reasons.
+// runs before colorClass so that outline-none gets its reason rather
+// than "unknown color"; gradientClass runs before unsupportedClass so
+// from-/via-/to-/bg-linear-* get gradient reasons.
 var classStages = []classStage{
 	specialClass,
 	lengthClass,
@@ -1650,7 +1650,6 @@ var unsupportedClasses = []struct {
 	{[]string{"divide"}, "divide-* is not supported; give each child after the first a border-t (or border-l), or put separator elements between them"},
 	{[]string{"pointer-events"}, "pointer-events-* is not supported"},
 	{[]string{"inline-table", "table", "list-item"}, "this display type is not supported; use flex, grid, block, inline, inline-flex, inline-block, inline-grid, contents or flow-root"},
-	{[]string{"text-justify"}, "justified text is not supported"},
 	{[]string{"no-underline"}, "no-underline is not supported; leave underline out, or call .TextDecorationNone()"},
 	{[]string{"outline-solid", "outline-dotted", "outline-double", "outline-hidden"}, "only outline, outline-<n>, outline-offset-<n>, outline-<color>, outline-none and outline-dashed are supported (the scene's border records are solid and dashed only; outline-hidden has no port spelling — outline-none is the plain opt-out)"},
 	{[]string{"ring-offset"}, "ring offsets are not supported"},
@@ -1666,7 +1665,7 @@ var unsupportedClasses = []struct {
 	{[]string{"place-content", "place-items", "place-self", "justify-items", "justify-self"}, "use items-*, justify-*, content-* and self-* instead"},
 	{[]string{"box-border", "box-content", "box-decoration"}, "box sizing is always border-box; drop it"},
 	{[]string{"whitespace-break-spaces"}, "only whitespace-normal, whitespace-nowrap, whitespace-pre, whitespace-pre-line and whitespace-pre-wrap are supported (browser-core 38); break-spaces is not"},
-	{[]string{"break-words", "break-all", "break-keep", "break-normal", "hyphens", "text-balance", "text-pretty"}, "text wrapping modes other than whitespace-normal / whitespace-nowrap are not supported"},
+	{[]string{"break-normal", "hyphens", "text-pretty"}, "only break-all, break-keep, break-words/wrap-break-word, wrap-anywhere and text-balance are supported (browser-core 43); break-normal is the default, hyphens and text-wrap: pretty are not"},
 	{[]string{"antialiased", "subpixel-antialiased"}, "GPUI chooses text antialiasing itself; drop it"},
 	{[]string{"list"}, "list styles are not supported"},
 	{[]string{"appearance", "resize", "accent", "caret"}, "form-control styling is not supported; GPUI has no native form controls"},

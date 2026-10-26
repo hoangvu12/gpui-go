@@ -142,6 +142,15 @@ type shapedLineKey struct {
 	// pin's DirectWrite stops, so the mode is part of the key.
 	tabSize    uint32
 	hasTabSize bool
+	// align keys the browser text alignment (browser-core 43): a
+	// start/end/justify request carries the native alignment tag and
+	// shapes different geometry (justify stretches the lines) than a
+	// paint-time-aligned one.
+	align uint8
+	// balance keys the balancing mode (browser-core 43): the balanced
+	// line was bisected to a narrower width than the greedy shape under
+	// the same constraint, so the two must never share an entry.
+	balance bool
 }
 
 // shapedLineKeyOf builds the cache key of one shaping request (the
@@ -151,6 +160,8 @@ func shapedLineKeyOf(request TextLayoutRequest) shapedLineKey {
 		text:     request.Text,
 		fontSize: math.Float32bits(request.FontSize),
 		runs:     encodeShapeRuns(request.Runs),
+		align:    uint8(request.Align),
+		balance:  request.Balance,
 	}
 	if request.WrapWidth != nil {
 		key.wrap = math.Float32bits(*request.WrapWidth)
@@ -184,7 +195,8 @@ func encodeShapeRuns(runs []TextRun) string {
 		for _, family := range run.Font.Fallbacks {
 			size += 4 + len(family)
 		}
-		size += 1 + 4
+		// letter spacing, word-break, overflow-wrap, text-wrap.
+		size += 1 + 4 + 1 + 1 + 1
 	}
 	buf := make([]byte, 0, size)
 	buf = binary.LittleEndian.AppendUint32(buf, uint32(len(runs)))
@@ -208,6 +220,11 @@ func encodeShapeRuns(runs []TextRun) string {
 		} else {
 			buf = append(buf, 0)
 		}
+		// The browser text fields (browser-core 43): word-break and
+		// overflow-wrap drive the native range styles, text-wrap the
+		// balance bisection, so differently-tagged runs never share a
+		// cache entry.
+		buf = append(buf, byte(run.WordBreak), byte(run.OverflowWrap), byte(run.TextWrap))
 	}
 	// buf is never written again: the key aliases it instead of copying
 	// (gpui-perf ticket 06).
@@ -252,6 +269,18 @@ func (c *shapedLineCache) layoutWrappedLine(system *TextSystem, request TextLayo
 	line, err := system.ShapeText(request)
 	if err != nil {
 		return nil, err
+	}
+	// text-wrap: balance (browser-core 43): bisect the freshly shaped
+	// line to the narrowest width that keeps its line count (Chromium's
+	// ParagraphLineBreaker::AttemptParagraphBalancing — text_balance.go).
+	// Only a definite positive wrap width balances: an unconstrained
+	// (max-content) shape has no width to trade, and the wrap-0
+	// min-content probe balances nothing (intrinsic sizing ignores
+	// text-wrap, like Chromium's own ComputeMinMaxSizes path). A
+	// bisection failure falls back to the greedy shape (the error is
+	// swallowed — the shape below it already succeeded).
+	if request.Balance && request.WrapWidth != nil && *request.WrapWidth > 0 {
+		_ = balanceLine(line, *request.WrapWidth)
 	}
 	// sync_font_generation: a layout shaped under a different font
 	// catalog generation invalidates every cached layout. The reference

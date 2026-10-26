@@ -561,7 +561,6 @@ func TestCheckClassesReasons(t *testing.T) {
 		{"-w-[4px]", "margins and insets only"},
 		{"p-auto", "auto is not a valid value here"},
 		{"tracking-grotesk", "tighter, tight, normal, wide"},
-		{"text-justify", "justified text"},
 		{"bg-slate-850", "unknown shade"},
 		{"bg-brand", "palette color"},
 		{"text-current", "currentColor"},

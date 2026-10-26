@@ -83,15 +83,43 @@ type runSegment struct {
 }
 
 // alignedVisualOriginX is the pinned aligned_visual_origin_x
-// (R:text_system/line.rs:466-477).
-func alignedVisualOriginX(originX, alignWidth, lineWidth float32, align TextAlign) float32 {
-	switch align {
+// (R:text_system/line.rs:466-477), extended with the CSS start/end/
+// justify values (browser-core 43): start and end resolve against the
+// document's base direction (left/right swap under RTL — the shaped
+// summary's IsRTL), and justify paints from the line origin (the native
+// layout stretched the lines' contents to the width, and each
+// paragraph's last line is start-aligned — start resolves like left
+// under the LTR documents justify currently reaches).
+func alignedVisualOriginX(originX, alignWidth, lineWidth float32, align TextAlign, isRTL bool) float32 {
+	switch resolvedTextAlign(align, isRTL) {
 	case TextAlignCenter:
 		return (originX*2.0 + alignWidth - lineWidth) / 2.0
 	case TextAlignRight:
 		return originX + alignWidth - lineWidth
 	default:
 		return originX
+	}
+}
+
+// resolvedTextAlign maps the direction-aware alignments onto the
+// absolute ones (browser-core 43): start is left for LTR and right for
+// RTL, end the mirror; justify and the absolute values pass through
+// (justify's paint is left-anchored — the stretch already happened in
+// the native layout).
+func resolvedTextAlign(align TextAlign, isRTL bool) TextAlign {
+	switch align {
+	case TextAlignStart:
+		if isRTL {
+			return TextAlignRight
+		}
+		return TextAlignLeft
+	case TextAlignEnd:
+		if isRTL {
+			return TextAlignLeft
+		}
+		return TextAlignRight
+	default:
+		return align
 	}
 }
 
@@ -112,6 +140,14 @@ func paintStyledDocument(w *Window, doc shapedText, runs []TextRun, origin Point
 	for i := 0; i < rows; i++ {
 		paintWidth = max32(paintWidth, doc.lineAdvance(i))
 	}
+	// A justified document's rows are stretched to the alignment width
+	// inside the native layout (browser-core 43): the reported per-line
+	// advances are the pre-justification content advances, so the paint
+	// layer's bounds must cover the alignment width too.
+	if align == TextAlignJustify && alignWidth != nil && *alignWidth > paintWidth {
+		paintWidth = *alignWidth
+	}
+	isRTL := doc.isRTL()
 	lineBounds := Bounds{Origin: origin, Size: Size{Width: paintWidth, Height: lineHeight * float32(rows)}}
 	ascent, descent := doc.ascent(), doc.descent()
 	paddingTop := (lineHeight - ascent - descent) / 2
@@ -125,7 +161,7 @@ func paintStyledDocument(w *Window, doc shapedText, runs []TextRun, origin Point
 				width = *alignWidth
 			}
 			lineOrigin := Point{
-				X: alignedVisualOriginX(origin.X, width, advance, align),
+				X: alignedVisualOriginX(origin.X, width, advance, align, isRTL),
 				Y: origin.Y + float32(row)*lineHeight,
 			}
 			baseline := lineOrigin.Y + paddingTop + ascent

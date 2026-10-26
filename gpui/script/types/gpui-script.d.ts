@@ -562,6 +562,9 @@ type CoreClass =
 	"border-y-8" |
 	"border-y-9" |
 	"border-y-[0]" |
+	"break-all" |
+	"break-keep" |
+	"break-words" |
 	"capitalize" |
 	"col-end-auto" |
 	"col-span-full" |
@@ -918,6 +921,7 @@ type CoreClass =
 	"text-8xl" |
 	"text-9xl" |
 	"text-[0]" |
+	"text-balance" |
 	"text-base" |
 	"text-center" |
 	"text-decoration-0" |
@@ -931,11 +935,14 @@ type CoreClass =
 	"text-ellipsis" |
 	"text-ellipsis-middle" |
 	"text-ellipsis-start" |
+	"text-end" |
+	"text-justify" |
 	"text-left" |
 	"text-lg" |
 	"text-nowrap" |
 	"text-right" |
 	"text-sm" |
+	"text-start" |
 	"text-wrap" |
 	"text-xl" |
 	"text-xs" |
@@ -955,6 +962,8 @@ type CoreClass =
 	"whitespace-pre" |
 	"whitespace-pre-line" |
 	"whitespace-pre-wrap" |
+	"wrap-anywhere" |
+	"wrap-break-word" |
 	`group/${string}` |
 	`${PosPrefix}-${LengthValue}` |
 	`-${NegPrefix}-${LengthValue}` |
@@ -1242,6 +1251,9 @@ type Class =
 	"border-y-8" |
 	"border-y-9" |
 	"border-y-[0]" |
+	"break-all" |
+	"break-keep" |
+	"break-words" |
 	"capitalize" |
 	"col-end-auto" |
 	"col-span-full" |
@@ -1598,6 +1610,7 @@ type Class =
 	"text-8xl" |
 	"text-9xl" |
 	"text-[0]" |
+	"text-balance" |
 	"text-base" |
 	"text-center" |
 	"text-decoration-0" |
@@ -1611,11 +1624,14 @@ type Class =
 	"text-ellipsis" |
 	"text-ellipsis-middle" |
 	"text-ellipsis-start" |
+	"text-end" |
+	"text-justify" |
 	"text-left" |
 	"text-lg" |
 	"text-nowrap" |
 	"text-right" |
 	"text-sm" |
+	"text-start" |
 	"text-wrap" |
 	"text-xl" |
 	"text-xs" |
@@ -1635,6 +1651,8 @@ type Class =
 	"whitespace-pre" |
 	"whitespace-pre-line" |
 	"whitespace-pre-wrap" |
+	"wrap-anywhere" |
+	"wrap-break-word" |
 	`group/${string}` |
 	`${PosPrefix}-${LengthValue}` |
 	`-${NegPrefix}-${LengthValue}` |

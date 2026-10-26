@@ -260,6 +260,12 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.BorderY8()
 	case "border-y-9":
 		b.BorderY9()
+	case "break-all":
+		b.BreakAll()
+	case "break-keep":
+		b.BreakKeep()
+	case "break-words":
+		b.BreakWords()
 	case "capitalize":
 		b.Capitalize()
 	case "col-end-auto":
@@ -832,6 +838,8 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.Text8xl()
 	case "text-9xl":
 		b.Text9xl()
+	case "text-balance":
+		b.TextBalance()
 	case "text-base":
 		b.TextBase()
 	case "text-center":
@@ -858,6 +866,10 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.TextEllipsisMiddle()
 	case "text-ellipsis-start":
 		b.TextEllipsisStart()
+	case "text-end":
+		b.TextEnd()
+	case "text-justify":
+		b.TextJustify()
 	case "text-left":
 		b.TextLeft()
 	case "text-lg":
@@ -866,6 +878,8 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.TextRight()
 	case "text-sm":
 		b.TextSm()
+	case "text-start":
+		b.TextStart()
 	case "text-xl":
 		b.TextXl()
 	case "text-xs":
@@ -888,6 +902,10 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.WhitespacePreLine()
 	case "whitespace-pre-wrap":
 		b.WhitespacePreWrap()
+	case "wrap-anywhere":
+		b.WrapAnywhere()
+	case "wrap-break-word":
+		b.WrapBreakWord()
 	default:
 		return false
 	}
@@ -895,4 +913,4 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 }
 
 // methodClassCount is the number of classes applyMethodClass knows.
-const methodClassCount = 441
+const methodClassCount = 450
