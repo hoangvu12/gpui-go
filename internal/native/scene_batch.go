@@ -247,6 +247,24 @@ func checkBackground(op string, b SceneBackground) error {
 			return badRecord(op, "gradient background carries solid payload")
 		}
 		return nil
+	case 4:
+		// rev 16, ticket 52: the gradient-table arm - the index rides the
+		// ANGLE field as f32 bits (finite, non-negative, integral, under
+		// the table bound; the RENDERER resolves the reference).
+		if b.ColorSpace != 0 {
+			return badRecord(op, "gradient-table background requires the sRGB space")
+		}
+		index := float64(math.Float32frombits(b.Angle))
+		if math.IsNaN(index) || math.IsInf(index, 0) || index < 0 ||
+			index != math.Trunc(index) || index >= 256 {
+			return badRecord(op, "gradient-table background index out of range")
+		}
+		if b.H != 0 || b.S != 0 || b.L != 0 || b.A != 0 ||
+			b.Stop0H != 0 || b.Stop0S != 0 || b.Stop0L != 0 || b.Stop0A != 0 || b.Stop0Percentage != 0 ||
+			b.Stop1H != 0 || b.Stop1S != 0 || b.Stop1L != 0 || b.Stop1A != 0 || b.Stop1Percentage != 0 {
+			return badRecord(op, "gradient-table background carries payload")
+		}
+		return nil
 	default:
 		return badRecord(op, "unsupported background tag")
 	}
@@ -321,9 +339,17 @@ func checkEffectRecord(op string, rec *SceneEffectRecord) error {
 	if rec.BlendMode > 16 {
 		return badRecord(op, "effect blend mode out of range")
 	}
-	// This revision requires the none-kind mask (ticket 52 relaxes it).
-	if rec.MaskKind != 0 || rec.MaskReference != 0 || rec.MaskMode != 0 {
-		return badRecord(op, "effect mask source kinds arrive with the mask table (ticket 52)")
+	// rev 16, ticket 52: the mask kinds 1-3 are wired - the composite
+	// resolves the reference at RENDER time (an unresolvable mask hides
+	// the element), so only the kind/mode tags validate here.
+	if rec.MaskKind > 3 {
+		return badRecord(op, "effect mask kind out of range")
+	}
+	if rec.MaskKind == 0 && (rec.MaskReference != 0 || rec.MaskMode != 0) {
+		return badRecord(op, "effect none-kind mask must carry zero reference and mode")
+	}
+	if rec.MaskKind != 0 && rec.MaskMode > 1 {
+		return badRecord(op, "effect mask mode out of range")
 	}
 	if rec.Flags&SceneEffectFlagPropertyNode != 0 {
 		if rec.NodeID == 0 {
@@ -452,6 +478,16 @@ func checkFilterRecord(op string, rec *SceneFilterRecord, maxFilters uint32) err
 			}
 		}
 	}
+	// rev 16, ticket 52: the appended drop-shadow op-chain reference -
+	// 0/0 is the R15 legacy shape; a count demands an index (the chain
+	// resolves at SNAPSHOT time: an out-of-range index reads as empty,
+	// the R15 semantics).
+	if rec.OpChainCount == 0 && rec.OpChainIndex != 0 {
+		return badRecord(op, "filter op-chain count zero with a non-zero index")
+	}
+	if rec.OpChainCount > 8 {
+		return badRecord(op, "filter op-chain count over the maximum")
+	}
 	return nil
 }
 
@@ -526,4 +562,107 @@ func checkPolychromeSpriteRecord(rec *ScenePolychromeSpriteRecord) error {
 		}
 	}
 	return checkTile(op, &rec.Tile, SceneSpriteTexturePolychrome)
+}
+
+// checkGradientRecord validates a gradient table entry (rev 16,
+// ticket 52): known kind and tile tags, the sRGB space, finite
+// geometry with the kind's non-degeneracy rule, the stop count in
+// 1..=64, and stops that are finite, ordered non-decreasing within
+// [0, 1].
+func checkGradientRecord(op string, rec *SceneGradientRecord, stops []SceneGradientStop) error {
+	if err := checkCommon(op, rec.RecordSize, unsafe.Sizeof(*rec), 0); err != nil {
+		return err
+	}
+	if rec.Kind > SceneGradientKindConic {
+		return badRecord(op, "gradient kind out of range")
+	}
+	if rec.Tile > SceneGradientTileReflect {
+		return badRecord(op, "gradient tile mode out of range")
+	}
+	if rec.ColorSpace != 0 {
+		return badRecord(op, "gradient color space must be sRGB this revision")
+	}
+	for _, bits := range rec.Geometry {
+		if !finiteBits(bits) {
+			return badRecord(op, "gradient geometry is non-finite")
+		}
+	}
+	switch rec.Kind {
+	case SceneGradientKindLinear:
+		x0 := math.Float32frombits(rec.Geometry[0])
+		y0 := math.Float32frombits(rec.Geometry[1])
+		x1 := math.Float32frombits(rec.Geometry[2])
+		y1 := math.Float32frombits(rec.Geometry[3])
+		if x1 == x0 && y1 == y0 {
+			return badRecord(op, "linear gradient line is degenerate")
+		}
+	case SceneGradientKindRadial:
+		r0 := math.Float32frombits(rec.Geometry[2])
+		r1 := math.Float32frombits(rec.Geometry[3])
+		aspect := math.Float32frombits(rec.Geometry[4])
+		if r1 == r0 || aspect <= 0 {
+			return badRecord(op, "radial gradient radii or aspect are degenerate")
+		}
+	case SceneGradientKindConic:
+		rotation := math.Float32frombits(rec.Geometry[3])
+		if rotation <= 0 {
+			return badRecord(op, "conic gradient sweep must be positive")
+		}
+	}
+	if rec.StopRow != 0 {
+		return badRecord(op, "gradient stop row must be zero on insert")
+	}
+	if len(stops) == 0 || len(stops) > int(MaxGradientStops) {
+		return badRecord(op, "gradient stop count out of range (1..=64)")
+	}
+	if rec.StopCount != uint32(len(stops)) {
+		return badRecord(op, "gradient stop count disagrees with the stop array")
+	}
+	previous := math.Inf(-1)
+	for _, stop := range stops {
+		position := float64(math.Float32frombits(stop.Position))
+		if math.IsNaN(position) || math.IsInf(position, 0) || position < 0 || position > 1 {
+			return badRecord(op, "gradient stop position out of range")
+		}
+		if position < previous {
+			return badRecord(op, "gradient stop positions must be non-decreasing")
+		}
+		previous = position
+	}
+	return nil
+}
+
+// checkCoverageRecord validates a coverage entry (rev 16, ticket 52):
+// finite bounds (the path index resolves at render time).
+func checkCoverageRecord(op string, rec *SceneCoverageRecord) error {
+	if err := checkCommon(op, rec.RecordSize, unsafe.Sizeof(*rec), 0); err != nil {
+		return err
+	}
+	for _, bits := range []uint32{rec.Bounds.X, rec.Bounds.Y, rec.Bounds.W, rec.Bounds.H} {
+		if !finiteBits(bits) {
+			return badRecord(op, "coverage bounds are non-finite")
+		}
+	}
+	return nil
+}
+
+// checkFilterOpRecord validates one drop-shadow op (rev 16, ticket 52):
+// the drop-shadow kind only, finite offset and radius, a solid color.
+func checkFilterOpRecord(op string, rec *SceneFilterOpRecord) error {
+	if err := checkCommon(op, rec.RecordSize, unsafe.Sizeof(*rec), 0); err != nil {
+		return err
+	}
+	if rec.Kind != SceneFilterOpDropShadow {
+		return badRecord(op, "filter op kind must be drop-shadow")
+	}
+	for _, bits := range rec.Offset {
+		if !finiteBits(bits) {
+			return badRecord(op, "filter op offset is non-finite")
+		}
+	}
+	radius := float64(math.Float32frombits(rec.BlurRadius))
+	if math.IsNaN(radius) || math.IsInf(radius, 0) || radius < 0 {
+		return badRecord(op, "filter op blur radius out of range")
+	}
+	return checkColor(op, rec.Color)
 }

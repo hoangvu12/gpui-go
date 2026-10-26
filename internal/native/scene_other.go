@@ -124,6 +124,44 @@ func callSceneUpdateProperty(
 	return 0, hostSupported()
 }
 
+func callSceneInsertGradient(
+	fn uintptr,
+	scene uint64,
+	rec *SceneGradientRecord,
+	stops *SceneGradientStop,
+	stopCount uint32,
+	outIndex *uint32,
+) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callSceneGradientDump(
+	fn uintptr,
+	scene uint64,
+	records uintptr,
+	stops uintptr,
+	recordCapacity uint32,
+	stopCapacity uint32,
+	outRecordCount *uint32,
+	outStopCount *uint32,
+) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callSceneInsertCoverage(fn uintptr, scene uint64, rec *SceneCoverageRecord, outIndex *uint32) (int32, error) {
+	return 0, hostSupported()
+}
+
+func callSceneInsertFilterOpChain(
+	fn uintptr,
+	scene uint64,
+	ops *SceneFilterOpRecord,
+	opCount uint32,
+	outIndex *uint32,
+) (int32, error) {
+	return 0, hostSupported()
+}
+
 func callScenePathDump(
 	fn uintptr,
 	scene uint64,

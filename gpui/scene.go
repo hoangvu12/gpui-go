@@ -168,6 +168,13 @@ type FilterBoundary struct {
 	// ColorMatrixCount is the number of carried colour functions
 	// (0..8; slots at and beyond it are zero).
 	ColorMatrixCount uint32
+	// OpChainIndex is the appended drop-shadow op-chain reference (rev
+	// 16, ticket 52; the design's appendix A.5): the scene-level chain
+	// index, inserted through Scene.InsertFilterOpChain before the
+	// boundary. 0/0 is the R15 legacy chain - bit-exact.
+	OpChainIndex uint32
+	// OpChainCount is the op count (0 = R15 legacy).
+	OpChainCount uint32
 	// IsStart opens the group; false closes it.
 	IsStart bool
 }
@@ -221,6 +228,28 @@ type EffectGroup struct {
 	// to the rounded bounds (a nested rounded clip: the child clips
 	// itself, so the ancestor's rrect needs the isolated composite).
 	RoundedClipOnly bool
+	// HasBlend composites the subtree with BlendMode instead of
+	// source-over (rev 16, ticket 52: the group takes the offscreen
+	// route and blends against a backdrop copy in the shader - the W3C
+	// compositing formulas; plus-lighter is the premultiplied
+	// clamp(source + backdrop)).
+	HasBlend bool
+	// BlendMode is 0 (source-over) .. 16 (plus-lighter), the W3C
+	// compositing-1 blend-mode tags (used when HasBlend is set).
+	BlendMode BlendMode
+	// HasMask composites the subtree dst_in against a mask source (rev
+	// 16, ticket 52): MaskKind 1 (gradient), 2 (atlas texture) or 3
+	// (coverage), alpha or luminance per MaskMode. An unresolvable mask
+	// hides the group.
+	HasMask bool
+	// MaskKind is 0 (none), 1 (gradient table), 2 (atlas texture), 3
+	// (coverage entry).
+	MaskKind MaskKind
+	// MaskReference is the mask source reference: the gradient table
+	// index, the atlas texture index or the coverage entry index.
+	MaskReference uint32
+	// MaskMode is 0 (alpha) or 1 (luminance).
+	MaskMode MaskMode
 	// Bounds of the group, LOCAL-frame pixels when HasTransform (the
 	// group's border box; the pre-image of the transform), device
 	// pixels otherwise.

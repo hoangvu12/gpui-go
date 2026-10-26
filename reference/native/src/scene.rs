@@ -102,7 +102,23 @@ use lyon::math::Transform as LyonTransform;
 /// `color_matrix` 20 → 160 words, one slot per colour function with
 /// the [0,1] clamp between — the rev-15 composed payload could not
 /// express Chrome's per-function clamping); no table slots changed.
-pub const GPUI_GO_SCENE_SERVICE_VERSION: u32 = 7;
+/// Version 6 (rev 16, browser-core ticket 50) added the effect-group
+/// primitive (insert/effect_dump, batch ops 12/13, plan kinds 3/4, the
+/// 52-byte content mask, the single-primitive fold, the meta
+/// effect_count and the requirements isolated_effect_count).
+/// Version 7 (rev 16, browser-core ticket 51) appended `update_property`
+/// (30 pointers, 320 bytes).
+/// Version 8 (rev 16, browser-core ticket 52) appended the scene-level
+/// tables the effect groups ride: `scene_insert_gradient` /
+/// `scene_gradient_dump` (the gradient table with its baked 1024x1
+/// premultiplied-sRGB ramp rows, up to 64 stops),
+/// `scene_insert_coverage` (the clip-path coverage entries) and
+/// `scene_insert_filter_op_chain` (the R15-append drop-shadow ops) -
+/// 34 pointers, 376 bytes; the effect record's mask kinds 1-3 and the
+/// `has_blend` composite are wired (the renderer resolves them); the
+/// filter record appends `op_chain_index`/`op_chain_count` (0/0 = R15
+/// semantics, bit-exact) and the meta record appends the table counts.
+pub const GPUI_GO_SCENE_SERVICE_VERSION: u32 = 8;
 
 /// Property kinds of `scene_update_property` (rev 16, ticket 51: the
 /// design's appendix A.7). A kind updates the records' stored value
@@ -167,6 +183,34 @@ pub const MAX_SCENE_PLAN_COMMANDS: u32 = 262_144;
 /// bulk vertex array of `insert_path`; the pinned scene imposes no
 /// explicit per-path bound, but the ABI validates every bulk copy).
 pub const MAX_SCENE_PATH_VERTICES: u32 = 1_048_576;
+
+/// Maximum gradients in one scene's gradient table (rev 16, ticket 52;
+/// each entry carries its stops and the baked 1024x1 ramp row, so the
+/// bound also caps the ramp texture's height and the table's bytes).
+pub const MAX_SCENE_GRADIENTS: u32 = 256;
+
+/// Maximum stops in one gradient (rev 16, ticket 52; the user's 2026-
+/// 10-24 decision - the design text's 32 was raised to 64. Above it the
+/// GO layer resamples down to 64 and warns in debug builds; the native
+/// service rejects the insert with `ERR_LIMIT`).
+pub const MAX_GRADIENT_STOPS: u32 = 64;
+
+/// The baked ramp row's texel width (rev 16, ticket 52): every
+/// gradient's stops are baked into one 1024x1 premultiplied sRGB row
+/// (CSS's interpolation rule is linear in that space, so the hardware's
+/// linear filtering of the baked bytes IS the interpolation).
+pub const GRADIENT_RAMP_WIDTH: u32 = 1024;
+
+/// Maximum coverage-mask entries in one scene (rev 16, ticket 52; the
+/// clip-path A8 rasterization sources).
+pub const MAX_SCENE_COVERAGE: u32 = 256;
+
+/// Maximum filter-op chains in one scene (rev 16, ticket 52: the
+/// drop-shadow chains the R15 filter records reference).
+pub const MAX_SCENE_FILTER_OP_CHAINS: u32 = 256;
+
+/// Maximum ops in one filter-op chain (rev 16, ticket 52).
+pub const MAX_SCENE_FILTER_OPS: u32 = 8;
 
 /// **Removed in rev 16 (browser-core ticket 50):** the pinned
 /// `MAX_FILTER_GROUP_DEPTH = 2` cap (deeper groups rendered inline,
@@ -297,6 +341,13 @@ impl Default for GpuiGoSceneColor {
 /// shader. The angle follows the pinned convention (CSS degrees, 0
 /// pointing up, growing clockwise; 90 is to the right).
 ///
+/// The R16 gradient-table background tag (rev 16, ticket 52): the
+/// background references a scene-level gradient table entry by index
+/// (the index stored in the record's `angle` field as f32 bits); the
+/// quad/shadow pipelines evaluate the table gradient per pixel. R15's
+/// tags 0-3 keep their exact meaning.
+pub const SCENE_BACKGROUND_TAG_GRADIENT_TABLE: u32 = 4;
+
 /// Layout (x86-64, `#[repr(C)]`): `tag` @0, `color_space` @4, `h` @8,
 /// `s` @12, `l` @16, `a` @20, `angle` @24, `stop0_h` @28, `stop0_s`
 /// @32, `stop0_l` @36, `stop0_a` @40, `stop0_percentage` @44,
@@ -587,7 +638,8 @@ impl Default for GpuiGoSceneUnderlineRecord {
 /// `corner_radii` @72, `corner_smoothing` @88, `blur_radii` @92,
 /// `filter_count` @124, `opacity` @128, `is_start` @132, `filter_tags`
 /// @136, `color_matrix` @168, `color_matrix_count` @808, `record_size`
-/// @812; size 816, alignment 4.
+/// @812, `op_chain_index` @816, `op_chain_count` @820; size 828,
+/// alignment 4.
 ///
 /// Filters are gaussian blurs with radii in device pixels (the pinned
 /// `ScaledFilter::Blur`) or colour-matrix filters (rev 15, browser-core
@@ -648,6 +700,16 @@ pub struct GpuiGoSceneFilterRecord {
     pub color_matrix_count: u32,
     /// `size_of::<GpuiGoSceneFilterRecord>()` self-check.
     pub record_size: u32,
+    /// The appended drop-shadow op-chain reference (rev 16, ticket 52,
+    /// the design's appendix A.5): the chain index of the scene-level
+    /// op array the group's DROP-SHADOW ops live in. Appended AFTER
+    /// `record_size` (the size self-check catches old mirrors); 0/0
+    /// (the default) is the R15 legacy chain - bit-exact, nothing
+    /// changes for every existing record.
+    pub op_chain_index: u32,
+    /// The op count (0 = R15 legacy; the referenced chain is read up to
+    /// this many entries).
+    pub op_chain_count: u32,
 }
 
 impl GpuiGoSceneFilterRecord {
@@ -680,6 +742,8 @@ impl Default for GpuiGoSceneFilterRecord {
             color_matrix: [0; 160],
             color_matrix_count: 0,
             record_size: core::mem::size_of::<GpuiGoSceneFilterRecord>() as u32,
+            op_chain_index: 0,
+            op_chain_count: 0,
         }
     }
 }
@@ -1309,6 +1373,191 @@ impl Default for GpuiGoSceneEffectRecord {
     }
 }
 
+/// One gradient stop (rev 16, ticket 52; the design's appendix A.3
+/// stop triple): the position along the gradient's parameter and an
+/// RGBA8 straight (non-premultiplied) sRGB color packed one byte per
+/// lane, `r | g << 8 | b << 16 | a << 24`. The CSS color-stop fixup
+/// (ordering, the 0/1 end rules) is resolved by the CALLER before
+/// insert; the service interpolates the fixed stops. Layout:
+/// `position` @0 (f32 bits), `rgba` @4; size 8, alignment 4.
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct GpuiGoSceneGradientStop {
+    /// The stop's position in [0, 1] along the gradient parameter (the
+    /// gradient line for linear, the normalized radius for radial, the
+    /// sweep fraction for conic), f32 bits.
+    pub position: u32,
+    /// The stop's straight sRGBA color, one byte per lane.
+    pub rgba: u32,
+}
+
+impl Default for GpuiGoSceneGradientStop {
+    fn default() -> Self {
+        GpuiGoSceneGradientStop { position: 0, rgba: 0 }
+    }
+}
+
+/// Gradient kind tags of [`GpuiGoSceneGradientRecord::kind`] (rev 16,
+/// ticket 52).
+pub mod gradient_kind {
+    /// A linear gradient along the record's `[x0, y0, x1, y1]` line.
+    pub const LINEAR: u32 = 0;
+    /// A radial gradient (circle or ellipse) around `[cx, cy]`.
+    pub const RADIAL: u32 = 1;
+    /// A conic gradient sweeping from `start_angle`.
+    pub const CONIC: u32 = 2;
+}
+
+/// Tile-mode tags of [`GpuiGoSceneGradientRecord::tile`] (rev 16,
+/// ticket 52): the wrap rule applied to the parameter BEFORE the ramp
+/// is sampled (CSS `repeating-*` sets the repeat tile).
+pub mod gradient_tile {
+    /// The ramp's own end colors continue beyond [0, 1] (the ramp row
+    /// is baked with the first/last stop padded to its ends).
+    pub const PAD: u32 = 0;
+    /// The parameter wraps with `fract(t)` - CSS `repeating-*`.
+    pub const REPEAT: u32 = 1;
+    /// The parameter mirrors around the ends (a triangle wave).
+    pub const REFLECT: u32 = 2;
+}
+
+/// One scene-level gradient table entry (rev 16, ticket 52; the
+/// design's appendix A.3): the kind, tile mode, geometry and stop
+/// count; the stops travel as the parallel bulk array of
+/// `scene_insert_gradient` and are baked into one 1024x1 premultiplied
+/// sRGB ramp row the renderer uploads as the ramp texture's row
+/// `stop_row`. The endpoint/shape math is resolved by the CALLER
+/// (CSS's `EndPointsFromAngle` line, the ellipse's radii, the conic's
+/// angles) into the geometry words.
+///
+/// Layout: `kind` @0, `tile` @4, `color_space` @8 (0 sRGB this
+/// revision; 1 Oklab reserved and rejected), `geometry` @12 (8 f32
+/// words), `stop_count` @44 (1..=64), `stop_row` @48 (0 on insert; the
+/// service assigns the gradient's table index), `record_size` @52;
+/// size 56, alignment 4.
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct GpuiGoSceneGradientRecord {
+    /// A [`gradient_kind`] tag.
+    pub kind: u32,
+    /// A [`gradient_tile`] tag.
+    pub tile: u32,
+    /// 0 sRGB (this revision's only space); 1 Oklab (reserved,
+    /// rejected).
+    pub color_space: u32,
+    /// Kind-specific geometry, f32 bits, device pixels: linear
+    /// `[x0, y0, x1, y1]` (the gradient line's endpoints; the rest
+    /// zero), radial `[cx, cy, r0, r1, aspect]` (the center, the
+    /// start/end radii in ry units, and the horizontal-over-vertical
+    /// radius ratio `rx/ry` - 1 for a circle; the rest zero), conic
+    /// `[cx, cy, start_angle, rotation]` (the center, the CSS start
+    /// angle in RADIANS measured clockwise from up, and the total
+    /// sweep in radians - 2*pi for a full turn; the rest zero).
+    pub geometry: [u32; 8],
+    /// The stop count (1..=64).
+    pub stop_count: u32,
+    /// The ramp row index (0 on insert; the service assigns the
+    /// gradient's own table index, 1:1).
+    pub stop_row: u32,
+    /// `size_of::<GpuiGoSceneGradientRecord>()` self-check.
+    pub record_size: u32,
+}
+
+impl Default for GpuiGoSceneGradientRecord {
+    fn default() -> Self {
+        GpuiGoSceneGradientRecord {
+            kind: gradient_kind::LINEAR,
+            tile: gradient_tile::PAD,
+            color_space: 0,
+            geometry: [0; 8],
+            stop_count: 0,
+            stop_row: 0,
+            record_size: core::mem::size_of::<GpuiGoSceneGradientRecord>() as u32,
+        }
+    }
+}
+
+/// One clip-path coverage entry (rev 16, ticket 52; the design's
+/// appendix A.4): a reference to one of the scene's tessellated path
+/// records plus the path's device bounds. The renderer rasterizes the
+/// referenced path into the per-surface A8 coverage target when the
+/// frame's effect groups reference the entry (mask kind 3), and the
+/// mask composite samples that target. Layout: `path_index` @0,
+/// `bounds` @4 (4 words), `record_size` @20; size 24, alignment 4.
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct GpuiGoSceneCoverageRecord {
+    /// The referenced path record's index in the scene's path array.
+    pub path_index: u32,
+    /// The path's device bounds (x, y, w, h, f32 bits).
+    pub bounds: GpuiGoSceneBounds,
+    /// `size_of::<GpuiGoSceneCoverageRecord>()` self-check.
+    pub record_size: u32,
+}
+
+impl Default for GpuiGoSceneCoverageRecord {
+    fn default() -> Self {
+        GpuiGoSceneCoverageRecord {
+            path_index: 0,
+            bounds: GpuiGoSceneBounds::default(),
+            record_size: core::mem::size_of::<GpuiGoSceneCoverageRecord>() as u32,
+        }
+    }
+}
+
+/// Filter-op kinds of [`GpuiGoSceneFilterOpRecord::kind`] (rev 16,
+/// ticket 52; the design's appendix A.5).
+pub mod filter_op_kind {
+    /// A gaussian blur (R15's chain semantics; re-stated for reference
+    /// - an op of this kind is NOT insertable, the R15 filter tags carry
+    /// the chain's blurs).
+    pub const BLUR: u32 = 0;
+    /// A colour matrix (R15's chain semantics; re-stated for reference -
+    /// not insertable, the R15 matrix slots carry the chain's matrices).
+    pub const COLOR_MATRIX: u32 = 1;
+    /// A CSS `drop-shadow()`: offset, blur radius and color. The ONLY
+    /// insertable kind this revision.
+    pub const DROP_SHADOW: u32 = 2;
+}
+
+/// One filter-op chain entry (rev 16, ticket 52; the design's appendix
+/// A.5): a drop-shadow op - offset (dx, dy), the CSS blur radius (the
+/// service stores it as given; the renderer's shadow rule derives
+/// sigma = radius / 2, Chromium `shadow_data.h:76-88` BlurAsSigma) and
+/// the shadow color. The chain is inserted scene-level
+/// (`scene_insert_filter_op_chain`) and referenced APPEND-ONLY from the
+/// R15 filter record's `op_chain_index`/`op_chain_count` (0/0 = the R15
+/// legacy chain, bit-exact). Layout: `kind` @0, `offset` @4 (2 words),
+/// `blur_radius` @12, `color` @16 (a `GpuiGoSceneColor`),
+/// `record_size` @36; size 40, alignment 4.
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct GpuiGoSceneFilterOpRecord {
+    /// A [`filter_op_kind`] tag (only DROP_SHADOW is insertable).
+    pub kind: u32,
+    /// The shadow offset dx, dy (device pixels, f32 bits).
+    pub offset: [u32; 2],
+    /// The CSS blur radius (device pixels, f32 bits; sigma = radius/2
+    /// at render).
+    pub blur_radius: u32,
+    /// The shadow color (a solid `GpuiGoSceneColor`).
+    pub color: GpuiGoSceneColor,
+    /// `size_of::<GpuiGoSceneFilterOpRecord>()` self-check.
+    pub record_size: u32,
+}
+
+impl Default for GpuiGoSceneFilterOpRecord {
+    fn default() -> Self {
+        GpuiGoSceneFilterOpRecord {
+            kind: filter_op_kind::DROP_SHADOW,
+            offset: [0; 2],
+            blur_radius: 0,
+            color: GpuiGoSceneColor::default(),
+            record_size: core::mem::size_of::<GpuiGoSceneFilterOpRecord>() as u32,
+        }
+    }
+}
+
 /// Scene plan requirements, mirroring the pinned
 /// `ScenePlanRequirements` (all counts are `usize` in the pin; the ABI
 /// carries u32). Layout: 11 u32 fields; size 44, alignment 4.
@@ -1361,6 +1610,14 @@ pub struct GpuiGoSceneMetaRecord {
     /// 1 after `scene_finish`.
     pub is_finished: u32,
     pub record_size: u32,
+    /// Gradient table entries (rev 16, ticket 52; appended after
+    /// `record_size` - the size self-check catches old mirrors).
+    pub gradient_count: u32,
+    /// Coverage-mask entries (rev 16, ticket 52).
+    pub coverage_count: u32,
+    /// Filter-op chains (rev 16, ticket 52: the drop-shadow chains the
+    /// filter records reference).
+    pub filter_chain_count: u32,
 }
 
 // Compile-time layout pins; the Go loader mirrors these exactly.
@@ -1376,7 +1633,7 @@ const _: () = assert!(core::mem::size_of::<GpuiGoSceneShadowRecord>() == 216);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneShadowRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneUnderlineRecord>() == 112);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneUnderlineRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneFilterRecord>() == 820);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneFilterRecord>() == 828);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneFilterRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneSurfaceRecord>() == 96);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneSurfaceRecord>() == 4);
@@ -1390,7 +1647,7 @@ const _: () = assert!(core::mem::size_of::<GpuiGoSceneCommandRecord>() == 56);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneCommandRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneRequirementsRecord>() == 48);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneRequirementsRecord>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneMetaRecord>() == 60);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneMetaRecord>() == 72);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneMetaRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoScenePathRecord>() == 156);
 const _: () = assert!(core::mem::align_of::<GpuiGoScenePathRecord>() == 4);
@@ -1402,7 +1659,15 @@ const _: () = assert!(core::mem::size_of::<GpuiGoSceneEffectRecord>() == 116);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneEffectRecord>() == 4);
 const _: () = assert!(core::mem::size_of::<GpuiGoSceneContentMask>() == 56);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneContentMask>() == 4);
-const _: () = assert!(core::mem::size_of::<GpuiGoSceneTable>() == 320);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneGradientRecord>() == 56);
+const _: () = assert!(core::mem::align_of::<GpuiGoSceneGradientRecord>() == 4);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneGradientStop>() == 8);
+const _: () = assert!(core::mem::align_of::<GpuiGoSceneGradientStop>() == 4);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneCoverageRecord>() == 24);
+const _: () = assert!(core::mem::align_of::<GpuiGoSceneCoverageRecord>() == 4);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneFilterOpRecord>() == 40);
+const _: () = assert!(core::mem::align_of::<GpuiGoSceneFilterOpRecord>() == 4);
+const _: () = assert!(core::mem::size_of::<GpuiGoSceneTable>() == 376);
 const _: () = assert!(core::mem::align_of::<GpuiGoSceneTable>() == 8);
 
 // ---------------------------------------------------------------------------
@@ -1840,8 +2105,27 @@ enum PaintOp {
     Path(PathData),
     /// An effect-group marker insert (rev 16, ticket 50).
     Effect(GpuiGoSceneEffectRecord),
+    /// A gradient table insert (rev 16, ticket 52).
+    Gradient(GradientData),
+    /// A coverage-mask entry insert (rev 16, ticket 52).
+    Coverage(GpuiGoSceneCoverageRecord),
+    /// A filter-op chain insert (rev 16, ticket 52).
+    FilterOpChain(Vec<GpuiGoSceneFilterOpRecord>),
     StartLayer(F32Bounds),
     EndLayer,
+}
+
+/// One gradient table entry with its stops and the baked ramp row
+/// (rev 16, ticket 52): the service bakes the stops into one 1024x1
+/// premultiplied sRGB row at insert (the renderer uploads the rows as
+/// the ramp texture; the bake is deterministic so the CPU reference in
+/// the spec tests mirrors it exactly).
+#[derive(Debug, Clone)]
+struct GradientData {
+    rec: GpuiGoSceneGradientRecord,
+    stops: Vec<GpuiGoSceneGradientStop>,
+    /// The baked 1024x4-byte premultiplied sRGB ramp row.
+    ramp: Vec<u8>,
 }
 
 /// The per-scene kernel state (the pinned `Scene`).
@@ -1864,6 +2148,15 @@ struct SceneState {
     /// Effect-group records (rev 16, ticket 50), sorted by (order,
     /// !is_start) at finish like the filter boundaries.
     effects: Vec<GpuiGoSceneEffectRecord>,
+    /// The gradient table (rev 16, ticket 52): insert-order entries
+    /// whose `stop_row` is their own index (1:1).
+    gradients: Vec<GradientData>,
+    /// The coverage-mask entries (rev 16, ticket 52: the clip-path
+    /// sources, referencing the path array by index).
+    coverage: Vec<GpuiGoSceneCoverageRecord>,
+    /// The filter-op chains (rev 16, ticket 52: the drop-shadow chains
+    /// the R15 filter records reference by index).
+    filter_op_chains: Vec<Vec<GpuiGoSceneFilterOpRecord>>,
     /// How many group START markers (filter boundaries + effect
     /// groups) have been inserted - the `MAX_SCENE_GROUPS` sanity
     /// bound's counter.
@@ -2066,6 +2359,9 @@ impl SceneState {
         self.polychrome_sprites.clear();
         self.paths.clear();
         self.effects.clear();
+        self.gradients.clear();
+        self.coverage.clear();
+        self.filter_op_chains.clear();
         self.group_starts = 0;
         self.plan.commands.clear();
         self.plan.requirements = GpuiGoSceneRequirementsRecord::default();
@@ -2120,6 +2416,31 @@ impl SceneState {
             .ok_or(scene_status::ERR_BAD_VALUE)?;
         self.bounds_tree.set_order_floor(floor);
         Ok(())
+    }
+
+    /// Whether the primitive at `index` of its class array can carry a
+    /// single-primitive opacity FOLD (rev 16, ticket 52): a quad or
+    /// shadow whose background references the gradient table (tag 4)
+    /// cannot - the fold multiplies the record's stored alpha payload
+    /// and the table arm carries none. Every other class folds (the
+    /// fold's own multiplication covers their stored colors).
+    fn primitive_foldable(&self, class: SceneFoldPrimitive, index: u32) -> bool {
+        let background_ok = |bg: &GpuiGoSceneBackground| {
+            bg.tag != SCENE_BACKGROUND_TAG_GRADIENT_TABLE
+        };
+        match class {
+            SceneFoldPrimitive::Quad => self
+                .quads
+                .get(index as usize)
+                .map(|quad| background_ok(&quad.background) && background_ok(&quad.border_color))
+                .unwrap_or(true),
+            SceneFoldPrimitive::Shadow => self
+                .shadows
+                .get(index as usize)
+                .map(|shadow| background_ok(&shadow.color))
+                .unwrap_or(true),
+            _ => true,
+        }
     }
 
     fn check_insert_capacity(&self, array_len: usize) -> Result<(), i32> {
@@ -2282,6 +2603,71 @@ impl SceneState {
         Ok(())
     }
 
+    /// A gradient table insert (rev 16, ticket 52): validates the
+    /// record and stops, bakes the 1024x1 premultiplied-sRGB ramp row
+    /// and appends the entry (its `stop_row` is its own table index,
+    /// assigned here). The gradient table is NOT ordered - it is a
+    /// scene-level table the records reference by index, so no
+    /// bounds-tree insert happens; the op log still carries it for
+    /// replay (a replayed range re-inserts the table entries it
+    /// contains).
+    fn insert_gradient(
+        &mut self,
+        mut rec: GpuiGoSceneGradientRecord,
+        stops: &[GpuiGoSceneGradientStop],
+    ) -> Result<(), i32> {
+        if self.ops.len() >= MAX_SCENE_OPERATIONS as usize {
+            return Err(scene_status::ERR_LIMIT);
+        }
+        if self.gradients.len() >= MAX_SCENE_GRADIENTS as usize {
+            return Err(scene_status::ERR_LIMIT);
+        }
+        let ramp = bake_gradient_ramp(stops);
+        rec.stop_row = self.gradients.len() as u32;
+        self.is_finished = false;
+        let data = GradientData { rec, stops: stops.to_vec(), ramp };
+        self.gradients.push(data.clone());
+        self.ops.push(PaintOp::Gradient(data));
+        Ok(())
+    }
+
+    /// A coverage-mask entry insert (rev 16, ticket 52): the clip-path
+    /// source referencing one of the scene's path records. The entry is
+    /// a scene-level table row (no bounds-tree insert; the op log
+    /// carries it for replay).
+    fn insert_coverage(&mut self, rec: GpuiGoSceneCoverageRecord) -> Result<(), i32> {
+        if self.ops.len() >= MAX_SCENE_OPERATIONS as usize {
+            return Err(scene_status::ERR_LIMIT);
+        }
+        if self.coverage.len() >= MAX_SCENE_COVERAGE as usize {
+            return Err(scene_status::ERR_LIMIT);
+        }
+        self.is_finished = false;
+        self.coverage.push(rec);
+        self.ops.push(PaintOp::Coverage(rec));
+        Ok(())
+    }
+
+    /// A filter-op chain insert (rev 16, ticket 52): the drop-shadow
+    /// ops the R15 filter records reference by chain index. The chain
+    /// index is the insertion order (0-based, returned through the
+    /// out parameter).
+    fn insert_filter_op_chain(&mut self, ops: &[GpuiGoSceneFilterOpRecord]) -> Result<(), i32> {
+        if ops.is_empty() || ops.len() > MAX_SCENE_FILTER_OPS as usize {
+            return Err(scene_status::ERR_BAD_VALUE);
+        }
+        if self.ops.len() >= MAX_SCENE_OPERATIONS as usize {
+            return Err(scene_status::ERR_LIMIT);
+        }
+        if self.filter_op_chains.len() >= MAX_SCENE_FILTER_OP_CHAINS as usize {
+            return Err(scene_status::ERR_LIMIT);
+        }
+        self.is_finished = false;
+        self.filter_op_chains.push(ops.to_vec());
+        self.ops.push(PaintOp::FilterOpChain(ops.to_vec()));
+        Ok(())
+    }
+
     fn insert_surface(
         &mut self,
         mut rec: GpuiGoSceneSurfaceRecord,
@@ -2415,6 +2801,11 @@ impl SceneState {
                 PaintOp::PolychromeSprite(rec) => self.insert_polychrome_sprite(rec)?,
                 PaintOp::Path(data) => self.insert_path(data.rec, data.vertices)?,
                 PaintOp::Effect(rec) => self.insert_effect(rec)?,
+                PaintOp::Gradient(data) => {
+                    self.insert_gradient(data.rec, &data.stops)?;
+                }
+                PaintOp::Coverage(rec) => self.insert_coverage(rec)?,
+                PaintOp::FilterOpChain(ops) => self.insert_filter_op_chain(&ops)?,
                 PaintOp::StartLayer(bounds) => self.push_layer(bounds)?,
                 PaintOp::EndLayer => self.pop_layer()?,
             }
@@ -2631,6 +3022,15 @@ impl SceneState {
                             open_isolated += 1;
                             requirements.isolated_target_count =
                                 requirements.isolated_target_count.max(open_isolated as u32);
+                            // rev 16, ticket 52: a blend group forces the
+                            // OFFSCREEN route - the composite blends
+                            // against a backdrop COPY sampled from the
+                            // parent target, so the base target must be a
+                            // readable texture (the offscreen scene
+                            // texture, not the swapchain back buffer).
+                            if (effect.flags & effect_flags::HAS_BLEND) != 0 {
+                                requirements.uses_offscreen_target = 1;
+                            }
                         }
                         render_stack.push(RenderStackEntry {
                             kind: GroupMarkerKind::Effect,
@@ -2682,7 +3082,22 @@ impl SceneState {
                                     == 0
                                     && span_markers.last().copied() == Some(0)
                                     && span_primitives.last().copied() == Some(1)
-                                    && span_single.last().is_some_and(|single| single.is_some());
+                                    && span_single.last().is_some_and(|single| single.is_some())
+                                    && span_single
+                                        .last()
+                                        .and_then(|single| *single)
+                                        .is_some_and(|(class, index)| {
+                                            // rev 16, ticket 52: a quad or shadow
+                                            // referencing the GRADIENT TABLE
+                                            // (background tag 4) cannot fold - the
+                                            // fold multiplies the record's stored
+                                            // alpha payload, and the table arm
+                                            // carries none (the ramp is shared by
+                                            // every referencing record). Such a
+                                            // group isolates instead (always
+                                            // correct, never wrong pixels).
+                                            self.primitive_foldable(class, index)
+                                        });
                                 if foldable {
                                     let primitive = span_single.last().copied().flatten();
                                     let begin_command = span_begin_command.last().copied();
@@ -3515,7 +3930,16 @@ fn check_color(color: &GpuiGoSceneColor) -> Result<(), i32> {
 /// Validates a background record (rev 15): a known tag and color space,
 /// finite gradient scalars, non-degenerate stop positions, and a
 /// zeroed unused arm (the surface record's strict-payload pattern).
-fn check_background(bg: &GpuiGoSceneBackground) -> Result<(), i32> {
+///
+/// rev 16, ticket 52: tag 4 is the R16 gradient-table arm - the
+/// background references a scene-level gradient entry by index (the
+/// index stored in the ANGLE field as f32 bits; the plain sRGB space
+/// only, the table record carries its own). The arm is allowed on
+/// quads and shadows (the vendored pipelines evaluate it) and REJECTED
+/// on paths (`allow_table` false: the pinned path-sprite pipeline
+/// consumes the pinned DXBC and cannot sample the table; the
+/// record-size self-check plus this gate keep the ABI honest).
+fn check_background_with(bg: &GpuiGoSceneBackground, allow_table: bool) -> Result<(), i32> {
     if bg.reserved != 0 {
         return Err(scene_status::ERR_BAD_VALUE);
     }
@@ -3574,8 +3998,48 @@ fn check_background(bg: &GpuiGoSceneBackground) -> Result<(), i32> {
             }
             Ok(())
         }
+        (4, 0) if allow_table => {
+            // The gradient table index rides the ANGLE field as f32
+            // bits: finite, non-negative, integral, and under the
+            // table bound (the RENDERER resolves the reference - an
+            // out-of-range index paints transparent, the design's
+            // "an invalid mask hides the element" rule applied to
+            // gradients - so replayed ranges stay robust).
+            let index = f32::from_bits(bg.angle);
+            if !index.is_finite()
+                || index < 0.0
+                || index != index.trunc()
+                || index >= MAX_SCENE_GRADIENTS as f32
+            {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+            let others = [
+                bg.stop0_h,
+                bg.stop0_s,
+                bg.stop0_l,
+                bg.stop0_a,
+                bg.stop0_percentage,
+                bg.stop1_h,
+                bg.stop1_s,
+                bg.stop1_l,
+                bg.stop1_a,
+                bg.stop1_percentage,
+            ];
+            if others != [0u32; 10] {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+            let solid_words = [bg.h, bg.s, bg.l, bg.a];
+            if solid_words != [0u32; 4] {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+            Ok(())
+        }
         _ => Err(scene_status::ERR_BAD_VALUE),
     }
+}
+
+fn check_background(bg: &GpuiGoSceneBackground) -> Result<(), i32> {
+    check_background_with(bg, true)
 }
 
 fn check_bool01(value: u32) -> Result<(), i32> {
@@ -3639,9 +4103,20 @@ fn check_effect(rec: &GpuiGoSceneEffectRecord) -> Result<(), i32> {
     if rec.blend_mode > 16 {
         return Err(scene_status::ERR_BAD_VALUE);
     }
-    // This revision requires the none-kind mask (ticket 52 relaxes it
-    // when the tables land).
-    if rec.mask_kind != 0 || rec.mask_reference != 0 || rec.mask_mode != 0 {
+    // rev 16, ticket 52: the mask kinds 1-3 are wired - the composite
+    // samples the gradient table / the atlas texture / the coverage
+    // target at render. The REFERENCES are resolved by the renderer
+    // (an unresolvable mask hides the element - the design §3.5's
+    // transparent-black rule), NOT validated here: a replayed range
+    // can carry an effect record whose table entry lives outside the
+    // range, and the render-time resolution keeps that robust.
+    if rec.mask_kind > 3 {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    if rec.mask_kind == 0 && (rec.mask_reference != 0 || rec.mask_mode != 0) {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    if rec.mask_kind != 0 && rec.mask_mode > 1 {
         return Err(scene_status::ERR_BAD_VALUE);
     }
     if (rec.flags & effect_flags::PROPERTY_NODE) != 0 {
@@ -3700,6 +4175,194 @@ pub(crate) fn effect_translation(rec: &GpuiGoSceneEffectRecord) -> (f32, f32) {
 pub(crate) fn effect_translation_only(rec: &GpuiGoSceneEffectRecord) -> bool {
     let [m00, m01, m10, m11, _, _] = effect_matrix(rec);
     m00 == 1.0 && m11 == 1.0 && m01 == 0.0 && m10 == 0.0
+}
+
+/// Validates a gradient table entry (rev 16, ticket 52): known kind and
+/// tile tags, the sRGB space (Oklab is reserved), finite geometry with
+/// the kind's non-degeneracy rule, a stop count in 1..=64, and stops
+/// that are finite, ordered non-decreasing within [0, 1] (the CSS
+/// fixup is the CALLER's; the service interpolates the fixed stops).
+/// `stop_row` must be zero on insert (the service assigns it).
+fn check_gradient(
+    rec: &GpuiGoSceneGradientRecord,
+    stops: &[GpuiGoSceneGradientStop],
+) -> Result<(), i32> {
+    check_record_size(
+        rec.record_size,
+        core::mem::size_of::<GpuiGoSceneGradientRecord>() as u32,
+    )?;
+    if rec.kind > gradient_kind::CONIC {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    if rec.tile > gradient_tile::REFLECT {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    if rec.color_space != 0 {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    for bits in rec.geometry.iter() {
+        if !f32::from_bits(*bits).is_finite() {
+            return Err(scene_status::ERR_BAD_VALUE);
+        }
+    }
+    match rec.kind {
+        gradient_kind::LINEAR => {
+            // The parameter divides by the line's length.
+            let (x0, y0) = (f32::from_bits(rec.geometry[0]), f32::from_bits(rec.geometry[1]));
+            let (x1, y1) = (f32::from_bits(rec.geometry[2]), f32::from_bits(rec.geometry[3]));
+            if (x1 - x0) == 0.0 && (y1 - y0) == 0.0 {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+        }
+        gradient_kind::RADIAL => {
+            // The radii must differ (the parameter divides by the
+            // delta) and the aspect ratio must be positive.
+            let (r0, r1) = (f32::from_bits(rec.geometry[2]), f32::from_bits(rec.geometry[3]));
+            let aspect = f32::from_bits(rec.geometry[4]);
+            if r1 == r0 || aspect <= 0.0 {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+        }
+        gradient_kind::CONIC => {
+            // The sweep must be positive (the parameter divides by it).
+            let rotation = f32::from_bits(rec.geometry[3]);
+            if rotation <= 0.0 {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+        }
+        _ => unreachable!("the kind tag is validated above"),
+    }
+    if rec.stop_row != 0 {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    if stops.is_empty() || stops.len() > MAX_GRADIENT_STOPS as usize {
+        return Err(scene_status::ERR_LIMIT);
+    }
+    if rec.stop_count != stops.len() as u32 {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    let mut previous = f32::NEG_INFINITY;
+    for stop in stops {
+        let position = f32::from_bits(stop.position);
+        if !position.is_finite() || !(0.0..=1.0).contains(&position) {
+            return Err(scene_status::ERR_BAD_VALUE);
+        }
+        if position < previous {
+            return Err(scene_status::ERR_BAD_VALUE);
+        }
+        previous = position;
+    }
+    Ok(())
+}
+
+/// Bakes one gradient's stops into a 1024x4-byte premultiplied-sRGB
+/// ramp row (rev 16, ticket 52): texel i holds the interpolation at
+/// t = i/1023 - the stops' straight sRGBA bytes premultiplied, mixed
+/// linearly in f32, and rounded back to bytes (the CPU reference in
+/// the spec tests mirrors this arithmetic exactly; the hardware's
+/// linear filtering of the baked bytes IS CSS's interpolation rule,
+/// the design §3.8's ramp-row decision). Before the first stop the
+/// first color continues; after the last the last (the pad tile's
+/// behavior baked into the row).
+fn bake_gradient_ramp(stops: &[GpuiGoSceneGradientStop]) -> Vec<u8> {
+    let mut ramp = vec![0u8; GRADIENT_RAMP_WIDTH as usize * 4];
+    let lanes = |stop: &GpuiGoSceneGradientStop| -> [f32; 4] {
+        // Straight sRGBA bytes to normalized f32 lanes (r, g, b, a).
+        [
+            (stop.rgba & 0xFF) as f32 / 255.0,
+            ((stop.rgba >> 8) & 0xFF) as f32 / 255.0,
+            ((stop.rgba >> 16) & 0xFF) as f32 / 255.0,
+            ((stop.rgba >> 24) & 0xFF) as f32 / 255.0,
+        ]
+    };
+    // The stop's PREMULTIPLIED sRGB lanes (r*a, g*a, b*a, a).
+    let premultiplied = |stop: &GpuiGoSceneGradientStop| -> [f32; 4] {
+        let l = lanes(stop);
+        [l[0] * l[3], l[1] * l[3], l[2] * l[3], l[3]]
+    };
+    let position = |stop: &GpuiGoSceneGradientStop| f32::from_bits(stop.position);
+    for texel in 0..GRADIENT_RAMP_WIDTH as usize {
+        let t = texel as f32 / (GRADIENT_RAMP_WIDTH - 1) as f32;
+        let mut color = premultiplied(&stops[0]);
+        if t <= position(&stops[0]) {
+            color = premultiplied(&stops[0]);
+        } else if t >= position(&stops[stops.len() - 1]) {
+            color = premultiplied(&stops[stops.len() - 1]);
+        } else {
+            // The largest stop index whose position is <= t (the
+            // interval's left end; the delta to the next stop is
+            // strictly positive by construction).
+            let mut index = 0usize;
+            for candidate in 1..stops.len() {
+                if position(&stops[candidate]) <= t {
+                    index = candidate;
+                }
+            }
+            let p0 = position(&stops[index]);
+            let p1 = position(&stops[index + 1]);
+            let factor = (t - p0) / (p1 - p0);
+            let left = premultiplied(&stops[index]);
+            let right = premultiplied(&stops[index + 1]);
+            for lane in 0..4 {
+                color[lane] = left[lane] + factor * (right[lane] - left[lane]);
+            }
+        }
+        for lane in 0..4 {
+            let scaled = color[lane] * 255.0 + 0.5;
+            let byte = if scaled < 0.0 {
+                0u8
+            } else if scaled > 255.0 {
+                255u8
+            } else {
+                scaled as u8
+            };
+            ramp[texel * 4 + lane] = byte;
+        }
+    }
+    ramp
+}
+
+/// Validates a coverage-mask entry (rev 16, ticket 52): finite bounds,
+/// a non-negative path index (the RENDERER resolves the reference -
+/// an out-of-range path index renders the mask empty, hiding the
+/// element).
+fn check_coverage(rec: &GpuiGoSceneCoverageRecord) -> Result<(), i32> {
+    check_record_size(
+        rec.record_size,
+        core::mem::size_of::<GpuiGoSceneCoverageRecord>() as u32,
+    )?;
+    for bits in [rec.bounds.x, rec.bounds.y, rec.bounds.w, rec.bounds.h] {
+        if !f32::from_bits(bits).is_finite() {
+            return Err(scene_status::ERR_BAD_VALUE);
+        }
+    }
+    Ok(())
+}
+
+/// Validates one filter-op record (rev 16, ticket 52): the
+/// drop-shadow kind only (the blur/colour-matrix tags are R15's chain
+/// semantics, re-stated in the appendix for reference - an op of
+/// those kinds is not insertable), finite offset and radius, a solid
+/// color record.
+fn check_filter_op(op: &GpuiGoSceneFilterOpRecord) -> Result<(), i32> {
+    check_record_size(
+        op.record_size,
+        core::mem::size_of::<GpuiGoSceneFilterOpRecord>() as u32,
+    )?;
+    if op.kind != filter_op_kind::DROP_SHADOW {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    for bits in op.offset.iter() {
+        if !f32::from_bits(*bits).is_finite() {
+            return Err(scene_status::ERR_BAD_VALUE);
+        }
+    }
+    let radius = f32::from_bits(op.blur_radius);
+    if !radius.is_finite() || radius < 0.0 {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    check_color(&op.color)?;
+    Ok(())
 }
 
 /// Maps a window-space rect's four corners through the 2x3 matrix
@@ -3823,6 +4486,17 @@ fn check_filter(rec: &GpuiGoSceneFilterRecord) -> Result<(), i32> {
         if rec.color_matrix[carried..].iter().any(|&bits| bits != 0) {
             return Err(scene_status::ERR_BAD_VALUE);
         }
+    }
+    // rev 16, ticket 52: the appended drop-shadow op-chain reference -
+    // 0/0 is the R15 legacy shape; a count demands an index (the chain
+    // itself is resolved at SNAPSHOT time: an out-of-range index reads
+    // as an empty chain, the R15 semantics, so replayed ranges stay
+    // robust).
+    if rec.op_chain_count == 0 && rec.op_chain_index != 0 {
+        return Err(scene_status::ERR_BAD_VALUE);
+    }
+    if rec.op_chain_count > MAX_SCENE_FILTER_OPS {
+        return Err(scene_status::ERR_BAD_VALUE);
     }
     check_content_mask(&rec.content_mask)?;
     Ok(())
@@ -4146,6 +4820,169 @@ fn scene_effect_dump_body(
     }
 }
 
+/// `scene_insert_gradient` (rev 16, ticket 52): one gradient table
+/// entry plus its bulk stop array. The service bakes the 1024x1
+/// premultiplied-sRGB ramp row and assigns `stop_row` (the gradient's
+/// own table index); the renderer uploads the rows as the ramp
+/// texture. Returns the assigned gradient index through `out_index`
+/// (null allowed - no report).
+fn scene_insert_gradient_body(
+    handle: u64,
+    rec: *const GpuiGoSceneGradientRecord,
+    stops: *const GpuiGoSceneGradientStop,
+    stop_count: u32,
+    out_index: *mut u32,
+) -> i32 {
+    if rec.is_null() {
+        return scene_status::ERR_NULL_ARG;
+    }
+    if stop_count > 0 && stops.is_null() {
+        return scene_status::ERR_NULL_ARG;
+    }
+    let stop_slice: &[GpuiGoSceneGradientStop] = if stop_count == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(stops, stop_count as usize) }
+    };
+    let result = with_scene(handle, |state| {
+        let record = unsafe { *rec };
+        check_gradient(&record, stop_slice)?;
+        let index = state.gradients.len() as u32;
+        state.insert_gradient(record, stop_slice)?;
+        if !out_index.is_null() {
+            unsafe { *out_index = index };
+        }
+        Ok(())
+    });
+    match result {
+        Ok(()) => scene_status::OK,
+        Err(code) => code,
+    }
+}
+
+/// `scene_gradient_dump` (rev 16, ticket 52): the finished scene's
+/// gradient records and the concatenated stop array (the
+/// `path_dump` capacity protocol - both capacities are checked with
+/// the required counts reported in the out parameters; the baked ramp
+/// rows are renderer-internal and verified through the readback
+/// tests).
+fn scene_gradient_dump_body(
+    handle: u64,
+    records: *mut GpuiGoSceneGradientRecord,
+    stops: *mut GpuiGoSceneGradientStop,
+    record_capacity: u32,
+    stop_capacity: u32,
+    out_record_count: *mut u32,
+    out_stop_count: *mut u32,
+) -> i32 {
+    if out_record_count.is_null() || out_stop_count.is_null() {
+        return scene_status::ERR_NULL_ARG;
+    }
+    let result = with_scene(handle, |state| {
+        if !state.is_finished {
+            return Err(scene_status::ERR_NOT_FINISHED);
+        }
+        let record_count = state.gradients.len() as u32;
+        let stop_count: u32 = state.gradients.iter().map(|g| g.stops.len() as u32).sum();
+        unsafe {
+            *out_record_count = record_count;
+            *out_stop_count = stop_count;
+        }
+        if record_count > record_capacity || stop_count > stop_capacity {
+            return Err(scene_status::ERR_CAPACITY);
+        }
+        if record_count > 0 && records.is_null() {
+            return Err(scene_status::ERR_NULL_ARG);
+        }
+        if stop_count > 0 && stops.is_null() {
+            return Err(scene_status::ERR_NULL_ARG);
+        }
+        if record_count > 0 {
+            let out =
+                unsafe { std::slice::from_raw_parts_mut(records, record_capacity as usize) };
+            for (slot, gradient) in out.iter_mut().zip(state.gradients.iter()) {
+                *slot = gradient.rec;
+            }
+        }
+        if stop_count > 0 {
+            let out =
+                unsafe { std::slice::from_raw_parts_mut(stops, stop_capacity as usize) };
+            let mut cursor = 0usize;
+            for gradient in state.gradients.iter() {
+                for stop in gradient.stops.iter() {
+                    out[cursor] = *stop;
+                    cursor += 1;
+                }
+            }
+        }
+        Ok(())
+    });
+    match result {
+        Ok(()) => scene_status::OK,
+        Err(code) => code,
+    }
+}
+
+/// `scene_insert_coverage` (rev 16, ticket 52): one clip-path
+/// coverage entry (a path reference plus its device bounds). Returns
+/// the assigned coverage index through `out_index` (null allowed).
+fn scene_insert_coverage_body(
+    handle: u64,
+    rec: *const GpuiGoSceneCoverageRecord,
+    out_index: *mut u32,
+) -> i32 {
+    if rec.is_null() {
+        return scene_status::ERR_NULL_ARG;
+    }
+    let result = with_scene(handle, |state| {
+        let record = unsafe { *rec };
+        check_coverage(&record)?;
+        let index = state.coverage.len() as u32;
+        state.insert_coverage(record)?;
+        if !out_index.is_null() {
+            unsafe { *out_index = index };
+        }
+        Ok(())
+    });
+    match result {
+        Ok(()) => scene_status::OK,
+        Err(code) => code,
+    }
+}
+
+/// `scene_insert_filter_op_chain` (rev 16, ticket 52): one drop-shadow
+/// op chain (the design's appendix A.5). Returns the assigned chain
+/// index through `out_index` (null allowed).
+fn scene_insert_filter_op_chain_body(
+    handle: u64,
+    ops: *const GpuiGoSceneFilterOpRecord,
+    op_count: u32,
+    out_index: *mut u32,
+) -> i32 {
+    if op_count == 0 || ops.is_null() {
+        return scene_status::ERR_NULL_ARG;
+    }
+    let op_slice: &[GpuiGoSceneFilterOpRecord] =
+        unsafe { std::slice::from_raw_parts(ops, op_count as usize) };
+    for op in op_slice {
+        if let Err(code) = check_filter_op(op) {
+            return code;
+        }
+    }
+    let result = with_scene(handle, |state| {
+        let index = state.filter_op_chains.len() as u32;
+        state.insert_filter_op_chain(op_slice)?;
+        if !out_index.is_null() {
+            unsafe { *out_index = index };
+        }
+        Ok(())
+    });
+    match result {
+        Ok(()) => scene_status::OK,
+        Err(code) => code,
+    }
+}
+
 /// `scene_update_property` (rev 16, ticket 51, the design's appendix
 /// A.7): mutates every FINISHED effect record carrying `node_id` in
 /// place - the new matrix or opacity, no re-sort, no re-plan (the
@@ -4437,6 +5274,17 @@ pub mod batch_op {
     /// `GpuiGoSceneEffectRecord` with `flags.IS_START` clear (rev 16,
     /// ticket 50).
     pub const EFFECT_END: u32 = 13;
+    /// One `GpuiGoSceneGradientRecord` (56 bytes, 14 words) followed by
+    /// its `stop_count` `GpuiGoSceneGradientStop` rows (2 words each;
+    /// rev 16, ticket 52).
+    pub const GRADIENT: u32 = 14;
+    /// One `GpuiGoSceneCoverageRecord` (24 bytes, 6 words; rev 16,
+    /// ticket 52).
+    pub const COVERAGE: u32 = 15;
+    /// A filter-op chain: one word of the op count followed by that many
+    /// `GpuiGoSceneFilterOpRecord` rows (10 words each; rev 16, ticket
+    /// 52).
+    pub const FILTER_OP_CHAIN: u32 = 16;
 }
 
 /// Reads one record of type `T` from a word payload that must be exactly
@@ -4486,6 +5334,55 @@ fn apply_batch_op(state: &mut SceneState, kind: u32, payload: &[u32]) -> Result<
             }
             check_effect(&record)?;
             state.insert_effect(record)
+        }
+        batch_op::GRADIENT => {
+            // The record (14 words) followed by the stop rows (2 words
+            // each, `record.stop_count` of them).
+            const RECORD_WORDS: usize =
+                core::mem::size_of::<GpuiGoSceneGradientRecord>() / 4;
+            if payload.len() < RECORD_WORDS {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+            let (record_words, stop_words) = payload.split_at(RECORD_WORDS);
+            let rec: GpuiGoSceneGradientRecord = batch_record(record_words)?;
+            if stop_words.len() % 2 != 0
+                || (rec.stop_count as usize) * 2 != stop_words.len()
+            {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+            let stops: Vec<GpuiGoSceneGradientStop> = stop_words
+                .chunks_exact(2)
+                .map(|pair| GpuiGoSceneGradientStop { position: pair[0], rgba: pair[1] })
+                .collect();
+            check_gradient(&rec, &stops)?;
+            state.insert_gradient(rec, &stops)
+        }
+        batch_op::COVERAGE => {
+            let rec: GpuiGoSceneCoverageRecord = batch_record(payload)?;
+            check_coverage(&rec)?;
+            state.insert_coverage(rec)
+        }
+        batch_op::FILTER_OP_CHAIN => {
+            const OP_WORDS: usize = core::mem::size_of::<GpuiGoSceneFilterOpRecord>() / 4;
+            let Some((&count, rest)) = payload.split_first() else {
+                return Err(scene_status::ERR_BAD_VALUE);
+            };
+            if count == 0
+                || count > MAX_SCENE_FILTER_OPS
+                || rest.len() != count as usize * OP_WORDS
+            {
+                return Err(scene_status::ERR_BAD_VALUE);
+            }
+            let ops: Vec<GpuiGoSceneFilterOpRecord> = rest
+                .chunks_exact(OP_WORDS)
+                .map(|words| {
+                    unsafe { core::ptr::read_unaligned(words.as_ptr().cast::<GpuiGoSceneFilterOpRecord>()) }
+                })
+                .collect();
+            for op in ops.iter() {
+                check_filter_op(op)?;
+            }
+            state.insert_filter_op_chain(&ops)
         }
         batch_op::SURFACE => {
             let Some((&opacity_bits, record)) = payload.split_last() else {
@@ -4641,6 +5538,9 @@ fn scene_meta_body(handle: u64, out_meta: *mut GpuiGoSceneMetaRecord) -> i32 {
             polychrome_sprite_count: state.polychrome_sprites.len() as u32,
             path_count: state.paths.len() as u32,
             effect_count: state.effects.len() as u32,
+            gradient_count: state.gradients.len() as u32,
+            coverage_count: state.coverage.len() as u32,
+            filter_chain_count: state.filter_op_chains.len() as u32,
             is_finished: u32::from(state.is_finished),
             record_size: core::mem::size_of::<GpuiGoSceneMetaRecord>() as u32,
         })
@@ -4889,7 +5789,10 @@ fn check_path(rec: &GpuiGoScenePathRecord, vertex_count: u32) -> Result<(), i32>
     if rec.order != 0 {
         return Err(scene_status::ERR_BAD_VALUE);
     }
-    check_background(&rec.color)?;
+    // The pinned path-sprite pipeline cannot evaluate the R16
+    // gradient-table arm (rev 16, ticket 52): the table tag is
+    // rejected on path fills.
+    check_background_with(&rec.color, false)?;
     if rec.vertex_count != vertex_count {
         return Err(scene_status::ERR_BAD_VALUE);
     }
@@ -5379,6 +6282,20 @@ pub(crate) struct SceneRenderSnapshot {
     /// reads the bounds, mask, radii, smoothing and opacity from them
     /// directly - the composite pass's own record).
     pub effects: Vec<GpuiGoSceneEffectRecord>,
+    /// The ABI gradient table records (rev 16, ticket 52): one per
+    /// scene gradient, `stop_row` == the index (the renderer uploads
+    /// them as the gradient instance buffer).
+    pub gradients: Vec<GpuiGoSceneGradientRecord>,
+    /// The baked premultiplied-sRGB ramp rows, concatenated (each row
+    /// 1024x4 bytes, row i belonging to gradient i; rev 16, ticket
+    /// 52).
+    pub gradient_ramps: Vec<u8>,
+    /// The ABI coverage-mask entries (rev 16, ticket 52: the clip-path
+    /// sources the effect groups reference).
+    pub coverage: Vec<GpuiGoSceneCoverageRecord>,
+    /// The ABI filter-op chains (rev 16, ticket 52: the drop-shadow
+    /// ops the filter records reference).
+    pub filter_op_chains: Vec<Vec<GpuiGoSceneFilterOpRecord>>,
     pub commands: Vec<GpuiGoSceneCommandRecord>,
     pub requirements: GpuiGoSceneRequirementsRecord,
 }
@@ -5750,6 +6667,14 @@ fn render_snapshot_of_state(state: &SceneState) -> SceneRenderSnapshot {
         backdrops: state.backdrops.clone(),
         boundaries: state.boundaries.clone(),
         effects: state.effects.clone(),
+        gradients: state.gradients.iter().map(|g| g.rec.clone()).collect(),
+        gradient_ramps: state
+            .gradients
+            .iter()
+            .flat_map(|g| g.ramp.iter().copied())
+            .collect(),
+        coverage: state.coverage.clone(),
+        filter_op_chains: state.filter_op_chains.clone(),
         commands: state.plan.commands.clone(),
         requirements: state.plan.requirements,
     };
@@ -5946,6 +6871,46 @@ pub struct GpuiGoSceneTable {
             *mut GpuiGoSceneBounds,
         ) -> i32,
     >,
+    /// `scene_insert_gradient` (service version 8, rev 16 ticket 52):
+    /// one gradient table entry plus its bulk stop array; the service
+    /// bakes the 1024x1 premultiplied-sRGB ramp row and assigns
+    /// `stop_row`.
+    pub insert_gradient: Option<
+        unsafe extern "system" fn(
+            u64,
+            *const GpuiGoSceneGradientRecord,
+            *const GpuiGoSceneGradientStop,
+            u32,
+            *mut u32,
+        ) -> i32,
+    >,
+    /// `scene_gradient_dump` (service version 8, rev 16 ticket 52): the
+    /// finished scene's gradient records and concatenated stops.
+    pub gradient_dump: Option<
+        unsafe extern "system" fn(
+            u64,
+            *mut GpuiGoSceneGradientRecord,
+            *mut GpuiGoSceneGradientStop,
+            u32,
+            u32,
+            *mut u32,
+            *mut u32,
+        ) -> i32,
+    >,
+    /// `scene_insert_coverage` (service version 8, rev 16 ticket 52):
+    /// one clip-path coverage entry (a path reference + bounds).
+    pub insert_coverage:
+        Option<unsafe extern "system" fn(u64, *const GpuiGoSceneCoverageRecord, *mut u32) -> i32>,
+    /// `scene_insert_filter_op_chain` (service version 8, rev 16 ticket
+    /// 52): the drop-shadow op chain the R15 filter records reference.
+    pub insert_filter_op_chain: Option<
+        unsafe extern "system" fn(
+            u64,
+            *const GpuiGoSceneFilterOpRecord,
+            u32,
+            *mut u32,
+        ) -> i32,
+    >,
     /// Scene ABI version (see [`GPUI_GO_SCENE_SERVICE_VERSION`]).
     pub service_version: u32,
     /// `size_of::<GpuiGoSceneTable>()` self-check.
@@ -5987,6 +6952,21 @@ pub struct GpuiGoSceneTable {
     pub size_of_content_mask: u32,
     /// The group-count sanity bound `MAX_SCENE_GROUPS` (rev 16).
     pub max_scene_groups: u32,
+    /// `size_of::<GpuiGoSceneGradientRecord>()` self-check (rev 16,
+    /// ticket 52).
+    pub size_of_gradient_record: u32,
+    /// `size_of::<GpuiGoSceneGradientStop>()` self-check (rev 16,
+    /// ticket 52).
+    pub size_of_gradient_stop: u32,
+    /// `MAX_GRADIENT_STOPS` (rev 16, ticket 52: 64, the user's
+    /// decision).
+    pub max_gradient_stops: u32,
+    /// `size_of::<GpuiGoSceneCoverageRecord>()` self-check (rev 16,
+    /// ticket 52).
+    pub size_of_coverage_record: u32,
+    /// `size_of::<GpuiGoSceneFilterOpRecord>()` self-check (rev 16,
+    /// ticket 52).
+    pub size_of_filter_op_record: u32,
 }
 
 pub(crate) static SCENE_TABLE: GpuiGoSceneTable = GpuiGoSceneTable {
@@ -6020,6 +7000,10 @@ pub(crate) static SCENE_TABLE: GpuiGoSceneTable = GpuiGoSceneTable {
     insert_effect: Some(scene_insert_effect),
     effect_dump: Some(scene_effect_dump),
     update_property: Some(scene_update_property),
+    insert_gradient: Some(scene_insert_gradient),
+    gradient_dump: Some(scene_gradient_dump),
+    insert_coverage: Some(scene_insert_coverage),
+    insert_filter_op_chain: Some(scene_insert_filter_op_chain),
     service_version: GPUI_GO_SCENE_SERVICE_VERSION,
     size_of_table: core::mem::size_of::<GpuiGoSceneTable>() as u32,
     align_of_table: core::mem::align_of::<GpuiGoSceneTable>() as u32,
@@ -6041,6 +7025,11 @@ pub(crate) static SCENE_TABLE: GpuiGoSceneTable = GpuiGoSceneTable {
     size_of_effect_record: core::mem::size_of::<GpuiGoSceneEffectRecord>() as u32,
     size_of_content_mask: core::mem::size_of::<GpuiGoSceneContentMask>() as u32,
     max_scene_groups: MAX_SCENE_GROUPS,
+    size_of_gradient_record: core::mem::size_of::<GpuiGoSceneGradientRecord>() as u32,
+    size_of_gradient_stop: core::mem::size_of::<GpuiGoSceneGradientStop>() as u32,
+    max_gradient_stops: MAX_GRADIENT_STOPS,
+    size_of_coverage_record: core::mem::size_of::<GpuiGoSceneCoverageRecord>() as u32,
+    size_of_filter_op_record: core::mem::size_of::<GpuiGoSceneFilterOpRecord>() as u32,
 };
 
 // ---------------------------------------------------------------------------
@@ -6338,6 +7327,92 @@ unsafe extern "system" fn scene_update_property(
         Ok(code) => code,
         Err(payload) => {
             drop(payload);
+            scene_status::ERR_PANIC
+        }
+    }
+}
+
+unsafe extern "system" fn scene_insert_gradient(
+    handle: u64,
+    rec: *const GpuiGoSceneGradientRecord,
+    stops: *const GpuiGoSceneGradientStop,
+    stop_count: u32,
+    out_index: *mut u32,
+) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        scene_insert_gradient_body(handle, rec, stops, stop_count, out_index)
+    }));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            mark_scene_failed(handle);
+            scene_status::ERR_PANIC
+        }
+    }
+}
+
+unsafe extern "system" fn scene_gradient_dump(
+    handle: u64,
+    records: *mut GpuiGoSceneGradientRecord,
+    stops: *mut GpuiGoSceneGradientStop,
+    record_capacity: u32,
+    stop_capacity: u32,
+    out_record_count: *mut u32,
+    out_stop_count: *mut u32,
+) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        scene_gradient_dump_body(
+            handle,
+            records,
+            stops,
+            record_capacity,
+            stop_capacity,
+            out_record_count,
+            out_stop_count,
+        )
+    }));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            mark_scene_failed(handle);
+            scene_status::ERR_PANIC
+        }
+    }
+}
+
+unsafe extern "system" fn scene_insert_coverage(
+    handle: u64,
+    rec: *const GpuiGoSceneCoverageRecord,
+    out_index: *mut u32,
+) -> i32 {
+    let outcome =
+        catch_unwind(AssertUnwindSafe(|| scene_insert_coverage_body(handle, rec, out_index)));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            mark_scene_failed(handle);
+            scene_status::ERR_PANIC
+        }
+    }
+}
+
+unsafe extern "system" fn scene_insert_filter_op_chain(
+    handle: u64,
+    ops: *const GpuiGoSceneFilterOpRecord,
+    op_count: u32,
+    out_index: *mut u32,
+) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        scene_insert_filter_op_chain_body(handle, ops, op_count, out_index)
+    }));
+    match outcome {
+        Ok(code) => code,
+        Err(payload) => {
+            drop(payload);
+            mark_scene_failed(handle);
             scene_status::ERR_PANIC
         }
     }

@@ -257,10 +257,120 @@ func (k *SceneKernel) InsertFilterBoundary(b FilterBoundary) error {
 		return fmt.Errorf("gpui: scene insert filter boundary: record order must be zero, got %d", b.Order)
 	}
 	rec := filterRecordOf(b.Order, b.Bounds, b.ContentMask, b.CornerRadii, b.CornerSmoothing, b.BlurRadius, b.ColorMatrix, b.ColorMatrixCount, b.Opacity, b.IsStart)
+	rec.OpChainIndex = b.OpChainIndex
+	rec.OpChainCount = b.OpChainCount
 	if err := k.scene.InsertFilterBoundary(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert filter boundary: %w", err)
 	}
 	return nil
+}
+
+// insertGradient inserts one gradient table entry (rev 16, ticket 52)
+// and returns the assigned table index. The stop list above the cap is
+// resampled down to 64 evenly-spaced stops with a debug-build warning
+// (the design's §8.1 answer 4); the native service bakes the
+// premultiplied-sRGB ramp row.
+func (k *SceneKernel) insertGradient(g Gradient) (uint32, error) {
+	if err := k.checkLive("InsertGradient"); err != nil {
+		return 0, err
+	}
+	if len(g.Stops) == 0 {
+		return 0, fmt.Errorf("gpui: InsertGradient: at least one stop is required")
+	}
+	stops := g.Stops
+	if len(stops) > MaxTableGradientStops {
+		gradientDebugWarnf("gpui: InsertGradient: %d stops over the %d-stop cap; resampling down to %d (the ramp-path approximation)", len(stops), MaxTableGradientStops, MaxTableGradientStops)
+		stops = ResampleTableGradientStops(stops)
+	}
+	rec := native.NewSceneGradientRecord()
+	rec.Kind = uint32(g.Kind)
+	rec.Tile = uint32(g.Tile)
+	for i, value := range g.Geometry {
+		rec.Geometry[i] = math.Float32bits(value)
+	}
+	rec.StopCount = uint32(len(stops))
+	packed := make([]native.SceneGradientStop, len(stops))
+	for i, stop := range stops {
+		packed[i] = native.SceneGradientStop{
+			Position: math.Float32bits(stop.Position),
+			Rgba:     rgbaPacked(stop.Color),
+		}
+	}
+	index, err := k.scene.InsertGradient(&rec, packed)
+	if err != nil {
+		return 0, fmt.Errorf("gpui: scene insert gradient: %w", err)
+	}
+	return index, nil
+}
+
+// rgbaPacked packs one straight sRGBA f32 color into the stop record's
+// one-byte-per-lane word (r | g<<8 | b<<16 | a<<24).
+func rgbaPacked(c Rgba) uint32 {
+	clampLane := func(value float32) uint32 {
+		if value < 0 {
+			return 0
+		}
+		if value > 1 {
+			return 255
+		}
+		return uint32(value*255.0 + 0.5)
+	}
+	return clampLane(c.R) | clampLane(c.G)<<8 | clampLane(c.B)<<16 | clampLane(c.A)<<24
+}
+
+// insertCoverage inserts one clip-path coverage entry (rev 16, ticket
+// 52) and returns the assigned coverage index.
+func (k *SceneKernel) insertCoverage(pathIndex uint32, bounds Bounds) (uint32, error) {
+	if err := k.checkLive("InsertCoverage"); err != nil {
+		return 0, err
+	}
+	rec := native.NewSceneCoverageRecord()
+	rec.PathIndex = pathIndex
+	rec.Bounds = sceneBoundsRecord(bounds)
+	index, err := k.scene.InsertCoverage(&rec)
+	if err != nil {
+		return 0, fmt.Errorf("gpui: scene insert coverage: %w", err)
+	}
+	return index, nil
+}
+
+// insertFilterOpChain inserts one drop-shadow op chain (rev 16, ticket
+// 52) and returns the assigned chain index.
+func (k *SceneKernel) insertFilterOpChain(ops []FilterOp) (uint32, error) {
+	if err := k.checkLive("InsertFilterOpChain"); err != nil {
+		return 0, err
+	}
+	if len(ops) == 0 {
+		return 0, fmt.Errorf("gpui: InsertFilterOpChain: at least one op is required")
+	}
+	records := make([]native.SceneFilterOpRecord, len(ops))
+	for i, op := range ops {
+		records[i] = native.NewSceneFilterOpRecord()
+		records[i].Offset[0] = math.Float32bits(op.OffsetX)
+		records[i].Offset[1] = math.Float32bits(op.OffsetY)
+		records[i].BlurRadius = math.Float32bits(op.BlurRadius)
+		records[i].Color = rgbaSceneColor(op.Color)
+	}
+	index, err := k.scene.InsertFilterOpChain(records)
+	if err != nil {
+		return 0, fmt.Errorf("gpui: scene insert filter op chain: %w", err)
+	}
+	return index, nil
+}
+
+// rgbaSceneColor converts one straight sRGBA f32 color into the ABI
+// scene color record (the HSL-with-alpha storage the native side
+// converts back through its own pinned conversion).
+func rgbaSceneColor(c Rgba) native.SceneColor {
+	hsla := RgbaToHsla32(c)
+	return native.SceneColorOf(hsla.H, hsla.S, hsla.L, hsla.A)
+}
+
+// RgbaToHsla32 converts a straight sRGBA f32 color into the palette's
+// HSL representation (the pinned Rgba::into_color path).
+func RgbaToHsla32(c Rgba) Hsla {
+	hex := rgbaPacked(c)
+	return RgbaToHsla(hex)
 }
 
 // InsertEffect inserts an effect-group marker record (rev 16,
@@ -664,6 +774,10 @@ func effectRecordOf(e EffectGroup) native.SceneEffectRecord {
 		math.Float32bits(e.Transform.Translation[1]),
 	}
 	rec.NodeID = e.NodeID
+	rec.BlendMode = uint32(e.BlendMode)
+	rec.MaskKind = uint32(e.MaskKind)
+	rec.MaskReference = e.MaskReference
+	rec.MaskMode = uint32(e.MaskMode)
 	for i, radius := range [4]float32{e.CornerRadii.TopLeft, e.CornerRadii.TopRight, e.CornerRadii.BottomRight, e.CornerRadii.BottomLeft} {
 		rec.CornerRadii[i] = math.Float32bits(radius)
 	}
@@ -687,6 +801,12 @@ func effectRecordOf(e EffectGroup) native.SceneEffectRecord {
 	if e.RoundedClipOnly {
 		flags |= native.SceneEffectFlagRoundedClipOnly
 	}
+	if e.HasBlend {
+		flags |= native.SceneEffectFlagHasBlend
+	}
+	if e.HasMask {
+		flags |= native.SceneEffectFlagHasMask
+	}
 	rec.Flags = flags
 	return rec
 }
@@ -705,6 +825,12 @@ func effectGroupOf(rec native.SceneEffectRecord) EffectGroup {
 		NodeID:          rec.NodeID,
 		ClipToBounds:    flags&native.SceneEffectFlagClipToBounds != 0,
 		RoundedClipOnly: flags&native.SceneEffectFlagRoundedClipOnly != 0,
+		HasBlend:        flags&native.SceneEffectFlagHasBlend != 0,
+		BlendMode:       BlendMode(rec.BlendMode),
+		HasMask:         flags&native.SceneEffectFlagHasMask != 0,
+		MaskKind:        MaskKind(rec.MaskKind),
+		MaskReference:   rec.MaskReference,
+		MaskMode:        MaskMode(rec.MaskMode),
 		Bounds:          sceneBoundsValue(rec.Bounds),
 		ContentMask:     sceneBoundsValue(rec.ContentMask),
 		Opacity:         math.Float32frombits(rec.Opacity),
@@ -745,6 +871,12 @@ func sceneColorValue(rec native.SceneColor) Hsla {
 // revision draws exactly, so it is the only one the Go Background
 // carries.
 func sceneBackgroundRecord(b Background, bounds Bounds) native.SceneBackground {
+	if b.Kind == BackgroundKindGradientTable {
+		// rev 16, ticket 52: the table-gradient arm - the table index
+		// rides the ANGLE field as f32 bits (the native validation
+		// checks it).
+		return native.SceneGradientTableBackground(b.GradientTable)
+	}
 	if b.Kind == BackgroundKindLinearGradient {
 		angle := resolveGradientAngle(&b.Gradient, bounds.Size.Width, bounds.Size.Height)
 		return native.SceneGradientBackground(
@@ -764,6 +896,12 @@ func sceneBackgroundRecord(b Background, bounds Bounds) native.SceneBackground {
 // record's reserved pattern tags) reads as a transparent solid, the
 // kernel's never-inserted state.
 func sceneBackgroundValue(rec native.SceneBackground) Background {
+	if rec.Tag == 4 {
+		// rev 16, ticket 52: the table-gradient arm (the index stored in
+		// the angle field).
+		index := uint32(math.Float32frombits(rec.Angle))
+		return Background{Kind: BackgroundKindGradientTable, GradientTable: index}
+	}
 	if rec.Tag == 1 {
 		from := native.HslaF{
 			H: math.Float32frombits(rec.Stop0H),

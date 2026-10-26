@@ -180,6 +180,11 @@ type Background struct {
 	Solid Hsla
 	// Gradient is the two-stop linear gradient (the gradient arm).
 	Gradient LinearGradient
+	// GradientTable is the scene-level gradient table index (rev 16,
+	// ticket 52: the R16 table-gradient arm - the referenced entry's
+	// kind, geometry and baked ramp row paint the primitive; the entry
+	// must be inserted before the primitive).
+	GradientTable uint32
 }
 
 // SolidBackground builds a solid background from a color.
@@ -710,6 +715,8 @@ func filterBoundaryFor(bounds Bounds, chain FilterChain, radii Corners, mask Bou
 		BlurRadius:       chain.BlurRadius * scale,
 		ColorMatrix:      chain.ColorMatrix,
 		ColorMatrixCount: uint32(chain.ColorMatrixCount),
+		OpChainIndex:     chain.DropShadow,
+		OpChainCount:     uint32(chain.DropShadowCount),
 		Opacity:          1.0,
 		IsStart:          true,
 	}, true

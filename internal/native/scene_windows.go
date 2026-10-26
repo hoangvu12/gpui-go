@@ -209,6 +209,104 @@ func callSceneEffectDump(fn uintptr, scene uint64, records uintptr, capacity uin
 	return callStatus(r1), nil
 }
 
+// callSceneInsertGradient invokes scene_insert_gradient (rev 16,
+// ticket 52).
+func callSceneInsertGradient(
+	fn uintptr,
+	scene uint64,
+	rec *SceneGradientRecord,
+	stops *SceneGradientStop,
+	stopCount uint32,
+	outIndex *uint32,
+) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_insert_gradient")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(scene),
+		uintptr(unsafe.Pointer(rec)),
+		uintptr(unsafe.Pointer(stops)),
+		uintptr(stopCount),
+		uintptr(unsafe.Pointer(outIndex)),
+	)
+	runtime.KeepAlive(rec)
+	runtime.KeepAlive(stops)
+	runtime.KeepAlive(outIndex)
+	return callStatus(r1), nil
+}
+
+// callSceneGradientDump invokes scene_gradient_dump (rev 16, ticket
+// 52).
+func callSceneGradientDump(
+	fn uintptr,
+	scene uint64,
+	records uintptr,
+	stops uintptr,
+	recordCapacity uint32,
+	stopCapacity uint32,
+	outRecordCount *uint32,
+	outStopCount *uint32,
+) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_gradient_dump")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(scene),
+		records,
+		stops,
+		uintptr(recordCapacity),
+		uintptr(stopCapacity),
+		uintptr(unsafe.Pointer(outRecordCount)),
+		uintptr(unsafe.Pointer(outStopCount)),
+	)
+	runtime.KeepAlive(outRecordCount)
+	runtime.KeepAlive(outStopCount)
+	return callStatus(r1), nil
+}
+
+// callSceneInsertCoverage invokes scene_insert_coverage (rev 16,
+// ticket 52).
+func callSceneInsertCoverage(fn uintptr, scene uint64, rec *SceneCoverageRecord, outIndex *uint32) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_insert_coverage")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(scene),
+		uintptr(unsafe.Pointer(rec)),
+		uintptr(unsafe.Pointer(outIndex)),
+	)
+	runtime.KeepAlive(rec)
+	runtime.KeepAlive(outIndex)
+	return callStatus(r1), nil
+}
+
+// callSceneInsertFilterOpChain invokes
+// scene_insert_filter_op_chain (rev 16, ticket 52).
+func callSceneInsertFilterOpChain(
+	fn uintptr,
+	scene uint64,
+	ops *SceneFilterOpRecord,
+	opCount uint32,
+	outIndex *uint32,
+) (int32, error) {
+	if fn == 0 {
+		return 0, nullSlot("scene_insert_filter_op_chain")
+	}
+	r1, _, _ := syscall.SyscallN(
+		fn,
+		uintptr(scene),
+		uintptr(unsafe.Pointer(ops)),
+		uintptr(opCount),
+		uintptr(unsafe.Pointer(outIndex)),
+	)
+	runtime.KeepAlive(ops)
+	runtime.KeepAlive(outIndex)
+	return callStatus(r1), nil
+}
+
 // callSceneUpdateProperty invokes scene_update_property (rev 16,
 // ticket 51).
 func callSceneUpdateProperty(

@@ -91,6 +91,11 @@ const (
 	BackgroundKindSolid BackgroundKind = iota
 	// BackgroundKindLinearGradient is the two-stop linear gradient arm.
 	BackgroundKindLinearGradient
+	// BackgroundKindGradientTable is the scene-level gradient table arm
+	// (rev 16, ticket 52: n-stop, radial, conic and repeating
+	// gradients - the R15 two-stop record keeps its own arm,
+	// bit-exact).
+	BackgroundKindGradientTable
 )
 
 // LinearGradientBackground builds a linear gradient Background with an

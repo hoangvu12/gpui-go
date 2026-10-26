@@ -370,8 +370,8 @@ func TestEffectRecordValidationRejectsMalformedRecords(t *testing.T) {
 	rejects("singular transform", rec)
 
 	rec = effectRecord(true, native.SceneEffectFlagHasOpacity, 1)
-	rec.MaskKind = 1
-	rejects("mask kind this revision", rec)
+	rec.MaskKind = 4
+	rejects("mask kind out of range", rec)
 
 	rec = effectRecord(true, native.SceneEffectFlagPropertyNode|native.SceneEffectFlagHasOpacity, 1)
 	rec.NodeID = 0

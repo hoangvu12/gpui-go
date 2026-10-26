@@ -313,6 +313,15 @@ type FilterChain struct {
 	// ColorMatrixCount is the number of carried colour functions
 	// (0..8).
 	ColorMatrixCount int
+	// DropShadow is the appended op-chain reference (rev 16, ticket
+	// 52; the design's §3.9): the chain index of the scene-level
+	// drop-shadow ops, inserted through Scene.InsertFilterOpChain
+	// BEFORE the group opens. Zero (with DropShadowCount zero) is the
+	// R15 legacy chain - bit-exact, nothing changes.
+	DropShadow uint32
+	// DropShadowCount is the number of ops the chain reference covers
+	// (0 = the R15 legacy chain).
+	DropShadowCount int
 }
 
 // filterChainMatrixSlots is the scene filter record's per-function
@@ -323,7 +332,7 @@ const filterChainMatrixSlots = 8
 // IsEmpty reports a chain with no visible filter (every entry
 // identity), which paints inline with no isolation group.
 func (c FilterChain) IsEmpty() bool {
-	return c.BlurRadius <= 0 && c.ColorMatrixCount == 0
+	return c.BlurRadius <= 0 && c.ColorMatrixCount == 0 && c.DropShadowCount == 0
 }
 
 // composeFilterChain composes a style filter chain into its scene

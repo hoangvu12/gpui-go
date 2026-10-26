@@ -460,6 +460,24 @@ const PRIMARY_SAMPLER_REGISTER: u32 =
 /// imported capture surface — ticket28).
 const SURFACE_SAMPLER_REGISTER: u32 =
     shader_interface::SURFACE_SAMPLER_BINDING + GROUP_1_REGISTER_OFFSET;
+/// The gradient table's structured-buffer register (rev 16, ticket
+/// 52: group(1) binding(5) -> t7; the quad/shadow fragments index it
+/// by the background's gradient reference).
+const GRADIENT_TABLE_REGISTER: u32 = 5 + GROUP_1_REGISTER_OFFSET;
+/// The gradient ramp texture's register (rev 16, ticket 52: group(1)
+/// binding(6) -> t8; the 1024-wide premultiplied-sRGB rows).
+const GRADIENT_RAMP_REGISTER: u32 = 6 + GROUP_1_REGISTER_OFFSET;
+/// The gradient ramp's clamp-addressing sampler register (rev 16,
+/// ticket 52: group(1) binding(7) -> s9).
+const GRADIENT_SAMPLER_REGISTER: u32 = 7 + GROUP_1_REGISTER_OFFSET;
+/// The mask source texture's register (rev 16, ticket 52: the blur
+/// module's group(1) binding(8) -> t10; the composite's mask sample -
+/// the atlas texture for image masks, the coverage target for
+/// clip-path masks).
+const MASK_TEXTURE_REGISTER: u32 = 8 + GROUP_1_REGISTER_OFFSET;
+/// The blend composite's backdrop-copy texture register (rev 16,
+/// ticket 52: the blur module's group(1) binding(9) -> t11).
+const BACKDROP_TEXTURE_REGISTER: u32 = 9 + GROUP_1_REGISTER_OFFSET;
 
 /// Background appearance tags of the draw entries (the pin's
 /// `WindowBackgroundAppearance`, reduced to the opaque/transparent
@@ -499,6 +517,12 @@ pub(super) enum ShaderModule {
     /// under the effect group's 2x3 matrix over the local-space
     /// subtree bucket.
     TransformedBlurComposite,
+    /// The blend composite (rev 16, ticket 52): the W3C blend formula
+    /// against a backdrop copy of the parent target.
+    BlendComposite,
+    /// The drop-shadow composite (rev 16, ticket 52): the blurred
+    /// silhouette tinted and drawn beneath the content quad.
+    DropShadowComposite,
     /// The vendored backdrop mirror-crop pass (rev 15).
     BackdropCrop,
 }
@@ -523,6 +547,8 @@ impl ShaderModule {
             Self::BlurComposite => "blur_composite",
             Self::SmoothedBlurComposite => "smoothed_blur_composite",
             Self::TransformedBlurComposite => "transformed_blur_composite",
+            Self::BlendComposite => "blend_composite",
+            Self::DropShadowComposite => "drop_shadow_composite",
             Self::BackdropCrop => "backdrop_crop",
         }
     }
@@ -586,6 +612,18 @@ impl ShaderModule {
                 "transformed_blur_composite",
                 include_bytes!(concat!(env!("OUT_DIR"), "/transformed_blur_composite.vs_5_0.dxbc")),
                 include_bytes!(concat!(env!("OUT_DIR"), "/transformed_blur_composite.ps_5_0.dxbc")),
+                false,
+            )),
+            Self::BlendComposite => Ok(vendored_bytecode(
+                "blend_composite",
+                include_bytes!(concat!(env!("OUT_DIR"), "/blend_composite.vs_5_0.dxbc")),
+                include_bytes!(concat!(env!("OUT_DIR"), "/blend_composite.ps_5_0.dxbc")),
+                false,
+            )),
+            Self::DropShadowComposite => Ok(vendored_bytecode(
+                "drop_shadow_composite",
+                include_bytes!(concat!(env!("OUT_DIR"), "/drop_shadow_composite.vs_5_0.dxbc")),
+                include_bytes!(concat!(env!("OUT_DIR"), "/drop_shadow_composite.ps_5_0.dxbc")),
                 false,
             )),
             Self::BackdropCrop => Ok(vendored_bytecode(
@@ -688,6 +726,11 @@ struct GlobalElements {
     /// The mirror-addressing sampler of the backdrop crop's blur passes
     /// (CSS filter-effects-2's mirrored backdrop edges; rev 15).
     mirror_sampler: Option<ID3D11SamplerState>,
+    /// The clamp-addressing linear sampler of the gradient ramp rows
+    /// (rev 16, ticket 52: the baked 1024x1 rows pad at their ends -
+    /// the ramp's own first/last stop colors - so the pad tile's
+    /// clamp IS the sampling rule).
+    clamp_sampler: Option<ID3D11SamplerState>,
 }
 
 impl GlobalElements {
@@ -727,6 +770,8 @@ impl GlobalElements {
         let point_sampler = make_sampler(D3D11_FILTER_MIN_MAG_MIP_POINT, D3D11_TEXTURE_ADDRESS_WRAP)?;
         let mirror_sampler =
             make_sampler(D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR)?;
+        let clamp_sampler =
+            make_sampler(D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_CLAMP)?;
         Ok(Self {
             globals_buffer,
             font_buffer,
@@ -734,6 +779,7 @@ impl GlobalElements {
             sampler: Some(sampler),
             point_sampler: Some(point_sampler),
             mirror_sampler: Some(mirror_sampler),
+            clamp_sampler: Some(clamp_sampler),
         })
     }
 }
@@ -789,6 +835,30 @@ struct CompositeExtensionsUniforms {
     /// matrix for every other composite pass.
     transform_row0: [f32; 4],
     transform_row1: [f32; 4],
+    /// The composite's MASK source kind (rev 16, ticket 52): 0 none,
+    /// 1 gradient table, 2 atlas texture, 3 coverage, 4
+    /// invalid/unresolvable (the composite draws NOTHING - the
+    /// design §3.5's "an invalid mask hides the element").
+    mask_kind: u32,
+    /// The mask source reference (the gradient table index / the
+    /// atlas texture index / the coverage entry index).
+    mask_reference: u32,
+    /// 0 alpha, 1 luminance (the mask mode).
+    mask_mode: u32,
+    /// The composite's blend mode (rev 16, ticket 52): 0 src-over ..
+    /// 16 plus-lighter - the W3C compositing tags; only the BLEND
+    /// composite pass reads it (every other composite leaves 0).
+    blend_mode: u32,
+    /// The drop-shadow composite's tint color (rev 16, ticket 52;
+    /// straight sRGBA, used only by the shadow pass).
+    tint_color: [f32; 4],
+    /// The blend composite's backdrop-copy size (rev 16, ticket 52;
+    /// the backdrop is sampled at device position / this size).
+    backdrop_size: [f32; 2],
+    /// 1 for the drop-shadow composite pass (sample the silhouette,
+    /// tint and draw; rev 16, ticket 52), 0 otherwise.
+    shadow_mode: u32,
+    padding3: u32,
 }
 
 impl Default for CompositeExtensionsUniforms {
@@ -808,6 +878,14 @@ impl Default for CompositeExtensionsUniforms {
             padding2: [0.0, 0.0],
             transform_row0: [1.0, 0.0, 0.0, 0.0],
             transform_row1: [0.0, 1.0, 0.0, 0.0],
+            mask_kind: 0,
+            mask_reference: 0,
+            mask_mode: 0,
+            blend_mode: 0,
+            tint_color: [0.0; 4],
+            backdrop_size: [1.0, 1.0],
+            shadow_mode: 0,
+            padding3: 0,
         }
     }
 }
@@ -1153,6 +1231,14 @@ pub(super) struct DrawPipelines {
     /// The transformed-group composite (rev 16, ticket 51).
     transformed_blur_composite_vertex: ID3D11VertexShader,
     transformed_blur_composite_fragment: ID3D11PixelShader,
+    /// The blend composite (rev 16, ticket 52): the W3C blend formula
+    /// against the backdrop copy.
+    blend_composite_vertex: ID3D11VertexShader,
+    blend_composite_fragment: ID3D11PixelShader,
+    /// The drop-shadow composite (rev 16, ticket 52): the blurred
+    /// silhouette tinted beneath the content.
+    drop_shadow_composite_vertex: ID3D11VertexShader,
+    drop_shadow_composite_fragment: ID3D11PixelShader,
     /// The vendored backdrop mirror-crop pass (rev 15).
     backdrop_crop_vertex: ID3D11VertexShader,
     backdrop_crop_fragment: ID3D11PixelShader,
@@ -1164,6 +1250,25 @@ pub(super) struct DrawPipelines {
     backdrop_crop_buffer: ID3D11Buffer,
     blur_blend_replace: ID3D11BlendState,
     blur_blend_composite: ID3D11BlendState,
+    /// The gradient table's structured instance buffer (rev 16,
+    /// ticket 52): one 64-byte `GradientInstance` per scene gradient
+    /// (the ABI record reshaped for the HLSL structured-buffer layout;
+    /// bound at t7 for the quad/shadow draws and the gradient masks).
+    gradient_table_buffer: ID3D11Buffer,
+    /// The gradient table's raw SRV (the shaders read it through a
+    /// `RuntimeArray<GradientInstance>` view).
+    gradient_table_view: Option<ID3D11ShaderResourceView>,
+    /// The gradient table's capacity in elements (grown in place, the
+    /// instance buffers' power-of-two rule).
+    gradient_table_capacity: usize,
+    /// The baked gradient ramp texture (rev 16, ticket 52): 1024-wide
+    /// premultiplied-sRGB rows, one per gradient (the height grows with
+    /// the scene's gradient count; a 1-row placeholder when empty).
+    ramp_texture: Option<ID3D11Texture2D>,
+    /// The ramp texture's SRV (bound at t8).
+    ramp_srv: Option<ID3D11ShaderResourceView>,
+    /// The ramp texture's current row count.
+    ramp_rows: u32,
 }
 
 impl DrawPipelines {
@@ -1259,6 +1364,15 @@ impl DrawPipelines {
             create_vertex_shader(device, transformed_blur_composite.vertex)?;
         let transformed_blur_composite_fragment =
             create_fragment_shader(device, transformed_blur_composite.fragment)?;
+        let blend_composite = ShaderModule::BlendComposite.bytecode()?;
+        let blend_composite_vertex = create_vertex_shader(device, blend_composite.vertex)?;
+        let blend_composite_fragment = create_fragment_shader(device, blend_composite.fragment)?;
+        let drop_shadow_composite = ShaderModule::DropShadowComposite.bytecode()?;
+        // The drop-shadow composite shares the plain composite's vertex
+        // stage (the rect + clip-distances shape).
+        let drop_shadow_composite_vertex = create_vertex_shader(device, drop_shadow_composite.vertex)?;
+        let drop_shadow_composite_fragment =
+            create_fragment_shader(device, drop_shadow_composite.fragment)?;
         let backdrop_crop = ShaderModule::BackdropCrop.bytecode()?;
         let backdrop_crop_vertex = create_vertex_shader(device, backdrop_crop.vertex)?;
         let backdrop_crop_fragment = create_fragment_shader(device, backdrop_crop.fragment)?;
@@ -1275,6 +1389,13 @@ impl DrawPipelines {
         // premultiplied blurred sample; straight-alpha blending would
         // darken the faded edges.
         let blur_blend_composite = create_blend_state_for_path_sprite(device)?;
+
+        // rev 16 (ticket 52): the gradient table's structured buffer and
+        // the 1-row placeholder ramp (both grown in place by the upload
+        // path).
+        let (gradient_table_buffer, gradient_table_view) =
+            create_instance_buffer(device, GRADIENT_INSTANCE_STRIDE, 16)?;
+        let (ramp_texture, ramp_srv) = create_gradient_ramp_texture(device, 1)?;
 
         let surface = ShaderModule::Surface.bytecode()?;
         let surfaces = SurfacePipeline {
@@ -1304,6 +1425,10 @@ impl DrawPipelines {
             smoothed_blur_composite_fragment,
             transformed_blur_composite_vertex,
             transformed_blur_composite_fragment,
+            blend_composite_vertex,
+            blend_composite_fragment,
+            drop_shadow_composite_vertex,
+            drop_shadow_composite_fragment,
             backdrop_crop_vertex,
             backdrop_crop_fragment,
             blur_params_buffer,
@@ -1311,6 +1436,12 @@ impl DrawPipelines {
             backdrop_crop_buffer,
             blur_blend_replace,
             blur_blend_composite,
+            gradient_table_buffer,
+            gradient_table_view,
+            gradient_table_capacity: 16,
+            ramp_texture: Some(ramp_texture),
+            ramp_srv,
+            ramp_rows: 1,
         })
     }
 }
@@ -1431,6 +1562,12 @@ pub(super) struct DrawTargets {
     pub(super) path: Option<PathResources>,
     pub(super) blur: Option<BlurResources>,
     pub(super) backdrop_crop: Option<BackdropCropTarget>,
+    /// The clip-path coverage rasterization resources (rev 16, ticket
+    /// 52), created lazily when the scene carries coverage entries.
+    pub(super) coverage: Option<CoverageResources>,
+    /// The blend composite's backdrop copy target (rev 16, ticket 52),
+    /// created lazily when the scene carries blend groups.
+    pub(super) blend_backdrop: Option<BlendBackdropTarget>,
     /// The R16 group target pool (rev 16, ticket 50): bounds-sized,
     /// bucketed, kept across frames while groups keep using it.
     pub(super) group_pool: GroupTargetPool,
@@ -1780,6 +1917,92 @@ fn create_path_intermediate_msaa_texture_and_view(
     Ok((msaa_texture, msaa_view))
 }
 
+/// The gradient instance buffer's element stride (rev 16, ticket 52):
+/// the ABI record's 56 bytes reshaped for the HLSL structured-buffer
+/// layout - the two `vec4f` geometry fields land 16-aligned and the
+/// struct's size rounds up to its 16-byte alignment (a 64-byte stride;
+/// the trailing two words are padding).
+const GRADIENT_INSTANCE_STRIDE: usize = 64;
+
+/// Creates the gradient ramp texture (rev 16, ticket 52): a DYNAMIC
+/// 1024-wide R8G8B8A8_UNORM texture of `rows` rows, CPU-writable and
+/// GPU-readable (the upload path maps it once per frame and copies
+/// the scene's baked ramp rows; unused rows are cleared).
+fn create_gradient_ramp_texture(
+    device: &ID3D11Device,
+    rows: u32,
+) -> Result<(ID3D11Texture2D, Option<ID3D11ShaderResourceView>), i32> {
+    let texture = unsafe {
+        let mut output = None;
+        let desc = D3D11_TEXTURE2D_DESC {
+            Width: crate::scene::GRADIENT_RAMP_WIDTH,
+            Height: rows.max(1),
+            MipLevels: 1,
+            ArraySize: 1,
+            Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+            SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+            Usage: D3D11_USAGE_DYNAMIC,
+            BindFlags: D3D11_BIND_SHADER_RESOURCE.0 as u32,
+            CPUAccessFlags: D3D11_CPU_ACCESS_WRITE.0 as u32,
+            MiscFlags: 0,
+        };
+        device.CreateTexture2D(&desc, None, Some(&mut output)).map_err(|e| e.code().0)?;
+        output.ok_or(renderer_status::ERR_DEVICE)?
+    };
+    let mut srv = None;
+    unsafe {
+        device
+            .CreateShaderResourceView(&texture, None, Some(&mut srv))
+            .map_err(|e| e.code().0)?;
+    }
+    Ok((texture, srv))
+}
+
+/// The clip-path COVERAGE resources (rev 16, ticket 52): the window-
+/// sized MSAA rasterization target, the resolved coverage texture and
+/// its SRV - the pinned path machinery's shape, rasterized with a
+/// solid white fill so the resolved texture's channels carry the
+/// path's coverage (the mask composite samples it as the A8 source).
+#[derive(Default)]
+pub(super) struct CoverageResources {
+    texture: Option<ID3D11Texture2D>,
+    srv: Option<ID3D11ShaderResourceView>,
+    msaa_texture: Option<ID3D11Texture2D>,
+    msaa_view: Option<ID3D11RenderTargetView>,
+}
+
+impl CoverageResources {
+    fn new(device: &ID3D11Device, width: u32, height: u32) -> Result<Self, i32> {
+        let (texture, srv) = create_path_intermediate_texture(device, width, height)?;
+        let (msaa_texture, msaa_view) =
+            create_path_intermediate_msaa_texture_and_view(device, width, height)?;
+        Ok(Self {
+            texture: Some(texture),
+            srv,
+            msaa_texture: Some(msaa_texture),
+            msaa_view,
+        })
+    }
+}
+
+/// The blend composite's backdrop COPY target (rev 16, ticket 52): one
+/// window-sized color texture the composite's prep pass fills with the
+/// parent target's content (the D3D11 shader-pass copy - the parent's
+/// SRV sampled 1:1), so the blend fragment can read the backdrop while
+/// writing the parent (no read-write hazard). Recreated on resize.
+#[derive(Default)]
+pub(super) struct BlendBackdropTarget {
+    rtv: Option<ID3D11RenderTargetView>,
+    srv: Option<ID3D11ShaderResourceView>,
+}
+
+impl BlendBackdropTarget {
+    fn new(device: &ID3D11Device, width: u32, height: u32) -> Result<Self, i32> {
+        let (_, rtv, srv) = create_color_target(device, width, height)?;
+        Ok(Self { rtv, srv })
+    }
+}
+
 /// The pin's `set_rasterizer_state` (solid fill, no culling, MSAA line
 /// rasterization enabled).
 fn set_rasterizer_state(device: &ID3D11Device, device_context: &ID3D11DeviceContext) -> Result<(), i32> {
@@ -1972,6 +2195,22 @@ fn render_scene(
     if use_offscreen {
         ensure_blur_resources(state, slot_index, slot_generation, &device)?;
     }
+    // rev 16 (ticket 52): the clip-path coverage rasterization and the
+    // blend backdrop copy target, created when the scene carries them.
+    let scene_has_coverage = snapshot
+        .effects
+        .iter()
+        .any(|effect| effect.mask_kind == 3);
+    if scene_has_coverage && !snapshot.coverage.is_empty() {
+        ensure_coverage_resources(state, slot_index, slot_generation, &device)?;
+    }
+    let scene_has_blend = snapshot
+        .effects
+        .iter()
+        .any(|effect| (effect.flags & crate::scene::effect_flags::HAS_BLEND) != 0);
+    if scene_has_blend {
+        ensure_blend_backdrop(state, slot_index, slot_generation, &device)?;
+    }
 
     let (scene_rtv, scene_srv) = {
         let surface_state = resolve_slot(state, slot_index, slot_generation)?;
@@ -2019,6 +2258,13 @@ fn render_scene(
 
     let mut current = base.clone();
 
+    // rev 16 (ticket 52): the clip-path coverage rasterization runs
+    // BEFORE the command walk (the composites sample it), in the BASE
+    // frame - the window's coordinates and globals (a transform
+    // group's local-frame mask is the documented limit: the coverage
+    // rasterizes at the window frame).
+    let coverage_rasterized = scene_has_coverage && !snapshot.coverage.is_empty();
+
     // The shared group stack (rev 16, ticket 50): one entry per open
     // group of EITHER kind - the parent target to restore and the
     // pooled lease (None when the group renders inline: an inline
@@ -2051,6 +2297,18 @@ fn render_scene(
         globals: draw.globals.clone(),
     };
 
+    // rev 16 (ticket 52): the clip-path coverage rasterization (see the
+    // comment above) - the composites sample the resolved target.
+    if coverage_rasterized {
+        rasterize_coverage(state, draw, slot_index, slot_generation, &frame, snapshot)?;
+        // Restore the base target binding (the rasterization drew into
+        // the coverage MSAA target).
+        unsafe {
+            ctx.OMSetRenderTargets(Some(slice::from_ref(&current.rtv)), None);
+            ctx.RSSetViewports(Some(slice::from_ref(&current.viewport)));
+        }
+    }
+
     let mut path_rasterization_vertices: Vec<PathRasterizationVertex> = Vec::new();
     let mut path_sprites: Vec<PathSprite> = Vec::new();
 
@@ -2060,6 +2318,7 @@ fn render_scene(
             match command.primitive_kind {
                 batch_primitive_kind::SHADOWS => {
                     let instances = instance_range(command.range_start, command.range_end)?;
+                    bind_gradient_resources(&ctx, draw);
                     draw.pipelines.shadow_pipeline.draw_instances_variant(
                         &frame,
                         None,
@@ -2071,6 +2330,7 @@ fn render_scene(
                 }
                 batch_primitive_kind::QUADS => {
                     let instances = instance_range(command.range_start, command.range_end)?;
+                    bind_gradient_resources(&ctx, draw);
                     draw.pipelines.quad_pipeline.draw_instances_variant(
                         &frame,
                         None,
@@ -2419,6 +2679,7 @@ fn render_scene(
                             .boundaries
                             .get(command.boundary_index as usize)
                             .ok_or(renderer_status::ERR_BAD_VALUE)?;
+                        let ops = resolve_filter_op_chain(snapshot, boundary);
                         composite_filter_group(
                             state,
                             draw,
@@ -2429,6 +2690,7 @@ fn render_scene(
                             &parent,
                             &lease,
                             boundary,
+                            ops,
                             window,
                         )?;
                     } else {
@@ -2442,10 +2704,13 @@ fn render_scene(
                             slot_index,
                             slot_generation,
                             &frame,
+                            snapshot,
+                            atlas,
                             &source,
                             &parent,
                             effect,
                             entry.region,
+                            window,
                         )?;
                     }
                     let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
@@ -2837,7 +3102,110 @@ fn upload_scene_buffers(
     upload!(mono_sprites, snapshot.monochrome_sprites);
     upload!(subpixel_sprites, snapshot.subpixel_sprites);
     upload!(poly_sprites, snapshot.polychrome_sprites);
+    // rev 16 (ticket 52): the scene's gradient table - one 64-byte
+    // instance per gradient (the ABI record reshaped for the HLSL
+    // structured-buffer layout) - and the baked ramp rows into the
+    // DYNAMIC ramp texture (grown in place when the row count rises;
+    // the unused tail rows are cleared).
+    if !snapshot.gradients.is_empty() {
+        if pipelines.gradient_table_capacity < snapshot.gradients.len() {
+            let capacity = snapshot
+                .gradients
+                .len()
+                .checked_next_power_of_two()
+                .ok_or(renderer_status::ERR_CAPACITY)?;
+            let (buffer, view) =
+                create_instance_buffer(device, GRADIENT_INSTANCE_STRIDE, capacity)?;
+            pipelines.gradient_table_buffer = buffer;
+            pipelines.gradient_table_view = view;
+            pipelines.gradient_table_capacity = capacity;
+        }
+        let mut instances: Vec<[u32; GRADIENT_INSTANCE_STRIDE / 4]> =
+            vec![[0u32; GRADIENT_INSTANCE_STRIDE / 4]; snapshot.gradients.len()];
+        for (instance, gradient) in instances.iter_mut().zip(snapshot.gradients.iter()) {
+            instance[0] = gradient.kind;
+            instance[1] = gradient.tile;
+            instance[2] = gradient.color_space;
+            instance[3] = gradient.stop_count;
+            instance[4] = gradient.geometry[0];
+            instance[5] = gradient.geometry[1];
+            instance[6] = gradient.geometry[2];
+            instance[7] = gradient.geometry[3];
+            instance[8] = gradient.geometry[4];
+            instance[9] = gradient.geometry[5];
+            instance[10] = gradient.geometry[6];
+            instance[11] = gradient.geometry[7];
+            instance[12] = gradient.stop_row;
+            instance[13] = gradient.record_size;
+        }
+        unsafe {
+            let mut dest = std::mem::zeroed();
+            ctx.Map(
+                &pipelines.gradient_table_buffer,
+                0,
+                D3D11_MAP_WRITE_DISCARD,
+                0,
+                Some(&mut dest),
+            )
+            .map_err(|e| e.code().0)?;
+            let bytes = std::mem::size_of_val(instances.as_slice());
+            debug_assert_eq!(bytes, instances.len() * GRADIENT_INSTANCE_STRIDE);
+            std::ptr::copy_nonoverlapping(
+                instances.as_ptr() as *const u8,
+                dest.pData as *mut u8,
+                bytes,
+            );
+            ctx.Unmap(&pipelines.gradient_table_buffer, 0);
+        }
+    }
+    let rows = snapshot.gradients.len().max(1) as u32;
+    if pipelines.ramp_rows < rows {
+        let (texture, srv) = create_gradient_ramp_texture(device, rows)?;
+        pipelines.ramp_texture = Some(texture);
+        pipelines.ramp_srv = srv;
+        pipelines.ramp_rows = rows;
+    }
+    let ramp_texture = pipelines
+        .ramp_texture
+        .clone()
+        .ok_or(renderer_status::ERR_DEVICE)?;
+    unsafe {
+        let mut mapped = std::mem::zeroed();
+        ctx.Map(&ramp_texture, 0, D3D11_MAP_WRITE_DISCARD, 0, Some(&mut mapped))
+            .map_err(|e| e.code().0)?;
+        let row_bytes = crate::scene::GRADIENT_RAMP_WIDTH as usize * 4;
+        let usable = snapshot.gradient_ramps.len();
+        for row in 0..pipelines.ramp_rows as usize {
+            let dest_row = (mapped.pData as *mut u8).add(row * mapped.RowPitch as usize);
+            if row * row_bytes < usable {
+                let source = &snapshot.gradient_ramps
+                    [row * row_bytes..(row + 1) * row_bytes];
+                std::ptr::copy_nonoverlapping(source.as_ptr(), dest_row, row_bytes);
+            } else {
+                std::ptr::write_bytes(dest_row, 0, row_bytes);
+            }
+        }
+        ctx.Unmap(&ramp_texture, 0);
+    }
     Ok(())
+}
+
+/// Binds the scene's gradient table (t7), ramp texture (t8) and clamp
+/// sampler (s9) on the PIXEL stage (rev 16, ticket 52) for the
+/// quad/shadow draws - the gradient-table backgrounds sample them per
+/// pixel. Rebound on EVERY quad/shadow batch: the sprite draws bind
+/// their atlas texture over the neighboring slots, so the state cannot
+/// be assumed to survive (the same reason every batch rebinds its own
+/// textures).
+fn bind_gradient_resources(ctx: &ID3D11DeviceContext, draw: &DrawGlobal) {
+    let table = [draw.pipelines.gradient_table_view.clone()];
+    let ramp = [draw.pipelines.ramp_srv.clone()];
+    let sampler = [draw.globals.clamp_sampler.clone()];
+    unsafe {
+        ctx.PSSetShaderResources(GRADIENT_TABLE_REGISTER, Some(&table));
+        ctx.PSSetShaderResources(GRADIENT_RAMP_REGISTER, Some(&ramp));
+        ctx.PSSetSamplers(GRADIENT_SAMPLER_REGISTER, Some(&sampler));
+    }
 }
 
 /// Resolves a sprite batch's atlas texture view through the atlas
@@ -2879,6 +3247,164 @@ fn ensure_path_resources(
         surface_state.draw_targets.path = Some(PathResources::new(device, width, height)?);
     }
     Ok(())
+}
+
+/// Creates the per-surface coverage rasterization resources (rev 16,
+/// ticket 52) when the scene carries clip-path coverage entries.
+fn ensure_coverage_resources(
+    state: &mut RendererState,
+    slot_index: usize,
+    slot_generation: u32,
+    device: &ID3D11Device,
+) -> Result<(), i32> {
+    let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
+    if surface_state.draw_targets.coverage.is_none() {
+        let width = surface_state.width;
+        let height = surface_state.height;
+        surface_state.draw_targets.coverage =
+            Some(CoverageResources::new(device, width, height)?);
+    }
+    Ok(())
+}
+
+/// Creates the per-surface blend backdrop-copy target (rev 16, ticket
+/// 52) when the scene carries blend groups.
+fn ensure_blend_backdrop(
+    state: &mut RendererState,
+    slot_index: usize,
+    slot_generation: u32,
+    device: &ID3D11Device,
+) -> Result<(), i32> {
+    let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
+    if surface_state.draw_targets.blend_backdrop.is_none() {
+        let width = surface_state.width;
+        let height = surface_state.height;
+        surface_state.draw_targets.blend_backdrop =
+            Some(BlendBackdropTarget::new(device, width, height)?);
+    }
+    Ok(())
+}
+
+/// The clip-path COVERAGE rasterization (rev 16, ticket 52): rasterizes
+/// every coverage entry's referenced path into the per-surface coverage
+/// target, in the BASE frame's coordinates (the window; the rasterized
+/// fill is solid white, so the resolved texture's channels carry the
+/// path's coverage). An out-of-range path index rasterizes nothing (the
+/// mask reads empty - the element is hidden, the design §3.5 rule).
+#[allow(clippy::too_many_arguments)]
+fn rasterize_coverage(
+    state: &mut RendererState,
+    draw: &mut DrawGlobal,
+    slot_index: usize,
+    slot_generation: u32,
+    frame: &FrameBindings<'_>,
+    snapshot: &Snapshot,
+) -> Result<(), i32> {
+    let surface_state = resolve_slot_mut(state, slot_index, slot_generation)?;
+    let coverage = surface_state
+        .draw_targets
+        .coverage
+        .as_ref()
+        .ok_or(renderer_status::ERR_DEVICE)?;
+    let msaa_view = coverage.msaa_view.clone().ok_or(renderer_status::ERR_DEVICE)?;
+    let coverage_texture = coverage.texture.clone().ok_or(renderer_status::ERR_DEVICE)?;
+    let msaa_texture = coverage.msaa_texture.clone().ok_or(renderer_status::ERR_DEVICE)?;
+    let ctx = frame.device_context;
+    unsafe {
+        ctx.ClearRenderTargetView(&msaa_view, &[0.0; 4]);
+        let bound = Some(msaa_view.clone());
+        ctx.OMSetRenderTargets(Some(slice::from_ref(&bound)), None);
+    }
+    // The rasterization instances: each coverage entry's path vertices
+    // with the SOLID WHITE fill (the silhouette is the coverage).
+    let mut vertices: Vec<PathRasterizationVertex> = Vec::new();
+    for entry in snapshot.coverage.iter() {
+        let Some(path) = snapshot.paths.get(entry.path_index as usize) else {
+            continue;
+        };
+        let fill_hsla: gpui::Hsla = gpui::Hsla::new(0.0, 0.0, 1.0, 1.0);
+        let fill: gpui::Background = gpui::Background::from(fill_hsla);
+        for vertex in path.vertices.iter() {
+            vertices.push(PathRasterizationVertex {
+                xy_position: vertex.xy,
+                curve_position: vertex.st,
+                color: fill.clone(),
+                bounds: path.clipped_bounds,
+            });
+        }
+    }
+    if !vertices.is_empty() {
+        let device = state
+            .device
+            .as_ref()
+            .ok_or(renderer_status::ERR_DEVICE)?
+            .device
+            .clone();
+        let pipeline = &mut draw.pipelines.path_rasterization_pipeline;
+        pipeline.update(&device, ctx, vertices.len())?;
+        unsafe {
+            let mut dest = std::mem::zeroed();
+            ctx.Map(&pipeline.buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, Some(&mut dest))
+                .map_err(|e| e.code().0)?;
+            std::ptr::copy_nonoverlapping(
+                vertices.as_ptr() as *const u8,
+                dest.pData as *mut u8,
+                std::mem::size_of_val(vertices.as_slice()),
+            );
+            ctx.Unmap(&pipeline.buffer, 0);
+        }
+        let vertex_count =
+            u32::try_from(vertices.len()).map_err(|_| renderer_status::ERR_CAPACITY)?;
+        pipeline.draw_vertices(frame, vertex_count)?;
+    }
+    // Resolve MSAA into the coverage texture (the pin's path resolve).
+    unsafe {
+        ctx.ResolveSubresource(
+            &coverage_texture,
+            0,
+            &msaa_texture,
+            0,
+            DXGI_FORMAT_B8G8R8A8_UNORM,
+        );
+    }
+    Ok(())
+}
+
+/// Copies the parent target's content into the blend backdrop target
+/// (rev 16, ticket 52): the 1:1 shader-pass copy through the vendored
+/// backdrop-crop pass with a zero margin and the whole parent as the
+/// region (the parent's SRV sampled at its own layout; the copy's
+/// viewport is the PARENT's so the content lands at the parent's
+/// coordinates in the window-sized copy target).
+fn copy_blend_backdrop(
+    draw: &DrawGlobal,
+    frame: &FrameBindings<'_>,
+    parent: &ActiveTarget,
+    parent_srv: &Option<ID3D11ShaderResourceView>,
+    backdrop_rtv: &Option<ID3D11RenderTargetView>,
+) -> Result<(), i32> {
+    let params = BlurUniforms::copy(parent.size);
+    let crop = BackdropCropUniforms {
+        origin: [0.0, 0.0],
+        source_size: parent.size,
+        region_size: parent.size,
+        margin: [0.0, 0.0],
+    };
+    dx_blur_pass(
+        draw,
+        frame,
+        &draw.pipelines.backdrop_crop_vertex,
+        &draw.pipelines.backdrop_crop_fragment,
+        &draw.pipelines.blur_blend_replace,
+        backdrop_rtv,
+        parent_srv,
+        params,
+        &parent.viewport,
+        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        3,
+        false,
+        BlurPassExtras::Crop(&crop),
+    )
 }
 
 fn ensure_blur_resources(
@@ -3366,7 +3892,165 @@ fn dx_blur_pass(
 ///   content just outside the element no longer bleeds into the blur.
 ///   The blurred input is then the crop texture and the composite
 ///   samples it region-relative.
-/// The R16 group composite for content-FILTER groups (rev 16, ticket
+/// The drop-shadow op's σ: the CSS blur radius halved (Chromium
+/// `ShadowData::BlurRadiusToStdDev`, "per spec, sigma is exactly half
+/// the blur radius" - shadow_data.h:76-88; the record carries the CSS
+/// radius, the renderer derives σ, mirroring the Go paint seam's
+/// PaintBoxShadow).
+fn drop_shadow_sigma(op: &crate::scene::GpuiGoSceneFilterOpRecord) -> f32 {
+    f32::from_bits(op.blur_radius) * 0.5
+}
+
+/// Draws one DROP-SHADOW op (rev 16, ticket 52, the design's §3.9): the
+/// group's blurred ALPHA silhouette, tinted with the op's color,
+/// offset by (dx, dy) and composited PREMULTIPLIED beneath the content
+/// quad. The op's own blur chain runs when its radius is nonzero (the
+/// half-res downsample + the separable gaussian, exactly the content
+/// chain's shape; a zero radius samples the raw bucket). The shadow
+/// quad is the content composite's dilated bounds dilated by the op's
+/// 3σ and translated by the op's offset; `sample_offset` carries the
+/// offset (the translation composite's rule).
+#[allow(clippy::too_many_arguments)]
+fn draw_drop_shadow_op(
+    draw: &DrawGlobal,
+    frame: &FrameBindings<'_>,
+    blur_source: &Option<ID3D11ShaderResourceView>,
+    target: &ActiveTarget,
+    ping_rtv: &Option<ID3D11RenderTargetView>,
+    ping_srv: &Option<ID3D11ShaderResourceView>,
+    pong_rtv: &Option<ID3D11RenderTargetView>,
+    pong_srv: &Option<ID3D11ShaderResourceView>,
+    source_size: [f32; 2],
+    blur_size: [f32; 2],
+    bounds: gpui::Bounds<gpui::ScaledPixels>,
+    content_mask: gpui::Bounds<gpui::ScaledPixels>,
+    opacity: f32,
+    content_blur_radius: f32,
+    op: &crate::scene::GpuiGoSceneFilterOpRecord,
+) -> Result<(), i32> {
+    let sigma = drop_shadow_sigma(op);
+    let (dx, dy) = (f32::from_bits(op.offset[0]), f32::from_bits(op.offset[1]));
+    // The shadow's source: the op's own blurred silhouette or the raw
+    // bucket (a zero-radius op).
+    let shadow_source: Option<ID3D11ShaderResourceView>;
+    let shadow_source_size: [f32; 2];
+    if let Some(kernel) = BlurKernel::for_radius(sigma) {
+        let half_vp = D3D11_VIEWPORT {
+            TopLeftX: 0.0,
+            TopLeftY: 0.0,
+            Width: blur_size[0],
+            Height: blur_size[1],
+            MinDepth: 0.0,
+            MaxDepth: 1.0,
+        };
+        dx_blur_pass(
+            draw,
+            frame,
+            &draw.pipelines.blur_downsample_vertex,
+            &draw.pipelines.blur_downsample_fragment,
+            &draw.pipelines.blur_blend_replace,
+            ping_rtv,
+            blur_source,
+            BlurUniforms::downsample(source_size, blur_size),
+            &half_vp,
+            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+            3,
+            true,
+            BlurPassExtras::None,
+        )?;
+        dx_blur_pass(
+            draw,
+            frame,
+            &draw.pipelines.blur_vertex,
+            &draw.pipelines.blur_fragment,
+            &draw.pipelines.blur_blend_replace,
+            pong_rtv,
+            ping_srv,
+            BlurUniforms::gaussian(BlurAxis::Horizontal, blur_size, kernel),
+            &half_vp,
+            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+            3,
+            true,
+            BlurPassExtras::None,
+        )?;
+        dx_blur_pass(
+            draw,
+            frame,
+            &draw.pipelines.blur_vertex,
+            &draw.pipelines.blur_fragment,
+            &draw.pipelines.blur_blend_replace,
+            ping_rtv,
+            pong_srv,
+            BlurUniforms::gaussian(BlurAxis::Vertical, blur_size, kernel),
+            &half_vp,
+            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+            3,
+            true,
+            BlurPassExtras::None,
+        )?;
+        shadow_source = ping_srv.clone();
+        shadow_source_size = blur_size;
+    } else {
+        shadow_source = blur_source.clone();
+        shadow_source_size = source_size;
+    }
+    // The shadow quad: the content composite's dilated bounds (the
+    // record bounds dilated by the CONTENT blur's 3σ - the blurred
+    // silhouette spreads exactly as far as the blurred content),
+    // dilated by the op's own 3σ and translated by the op's offset.
+    let content_dilation =
+        GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * content_blur_radius;
+    let shadow_dilation = GAUSSIAN_CUTOFF_STANDARD_DEVIATIONS * sigma;
+    let shadow_bounds = bounds
+        .dilate(gpui::ScaledPixels(content_dilation))
+        .dilate(gpui::ScaledPixels(shadow_dilation));
+    let shadow_bounds = gpui::Bounds {
+        origin: gpui::point(
+            gpui::ScaledPixels(shadow_bounds.origin.x.0 + dx),
+            gpui::ScaledPixels(shadow_bounds.origin.y.0 + dy),
+        ),
+        size: shadow_bounds.size,
+    };
+    let uniforms = BlurUniforms::composite(
+        shadow_bounds,
+        content_mask,
+        snapshot_radii(&[0, 0, 0, 0]),
+        0.0,
+        opacity,
+        FilterCompositeClip::ContentShape,
+        shadow_source_size,
+        source_size,
+    );
+    // The tint: the op's straight sRGBA color (the HSLA record
+    // converted through the pinned conversion).
+    let tint = gpui::hsla_to_rgba(gpui::Hsla::new(
+        f32::from_bits(op.color.h) * 360.0,
+        f32::from_bits(op.color.s),
+        f32::from_bits(op.color.l),
+        f32::from_bits(op.color.a),
+    ));
+    let mut extensions = CompositeExtensionsUniforms::default();
+    extensions.tint_color = [tint.red, tint.green, tint.blue, tint.alpha];
+    extensions.sample_offset = [dx, dy];
+    dx_blur_pass(
+        draw,
+        frame,
+        &draw.pipelines.drop_shadow_composite_vertex,
+        &draw.pipelines.drop_shadow_composite_fragment,
+        &draw.pipelines.blur_blend_composite,
+        &target.rtv,
+        &shadow_source,
+        uniforms,
+        &target.viewport,
+        D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+        4,
+        false,
+        BlurPassExtras::Composite(&extensions),
+    )?;
+    Ok(())
+}
+
+
 /// 50: `dx_blur_and_composite` generalized off the full-window targets -
 /// the group's pooled bucket is the blur source, the parent target the
 /// destination, the bucket's own half-resolution scratch (or the
@@ -3374,6 +4058,16 @@ fn dx_blur_pass(
 /// exact scratch) runs the chain, and the composite samples the bucket
 /// region-relative ((window position - bucket origin) / bucket size).
 /// The blur, colour-matrix and clip semantics are R15's, unchanged.
+///
+/// rev 16, ticket 52: the DROP-SHADOW ops (the appended op chain)
+/// render BENEATH the content - for each op, the bucket's blurred
+/// ALPHA silhouette (the gaussian averages each channel, so the
+/// blurred alpha IS the blurred silhouette; the chain runs at the op's
+/// own σ = radius/2, CSS's shadow rule, Chromium `shadow_data.h:76-88`
+/// BlurAsSigma - a zero-radius op samples the raw bucket), tinted with
+/// the op's color and offset by (dx, dy), drawn premultiplied over the
+/// parent; then the content composite runs unchanged. The R15 early-
+/// out (no blur, no matrices, nothing to draw) fires only WITHOUT ops.
 #[allow(clippy::too_many_arguments)]
 fn composite_filter_group(
     state: &mut RendererState,
@@ -3385,6 +4079,7 @@ fn composite_filter_group(
     target: &ActiveTarget,
     lease: &GroupLease,
     rec: &crate::scene::GpuiGoSceneFilterRecord,
+    ops: &[crate::scene::GpuiGoSceneFilterOpRecord],
     window: (u32, u32),
 ) -> Result<(), i32> {
     let bounds = snapshot_bounds(&rec.bounds);
@@ -3415,7 +4110,13 @@ fn composite_filter_group(
         }
     };
     let bucket_is_window = lease.size[0] as u32 == window.0 && lease.size[1] as u32 == window.1;
-    let needs_blur_chain = BlurKernel::for_radius(blur_radius).is_some();
+    // rev 16, ticket 52: a drop-shadow op with a nonzero radius needs the
+    // half-res scratch even when the content chain carries no blur of
+    // its own (the shadow's own chain runs through the same pair).
+    let needs_blur_chain = BlurKernel::for_radius(blur_radius).is_some()
+        || ops
+            .iter()
+            .any(|op| BlurKernel::for_radius(drop_shadow_sigma(op)).is_some());
     let (ping_rtv, ping_srv, pong_rtv, pong_srv) = if !needs_blur_chain {
         // A matrix-only chain composites the bucket directly - the
         // half-resolution scratch is never touched.
@@ -3482,10 +4183,33 @@ fn composite_filter_group(
 
     // Downsample source -> ping, then separable gaussian ping -> pong ->
     // ping. A matrix-only chain (no blur kernel) composites the bucket
-    // directly - and a zero-radius, zero-matrix chain keeps the pinned
-    // early-out (nothing to draw).
+    // directly - and a zero-radius, zero-matrix chain with NO drop-shadow
+    // ops keeps the pinned early-out (nothing to draw).
     let composited_srv: Option<ID3D11ShaderResourceView>;
     let kernel = BlurKernel::for_radius(blur_radius);
+    // rev 16, ticket 52: the drop-shadow ops render BENEATH the content -
+    // the shadow's own blur chain (at the op's σ) runs before the
+    // content's chain (both reuse the same scratch ping/pong; the shadow
+    // reads its result immediately).
+    for op in ops {
+        draw_drop_shadow_op(
+            draw,
+            frame,
+            &blur_source,
+            target,
+            &ping_rtv,
+            &ping_srv,
+            &pong_rtv,
+            &pong_srv,
+            source_size,
+            blur_size,
+            bounds,
+            content_mask,
+            opacity,
+            blur_radius,
+            op,
+        )?;
+    }
     if let Some(kernel) = kernel {
         dx_blur_pass(
             draw,
@@ -3533,12 +4257,12 @@ fn composite_filter_group(
             BlurPassExtras::None,
         )?;
         composited_srv = ping_srv;
-    } else if rec.color_matrix_count > 0 {
+    } else if rec.color_matrix_count > 0 || !ops.is_empty() {
         composited_srv = blur_source;
     } else {
         // The pinned early-out (R15 semantics preserved for filter
-        // boundaries): a zero-radius blur chain with no matrix has
-        // nothing to draw.
+        // boundaries): a zero-radius blur chain with no matrix and no
+        // drop-shadow ops has nothing to draw.
         return Ok(());
     }
 
@@ -3603,24 +4327,200 @@ fn composite_filter_group(
 /// linear filtering. A translation-only group (the 2x2 is the
 /// identity) takes the axis-aligned path with its rects translated -
 /// it keeps the smoothed-corner composite 50 built.
+///
+/// rev 16, ticket 52: the MASK composite (the `has_mask` flag - the
+/// b5 mask fields plus the bound mask source texture; the fragments
+/// multiply the sampled group colour by the mask's alpha or
+/// luminance, dst_in on the premultiplied source; a masked group's
+/// quad is its BOUNDS, the mask rect, per Chromium's "masked content
+/// is clipped to the mask's bounding box") and the BLEND composite
+/// (the `has_blend` flag - the parent's content is copied into the
+/// backdrop target first, then one `blend_composite` pass applies the
+/// W3C blend formula against that copy, writing with no fixed
+/// blending; the matrix path and the axis-aligned path share it, the
+/// identity matrix for the latter).
+/// The effect record's BOUNDS as a window-space rect (the mask rect /
+/// the clipped composite quad).
+fn effect_quad(effect: &crate::scene::GpuiGoSceneEffectRecord) -> [f32; 4] {
+    [
+        f32::from_bits(effect.bounds.x),
+        f32::from_bits(effect.bounds.y),
+        f32::from_bits(effect.bounds.w),
+        f32::from_bits(effect.bounds.h),
+    ]
+}
+
+/// Unbinds the composite's mask (t10) and backdrop (t11) texture slots
+/// (rev 16, ticket 52): the mask sources and the backdrop copy are
+/// read-only during the composites, but the slots must not leak into
+/// later passes that bind their own textures there (the same reason
+/// `dx_blur_pass` unbinds its primary source after every pass).
+fn unbind_mask_and_backdrop(ctx: &ID3D11DeviceContext) {
+    let null_srv: [Option<ID3D11ShaderResourceView>; 1] = [None];
+    unsafe {
+        ctx.PSSetShaderResources(MASK_TEXTURE_REGISTER, Some(&null_srv));
+        ctx.PSSetShaderResources(BACKDROP_TEXTURE_REGISTER, Some(&null_srv));
+    }
+}
+
+/// Resolves one effect group's MASK source (rev 16, ticket 52) and
+/// binds it at the composite's mask slot (t10): the gradient mask
+/// samples the shared ramp (t7/t8/t9 - rebound here for the composite's
+/// frame), the atlas mask resolves the polychrome texture view through
+/// the atlas service, and the coverage mask resolves the per-surface
+/// coverage target's SRV. Returns the EFFECTIVE kind (the record's
+/// kind, or 4 when the source is unresolvable - the composite draws
+/// NOTHING, the design §3.5's "an invalid mask hides the element" -
+/// never a failed frame) and the mask texture to bind (None for the
+/// gradient and invalid sources).
+#[allow(clippy::too_many_arguments)]
+fn resolve_mask_source(
+    state: &mut RendererState,
+    ctx: &ID3D11DeviceContext,
+    draw: &DrawGlobal,
+    snapshot: &Snapshot,
+    atlas: u64,
+    effect: &crate::scene::GpuiGoSceneEffectRecord,
+    slot_index: usize,
+    slot_generation: u32,
+) -> Result<(u32, Option<ID3D11ShaderResourceView>), i32> {
+    if (effect.flags & crate::scene::effect_flags::HAS_MASK) == 0 {
+        return Ok((0, None));
+    }
+    match effect.mask_kind {
+        1 => {
+            // The gradient mask: rebind the shared gradient table +
+            // ramp (the composite's frame may follow sprite draws that
+            // bound their atlas textures over the slots); the reference
+            // must name a table entry.
+            bind_gradient_resources(ctx, draw);
+            if (effect.mask_reference as usize) < snapshot.gradients.len() {
+                Ok((1, None))
+            } else {
+                Ok((4, None))
+            }
+        }
+        2 => {
+            // The atlas mask: the polychrome texture the reference
+            // names (the whole texture stretched over the mask rect -
+            // the mask-image contract).
+            match crate::atlas::texture_srv(atlas, 1, effect.mask_reference) {
+                Ok(view) => Ok((2, Some(view))),
+                Err(_) => Ok((4, None)),
+            }
+        }
+        3 => {
+            // The coverage mask: the per-surface coverage target's SRV,
+            // valid when the entry AND its path resolve.
+            let surface_state = resolve_slot(state, slot_index, slot_generation)?;
+            let srv = surface_state
+                .draw_targets
+                .coverage
+                .as_ref()
+                .and_then(|coverage| coverage.srv.clone());
+            let valid = snapshot
+                .coverage
+                .get(effect.mask_reference as usize)
+                .and_then(|entry| snapshot.paths.get(entry.path_index as usize))
+                .is_some();
+            if valid {
+                Ok((3, srv))
+            } else {
+                Ok((4, None))
+            }
+        }
+        _ => Ok((4, None)),
+    }
+}
+
+/// The per-surface blend backdrop-copy target's SRV (rev 16, ticket 52;
+/// bound at t11 for the blend composite after the copy pass).
+fn surface_state_after_copy(
+    state: &mut RendererState,
+    slot_index: usize,
+    slot_generation: u32,
+) -> Result<Option<ID3D11ShaderResourceView>, i32> {
+    let surface_state = resolve_slot(state, slot_index, slot_generation)?;
+    Ok(surface_state
+        .draw_targets
+        .blend_backdrop
+        .as_ref()
+        .and_then(|backdrop| backdrop.srv.clone()))
+}
+
+/// Resolves a filter boundary's DROP-SHADOW op chain (rev 16, ticket
+/// 52): the referenced scene-level chain sliced to the record's op
+/// count; an out-of-range index or a zero count is the R15 legacy
+/// semantics (an EMPTY chain - nothing changes for every existing
+/// record).
+fn resolve_filter_op_chain<'a>(
+    snapshot: &'a Snapshot,
+    boundary: &crate::scene::GpuiGoSceneFilterRecord,
+) -> &'a [crate::scene::GpuiGoSceneFilterOpRecord] {
+    if boundary.op_chain_count == 0 {
+        return &[];
+    }
+    match snapshot
+        .filter_op_chains
+        .get(boundary.op_chain_index as usize)
+    {
+        Some(chain) => chain.as_slice()
+            .get(..boundary.op_chain_count as usize)
+            .unwrap_or(&[]),
+        None => &[],
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn composite_effect_group(
-    _state: &mut RendererState,
+    state: &mut RendererState,
     draw: &DrawGlobal,
-    _slot_index: usize,
-    _slot_generation: u32,
+    slot_index: usize,
+    slot_generation: u32,
     frame: &FrameBindings<'_>,
+    snapshot: &Snapshot,
+    atlas: u64,
     source: &ActiveTarget,
     target: &ActiveTarget,
     effect: &crate::scene::GpuiGoSceneEffectRecord,
     region: [f32; 4],
+    window: (u32, u32),
 ) -> Result<(), i32> {
     let clips = (effect.flags
         & (crate::scene::effect_flags::CLIP_TO_BOUNDS
             | crate::scene::effect_flags::ROUNDED_CLIP_ONLY))
         != 0;
+    let has_mask = (effect.flags & crate::scene::effect_flags::HAS_MASK) != 0;
+    let has_blend = (effect.flags & crate::scene::effect_flags::HAS_BLEND) != 0;
     let opacity = f32::from_bits(effect.opacity);
     let mut extensions = CompositeExtensionsUniforms::default();
+    // The mask resolution (ticket 52): the b5 mask fields plus the
+    // mask source texture at t10 (the atlas or coverage source; the
+    // gradient mask samples the shared ramp directly). An
+    // unresolvable source is kind 4 - the composite draws NOTHING (the
+    // design §3.5's "an invalid mask hides the element").
+    let (mask_kind, mask_texture) = resolve_mask_source(
+        state,
+        frame.device_context,
+        draw,
+        snapshot,
+        atlas,
+        effect,
+        slot_index,
+        slot_generation,
+    )?;
+    {
+        let bound = [mask_texture];
+        unsafe {
+            frame
+                .device_context
+                .PSSetShaderResources(MASK_TEXTURE_REGISTER, Some(&bound));
+        }
+    }
+    extensions.mask_kind = mask_kind;
+    extensions.mask_reference = effect.mask_reference;
+    extensions.mask_mode = effect.mask_mode;
+    extensions.blend_mode = effect.blend_mode;
     // The matrix composite (ticket 51): the subtree rendered into its
     // bucket in the group's LOCAL frame (the children's local
     // coordinates, bucket pixel p = local p), so the composite maps the
@@ -3632,20 +4532,167 @@ fn composite_effect_group(
     // quad's unit coordinates (linear filtering).
     let matrix_composite = (effect.flags & crate::scene::effect_flags::HAS_TRANSFORM) != 0
         && !crate::scene::effect_translation_only(effect);
+    if has_blend {
+        // The blend composite (ticket 52): copy the parent's content
+        // into the backdrop target, then one pass blending the source
+        // against that copy. The pass covers the group's composite quad
+        // (the BOUNDS when the group clips or masks - the mask rect;
+        // the content region otherwise), mapped through the matrix for
+        // transform groups (the identity otherwise), and the b5
+        // `backdrop_size` carries the parent's logical size.
+        let surface_state = resolve_slot(state, slot_index, slot_generation)?;
+        let backdrop_rtv = surface_state
+            .draw_targets
+            .blend_backdrop
+            .as_ref()
+            .and_then(|backdrop| backdrop.rtv.clone());
+        let parent_srv = target.srv.clone();
+        match (backdrop_rtv, parent_srv) {
+            (Some(backdrop_rtv), Some(parent_srv)) => {
+                copy_blend_backdrop(draw, frame, target, &Some(parent_srv), &Some(backdrop_rtv))?;
+                // The blend fragment samples the backdrop COPY at the
+                // device position - bind its SRV at t11.
+                let backdrop_srv = surface_state_after_copy(
+                    state,
+                    slot_index,
+                    slot_generation,
+                )?;
+                let bound_backdrop = [backdrop_srv];
+                unsafe {
+                    frame
+                        .device_context
+                        .PSSetShaderResources(BACKDROP_TEXTURE_REGISTER, Some(&bound_backdrop));
+                }
+                let clip = if clips || has_mask {
+                    FilterCompositeClip::RoundedBounds
+                } else {
+                    FilterCompositeClip::ContentShape
+                };
+                // The composite quad: the group's BOUNDS (the mask rect)
+                // when the group clips or masks, the content region
+                // otherwise; translated for an axis-aligned group, in
+                // the LOCAL frame for a matrix composite.
+                let quad = if clips || has_mask {
+                    effect_quad(effect)
+                } else {
+                    region
+                };
+                if matrix_composite {
+                    let [m00, m01, m10, m11, tx, ty] = crate::scene::effect_matrix(effect);
+                    extensions.transform_row0 = [m00, m01, tx, 0.0];
+                    extensions.transform_row1 = [m10, m11, ty, 0.0];
+                    let uniforms = BlurUniforms::composite(
+                        quad_bounds(quad),
+                        quad_bounds(effect_mask_bounds(effect)),
+                        snapshot_radii(&effect.corner_radii),
+                        0.0,
+                        opacity,
+                        clip,
+                        source.size,
+                        source.size,
+                    );
+                    extensions.backdrop_size = target.size;
+                    dx_blur_pass(
+                        draw,
+                        frame,
+                        &draw.pipelines.blend_composite_vertex,
+                        &draw.pipelines.blend_composite_fragment,
+                        &draw.pipelines.blur_blend_replace,
+                        &target.rtv,
+                        &source.srv,
+                        uniforms,
+                        &target.viewport,
+                        D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+                        4,
+                        false,
+                        BlurPassExtras::Composite(&extensions),
+                    )?;
+                } else {
+                    // The axis-aligned blend group: the identity matrix
+                    // (the blend composite's vertex is the transformed
+                    // shape) with the translation folded into the quad
+                    // (the translation composite's rule).
+                    let (tx, ty) = if (effect.flags
+                        & crate::scene::effect_flags::HAS_TRANSFORM)
+                        != 0
+                    {
+                        crate::scene::effect_translation(effect)
+                    } else {
+                        (0.0, 0.0)
+                    };
+                    extensions.transform_row0 = [1.0, 0.0, tx, 0.0];
+                    extensions.transform_row1 = [0.0, 1.0, ty, 0.0];
+                    extensions.sample_offset = [tx, ty];
+                    let translated = [
+                        quad[0] + tx,
+                        quad[1] + ty,
+                        quad[2],
+                        quad[3],
+                    ];
+                    let uniforms = BlurUniforms::composite(
+                        quad_bounds(translated),
+                        quad_bounds(effect_mask_bounds(effect)),
+                        snapshot_radii(&effect.corner_radii),
+                        0.0,
+                        opacity,
+                        clip,
+                        source.size,
+                        source.size,
+                    );
+                    extensions.backdrop_size = target.size;
+                    dx_blur_pass(
+                        draw,
+                        frame,
+                        &draw.pipelines.blend_composite_vertex,
+                        &draw.pipelines.blend_composite_fragment,
+                        &draw.pipelines.blur_blend_replace,
+                        &target.rtv,
+                        &source.srv,
+                        uniforms,
+                        &target.viewport,
+                        D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+                        4,
+                        false,
+                        BlurPassExtras::Composite(&extensions),
+                    )?;
+                }
+                // Unbind the mask/backdrop textures so later passes can
+                // freely reuse their slots (the existing code unbinds the
+                // primary source; the mask and backdrop sources get the
+                // same treatment).
+                unbind_mask_and_backdrop(frame.device_context);
+                return Ok(());
+            }
+            _ => {
+                // The backdrop cannot be sampled (no offscreen scene
+                // texture / no backdrop target - a defensive path that
+                // the plan's `uses_offscreen_target` flag prevents):
+                // degrade to the source-over composite below, never a
+                // failed frame.
+            }
+        }
+    }
     if matrix_composite {
         // The quad rect: the group's LOCAL content region (the bucket's
-        // un-quantized extent). The quantization margin between the
-        // region and the bucket never reaches the target, and the
+        // un-quantized extent) - or the record BOUNDS when the group
+        // clips or masks (the mask rect; Chromium clips masked content
+        // to the mask's bounding box). The quantization margin between
+        // the region and the bucket never reaches the target, and the
         // wrap-addressed sampling edge stays at the content's own
         // edge. The group's clip (when it clips) is the rrect coverage
         // over the record's content mask - not the quad.
-        let clip = if clips {
+        let clip = if clips || has_mask {
             FilterCompositeClip::RoundedBounds
         } else {
             FilterCompositeClip::ContentShape
         };
+        let quad = if clips || has_mask {
+            effect_quad(effect)
+        } else {
+            region
+        };
         let uniforms = BlurUniforms::composite(
-            quad_bounds(region),
+            quad_bounds(quad),
             quad_bounds(effect_mask_bounds(effect)),
             snapshot_radii(&effect.corner_radii),
             0.0,
@@ -3674,6 +4721,7 @@ fn composite_effect_group(
             false,
             BlurPassExtras::Composite(&extensions),
         )?;
+        unbind_mask_and_backdrop(frame.device_context);
         return Ok(());
     }
     // The translation a translation-only group carries (ticket 51):
@@ -3693,7 +4741,9 @@ fn composite_effect_group(
             f32::from_bits(bits.h),
         ]
     };
-    let (composite_bounds, corner_radii, corner_smoothing, clip) = if clips {
+    // rev 16, ticket 52: a masked group's composite quad is its
+    // BOUNDS (the mask rect), like a clipping group's.
+    let (composite_bounds, corner_radii, corner_smoothing, clip) = if clips || has_mask {
         // The composite quad is the group's (rounded) bounds; content
         // outside the rrect is dropped - CSS overflow clipping.
         (
@@ -3755,6 +4805,8 @@ fn composite_effect_group(
         false,
         BlurPassExtras::Composite(&extensions),
     )?;
+    unbind_mask_and_backdrop(frame.device_context);
+    let _ = window;
     Ok(())
 }
 
