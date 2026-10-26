@@ -4,8 +4,8 @@ Parent: ../map.md
 Spec: ../../browser-parity/spec.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
-Assignee: orchestrator 11 (Claude Code); R16 integration branch native/r16
+Status: resolved
+Assignee: orchestrator 11 (Claude Code); worker chat 56dea239; R16 integration branch native/r16
 Blocked by: 39
 Triage: ready-for-agent
 
@@ -21,6 +21,8 @@ Triage: ready-for-agent
 Every behaviour check is a browser-parity harness fixture (an HTML page recorded in headless Chrome plus the equivalent gpui-go view), unless stated otherwise.
 
 ## Comments
+
+- 2026-10-26, orchestrator 11: verified on `native/r16` (8402b74..c288e90); it reaches main with ticket 54. Clean tree, no artifacts committed. The test DLL `cb8abb65…` matches the shared target's build output. With the manifest swapped in for the test run: `go vet ./...` clean; the broad batch set plus the native spec packages gives 74 packages ok, failing only portfixture TestFx0004 (known), the 7 internal/native loader tests that fail by construction under the swap, and clipspec (clipboard contention; ok when re-run alone). Spot-check: text_break_iterator.cc:125-149 at 0d4dcd4f (`ShouldBreakAfterBreakAll` uses the break-all class table) matches. Accepted deviations: a break-all document drops the Chromium line-break override; the inline paragraph assembler doesn't balance; Parley's keep-all breaks after U+3005.
 
 - 2026-10-26, orchestrator 11 (the approach, chosen by the orchestrator as the handoff asked): fold into the rev 16 rebuild on `native/r16`. Vendor the pinned adapter's paragraph layout (`gpui_ce_parley` `parley_paragraph_layout`) into reference/native the way R15 vendored the shaders, keeping the ONE FontContext (FontId provenance check), with a side-channel request entry so the pinned gpui types stay untouched; drive word-break, overflow-wrap and justify/start/end through it. text-wrap: balance stays Go-side bisection (the rev-15 record's contract). Locale and font width/variations are out of this ticket's acceptance.
 
