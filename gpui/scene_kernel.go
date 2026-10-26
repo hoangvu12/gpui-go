@@ -279,7 +279,7 @@ func (k *SceneKernel) insertGradient(g Gradient) (uint32, error) {
 	}
 	stops := g.Stops
 	if len(stops) > MaxTableGradientStops {
-		gradientDebugWarnf("gpui: InsertGradient: %d stops over the %d-stop cap; resampling down to %d (the ramp-path approximation)", len(stops), MaxTableGradientStops, MaxTableGradientStops)
+		GradientDebugWarnf("gpui: InsertGradient: %d stops over the %d-stop cap; resampling down to %d (the ramp-path approximation)", len(stops), MaxTableGradientStops, MaxTableGradientStops)
 		stops = ResampleTableGradientStops(stops)
 	}
 	rec := native.NewSceneGradientRecord()

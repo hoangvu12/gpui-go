@@ -444,7 +444,12 @@ func TestR52GradientStopCapResamplesInGo(t *testing.T) {
 		t.Fatalf("the resampled position %v, want 31/63", resampled[31].Position)
 	}
 	// The straight insert path: a 65-stop gradient through the SCENE
-	// API resamples (the native cap never sees it).
+	// API resamples (the native cap never sees it) and the debug
+	// warning hook fires.
+	warnings := 0
+	previous := gpui.GradientDebugWarnf
+	gpui.GradientDebugWarnf = func(format string, args ...any) { warnings++ }
+	t.Cleanup(func() { gpui.GradientDebugWarnf = previous })
 	surface := r16Surface(t, "rendererspec r52 stop cap", 120, 80)
 	scene := r16Scene(t)
 	over := make([]gpui.TableGradientStop, 65)
@@ -458,6 +463,9 @@ func TestR52GradientStopCapResamplesInGo(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("InsertGradient (65 stops, resampled): %v", err)
+	}
+	if warnings == 0 {
+		t.Fatal("the >64-stop resampling must fire the debug warning hook")
 	}
 	quad := gpui.Quad{
 		Bounds:      gpui.Bounds{Origin: gpui.Point{}, Size: gpui.Size{Width: 120, Height: 80}},

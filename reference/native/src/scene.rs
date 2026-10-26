@@ -8175,9 +8175,11 @@ mod tests {
     fn effect_record_validation_rejects_malformed_inserts() {
         // Validation lives at the ABI boundary (the bodies), exactly
         // like every other record: unknown flag bits, a singular
-        // transform, a non-zero mask kind, a property node without an
-        // id (or without a value), opacity out of range and negative
-        // radii all fail with ERR_BAD_VALUE.
+        // transform, a mask KIND out of range (the kinds 1-3 are wired
+        // since ticket 52; a kind-0 mask with a payload still
+        // rejects), a property node without an id (or without a
+        // value), opacity out of range and negative radii all fail
+        // with ERR_BAD_VALUE.
         let mut handle = 0u64;
         assert_eq!(scene_create_body(&mut handle), scene_status::OK);
         let rejects = |record: GpuiGoSceneEffectRecord| {
@@ -8195,7 +8197,15 @@ mod tests {
         rejects(record);
 
         let mut record = effect(true, effect_flags::HAS_OPACITY);
-        record.mask_kind = 1;
+        // rev 16, ticket 52: the kinds 1-3 validate (the renderer
+        // resolves the reference); kind 4 and beyond reject.
+        record.mask_kind = 4;
+        rejects(record);
+
+        let mut record = effect(true, effect_flags::HAS_OPACITY);
+        // A none-kind mask with a reference still rejects.
+        record.mask_kind = 0;
+        record.mask_reference = 1;
         rejects(record);
 
         let mut record = effect(true, effect_flags::PROPERTY_NODE | effect_flags::HAS_OPACITY);

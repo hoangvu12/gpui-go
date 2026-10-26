@@ -164,10 +164,12 @@ type Gradient struct {
 // raised to 64).
 const MaxTableGradientStops = 64
 
-// gradientDebugWarnf is the debug-build warning hook (the resampling
-// above the stop cap). Tests swap it; release builds keep the nil
-// default (no warnings).
-var gradientDebugWarnf = func(format string, args ...any) {}
+// GradientDebugWarnf is the resampling warning hook (the >64-stop
+// resample fires it once per gradient; the message carries the stop
+// count and the cap). The default is silent (production builds); tests
+// swap it to observe the warning, and debug tooling can point it at a
+// logger.
+var GradientDebugWarnf = func(format string, args ...any) {}
 
 // InsertGradient inserts one gradient table entry and returns its
 // table index (rev 16, ticket 52): the stops are baked into a 1024x1
