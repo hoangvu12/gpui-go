@@ -1,0 +1,32 @@
+{
+  "name": "opacitygroup",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-26T20:39:39Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "child-a": {
+      "x": 260,
+      "y": 140,
+      "width": 60,
+      "height": 120
+    },
+    "child-b": {
+      "x": 290,
+      "y": 140,
+      "width": 60,
+      "height": 120
+    },
+    "parent": {
+      "x": 260,
+      "y": 140,
+      "width": 120,
+      "height": 120
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

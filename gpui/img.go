@@ -540,7 +540,7 @@ func (d *imgDrawable) Prepaint(global *GlobalElementID, inspector *InspectorElem
 	if layout.replacement != nil {
 		style := d.img.computeStyle(w, app)
 		WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
-			WithContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
+			WithRoundedContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
 				layout.replacement.Prepaint(w, app)
 			})
 		})
@@ -568,10 +568,13 @@ func (d *imgDrawable) Paint(global *GlobalElementID, inspector *InspectorElement
 	if style.Visibility == VisibilityHidden {
 		return
 	}
-	WithElementOpacityVoid(w, style.Opacity, func(w *Window) {
+	// D9 (rev 16, browser-core ticket 55): the element opacity composites
+	// the subtree as one effect group; an element with a backdrop-filter
+	// chain keeps the per-primitive multiply (opacityCompositesAsGroup).
+	WithElementOpacityVoid(w, style.Opacity, bounds, opacityCompositesAsGroup(&style), func(w *Window) {
 		style.paint(bounds, w, app, func(w *Window) {
 			WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
-				WithContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
+				WithRoundedContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {
 					result, done := img.source.UseData(img.imageCache, w, app)
 					if done && result.Err == nil && result.Image != nil {
 						data := result.Image

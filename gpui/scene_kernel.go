@@ -156,7 +156,7 @@ func (k *SceneKernel) InsertQuad(q Quad) error {
 	}
 	rec := native.NewSceneQuadRecord()
 	rec.Bounds = sceneBoundsRecord(q.Bounds)
-	rec.ContentMask = sceneContentMaskRecord(q.ContentMask)
+	rec.ContentMask = sceneContentMaskOf(q.ContentMask, q.MaskRadii, q.MaskCornerSmoothing)
 	rec.Background = sceneBackgroundRecord(q.Background, q.Bounds)
 	rec.BorderColor = sceneBackgroundRecord(q.BorderColor, q.Bounds)
 	for i, radius := range [4]float32{q.CornerRadii.TopLeft, q.CornerRadii.TopRight, q.CornerRadii.BottomRight, q.CornerRadii.BottomLeft} {
@@ -188,7 +188,7 @@ func (k *SceneKernel) InsertShadow(sh Shadow) error {
 	rec := native.NewSceneShadowRecord()
 	rec.BlurRadius = math.Float32bits(sh.BlurRadius)
 	rec.Bounds = sceneBoundsRecord(sh.Bounds)
-	rec.ContentMask = sceneContentMaskRecord(sh.ContentMask)
+	rec.ContentMask = sceneContentMaskOf(sh.ContentMask, sh.MaskRadii, sh.MaskCornerSmoothing)
 	rec.Color = sceneBackgroundRecord(sh.Color, sh.Bounds)
 	rec.ElementBounds = sceneBoundsRecord(sh.ElementBounds)
 	for i, radius := range [4]float32{sh.CornerRadii.TopLeft, sh.CornerRadii.TopRight, sh.CornerRadii.BottomRight, sh.CornerRadii.BottomLeft} {
@@ -539,16 +539,18 @@ func (k *SceneKernel) Quads() ([]Quad, error) {
 	out := make([]Quad, len(records))
 	for i, rec := range records {
 		out[i] = Quad{
-			Order:           rec.Order,
-			Bounds:          sceneBoundsValue(rec.Bounds),
-			ContentMask:     sceneContentMaskValue(rec.ContentMask),
-			Background:      sceneBackgroundValue(rec.Background),
-			BorderColor:     sceneBackgroundValue(rec.BorderColor),
-			BorderStyle:     BorderStyle(rec.BorderStyle),
-			DashedLength:    math.Float32frombits(rec.BorderDashedLength),
-			DashedGap:       math.Float32frombits(rec.BorderDashedGap),
-			CornerSmoothing: math.Float32frombits(rec.CornerSmoothing),
-			Padding:         rec.Padding,
+			Order:               rec.Order,
+			Bounds:              sceneBoundsValue(rec.Bounds),
+			ContentMask:         sceneContentMaskValue(rec.ContentMask),
+			MaskRadii:           cornersValue(rec.ContentMask.CornerRadii),
+			MaskCornerSmoothing: math.Float32frombits(rec.ContentMask.CornerSmoothing),
+			Background:          sceneBackgroundValue(rec.Background),
+			BorderColor:         sceneBackgroundValue(rec.BorderColor),
+			BorderStyle:         BorderStyle(rec.BorderStyle),
+			DashedLength:        math.Float32frombits(rec.BorderDashedLength),
+			DashedGap:           math.Float32frombits(rec.BorderDashedGap),
+			CornerSmoothing:     math.Float32frombits(rec.CornerSmoothing),
+			Padding:             rec.Padding,
 		}
 		out[i].CornerRadii = cornersValue(rec.CornerRadii)
 		out[i].BorderWidths = edgesValue(rec.BorderWidths)
@@ -568,15 +570,17 @@ func (k *SceneKernel) Shadows() ([]Shadow, error) {
 	out := make([]Shadow, len(records))
 	for i, rec := range records {
 		out[i] = Shadow{
-			Order:              rec.Order,
-			BlurRadius:         math.Float32frombits(rec.BlurRadius),
-			Bounds:             sceneBoundsValue(rec.Bounds),
-			ContentMask:        sceneContentMaskValue(rec.ContentMask),
-			Color:              sceneBackgroundValue(rec.Color),
-			ElementBounds:      sceneBoundsValue(rec.ElementBounds),
-			ElementCornerRadii: cornersValue(rec.ElementCornerRadii),
-			Inset:              rec.Inset == 1,
-			CornerSmoothing:    math.Float32frombits(rec.CornerSmoothing),
+			Order:               rec.Order,
+			BlurRadius:          math.Float32frombits(rec.BlurRadius),
+			Bounds:              sceneBoundsValue(rec.Bounds),
+			ContentMask:         sceneContentMaskValue(rec.ContentMask),
+			MaskRadii:           cornersValue(rec.ContentMask.CornerRadii),
+			MaskCornerSmoothing: math.Float32frombits(rec.ContentMask.CornerSmoothing),
+			Color:               sceneBackgroundValue(rec.Color),
+			ElementBounds:       sceneBoundsValue(rec.ElementBounds),
+			ElementCornerRadii:  cornersValue(rec.ElementCornerRadii),
+			Inset:               rec.Inset == 1,
+			CornerSmoothing:     math.Float32frombits(rec.CornerSmoothing),
 		}
 		out[i].CornerRadii = cornersValue(rec.CornerRadii)
 	}
@@ -761,11 +765,22 @@ func sceneBoundsRecord(b Bounds) native.SceneBounds {
 
 // sceneContentMaskRecord packs a rect-only (zero fade, zero radii)
 // content mask: the exact pre-R16 behaviour, the encoding every
-// existing Go paint path uses. The Go styling that authors mask radii
-// and fades (Style.OverflowMask, the mask-intersection rules) is
-// browser-core ticket 55.
+// record whose pipeline consumes bounds+fade only uses (the pinned
+// underline/sprite/path pipelines - the recorded native divergence 4).
 func sceneContentMaskRecord(b Bounds) native.SceneContentMask {
 	return native.SceneContentMaskOf(b.Origin.X, b.Origin.Y, b.Size.Width, b.Size.Height)
+}
+
+// sceneContentMaskOf packs a content mask with its rounded-corner clip
+// (rev 16, browser-core ticket 55): the rect plus the radii and
+// smoothing, the fade edges zero (the Go styling authors no fades yet
+// - ticket 57). Zero radii pack exactly the rect-only mask.
+func sceneContentMaskOf(b Bounds, radii Corners, smoothing float32) native.SceneContentMask {
+	return native.SceneContentMaskRounded(
+		b.Origin.X, b.Origin.Y, b.Size.Width, b.Size.Height,
+		[4]float32{radii.TopLeft, radii.TopRight, radii.BottomRight, radii.BottomLeft},
+		smoothing,
+	)
 }
 
 // sceneContentMaskValue unpacks a rect-only mask (the radii and fades

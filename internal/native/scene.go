@@ -239,11 +239,28 @@ type SceneContentMask struct {
 }
 
 // SceneContentMaskOf packs a rect-only (zero fade, zero radii) mask -
-// the exact pre-R16 behaviour, the encoding every existing Go paint
-// path uses (the Go styling that authors radii and fades is
-// browser-core ticket 55).
+// the exact pre-R16 behaviour, the encoding every Go paint path that
+// does not carry the rounded clip uses.
 func SceneContentMaskOf(x, y, w, h float32) SceneContentMask {
 	return SceneContentMask{Bounds: SceneBoundsOf(x, y, w, h)}
+}
+
+// SceneContentMaskRounded packs a content mask with the rounded-corner
+// clip (rev 16, browser-core ticket 55): the rect plus the corner radii
+// (top-left, top-right, bottom-right, bottom-left) and the smoothing.
+// The fade edges stay zero - the Go styling authors no fades yet
+// (ticket 57). Zero radii pack exactly the rect-only mask.
+func SceneContentMaskRounded(x, y, w, h float32, radii [4]float32, smoothing float32) SceneContentMask {
+	return SceneContentMask{
+		Bounds: SceneBoundsOf(x, y, w, h),
+		CornerRadii: [4]uint32{
+			math.Float32bits(radii[0]),
+			math.Float32bits(radii[1]),
+			math.Float32bits(radii[2]),
+			math.Float32bits(radii[3]),
+		},
+		CornerSmoothing: math.Float32bits(smoothing),
+	}
 }
 
 // IsRounded reports whether the mask clips with rounded corners.

@@ -1,0 +1,20 @@
+{
+  "name": "roundedclip",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-26T20:47:16Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "card": {
+      "x": 260,
+      "y": 155,
+      "width": 120,
+      "height": 90
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

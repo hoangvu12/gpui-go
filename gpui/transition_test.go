@@ -393,8 +393,11 @@ func TestMatchTransitionRuleLastWinsAndCombinedGates(t *testing.T) {
 
 // TestTransitionStyleInterpolatesOpacityAndBackground drives the paint
 // properties through the same diff: opacity 1 → 0 and red → blue,
-// sampled at the 200ms midpoint, land on the scene's painted quad as
-// alpha 0.5 and the sRGB midpoint colour.
+// sampled at the 200ms midpoint, land on the scene as the R16 opacity
+// GROUP's 0.5 (D9, browser-core ticket 55: the single-primitive subtree
+// brackets in an effect group - the native plan folds it into the
+// per-primitive colour multiply at snapshot time, so the pixels are the
+// multiply's) and the sRGB midpoint colour on the painted quad.
 func TestTransitionStyleInterpolatesOpacityAndBackground(t *testing.T) {
 	ta, w, v := openTransitionWindow(t, []TransitionRule{
 		NewTransitionRule(TransitionOpacity, msT(400)).WithEasing(EasingLinear()),
@@ -414,13 +417,22 @@ func TestTransitionStyleInterpolatesOpacityAndBackground(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The element opacity rides the effect group (D9): the quad keeps
+	// the un-multiplied colour and the pair carries 0.5.
+	groups, err := scene.EffectGroups()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 2 || !groups[0].IsStart || groups[1].IsStart || !groups[0].HasOpacity || abs32(groups[0].Opacity-0.5) > 1e-3 {
+		t.Fatalf("effect groups = %+v, want a matched opacity pair at 0.5", groups)
+	}
 	// The test window's device scale is 2: the 100x40 box is 200x80.
 	var found bool
 	for _, q := range quads {
 		if q.Bounds.Size.Width == 200 && q.Bounds.Origin.X == 0 {
 			rgba := hslaToRgba(q.Background.Solid)
-			if abs32(rgba.A-0.5) > 1e-3 {
-				t.Fatalf("painted alpha at the midpoint = %v, want 0.5", rgba.A)
+			if rgba.A < 1-1e-3 {
+				t.Fatalf("painted alpha at the midpoint = %v, want the un-multiplied 1 (the group carries the opacity)", rgba.A)
 			}
 			if abs32(rgba.R-0.5) > 1e-3 || rgba.G > 1e-3 || abs32(rgba.B-0.5) > 1e-3 {
 				t.Fatalf("painted background at the midpoint = rgba(%v,%v,%v), want (0.5, 0, 0.5)",

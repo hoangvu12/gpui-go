@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.box {
+		box-sizing: border-box;
+		width: 200px;
+		height: 120px;
+		border: 12px solid #334155;
+		/* overflow: visible (the default): the child paints over the
+		   border, past the padding box and past the border box. */
+		overflow: visible;
+	}
+	.poker {
+		width: 200px;
+		height: 200px;
+		background: #dc2626;
+	}
+</style>
+</head>
+<body>
+	<div class="box" data-id="box">
+		<div class="poker" data-id="poker"></div>
+	</div>
+</body>
+</html>

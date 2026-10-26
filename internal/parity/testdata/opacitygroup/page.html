@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.parent {
+		position: relative;
+		box-sizing: border-box;
+		width: 120px;
+		height: 120px;
+		background: #94a3b8;
+		/* The element opacity: ONE group composites the whole subtree
+		   (D9) - the overlapping children blend inside it. */
+		opacity: 0.5;
+	}
+	.child {
+		position: absolute;
+		top: 0;
+		width: 60px;
+		height: 120px;
+	}
+	.child-a {
+		left: 0;
+		background: #dc2626;
+	}
+	.child-b {
+		left: 30px;
+		background: #2563eb;
+	}
+</style>
+</head>
+<body>
+	<div class="parent" data-id="parent">
+		<div class="child child-a" data-id="child-a"></div>
+		<div class="child child-b" data-id="child-b"></div>
+	</div>
+</body>
+</html>

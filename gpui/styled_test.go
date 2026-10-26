@@ -288,15 +288,26 @@ func TestStyleSnapshotIsIndependent(t *testing.T) {
 
 // TestDivPaintsTheBoxInPinnedOrder is the scene transcript of
 // style.rs:894-1015 paint_box: drop shadows, the outer ring, the
-// background, the inset ring and inset shadows, the children, then the
-// border, with the clamped corner radii shared by every primitive.
+// background, the inset ring and inset shadows, the border, then the
+// children, with the clamped corner radii shared by every primitive.
+// The border-before-children order is CSS's (rev 16, browser-core
+// ticket 55): the background phase paints backgrounds AND borders
+// before the foreground (paint_phase.h:33-35: "Background phase:
+// backgrounds and borders of all blocks are painted", the phase before
+// the foreground; box_fragment_painter.cc's
+// PaintBoxDecorationBackgroundWithRectImpl paints the border as the
+// decoration phase's last step). The pin painted the border after the
+// children, so a child poking over the border was covered by it.
 func TestDivPaintsTheBoxInPinnedOrder(t *testing.T) {
 	inset := gpui.NewBoxShadow(1, 1, gpui.SolidBackground(green)).WithInset()
 	drop := gpui.NewBoxShadow(0, 2, gpui.SolidBackground(blue)).WithBlurRadius(4)
 	box := gpui.Div().Flex().W(gpui.Px(100)).H(gpui.Px(40)).Bg(red).Rounded(gpui.Px(6)).
 		Border2().BorderColor(blue).Shadow([]gpui.BoxShadow{inset, drop}).
 		Ring(3).RingColor(green).InsetRing2().InsetRingColor(green).
-		Child(gpui.Div().Flex().Size(gpui.Px(10)).Bg(green))
+		// The child fills the whole padding box (it pokes over none of
+		// the border bands - the z-order gate over the border lives in
+		// TestBorderPaintsBeforeTheOverflowingChild below).
+		Child(gpui.Div().Flex().Size(gpui.Px(96)).H(gpui.Px(36)).Bg(green))
 	_, scene := drawStyled(t, gpui.Div().Flex().P(gpui.Px(20)).Child(box).IntoElement())
 
 	quads := quadsOf(t, scene)
@@ -304,28 +315,53 @@ func TestDivPaintsTheBoxInPinnedOrder(t *testing.T) {
 	// The ring and the border are border-only quads: each paints as four
 	// strips (window.rs paint_quad's split).
 	if len(quads) != 10 || len(shadows) != 3 {
-		t.Fatalf("quads = %d, shadows = %d; want 4 ring strips, bg, child, 4 border strips and 3 shadows", len(quads), len(shadows))
+		t.Fatalf("quads = %d, shadows = %d; want 4 ring strips, bg, 4 border strips, the child and 3 shadows", len(quads), len(shadows))
 	}
 	elem := dev(20, 20, 100, 40)
 	r6 := corners(6)
-	ringStrips, bg, child, borderStrips := quads[0:4], quads[4], quads[5], quads[6:10]
+	// The dump is the SORTED stream (bounds-tree z-order): with the
+	// border painting before the child the strips and the child
+	// interleave, so identify the roles instead of slicing - the ring
+	// strips (border-only, 3px, green), the background (red), the border
+	// strips (border-only, 2px, blue) and the child (solid green fill).
+	var ringStrips, borderStrips []gpui.Quad
+	var bg, child gpui.Quad
+	for _, q := range quads {
+		switch {
+		case q.BorderWidths == edges(3):
+			ringStrips = append(ringStrips, q)
+		case q.BorderWidths == edges(2):
+			borderStrips = append(borderStrips, q)
+		case q.Background == painted(red):
+			bg = q
+		case q.Background == painted(green) && q.BorderWidths == (gpui.Edges{}):
+			child = q
+		}
+	}
+	if len(ringStrips) != 4 || len(borderStrips) != 4 || bg.Order == 0 || child.Order == 0 {
+		t.Fatalf("quads by role: ring %d border %d bg %+v child %+v", len(ringStrips), len(borderStrips), bg, child)
+	}
 	dropShadow, insetRing, insetShadow := shadows[0], shadows[1], shadows[2]
 
 	// Scene orders are the kernel's bounds-tree z-orders (a primitive
 	// orders above every earlier one it overlaps), so the paint sequence
-	// shows as non-decreasing orders, strictly increasing between the
-	// overlapping primitives.
-	maxRing, minBorder := ringStrips[0].Order, borderStrips[0].Order
+	// shows as non-decreasing orders between overlapping primitives: the
+	// decoration stack rises (shadows, ring, background, insets) and the
+	// whole decoration phase sits below the child - including the border,
+	// which now paints BEFORE the child (CSS's background phase), so the
+	// child's order exceeds every border strip's (the strips overlap the
+	// child's insertion footprint).
+	maxRing, maxBorder := ringStrips[0].Order, borderStrips[0].Order
 	for _, q := range ringStrips {
 		maxRing = max(maxRing, q.Order)
 	}
 	for _, q := range borderStrips {
-		minBorder = min(minBorder, q.Order)
+		maxBorder = max(maxBorder, q.Order)
 	}
 	if !(dropShadow.Order < bg.Order && maxRing < bg.Order && bg.Order < insetRing.Order &&
-		insetRing.Order < insetShadow.Order && insetShadow.Order < child.Order && child.Order <= minBorder) {
-		t.Errorf("paint order: drop %d ring %d bg %d insetRing %d inset %d child %d border %d",
-			dropShadow.Order, ringStrips[0].Order, bg.Order, insetRing.Order, insetShadow.Order, child.Order, borderStrips[0].Order)
+		insetRing.Order < insetShadow.Order && maxBorder < child.Order) {
+		t.Errorf("paint order: drop %d ring %d bg %d insetRing %d inset %d border <=%d child %d",
+			dropShadow.Order, ringStrips[0].Order, bg.Order, insetRing.Order, insetShadow.Order, maxBorder, child.Order)
 	}
 	if dropShadow.Inset || dropShadow.Bounds != dev(20, 22, 100, 40) || dropShadow.CornerRadii != r6 {
 		t.Errorf("drop shadow = %+v", dropShadow)
@@ -361,8 +397,8 @@ func TestDivPaintsTheBoxInPinnedOrder(t *testing.T) {
 	if !insetShadow.Inset || insetShadow.Bounds != dev(23, 23, 96, 36) || insetShadow.CornerRadii != corners(4) {
 		t.Errorf("inset shadow = %+v", insetShadow)
 	}
-	if child.Bounds != dev(22, 22, 10, 10) {
-		t.Errorf("child = %+v (the border width is layout padding of the box)", child)
+	if child.Bounds != dev(22, 22, 96, 36) {
+		t.Errorf("child = %+v (the padding box)", child)
 	}
 	for _, border := range borderStrips {
 		if border.BorderWidths != edges(2) || border.BorderColor != painted(blue) || !border.Background.IsTransparent() || border.CornerRadii != r6 {
@@ -374,8 +410,52 @@ func TestDivPaintsTheBoxInPinnedOrder(t *testing.T) {
 	}
 }
 
+// TestBorderPaintsBeforeTheOverflowingChild pins the CSS border order
+// (rev 16, browser-core ticket 55): a child that pokes over the
+// element's border paints ABOVE it (the background phase - backgrounds
+// and borders - precedes the foreground; paint_phase.h:33-35), the
+// z-order gate of the change. The child covers the border box's right
+// and bottom bands entirely (overflow: visible, no clip), so its
+// bounds-tree order must exceed every border strip's.
+func TestBorderPaintsBeforeTheOverflowingChild(t *testing.T) {
+	box := gpui.Div().Flex().W(gpui.Px(100)).H(gpui.Px(40)).
+		Border2().BorderColor(blue).Bg(red).
+		// Flex children do not shrink past the box by default
+		// (flex-shrink 0 in the fixture vocabulary): the 120x60 child
+		// pokes 20 logical px past the box's right and bottom edges.
+		Child(gpui.Div().Flex().Size(gpui.Px(120)).H(gpui.Px(60)).Bg(green).FlexShrink(0))
+	_, scene := drawStyled(t, gpui.Div().Flex().P(gpui.Px(20)).Child(box).IntoElement())
+	quads := quadsOf(t, scene)
+	var child gpui.Quad
+	var borderStrips []gpui.Quad
+	for _, q := range quads {
+		switch {
+		case q.Background == painted(green):
+			child = q
+		case q.BorderWidths == edges(2):
+			borderStrips = append(borderStrips, q)
+		}
+	}
+	if child.Order == 0 || len(borderStrips) != 4 {
+		t.Fatalf("quads by role: border %d child %+v", len(borderStrips), child)
+	}
+	for _, strip := range borderStrips {
+		if child.Order <= strip.Order {
+			t.Fatalf("the overflowing child orders %d below a border strip %d (bounds %v) - CSS paints the border below the foreground (paint_phase.h:33-35)",
+				child.Order, strip.Order, strip.Bounds)
+		}
+	}
+}
+
 // TestDivPaintRadiiClampAndOpacity checks the radius clamp
-// (geometry.rs:2511) and that element opacity scales the box colors.
+// (geometry.rs:2511) and the element opacity's R16 encoding (D9,
+// browser-core ticket 55): a single-primitive translucent element
+// brackets its subtree in an effect group carrying the opacity (the
+// native plan folds the single primitive into the per-primitive colour
+// multiply at snapshot time, so the pixels are the multiply's); the
+// STORED record keeps the un-multiplied colour - the group owns the
+// opacity. The effect-group dump carries HasOpacity and the opacity
+// value.
 func TestDivPaintRadiiClampAndOpacity(t *testing.T) {
 	_, scene := drawStyled(t, gpui.Div().Flex().W(gpui.Px(60)).H(gpui.Px(20)).RoundedFull().Opacity(0.5).Bg(red).IntoElement())
 	quads := quadsOf(t, scene)
@@ -385,8 +465,25 @@ func TestDivPaintRadiiClampAndOpacity(t *testing.T) {
 	if quads[0].CornerRadii != corners(10) {
 		t.Errorf("rounded_full radii = %+v, want clamped to 10", quads[0].CornerRadii)
 	}
-	if quads[0].Background != gpui.SolidBackground(red).Opacity(0.5) {
-		t.Errorf("opacity background = %+v", quads[0].Background)
+	if quads[0].Background != painted(red) {
+		t.Errorf("opacity background = %+v, want the un-multiplied colour (the group carries the opacity)", quads[0].Background)
+	}
+	groups, err := scene.EffectGroups()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 2 {
+		t.Fatalf("effect groups = %d, want a matched pair", len(groups))
+	}
+	start, end := groups[0], groups[1]
+	if !start.IsStart || end.IsStart {
+		t.Errorf("effect groups = start %v end %v, want a start/end pair", start.IsStart, end.IsStart)
+	}
+	if !start.HasOpacity || !end.HasOpacity {
+		t.Errorf("effect groups = %+v %+v, want the opacity flag on the pair", start, end)
+	}
+	if d := start.Opacity - 0.5; d < -1e-6 || d > 1e-6 {
+		t.Errorf("group opacity = %v, want 0.5", start.Opacity)
 	}
 }
 
@@ -435,8 +532,21 @@ func TestOverflowMaskInsetsByBorderWidths(t *testing.T) {
 		if len(quads) != tc.quads {
 			t.Fatalf("%s: quads = %d, want %d", name, len(quads), tc.quads)
 		}
-		if quads[0].ContentMask != want {
-			t.Errorf("%s: child mask = %+v, want %+v (the padding box, inset by the border widths)", name, quads[0].ContentMask, want)
+		// The dump is the SORTED stream and the border paints before the
+		// child now (rev 16, ticket 55 - CSS's background-phase border),
+		// so find the CHILD by its solid red fill instead of slicing.
+		var child *gpui.Quad
+		for i := range quads {
+			if quads[i].Background == painted(red) && quads[i].BorderWidths == (gpui.Edges{}) {
+				child = &quads[i]
+				break
+			}
+		}
+		if child == nil {
+			t.Fatalf("%s: no child quad in %+v", name, quads)
+		}
+		if child.ContentMask != want {
+			t.Errorf("%s: child mask = %+v, want %+v (the padding box, inset by the border widths)", name, child.ContentMask, want)
 		}
 	}
 }
