@@ -26,7 +26,7 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 - **43 resolved ON native/r16** (8402b74..c288e90 + 4d18b95; the broad set passed against the bundle).
 - **42 resolved ON native/r16** (36a329e..ae84f31 + fd2582c). All native code is in.
 - **54 resolved; `native/r16` MERGED into main** (native revision 16, DLL `8ec910d4…`). gpui-go-base ported to `gpui.MeasuredSize` in its merge-day commit. Worktree `gpui-go-wt-r16` and branch `native/r16` removed; the interim bundle folder deleted. `gpui-r16-target` (cargo target, ~8 GB) KEPT for incremental native follow-ups.
-- **Next:** 55, 56, 58 in parallel (Go-only; no cargo); then 57 (after 55), 59 (after 58), 60 (after 56+58), 61 (after 56).
+- **Running (Go-only, parallel):** 55 (chat 2b2ae62c, `gpui-go-wt-core-55`), 56 (chat b2fbb77f, `gpui-go-wt-core-56`), 58 (chat 6ead47b3, `gpui-go-wt-core-58`), all branched from 43d22e6. Then 57 (after 55), 59 (after 58), 60 (after 56+58), 61 (after 56).
 - Open questions re-asked to the user 2026-10-26 (Tab wrap, reduced motion, plugin memory, gpui-go-base repo); answers pending.
 
 **ORCHESTRATOR 10 STATUS (2026-10-25). History now.** Claude Code, Opus 5.5; Roboco chat d041f254. It took over from orchestrator 9 (chat b38c2f03; handoff doc `%TEMP%\gpui-go-handoff-orchestrator10.md`). Rules: orchestrator 8's block plus the native decision above.
