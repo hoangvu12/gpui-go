@@ -565,6 +565,7 @@ func (r *realWindowTextSystem) layoutInline(request inlineLayoutRequest) (inline
 // them. tabSizeSpaces selects the browser's tab-size stops when the
 // segment's white-space mode preserves tabs (browser-core 38).
 func (r *realWindowTextSystem) shapeRuns(text string, fontSize float32, runs []TextRun, wrapWidth *float32, lineClamp *uint32, tabSizeSpaces *uint32, align TextAlign, balance bool) (shapedText, error) {
+
 	line, err := r.lines.layoutWrappedLine(r.system, TextLayoutRequest{
 		Text:          text,
 		FontSize:      fontSize,

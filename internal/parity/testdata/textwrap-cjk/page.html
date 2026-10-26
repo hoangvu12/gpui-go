@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		padding: 16px;
+		box-sizing: border-box;
+		/* The pinned 25px line height (the textstyle fixtures' rule). */
+		font: 16px/25px "Segoe UI", system-ui, sans-serif;
+		color: #0f172a;
+	}
+	.row {
+		box-sizing: border-box;
+		width: 380px;
+		padding: 8px;
+		border: 1px solid #334155;
+		background: #e2e8f0;
+		display: flex;
+	}
+	.fill {
+		box-sizing: border-box;
+		background: #dbeafe;
+	}
+
+	body, .row .fill {
+		font-family: "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+	}
+
+</style>
+</head>
+<body data-id="root">
+	<div class="row" data-id="row-cjk"><span class="fill" data-id="span-cjk" style="display: block; width: 100%">東京都渋谷区神南一丁目公園神宮外苑恵比寿広尾橋方向</span></div>
+	<div class="row" data-id="row-cjk-keepall"><span class="fill" data-id="span-cjk-keepall" style="display: block; width: 100%; word-break: keep-all">東京都渋谷区神南一丁目公園神宮外苑恵比寿広尾橋方向</span></div>
+</body>
+</html>

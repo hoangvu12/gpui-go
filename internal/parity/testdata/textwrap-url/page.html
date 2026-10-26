@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		padding: 16px;
+		box-sizing: border-box;
+		/* The pinned 25px line height (the textstyle fixtures' rule). */
+		font: 16px/25px "Segoe UI", system-ui, sans-serif;
+		color: #0f172a;
+	}
+	.row {
+		box-sizing: border-box;
+		width: 380px;
+		padding: 8px;
+		border: 1px solid #334155;
+		background: #e2e8f0;
+		display: flex;
+	}
+	.fill {
+		box-sizing: border-box;
+		background: #dbeafe;
+	}
+
+</style>
+</head>
+<body data-id="root">
+	<div class="row" data-id="row-url"><span class="fill" data-id="span-url" style="display: block; width: 100%">https://example.com/browser-parity/fixtures/very/unbreakable/url/path/segments</span></div>
+	<div class="row" data-id="row-url-anywhere"><span class="fill" data-id="span-url-anywhere" style="display: block; width: 100%; overflow-wrap: anywhere">https://example.com/browser-parity/fixtures/very/unbreakable/url/path/segments</span></div>
+	<div class="row" data-id="row-url-break-word"><span class="fill" data-id="span-url-break-word" style="display: block; width: 100%; overflow-wrap: break-word">https://example.com/browser-parity/fixtures/very/unbreakable/url/path/segments</span></div>
+	<div class="row" data-id="row-url-break-all"><span class="fill" data-id="span-url-break-all" style="display: block; width: 100%; word-break: break-all">https://example.com/browser-parity/fixtures/very/unbreakable/url/path/segments</span></div>
+</body>
+</html>

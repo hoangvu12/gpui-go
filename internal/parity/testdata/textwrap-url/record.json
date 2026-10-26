@@ -1,0 +1,68 @@
+{
+  "name": "textwrap-url",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-26T14:09:11Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "row-url": {
+      "x": 16,
+      "y": 16,
+      "width": 380,
+      "height": 68
+    },
+    "row-url-anywhere": {
+      "x": 16,
+      "y": 96,
+      "width": 380,
+      "height": 93
+    },
+    "row-url-break-all": {
+      "x": 16,
+      "y": 306,
+      "width": 380,
+      "height": 68
+    },
+    "row-url-break-word": {
+      "x": 16,
+      "y": 201,
+      "width": 380,
+      "height": 93
+    },
+    "span-url": {
+      "x": 25,
+      "y": 25,
+      "width": 362,
+      "height": 50
+    },
+    "span-url-anywhere": {
+      "x": 25,
+      "y": 105,
+      "width": 362,
+      "height": 75
+    },
+    "span-url-break-all": {
+      "x": 25,
+      "y": 315,
+      "width": 362,
+      "height": 50
+    },
+    "span-url-break-word": {
+      "x": 25,
+      "y": 210,
+      "width": 362,
+      "height": 75
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

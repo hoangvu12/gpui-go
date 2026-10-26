@@ -712,6 +712,12 @@ func (c *inlineParagraphCollector) paintRuns(record *inlineTextContent) []TextRu
 		styled := c.textStyle.ToRun(run.Len)
 		styled.Font = run.Font
 		styled.LetterSpacing = run.LetterSpacing
+		// The browser text fields ride the published run (browser-core
+		// 43): the text element's own resolved tags — the innermost
+		// style, not the paragraph's ambient — own the word breaking.
+		styled.WordBreak = run.WordBreak
+		styled.OverflowWrap = run.OverflowWrap
+		styled.TextWrap = run.TextWrap
 		runs[i] = styled
 	}
 	return runs

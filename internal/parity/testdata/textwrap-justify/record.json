@@ -1,0 +1,56 @@
+{
+  "name": "textwrap-justify",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-26T14:15:47Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    },
+    "row-justify": {
+      "x": 16,
+      "y": 96,
+      "width": 380,
+      "height": 68
+    },
+    "row-justify-leaf": {
+      "x": 16,
+      "y": 176,
+      "width": 380,
+      "height": 68
+    },
+    "row-left": {
+      "x": 16,
+      "y": 16,
+      "width": 380,
+      "height": 68
+    },
+    "span-justify": {
+      "x": 25,
+      "y": 105,
+      "width": 362,
+      "height": 50
+    },
+    "span-justify-leaf": {
+      "x": 25,
+      "y": 185,
+      "width": 362,
+      "height": 50
+    },
+    "span-left": {
+      "x": 25,
+      "y": 25,
+      "width": 362,
+      "height": 50
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

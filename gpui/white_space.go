@@ -859,7 +859,12 @@ func sameShapingRun(a, b TextRun) bool {
 	if (a.LetterSpacing == nil) != (b.LetterSpacing == nil) {
 		return false
 	}
-	return a.LetterSpacing == nil || *a.LetterSpacing == *b.LetterSpacing
+	if a.LetterSpacing != nil && *a.LetterSpacing != *b.LetterSpacing {
+		return false
+	}
+	// The browser text fields (browser-core 43): a run with different
+	// word-breaking tags shapes differently.
+	return a.WordBreak == b.WordBreak && a.OverflowWrap == b.OverflowWrap && a.TextWrap == b.TextWrap
 }
 
 // sameFontDescriptor reports whether two descriptors select the same
@@ -899,6 +904,10 @@ func sliceRunsByRange(runs []TextRun, start, end int) []TextRun {
 			Underline:       run.Underline,
 			Strikethrough:   run.Strikethrough,
 			LetterSpacing:   run.LetterSpacing,
+			// The browser text fields ride the slice (browser-core 43).
+			WordBreak:    run.WordBreak,
+			OverflowWrap: run.OverflowWrap,
+			TextWrap:     run.TextWrap,
 		})
 	}
 	return sliced
