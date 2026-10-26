@@ -185,6 +185,14 @@ type Background struct {
 	// kind, geometry and baked ramp row paint the primitive; the entry
 	// must be inserted before the primitive).
 	GradientTable uint32
+	// CssGradient is the CSS gradient description (rev 16, browser-core
+	// ticket 57): n stops, the radial/conic shapes and the repeating
+	// tile, resolved at PAINT time against the element's device bounds
+	// into one table entry (Scene.PaintQuad resolves it; the kernel
+	// insert paths reject the unresolved arm). A POINTER so Background
+	// stays comparable (the arm's == is the pointer's identity; compare
+	// kinds and stop lists instead).
+	CssGradient *CssGradient
 }
 
 // SolidBackground builds a solid background from a color.
@@ -195,11 +203,25 @@ func SolidBackground(c Hsla) Background {
 // Opacity applies an element opacity (the pinned Background::opacity:
 // the solid's alpha multiplied by the clamped factor with the hue
 // round-tripped, each gradient stop's alpha multiplied by the clamped
-// factor — the pinned LinearColorStop::opacity, alpha only).
+// factor — the pinned LinearColorStop::opacity, alpha only; the CSS
+// gradient arm scales each of its stops the same way, ticket 57).
 func (b Background) Opacity(factor float32) Background {
 	if b.Kind == BackgroundKindLinearGradient {
 		b.Gradient.From.Color = OpacityHsla(b.Gradient.From.Color, factor)
 		b.Gradient.To.Color = OpacityHsla(b.Gradient.To.Color, factor)
+		return b
+	}
+	if b.Kind == BackgroundKindCssGradient && b.CssGradient != nil {
+		out := *b.CssGradient
+		for i := range out.Stops {
+			out.Stops[i].Color = OpacityHsla(out.Stops[i].Color, factor)
+		}
+		return Background{Kind: BackgroundKindCssGradient, CssGradient: &out}
+	}
+	if b.Kind == BackgroundKindGradientTable {
+		// The referenced table entry is already baked; the caller folds
+		// the element opacity into the stops BEFORE the resolve (the
+		// ramp bakes it).
 		return b
 	}
 	return Background{Kind: BackgroundKindSolid, Solid: OpacityBackground(b.Solid, factor)}
@@ -211,10 +233,28 @@ func (b Background) AsSolid() Hsla { return b.Solid }
 
 // IsTransparent reports whether the background is fully transparent
 // (the pinned Background::is_transparent: a solid with a == 0, or a
-// gradient whose every stop has a == 0).
+// gradient whose every stop has a == 0 - the two-stop and CSS arms).
 func (b Background) IsTransparent() bool {
 	if b.Kind == BackgroundKindLinearGradient {
 		return b.Gradient.From.Color.A == 0 && b.Gradient.To.Color.A == 0
+	}
+	if b.Kind == BackgroundKindCssGradient {
+		if b.CssGradient == nil {
+			return true
+		}
+		for _, stop := range b.CssGradient.Stops {
+			if stop.Color.A != 0 {
+				return false
+			}
+		}
+		return true
+	}
+	if b.Kind == BackgroundKindGradientTable {
+		// The referenced table entry's stops decide; the resolved arm
+		// is never transparent by construction (PaintQuad only resolves
+		// real stop lists, and an all-transparent CSS arm drops before
+		// the resolve).
+		return false
 	}
 	return b.Solid.A == 0
 }

@@ -96,6 +96,11 @@ const (
 	// gradients - the R15 two-stop record keeps its own arm,
 	// bit-exact).
 	BackgroundKindGradientTable
+	// BackgroundKindCssGradient is the unresolved CSS gradient arm (rev
+	// 16, browser-core ticket 57): the n-stop / radial / conic /
+	// repeating description resolved at PAINT time into one table
+	// entry (Scene.PaintQuad; the kernel insert paths reject it).
+	BackgroundKindCssGradient
 )
 
 // LinearGradientBackground builds a linear gradient Background with an

@@ -746,7 +746,24 @@ func NewPaintContext(scale float32, mask Bounds, elementOpacity float32) *PaintC
 
 // PaintQuad paints a styled box (the pinned paint_quad, including the
 // border-only split into strips around the empty interior).
+//
+// A CSS-gradient Background (rev 16, ticket 57) resolves here: the
+// gradient's geometry and stops are fixed against the painted bounds
+// and inserted into the scene's gradient table, and the record(s)
+// carry the table reference — the border strips share the one entry,
+// so the gradient spans the whole quad.
 func (s *Scene) PaintQuad(pq PaintQuad, cornerSmoothing float32, ctx *PaintContext) error {
+	if pq.Background.Kind == BackgroundKindCssGradient && pq.Background.CssGradient != nil {
+		// The element opacity folds into the STOPS before the resolve
+		// (the ramp bakes it; the resolved table arm ignores a later
+		// opacity multiply — see Background.Opacity).
+		shaded := pq.Background.Opacity(ctx.ElementOpacity)
+		resolved, err := s.resolveCssGradientBackground(shaded, pq.Bounds, ctx.ScaleFactor)
+		if err != nil {
+			return fmt.Errorf("gpui: PaintQuad: %w", err)
+		}
+		pq.Background = resolved
+	}
 	record := paintQuadFor(pq, ctx.Mask, ctx.ScaleFactor, ctx.ElementOpacity, cornerSmoothing)
 	if !record.Background.IsTransparent() {
 		return s.InsertQuad(record)

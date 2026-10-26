@@ -144,15 +144,19 @@ func (k *SceneKernel) RaiseOrderFloor() error {
 	return nil
 }
 
-// InsertQuad inserts a quad record. The record's Order must be zero (the
-// kernel assigns it); a non-zero order is a caller error rejected before
-// native entry, mirroring the ABI's record validation.
+// insertQuadRecord packs and inserts a quad record; the CSS-gradient
+// Background arm is resolved by the paint seam (Scene.PaintQuad)
+// before this level - a directly-inserted unresolved arm is a caller
+// error (the ABI has no record for it).
 func (k *SceneKernel) InsertQuad(q Quad) error {
 	if err := k.checkLive("InsertQuad"); err != nil {
 		return err
 	}
 	if q.Order != 0 {
 		return fmt.Errorf("gpui: scene insert quad: record order must be zero, got %d (the kernel assigns the draw order)", q.Order)
+	}
+	if q.Background.Kind == BackgroundKindCssGradient || q.BorderColor.Kind == BackgroundKindCssGradient {
+		return fmt.Errorf("gpui: scene insert quad: a CSS-gradient background must be resolved through Scene.PaintQuad before insertion (the gradient table entry is inserted at paint time)")
 	}
 	rec := native.NewSceneQuadRecord()
 	rec.Bounds = sceneBoundsRecord(q.Bounds)

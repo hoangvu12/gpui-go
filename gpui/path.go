@@ -459,6 +459,12 @@ func (s *Scene) PaintPath(path *Path, color Background, ctx *PaintContext) error
 	if path == nil {
 		return fmt.Errorf("gpui: PaintPath: nil path")
 	}
+	if color.Kind == BackgroundKindGradientTable || color.Kind == BackgroundKindCssGradient {
+		// The pinned path-sprite pipeline draws solid and two-stop
+		// backgrounds only (the recorded native limit, ticket 52: the
+		// table-gradient tag is rejected on paths).
+		return fmt.Errorf("gpui: PaintPath: a table gradient cannot fill a path (the path pipeline paints solid colors and two-stop gradients only)")
+	}
 	scaled := scalePath(path, ctx.ScaleFactor)
 	mask := scaleBounds(ctx.Mask, ctx.ScaleFactor)
 	// The color carries the element opacity: the gradient arm scales
