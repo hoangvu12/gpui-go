@@ -161,14 +161,31 @@ use gpui::{
     FontWeight, LineLayout, Pixels, PlatformTextSystem, Point, TextLayoutRequest, TextSystem,
     TextRun,
 };
-use gpui_ce_parley::{ParleyTextSystem, SystemFonts};
+// REV16 (browser-core 43): the text stack is the VENDORED Parley adapter
+// (crate::text_vendored — a byte-copy of the pinned gpui_ce_parley
+// implementation plus the rev-16 side-channel; the pinned crate remains
+// the dependency that supplies the public types SystemFonts and the
+// GlyphRasterizer trait crate::glyph implements). The service constructs
+// the vendored system exactly like the pinned one (same construction
+// path, same fallbacks), so the process keeps ONE FontContext/FontStore —
+// the FontIds the text service reports are the FontIds the glyph service
+// rasterizes (FontId-provenance guarantee; see the vendored module's
+// docs and text::tests::vendored_font_ids_match_the_pinned_adapter).
+use crate::text_vendored::ParleyTextSystem;
+use gpui_ce_parley::SystemFonts;
 
 /// Text service ABI version (bumped only on record/table layout changes of
 /// the text service). Version 2 (the consumer-gaps font-registration
 /// ticket): the font record's v1 `reserved` word became `family_found`, and
 /// the table gained the `font_add` entry (slot 15) plus the
 /// `max_font_bytes` capacity scalar (200 → 216 bytes).
-pub const GPUI_GO_TEXT_SERVICE_VERSION: u32 = 2;
+///
+/// Version 3 (browser-core ticket 43, rev 16): the run record grew the
+/// `text_align` tag (92 → 96 bytes) and the layout record grew `is_rtl`
+/// (56 → 60 bytes); word-break, overflow-wrap and the align tag now
+/// drive shaping/alignment through the vendored Parley adapter
+/// (`crate::text_vendored`).
+pub const GPUI_GO_TEXT_SERVICE_VERSION: u32 = 3;
 
 /// Maximum simultaneously live shaping handles. Exceeding the bound fails
 /// `text_shape` with [`text_status::ERR_SHAPING_LIMIT`] before any shaping
@@ -368,11 +385,19 @@ pub struct GpuiGoTextFontMetricsRecord {
 /// override (CSS font-optical-sizing; absent = auto), and justify
 /// (CSS text-align: justify). The pinned `TextLayoutRequest` has no
 /// slots for these, so the service validates them, stores them with the
-/// shaping handle and echoes them through `text_run_info`; the shaping
-/// behavior is unchanged until the fields can be pushed into Parley
-/// (recorded honestly in TEXT_ABI.md).
+/// shaping handle and echoes them through `text_run_info`.
 ///
-/// Layout (x86-64): 23 u32 fields; size 92, alignment 4.
+/// rev 16 (browser-core ticket 43) makes word-break, overflow-wrap and
+/// the text-align tag DRIVE behavior through the vendored adapter's
+/// side-channel (`layout_text_with_browser`): word-break and
+/// overflow-wrap become Parley range styles and the align tag drives
+/// Parley's `Alignment` (see TEXT_ABI.md's rev-16 section). The `justify`
+/// word stays the rev-15 echo (0/1); the behavioral channel is
+/// `text_align` below (3 = justify). The remaining fields (locale, font
+/// width, variations, optical size) are still recorded as blocked — see
+/// TEXT_ABI.md.
+///
+/// Layout (x86-64): 24 u32 fields; size 96, alignment 4.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct GpuiGoTextRunRecord {
@@ -431,7 +456,14 @@ pub struct GpuiGoTextRunRecord {
     /// Optical size in pixels (f32 bits) when present.
     pub opsz_bits: u32,
     /// 0 = no justification, 1 = justify (CSS text-align: justify).
+    /// The rev-15 echo word; the behavioral channel is `text_align`.
     pub justify: u32,
+    /// CSS text-align tag (rev 16): 0 none (paint-time alignment, the
+    /// pinned behavior), 1 start, 2 end, 3 justify. Document-level by
+    /// the rev-15.1 any-run rule (the first non-zero tag of any run
+    /// governs) — the styling layer stamps the whole element's computed
+    /// text-align on every run.
+    pub text_align: u32,
 }
 
 /// One font variation setting (rev 15; parley's `FontVariation`):
@@ -450,7 +482,8 @@ pub struct GpuiGoTextVariation {
 
 /// Shaped layout summary (service-written).
 ///
-/// Layout (x86-64): 14 u32 fields; size 56, alignment 4.
+/// Layout (x86-64): 15 u32 fields; size 60, alignment 4 (rev 16 grew the
+/// record with `is_rtl`).
 #[derive(Clone, Copy)]
 #[repr(C)]
 pub struct GpuiGoTextLayoutRecord {
@@ -480,6 +513,10 @@ pub struct GpuiGoTextLayoutRecord {
     pub descent_bits: u32,
     /// Font catalog generation at layout time.
     pub font_generation: u32,
+    /// rev 16: 1 when the document's base direction is RTL (the
+    /// `paragraphs[0]` rule of the pinned multi-paragraph layout) — the
+    /// signal the Go paint layer resolves text-align start/end against.
+    pub is_rtl: u32,
     /// `size_of::<GpuiGoTextLayoutRecord>()` self-check.
     pub record_size: u32,
 }
@@ -659,11 +696,11 @@ const _: () = assert!(std::mem::size_of::<GpuiGoTextFontRecord>() == 40);
 const _: () = assert!(std::mem::align_of::<GpuiGoTextFontRecord>() == 8);
 const _: () = assert!(std::mem::size_of::<GpuiGoTextFontMetricsRecord>() == 52);
 const _: () = assert!(std::mem::align_of::<GpuiGoTextFontMetricsRecord>() == 4);
-const _: () = assert!(std::mem::size_of::<GpuiGoTextRunRecord>() == 92);
+const _: () = assert!(std::mem::size_of::<GpuiGoTextRunRecord>() == 96);
 const _: () = assert!(std::mem::align_of::<GpuiGoTextRunRecord>() == 4);
 const _: () = assert!(std::mem::size_of::<GpuiGoTextVariation>() == 8);
 const _: () = assert!(std::mem::align_of::<GpuiGoTextVariation>() == 4);
-const _: () = assert!(std::mem::size_of::<GpuiGoTextLayoutRecord>() == 56);
+const _: () = assert!(std::mem::size_of::<GpuiGoTextLayoutRecord>() == 60);
 const _: () = assert!(std::mem::align_of::<GpuiGoTextLayoutRecord>() == 4);
 const _: () = assert!(std::mem::size_of::<GpuiGoTextLineRecord>() == 36);
 const _: () = assert!(std::mem::align_of::<GpuiGoTextLineRecord>() == 4);
@@ -923,8 +960,13 @@ struct ShapingState {
     wrap_width: Option<Pixels>,
     /// The active line clamp.
     line_clamp: Option<usize>,
-    /// The current layout (the pinned `layout_text` result).
+    /// The current layout (the vendored adapter's `layout_text_with_browser`
+    /// result — the pinned `layout_text` plus the rev-16 side-channel).
     layout: Arc<LineLayout>,
+    /// rev 16: the document's base direction (the layout result's
+    /// `is_rtl`), reported through `text_layout_info` so the Go paint
+    /// layer resolves text-align start/end against it.
+    is_rtl: bool,
     /// Font catalog generation when the layout was produced.
     font_generation: u64,
 }
@@ -1278,6 +1320,12 @@ fn build_runs(
             return Err(text_status::ERR_BAD_VALUE);
         }
         if record.justify > 1 {
+            return Err(text_status::ERR_BAD_VALUE);
+        }
+        // rev 16: the text-align tag (0 none, 1 start, 2 end, 3
+        // justify — the behavioral channel; `justify` above stays the
+        // rev-15 echo).
+        if record.text_align > 3 {
             return Err(text_status::ERR_BAD_VALUE);
         }
         let locale_len = record.locale_len as usize;
@@ -1732,17 +1780,63 @@ fn nowrap_requested(run_records: &[GpuiGoTextRunRecord]) -> bool {
         .any(|record| record.text_wrap == TEXT_WRAP_NOWRAP)
 }
 
+/// rev 16: the document's text-align tag — the FIRST non-zero tag of any
+/// run (the any-run rule `nowrap_requested` established; the styling layer
+/// stamps the element's computed text-align on every run, so all runs
+/// agree). 0 = none (paint-time alignment, the pinned behavior).
+fn browser_align_of(run_records: &[GpuiGoTextRunRecord]) -> crate::text_vendored::BrowserTextAlign {
+    run_records
+        .iter()
+        .find_map(|record| match record.text_align {
+            1 => Some(crate::text_vendored::BrowserTextAlign::Start),
+            2 => Some(crate::text_vendored::BrowserTextAlign::End),
+            3 => Some(crate::text_vendored::BrowserTextAlign::Justify),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+/// rev 16: the run-record browser fields translated for the vendored
+/// adapter's side-channel (word-break / overflow-wrap; a run list longer
+/// than the records keeps default fields for the tail).
+fn browser_run_fields_of(
+    run_records: &[GpuiGoTextRunRecord],
+    run_count: usize,
+) -> Vec<crate::text_vendored::BrowserRunFields> {
+    let mut fields = Vec::with_capacity(run_count);
+    for (index, record) in run_records.iter().enumerate().take(run_count) {
+        fields.push(crate::text_vendored::BrowserRunFields {
+            word_break: match record.word_break {
+                1 => parley::WordBreak::BreakAll,
+                2 => parley::WordBreak::KeepAll,
+                _ => parley::WordBreak::Normal,
+            },
+            overflow_wrap: match record.overflow_wrap {
+                1 => parley::OverflowWrap::Anywhere,
+                2 => parley::OverflowWrap::BreakWord,
+                _ => parley::OverflowWrap::Normal,
+            },
+        });
+    }
+    fields
+}
+
 /// The shaping core shared by `text_shape` and `text_layout`: calls the
-/// pinned `layout_text` and registers every resolved fragment font.
+/// vendored adapter's `layout_text_with_browser` (the pinned
+/// `layout_text` plus the rev-16 side-channel; a no-field request is
+/// byte-identical to the pinned call) and registers every resolved
+/// fragment font. Returns the layout plus the document's base direction.
+#[allow(clippy::type_complexity)]
 fn shape_document(
     state: &mut TextServiceState,
     stack: &TextStack,
     text: &str,
     runs: &[TextRun],
+    run_records: &[GpuiGoTextRunRecord],
     font_size: Pixels,
     wrap_width: Option<Pixels>,
     line_clamp: Option<usize>,
-) -> Result<Arc<LineLayout>, i32> {
+) -> Result<(Arc<LineLayout>, bool), i32> {
     // gpui-perf ticket 05 / zterm ticket 13: the same weight replacement as
     // the resolve path, so per-run shaping synthesizes bold only where a
     // browser would.
@@ -1764,20 +1858,39 @@ fn shape_document(
             .font_id(&run.font)
             .map_err(|_| text_status::ERR_FONT_UNRESOLVED)?;
     }
-    // The pinned shaping call: the exact entry shape_text/layout_line make.
-    let layout = stack.parley.layout_text(TextLayoutRequest {
-        text,
-        font_size,
-        runs,
-        wrap_width,
-        line_clamp,
-    });
+    // The shaping call: the vendored adapter's `layout_text_with_browser`
+    // (rev 16). A request with no browser fields — every run at the
+    // default word-break/overflow-wrap and no align tag — goes through
+    // the same byte-identical code path the pinned `layout_text` took
+    // (the side-channel defaults reproduce it exactly).
+    let browser_runs = browser_run_fields_of(run_records, runs.len());
+    let browser = crate::text_vendored::BrowserLayoutParams {
+        runs: &browser_runs,
+        align: browser_align_of(run_records),
+    };
+    let result = stack
+        .parley
+        .layout_text_with_browser(
+            TextLayoutRequest {
+                text,
+                font_size,
+                runs,
+                wrap_width,
+                line_clamp,
+            },
+            browser,
+        )
+        // The pinned `layout_text`'s exact failure mode (its `expect`):
+        // the export's catch_unwind contains it as status 101, and the
+        // pre-resolution above keeps the unresolvable-font class out.
+        .expect("Parley failed to lay out a validated GPUI document");
+    let layout = result.layout;
     // Register every resolved fragment font id (shaping may select
     // fallback faces the caller never resolved).
     for fragment in &layout.paint_fragments {
         register_font(state, stack, fragment.font_id);
     }
-    Ok(Arc::new(layout))
+    Ok((Arc::new(layout), result.is_rtl))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1869,16 +1982,17 @@ fn text_shape_body(
         // layout summary reports the ACTIVE constraint, so the echo says
         // no wrap while the run records still carry the nowrap tag).
         let wrap_width = wrap_width.filter(|_| !nowrap_requested(run_records));
-        let layout = match shape_document(
+        let (layout, is_rtl) = match shape_document(
             &mut state,
             &stack,
             text,
             &runs,
+            run_records,
             font_size,
             wrap_width,
             line_clamp,
         ) {
-            Ok(layout) => layout,
+            Ok(result) => result,
             Err(code) => return code,
         };
         let font_generation = stack.parley.font_generation();
@@ -1907,6 +2021,7 @@ fn text_shape_body(
                 wrap_width,
                 line_clamp,
                 layout,
+                is_rtl,
                 font_generation,
             }),
         };
@@ -1957,16 +2072,17 @@ fn text_layout_body(
     // (text_layout re-shapes the SAME runs; their text-wrap tag still
     // governs).
     let wrap_width = wrap_width.filter(|_| !nowrap_requested(&run_records));
-    let layout = match shape_document(
+    let (layout, is_rtl) = match shape_document(
         &mut state,
         &stack,
         &text,
         &runs,
+        &run_records,
         font_size,
         wrap_width,
         line_clamp,
     ) {
-        Ok(layout) => layout,
+        Ok(result) => result,
         Err(code) => return code,
     };
     let font_generation = stack.parley.font_generation();
@@ -1978,6 +2094,7 @@ fn text_layout_body(
     shaping.wrap_width = wrap_width;
     shaping.line_clamp = line_clamp;
     shaping.layout = layout;
+    shaping.is_rtl = is_rtl;
     shaping.font_generation = font_generation;
     text_status::OK
 }
@@ -2051,6 +2168,7 @@ fn text_layout_info_body(handle: u64, out: *mut GpuiGoTextLayoutRecord) -> i32 {
             ascent_bits: f32::from(layout.ascent).to_bits(),
             descent_bits: f32::from(layout.descent).to_bits(),
             font_generation: shaping.font_generation as u32,
+            is_rtl: u32::from(shaping.is_rtl),
             record_size: std::mem::size_of::<GpuiGoTextLayoutRecord>() as u32,
         })
     });
@@ -2779,6 +2897,7 @@ pub(crate) mod tests {
             opsz_present: 0,
             opsz_bits: 0,
             justify: 0,
+            text_align: 0,
         };
         let strings = b"Segoe UI";
         for _ in 0..200 {
@@ -2834,6 +2953,7 @@ pub(crate) mod tests {
             ascent_bits: 0,
             descent_bits: 0,
             font_generation: 0,
+            is_rtl: 0,
             record_size: 0,
         };
         let code = unsafe { text_layout_info(handle, &mut record) };
@@ -3316,6 +3436,7 @@ pub(crate) mod tests {
                 opsz_present: 0,
                 opsz_bits: 0,
                 justify: 0,
+                text_align: 0,
             };
             let strings = family.as_bytes().to_vec();
             let mut handle = 0u64;
@@ -3691,6 +3812,7 @@ pub(crate) mod tests {
                 opsz_present: 0,
                 opsz_bits: 0,
                 justify: 0,
+                text_align: 0,
             },
             GpuiGoTextRunRecord {
                 len: 9,
@@ -3716,6 +3838,7 @@ pub(crate) mod tests {
                 opsz_present: 0,
                 opsz_bits: 0,
                 justify: 0,
+                text_align: 0,
             },
         ];
         let mut handle = 0;
@@ -3785,6 +3908,7 @@ pub(crate) mod tests {
             opsz_present: 0,
             opsz_bits: 0,
             justify: 0,
+            text_align: 0,
         };
         let strings = b"Segoe UI";
         let mut handle = 0;
@@ -4033,6 +4157,7 @@ pub(crate) mod tests {
             ascent_bits: 0,
             descent_bits: 0,
             font_generation: 0,
+            is_rtl: 0,
             record_size: 0,
         };
         assert_eq!(
@@ -4085,6 +4210,7 @@ pub(crate) mod tests {
             opsz_present: 0,
             opsz_bits: 0,
             justify: 0,
+            text_align: 0,
         };
         let strings = b"Segoe UI";
         loop {
@@ -4144,6 +4270,7 @@ pub(crate) mod tests {
             opsz_present: 0,
             opsz_bits: 0,
             justify: 0,
+            text_align: 0,
         };
         let strings = b"Segoe UI";
         let code = unsafe {
@@ -4233,6 +4360,7 @@ pub(crate) mod tests {
             opsz_present: 0,
             opsz_bits: 0,
             justify: 0,
+            text_align: 0,
         };
         let mut times_handle = 0;
         let code = unsafe {
@@ -4286,6 +4414,7 @@ pub(crate) mod tests {
             opsz_present: 0,
             opsz_bits: 0,
             justify: 0,
+            text_align: 0,
         };
         let strings = times;
         // 'liga' on vs off: Cambria's liga table substitutes a different
@@ -4354,6 +4483,7 @@ pub(crate) mod tests {
             opsz_present: 0,
             opsz_bits: 0,
             justify: 0,
+            text_align: 0,
         };
         let mut handle = 0;
         let code = unsafe {
@@ -4383,5 +4513,377 @@ pub(crate) mod tests {
             "letter spacing must widen the line"
         );
         unsafe { text_dispose(handle) };
+    }
+
+    // -----------------------------------------------------------------------
+    // rev 16 (browser-core ticket 43): the vendored adapter, the browser
+    // run fields driving behavior, and the FontId-provenance guarantee.
+    // -----------------------------------------------------------------------
+
+    /// The FontId-provenance check the ticket's approach asked for: the
+    /// vendored adapter (crate::text_vendored) interns fonts EXACTLY like
+    /// the pinned gpui_ce_parley adapter for the same request sequence —
+    /// the service switched to the vendored stack, and the glyph service
+    /// rasterizes through the SAME stack instance, but this additionally
+    /// proves the vendored copy did not alter interning semantics
+    /// (resolve path AND the shaping-time fallback discovery).
+    #[test]
+    fn vendored_font_ids_match_the_pinned_adapter() {
+        let construct_pinned = || {
+            std::sync::Arc::new(
+                gpui_ce_parley::ParleyTextSystem::new_with_rasterizer(
+                    SystemFonts::Load,
+                    "Segoe UI",
+                    crate::glyph::new_windows_rasterizer(),
+                )
+                .with_fallback_families(["Lilex", "IBM Plex Sans", "Arial"]),
+            )
+        };
+        let construct_vendored = || {
+            std::sync::Arc::new(
+                crate::text_vendored::ParleyTextSystem::new_with_rasterizer(
+                    SystemFonts::Load,
+                    "Segoe UI",
+                    crate::glyph::new_windows_rasterizer(),
+                )
+                .with_fallback_families(["Lilex", "IBM Plex Sans", "Arial"]),
+            )
+        };
+        let pinned = construct_pinned();
+        let vendored = construct_vendored();
+
+        // The resolve path (resolve_canonical_font): identical FontIds
+        // for the same descriptor sequence, including the
+        // fallback-resolved bogus family.
+        for family in ["Segoe UI", "Arial", "Georgia", "Consolas", BOGUS_FAMILY] {
+            let descriptor = gpui::font(family);
+            let pinned_id = pinned
+                .font_id(&descriptor)
+                .unwrap_or_else(|error| panic!("pinned resolve {family}: {error}"));
+            let vendored_id = vendored
+                .font_id(&descriptor)
+                .unwrap_or_else(|error| panic!("vendored resolve {family}: {error}"));
+            assert_eq!(pinned_id, vendored_id, "FontId diverged for family {family}");
+        }
+
+        // The shaping path (fallback discovery interned during layout):
+        // the same document — including non-Latin text that triggers
+        // character-level fallback — resolves to the same fragment
+        // FontIds AND the same glyph stream through the vendored
+        // side-channel's default (no browser fields) path.
+        let text = "héllo wörld — かな漢字 🙂";
+        let runs = [TextRun {
+            len: text.len(),
+            font: gpui::font("Segoe UI"),
+            ..Default::default()
+        }];
+        let request = TextLayoutRequest {
+            text,
+            font_size: px(FONT_SIZE),
+            runs: &runs,
+            wrap_width: Some(px(90.0)),
+            line_clamp: None,
+        };
+        let pinned_layout = pinned.layout_text(request);
+        let vendored_result = vendored
+            .layout_text_with_browser(request, Default::default())
+            .expect("vendored layout");
+
+        let facts_of = |layout: &LineLayout| {
+            layout
+                .paint_fragments
+                .iter()
+                .flat_map(|fragment| {
+                    fragment
+                        .glyphs
+                        .iter()
+                        .map(|glyph| (glyph.id.0, f32::from(glyph.position.x), f32::from(glyph.position.y)))
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(facts_of(&pinned_layout), facts_of(&vendored_result.layout));
+        let ids_of = |layout: &LineLayout| {
+            layout
+                .paint_fragments
+                .iter()
+                .map(|fragment| fragment.font_id)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(ids_of(&pinned_layout), ids_of(&vendored_result.layout));
+        assert_eq!(pinned_layout.visual_lines.len(), vendored_result.layout.visual_lines.len());
+    }
+
+    /// Shapes a one-run document with explicit browser fields (rev 16's
+    /// behavioral channel): word_break / overflow_wrap / text_align on
+    /// the run record.
+    fn shape_browser(text: &str, wrap: f32, word_break: u32, overflow_wrap: u32, text_align: u32) -> u64 {
+        let mut run = run_record_for(text);
+        run.word_break = word_break;
+        run.overflow_wrap = overflow_wrap;
+        run.text_align = text_align;
+        let strings = b"Segoe UI";
+        for _ in 0..200 {
+            let mut handle = 0;
+            let code = unsafe {
+                text_shape(
+                    text.as_ptr(),
+                    text.len() as u32,
+                    &run,
+                    1,
+                    std::ptr::null(),
+                    0,
+                    std::ptr::null(),
+                    0,
+                    strings.as_ptr(),
+                    strings.len() as u32,
+                    FONT_SIZE.to_bits(),
+                    wrap.to_bits(),
+                    1,
+                    0,
+                    0,
+                    &mut handle,
+                )
+            };
+            if code == text_status::OK {
+                return handle;
+            }
+            if code != text_status::ERR_SHAPING_LIMIT {
+                panic!("text_shape failed for {text:?}: status {code}");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("text_shape never acquired a free slot for {text:?}");
+    }
+
+    /// The one-run record every rev-16 test shapes with (Segoe UI 400).
+    fn run_record_for(text: &str) -> GpuiGoTextRunRecord {
+        GpuiGoTextRunRecord {
+            len: text.len() as u32,
+            family_offset: 0,
+            family_len: b"Segoe UI".len() as u32,
+            fallbacks_offset: 0,
+            fallbacks_len: 0,
+            weight_bits: 400.0f32.to_bits(),
+            style: 0,
+            feature_offset: 0,
+            feature_count: 0,
+            letter_spacing_present: 0,
+            letter_spacing_bits: 0,
+            word_break: 0,
+            overflow_wrap: 0,
+            text_wrap: 0,
+            locale_offset: 0,
+            locale_len: 0,
+            font_width_present: 0,
+            font_width_bits: 0,
+            variation_offset: 0,
+            variation_count: 0,
+            opsz_present: 0,
+            opsz_bits: 0,
+            justify: 0,
+            text_align: 0,
+        }
+    }
+
+    /// rev 16: overflow-wrap drives emergency breaking. A long URL has
+    /// no break opportunities, so under a narrow wrap it stays one
+    /// overflow line at `normal` but breaks into multiple lines with
+    /// `anywhere` (and with word-break `break-all`, whose every-cluster
+    /// boundaries are also opportunities).
+    #[test]
+    fn overflow_wrap_and_word_break_drive_line_breaks() {
+        const URL: &str = "https://example.com/a/very/long/unbreakable/url/path/segment";
+        const WRAP: f32 = 150.0;
+
+        let plain = shape_browser(URL, WRAP, 0, 0, 0);
+        let plain_info = layout_info(plain);
+        assert_eq!(plain_info.line_count, 1, "no break opportunities: one overflow line");
+        assert!(
+            bits(plain_info.width_bits) > WRAP,
+            "the unbroken URL must overflow the wrap width"
+        );
+        // The stored run record echoes the tags (rev 15's contract).
+        let mut echoed = GpuiGoTextRunRecord {
+            len: 0,
+            family_offset: 0,
+            family_len: 0,
+            fallbacks_offset: 0,
+            fallbacks_len: 0,
+            weight_bits: 0,
+            style: 0,
+            feature_offset: 0,
+            feature_count: 0,
+            letter_spacing_present: 0,
+            letter_spacing_bits: 0,
+            word_break: 0,
+            overflow_wrap: 0,
+            text_wrap: 0,
+            locale_offset: 0,
+            locale_len: 0,
+            font_width_present: 0,
+            font_width_bits: 0,
+            variation_offset: 0,
+            variation_count: 0,
+            opsz_present: 0,
+            opsz_bits: 0,
+            justify: 0,
+            text_align: 0,
+        };
+        let echo_code = unsafe { text_run_info(plain, 0, &mut echoed) };
+        assert_eq!(echo_code, text_status::OK);
+        assert_eq!((echoed.word_break, echoed.overflow_wrap, echoed.text_align), (0, 0, 0));
+        unsafe { text_dispose(plain) };
+
+        let anywhere = shape_browser(URL, WRAP, 0, 1, 0);
+        let anywhere_info = layout_info(anywhere);
+        assert!(
+            anywhere_info.line_count > 1,
+            "overflow-wrap: anywhere must emergency-break the URL (got {})",
+            anywhere_info.line_count
+        );
+        assert!(bits(anywhere_info.width_bits) <= WRAP + 1.0);
+        let mut echoed = run_record_for(URL);
+        let echo_code = unsafe { text_run_info(anywhere, 0, &mut echoed) };
+        assert_eq!(echo_code, text_status::OK);
+        assert_eq!((echoed.word_break, echoed.overflow_wrap, echoed.text_align), (0, 1, 0));
+        unsafe { text_dispose(anywhere) };
+
+        let break_all = shape_browser(URL, WRAP, 1, 0, 0);
+        let break_all_info = layout_info(break_all);
+        assert!(
+            break_all_info.line_count > 1,
+            "word-break: break-all must break within the URL (got {})",
+            break_all_info.line_count
+        );
+        unsafe { text_dispose(break_all) };
+
+        // break-word is the same emergency-breaking class at the shaper
+        // (the CSS min-content distinction is the caller's).
+        let break_word = shape_browser(URL, WRAP, 0, 2, 0);
+        let break_word_info = layout_info(break_word);
+        assert_eq!(break_word_info.line_count, anywhere_info.line_count);
+        unsafe { text_dispose(break_word) };
+    }
+
+    /// rev 16: word-break keep-all forbids the CJK ideograph breaks that
+    /// `normal` allows — the CJK text wraps under a narrow width at
+    /// normal and stays one overflow line at keep-all.
+    #[test]
+    fn word_break_keep_all_suppresses_cjk_breaks() {
+        const CJK: &str = "東京都渋谷区神南";
+        const WRAP: f32 = 90.0;
+
+        let normal = shape_browser(CJK, WRAP, 0, 0, 0);
+        let normal_info = layout_info(normal);
+        assert!(
+            normal_info.line_count > 1,
+            "CJK ideographs are break opportunities at word-break: normal (got {})",
+            normal_info.line_count
+        );
+        assert!(bits(normal_info.width_bits) <= WRAP + 1.0);
+        unsafe { text_dispose(normal) };
+
+        let keep_all = shape_browser(CJK, WRAP, 2, 0, 0);
+        let keep_all_info = layout_info(keep_all);
+        assert_eq!(
+            keep_all_info.line_count, 1,
+            "word-break: keep-all must keep the CJK run unbroken"
+        );
+        assert!(bits(keep_all_info.width_bits) > WRAP);
+        unsafe { text_dispose(keep_all) };
+    }
+
+    /// rev 16: the text-align tag drives Parley's alignment inside the
+    /// layout — justify stretches the whitespace so a wrapped row's
+    /// glyphs reach the wrap width while the LAST row stays
+    /// start-aligned; and the layout summary reports the document's base
+    /// direction (`is_rtl`) for start/end.
+    #[test]
+    fn text_align_tag_drives_alignment_and_direction() {
+        const TEXT: &str = "The quick brown fox jumps over the lazy dog again and again";
+        const WRAP: f32 = 150.0;
+
+        // The unjustified baseline: line 0's last glyph ends at the
+        // row's content advance (well under the wrap width).
+        let plain = shape_browser(TEXT, WRAP, 0, 0, 0);
+        let plain_info = layout_info(plain);
+        let plain_max_x = max_glyph_x(plain, 0);
+        assert_eq!(plain_info.is_rtl, 0);
+        unsafe { text_dispose(plain) };
+
+        let justified = shape_browser(TEXT, WRAP, 0, 0, 3);
+        let justified_info = layout_info(justified);
+        assert!(justified_info.line_count >= 3, "the text must wrap to 3+ rows (got {})", justified_info.line_count);
+        let justified_max_x = max_glyph_x(justified, 0);
+        assert!(
+            justified_max_x > plain_max_x + 1.0,
+            "justify must stretch row 0 past its unjustified advance ({plain_max_x} -> {justified_max_x})"
+        );
+        assert!(
+            justified_max_x >= WRAP - 4.0 && justified_max_x <= WRAP + 4.0,
+            "row 0's glyphs must reach the wrap width under justify (got {justified_max_x})"
+        );
+        // The last row is start-aligned (BreakReason::None): it ends
+        // short of the wrap width, unlike the stretched rows.
+        let last = justified_info.line_count - 1;
+        let last_max_x = max_glyph_x(justified, last);
+        assert!(last_max_x < WRAP - 10.0, "the last row must not be stretched");
+        unsafe { text_dispose(justified) };
+
+        // RTL: a Hebrew document's base direction reports is_rtl = 1
+        // (the paragraphs[0] rule), the signal the Go paint layer
+        // resolves text-align start/end against.
+        const HEBREW: &str = "שלום עולם טוב מאוד";
+        let rtl = shape_browser(HEBREW, 400.0, 0, 0, 0);
+        let rtl_info = layout_info(rtl);
+        assert_eq!(rtl_info.is_rtl, 1, "a Hebrew document must report RTL");
+        unsafe { text_dispose(rtl) };
+    }
+
+    /// The largest glyph x (line-local) on one visual row — the row's
+    /// painted extent the justify assertions read. The line record's
+    /// fragment range indexes the fragment dump, and each fragment's
+    /// glyph range indexes the glyph dump (both document order).
+    fn max_glyph_x(handle: u64, line: u32) -> f32 {
+        let mut line_record = GpuiGoTextLineRecord {
+            line_index: 0,
+            text_start: 0,
+            text_end: 0,
+            fragment_start: 0,
+            fragment_end: 0,
+            advance_width_bits: 0,
+            line_height_bits: 0,
+            baseline_bits: 0,
+            record_size: 0,
+        };
+        let code = unsafe { text_line(handle, line, LINE_HEIGHT.to_bits(), &mut line_record) };
+        assert_eq!(code, text_status::OK);
+
+        let mut needed = 0;
+        let code = unsafe { text_fragments(handle, std::ptr::null_mut(), 0, &mut needed) };
+        assert_eq!(code, text_status::ERR_CAPACITY);
+        let mut fragments = vec![GpuiGoTextFragmentRecord {
+            font_id: 0,
+            font_size_bits: 0,
+            x_start_bits: 0,
+            x_end_bits: 0,
+            glyph_start: 0,
+            glyph_count: 0,
+            record_size: 0,
+        }; needed as usize];
+        let code = unsafe { text_fragments(handle, fragments.as_mut_ptr(), needed, &mut needed) };
+        assert_eq!(code, text_status::OK);
+
+        let glyphs = dump_glyphs(handle);
+
+        let mut max_x = 0.0f32;
+        for fragment_index in line_record.fragment_start..line_record.fragment_end {
+            let fragment = &fragments[fragment_index as usize];
+            for glyph_index in fragment.glyph_start..fragment.glyph_start + fragment.glyph_count {
+                let glyph = &glyphs[glyph_index as usize];
+                max_x = max_x.max(bits(glyph.x_bits));
+            }
+        }
+        max_x
     }
 }

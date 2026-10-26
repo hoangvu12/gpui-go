@@ -121,8 +121,8 @@ use gpui::{
     Rgba, Rgba8, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, TextRenderingMode, px, size,
     FontId, PlatformTextSystem, TextSystem,
 };
-use gpui_ce_parley::{ColorGlyphKind, GlyphRasterizer, ParleyTextSystem, RasterFace,
-    SwashGlyphRasterizer};
+use crate::text_vendored::ParleyTextSystem;
+use gpui_ce_parley::{ColorGlyphKind, GlyphRasterizer, RasterFace, SwashGlyphRasterizer};
 use windows::{
     Win32::{
         Foundation::RECT,

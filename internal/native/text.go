@@ -58,8 +58,12 @@ const (
 // textServiceVersion mirrors GPUI_GO_TEXT_SERVICE_VERSION. Version 2
 // (the consumer-gaps font-registration ticket): the font record's v1
 // reserved word became family_found, and the table gained the font_add
-// entry plus the max_font_bytes scalar.
-const textServiceVersion uint32 = 2
+// entry plus the max_font_bytes scalar. Version 3 (browser-core ticket
+// 43, native rev 16): the run record grew the text_align tag (92 → 96
+// bytes) and the layout record grew is_rtl (56 → 60 bytes); word-break,
+// overflow-wrap and the align tag drive shaping/alignment through the
+// vendored Parley adapter.
+const textServiceVersion uint32 = 3
 
 func textStatusName(code int32) string {
 	switch code {
@@ -253,8 +257,8 @@ type TextFeatureRecord struct {
 	Value uint32
 }
 
-// TextRunRecord mirrors GpuiGoTextRunRecord (92 bytes, alignment 4;
-// rev 15 grew it with the browser text fields).
+// TextRunRecord mirrors GpuiGoTextRunRecord (96 bytes, alignment 4;
+// rev 15 grew it with the browser text fields, rev 16 with text_align).
 type TextRunRecord struct {
 	Len                  uint32
 	FamilyOffset         uint32
@@ -292,8 +296,14 @@ type TextRunRecord struct {
 	// (rev 15; absent = CSS `auto`).
 	OpSZPresent uint32
 	OpSZBits    uint32
-	// Justify is 0 (none) or 1 (CSS text-align: justify) (rev 15).
+	// Justify is 0 (none) or 1 (CSS text-align: justify) (rev 15; the
+	// rev-15 echo — the behavioral channel is TextAlign).
 	Justify uint32
+	// TextAlign is the CSS text-align tag (rev 16): 0 none (paint-time
+	// alignment, the pinned behavior), 1 start, 2 end, 3 justify.
+	// Document-level by the any-run rule — the styling layer stamps the
+	// element's computed text-align on every run.
+	TextAlign uint32
 }
 
 // TextVariationRecord mirrors GpuiGoTextVariation (rev 15): one OpenType
@@ -339,9 +349,19 @@ const (
 	TextTextWrapPretty uint32 = 3
 	// TextTextWrapStable is CSS text-wrap: stable.
 	TextTextWrapStable uint32 = 4
+	// TextTextAlignNone is the absence of a native alignment tag: the
+	// layout stays paint-time aligned (rev 16).
+	TextTextAlignNone uint32 = 0
+	// TextTextAlignStart is CSS text-align: start (rev 16).
+	TextTextAlignStart uint32 = 1
+	// TextTextAlignEnd is CSS text-align: end (rev 16).
+	TextTextAlignEnd uint32 = 2
+	// TextTextAlignJustify is CSS text-align: justify (rev 16).
+	TextTextAlignJustify uint32 = 3
 )
 
-// TextLayoutRecord mirrors GpuiGoTextLayoutRecord (56 bytes, alignment 4).
+// TextLayoutRecord mirrors GpuiGoTextLayoutRecord (60 bytes, alignment
+// 4; rev 16 grew it with is_rtl).
 type TextLayoutRecord struct {
 	TextLen        uint32
 	FontSizeBits   uint32
@@ -356,7 +376,10 @@ type TextLayoutRecord struct {
 	AscentBits     uint32
 	DescentBits    uint32
 	FontGeneration uint32
-	RecordSize     uint32
+	// IsRTL is 1 when the document's base direction is RTL (rev 16; the
+	// signal the paint layer resolves text-align start/end against).
+	IsRTL      uint32
+	RecordSize uint32
 }
 
 // TextLineRecord mirrors GpuiGoTextLineRecord (36 bytes, alignment 4).
@@ -534,8 +557,14 @@ type TextRunSpec struct {
 	// OpticalSize overrides the optical size in pixels (rev 15; nil =
 	// CSS font-optical-sizing auto).
 	OpticalSize *float32
-	// Justify selects CSS text-align: justify for the run (rev 15).
+	// Justify selects CSS text-align: justify for the run (rev 15; the
+	// echo word — the behavioral channel is TextAlign).
 	Justify bool
+	// TextAlign is the CSS text-align tag (rev 16): 0 none, 1 start,
+	// 2 end, 3 justify. The styling layer stamps the whole element's
+	// computed text-align on every run (document-level by the any-run
+	// rule).
+	TextAlign uint32
 }
 
 // ShapeRequest is one shaping document.
@@ -555,8 +584,8 @@ type ShapeRequest struct {
 // RunInfo echoes one stored run record (rev 15): the browser text
 // fields — word-break, overflow-wrap, text-wrap, locale, font width,
 // variations, optical size, justify — exactly as they crossed the ABI
-// (the shaping behavior itself is unchanged until the pinned Parley
-// adapter can carry them).
+// (since rev 16 word-break, overflow-wrap and the text_align tag drive
+// behavior through the vendored adapter; the echo itself is unchanged).
 func (s *TextService) RunInfo(handle ShapingID, runIndex int) (TextRunRecord, error) {
 	if s.lib.released.Load() {
 		return TextRunRecord{}, ErrClosed
@@ -588,6 +617,9 @@ type TextLayout struct {
 	Ascent         float32
 	Descent        float32
 	FontGeneration uint32
+	// IsRTL reports the document's base direction (rev 16): the signal
+	// the paint layer resolves text-align start/end against.
+	IsRTL bool
 }
 
 // TextLine is one visual row. The row occupies
@@ -1247,6 +1279,10 @@ func packShapeRequest(request *ShapeRequest) ([]TextRunRecord, []TextFeatureReco
 		if spec.Justify {
 			justify = 1
 		}
+		// rev 16: the align tag (0 none, 1 start, 2 end, 3 justify).
+		if spec.TextAlign > 3 {
+			return nil, nil, nil, nil, fmt.Errorf("%w: run %d text-align %d is unknown", ErrTextBadValue, i, spec.TextAlign)
+		}
 		runs[i] = TextRunRecord{
 			Len:                  uint32(spec.Len),
 			FamilyOffset:         uint32(familyOffset),
@@ -1271,6 +1307,7 @@ func packShapeRequest(request *ShapeRequest) ([]TextRunRecord, []TextFeatureReco
 			OpSZPresent:          opszPresent,
 			OpSZBits:             opszBits,
 			Justify:              justify,
+			TextAlign:            spec.TextAlign,
 		}
 	}
 	if covered != len(text) {
@@ -1389,6 +1426,7 @@ func (s *TextService) LayoutInfo(handle ShapingID) (TextLayout, error) {
 		Ascent:         math.Float32frombits(record.AscentBits),
 		Descent:        math.Float32frombits(record.DescentBits),
 		FontGeneration: record.FontGeneration,
+		IsRTL:          record.IsRTL != 0,
 	}
 	if record.WrapPresent != 0 {
 		wrap := math.Float32frombits(record.WrapBits)

@@ -65,6 +65,12 @@ pub mod renderer;
 pub mod scene;
 pub mod svg;
 pub mod text;
+// The vendored Parley adapter (browser-core ticket 43): a byte-copy of
+// the pinned `gpui_ce_parley` implementation with the rev-16 side-channel
+// — see `text_vendored/mod.rs` for the divergence record. `pub(crate)`:
+// the text and glyph services are its only consumers; the pinned
+// `gpui-ce-parley` crate stays the ABI's public-type owner.
+mod text_vendored;
 
 use std::mem::{align_of, size_of};
 use std::panic::{catch_unwind, AssertUnwindSafe};
