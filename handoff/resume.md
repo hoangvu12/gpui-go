@@ -6,7 +6,9 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 ## ACTIVE EFFORT (2026-10-23): recreate zgui's terminal app ("zterm") on gpui-go
 
-**HANDOFF 2026-10-27 (orchestrator 11 → orchestrator 12).** The user asked for it. The handoff doc is `%TEMP%\gpui-go-handoff-orchestrator12.md`: finish 58's STAGED merge, then 57/61 (running), then 59/60. The predecessor is Roboco chat b8bb5b81.
+**HANDOFF 2026-10-27 (orchestrator 12 → orchestrator 13).** The user asked for it (context size). The handoff doc is `%TEMP%\gpui-go-handoff-orchestrator13.md`: all 78 resolved; next is ticket 79 (Tab wrap switch) and asking the user about the gpui-go-base GitHub repo. The predecessor is Roboco chat 2379fd85.
+
+**HANDOFF 2026-10-27 (orchestrator 11 → orchestrator 12).** History now. The user asked for it. The handoff doc is `%TEMP%\gpui-go-handoff-orchestrator12.md`: finish 58's STAGED merge, then 57/61 (running), then 59/60. The predecessor is Roboco chat b8bb5b81.
 
 **HANDOFF 2026-10-26 (orchestrator 10 → orchestrator 11).** History now. The user asked for it. The handoff doc is `%TEMP%\gpui-go-handoff-orchestrator11.md`: finish verifying 76 (its merges are STAGED, uncommitted, in both gpui-go and gpui-go-base), then the native phase (R16 50-53 → 54 → 55-61, 42/43). The predecessor is Roboco chat d041f254.
 
@@ -16,7 +18,7 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 **HANDOFF 2026-10-24 (orchestrator 8 → orchestrator 9).** History: `%TEMP%\gpui-go-handoff-orchestrator9.md`; the predecessor was Roboco chat 08b88b23.
 
-**ORCHESTRATOR 12 STATUS (2026-10-27). Latest.** Claude Code, Opus 5.5; Roboco chat 2379fd85. It took over from orchestrator 11 (chat b8bb5b81; handoff doc `%TEMP%\gpui-go-handoff-orchestrator12.md`). Rules: unchanged.
+**ORCHESTRATOR 12 STATUS (2026-10-27). Latest until 13 writes its block.** Claude Code, Opus 5.5; Roboco chat 2379fd85. It took over from orchestrator 11 (chat b8bb5b81; handoff doc `%TEMP%\gpui-go-handoff-orchestrator12.md`). Rules: unchanged.
 - **58 resolved and merged** (damage tracking + paint flashing; verified by orchestrator 11 on the merged tree: 88 packages ok, gpui-go-base ok). Worktree `gpui-go-wt-core-58` and its branch removed.
 - **61 resolved and merged** (FLIP helper; gpui + parity + gpui-go-base ok). Worktree `gpui-go-wt-core-61` and its branch removed. The idle pi trees of 55/56/58 had exited; folders `gpui-go-wt-core-55`/`-56` deleted.
 - **57 resolved and merged** (masks/clip-path/blend/fades/gradients; conflicts with 56 resolved, see its Comment; 92 packages ok). New flake: focusspec TestRealWindowKeyboardTranslation (passes alone). Follow-ups: replayed ranges keep baked gradient/coverage/op-chain indices + pathCount misses replays (sent to 59); native drop-shadow lease bug (draw.rs:3506).
