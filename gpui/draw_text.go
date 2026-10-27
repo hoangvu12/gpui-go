@@ -217,6 +217,7 @@ func (k *SceneKernel) insertMonochromeSprite(sprite MonochromeSprite) error {
 	if err := k.scene.InsertMonochromeSprite(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert monochrome sprite: %w", err)
 	}
+	k.recordDamageRect(sprite.Bounds, sprite.ContentMask, false)
 	return nil
 }
 
@@ -236,6 +237,7 @@ func (k *SceneKernel) insertSubpixelSprite(sprite SubpixelSprite) error {
 	if err := k.scene.InsertSubpixelSprite(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert subpixel sprite: %w", err)
 	}
+	k.recordDamageRect(sprite.Bounds, sprite.ContentMask, false)
 	return nil
 }
 
@@ -293,6 +295,7 @@ func (k *SceneKernel) insertPolychromeSprite(sprite PolychromeSprite) error {
 	if err := k.scene.InsertPolychromeSprite(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert polychrome sprite: %w", err)
 	}
+	k.recordDamageRect(sprite.Bounds, sprite.ContentMask, false)
 	return nil
 }
 

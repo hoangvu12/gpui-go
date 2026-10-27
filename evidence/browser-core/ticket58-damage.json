@@ -1,0 +1,177 @@
+{
+  "schema": "gpui-go/r58-damage-measure@1",
+  "date": "2026-10-26T22:03:52Z",
+  "window_px": [
+    1280,
+    800
+  ],
+  "note": "wall-time measurements of the WINDOW frame request (the draw plus the present plus the retirement wait, on the host thread) on one shown-never-activated off-screen window per surface mode; the page is a 16x12 wrap grid of 80x40 cached panes (192 panes), a 640x300 scroller of forty cached 50px rows and a 200x100 pulse pane (the animation), so the scene carries about 470 primitives - enough for the present's GPU work to matter while the cached replays keep the rebuild cheap (the damage savings come from the reused view ranges; a real page's non-cached parts add their own rebuild cost on both sides of every row); every scenario is measured as INTERLEAVED pairs (the damage-presented frame, then the same content's force-full frame, order alternating), so the paired savings mean sees the same machine load on both sides - this machine is heavily shared, so the absolute wall times are several times an idle machine's and the paired mean is the comparable statistic; the present_submit_ms fields time the present CALL (the CPU submit cost, measured inside the hook) - the damage path pays a little more CPU (the merge, the retained-target copy) and wins back GPU completion time; the damage fraction is the native per-mille of the window area from the DAMAGE present (forced-full presents do not update that counter, so the full-redraw control's fraction field is stale there - its rects ARE the whole window); the present/bind counters are cumulative deltas over the sequence and include the frame pacer's host-delivered frames during the settles; the DComp mode (the default surface) presents full on this machine - the r53 pinned readback fallback - while the damage-scissored redraw still saves the GPU shading work, and the hwnd mode accepts Present1 (30/30 partial presents at the window level, below)",
+  "rule": "reused view ranges at the same bounds and mask are undamaged (Chrome's chunk rule, raster_invalidator.cc:242-249); everything else damages its old and new bounds; capture-backed surfaces always damage; the first frame, a viewport/scale/appearance change, log drift and out-of-order replays fall back to full",
+  "measurements": {
+    "animation": {
+      "desc": "animation: the pulse pane repaints every frame",
+      "damage": {
+        "desc": "animation: the pulse pane repaints every frame (damage present)",
+        "timing": {
+          "n": 30,
+          "mean_ms": 21.283993333333328,
+          "min_ms": 10.6152
+        },
+        "input_damage_rects": 1,
+        "damage_fraction_per_mille_min": 20,
+        "damage_fraction_per_mille_mean": 20,
+        "full_presents": 355,
+        "partial_presents": 0,
+        "state_binds_per_frame": 106.5,
+        "stolen_frames_skipped": 0,
+        "present_submit_ms_mean": 0.7515000000000001
+      },
+      "baseline_force_full": {
+        "desc": "animation: the pulse pane repaints every frame (force-full baseline)",
+        "timing": {
+          "n": 30,
+          "mean_ms": 20.99326,
+          "min_ms": 9.883700000000001
+        },
+        "input_damage_rects": 0,
+        "damage_fraction_per_mille_min": 0,
+        "damage_fraction_per_mille_mean": 0,
+        "full_presents": 0,
+        "partial_presents": 0,
+        "state_binds_per_frame": 0,
+        "stolen_frames_skipped": 0,
+        "present_submit_ms_mean": 0.6746000000000001
+      },
+      "paired_frame_savings_ms_mean": -0.29073333333333395,
+      "paired_frame_savings_ms_min": -11.404199999999996,
+      "frame_savings_percent": -1.3848889278431933
+    },
+    "full_redraw_control": {
+      "desc": "full-redraw control: a refresh per frame",
+      "damage": {
+        "desc": "full-redraw control: a refresh per frame (damage present)",
+        "timing": {
+          "n": 30,
+          "mean_ms": 34.658970000000004,
+          "min_ms": 13.973799999999999
+        },
+        "input_damage_rects": 0,
+        "damage_fraction_per_mille_min": 20,
+        "damage_fraction_per_mille_mean": 51,
+        "full_presents": 342,
+        "partial_presents": 0,
+        "state_binds_per_frame": 102.6,
+        "stolen_frames_skipped": 0,
+        "present_submit_ms_mean": 0.9899333333333332
+      },
+      "baseline_force_full": {
+        "desc": "full-redraw control: a refresh per frame (force-full baseline)",
+        "timing": {
+          "n": 30,
+          "mean_ms": 36.660293333333335,
+          "min_ms": 16.4825
+        },
+        "input_damage_rects": 0,
+        "damage_fraction_per_mille_min": 0,
+        "damage_fraction_per_mille_mean": 0,
+        "full_presents": 0,
+        "partial_presents": 0,
+        "state_binds_per_frame": 0,
+        "stolen_frames_skipped": 0,
+        "present_submit_ms_mean": 0.5502666666666668
+      },
+      "paired_frame_savings_ms_mean": 2.0013233333333336,
+      "paired_frame_savings_ms_min": -46.6888,
+      "frame_savings_percent": 5.459103436888303
+    },
+    "hover_change": {
+      "desc": "hover change: one cached pane recolors per frame",
+      "damage": {
+        "desc": "hover change: one cached pane recolors per frame (damage present)",
+        "timing": {
+          "n": 30,
+          "mean_ms": 9.23433333333333,
+          "min_ms": 6.587
+        },
+        "input_damage_rects": 1,
+        "damage_fraction_per_mille_min": 3,
+        "damage_fraction_per_mille_mean": 3,
+        "full_presents": 60,
+        "partial_presents": 0,
+        "state_binds_per_frame": 18,
+        "stolen_frames_skipped": 0,
+        "present_submit_ms_mean": 1.0824
+      },
+      "baseline_force_full": {
+        "desc": "hover change: one cached pane recolors per frame (force-full baseline)",
+        "timing": {
+          "n": 30,
+          "mean_ms": 9.690013333333333,
+          "min_ms": 5.8303
+        },
+        "input_damage_rects": 0,
+        "damage_fraction_per_mille_min": 0,
+        "damage_fraction_per_mille_mean": 0,
+        "full_presents": 0,
+        "partial_presents": 0,
+        "state_binds_per_frame": 0,
+        "stolen_frames_skipped": 0,
+        "present_submit_ms_mean": 0.49470000000000003
+      },
+      "paired_frame_savings_ms_mean": 0.4556800000000002,
+      "paired_frame_savings_ms_min": -4.524899999999999,
+      "frame_savings_percent": 4.702573508670785
+    },
+    "hover_change_hwnd_mode": {
+      "damage_fraction_per_mille": 3,
+      "desc": "hover change in hwnd mode (Present1's accepted mode), driven through the frame pacer",
+      "frames": 30,
+      "full_presents": 0,
+      "partial_presents": 30
+    },
+    "identity": {
+      "bytes": 19464192,
+      "native_revision": 16,
+      "sha256": "8ec910d4f24df66f937b312a02345458fd218888eae15a29a906745fc225dd11",
+      "source": "cache"
+    },
+    "scroll": {
+      "desc": "scroll: the cached rows move 16px per frame",
+      "damage": {
+        "desc": "scroll: the cached rows move 16px per frame (damage present)",
+        "timing": {
+          "n": 30,
+          "mean_ms": 12.37492,
+          "min_ms": 8.830599999999999
+        },
+        "input_damage_rects": 1,
+        "damage_fraction_per_mille_min": 188,
+        "damage_fraction_per_mille_mean": 188,
+        "full_presents": 60,
+        "partial_presents": 0,
+        "state_binds_per_frame": 18,
+        "stolen_frames_skipped": 0,
+        "present_submit_ms_mean": 0.8565666666666668
+      },
+      "baseline_force_full": {
+        "desc": "scroll: the cached rows move 16px per frame (force-full baseline)",
+        "timing": {
+          "n": 30,
+          "mean_ms": 11.872239999999998,
+          "min_ms": 8.0043
+        },
+        "input_damage_rects": 0,
+        "damage_fraction_per_mille_min": 0,
+        "damage_fraction_per_mille_mean": 0,
+        "full_presents": 0,
+        "partial_presents": 0,
+        "state_binds_per_frame": 0,
+        "stolen_frames_skipped": 0,
+        "present_submit_ms_mean": 0.7039333333333333
+      },
+      "paired_frame_savings_ms_mean": -0.5026799999999998,
+      "paired_frame_savings_ms_min": -5.423599999999999,
+      "frame_savings_percent": -4.234078825899745
+    }
+  }
+}

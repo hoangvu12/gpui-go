@@ -1158,6 +1158,25 @@ type windowDrawState struct {
 	// reused their previous range or rendered afresh (test-support
 	// diagnostics; the pin has none).
 	viewCacheHits, viewCacheMisses uint64
+	// The damage state of the last completed frame (browser-core ticket
+	// 58, damage.go): the merged device-pixel rects the frame changed
+	// and whether it was a full redraw, plus the geometry keys that
+	// invalidate it (the viewport, the scale, the clear appearance).
+	// lastDamageValid gates the whole rule — without a previously
+	// completed damage-tracked frame (the first frame, an abandoned
+	// build) the next frame is a full redraw.
+	lastDamageRects      []DamageRect
+	lastDamageFull       bool
+	lastDamageValid      bool
+	lastDamageViewport   Size
+	lastDamageScale      float32
+	lastDamageBackground WindowBackgroundAppearance
+	// paintFlashing enables the paint-flashing overlay (WindowOptions.
+	// PaintFlashing / Window.SetPaintFlashing): each frame's damage
+	// rects are tinted into the scene before its finish; damageFlashFrame
+	// alternates the tint's color (damage.go).
+	paintFlashing     bool
+	damageFlashFrame uint32
 }
 
 // isViewDirty reports whether the view is dirty in the frame being
@@ -1345,6 +1364,15 @@ type frameDrawState struct {
 	// global that is only non-empty inside prepaint_deferred_draws; the
 	// port scopes it to the frame under construction.
 	deferredPriorities []int
+	// damageReplays are the scene-op ranges the frame replayed from the
+	// previous scene (reusePaint records each one; damage.go): the reused
+	// view ranges — the frame's undamaged regions.
+	damageReplays []damageReplay
+	// damageRects and damageFull are the frame's computed damage (the
+	// merged rects the present passes to Surface.DrawSceneDamage; damage.go
+	// computes them after the build, before the scene's finish).
+	damageRects []DamageRect
+	damageFull  bool
 }
 
 // windowDrawStates is the per-window element runtime registry.

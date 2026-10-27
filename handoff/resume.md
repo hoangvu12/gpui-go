@@ -6,6 +6,8 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 ## ACTIVE EFFORT (2026-10-23): recreate zgui's terminal app ("zterm") on gpui-go
 
+**HANDOFF 2026-10-27 (orchestrator 11 → orchestrator 12).** The user asked for it. The handoff doc is `%TEMP%\gpui-go-handoff-orchestrator12.md`: finish 58's STAGED merge, then 57/61 (running), then 59/60. The predecessor is Roboco chat b8bb5b81.
+
 **HANDOFF 2026-10-26 (orchestrator 10 → orchestrator 11).** History now. The user asked for it. The handoff doc is `%TEMP%\gpui-go-handoff-orchestrator11.md`: finish verifying 76 (its merges are STAGED, uncommitted, in both gpui-go and gpui-go-base), then the native phase (R16 50-53 → 54 → 55-61, 42/43). The predecessor is Roboco chat d041f254.
 
 **HANDOFF 2026-10-25 (orchestrator 9 → orchestrator 10).** History now. The user asked for it. The handoff doc is `%TEMP%\gpui-go-handoff-orchestrator10.md`. It covers taking over the 2 running workers (45, 73), the user's new native decision, the lessons and the frontier. The predecessor is Roboco chat b38c2f03.
@@ -14,7 +16,10 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 **HANDOFF 2026-10-24 (orchestrator 8 → orchestrator 9).** History: `%TEMP%\gpui-go-handoff-orchestrator9.md`; the predecessor was Roboco chat 08b88b23.
 
-**ORCHESTRATOR 11 STATUS (2026-10-26). Latest.** Claude Code, Opus 5.5; Roboco chat b8bb5b81. It took over from orchestrator 10 (chat d041f254; handoff doc `%TEMP%\gpui-go-handoff-orchestrator11.md`). Rules: orchestrator 10's handoff doc, unchanged.
+**ORCHESTRATOR 12 STATUS (2026-10-27). Latest.** Claude Code, Opus 5.5; Roboco chat 2379fd85. It took over from orchestrator 11 (chat b8bb5b81; handoff doc `%TEMP%\gpui-go-handoff-orchestrator12.md`). Rules: unchanged.
+- **58 resolved and merged** (damage tracking + paint flashing; verified by orchestrator 11 on the merged tree: 88 packages ok, gpui-go-base ok). Worktree `gpui-go-wt-core-58` and its branch removed.
+
+**ORCHESTRATOR 11 STATUS (2026-10-26). History now.** Claude Code, Opus 5.5; Roboco chat b8bb5b81. It took over from orchestrator 10 (chat d041f254; handoff doc `%TEMP%\gpui-go-handoff-orchestrator11.md`). Rules: orchestrator 10's handoff doc, unchanged.
 - **Resolved (73 of 78):** 76 (default position static; merged in both repos, worker chat a660cce4). EVERY Go-only ticket is now resolved. Worktrees `gpui-go-wt-core-76` and `gpui-go-base-wt-76` and both `core/76-position-static` branches are removed.
 - New rare flake: gpui-go-base `TestRealTheEndOfTheTextAndItsSeparatorsRevealTheLastLine` panicked once with "conflicting reentrant access" in the window trampoline (36 clean re-runs); same class as authorspec's TestRealTwoWindowCounterSharedModel. Follow-up, not a ticket yet.
 - **Native phase (user-approved):** R16 on ONE integration branch `native/r16` (worktree `gpui-go-wt-r16`), one worker at a time: 50 → 51 → 52 → 53, then 42/43 (vendored Parley adapter / text-run fields), then 54 (the rev 16 rebuild, approved by the user's 2026-10-25 decision). Shared `CARGO_TARGET_DIR=C:\Users\ADMIN\Desktop\nguyenvu\gpui-r16-target` (keep it; incremental). Interim DLLs are NOT committed: workers test through `GPUI_GO_NATIVE_BUNDLE=C:\Users\ADMIN\Desktop\nguyenvu\gpui-r16-bundle`; only 54 refreshes `internal/native/artifacts`. One cargo build at a time, `-j 4`, below-normal priority.

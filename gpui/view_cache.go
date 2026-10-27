@@ -187,9 +187,23 @@ func (w *Window) reusePaint(start, end paintIndex) {
 		if ds.lastScene == nil {
 			panic("gpui: reuse_paint: no previous scene to replay")
 		}
+		// browser-core 58: the copied range is the frame's undamaged
+		// region (the reused view range — Chrome's cached subsequence,
+		// raster_invalidator.cc:242-249). Bracket the copy with the new
+		// scene's op counts so the damage computation can map both index
+		// spaces (damage.go recordDamageReplay).
+		newStart, lenErr := frame.scene.Len()
+		if lenErr != nil {
+			panic(fmt.Sprintf("gpui: reuse_paint: scene len: %v", lenErr))
+		}
 		if err := frame.scene.Replay(start.scene, end.scene, ds.lastScene); err != nil {
 			panic(fmt.Sprintf("gpui: reuse_paint: %v", err))
 		}
+		newEnd, lenErr := frame.scene.Len()
+		if lenErr != nil {
+			panic(fmt.Sprintf("gpui: reuse_paint: scene len: %v", lenErr))
+		}
+		frame.recordDamageReplay(start.scene, end.scene, newStart, newEnd)
 	}
 }
 

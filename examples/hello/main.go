@@ -59,25 +59,18 @@ func main() {
 		if shown == nil || !shown.Alive() {
 			return
 		}
-		scene := gpui.LastDrawnScene(shown)
-		if scene == nil {
-			return
-		}
 		// GetOrCreateSurface also resizes the surface to the window.
 		target, err := renderer.GetOrCreateSurface(shown)
 		if err != nil {
 			log.Print(err)
 			return
 		}
-		// The scene's glyph sprites reference the atlas the window's
-		// text system rasterized them into: pass that atlas along with
-		// the scene (a sprite-free scene would ignore it).
-		atlas, err := shown.GlyphAtlas()
-		if err != nil {
-			log.Print(err)
-			return
-		}
-		if _, err := target.DrawScene(scene, atlas, gpui.BackgroundOpaque); err != nil {
+		// The window's frame loop computed the frame's damage (the reused
+		// view ranges are undamaged; everything else damaged its old and
+		// new bounds): present through the damage entry instead of a full
+		// draw — a full-redraw frame takes the forceFull path, and a
+		// frame that changed nothing presents nothing at all.
+		if _, err := gpui.PresentFrame(shown, target, gpui.BackgroundOpaque); err != nil {
 			log.Print(err)
 		}
 	}

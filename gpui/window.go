@@ -150,6 +150,15 @@ type WindowOptions struct {
 	// default-action position, all skipped when a listener prevents the
 	// default. Change it live with Window.SetKeyDispatchOrder.
 	KeyDispatchOrder KeyDispatchOrder
+	// PaintFlashing enables the paint-flashing overlay (browser-core
+	// ticket 58): each frame's damage rects are tinted into the scene
+	// before its finish — one translucent quad per merged damage rect,
+	// alternating red and green frame over frame, one viewport-sized
+	// quad on a full redraw — so what each frame repainted is visible
+	// (Chrome's own paint-rects debug option). Change it live with
+	// Window.SetPaintFlashing. The overlay changes pixels: keep it off
+	// unless debugging.
+	PaintFlashing bool
 
 	// ShouldClose is the close veto: it is called synchronously when a
 	// close is requested (WM_CLOSE); returning false vetoes the close
@@ -996,6 +1005,10 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 				// The frame loop drives every window; OnRedraw is its present
 				// step. The window starts dirty (window.rs:178).
 				frames: newWindowFrameState(opts.OnRedraw, opts.PreferredFrameInterval),
+			}
+			if opts.PaintFlashing {
+				// browser-core 58: the paint-flashing overlay's debug option.
+				drawState(window).paintFlashing = true
 			}
 			if opts.KeyDispatchOrder != BindingsBeforeListeners {
 				// browser-core 09: the key dispatch order option, stored in
