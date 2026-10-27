@@ -70,14 +70,17 @@ var Fixture = parity.Fixture{
 	View:   View,
 	BoxIDs: []string{"shadowed"},
 	Tolerance: parity.PixelTolerance{
-		// Provisional: the correct view's statistics are the blurred
-		// shadow's gaussian falloff (Chrome's three box-blur passes
-		// against the port's — both approximate the same gaussian, the
+		// Set from the measured correct-view statistics (the headroom
+		// check's rule: 2x the measured): whole mean 0.284 / the
+		// shadowed ROI 1.27 / hot 0.0001 — the blurred shadow's
+		// gaussian approximation (Chrome's three box-blur passes
+		// against the port's; both approximate the same gaussian, the
 		// tails differ in the low bits) plus the translucent box's
-		// rounding. Verified by dropshadow_test.go.
-		MaxMeanChannelDiff:    0.3,
-		MaxROIMeanChannelDiff: 6.0,
-		MaxHotPixelFraction:   0.05,
+		// rounding. The deliberately-wrong view (no shadow) measures
+		// far past it. Verified by dropshadow_test.go.
+		MaxMeanChannelDiff:    0.6,
+		MaxROIMeanChannelDiff: 3.0,
+		MaxHotPixelFraction:   0.002,
 	},
 }
 
