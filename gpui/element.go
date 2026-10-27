@@ -1165,6 +1165,10 @@ type windowDrawState struct {
 	// lastDamageValid gates the whole rule — without a previously
 	// completed damage-tracked frame (the first frame, an abandoned
 	// build) the next frame is a full redraw.
+	// lastDamageRects and lastDamageFull are the frame's merged damage
+	// and full-redraw flag; the tick's frames (propertyframes.go) publish
+	// the update's old ∪ new bounds the same way, so PresentFrame serves
+	// both frame kinds through one seam.
 	lastDamageRects      []DamageRect
 	lastDamageFull       bool
 	lastDamageValid      bool
@@ -1196,6 +1200,17 @@ type windowDrawState struct {
 	// reads (view_reuse.go): a NotifyGlobal of a type the frame read
 	// refreshes this window (a stale reuse would miss the new value).
 	lastAccessedGlobals map[reflect.Type]struct{}
+	// lastPropertyAnimations (browser-core ticket 60, propertyframes.go)
+	// is the last completed frame's property-node registry: the
+	// transform/opacity transition nodes whose runs were active, with
+	// the geometry and applied values the frame loop's tick consumes.
+	// Nil for frames without active property transitions.
+	lastPropertyAnimations []*propertyAnimation
+	// nextPropertyNodeID hands out the window's scene property-node ids
+	// (monotonic, never reused: an evicted element state that returns
+	// gets a fresh id, so a stale node id in an old scene never
+	// collides with a new one).
+	nextPropertyNodeID uint32
 }
 
 // isViewDirty reports whether the view is dirty in the frame being
@@ -1401,6 +1416,22 @@ type frameDrawState struct {
 	// fresh render captures its range into the reuse record (the
 	// handle states with their versions); the reuse check compares them.
 	scrollReads []*scrollHandleState
+	// propertyNodeDrafts (browser-core ticket 60, propertyframes.go) are
+	// the elements whose transform/opacity transition runs sampled active
+	// this frame, keyed by the element's global id path — the drafts the
+	// paint's group emissions mark and completeFrame publishes as the
+	// window's property animation registry. Nil for frames without
+	// active property transitions (every read pays one map-nil check).
+	propertyNodeDrafts map[string]*propertyNodeDraft
+	// transformOwnStack and transformNodeStack (browser-core ticket 60)
+	// mirror transformScopes with each open scope's OWN matrix and its
+	// property-node id (0 for a plain transform): a hitbox inserted under
+	// an animated transform snapshots the pair (propertyframes.go
+	// propertyScopeChain), and the tick recomposes its matrix by
+	// replacing the node's own matrix in the chain. Balanced with the
+	// scopes by push/popTransformScope.
+	transformOwnStack  []TransformationMatrix
+	transformNodeStack []uint32
 }
 
 // windowDrawStates is the per-window element runtime registry.
@@ -1748,6 +1779,18 @@ func WithRoundedContentMask[R any](w *Window, mask *ClipMask, f func(*Window) R)
 // with_element_opacity): the backdrop-filter exception (see
 // opacityCompositesAsGroup) and any caller without the element bounds.
 func WithElementOpacity[R any](w *Window, opacity *float32, bounds Bounds, isolateGroup bool, f func(*Window) R) R {
+	return withElementOpacityNode(w, opacity, bounds, isolateGroup, nil, f)
+}
+
+// withElementOpacityNode is WithElementOpacity with the property-node
+// draft of an active opacity transition (browser-core ticket 60):
+// when the group path runs, the group carries PropertyNode + the
+// draft's node id — the native plan never folds a property-node group
+// (the fold bakes the opacity into the primitive at plan time, so an
+// in-place update would be invisible; the flag forces the isolated
+// composite that reads the mutated record) — and the draft records
+// the emission. A nil draft is the public seam's plain call.
+func withElementOpacityNode[R any](w *Window, opacity *float32, bounds Bounds, isolateGroup bool, draft *propertyNodeDraft, f func(*Window) R) R {
 	frame := currentFrame(w)
 	if opacity == nil || *opacity >= 1 {
 		return f(w)
@@ -1764,6 +1807,12 @@ func WithElementOpacity[R any](w *Window, opacity *float32, bounds Bounds, isola
 		Opacity:     *opacity,
 		Bounds:      snapBounds(bounds, scale),
 		ContentMask: snappedContentMask(frame.paint.Mask, scale),
+	}
+	if draft != nil && draft.opacityNodeID != 0 {
+		group.PropertyNode = true
+		group.NodeID = draft.opacityNodeID
+		draft.opacityEmitted = true
+		draft.emittedOpacity = *opacity
 	}
 	if err := frame.scene.BeginEffectGroup(group); err != nil {
 		panic(fmt.Sprintf("gpui: WithElementOpacity: effect group: %v", err))
@@ -1851,6 +1900,15 @@ func WithRoundedContentMaskVoid(w *Window, mask *ClipMask, f func(*Window)) {
 // WithElementOpacityVoid is the void form of WithElementOpacity.
 func WithElementOpacityVoid(w *Window, opacity *float32, bounds Bounds, isolateGroup bool, f func(*Window)) {
 	WithElementOpacity(w, opacity, bounds, isolateGroup, func(w *Window) struct{} {
+		f(w)
+		return struct{}{}
+	})
+}
+
+// withElementOpacityNodeVoid is the void form of
+// withElementOpacityNode (the property-node draft's entry).
+func withElementOpacityNodeVoid(w *Window, opacity *float32, bounds Bounds, isolateGroup bool, draft *propertyNodeDraft, f func(*Window)) {
+	withElementOpacityNode(w, opacity, bounds, isolateGroup, draft, func(w *Window) struct{} {
 		f(w)
 		return struct{}{}
 	})

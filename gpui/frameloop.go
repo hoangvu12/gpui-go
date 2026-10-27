@@ -123,6 +123,14 @@ type windowFrameState struct {
 	// requesting reports a frame request in progress for this window;
 	// the flush tail leaves its demand to the request's own tail.
 	requesting bool
+	// propertyTickPending reports a property animation tick pending
+	// (browser-core ticket 60, propertyframes.go): an active transform or
+	// opacity transition asked for the next frame WITHOUT notifying its
+	// view. The frame request serves it by updating the last drawn
+	// scene's property nodes and presenting the damage — no render, no
+	// layout, no paint; the tick's own fallbacks redraw the window
+	// fully.
+	propertyTickPending bool
 	// onWake observes every frame-source wake (each clean-to-armed edge
 	// that will cost a frame request). Test support only: real-window
 	// tests attribute the frames they did not cause (OS activation,
@@ -230,10 +238,15 @@ func (w *Window) wakeFrameSource() {
 }
 
 // hasFrameDemand reports whether the window needs a frame (the flush
-// tail's condition, R:app.rs:1816-1818).
+// tail's condition, R:app.rs:1816-1818). A pending property animation
+// tick is frame demand too (browser-core ticket 60): the frame source
+// must wake for it exactly as it wakes for a next-frame callback.
 func (w *Window) hasFrameDemand() bool {
 	fs := frameStateOf(w)
 	if len(fs.nextFrameCallbacks) > 0 {
+		return true
+	}
+	if fs.propertyTickPending {
 		return true
 	}
 	return w.isFrameDirty() || fs.needsPresent
@@ -287,12 +300,17 @@ func (cx *Context[S]) OnNextFrame(w *Window, f func(state *S, w *Window, cx *Con
 // SimulateNextFrame runs every callback scheduled through OnNextFrame
 // and returns how many ran (Window::simulate_next_frame,
 // R:window.rs:2643-2650). Tests have no platform frame loop, so this
-// simulates the delivery of the next frame's callbacks.
+// simulates the delivery of the next frame's callbacks. A pending
+// property animation tick (browser-core ticket 60 — the transition's
+// frame request, which notifies no view) is served here too, the test
+// twin of the frame request's tick, so a clock advance plus
+// SimulateNextFrame samples a transform or opacity transition without
+// a rebuild.
 func (w *Window) SimulateNextFrame(app *App) int {
 	fs := frameStateOf(w)
 	callbacks := fs.nextFrameCallbacks
 	fs.nextFrameCallbacks = nil
-	if len(callbacks) == 0 {
+	if len(callbacks) == 0 && !fs.propertyTickPending {
 		return 0
 	}
 	app.Update(func(app *App) {
@@ -300,6 +318,18 @@ func (w *Window) SimulateNextFrame(app *App) int {
 			callback(w, app)
 		}
 	})
+	if fs.propertyTickPending {
+		fs.propertyTickPending = false
+		if !w.isFrameDirty() && !w.isDrawing() {
+			app.Update(func(app *App) {
+				if !w.tickPropertyAnimations(app) {
+					// The tick's fallback: a full frame (the notify already
+					// queued the draw through the flush).
+					w.markFrameDirty()
+				}
+			})
+		}
+	}
 	return len(callbacks)
 }
 
@@ -385,6 +415,31 @@ func (w *Window) requestFrame() {
 	}
 
 	// Draw a dirty window, then present (R:window.rs:1805-1824).
+	//
+	// browser-core ticket 60: a frame request whose only demand is a
+	// pending property animation tick serves it FIRST — the transform or
+	// opacity transition runs sample at the app clock and update the
+	// last drawn scene's property nodes in place (propertyframes.go):
+	// no view renders, no layout, no paint. A window that is dirty
+	// anyway (a notification, a refresh request, a view notified during
+	// the last draw) absorbs the tick — the rebuild re-samples the same
+	// retained runs at this frame's clock, which is exactly the value
+	// the tick would have written. A failed tick marks the window dirty
+	// and the draw below renders the full frame (correctness first).
+	if fs.propertyTickPending {
+		fs.propertyTickPending = false
+		if !w.isFrameDirty() && !w.isDrawing() {
+			if ds, ok := windowDrawStates[w]; ok && ds.root != nil && !ds.closed {
+				ticked := false
+				app.Update(func(app *App) {
+					ticked = w.tickPropertyAnimations(app)
+				})
+				if !ticked {
+					w.markFrameDirty()
+				}
+			}
+		}
+	}
 	if w.isFrameDirty() {
 		ds, ok := windowDrawStates[w]
 		if ok && ds.root != nil && !ds.closed {
@@ -413,8 +468,9 @@ func (w *Window) requestFrame() {
 
 	// Re-arm the frame source when demand remains: the window was
 	// re-invalidated mid-frame or the frame scheduled next-frame
-	// callbacks (R:window.rs:1826-1843).
-	if w.isFrameDirty() || len(fs.nextFrameCallbacks) > 0 {
+	// callbacks (R:window.rs:1826-1843), or a property animation still
+	// ticks (browser-core ticket 60).
+	if w.isFrameDirty() || len(fs.nextFrameCallbacks) > 0 || fs.propertyTickPending {
 		w.wakeFrameSource()
 	}
 }

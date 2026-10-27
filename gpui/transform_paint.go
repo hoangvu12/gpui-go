@@ -22,12 +22,23 @@ import (
 //     test) and leaves the bounds alone — PAINT brackets the subtree
 //     in a scene effect group under the matrix.
 //
+// browser-core ticket 60 overrides the fast path while a TRANSFORM
+// TRANSITION runs on the element: the matrix scope is forced even for
+// a translation-only (or identity) matrix, so the group carries the
+// property node the animation frame ticks (Scene.UpdateEffectMatrix;
+// the offset fast path emits no group). The native composites
+// translation-only groups through the matrix (a lossless blit at
+// integral offsets, ticket 51), so mid-flight pixels and hit tests
+// match the matrix path's; a settled (inactive) transform returns to
+// the offset fast path.
+//
 // PAINT mirrors the same decision from the matrix the prepaint
 // resolved (stored in the div prepaint state, so the two phases agree
 // even when a hover style flips between them): the shift re-applies to
 // the bounds and the offset; the matrix opens the effect group around
 // the element's whole box — background, borders, shadows, outline and
-// children — as one transformed unit.
+// children — as one transformed unit. The group carries the property
+// node of an active transition (propertyframes.go).
 //
 // Elements participating in a parent paragraph get no transform: CSS
 // applies `transform` to transformable elements only (css-transforms-1
@@ -37,14 +48,21 @@ import (
 
 // pushTransformScope pushes the element's own matrix onto the frame's
 // transform scope (composed with the parent's: entry = parent·own, so
-// the stack top maps this subtree's layout space to the window).
-func pushTransformScope(w *Window, own TransformationMatrix) {
+// the stack top maps this subtree's layout space to the window), and
+// browser-core ticket 60 records the scope's OWN matrix and
+// property-node id alongside it: a hitbox inserted under an animated
+// transform snapshots the pair, and the property tick recomposes its
+// matrix by replacing the node's own matrix in the chain. nodeID is 0
+// for a plain (non-animated) transform scope.
+func pushTransformScope(w *Window, own TransformationMatrix, nodeID uint32) {
 	frame := currentFrame(w)
 	parent := UnitTransformation()
 	if len(frame.transformScopes) > 0 {
 		parent = frame.transformScopes[len(frame.transformScopes)-1]
 	}
 	frame.transformScopes = append(frame.transformScopes, mulTransformation(parent, own))
+	frame.transformOwnStack = append(frame.transformOwnStack, own)
+	frame.transformNodeStack = append(frame.transformNodeStack, nodeID)
 }
 
 // popTransformScope pops the innermost transform scope (balanced with
@@ -52,6 +70,8 @@ func pushTransformScope(w *Window, own TransformationMatrix) {
 func popTransformScope(w *Window) {
 	frame := currentFrame(w)
 	frame.transformScopes = frame.transformScopes[:len(frame.transformScopes)-1]
+	frame.transformOwnStack = frame.transformOwnStack[:len(frame.transformOwnStack)-1]
+	frame.transformNodeStack = frame.transformNodeStack[:len(frame.transformNodeStack)-1]
 }
 
 // currentTransformScope returns the composed matrix a hitbox inserted
@@ -154,7 +174,7 @@ func transformCollapsed(m *TransformationMatrix) bool {
 // pixels (the filter-boundary convention): the composite's local-space
 // clip never cuts surviving content, because the subtree's records are
 // already clipped by the same mask at insert time.
-func withElementTransformPaint(w *Window, matrix *TransformationMatrix, bounds Bounds, f func(*Window)) {
+func withElementTransformPaint(w *Window, matrix *TransformationMatrix, bounds Bounds, draft *propertyNodeDraft, f func(*Window)) {
 	if matrix == nil {
 		f(w)
 		return
@@ -167,6 +187,16 @@ func withElementTransformPaint(w *Window, matrix *TransformationMatrix, bounds B
 		Transform:    deviceTransform(*matrix, scale),
 		Bounds:       snapBounds(bounds, scale),
 		ContentMask:  snappedContentMask(frame.contentMask, scale),
+	}
+	// browser-core ticket 60: an active transform transition brackets
+	// the group as a property node (Scene.UpdateEffectMatrix mutates it
+	// in place on the tick) and records the emission — the device
+	// matrix is the tick's skip-equal baseline.
+	if draft != nil && draft.transformNodeID != 0 {
+		group.PropertyNode = true
+		group.NodeID = draft.transformNodeID
+		draft.transformEmitted = true
+		draft.emittedMatrix = group.Transform
 	}
 	if err := frame.scene.BeginEffectGroup(group); err != nil {
 		panic(fmt.Sprintf("gpui: DivElement paint: begin transform group: %v", err))

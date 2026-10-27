@@ -319,6 +319,21 @@ func damageClippedBounds(b, m Bounds) Bounds {
 //     knowledge);
 //   - any condition the rule cannot prove falls back to full.
 func computeFrameDamage(w *Window, ds *windowDrawState, frame *frameDrawState, scene *Scene) (rects []DamageRect, full bool) {
+	// browser-core ticket 60: a rebuilt frame with an EMITTED transform
+	// property node damages FULL — the transform group's visible pixels
+	// live at the MAPPED bounds (the composite's position), not at the
+	// ops' local bounds the rule reads, so an op-bounds partial frame
+	// can miss the mapped composite of the frame the transition left
+	// behind. The property tick path owns transform animation damage
+	// (the update's old ∪ new mapped bounds); a rebuild is the fallback
+	// and presents as one. An opacity-only transition moves nothing: its
+	// group's region is the damage the rule computes, expanded by the
+	// native influence to the composite's region.
+	for _, draft := range frame.propertyNodeDrafts {
+		if draft.transformActive && draft.transformEmitted {
+			return nil, true
+		}
+	}
 	// No previously completed damage-tracked frame: the first frame
 	// after the window opens (or after an abandoned build, which also
 	// invalidates the state) is a full redraw.
