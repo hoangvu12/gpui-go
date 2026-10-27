@@ -29,6 +29,7 @@ type pfView struct {
 	translate   bool
 	faded       bool
 	wide        bool
+	blended     bool
 	rules       []TransitionRule
 	renders     int
 }
@@ -63,6 +64,12 @@ func (v *pfView) Render(w *Window, cx *Context[pfView]) AnyElement {
 		// A mouse listener keeps the box's hitbox in the rendered frame
 		// (the hit-test gate needs one).
 		OnClick(func(*ClickEvent, *Window, *App) {})
+	if v.blended {
+		// A mix-blend-mode element (57): the blend group carries the
+		// opacity (styleElementOpacity returns nil for the opacity
+		// scope), so an opacity transition brackets no opacity group.
+		d = d.MixBlendMode(BlendMultiply)
+	}
 	if v.faded {
 		d = d.Opacity(0)
 	}
@@ -514,6 +521,59 @@ func TestPropertyTranslateTransitionForcesTheGroup(t *testing.T) {
 	}
 	if bounds, ok := WindowDebugBounds(w)["box"]; !ok || bounds.Origin.X != 120 || bounds.Origin.Y != 30 {
 		t.Fatalf("the settled debug bounds = %+v, want (120, 30, 40, 40)", bounds)
+	}
+}
+
+// TestPropertyBlendElementOpacityFallsBack: a mix-blend-mode element's
+// opacity is carried by the blend group (ticket 57's styleElementOpacity
+// — one effect node holds blend and opacity), which brackets no opacity
+// property node, so an opacity transition on a blended element falls
+// back to a full frame per tick (the notify path, the pre-60 animation).
+func TestPropertyBlendElementOpacityFallsBack(t *testing.T) {
+	ta, w, v := pfOpen(t, []TransitionRule{
+		NewTransitionRule(TransitionOpacity, 400*time.Millisecond).WithEasing(EasingLinear()),
+	})
+	// The settle frame: the blended box adopts its blend style (the
+	// first frame after the open re-renders with it).
+	pfChange(t, ta, w, v, func() { v.blended = true })
+	if _, _, ok := pfNodeOpacity(t, w); ok {
+		t.Fatal("a blend element's opacity group carries a property node (the blend group should carry the opacity instead)")
+	}
+	pfChange(t, ta, w, v, func() { v.faded = true })
+	// Advance past the first fallback frame so the diff has sampled
+	// below 1, then gate: every animation frame re-renders (the notify
+	// fallback), the transition still animates.
+	ta.AdvanceClock(2)
+	w.SimulateNextFrame(ta.App())
+	renders := v.renders
+	for i := 0; i < 3; i++ {
+		ta.AdvanceClock(50)
+		w.SimulateNextFrame(ta.App())
+		if v.renders <= renders {
+			t.Fatal("a blend element's opacity transition did not re-render (the blend group carries the opacity; the tick must fall back to full frames)")
+		}
+		renders = v.renders
+	}
+	// The blend group's opacity still animated through the rebuilds (the
+	// scene's blend group carries the sampled opacity).
+	scene := LastDrawnScene(w)
+	groups, err := scene.EffectGroups()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, g := range groups {
+		if g.IsStart && g.HasBlend && g.HasOpacity {
+			found = true
+			// 400ms linear from 1 to 0: the three 50ms steps land at
+			// 152ms past the change — the sample is 0.62.
+			if abs32(g.Opacity-0.62) > 0.01 {
+				t.Fatalf("the blend group's opacity at 152ms = %v, want the sampled 0.62 (the transition animates through the full frames)", g.Opacity)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("the blended box's scene carries no blend group with opacity")
 	}
 }
 

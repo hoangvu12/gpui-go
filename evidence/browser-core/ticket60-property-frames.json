@@ -1,6 +1,6 @@
 {
   "schema": "gpui-go/r60-property-frames-measure@1",
-  "date": "2026-10-27T02:48:28Z",
+  "date": "2026-10-27T03:23:50Z",
   "window_px": [
     640,
     300
@@ -22,26 +22,26 @@
     "transition_frames": {
       "desc": "transform+opacity transition frames: the property tick (UpdateEffectMatrix/Opacity + DrawSceneDamage, no rebuild) vs the pre-60 animation frame (a notified rebuild + full redraw)",
       "property_tick": {
-        "n": 30,
-        "mean_ms": 3.790973333333334,
-        "min_ms": 1.5871,
-        "present_submit_ms_mean": 0.5604666666666667
+        "n": 29,
+        "mean_ms": 2.220982758620689,
+        "min_ms": 1.0726,
+        "present_submit_ms_mean": 0.05431034482758621
       },
       "full_rebuild_frame": {
         "n": 30,
-        "mean_ms": 11.543346666666668,
-        "min_ms": 7.5789,
-        "present_submit_ms_mean": 0.5513
+        "mean_ms": 7.922536666666668,
+        "min_ms": 5.3666,
+        "present_submit_ms_mean": 0.11583333333333336
       },
       "paired_savings": {
-        "mean_ms": 7.752373333333335,
-        "min_ms": 5.9918,
-        "frame_savings_percent": 67.15880201120183
+        "mean_ms": 5.7015539080459785,
+        "min_ms": 4.2940000000000005,
+        "frame_savings_percent": 71.96626721886607
       },
       "damage_fraction_per_mille": 189,
-      "partial_presents": 76,
+      "partial_presents": 74,
       "full_presents": 32,
-      "stolen_frames_skipped": 0
+      "stolen_frames_skipped": 1
     }
   }
 }
