@@ -649,6 +649,19 @@ func (w *Window) DisableFocus() {
 // document scope's end — so the port blurs, the body equivalent; a
 // later Tab restarts from the first stop, and Shift+Tab returns to
 // the last, both sides' recorded answers).
+//
+// browser-core ticket 79 adds the app-level opt-in (App.SetTabWrap,
+// off by default): with the wrap on, the boundary wraps instead —
+// past the last stop focus moves to the cycle's FIRST stop. The wrap
+// keeps ticket 14's scoping rules: Inert subtrees never registered
+// stops (the wrap cannot land in one), the ordered slice's group paths
+// keep the forward walk's order, and a modal dialog's inert outside
+// leaves only the dialog's stops registered, so the wrap stays inside
+// the trap. Chromium has the same fallback shape when the browser UI
+// cannot take the focus (focus_controller.cc:2227-2236: "Chrome
+// doesn't want focus, so we should wrap focus" — the document-scope
+// re-search) — the port makes it an application choice because a real
+// Chrome window passes focus out, which headless records as the body.
 func (w *Window) FocusNext() {
 	if w == nil {
 		return
@@ -667,12 +680,25 @@ func (w *Window) FocusNext() {
 		// focus-visible styles (Chromium's FocusType::kForward is not
 		// kMouse, so !last_focus_from_mouse holds).
 		w.focusWithOrigin(handle, focusOriginKeyboard)
-	} else {
-		// The pass-out (browser-core ticket 14): past the last stop
-		// (or with no stop after an excluded focused element), focus
-		// moves to the body — no handle.
-		w.blurWithOrigin(focusOriginKeyboard)
+		return
 	}
+	// The wrap arm (browser-core ticket 79): the app-level switch
+	// turns the boundary into a wrap. firstStop scans the ordered
+	// slice, so the wrap target obeys the forward walk's order and
+	// cannot be an inert subtree's handle (inertness suppresses the
+	// registration, browser-core 14). With no stop at all the wrap
+	// falls through to the pass-out below — nothing focusable, nothing
+	// happens.
+	if w.tabWrapEnabled() {
+		if handle, ok := fs.rendered.tabStops.firstStop(); ok {
+			w.focusWithOrigin(handle, focusOriginKeyboard)
+			return
+		}
+	}
+	// The pass-out (browser-core ticket 14): past the last stop
+	// (or with no stop after an excluded focused element), focus
+	// moves to the body — no handle.
+	w.blurWithOrigin(focusOriginKeyboard)
 }
 
 // focusSearchStart resolves the sequential search's start: the focused
@@ -694,9 +720,19 @@ func (w *Window) focusSearchStart(backward bool) *uint64 {
 	return fs.focusNavStart.prev
 }
 
+// tabWrapEnabled reports whether the app-level Tab wrap switch is on
+// for this window's application (browser-core ticket 79, App.SetTabWrap).
+func (w *Window) tabWrapEnabled() bool {
+	return w != nil && w.app != nil && w.app.tabWrap
+}
+
 // FocusPrev moves focus to the previous tab stop (Window::focus_prev;
 // browser-core ticket 14's boundary like FocusNext: before the first
 // stop, the backward pass-out — the blur, the body equivalent).
+// browser-core ticket 79's app-level switch (App.SetTabWrap, off by
+// default) turns the boundary into a wrap: before the first stop focus
+// moves to the cycle's LAST stop, with FocusNext's scoping rules
+// (inert never registers, the ordered slice's order, the modal trap).
 func (w *Window) FocusPrev() {
 	if w == nil {
 		return
@@ -712,11 +748,22 @@ func (w *Window) FocusPrev() {
 	if handle, ok := fs.rendered.tabStops.Prev(focused, w); ok {
 		// Shift+Tab is a keyboard focus like Tab (focusOriginKeyboard).
 		w.focusWithOrigin(handle, focusOriginKeyboard)
-	} else {
-		// The backward pass-out (browser-core ticket 14): before the
-		// first stop, focus moves to the body — no handle.
-		w.blurWithOrigin(focusOriginKeyboard)
+		return
 	}
+	// The wrap arm (browser-core ticket 79): Shift+Tab before the first
+	// stop moves focus to the last stop of the cycle. lastStop scans
+	// the ordered slice backwards, so the wrap target obeys the walk's
+	// order and cannot be an inert subtree's handle; with no stop at
+	// all the pass-out below answers — nothing happens.
+	if w.tabWrapEnabled() {
+		if handle, ok := fs.rendered.tabStops.lastStop(); ok {
+			w.focusWithOrigin(handle, focusOriginKeyboard)
+			return
+		}
+	}
+	// The backward pass-out (browser-core ticket 14): before the
+	// first stop, focus moves to the body — no handle.
+	w.blurWithOrigin(focusOriginKeyboard)
 }
 
 // FocusGeneration returns the window's focus generation counter

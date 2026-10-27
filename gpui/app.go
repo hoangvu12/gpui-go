@@ -229,6 +229,13 @@ type App struct {
 	// keyboard scrolls and smooth programmatic scrolls animate with
 	// Chrome's curve while it is set and motion is allowed.
 	smoothScrolling bool
+	// tabWrap is the Tab-wrap policy flag (browser-core ticket 79): when
+	// set, Window.FocusNext/FocusPrev wrap at the sequential cycle's
+	// ends instead of passing focus out (Tab past the last stop focuses
+	// the first, Shift+Tab before the first focuses the last). The zero
+	// value is OFF — the default stays Chrome's boundary, where focus
+	// passes out of the page and the window blurs (ticket 14's D4 rule).
+	tabWrap bool
 	// imageCodec is the application's image decode+atlas pair the image
 	// cache retains frames in (lazily built; the first failure sticks).
 	imageCodec    *ImageCodec
@@ -374,6 +381,29 @@ func (a *App) SetSmoothScrolling(enabled bool) {
 	if a.smoothScrolling != enabled {
 		a.smoothScrolling = enabled
 		a.RefreshWindows()
+	}
+}
+
+// TabWrap reports whether sequential focus navigation wraps at the
+// cycle's ends (browser-core ticket 79): when on, Tab past the last
+// focus stop focuses the first and Shift+Tab before the first focuses
+// the last; when off — the default — the boundary stays Chrome's
+// (ticket 14's D4 rule): focus passes out of the page and the window
+// blurs (Window.FocusNext/FocusPrev).
+func (a *App) TabWrap() bool { return a != nil && a.tabWrap }
+
+// SetTabWrap sets the Tab-wrap flag (browser-core ticket 79, an
+// app-level divergence from the browser boundary): focus walking alone
+// consults the flag, so a change needs no refresh — the next Tab or
+// Shift+Tab default action (or Window.FocusNext/FocusPrev call) walks
+// with the new policy. The wrap keeps ticket 14's scoping: an Inert
+// subtree never registers stops (so the wrap never lands in one),
+// tab groups keep the forward walk's order, an open modal dialog's
+// inert outside keeps the wrap inside the dialog, and with nothing
+// focusable nothing happens (no wrap target exists).
+func (a *App) SetTabWrap(enabled bool) {
+	if a != nil {
+		a.tabWrap = enabled
 	}
 }
 
