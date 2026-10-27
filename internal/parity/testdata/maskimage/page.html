@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.masked {
+		box-sizing: border-box;
+		width: 160px;
+		height: 120px;
+		background: #2563eb;
+		/* The gradient mask: the alpha ramp composites the whole box
+		   (mask-mode is alpha for a gradient, the CSS default). */
+		mask-image: linear-gradient(to bottom, black, transparent);
+	}
+</style>
+</head>
+<body>
+	<div class="masked" data-id="masked"></div>
+</body>
+</html>

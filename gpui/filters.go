@@ -54,6 +54,32 @@ func (s *Scene) WithFilterLayerChain(bounds Bounds, chain FilterChain, radii Cor
 	if f == nil {
 		return fmt.Errorf("gpui: WithFilterLayerChain: nil closure")
 	}
+	// A chain carrying drop-shadow OPS (the source form,
+	// FilterChain.DropShadowOps — browser-core ticket 57) resolves
+	// here: the ops insert scene-level (scaled to device pixels) and
+	// the boundary pair carries the resolved chain (the op-chain index
+	// and count). Chromium builds FEDropShadow for each function
+	// (filter_effect_builder.cc:293-301) and draws each shadow beneath
+	// the content. A chain carrying the resolved reference only passes
+	// through unchanged.
+	if len(chain.DropShadowOps) > 0 {
+		ops := make([]FilterOp, len(chain.DropShadowOps))
+		for i, op := range chain.DropShadowOps {
+			ops[i] = FilterOp{
+				OffsetX:    op.OffsetX * ctx.ScaleFactor,
+				OffsetY:    op.OffsetY * ctx.ScaleFactor,
+				BlurRadius: op.BlurRadius * ctx.ScaleFactor,
+				Color:      op.Color,
+			}
+		}
+		index, err := s.InsertFilterOpChain(ops)
+		if err != nil {
+			return fmt.Errorf("gpui: WithFilterLayerChain: drop-shadow ops: %w", err)
+		}
+		chain.DropShadow = index
+		chain.DropShadowCount = len(ops)
+		chain.DropShadowOps = nil
+	}
 	if err := s.BeginFilterGroupChain(bounds, chain, radii, cornerSmoothing, ctx); err != nil {
 		return err
 	}

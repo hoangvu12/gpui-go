@@ -103,6 +103,10 @@ type style struct {
 	radius, fontSize, fontWeight, opacity, border float32
 	transform                                     []gpui.TransformFunction
 	transformOrigin                               gpui.TransformOrigin
+	fade                                          [4]float32
+	blend                                         gpui.BlendMode
+	isolate                                       bool
+	clipPath, maskImage, dropShadow               string
 }
 
 // style bits, one per supported CSS property.
@@ -128,6 +132,12 @@ const (
 	sOverflowY
 	sTransform
 	sTransformOrigin
+	sOverflowFade
+	sMixBlendMode
+	sIsolation
+	sClipPath
+	sMaskImage
+	sDropShadow
 )
 
 // overflowYScroll reports whether overflowY asked for scrolling
@@ -291,6 +301,89 @@ func parseStyle(o *goja.Object) (style, error) {
 				return style{}, fmt.Errorf("style transformOrigin: %v", err)
 			}
 			s.transformOrigin = origin
+		case "overflowFade":
+			s.set |= sOverflowFade
+			f := strings.Fields(str)
+			switch len(f) {
+			case 1:
+				p := px(f[0])
+				s.fade = [4]float32{p, p, p, p}
+			case 2:
+				y, x := px(f[0]), px(f[1])
+				s.fade = [4]float32{y, x, y, x}
+			case 4:
+				s.fade = [4]float32{px(f[0]), px(f[1]), px(f[2]), px(f[3])}
+			default:
+				return style{}, fmt.Errorf("style overflowFade: %q is not supported (one, two or four lengths)", str)
+			}
+		case "mixBlendMode":
+			s.set |= sMixBlendMode
+			switch str {
+			case "normal":
+				s.blend = gpui.BlendNormal
+			case "multiply":
+				s.blend = gpui.BlendMultiply
+			case "screen":
+				s.blend = gpui.BlendScreen
+			case "overlay":
+				s.blend = gpui.BlendOverlay
+			case "darken":
+				s.blend = gpui.BlendDarken
+			case "lighten":
+				s.blend = gpui.BlendLighten
+			case "color-dodge":
+				s.blend = gpui.BlendColorDodge
+			case "color-burn":
+				s.blend = gpui.BlendColorBurn
+			case "hard-light":
+				s.blend = gpui.BlendHardLight
+			case "soft-light":
+				s.blend = gpui.BlendSoftLight
+			case "difference":
+				s.blend = gpui.BlendDifference
+			case "exclusion":
+				s.blend = gpui.BlendExclusion
+			case "hue":
+				s.blend = gpui.BlendHue
+			case "saturation":
+				s.blend = gpui.BlendSaturation
+			case "color":
+				s.blend = gpui.BlendColor
+			case "luminosity":
+				s.blend = gpui.BlendLuminosity
+			case "plus-lighter":
+				s.blend = gpui.BlendPlusLighter
+			default:
+				return style{}, fmt.Errorf("style mixBlendMode: %q is not supported (the W3C blend modes and plus-lighter)", str)
+			}
+		case "isolation":
+			s.set |= sIsolation
+			switch str {
+			case "isolate":
+				s.isolate = true
+			case "auto":
+				s.isolate = false
+			default:
+				return style{}, fmt.Errorf("style isolation: %q is not supported (use \"isolate\" or \"auto\")", str)
+			}
+		case "clipPath":
+			s.set |= sClipPath
+			if _, err := gpui.ParseClipPath(str); err != nil {
+				return style{}, fmt.Errorf("style clipPath: %v", err)
+			}
+			s.clipPath = str
+		case "maskImage":
+			s.set |= sMaskImage
+			if _, err := gpui.ParseMaskImage(str); err != nil {
+				return style{}, fmt.Errorf("style maskImage: %v", err)
+			}
+			s.maskImage = str
+		case "dropShadow":
+			s.set |= sDropShadow
+			if _, err := gpui.ParseDropShadowValues(str); err != nil {
+				return style{}, fmt.Errorf("style dropShadow: %v", err)
+			}
+			s.dropShadow = str
 		default:
 			return style{}, fmt.Errorf("style: %q is not a supported CSS property here", k)
 		}
@@ -404,6 +497,43 @@ func (s *style) apply(d *gpui.DivElement) *gpui.DivElement {
 	}
 	if s.set&sTransformOrigin != 0 {
 		d = d.TransformOrigin(s.transformOrigin.X, s.transformOrigin.Y)
+	}
+	if s.set&sOverflowFade != 0 {
+		d = d.OverflowFade(gpui.AbsoluteLengthEdges{
+			Top:    gpui.Px(s.fade[0]),
+			Right:  gpui.Px(s.fade[1]),
+			Bottom: gpui.Px(s.fade[2]),
+			Left:   gpui.Px(s.fade[3]),
+		})
+	}
+	if s.set&sMixBlendMode != 0 {
+		d = d.MixBlendMode(s.blend)
+	}
+	if s.set&sIsolation != 0 && s.isolate {
+		d = d.Isolate()
+	}
+	if s.set&sClipPath != 0 {
+		clip, err := gpui.ParseClipPath(s.clipPath)
+		if err != nil {
+			panic(fmt.Sprintf("script: style clipPath: %v", err))
+		}
+		d = d.ClipPath(clip)
+	}
+	if s.set&sMaskImage != 0 {
+		mask, err := gpui.ParseMaskImage(s.maskImage)
+		if err != nil {
+			panic(fmt.Sprintf("script: style maskImage: %v", err))
+		}
+		d = d.MaskImage(mask)
+	}
+	if s.set&sDropShadow != 0 {
+		filters, err := gpui.ParseDropShadowValues(s.dropShadow)
+		if err != nil {
+			panic(fmt.Sprintf("script: style dropShadow: %v", err))
+		}
+		for _, f := range filters {
+			d = d.DropShadow(f.OffsetX, f.OffsetY, f.BlurRadius, f.Color)
+		}
 	}
 	return d
 }

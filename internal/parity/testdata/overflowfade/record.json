@@ -1,0 +1,26 @@
+{
+  "name": "overflowfade",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-27T00:21:38Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "child": {
+      "x": 250,
+      "y": 150,
+      "width": 140,
+      "height": 180
+    },
+    "scroller": {
+      "x": 250,
+      "y": 150,
+      "width": 140,
+      "height": 100
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

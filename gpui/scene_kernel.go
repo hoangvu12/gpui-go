@@ -67,6 +67,13 @@ type SceneKernel struct {
 	// log and the native count stay aligned; damageLogDrifted is the
 	// gate that falls back to a full redraw when they do not.
 	damageLog []sceneOpDamage
+	// pathCount tracks the path records inserted so far (browser-core
+	// ticket 57): the clip-path coverage seam needs the next path
+	// record's insertion index — the index the native renderer resolves
+	// the coverage entry's path reference against once the finish sort
+	// orders the array (a full-window-bounded path record's sorted
+	// index is its insertion index; see withClipPathScope).
+	pathCount int
 }
 
 // newSceneKernel creates a fresh native scene for the process-wide
@@ -156,9 +163,10 @@ func (k *SceneKernel) RaiseOrderFloor() error {
 	return nil
 }
 
-// InsertQuad inserts a quad record. The record's Order must be zero (the
-// kernel assigns it); a non-zero order is a caller error rejected before
-// native entry, mirroring the ABI's record validation.
+// insertQuadRecord packs and inserts a quad record; the CSS-gradient
+// Background arm is resolved by the paint seam (Scene.PaintQuad)
+// before this level - a directly-inserted unresolved arm is a caller
+// error (the ABI has no record for it).
 func (k *SceneKernel) InsertQuad(q Quad) error {
 	if err := k.checkLive("InsertQuad"); err != nil {
 		return err
@@ -166,9 +174,12 @@ func (k *SceneKernel) InsertQuad(q Quad) error {
 	if q.Order != 0 {
 		return fmt.Errorf("gpui: scene insert quad: record order must be zero, got %d (the kernel assigns the draw order)", q.Order)
 	}
+	if q.Background.Kind == BackgroundKindCssGradient || q.BorderColor.Kind == BackgroundKindCssGradient {
+		return fmt.Errorf("gpui: scene insert quad: a CSS-gradient background must be resolved through Scene.PaintQuad before insertion (the gradient table entry is inserted at paint time)")
+	}
 	rec := native.NewSceneQuadRecord()
 	rec.Bounds = sceneBoundsRecord(q.Bounds)
-	rec.ContentMask = sceneContentMaskOf(q.ContentMask, q.MaskRadii, q.MaskCornerSmoothing)
+	rec.ContentMask = sceneContentMaskOf(q.ContentMask, q.MaskRadii, q.MaskCornerSmoothing, q.MaskFade)
 	rec.Background = sceneBackgroundRecord(q.Background, q.Bounds)
 	rec.BorderColor = sceneBackgroundRecord(q.BorderColor, q.Bounds)
 	for i, radius := range [4]float32{q.CornerRadii.TopLeft, q.CornerRadii.TopRight, q.CornerRadii.BottomRight, q.CornerRadii.BottomLeft} {
@@ -201,7 +212,7 @@ func (k *SceneKernel) InsertShadow(sh Shadow) error {
 	rec := native.NewSceneShadowRecord()
 	rec.BlurRadius = math.Float32bits(sh.BlurRadius)
 	rec.Bounds = sceneBoundsRecord(sh.Bounds)
-	rec.ContentMask = sceneContentMaskOf(sh.ContentMask, sh.MaskRadii, sh.MaskCornerSmoothing)
+	rec.ContentMask = sceneContentMaskOf(sh.ContentMask, sh.MaskRadii, sh.MaskCornerSmoothing, sh.MaskFade)
 	rec.Color = sceneBackgroundRecord(sh.Color, sh.Bounds)
 	rec.ElementBounds = sceneBoundsRecord(sh.ElementBounds)
 	for i, radius := range [4]float32{sh.CornerRadii.TopLeft, sh.CornerRadii.TopRight, sh.CornerRadii.BottomRight, sh.CornerRadii.BottomLeft} {
@@ -233,7 +244,7 @@ func (k *SceneKernel) InsertUnderline(u Underline) error {
 	rec := native.NewSceneUnderlineRecord()
 	rec.Padding = u.Padding
 	rec.Bounds = sceneBoundsRecord(u.Bounds)
-	rec.ContentMask = sceneContentMaskRecord(u.ContentMask)
+	rec.ContentMask = sceneContentMaskFadedOf(u.ContentMask, u.MaskFade)
 	rec.Color = sceneColorRecord(u.Color)
 	rec.Thickness = math.Float32bits(u.Thickness)
 	if u.Wavy {
@@ -579,6 +590,7 @@ func (k *SceneKernel) Quads() ([]Quad, error) {
 			ContentMask:         sceneContentMaskValue(rec.ContentMask),
 			MaskRadii:           cornersValue(rec.ContentMask.CornerRadii),
 			MaskCornerSmoothing: math.Float32frombits(rec.ContentMask.CornerSmoothing),
+			MaskFade:            maskFadeValue(rec.ContentMask),
 			Background:          sceneBackgroundValue(rec.Background),
 			BorderColor:         sceneBackgroundValue(rec.BorderColor),
 			BorderStyle:         BorderStyle(rec.BorderStyle),
@@ -611,6 +623,7 @@ func (k *SceneKernel) Shadows() ([]Shadow, error) {
 			ContentMask:         sceneContentMaskValue(rec.ContentMask),
 			MaskRadii:           cornersValue(rec.ContentMask.CornerRadii),
 			MaskCornerSmoothing: math.Float32frombits(rec.ContentMask.CornerSmoothing),
+			MaskFade:            maskFadeValue(rec.ContentMask),
 			Color:               sceneBackgroundValue(rec.Color),
 			ElementBounds:       sceneBoundsValue(rec.ElementBounds),
 			ElementCornerRadii:  cornersValue(rec.ElementCornerRadii),
@@ -638,6 +651,7 @@ func (k *SceneKernel) Underlines() ([]Underline, error) {
 			Padding:     rec.Padding,
 			Bounds:      sceneBoundsValue(rec.Bounds),
 			ContentMask: sceneContentMaskValue(rec.ContentMask),
+			MaskFade:    maskFadeValue(rec.ContentMask),
 			Color:       sceneColorValue(rec.Color),
 			Thickness:   math.Float32frombits(rec.Thickness),
 			Wavy:        rec.Wavy == 1,
@@ -799,23 +813,43 @@ func sceneBoundsRecord(b Bounds) native.SceneBounds {
 }
 
 // sceneContentMaskRecord packs a rect-only (zero fade, zero radii)
-// content mask: the exact pre-R16 behaviour, the encoding every
-// record whose pipeline consumes bounds+fade only uses (the pinned
-// underline/sprite/path pipelines - the recorded native divergence 4).
+// content mask: the exact pre-R16 behaviour, the encoding every record
+// whose pipeline consumes bounds+fade only uses and whose Go record
+// carries no fade yet.
 func sceneContentMaskRecord(b Bounds) native.SceneContentMask {
 	return native.SceneContentMaskOf(b.Origin.X, b.Origin.Y, b.Size.Width, b.Size.Height)
 }
 
+// sceneContentMaskFadedOf packs a rect-only content mask with its
+// per-edge fade distances (rev 16, browser-core ticket 57): the record
+// kinds whose pipeline consumes bounds+fade (underlines, sprites,
+// paths). Zero fades pack exactly the rect-only mask.
+func sceneContentMaskFadedOf(b Bounds, fade Edges) native.SceneContentMask {
+	return native.SceneContentMaskFaded(
+		b.Origin.X, b.Origin.Y, b.Size.Width, b.Size.Height,
+		[4]float32{fade.Left, fade.Top, fade.Right, fade.Bottom},
+	)
+}
+
 // sceneContentMaskOf packs a content mask with its rounded-corner clip
-// (rev 16, browser-core ticket 55): the rect plus the radii and
-// smoothing, the fade edges zero (the Go styling authors no fades yet
-// - ticket 57). Zero radii pack exactly the rect-only mask.
-func sceneContentMaskOf(b Bounds, radii Corners, smoothing float32) native.SceneContentMask {
-	return native.SceneContentMaskRounded(
+// and per-edge fades (rev 16, browser-core tickets 55/57): the rect
+// plus the radii, smoothing and the linear edge ramps. Zero radii and
+// zero fades pack exactly the rect-only mask.
+func sceneContentMaskOf(b Bounds, radii Corners, smoothing float32, fade Edges) native.SceneContentMask {
+	mask := native.SceneContentMaskRounded(
 		b.Origin.X, b.Origin.Y, b.Size.Width, b.Size.Height,
 		[4]float32{radii.TopLeft, radii.TopRight, radii.BottomRight, radii.BottomLeft},
 		smoothing,
 	)
+	if fade.Left != 0 || fade.Top != 0 || fade.Right != 0 || fade.Bottom != 0 {
+		mask.FadeOut = [4]uint32{
+			math.Float32bits(fade.Left),
+			math.Float32bits(fade.Top),
+			math.Float32bits(fade.Right),
+			math.Float32bits(fade.Bottom),
+		}
+	}
+	return mask
 }
 
 // sceneContentMaskValue unpacks a rect-only mask (the radii and fades
@@ -1015,6 +1049,17 @@ func edgesValue(bits [4]uint32) Edges {
 		Right:  math.Float32frombits(bits[1]),
 		Bottom: math.Float32frombits(bits[2]),
 		Left:   math.Float32frombits(bits[3]),
+	}
+}
+
+// maskFadeValue reads a content mask's per-edge fade distances (the
+// ABI's LEFT, TOP, RIGHT, BOTTOM word order into Edges).
+func maskFadeValue(mask native.SceneContentMask) Edges {
+	return Edges{
+		Left:   math.Float32frombits(mask.FadeOut[0]),
+		Top:    math.Float32frombits(mask.FadeOut[1]),
+		Right:  math.Float32frombits(mask.FadeOut[2]),
+		Bottom: math.Float32frombits(mask.FadeOut[3]),
 	}
 }
 

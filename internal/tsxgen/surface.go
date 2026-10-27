@@ -146,6 +146,12 @@ func styleValueType(name string, body []ast.Stmt) (TSType, string, error) {
 		kind = "transformOrigin"
 	case containsCall(node, "Fields"):
 		kind = "lengthList"
+	case containsCall(node, "ParseClipPath"):
+		kind = "clipPath"
+	case containsCall(node, "ParseMaskImage"):
+		kind = "maskImage"
+	case containsCall(node, "ParseDropShadowValues"):
+		kind = "dropShadow"
 	case containsCall(node, "ParseHex"):
 		kind = "color"
 	case containsCall(node, "px"):
@@ -183,9 +189,7 @@ func styleValueType(name string, body []ast.Stmt) (TSType, string, error) {
 		return colorType, doc, nil
 	case "lengthList":
 		return lengthListType(), doc, nil
-	case "transformList":
-		return strType, doc, nil
-	case "transformOrigin":
+	case "transformList", "transformOrigin", "clipPath", "maskImage", "dropShadow":
 		return strType, doc, nil
 	}
 	panic("unreachable")
@@ -277,6 +281,12 @@ var styleDocs = map[string]string{
 	"overflowY":       `overflowY: "scroll", "auto" or "hidden".`,
 	"transform":       `transform: space-separated CSS functions, like "translate(8px, 4px) rotate(45deg) scale(1.5)" (translate, translateX, translateY, scale, rotate, skew, skewX, skewY; px, rem and % lengths, numbers and degrees).`,
 	"transformOrigin": `transformOrigin: two keywords or lengths, like "50% 50%", "top left" or "10px 20px".`,
+	"overflowFade":    `overflowFade: one, two or four px lengths — the overflow edge fades.`,
+	"mixBlendMode":    `mixBlendMode: a W3C blend mode or "plus-lighter".`,
+	"isolation":       `isolation: "isolate" or "auto".`,
+	"clipPath":        `clipPath: a CSS basic shape — circle(40px), ellipse(30% 50%), inset(10px 20px), polygon(50% 0, 100% 100%, 0 100%).`,
+	"maskImage":       `maskImage: linear-gradient(to bottom, #000000, #00000000) — a linear gradient mask with hex stops.`,
+	"dropShadow":      `dropShadow: one or more CSS drop-shadow values — "0 4px 6px #00000040".`,
 }
 
 // globalSignatures fills in each global's declared signature. The

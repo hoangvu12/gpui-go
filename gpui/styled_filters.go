@@ -60,6 +60,14 @@ func (s *Styled[Self]) Contrast[_ lazy](amount float32) Self {
 	return s.appendFilter(Contrast(amount))
 }
 
+// DropShadow appends drop-shadow(x y blur color) to the filter chain
+// (CSS filter: drop-shadow — the shadow of the element's own alpha
+// silhouette, blurred at sigma = blur/2, tinted, offset, composited
+// beneath the content; multiple drop-shadows stack in chain order).
+func (s *Styled[Self]) DropShadow[_ lazy](offsetX, offsetY, blurRadius float32, color Hsla) Self {
+	return s.appendFilter(DropShadow(offsetX, offsetY, blurRadius, color))
+}
+
 // appendFilter appends one filter to the element's filter chain
 // (Styled.Blur's shape: a clone, never an alias).
 func (s *Styled[Self]) appendFilter(f Filter) Self {

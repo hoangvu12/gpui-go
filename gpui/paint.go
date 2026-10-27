@@ -185,6 +185,14 @@ type Background struct {
 	// kind, geometry and baked ramp row paint the primitive; the entry
 	// must be inserted before the primitive).
 	GradientTable uint32
+	// CssGradient is the CSS gradient description (rev 16, browser-core
+	// ticket 57): n stops, the radial/conic shapes and the repeating
+	// tile, resolved at PAINT time against the element's device bounds
+	// into one table entry (Scene.PaintQuad resolves it; the kernel
+	// insert paths reject the unresolved arm). A POINTER so Background
+	// stays comparable (the arm's == is the pointer's identity; compare
+	// kinds and stop lists instead).
+	CssGradient *CssGradient
 }
 
 // SolidBackground builds a solid background from a color.
@@ -195,11 +203,31 @@ func SolidBackground(c Hsla) Background {
 // Opacity applies an element opacity (the pinned Background::opacity:
 // the solid's alpha multiplied by the clamped factor with the hue
 // round-tripped, each gradient stop's alpha multiplied by the clamped
-// factor — the pinned LinearColorStop::opacity, alpha only).
+// factor — the pinned LinearColorStop::opacity, alpha only; the CSS
+// gradient arm scales each of its stops the same way, ticket 57).
 func (b Background) Opacity(factor float32) Background {
 	if b.Kind == BackgroundKindLinearGradient {
 		b.Gradient.From.Color = OpacityHsla(b.Gradient.From.Color, factor)
 		b.Gradient.To.Color = OpacityHsla(b.Gradient.To.Color, factor)
+		return b
+	}
+	if b.Kind == BackgroundKindCssGradient && b.CssGradient != nil {
+		// A deep copy: the stops slice is shared with the source value
+		// (the callers hand the same Background to every frame), so the
+		// scaled stops must never write through it — the border-color
+		// twin (Opacity(0)) would otherwise blank the next frame's
+		// stops and drop the background as transparent.
+		out := *b.CssGradient
+		out.Stops = append([]GradientStop(nil), b.CssGradient.Stops...)
+		for i := range out.Stops {
+			out.Stops[i].Color = OpacityHsla(out.Stops[i].Color, factor)
+		}
+		return Background{Kind: BackgroundKindCssGradient, CssGradient: &out}
+	}
+	if b.Kind == BackgroundKindGradientTable {
+		// The referenced table entry is already baked; the caller folds
+		// the element opacity into the stops BEFORE the resolve (the
+		// ramp bakes it).
 		return b
 	}
 	return Background{Kind: BackgroundKindSolid, Solid: OpacityBackground(b.Solid, factor)}
@@ -211,10 +239,28 @@ func (b Background) AsSolid() Hsla { return b.Solid }
 
 // IsTransparent reports whether the background is fully transparent
 // (the pinned Background::is_transparent: a solid with a == 0, or a
-// gradient whose every stop has a == 0).
+// gradient whose every stop has a == 0 - the two-stop and CSS arms).
 func (b Background) IsTransparent() bool {
 	if b.Kind == BackgroundKindLinearGradient {
 		return b.Gradient.From.Color.A == 0 && b.Gradient.To.Color.A == 0
+	}
+	if b.Kind == BackgroundKindCssGradient {
+		if b.CssGradient == nil {
+			return true
+		}
+		for _, stop := range b.CssGradient.Stops {
+			if stop.Color.A != 0 {
+				return false
+			}
+		}
+		return true
+	}
+	if b.Kind == BackgroundKindGradientTable {
+		// The referenced table entry's stops decide; the resolved arm
+		// is never transparent by construction (PaintQuad only resolves
+		// real stop lists, and an all-transparent CSS arm drops before
+		// the resolve).
+		return false
 	}
 	return b.Solid.A == 0
 }
@@ -452,6 +498,12 @@ func snapBorderWidths(edges Edges, scale float32) Edges {
 	}
 }
 
+// scaleEdges multiplies each edge width by the scale factor (the
+// pinned Edges::scale — the content mask's fade distances).
+func scaleEdges(e Edges, scale float32) Edges {
+	return Edges{Top: e.Top * scale, Right: e.Right * scale, Bottom: e.Bottom * scale, Left: e.Left * scale}
+}
+
 // scaleCorners multiplies each corner radius by the scale factor (the
 // pinned Corners::scale).
 func scaleCorners(c Corners, scale float32) Corners {
@@ -492,10 +544,11 @@ func offsetBounds(b Bounds, dx, dy float32) Bounds {
 // smoothing: snapped bounds, snapped content mask, scaled radii,
 // stroke-snapped border widths, opacity folded into the colors, and the
 // border-only split deferred to PaintQuadStrips.
-func paintQuadFor(pq PaintQuad, mask Bounds, scale, elementOpacity float32, cornerSmoothing float32) Quad {
+func paintQuadFor(pq PaintQuad, mask Bounds, fade Edges, scale, elementOpacity float32, cornerSmoothing float32) Quad {
 	return Quad{
 		Bounds:          snapBounds(pq.Bounds, scale),
 		ContentMask:     snappedContentMask(mask, scale),
+		MaskFade:        scaleEdges(fade, scale),
 		Background:      pq.Background.Opacity(elementOpacity),
 		BorderColor:     pq.BorderColor.Opacity(elementOpacity),
 		CornerRadii:     scaleCorners(pq.CornerRadii, scale),
@@ -621,12 +674,13 @@ func intersectLogical(a, b Bounds) Bounds { return intersectBounds(a, b) }
 // given shadow-shape radii (the pinned callers pass the element's
 // radii; PaintBoxShadow passes the CSS spread-adjusted radii), and the
 // opacity folded into the color.
-func dropShadowFor(elementBounds Bounds, shadow BoxShadow, mask Bounds, scale, elementOpacity float32, elementRadii, shapeRadii Corners, cornerSmoothing float32) Shadow {
+func dropShadowFor(elementBounds Bounds, shadow BoxShadow, mask Bounds, fade Edges, scale, elementOpacity float32, elementRadii, shapeRadii Corners, cornerSmoothing float32) Shadow {
 	shadowBounds := dilate(offsetBounds(elementBounds, shadow.OffsetX, shadow.OffsetY), shadow.SpreadRadius)
 	return Shadow{
 		BlurRadius:         shadow.BlurRadius * scale,
 		Bounds:             coverBounds(shadowBounds, scale),
 		ContentMask:        snappedContentMask(mask, scale),
+		MaskFade:           scaleEdges(fade, scale),
 		CornerRadii:        scaleCorners(shapeRadii, scale),
 		Color:              shadow.Color.Opacity(elementOpacity),
 		ElementBounds:      coverBounds(elementBounds, scale),
@@ -640,7 +694,7 @@ func dropShadowFor(elementBounds Bounds, shadow BoxShadow, mask Bounds, scale, e
 // mirroring the pinned paint_inset_shadows_with_corner_smoothing: the
 // hole ((bounds + offset) dilated by -spread) with cover bounds, hole
 // corner radii clamped at zero per corner, blur scaled, inset true.
-func insetShadowFor(elementBounds Bounds, shadow BoxShadow, mask Bounds, scale, elementOpacity float32, elementRadii Corners, cornerSmoothing float32) Shadow {
+func insetShadowFor(elementBounds Bounds, shadow BoxShadow, mask Bounds, fade Edges, scale, elementOpacity float32, elementRadii Corners, cornerSmoothing float32) Shadow {
 	hole := dilate(offsetBounds(elementBounds, shadow.OffsetX, shadow.OffsetY), -shadow.SpreadRadius)
 	holeRadii := Corners{
 		TopLeft:     max32(elementRadii.TopLeft-shadow.SpreadRadius, 0),
@@ -652,6 +706,7 @@ func insetShadowFor(elementBounds Bounds, shadow BoxShadow, mask Bounds, scale, 
 		BlurRadius:         shadow.BlurRadius * scale,
 		Bounds:             coverBounds(hole, scale),
 		ContentMask:        snappedContentMask(mask, scale),
+		MaskFade:           scaleEdges(fade, scale),
 		CornerRadii:        scaleCorners(holeRadii, scale),
 		Color:              shadow.Color.Opacity(elementOpacity),
 		ElementBounds:      coverBounds(elementBounds, scale),
@@ -665,7 +720,7 @@ func insetShadowFor(elementBounds Bounds, shadow BoxShadow, mask Bounds, scale, 
 // paint_underline: stroke-snapped thickness (wavy height = 3x thickness),
 // origin rounded per component, width stroke-snapped, and the color
 // taking the palette-Hsla opacity path (alpha only).
-func underlineFor(origin Point, width float32, style UnderlineStyle, mask Bounds, scale, elementOpacity float32) Underline {
+func underlineFor(origin Point, width float32, style UnderlineStyle, mask Bounds, fade Edges, scale, elementOpacity float32) Underline {
 	thickness := snapStroke(style.Thickness, scale)
 	height := thickness
 	if style.Wavy {
@@ -684,6 +739,7 @@ func underlineFor(origin Point, width float32, style UnderlineStyle, mask Bounds
 			Size: Size{Width: snapStroke(width, scale), Height: height},
 		},
 		ContentMask: snappedContentMask(mask, scale),
+		MaskFade:    scaleEdges(fade, scale),
 		Color:       OpacityHsla(color, elementOpacity),
 		Thickness:   thickness,
 		Wavy:        style.Wavy,

@@ -1143,8 +1143,10 @@ type Style struct {
 	// Hidden keeps the layout space but skips paint, div.rs:3021).
 	Visibility Visibility
 	// OverflowFade is the per-edge fade distance of overflow masking
-	// (style.rs:248). Stored and refined; the port's content mask has no
-	// fade component yet, so it is not applied at paint.
+	// (style.rs:248): content within the distance of a clipped edge
+	// fades out linearly toward it (rev 16, browser-core ticket 57 —
+	// the pin's ContentMask fade_out, now painted through the clip
+	// scope's records).
 	OverflowFade AbsoluteLengthEdges
 	// AllowConcurrentScroll lets both axes scroll at once (style.rs:252).
 	AllowConcurrentScroll bool
@@ -1185,6 +1187,27 @@ type Style struct {
 	// default focus ring (see interact.go's computeStyleInternal);
 	// outline-style: none opts out.
 	Outline OutlineStyle
+	// MaskImage is the element's mask (CSS mask-image, browser-core
+	// ticket 57): a gradient mask composites the element's whole
+	// rendered image dst_in against the gradient's alpha (or
+	// luminance). Nil (the default) masks nothing.
+	MaskImage *MaskImage
+	// ClipPath is the element's clip-path (CSS clip-path, browser-core
+	// ticket 57): a basic shape in element-local coordinates - the
+	// element's rendering (and its hit testing) clips to the shape. Nil
+	// (the default) clips nothing.
+	ClipPath *ClipPath
+	// MixBlendMode is the element's compositing blend mode (CSS
+	// mix-blend-mode, browser-core ticket 57): the element's rendered
+	// image composites with the mode against its backdrop (the W3C
+	// compositing-1 formulas). Nil (the default) is normal
+	// (source-over).
+	MixBlendMode *BlendMode
+	// Isolation isolates the element's subtree for blending (CSS
+	// isolation: isolate, browser-core ticket 57): the group boundary
+	// that stops descendant blend modes from compositing past this
+	// element. False (the default) is the CSS auto.
+	Isolation bool
 	// Filter applies to the element's own content (style.rs:373).
 	Filter []Filter
 	// BackdropFilter applies to the content behind the element
@@ -1473,7 +1496,8 @@ func (c Corners) OutsetWithCornerCorrection(size Size, outset float32) Corners {
 // filter_colors.go for their Chromium-sourced matrices.
 type Filter struct {
 	// BlurRadius is the gaussian blur radius in logical pixels
-	// (FilterFunctionBlur).
+	// (FilterFunctionBlur; also FilterFunctionDropShadow's blur radius,
+	// the CSS length the shadow rule halves into sigma).
 	BlurRadius float32
 	// Function selects the CSS filter function (FilterFunctionBlur for
 	// the pinned blur, the zero value).
@@ -1481,12 +1505,33 @@ type Filter struct {
 	// Amount is the colour function's argument: the [0,1] fraction for
 	// grayscale/sepia/invert/opacity, the unclamped multiplier for
 	// saturate/brightness/contrast, or the degrees for hue-rotate.
-	// Zero for blur.
+	// Zero for blur and drop-shadow.
 	Amount float32
+	// OffsetX and OffsetY are drop-shadow()'s offset in logical pixels
+	// (FilterFunctionDropShadow; zero otherwise).
+	OffsetX, OffsetY float32
+	// Color is drop-shadow()'s shadow color (FilterFunctionDropShadow;
+	// zero otherwise — a transparent color makes the shadow identity).
+	Color Hsla
 }
 
 // Blur returns the gaussian blur filter (Filter::Blur).
 func Blur(radius float32) Filter { return Filter{BlurRadius: radius} }
+
+// DropShadow returns the drop-shadow filter (CSS filter:
+// drop-shadow(x y blur color); Chromium builds FEDropShadow,
+// filter_effect_builder.cc:293-301 — the shadow is the group's alpha,
+// blurred at sigma = blur/2, tinted, offset, composited UNDER the
+// group's content). Multiple drop-shadows stack in chain order.
+func DropShadow(offsetX, offsetY, blurRadius float32, color Hsla) Filter {
+	return Filter{
+		BlurRadius: blurRadius,
+		Function:   FilterFunctionDropShadow,
+		OffsetX:    offsetX,
+		OffsetY:    offsetY,
+		Color:      color,
+	}
+}
 
 // IsIdentity reports whether the filter has no visible effect
 // (style.rs:495 Filter::is_identity: radius <= 0 for blur; the CSS
@@ -1498,6 +1543,11 @@ func (f Filter) IsIdentity() bool {
 		return f.Amount == 1
 	case FilterFunctionGrayscale, FilterFunctionSepia, FilterFunctionInvert, FilterFunctionHueRotate:
 		return f.Amount == 0
+	case FilterFunctionDropShadow:
+		// A transparent shadow color paints nothing; any other color
+		// draws the silhouette (a zero blur/offset shadow is a hard
+		// copy, still visible).
+		return f.Color.A == 0
 	default:
 		return blurRadiusIsIdentity(f.BlurRadius)
 	}
@@ -1975,6 +2025,20 @@ func (s *Style) OverflowMask(bounds Bounds, remSize float32) *ClipMask {
 		rect = fromCorners(Point{X: minX, Y: minY}, Point{X: maxX, Y: maxY})
 	}
 	mask := ClipMask{Bounds: rect}
+	// The per-edge fade (rev 16, browser-core ticket 57): the
+	// overflow_fade distances on each CLIPPED axis, zeroed on a visible
+	// one (style.rs:836-843 — the pin's rule). The fade rides the
+	// records painted inside the clip scope (the pin's ContentMask
+	// fade_out ramps) — Style.OverflowFade finally paints.
+	mask.Fade = s.OverflowFade.ToPixels(remSize)
+	if xVisible {
+		mask.Fade.Left = 0
+		mask.Fade.Right = 0
+	}
+	if yVisible {
+		mask.Fade.Top = 0
+		mask.Fade.Bottom = 0
+	}
 	// The rounded corner clip (rev 16, browser-core ticket 55): when
 	// BOTH axes clip, the mask carries the INNER border radii - the
 	// padding-box corner rounding, Chromium's overflow clip (the

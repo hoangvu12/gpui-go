@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+	}
+	.root {
+		position: relative;
+		box-sizing: border-box;
+		width: 640px;
+		height: 400px;
+		background: #ffffff;
+	}
+	.box {
+		position: absolute;
+		box-sizing: border-box;
+		width: 120px;
+		height: 120px;
+	}
+	.circle {
+		left: 60px;
+		top: 120px;
+		background: #dc2626;
+		clip-path: circle(40px);
+	}
+	.poly {
+		left: 300px;
+		top: 120px;
+		background: #2563eb;
+		clip-path: polygon(50% 0, 100% 100%, 0 100%);
+	}
+</style>
+</head>
+<body>
+	<div class="root" data-id="root" data-events="click">
+		<div class="box circle" data-id="clip-circle" data-events="click"></div>
+		<div class="box poly" data-id="clip-poly" data-events="click"></div>
+	</div>
+</body>
+</html>

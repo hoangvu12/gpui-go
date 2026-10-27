@@ -1,7 +1,5 @@
 package gpui
 
-
-
 // This file is the browser-core ticket 52 (rev 16) public surface: the
 // scene-level gradient table (n-stop, radial, conic and repeating
 // gradients with the baked 1024x1 premultiplied-sRGB ramp rows), the
@@ -284,4 +282,3 @@ func TableGradientBackground(index uint32) Background {
 		GradientTable: index,
 	}
 }
-

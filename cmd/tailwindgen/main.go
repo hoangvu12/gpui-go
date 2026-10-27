@@ -146,7 +146,7 @@ func fieldWrites(fset *token.FileSet, fn *ast.FuncDecl) string {
 }
 
 // styledSources are the files declaring Styled methods.
-var styledSources = []string{"styled.go", "styled_generated.go", "styled_tailwind.go"}
+var styledSources = []string{"styled.go", "styled_generated.go", "styled_tailwind.go", "styled_masks.go"}
 
 // zeroArgStyledMethods returns the Styled[Self] methods that take no
 // arguments and carry only the lazy marker: the ones a bare class can

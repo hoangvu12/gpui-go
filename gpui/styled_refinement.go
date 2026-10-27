@@ -182,6 +182,13 @@ type StyleRefinement struct {
 
 	Filter         Optional[[]Filter]
 	BackdropFilter Optional[[]Filter]
+	// MaskImage, ClipPath, MixBlendMode and Isolation are the CSS
+	// mask/clip/blend refinements (browser-core ticket 57); each
+	// replaces the whole property (CSS's non-inherited reset).
+	MaskImage    Optional[*MaskImage]
+	ClipPath     Optional[*ClipPath]
+	MixBlendMode Optional[BlendMode]
+	Isolation    Optional[bool]
 
 	// The replaced-content options (CSS object-fit, object-position,
 	// image-rendering; browser-core ticket 41): consumed by the img
@@ -392,6 +399,14 @@ func (s *Style) refineBoxed(r *StyleRefinement, boxes *styleBoxes) {
 	if filters, ok := r.BackdropFilter.Get(); ok {
 		s.BackdropFilter = slices.Clone(filters)
 	}
+	if mask, ok := r.MaskImage.Get(); ok {
+		s.MaskImage = mask
+	}
+	if clip, ok := r.ClipPath.Get(); ok {
+		s.ClipPath = clip
+	}
+	refinePointer(&s.MixBlendMode, r.MixBlendMode)
+	refineValue(&s.Isolation, r.Isolation)
 	refinePointer(&s.ObjectFit, r.ObjectFit)
 	refinePointer(&s.ObjectPosition, r.ObjectPosition)
 	refinePointer(&s.ImageRendering, r.ImageRendering)
@@ -503,6 +518,10 @@ func (r *StyleRefinement) Refine(other *StyleRefinement) {
 	if filters, ok := other.BackdropFilter.Get(); ok {
 		r.BackdropFilter = Some(slices.Clone(filters))
 	}
+	mergeOptional(&r.MaskImage, other.MaskImage)
+	mergeOptional(&r.ClipPath, other.ClipPath)
+	mergeOptional(&r.MixBlendMode, other.MixBlendMode)
+	mergeOptional(&r.Isolation, other.Isolation)
 	mergeOptional(&r.ObjectFit, other.ObjectFit)
 	mergeOptional(&r.ObjectPosition, other.ObjectPosition)
 	mergeOptional(&r.ImageRendering, other.ImageRendering)
