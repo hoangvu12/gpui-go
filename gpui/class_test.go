@@ -926,8 +926,7 @@ func TestClassGradientRejections(t *testing.T) {
 		want    string
 		is      error
 	}{
-		{"bg-linear-to-r from-red-500 via-orange-400 to-blue-500", "via-orange-400", ErrGradientViaUnsupported},
-		{"via-none", "via-none", ErrGradientViaUnsupported},
+		{"via-none", "via-none takes a color", nil},
 		{"bg-linear-to-r/oklab from-red-500 to-blue-500", "non-sRGB gradient interpolation", ErrGradientInterpolationUnsupported},
 		{"bg-linear-45/oklch", "non-sRGB gradient interpolation", ErrGradientInterpolationUnsupported},
 		{"bg-linear-to-r/longer", "non-sRGB gradient interpolation", ErrGradientInterpolationUnsupported},
@@ -1053,10 +1052,11 @@ func TestClassFilterErrors(t *testing.T) {
 		{"hue-rotate-[slow]", "hue-rotate-… takes"},
 		{"grayscale-huge", "grayscale-… takes"},
 		{"grayscale-[six]", "grayscale-… takes"},
-		{"drop-shadow", "drop-shadow"},
+		{"drop-shadow-huge", "drop-shadow-… takes"},
+		{"drop-shadow-[0_4px]", "takes two offsets"},
 		{"filter", "the bare filter class"},
 		{"filter-none", "the bare filter class"},
-		{"mix-blend-multiply", "mix-blend-mode"},
+		{"mix-blend-plus-darker", "plus-darker"},
 		{"backdrop-grayscale", "backdrop-blur"},
 		{"backdrop-brightness-50", "backdrop-blur"},
 	}
@@ -1130,4 +1130,99 @@ func TestClassTextStyleQuickFixes(t *testing.T) {
 	if features, ok := d.StyleMut().Text.FontFeatures.Get(); !ok || len(features) != 0 {
 		t.Errorf("normal-nums = (%v, %v), want an empty feature list", features, ok)
 	}
+}
+
+// TestClassMasksClipBlendAndGradientShapes checks ticket 57's new
+// utilities: via-* (the middle stop, the n-stop table arm), bg-radial
+// and bg-conic (with their repeating forms), mix-blend-*, drop-shadow-*
+// (the presets, none and the arbitrary form) and isolate.
+func TestClassMasksClipBlendAndGradientShapes(t *testing.T) {
+	classTestNoErrors(t)
+	red, blue, orange := Rgb(0xef4444), Rgb(0x3b82f6), Rgb(0xfb923c)
+	classTestCheck(t, []classTestCase{
+		{"bg-linear-to-r from-red-500 via-25% to-blue-500", func(d *DivElement) *DivElement {
+			return d.Bg(LinearGradientToStopsBackground(GradientDirectionToRight,
+				GradientStop{Color: red, Position: 0},
+				GradientStop{Position: 0.25},
+				GradientStop{Color: blue, Position: 1}))
+		}},
+		// bg-radial / bg-conic and the repeating forms.
+		{"bg-radial from-red-500 to-blue-500", func(d *DivElement) *DivElement {
+			return d.Bg(RadialGradientBackground(RadialShapeEllipse, RadialExtentFarthestCorner,
+				GradientStop{Color: red, Position: 0}, GradientStop{Color: blue, Position: 1}))
+		}},
+		{"bg-conic from-red-500 to-blue-500", func(d *DivElement) *DivElement {
+			return d.Bg(ConicGradientBackground(0,
+				GradientStop{Color: red, Position: 0}, GradientStop{Color: blue, Position: 1}))
+		}},
+		{"bg-repeating-linear-to-r from-red-500 to-blue-500", func(d *DivElement) *DivElement {
+			return d.Bg(LinearGradientToStopsBackground(GradientDirectionToRight,
+				GradientStop{Color: red, Position: 0}, GradientStop{Color: blue, Position: 1}).Repeating())
+		}},
+		{"bg-repeating-radial from-red-500 to-blue-500", func(d *DivElement) *DivElement {
+			return d.Bg(RadialGradientBackground(RadialShapeEllipse, RadialExtentFarthestCorner,
+				GradientStop{Color: red, Position: 0}, GradientStop{Color: blue, Position: 1}).Repeating())
+		}},
+		{"bg-repeating-conic from-red-500 to-blue-500", func(d *DivElement) *DivElement {
+			return d.Bg(ConicGradientBackground(0,
+				GradientStop{Color: red, Position: 0}, GradientStop{Color: blue, Position: 1}).Repeating())
+		}},
+		// A two-stop linear gradient keeps the R15 record (no promotion).
+		{"bg-linear-to-r from-red-500 to-blue-500", func(d *DivElement) *DivElement {
+			return d.Bg(LinearGradientToBackground(GradientDirectionToRight,
+				GradientStop{Color: red, Position: 0}, GradientStop{Color: blue, Position: 1}))
+		}},
+		// mix-blend-* are the zero-arg methods.
+		{"mix-blend-multiply", func(d *DivElement) *DivElement { return d.MixBlendMultiply() }},
+		{"mix-blend-plus-lighter", func(d *DivElement) *DivElement { return d.MixBlendPlusLighter() }},
+		// drop-shadow presets, the arbitrary form and none.
+		{"drop-shadow-sm", func(d *DivElement) *DivElement { return d.DropShadow(0, 1, 2, Hsla{H: 0, S: 0, L: 0, A: 0.15}) }},
+		{"drop-shadow", func(d *DivElement) *DivElement {
+			return d.DropShadow(0, 1, 3, Hsla{H: 0, S: 0, L: 0, A: 0.1}).
+				DropShadow(0, 1, 2, Hsla{H: 0, S: 0, L: 0, A: 0.1})
+		}},
+		{"drop-shadow-[0_4px_6px_#00000040]", func(d *DivElement) *DivElement {
+			return d.DropShadow(0, 4, 6, ParseHexOrPanic("#00000040"))
+		}},
+		// blur-none resets the whole filter chain (the documented
+		// semantics), drop-shadows included.
+		{"blur-sm drop-shadow-md blur-none", func(d *DivElement) *DivElement { return d.Filter(nil) }},
+		// isolate.
+		{"isolate", func(d *DivElement) *DivElement { return d.Isolate() }},
+	})
+
+	// via-* promotes the gradient to the three-stop table arm; the
+	// middle stop's position stays unspecified (NaN — DeepEqual cannot
+	// compare NaN, so the stops are checked directly).
+	d := Div().Flex().Class("bg-linear-to-r from-red-500 via-orange-400 to-blue-500")
+	background, ok := d.StyleMut().Background.Get()
+	if !ok || background.Kind != BackgroundKindCssGradient || background.CssGradient == nil {
+		t.Fatalf("the via gradient = %+v, want the n-stop CSS arm", background)
+	}
+	stops := background.CssGradient.Stops
+	if len(stops) != 3 {
+		t.Fatalf("the via gradient has %d stops, want 3", len(stops))
+	}
+	if stops[0].Color != red || stops[0].Position != 0 {
+		t.Errorf("the from stop = %+v, want red at 0", stops[0])
+	}
+	if stops[1].Color != orange || !math.IsNaN(float64(stops[1].Position)) {
+		t.Errorf("the via stop = %+v, want orange at an unspecified (NaN) position", stops[1])
+	}
+	if stops[2].Color != blue || stops[2].Position != 1 {
+		t.Errorf("the to stop = %+v, want blue at 1", stops[2])
+	}
+	if background.CssGradient.Direction != GradientDirectionToRight {
+		t.Errorf("the via gradient direction = %v, want to right", background.CssGradient.Direction)
+	}
+}
+
+// ParseHexOrPanic is a test helper (the hex forms the arbitrary
+// drop-shadow accepts).
+func ParseHexOrPanic(hex string) (c Hsla) {
+	c, err := ParseHex(hex)
+	if err != nil {
+		panic(err)
+	}
+	return c
 }

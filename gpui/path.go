@@ -444,7 +444,29 @@ func (s *Scene) InsertPath(path *Path, color Background, contentMask Bounds) err
 	if path == nil {
 		return fmt.Errorf("gpui: InsertPath: nil path")
 	}
-	return s.kernel.InsertPath(pathRecordOf(path, color, contentMask))
+	return s.kernel.InsertPath(pathRecordOf(path, color, contentMask, Edges{}))
+}
+
+// NextPathIndex is the insertion index the next path record inserted
+// into this scene will occupy — the reference a clip-path coverage
+// entry carries (browser-core ticket 57; the native renderer resolves
+// it against the post-sort path array, which equals the insertion order
+// for the full-window-bounded records the coverage seam inserts).
+func (s *Scene) NextPathIndex() uint32 {
+	if s.kernel == nil {
+		return 0
+	}
+	return s.kernel.nextPathIndex()
+}
+
+// InsertPathFaded is InsertPath with the content mask's per-edge fade
+// distances (device pixels; rev 16, browser-core ticket 57 — the
+// pinned path pipeline evaluates the fade ramps of its mask).
+func (s *Scene) InsertPathFaded(path *Path, color Background, contentMask Bounds, maskFade Edges) error {
+	if path == nil {
+		return fmt.Errorf("gpui: InsertPathFaded: nil path")
+	}
+	return s.kernel.InsertPath(pathRecordOf(path, color, contentMask, maskFade))
 }
 
 // PaintPath paints the tessellated path at the current z-index (the
@@ -459,8 +481,15 @@ func (s *Scene) PaintPath(path *Path, color Background, ctx *PaintContext) error
 	if path == nil {
 		return fmt.Errorf("gpui: PaintPath: nil path")
 	}
+	if color.Kind == BackgroundKindGradientTable || color.Kind == BackgroundKindCssGradient {
+		// The pinned path-sprite pipeline draws solid and two-stop
+		// backgrounds only (the recorded native limit, ticket 52: the
+		// table-gradient tag is rejected on paths).
+		return fmt.Errorf("gpui: PaintPath: a table gradient cannot fill a path (the path pipeline paints solid colors and two-stop gradients only)")
+	}
 	scaled := scalePath(path, ctx.ScaleFactor)
 	mask := scaleBounds(ctx.Mask, ctx.ScaleFactor)
+	fade := scaleEdges(ctx.MaskFade, ctx.ScaleFactor)
 	// The color carries the element opacity: the gradient arm scales
 	// each stop's alpha (Background::opacity), the solid arm keeps the
 	// palette-Hsla path (alpha only, the pin's path).
@@ -470,7 +499,7 @@ func (s *Scene) PaintPath(path *Path, color Background, ctx *PaintContext) error
 	} else {
 		shaded = Background{Kind: BackgroundKindSolid, Solid: OpacityHsla(color.Solid, ctx.ElementOpacity)}
 	}
-	return s.InsertPath(scaled, shaded, mask)
+	return s.InsertPathFaded(scaled, shaded, mask, fade)
 }
 
 // scalePath scales a logical-pixel path into device pixels (the pinned
@@ -501,10 +530,11 @@ func scaleBounds(bounds Bounds, factor float32) Bounds {
 	}
 }
 
-func pathRecordOf(path *Path, color Background, contentMask Bounds) *PathRecord {
+func pathRecordOf(path *Path, color Background, contentMask Bounds, maskFade Edges) *PathRecord {
 	return &PathRecord{
 		Bounds:      path.Bounds,
 		ContentMask: contentMask,
+		MaskFade:    maskFade,
 		Color:       color,
 		Vertices:    path.Vertices,
 	}
@@ -525,6 +555,10 @@ type PathRecord struct {
 	Bounds Bounds
 	// ContentMask is the clip bounds, device pixels.
 	ContentMask Bounds
+	// MaskFade is the content mask's per-edge fade distances, device
+	// pixels (rev 16, browser-core ticket 57; zero fades keep the
+	// pre-R16 rect-only mask bit-exact).
+	MaskFade Edges
 	// Color is the path fill (the pinned Path's Background: a solid or
 	// a gradient).
 	Color Background
@@ -550,7 +584,7 @@ func (k *SceneKernel) InsertPath(rec *PathRecord) error {
 	}
 	nativeRec := native.NewScenePathRecord()
 	nativeRec.Bounds = sceneBoundsRecord(rec.Bounds)
-	nativeRec.ContentMask = sceneContentMaskRecord(rec.ContentMask)
+	nativeRec.ContentMask = sceneContentMaskFadedOf(rec.ContentMask, rec.MaskFade)
 	nativeRec.Color = sceneBackgroundRecord(rec.Color, rec.Bounds)
 	nativeRec.VertexCount = uint32(len(rec.Vertices))
 	vertices := make([]native.ScenePathVertexRecord, len(rec.Vertices))
@@ -561,7 +595,14 @@ func (k *SceneKernel) InsertPath(rec *PathRecord) error {
 		return fmt.Errorf("gpui: scene insert path: %w", err)
 	}
 	k.recordDamageRect(rec.Bounds, rec.ContentMask, false)
+	k.pathCount++
 	return nil
+}
+
+// nextPathIndex is the insertion index the NEXT path record will occupy
+// (the coverage seam's reference; see SceneKernel.pathCount).
+func (k *SceneKernel) nextPathIndex() uint32 {
+	return uint32(k.pathCount)
 }
 
 // Paths returns the finished scene's path records with their
@@ -599,6 +640,7 @@ func (k *SceneKernel) Paths() ([]PathRecord, [][]PathVertex, error) {
 			Order:       rec.Order,
 			Bounds:      Bounds{Origin: Point{X: x, Y: y}, Size: Size{Width: w, Height: height}},
 			ContentMask: Bounds{Origin: Point{X: maskX, Y: maskY}, Size: Size{Width: maskW, Height: maskH}},
+			MaskFade:    maskFadeValue(rec.ContentMask),
 			Color:       sceneBackgroundValue(rec.Color),
 		}
 	}

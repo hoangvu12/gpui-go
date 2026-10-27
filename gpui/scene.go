@@ -57,6 +57,12 @@ type Quad struct {
 	// [0, 1] (the mask's own smoothing, evaluated by the vendored quad
 	// pipeline's smoothed SDF; 0 is the plain rrect).
 	MaskCornerSmoothing float32
+	// MaskFade is the content mask's per-edge fade distances, device
+	// pixels (rev 16, browser-core ticket 57: the pin's linear edge
+	// ramp, the shader's ContentMask::alpha — Style.OverflowFade's
+	// paint). Zero fades (the zero value) keep the pre-R16 rect-only
+	// mask bit-exact.
+	MaskFade Edges
 	// Background color of the quad.
 	Background Background
 	// BorderColor is the background painted into the quad's borders.
@@ -97,6 +103,10 @@ type Shadow struct {
 	// MaskCornerSmoothing is the content mask's corner smoothing in
 	// [0, 1].
 	MaskCornerSmoothing float32
+	// MaskFade is the content mask's per-edge fade distances, device
+	// pixels (rev 16, browser-core ticket 57; zero fades keep the
+	// pre-R16 rect-only mask bit-exact).
+	MaskFade Edges
 	// Color of the shadow.
 	Color Background
 	// ElementBounds is the shadow's un-dilated frame.
@@ -119,6 +129,10 @@ type Underline struct {
 	Bounds Bounds
 	// ContentMask is the clip bounds.
 	ContentMask Bounds
+	// MaskFade is the content mask's per-edge fade distances, device
+	// pixels (rev 16, browser-core ticket 57; zero fades keep the
+	// pre-R16 rect-only mask bit-exact).
+	MaskFade Edges
 	// Color (the pinned SceneHsla).
 	Color Hsla
 	// Thickness of the stroke, device pixels.
@@ -728,6 +742,11 @@ type PaintContext struct {
 	ScaleFactor float32
 	// Mask is the current content mask in logical pixels.
 	Mask Bounds
+	// MaskFade is the current content mask's per-edge fade distances,
+	// logical pixels (rev 16, browser-core ticket 57: the pin's linear
+	// edge ramp; WithContentMask intersects it with the pin's
+	// clips-closer rule). Zero edges leave the mask's edges opaque.
+	MaskFade Edges
 	// ElementOpacity is the accumulated element opacity.
 	ElementOpacity float32
 	// Background is the window's background appearance: text painted
@@ -744,10 +763,42 @@ func NewPaintContext(scale float32, mask Bounds, elementOpacity float32) *PaintC
 	return &PaintContext{ScaleFactor: scale, Mask: mask, ElementOpacity: elementOpacity}
 }
 
+// NewPaintContextWithFade builds a paint context carrying the content
+// mask's per-edge fade distances (logical pixels).
+func NewPaintContextWithFade(scale float32, mask Bounds, fade Edges, elementOpacity float32) *PaintContext {
+	return &PaintContext{ScaleFactor: scale, Mask: mask, MaskFade: fade, ElementOpacity: elementOpacity}
+}
+
 // PaintQuad paints a styled box (the pinned paint_quad, including the
 // border-only split into strips around the empty interior).
+//
+// A CSS-gradient Background (rev 16, ticket 57) resolves here: the
+// gradient's geometry and stops are fixed against the painted bounds
+// and inserted into the scene's gradient table, and the record(s)
+// carry the table reference — the border strips share the one entry,
+// so the gradient spans the whole quad.
 func (s *Scene) PaintQuad(pq PaintQuad, cornerSmoothing float32, ctx *PaintContext) error {
-	record := paintQuadFor(pq, ctx.Mask, ctx.ScaleFactor, ctx.ElementOpacity, cornerSmoothing)
+	if pq.BorderColor.Kind == BackgroundKindCssGradient {
+		// A CSS gradient is not a border colour (CSS border-color takes
+		// <color>); the callers pass the background's Opacity(0) twin,
+		// which the 2-stop arm carries as its transparent gradient —
+		// the table record has no per-strip border gradient, so the
+		// equivalent here is the transparent solid (the border strips
+		// carry the resolved background's gradient).
+		pq.BorderColor = SolidBackground(Hsla{})
+	}
+	if pq.Background.Kind == BackgroundKindCssGradient && pq.Background.CssGradient != nil {
+		// The element opacity folds into the STOPS before the resolve
+		// (the ramp bakes it; the resolved table arm ignores a later
+		// opacity multiply — see Background.Opacity).
+		shaded := pq.Background.Opacity(ctx.ElementOpacity)
+		resolved, err := s.resolveCssGradientBackground(shaded, pq.Bounds, ctx.ScaleFactor)
+		if err != nil {
+			return fmt.Errorf("gpui: PaintQuad: %w", err)
+		}
+		pq.Background = resolved
+	}
+	record := paintQuadFor(pq, ctx.Mask, ctx.MaskFade, ctx.ScaleFactor, ctx.ElementOpacity, cornerSmoothing)
 	if !record.Background.IsTransparent() {
 		return s.InsertQuad(record)
 	}
@@ -773,9 +824,9 @@ func (s *Scene) PaintQuad(pq PaintQuad, cornerSmoothing float32, ctx *PaintConte
 func (s *Scene) PaintShadow(elementBounds Bounds, shadow BoxShadow, elementRadii Corners, cornerSmoothing float32, ctx *PaintContext) error {
 	var record Shadow
 	if shadow.Inset {
-		record = insetShadowFor(elementBounds, shadow, ctx.Mask, ctx.ScaleFactor, ctx.ElementOpacity, elementRadii, cornerSmoothing)
+		record = insetShadowFor(elementBounds, shadow, ctx.Mask, ctx.MaskFade, ctx.ScaleFactor, ctx.ElementOpacity, elementRadii, cornerSmoothing)
 	} else {
-		record = dropShadowFor(elementBounds, shadow, ctx.Mask, ctx.ScaleFactor, ctx.ElementOpacity, elementRadii, elementRadii, cornerSmoothing)
+		record = dropShadowFor(elementBounds, shadow, ctx.Mask, ctx.MaskFade, ctx.ScaleFactor, ctx.ElementOpacity, elementRadii, elementRadii, cornerSmoothing)
 	}
 	return s.InsertShadow(record)
 }
@@ -809,7 +860,7 @@ func (s *Scene) PaintBoxShadow(elementBounds Bounds, shadow BoxShadow, elementRa
 	css.BlurRadius = shadow.BlurRadius * 0.5
 	var record Shadow
 	if shadow.Inset {
-		record = insetShadowFor(elementBounds, css, ctx.Mask, ctx.ScaleFactor, ctx.ElementOpacity, elementRadii, cornerSmoothing)
+		record = insetShadowFor(elementBounds, css, ctx.Mask, ctx.MaskFade, ctx.ScaleFactor, ctx.ElementOpacity, elementRadii, cornerSmoothing)
 	} else {
 		shapeRadii := elementRadii
 		if shadow.SpreadRadius != 0 {
@@ -818,7 +869,7 @@ func (s *Scene) PaintBoxShadow(elementBounds Bounds, shadow BoxShadow, elementRa
 				OutsetWithCornerCorrection(elementBounds.Size, shadow.SpreadRadius).
 				ConstrainRadiiForQuadSize(shadowBox.Size)
 		}
-		record = dropShadowFor(elementBounds, css, ctx.Mask, ctx.ScaleFactor, ctx.ElementOpacity, elementRadii, shapeRadii, cornerSmoothing)
+		record = dropShadowFor(elementBounds, css, ctx.Mask, ctx.MaskFade, ctx.ScaleFactor, ctx.ElementOpacity, elementRadii, shapeRadii, cornerSmoothing)
 	}
 	return s.InsertShadow(record)
 }
@@ -826,7 +877,7 @@ func (s *Scene) PaintBoxShadow(elementBounds Bounds, shadow BoxShadow, elementRa
 // PaintUnderline paints an underline (the pinned paint_underline) at the
 // logical origin with the given logical width.
 func (s *Scene) PaintUnderline(origin Point, width float32, style UnderlineStyle, ctx *PaintContext) error {
-	return s.InsertUnderline(underlineFor(origin, width, style, ctx.Mask, ctx.ScaleFactor, ctx.ElementOpacity))
+	return s.InsertUnderline(underlineFor(origin, width, style, ctx.Mask, ctx.MaskFade, ctx.ScaleFactor, ctx.ElementOpacity))
 }
 
 // BeginLayer begins a paint layer (the pinned paint_layer): the clipped

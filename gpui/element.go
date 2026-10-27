@@ -1675,7 +1675,12 @@ func WindowTextStyle(w *Window) TextStyle {
 }
 
 // WithContentMask intersects the given mask with the window's current
-// content mask and runs f under it (window.rs with_content_mask).
+// content mask and runs f under it (window.rs with_content_mask). The
+// current mask's per-edge fades intersect with the pin's rule: the mask
+// that actually clips at an edge contributes its fade, and when both
+// clip at the same coordinate the stronger fade wins (window.rs
+// ContentMask::intersect; the rect-only mask here clips with zero
+// fades).
 func WithContentMask[R any](w *Window, mask *Bounds, f func(*Window) R) R {
 	frame := currentFrame(w)
 	if mask == nil {
@@ -1683,11 +1688,14 @@ func WithContentMask[R any](w *Window, mask *Bounds, f func(*Window) R) R {
 	}
 	intersected := intersectBounds(*mask, frame.contentMask)
 	previous := frame.contentMask
+	previousFade := frame.paint.MaskFade
 	frame.contentMask = intersected
 	frame.paint.Mask = intersected
+	frame.paint.MaskFade = intersectMaskFade(previous, previousFade, *mask, Edges{})
 	defer func() {
 		frame.contentMask = previous
 		frame.paint.Mask = previous
+		frame.paint.MaskFade = previousFade
 	}()
 	return f(w)
 }
@@ -1709,11 +1717,14 @@ func WithRoundedContentMask[R any](w *Window, mask *ClipMask, f func(*Window) R)
 	}
 	intersected := intersectBounds(mask.Bounds, frame.contentMask)
 	previous := frame.contentMask
+	previousFade := frame.paint.MaskFade
 	frame.contentMask = intersected
 	frame.paint.Mask = intersected
+	frame.paint.MaskFade = intersectMaskFade(previous, previousFade, mask.Bounds, mask.Fade)
 	defer func() {
 		frame.contentMask = previous
 		frame.paint.Mask = previous
+		frame.paint.MaskFade = previousFade
 	}()
 	if !mask.IsRounded() || !frame.paintPhase {
 		return f(w)

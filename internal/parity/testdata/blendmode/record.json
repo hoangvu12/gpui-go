@@ -1,0 +1,38 @@
+{
+  "name": "blendmode",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-27T00:22:02Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "multiply-backdrop": {
+      "x": 176,
+      "y": 155,
+      "width": 120,
+      "height": 90
+    },
+    "multiply-blend": {
+      "x": 216,
+      "y": 155,
+      "width": 80,
+      "height": 90
+    },
+    "plus-backdrop": {
+      "x": 344,
+      "y": 155,
+      "width": 120,
+      "height": 90
+    },
+    "plus-blend": {
+      "x": 384,
+      "y": 155,
+      "width": 80,
+      "height": 90
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}

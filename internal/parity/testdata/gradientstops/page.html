@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 48px;
+	}
+	.linear {
+		box-sizing: border-box;
+		width: 180px;
+		height: 120px;
+		/* The three stops carry no positions: the ends sit at 0% and
+		   100% and the middle distributes to the halfway point. */
+		background: linear-gradient(to right, #ef4444, #f97316, #3b82f6);
+	}
+	.radial {
+		box-sizing: border-box;
+		width: 180px;
+		height: 120px;
+		/* The CSS default: the ellipse to the farthest corner,
+		   centred. */
+		background: radial-gradient(#dc2626, #2563eb);
+	}
+</style>
+</head>
+<body>
+	<div class="linear" data-id="linear"></div>
+	<div class="radial" data-id="radial"></div>
+</body>
+</html>

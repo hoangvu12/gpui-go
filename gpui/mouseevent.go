@@ -473,6 +473,13 @@ type hitboxRecord struct {
 	// is not mouse-focusable), while the hit test still answers it (the
 	// pin's shape: hidden hitboxes stay in the hit test).
 	hidden bool
+	// clipPath is the owning element's clip-path (browser-core ticket
+	// 57): the hit test answers point-in-shape against it — the
+	// clip-path shapes pointer events (css-masking-1), so a position
+	// inside the bounds but outside the shape misses the element and
+	// passes through to whatever is behind. Nil (the common case) keeps
+	// the plain bounds+mask test.
+	clipPath *ClipPath
 }
 
 // hitboxOf returns the frame's hitbox record for a hit-test id, or nil.
@@ -488,9 +495,20 @@ func (f *renderedFrame) hitboxOf(id uint64) *hitboxRecord {
 	return nil
 }
 
-// contains is Hitbox::contains.
+// contains is Hitbox::contains (with the clip-path's point-in-shape
+// test when the owning element clips its shape, browser-core ticket
+// 57).
 func (r *hitboxRecord) contains(point Point) bool {
-	return r.box.Contains(point)
+	if !r.box.Contains(point) {
+		return false
+	}
+	if r.clipPath == nil {
+		return true
+	}
+	// The shape is element-local: the reference box is the hitbox's own
+	// bounds (the element's border box).
+	local := Point{X: point.X - r.box.Bounds.Origin.X, Y: point.Y - r.box.Bounds.Origin.Y}
+	return r.clipPath.Contains(local, r.box.Bounds.Size)
 }
 
 // hitTest is the occlusion test through hitboxes at a mouse position

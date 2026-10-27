@@ -1,0 +1,20 @@
+{
+  "name": "dropshadow",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-27T01:47:58Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "shadowed": {
+      "x": 250,
+      "y": 155,
+      "width": 140,
+      "height": 90
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}
