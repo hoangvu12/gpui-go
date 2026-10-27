@@ -143,6 +143,18 @@ func (ta *TestApp) WithSmoothScrolling(enabled bool) *TestApp {
 	return ta
 }
 
+// WithTabWrap pins the application's Tab-wrap flag (browser-core
+// ticket 79): the test application runs with the wrap OFF — the real
+// application default, Chrome's boundary where focus passes out and
+// the window blurs, so every existing Tab test and fixture keeps its
+// recorded shape — and a wrap test opts in here. The switch itself is
+// App.SetTabWrap; the flag is read at focus-walk time (FocusNext/
+// FocusPrev), so pinning it after a window opens also works.
+func (ta *TestApp) WithTabWrap(enabled bool) *TestApp {
+	ta.app.tabWrap = enabled
+	return ta
+}
+
 // ---------------------------------------------------------------------------
 // Base ticket 12: the TestAppContext window and input surface
 // (R:app/test_context.rs, R:app/test_app.rs; R: = reference/ce-source/

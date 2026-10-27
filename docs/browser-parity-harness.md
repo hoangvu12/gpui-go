@@ -687,6 +687,24 @@ quirk: a second forward pass-out from the same last element lands
 nondeterministically in headless Chrome, so `tabnav-order` steps each boundary
 exactly once.
 
+Ticket 79 (the app-level Tab wrap switch) made that boundary an application
+choice: `App.TabWrap()` / `App.SetTabWrap(bool)` (`gpui/app.go`) — plus the
+test-side `TestApp.WithTabWrap` opt-in (`gpui/testapp.go`) — turns the
+pass-out into a wrap when set (Tab past the last stop focuses the first,
+Shift+Tab before the first focuses the last; `Window.FocusNext/FocusPrev`'s
+wrap arms read the flag at focus-walk time, so a change needs no refresh).
+It is OFF by default — the zero value — so every recorded Chrome boundary
+above stays the default and no fixture changes: a wrap that Chrome never
+records (a real window passes focus to the browser UI,
+`focus_controller.cc:2216-2223` `CanTakeFocus`/`TakeFocus`; Chromium itself
+keeps a wrap fallback for when the UI refuses the focus, `:2227-2236`) is
+pinned by the Go tests instead — `internal/focusspec/focus_wrap_test.go`
+(the off-default pass-out, both wraps, the inert bookends the wrap must skip,
+the positive-index/TabGroup order at the wrap, the excluded element at the
+tree's end, the nothing-focusable no-op) and `gpui/modal_test.go`
+`TestShowModalTabWrapStaysInsideTheDialog` (the wrap stays inside the modal
+trap, whose inert outside leaves only the dialog's stops registered).
+
 Ticket 17 (the contextmenu event, story 60) added `DivElement.OnContextMenu`
 (`gpui/contextmenu.go`): the right-button release dispatches a bubbling
 contextmenu after the whole up tail — the listeners, the capture release, the

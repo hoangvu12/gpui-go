@@ -283,6 +283,37 @@ func TestShowModalTabNeverLeavesTheDialog(t *testing.T) {
 	}
 }
 
+// TestShowModalTabWrapStaysInsideTheDialog: the Tab wrap switch
+// (browser-core ticket 79, App.SetTabWrap) wraps INSIDE the trap —
+// while the modal is open the outside is inert, so the only stops of
+// the cycle are the dialog's own slot and its two buttons (the
+// focusing steps left focus on d1), and Tab past the dialog's last
+// stop wraps to the cycle's first stop, the dialog's own slot d —
+// never onto the outside anchor. The trap's edge behaviour with the
+// switch off (the pass-out blur above) is unchanged.
+func TestShowModalTabWrapStaysInsideTheDialog(t *testing.T) {
+	f := newModalFixture(t, nil)
+	v := f.view.Read(f.app, func(v *modalView, _ *App) *modalView { return v })
+	f.ta.WithTabWrap(true)
+	f.openModal()
+	f.pressKey("tab") // d1 -> d2
+	if got := f.focusedID(); got != v.focusD2.ID() {
+		t.Fatalf("focused after the first Tab = handle %d, want d2", got)
+	}
+	f.pressKey("tab") // past the dialog's last stop: the wrap
+	if got := f.focusedID(); got != v.focusD.ID() {
+		t.Fatalf("focused after the second Tab = handle %d, want the wrap to the dialog's own slot d (%d); the anchor is %d",
+			got, v.focusD.ID(), v.focusAnchor.ID())
+	}
+	f.pressKey("tab") // the cycle continues inside the dialog
+	if got := f.focusedID(); got != v.focusD1.ID() {
+		t.Fatalf("focused after the third Tab = handle %d, want d1 (%d)", got, v.focusD1.ID())
+	}
+	if !v.dialog.IsOpen() {
+		t.Fatal("the modal closed during the wrapped Tab walk")
+	}
+}
+
 // TestShowModalOutsideClickIsInert: while the modal is open, a click
 // on the page does not reach the outside element (the hit test skips
 // the inert hitboxes) and — with the default closedby (closerequest) —
