@@ -559,8 +559,3 @@ func styleElementOpacity(style *Style) *float32 {
 	}
 	return style.Opacity
 }
-
-// BuildClipPathForTest exposes buildClipPath for the tests.
-func BuildClipPathForTest(c ClipPath, box Bounds, scale float32) (*Path, error) {
-	return buildClipPath(c, box, scale)
-}

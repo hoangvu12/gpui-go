@@ -645,7 +645,3 @@ func (k *SceneKernel) Paths() ([]PathRecord, [][]PathVertex, error) {
 	}
 	return outRecords, outVertices, nil
 }
-
-// KernelForTest exposes the scene's kernel seam for tests (the
-// PathRecord-level insert without the PaintPath path-building).
-func (s *Scene) KernelForTest() *SceneKernel { return s.kernel }
