@@ -322,6 +322,14 @@ type Hitbox struct {
 	// before the bounds test, so hover, click, capture and drag targets
 	// follow the transform.
 	transform *TransformationMatrix
+	// transformChain and transformChainNodes (browser-core ticket 60):
+	// the own matrices of the open transform scopes at insertion,
+	// outermost first, with their property-node ids aligned (0 for a
+	// plain scope) — recorded only when an open scope is an ANIMATED
+	// transform (a property node), the hitboxes the property tick
+	// recomposes in place. Nil otherwise (the common case).
+	transformChain      []TransformationMatrix
+	transformChainNodes []uint32
 }
 
 // Contains tests the actual region, including the content mask,
@@ -954,6 +962,17 @@ func (w *Window) insertHitboxRecord(bounds Bounds, behavior HitboxBehavior) *hit
 		contentMask: currentContentMask(w),
 		behavior:    behavior,
 		transform:   currentTransformScope(w),
+	}
+	// browser-core ticket 60: the scope chain snapshot when an open
+	// transform scope is an animated one (a property node) — the tick
+	// recomposes this hitbox's matrix by replacing the node's own
+	// matrix in the chain, so hit testing follows the animation without
+	// a rebuild (propertyframes.go updateHitboxesForNode).
+	if ds, ok := windowDrawStates[w]; ok && ds.frame != nil {
+		if chain, nodes, chained := propertyScopeChain(ds.frame); chained {
+			box.transformChain = chain
+			box.transformChainNodes = nodes
+		}
 	}
 	record := &hitboxRecord{
 		box:       box,

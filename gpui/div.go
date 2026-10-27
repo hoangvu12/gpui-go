@@ -2397,8 +2397,32 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 		// map the pointer through the inverse. The bounds rebind BEFORE
 		// the overflow mask, the hitbox and the anchor/sticky records so
 		// the whole prepaint of the subtree sees the scope.
+		//
+		// browser-core 60: an ACTIVE transform transition forces the
+		// matrix scope even when the sampled matrix is translation-only
+		// — the property tick updates the transform group's node in
+		// place, and the offset fast path emits no group at all. The
+		// native composites translation-only groups through the matrix
+		// (a lossless blit at integral offsets, ticket 51), so the
+		// mid-flight pixels are the property path's and the hitboxes map
+		// through the inverse exactly as the offset path's do; a settled
+		// (inactive) transform returns to the offset fast path. The draft
+		// also records the node's geometry — the border box, origin, rem
+		// and scale the tick re-resolves the sampled functions against.
 		matrix, transformState := elementTransform(&style, bounds, layout.contentsInParentParagraph, RemSize(w))
 		transform := splitTransform(matrix, transformState)
+		var propertyDraft *propertyNodeDraft
+		if propertyDraft = framePropertyDraftOf(w, global); propertyDraft != nil && propertyDraft.transformActive {
+			fillPropertyDraftGeometry(propertyDraft, bounds, style.TransformOrigin, RemSize(w), currentFrame(w).scale, d.debugSelector)
+			if transform.matrix == nil && transformState == transformMatrix {
+				// The forced scope: the translation rides the group's
+				// matrix (the property node's home) instead of the
+				// element offset — even a zero translation, so the first
+				// frame of a translate transition is property-only.
+				m := matrix
+				transform = transformScopeSplit{matrix: &m}
+			}
+		}
 		state.transformShift = transform.shift
 		state.transformMatrix = transform.matrix
 		if transform.shift.X != 0 || transform.shift.Y != 0 {
@@ -2415,7 +2439,14 @@ func (d *DivElement) prepaintInFlow(global *GlobalElementID, inspector *Inspecto
 			}
 		}
 		if transform.matrix != nil {
-			pushTransformScope(w, *transform.matrix)
+			// browser-core 60: the scope carries the element's property-node
+			// id (0 for a plain transform), so the hitboxes inserted under it
+			// snapshot the chain the tick recomposes.
+			nodeID := uint32(0)
+			if propertyDraft != nil && propertyDraft.transformActive {
+				nodeID = propertyDraft.transformNodeID
+			}
+			pushTransformScope(w, *transform.matrix, nodeID)
 			defer popTransformScope(w)
 			// getBoundingClientRect reports the transformed border box (the
 			// AABB of the mapped corners): re-record the debug bounds through
@@ -2805,6 +2836,10 @@ func (d *DivElement) paintInFlow(global *GlobalElementID, inspector *InspectorEl
 		if style.Visibility == VisibilityHidden {
 			return struct{}{}, es
 		}
+		// browser-core 60: the element's property-node draft — the active
+		// transform/opacity transition runs the style resolution sampled;
+		// the group emissions below carry the nodes the tick updates.
+		propertyDraft := framePropertyDraftOf(w, global)
 		// D9 (rev 16, browser-core ticket 55): the element opacity
 		// composites the subtree as one effect group - the overlapping
 		// children blend inside the group before the group blends with
@@ -2812,18 +2847,24 @@ func (d *DivElement) paintInFlow(global *GlobalElementID, inspector *InspectorEl
 		// backdrop-filter chain keeps the per-primitive multiply (the
 		// native backdrop pass samples the current target; a group's
 		// bucket would blur nothing - see opacityCompositesAsGroup).
-		WithElementOpacityVoid(w, style.Opacity, bounds, opacityCompositesAsGroup(&style), func(w *Window) {
+		// browser-core 60: an active opacity transition marks the group
+		// as a property node (the tick's UpdateEffectOpacity target); a
+		// path that brackets no group leaves the draft unemitted and the
+		// tick falls back to a full frame.
+		withElementOpacityNodeVoid(w, style.Opacity, bounds, opacityCompositesAsGroup(&style), propertyDraft, func(w *Window) {
 			// browser-core 56: the element's whole painted box — background,
 			// borders, shadows, outline and children — brackets in one scene
 			// effect group under the prepaint-resolved matrix (a CSS
 			// transform moves the element as a unit; a collapsed transform —
 			// scale 0 — paints nothing). The translation-only transform
 			// already shifted the bounds and the element offset in
-			// d.paint, so its matrix is nil here.
+			// d.paint, so its matrix is nil here (browser-core 60 forces
+			// the matrix scope while a transform transition runs, so the
+			// group carries the property node).
 			if transformCollapsed(prepaint.transformMatrix) {
 				return
 			}
-			withElementTransformPaint(w, prepaint.transformMatrix, bounds, func(w *Window) {
+			withElementTransformPaint(w, prepaint.transformMatrix, bounds, propertyDraft, func(w *Window) {
 				style.paint(bounds, w, app, func(w *Window) {
 					WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
 						WithRoundedContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {

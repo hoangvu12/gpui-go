@@ -268,6 +268,12 @@ func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawSt
 		ds.lastDamageViewport = frame.viewport
 		ds.lastDamageScale = frame.scale
 		ds.lastDamageBackground = frame.paint.Background
+		// browser-core 60: publish the frame's property animations (the
+		// transform/opacity transition nodes whose runs sampled active,
+		// with the geometry and applied values the frame loop's tick
+		// consumes — propertyframes.go). A rebuilt frame re-publishes it;
+		// a frame with no active property transitions clears it.
+		ds.lastPropertyAnimations = publishPropertyAnimations(frame)
 		ds.lastInlineFacts = frame.inlineFacts
 		ds.lastAutoScrollbarFacts = frame.autoScrollbarFacts
 		ds.lastDeferredPriorities = deferredPrioritiesOf(frame)

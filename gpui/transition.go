@@ -451,13 +451,20 @@ func (r *styleTransitionRun) easedProgress(elapsed time.Duration) float32 {
 // frames for (one request per frame, not one per style resolution).
 // It lives in the window's element state arena keyed by the element's
 // global id, one per element (never per property map — the slots are a
-// fixed array).
+// fixed array). Browser-core ticket 60 adds the scene property-node
+// ids of the transform and opacity runs: assigned once from the
+// window's counter when the run first becomes active and persisted
+// here, so every frame of the transition carries the same node id
+// (the property tick updates it in place; a new run after an eviction
+// gets a fresh id, never a stale one).
 type transitionElementState struct {
-	frame          uint64
-	requestedFrame uint64
-	targets        [transitionSlotCount]animatedValue
-	has            [transitionSlotCount]bool
-	runs           [transitionSlotCount]*styleTransitionRun
+	frame           uint64
+	requestedFrame  uint64
+	targets         [transitionSlotCount]animatedValue
+	has             [transitionSlotCount]bool
+	runs            [transitionSlotCount]*styleTransitionRun
+	transformNodeID uint32
+	opacityNodeID   uint32
 }
 
 // ---------------------------------------------------------------------------
@@ -521,6 +528,9 @@ func resolveStyleTransitions(global *GlobalElementID, style Style, w *Window, ap
 		// Sample the runs onto the style. A finished run's target equals
 		// the style's own value, so writing it is the identity.
 		animated := false
+		propertyable := true
+		transformActive := false
+		opacityActive := false
 		for i := range transitionSlotCount {
 			run := next.runs[i]
 			if run == nil {
@@ -528,15 +538,46 @@ func resolveStyleTransitions(global *GlobalElementID, style Style, w *Window, ap
 			}
 			value, active := run.sample(satSubDuration(now, run.startedAt))
 			writeAnimated(slotProperty(i), &style, value)
-			if active {
-				animated = true
+			if !active {
+				continue
+			}
+			animated = true
+			// browser-core ticket 60: the compositable pair. Only the
+			// transform and opacity slots tick property nodes — Chromium's
+			// compositable-property switch (compositor_animations.cc:398-
+			// 426: opacity, transform/translate/rotate/scale, filter,
+			// backdrop-filter; every other property runs on the main
+			// thread). A run on any other slot keeps the notify-driven
+			// rebuild animation the engine always had.
+			switch slotProperty(i) {
+			case TransitionOpacity:
+				opacityActive = true
+			case TransitionTransform:
+				transformActive = true
+			default:
+				propertyable = false
 			}
 		}
 		// One frame request per frame: the three style resolutions of a
 		// frame (request_layout, prepaint, paint) share it.
 		if animated && next.requestedFrame != draws {
 			next.requestedFrame = draws
-			RequestAnimationFrame(w)
+			if propertyable {
+				// The property tick: no notification — the frame request
+				// samples the runs and updates the scene's nodes
+				// (propertyframes.go). A run the frame cannot bracket
+				// falls back to the notify inside the tick.
+				requestPropertyAnimationFrame(w)
+			} else {
+				RequestAnimationFrame(w)
+			}
+		}
+		// browser-core ticket 60: record the element's active
+		// transform/opacity runs in the frame's property-node drafts
+		// (the paint's group emission marks them; completeFrame
+		// publishes the registry the tick consumes).
+		if transformActive || opacityActive {
+			recordPropertyTransitionDraft(w, global, &next, &style, transformActive, opacityActive)
 		}
 		return style, next
 	})
