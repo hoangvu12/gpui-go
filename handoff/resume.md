@@ -18,6 +18,7 @@ Fluent methods of the generic mixins (Styled, Parent, Interactive) carry the `[_
 
 **ORCHESTRATOR 12 STATUS (2026-10-27). Latest.** Claude Code, Opus 5.5; Roboco chat 2379fd85. It took over from orchestrator 11 (chat b8bb5b81; handoff doc `%TEMP%\gpui-go-handoff-orchestrator12.md`). Rules: unchanged.
 - **58 resolved and merged** (damage tracking + paint flashing; verified by orchestrator 11 on the merged tree: 88 packages ok, gpui-go-base ok). Worktree `gpui-go-wt-core-58` and its branch removed.
+- **61 resolved and merged** (FLIP helper; gpui + parity + gpui-go-base ok). Worktree `gpui-go-wt-core-61` and its branch removed. The idle pi trees of 55/56/58 had exited; folders `gpui-go-wt-core-55`/`-56` deleted.
 
 **ORCHESTRATOR 11 STATUS (2026-10-26). History now.** Claude Code, Opus 5.5; Roboco chat b8bb5b81. It took over from orchestrator 10 (chat d041f254; handoff doc `%TEMP%\gpui-go-handoff-orchestrator11.md`). Rules: orchestrator 10's handoff doc, unchanged.
 - **Resolved (73 of 78):** 76 (default position static; merged in both repos, worker chat a660cce4). EVERY Go-only ticket is now resolved. Worktrees `gpui-go-wt-core-76` and `gpui-go-base-wt-76` and both `core/76-position-static` branches are removed.
