@@ -212,7 +212,13 @@ func (b Background) Opacity(factor float32) Background {
 		return b
 	}
 	if b.Kind == BackgroundKindCssGradient && b.CssGradient != nil {
+		// A deep copy: the stops slice is shared with the source value
+		// (the callers hand the same Background to every frame), so the
+		// scaled stops must never write through it — the border-color
+		// twin (Opacity(0)) would otherwise blank the next frame's
+		// stops and drop the background as transparent.
 		out := *b.CssGradient
+		out.Stops = append([]GradientStop(nil), b.CssGradient.Stops...)
 		for i := range out.Stops {
 			out.Stops[i].Color = OpacityHsla(out.Stops[i].Color, factor)
 		}

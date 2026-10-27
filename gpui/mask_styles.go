@@ -95,6 +95,35 @@ func (l ClipLength) resolve(extent float32) float32 {
 	return l.value
 }
 
+// centerOf resolves the shape's center (the box center when centered,
+// CSS `at 50% 50%`).
+func (c ClipPath) centerOf(size Size) (float32, float32) {
+	if c.centered {
+		return size.Width * 0.5, size.Height * 0.5
+	}
+	return c.cx.resolve(size.Width), c.cy.resolve(size.Height)
+}
+
+// resolveDevice evaluates a clip length against the DEVICE box: a
+// fraction of the device extent, or a logical pixel count scaled by
+// the paint factor (a 40px radius at 2x paints 80 device pixels).
+func (l ClipLength) resolveDevice(extent, scale float32) float32 {
+	if l.fraction {
+		return l.value * extent
+	}
+	return l.value * scale
+}
+
+// centerOfDevice resolves the shape's center against the DEVICE box
+// (the fractions scale with the extent, the pixel lengths with the
+// paint factor).
+func (c ClipPath) centerOfDevice(x, y, w, h, scale float32) (float32, float32) {
+	if c.centered {
+		return x + w*0.5, y + h*0.5
+	}
+	return x + c.cx.resolveDevice(w, scale), y + c.cy.resolveDevice(h, scale)
+}
+
 // ClipPoint is one clip-path polygon vertex.
 type ClipPoint struct {
 	// X and Y are the vertex coordinates.
@@ -223,14 +252,6 @@ func (c ClipPath) Contains(p Point, size Size) bool {
 	return false
 }
 
-// centerOf resolves the shape's center (the box center when centered).
-func (c ClipPath) centerOf(size Size) (float32, float32) {
-	if c.centered {
-		return size.Width * 0.5, size.Height * 0.5
-	}
-	return c.cx.resolve(size.Width), c.cy.resolve(size.Height)
-}
-
 // pointInPolygon is the even-odd ray cast (a simple polygon's
 // inside/outside test).
 func pointInPolygon(p Point, points []ClipPoint, size Size) bool {
@@ -268,19 +289,40 @@ func pointInTriangles(p Point, vertices []PathVertex) bool {
 	return false
 }
 
-// buildClipPath tessellates the clip shape against the reference box
-// (the element's border box, logical pixels) in element-local
-// coordinates and scales it into window DEVICE coordinates (the box
-// origin added, the scale factor applied). Returns the device-space
-// path plus its device bounds.
+// buildClipPath tessellates the clip shape in window DEVICE
+// coordinates — the reference box (the element's border box) scaled
+// and translated by the paint factor, the shape's lengths resolved
+// against the device size. Tessellating AT the final coordinates
+// matters: the tessellator's curve parameters (each vertex's S/T) feed
+// the rasterization pipeline's edge coverage, and scaling the vertices
+// after the fact would desynchronize them (the coverage would
+// mis-shape). The path form (ClipPathOfPath, an element-local
+// tessellation) is the exception — its vertices scale with its S/T
+// carried (the curve coverage can mis-AA there; the shape forms are
+// the exact ones).
 func buildClipPath(c ClipPath, box Bounds, scale float32) (*Path, error) {
+	if c.shape == clipShapePath {
+		if c.path == nil {
+			return nil, fmt.Errorf("gpui: clip-path path is empty")
+		}
+		local := c.path
+		scaled := &Path{Bounds: scaleBounds(local.Bounds, scale), Vertices: make([]PathVertex, len(local.Vertices))}
+		for i, vertex := range local.Vertices {
+			scaled.Vertices[i] = PathVertex{X: vertex.X * scale, Y: vertex.Y * scale, S: vertex.S, T: vertex.T}
+		}
+		return translatePath(scaled, box.Origin.X*scale, box.Origin.Y*scale), nil
+	}
 	builder := FillPathBuilder()
-	w, h := box.Size.Width, box.Size.Height
+	// The reference box in device pixels: the shape resolves against it.
+	x := box.Origin.X * scale
+	y := box.Origin.Y * scale
+	w := box.Size.Width * scale
+	h := box.Size.Height * scale
 	switch c.shape {
 	case clipShapeCircle, clipShapeEllipse:
-		cx, cy := c.centerOf(box.Size)
-		rx := c.rx.resolve(w)
-		ry := c.ry.resolve(h)
+		cx, cy := c.centerOfDevice(x, y, w, h, scale)
+		rx := c.rx.resolveDevice(w, scale)
+		ry := c.ry.resolveDevice(h, scale)
 		if rx <= 0 || ry <= 0 {
 			return nil, fmt.Errorf("gpui: clip-path ellipse has a non-positive radius at this size")
 		}
@@ -290,10 +332,10 @@ func buildClipPath(c ClipPath, box Bounds, scale float32) (*Path, error) {
 		builder.ArcTo(rx, ry, 0, false, true, cx+rx, cy)
 		builder.Close()
 	case clipShapeInset:
-		minX := c.left.resolve(w)
-		maxX := w - c.right.resolve(w)
-		minY := c.top.resolve(h)
-		maxY := h - c.bottom.resolve(h)
+		minX := x + c.left.resolveDevice(w, scale)
+		maxX := x + w - c.right.resolveDevice(w, scale)
+		minY := y + c.top.resolveDevice(h, scale)
+		maxY := y + h - c.bottom.resolveDevice(h, scale)
 		if maxX <= minX || maxY <= minY {
 			return nil, fmt.Errorf("gpui: clip-path inset is empty at this size")
 		}
@@ -308,27 +350,11 @@ func buildClipPath(c ClipPath, box Bounds, scale float32) (*Path, error) {
 		}
 		var points []Point
 		for _, vertex := range c.points {
-			points = append(points, Point{X: vertex.X.resolve(w), Y: vertex.Y.resolve(h)})
+			points = append(points, Point{X: x + vertex.X.resolveDevice(w, scale), Y: y + vertex.Y.resolveDevice(h, scale)})
 		}
 		builder.AddPolygon(points, true)
-	case clipShapePath:
-		if c.path == nil {
-			return nil, fmt.Errorf("gpui: clip-path path is empty")
-		}
-		local := c.path
-		scaled := &Path{Bounds: scaleBounds(local.Bounds, scale), Vertices: make([]PathVertex, len(local.Vertices))}
-		for i, vertex := range local.Vertices {
-			scaled.Vertices[i] = PathVertex{X: vertex.X * scale, Y: vertex.Y * scale, S: vertex.S, T: vertex.T}
-		}
-		translated := translatePath(scaled, box.Origin.X*scale, box.Origin.Y*scale)
-		return translated, nil
 	}
-	path, err := builder.Build()
-	if err != nil {
-		return nil, err
-	}
-	scaled := scalePath(path, scale)
-	return translatePath(scaled, box.Origin.X*scale, box.Origin.Y*scale), nil
+	return builder.Build()
 }
 
 // translatePath shifts a path's vertices and bounds (device pixels).
@@ -421,6 +447,10 @@ func withClipPathScope(w *Window, clip *ClipPath, bounds Bounds, f func()) {
 	// record carries (the index-stability rule above); the vertices are
 	// the element's device-space shape.
 	window := Bounds{Size: Size{Width: frame.viewport.Width * scale, Height: frame.viewport.Height * scale}}
+	// The path record's insertion index, captured BEFORE the insert —
+	// the coverage entry references it (the index the path will occupy
+	// in the post-sort array; see the index-stability rule above).
+	pathIndex := frame.scene.NextPathIndex()
 	if err := frame.scene.kernel.InsertPath(&PathRecord{
 		Bounds:      window,
 		ContentMask: window,
@@ -429,7 +459,7 @@ func withClipPathScope(w *Window, clip *ClipPath, bounds Bounds, f func()) {
 	}); err != nil {
 		panic(fmt.Sprintf("gpui: clip-path: path insert: %v", err))
 	}
-	coverage, err := frame.scene.InsertCoverage(frame.scene.NextPathIndex(), path.Bounds)
+	coverage, err := frame.scene.InsertCoverage(pathIndex, path.Bounds)
 	if err != nil {
 		panic(fmt.Sprintf("gpui: clip-path: coverage insert: %v", err))
 	}
@@ -528,4 +558,9 @@ func styleElementOpacity(style *Style) *float32 {
 		return nil
 	}
 	return style.Opacity
+}
+
+// BuildClipPathForTest exposes buildClipPath for the tests.
+func BuildClipPathForTest(c ClipPath, box Bounds, scale float32) (*Path, error) {
+	return buildClipPath(c, box, scale)
 }

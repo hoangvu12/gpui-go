@@ -778,6 +778,15 @@ func NewPaintContextWithFade(scale float32, mask Bounds, fade Edges, elementOpac
 // carry the table reference — the border strips share the one entry,
 // so the gradient spans the whole quad.
 func (s *Scene) PaintQuad(pq PaintQuad, cornerSmoothing float32, ctx *PaintContext) error {
+	if pq.BorderColor.Kind == BackgroundKindCssGradient {
+		// A CSS gradient is not a border colour (CSS border-color takes
+		// <color>); the callers pass the background's Opacity(0) twin,
+		// which the 2-stop arm carries as its transparent gradient —
+		// the table record has no per-strip border gradient, so the
+		// equivalent here is the transparent solid (the border strips
+		// carry the resolved background's gradient).
+		pq.BorderColor = SolidBackground(Hsla{})
+	}
 	if pq.Background.Kind == BackgroundKindCssGradient && pq.Background.CssGradient != nil {
 		// The element opacity folds into the STOPS before the resolve
 		// (the ramp bakes it; the resolved table arm ignores a later
