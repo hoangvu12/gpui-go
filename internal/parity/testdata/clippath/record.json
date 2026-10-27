@@ -1,0 +1,63 @@
+{
+  "name": "clippath",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-27T00:21:39Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "clip-circle": {
+      "x": 60,
+      "y": 120,
+      "width": 120,
+      "height": 120
+    },
+    "clip-poly": {
+      "x": 300,
+      "y": 120,
+      "width": 120,
+      "height": 120
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 400
+    }
+  },
+  "events": [
+    {
+      "kind": "click",
+      "target": "clip-circle",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "clip-poly",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    },
+    {
+      "kind": "click",
+      "target": "root",
+      "defaultPrevented": false
+    }
+  ],
+  "screenshot": "chrome.png"
+}

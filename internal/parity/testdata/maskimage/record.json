@@ -1,0 +1,20 @@
+{
+  "name": "maskimage",
+  "chrome": "Chrome/155.0.8059.85",
+  "recordedAt": "2026-10-27T00:21:26Z",
+  "viewport": {
+    "width": 640,
+    "height": 400
+  },
+  "deviceScaleFactor": 2,
+  "boxes": {
+    "masked": {
+      "x": 240,
+      "y": 140,
+      "width": 160,
+      "height": 120
+    }
+  },
+  "events": [],
+  "screenshot": "chrome.png"
+}
