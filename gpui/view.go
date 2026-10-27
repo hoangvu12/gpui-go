@@ -431,7 +431,8 @@ func (v *viewElement) Prepaint(global *GlobalElementID, inspector *InspectorElem
 					ds := drawState(w)
 					contentMask := ContentMask(w)
 					textStyle := WindowTextStyle(w)
-					if state != nil && state.cacheKey.matches(bounds, contentMask, textStyle) && !ds.isViewDirty(entityID) && !ds.refreshing {
+					if state != nil && state.cacheKey.matches(bounds, contentMask, textStyle) && !ds.isViewDirty(entityID) && !ds.refreshing &&
+						viewReuseTableSafe(w, state) {
 						ds.viewCacheHits++
 						reused := *state
 						prepaintStart := w.prepaintIndex()

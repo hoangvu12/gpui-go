@@ -760,6 +760,13 @@ func (v *viewElement) autoReuseRecord(global *GlobalElementID, w *Window) *viewE
 		// "the scrollable element clamps it at its next prepaint").
 		return nil
 	}
+	if !viewReuseTableSafe(w, state) {
+		// The recorded paint output inserts or references the scene's
+		// index-addressed tables (gradients, coverage, filter-op chains):
+		// the replay's baked indices are unprovable — render fresh
+		// (view_reuse.go viewReuseTableSafe).
+		return nil
+	}
 	return state
 }
 
@@ -770,6 +777,55 @@ func viewScrollVersionsMatch(rec *viewReuseRecord) bool {
 	for state, version := range rec.scrolls {
 		if state.version != version {
 			return false
+		}
+	}
+	return true
+}
+
+// viewReuseTableSafe reports whether a view's recorded paint output can
+// replay without the scene's index-addressed tables: the native replay
+// re-inserts the range's gradient, coverage and filter-op-chain rows at
+// NEW table indices (reference/native/src/scene.rs replay → insert_
+// gradient / insert_coverage / insert_filter_op_chain) while the copied
+// quads, shadows, boundaries and coverage rows keep the table indices
+// baked in the previous scene, so a range that inserts or references
+// table rows is only correct when both scenes' tables align exactly at
+// the range boundary — unprovable at the reuse decision (the new
+// scene's counts at the view's paint insertion are not yet known at
+// prepaint). The conservative rule: table-carrying ranges render fresh
+// (the ticket's "when in doubt, re-render"). Paths are data-carried
+// (their ops re-insert with their own data) and Replay advances the
+// kernel's counters with the copied rows, so a path insert alone keeps
+// the reuse — a coverage row referencing it does not.
+//
+// The check covers the view's own paint range AND the paint ranges of
+// the deferred draws its recorded prepaint range carries: those draws
+// replay their ranges at the frame's deferred round, after the reuse
+// decision — the refusal must happen here, where the fresh-render
+// fallback exists.
+func viewReuseTableSafe(w *Window, state *viewElementState) bool {
+	if state == nil {
+		return false
+	}
+	ds := drawState(w)
+	if ds.lastScene == nil || ds.lastScene.kernel == nil {
+		return false
+	}
+	prev := ds.lastScene.kernel
+	if sceneRangeTableRefs(prev, state.paintStart.scene, state.paintEnd.scene) {
+		return false
+	}
+	start, end := state.prepaintStart.deferredDraws, state.prepaintEnd.deferredDraws
+	if end > start {
+		if end > len(ds.lastDeferredDraws) {
+			// The draws list is shorter than the recorded range: drift —
+			// unprovable is unsafe.
+			return false
+		}
+		for _, draw := range ds.lastDeferredDraws[start:end] {
+			if sceneRangeTableRefs(prev, draw.paintStart.scene, draw.paintEnd.scene) {
+				return false
+			}
 		}
 	}
 	return true
@@ -871,7 +927,7 @@ func (v *viewElement) autoPrepaintSynthesized(global *GlobalElementID, bounds Bo
 		if state != nil && state.reuse != nil && state.reuse.complete &&
 			state.cacheKey.matches(bounds, contentMask, textStyle) &&
 			!ds.isViewDirty(entityID) && !ds.refreshing && windowViewReuseEnabled(w) &&
-			viewScrollVersionsMatch(state.reuse) {
+			viewScrollVersionsMatch(state.reuse) && viewReuseTableSafe(w, state) {
 			ds.viewReuseHits++
 			reused := *state
 			prepaintStart := w.prepaintIndex()

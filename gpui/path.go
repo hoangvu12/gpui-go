@@ -594,7 +594,10 @@ func (k *SceneKernel) InsertPath(rec *PathRecord) error {
 	if err := k.scene.InsertPath(&nativeRec, vertices); err != nil {
 		return fmt.Errorf("gpui: scene insert path: %w", err)
 	}
-	k.recordDamageRect(rec.Bounds, rec.ContentMask, false)
+	// browser-core 59: the path op is data-carried (safe to replay), but
+	// it advances the path array the coverage entries index into — the
+	// op's log entry carries the kind so Replay counts it (damage.go).
+	k.recordDamageRectTable(rec.Bounds, rec.ContentMask, false, sceneTablePath)
 	k.pathCount++
 	return nil
 }
