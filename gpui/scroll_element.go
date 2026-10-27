@@ -211,6 +211,11 @@ func (s *elementScroll) clamp(bounds Bounds, style *Style, maxOffset Point, w *W
 	if s.handle != nil {
 		s.handle.state.maxOffset = scrollMax
 		s.handle.state.bounds = bounds
+		// browser-core 59 (view_reuse.go): the clamp is the prepaint's
+		// read of the handle — the view's record carries the state and its
+		// version, so a programmatic write between frames refuses the
+		// reuse and re-clamps here.
+		recordScrollRead(s.handle.state)
 	}
 	return *offset
 }

@@ -79,6 +79,15 @@ type paintIndex struct {
 	accessedElementStates int
 	lineLayout            int
 	inlineFacts           int
+	// clickListeners, contextMenuListeners and overlayRegistrations are
+	// the paint-phase registration lists of the port's browser-core
+	// additions (browser-core 59: the pin's reuse index extended so a
+	// reused view re-registers them — the click dispatch, the contextmenu
+	// trigger and the top-layer reconciliation read them from the
+	// completed frame).
+	clickListeners         int
+	contextMenuListeners   int
+	overlayRegistrations   int
 }
 
 // paintIndexOf is window.rs paint_index (R:window.rs:3774-3784).
@@ -101,6 +110,9 @@ func (w *Window) paintIndex() paintIndex {
 		accessedElementStates: len(frame.accessedElementStateLog),
 		lineLayout:            frame.text.layoutIndex(),
 		inlineFacts:           len(frame.inlineFacts),
+		clickListeners:        len(next.clickListeners),
+		contextMenuListeners:  len(next.contextMenuListeners),
+		overlayRegistrations:  len(next.overlayRegistrations),
 	}
 }
 
@@ -139,6 +151,14 @@ func (w *Window) reusePrepaint(start, end prepaintStateIndex) {
 	next.hitboxes = append(next.hitboxes, rendered.hitboxes[start.hitboxes:end.hitboxes]...)
 	reuseElementStateAccesses(frame, ds.lastAccessedElementStateLog[start.accessedElementStates:end.accessedElementStates])
 	frame.text.reuseLayouts(start.lineLayout, end.lineLayout)
+	// browser-core 59: the port's prepaint-phase registration lists ride
+	// the reused range (the tooltip records' seen marks, the modal
+	// focusing entries, the titlebar control areas) — a reused view's
+	// registrations must re-join the frame or the frame-end
+	// reconciliations drop them.
+	next.tooltipSeen = append(next.tooltipSeen, rendered.tooltipSeen[start.tooltipSeen:end.tooltipSeen]...)
+	next.modalFocusEntries = append(next.modalFocusEntries, rendered.modalFocusEntries[start.modalFocusEntries:end.modalFocusEntries]...)
+	next.windowControlHitboxes = append(next.windowControlHitboxes, rendered.windowControlHitboxes[start.windowControlHitboxes:end.windowControlHitboxes]...)
 
 	reused := reuseDispatchSubtree(next.dispatchTree, rendered.dispatchTree, start.dispatchTree, end.dispatchTree)
 
@@ -182,6 +202,12 @@ func (w *Window) reusePaint(start, end paintIndex) {
 	reuseElementStateAccesses(frame, ds.lastAccessedElementStateLog[start.accessedElementStates:end.accessedElementStates])
 	frame.text.reuseLayouts(start.lineLayout, end.lineLayout)
 	frame.inlineFacts = append(frame.inlineFacts, ds.lastInlineFacts[start.inlineFacts:end.inlineFacts]...)
+	// browser-core 59: the paint-phase registration lists ride the reused
+	// range (the click and contextmenu registrations, the top-layer
+	// entries) — the completed frame's dispatch reads them.
+	next.clickListeners = append(next.clickListeners, rendered.clickListeners[start.clickListeners:end.clickListeners]...)
+	next.contextMenuListeners = append(next.contextMenuListeners, rendered.contextMenuListeners[start.contextMenuListeners:end.contextMenuListeners]...)
+	next.overlayRegistrations = append(next.overlayRegistrations, rendered.overlayRegistrations[start.overlayRegistrations:end.overlayRegistrations]...)
 
 	if start.scene < end.scene {
 		if ds.lastScene == nil {
@@ -340,6 +366,23 @@ func invalidateEntities(w *Window, ds *windowDrawState) {
 			}
 			ds.dirtyViews[id] = struct{}{}
 		}
+		// browser-core 59 (view_reuse.go): a notified entity a view's
+		// render ACCESSED — not only view entities — dirties that view
+		// and its ancestors, so the automatic reuse of a view that read a
+		// notified model is busted (the port's extension of the pin's
+		// dirty_views, whose cached views rely on the app's
+		// observe-and-notify discipline).
+		for dep := range ds.depViews[view] {
+			for _, id := range tree.viewPathReversed(dep) {
+				if _, dirty := ds.dirtyViews[id]; dirty {
+					break
+				}
+				if ds.dirtyViews == nil {
+					ds.dirtyViews = make(map[EntityID]struct{})
+				}
+				ds.dirtyViews[id] = struct{}{}
+			}
+		}
 	}
 	clear(ds.invalidatedViews)
 }
@@ -392,6 +435,13 @@ type viewElementState struct {
 	paintStart, paintEnd       paintIndex
 	cacheKey                   viewElementCacheKey
 	accessedEntities           map[EntityID]struct{}
+	// reuse is browser-core 59's automatic-reuse record (view_reuse.go):
+	// the provable node style the synthesized request replays and the
+	// frame records a reused view must re-contribute (the a11y node
+	// range, the debug/anchor/invoker registries, the scrollbar facts,
+	// the user-select registrations and the a11y listeners). nil while
+	// the view's root style is not reproducible (never reused).
+	reuse *viewReuseRecord
 }
 
 // viewElementCacheKey is the pin's ViewElementCacheKey: bounds, content

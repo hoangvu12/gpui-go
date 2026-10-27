@@ -271,6 +271,10 @@ func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawSt
 		ds.lastInlineFacts = frame.inlineFacts
 		ds.lastAutoScrollbarFacts = frame.autoScrollbarFacts
 		ds.lastDeferredPriorities = deferredPrioritiesOf(frame)
+		// browser-core 59 (view_reuse.go): the frame's global-type reads
+		// publish to the window (a NotifyGlobal of a read type refreshes
+		// it — a stale reuse would miss the new value).
+		ds.lastAccessedGlobals = frame.accessedGlobals
 		// The rendered frame's ordered lists a cached view's reused ranges
 		// index into (view_cache.go; the pin keeps them on rendered_frame).
 		ds.lastAccessedElementStateLog = frame.accessedElementStateLog

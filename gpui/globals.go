@@ -32,7 +32,12 @@ func TryGlobal[T any](a *App) (T, bool) {
 	if a == nil {
 		panic("gpui: TryGlobal requires an application")
 	}
-	v, ok := a.globals[reflect.TypeFor[T]()]
+	t := reflect.TypeFor[T]()
+	// browser-core 59 (view_reuse.go): a global read while a window's
+	// frame runs is recorded, so a notify of the type refreshes the
+	// windows that render from it.
+	recordViewGlobalRead(a, t)
+	v, ok := a.globals[t]
 	if !ok {
 		var zero T
 		return zero, false

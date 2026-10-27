@@ -103,6 +103,12 @@ type windowFrameState struct {
 	// nextTrackedEntities collects the entities accessed by the frame
 	// under construction.
 	nextTrackedEntities map[EntityID]struct{}
+	// nextTrackedLog is nextTrackedEntities's append log (browser-core 59,
+	// view_reuse.go): trackEntity appends every addition, so a view's
+	// fresh render captures its accessed entities as an O(1) log mark
+	// instead of a set copy (the pin's detect_accessed_entities diff). It
+	// dies with the frame like the set.
+	nextTrackedLog []EntityID
 	// present is the window's present hook (WindowOptions.OnRedraw for
 	// real windows; nil for test windows and real windows without the
 	// hook, whose present step is empty).
@@ -531,12 +537,15 @@ func trackEntity(w *Window, id EntityID) {
 		fs.nextTrackedEntities = make(map[EntityID]struct{})
 	}
 	fs.nextTrackedEntities[id] = struct{}{}
+	fs.nextTrackedLog = append(fs.nextTrackedLog, id)
 }
 
 // beginFrameTracking starts the frame's tracked-entity collection
 // (Window::draw clears the accessed entities first, R:window.rs:3162).
 func beginFrameTracking(w *Window) {
-	frameStateOf(w).nextTrackedEntities = make(map[EntityID]struct{})
+	fs := frameStateOf(w)
+	fs.nextTrackedEntities = make(map[EntityID]struct{})
+	fs.nextTrackedLog = nil
 }
 
 // completeFrameTracking publishes a completed frame to the frame loop:
@@ -556,6 +565,7 @@ func completeFrameTracking(w *Window, root View) {
 	}
 	fs.trackedEntities = tracked
 	fs.nextTrackedEntities = nil
+	fs.nextTrackedLog = nil
 	fs.dirty = false
 	fs.needsPresent = true
 }

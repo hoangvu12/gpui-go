@@ -707,6 +707,18 @@ func (a *App) applyEmit(e effect) {
 // the type's active global observers in registration order.
 func (a *App) applyNotifyGlobal(t reflect.Type) {
 	delete(a.pendingGlobalNotifies, t)
+	// browser-core 59 (view_reuse.go): every window whose last frame read
+	// the type refreshes — the automatic reuse would otherwise keep the
+	// old value on screen. The full bust is deliberate: globals change
+	// rarely and the read set is per window, not per view.
+	for _, w := range a.sortedWindows() {
+		if ds, ok := windowDrawStates[w]; ok && ds.lastAccessedGlobals != nil {
+			if _, read := ds.lastAccessedGlobals[t]; read {
+				w.markRefreshing()
+				w.markFrameDirty()
+			}
+		}
+	}
 	if set := a.globalObservers[t]; set != nil {
 		a.deliverSubs(set, nil, 0, nil)
 	}
@@ -740,6 +752,10 @@ func (a *App) SetGlobal(value any) {
 // that type was set.
 func Global[T any](a *App) T {
 	t := reflect.TypeFor[T]()
+	// browser-core 59 (view_reuse.go): a global read while a window's
+	// frame runs is recorded, so a notify of the type refreshes the
+	// windows that render from it.
+	recordViewGlobalRead(a, t)
 	v, ok := a.globals[t]
 	if !ok {
 		panic("gpui: no global registered for " + t.String())

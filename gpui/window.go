@@ -159,7 +159,12 @@ type WindowOptions struct {
 	// Window.SetPaintFlashing. The overlay changes pixels: keep it off
 	// unless debugging.
 	PaintFlashing bool
-
+	// DisableViewReuse turns this window's automatic view reuse off
+	// (browser-core 59): every view renders fresh on every frame, the
+	// pre-59 behavior. The process-wide form is GPUI_VIEW_REUSE=0, the
+	// live per-window form Window.SetViewReuse(false) and the per-view
+	// form gpui.WithoutViewReuse(view).
+	DisableViewReuse bool
 	// ShouldClose is the close veto: it is called synchronously when a
 	// close is requested (WM_CLOSE); returning false vetoes the close
 	// and the window stays open. A nil callback lets the close proceed
@@ -410,6 +415,15 @@ type prepaintStateIndex struct {
 	tabStopPath           tabStopPath
 	accessedElementStates int
 	lineLayout            int
+	// tooltipSeen, modalFocusEntries and windowControlHitboxes are the
+	// prepaint-phase registration lists of the port's browser-core
+	// additions (browser-core 59: the pin's reuse index extended so a
+	// reused view re-registers them — the tooltip records' frame-end
+	// reconciliation drops unseen records, the dialog focusing steps
+	// read the entries, the titlebar areas ride the frame).
+	tooltipSeen           int
+	modalFocusEntries     int
+	windowControlHitboxes int
 }
 
 // prepaintIndex is window.rs prepaint_index (R:window.rs:3712-3721).
@@ -428,6 +442,9 @@ func (w *Window) prepaintIndex() prepaintStateIndex {
 		tabStopPath:           append(tabStopPath{}, next.tabStops.currentPath...),
 		accessedElementStates: len(frame.accessedElementStateLog),
 		lineLayout:            frame.text.layoutIndex(),
+		tooltipSeen:           len(next.tooltipSeen),
+		modalFocusEntries:     len(next.modalFocusEntries),
+		windowControlHitboxes: len(next.windowControlHitboxes),
 	}
 }
 
@@ -442,6 +459,11 @@ func (w *Window) truncatePrepaint(index prepaintStateIndex) {
 	frame.deferredDraws = frame.deferredDraws[:index.deferredDraws]
 	frame.accessedElementStateLog = frame.accessedElementStateLog[:index.accessedElementStates]
 	frame.text.truncateLayouts(index.lineLayout)
+	// browser-core 59: the reused prepaint range's registration lists cut
+	// back with the rest.
+	next.tooltipSeen = next.tooltipSeen[:index.tooltipSeen]
+	next.modalFocusEntries = next.modalFocusEntries[:index.modalFocusEntries]
+	next.windowControlHitboxes = next.windowControlHitboxes[:index.windowControlHitboxes]
 	truncateDispatchTree(next.dispatchTree, index.dispatchTree)
 	truncateTabStops(next.tabStops, index.tabStops, index.tabStopPath)
 }
@@ -1009,6 +1031,11 @@ func (a *App) OpenWindow(opts WindowOptions) (*Window, error) {
 			if opts.PaintFlashing {
 				// browser-core 58: the paint-flashing overlay's debug option.
 				drawState(window).paintFlashing = true
+			}
+			if opts.DisableViewReuse {
+				// browser-core 59: the automatic view reuse's per-window
+				// opt-out (view_reuse.go).
+				drawState(window).viewReuseDisabled = true
 			}
 			if opts.KeyDispatchOrder != BindingsBeforeListeners {
 				// browser-core 09: the key dispatch order option, stored in

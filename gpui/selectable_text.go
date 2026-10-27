@@ -161,7 +161,12 @@ func (t *SelectableText) RequestLayout(global *GlobalElementID, inspector *Inspe
 // (U:selectable_text.rs:179-197). Browser-core 20: user-select: none
 // on the ambient text style (an ancestor's opt-out) suppresses the
 // registration — the run still paints, but it never joins the window
-// selection, like Chrome's none text.
+// selection, like Chrome's none text. Browser-core 59: the
+// registration carries the run itself, like the automatic path's
+// (user_select.go), so the model's copy projection resolves on demand
+// from the registration when the reporting element's frame is reused
+// (view_reuse.go) and its paint's UpdateRuns cache refresh is skipped
+// — the automatic path's on-demand rule (text_selection.go copyItem).
 func (t *SelectableText) Prepaint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, handle *TextSelectionHandle, w *Window, app *App) Hitbox {
 	t.styledText.Prepaint(global, inspector, bounds, &struct{}{}, w, app)
 	if !userSelectAllowsSelection(w) {
@@ -176,6 +181,9 @@ func (t *SelectableText) Prepaint(global *GlobalElementID, inspector *InspectorE
 	registration := NewTextSelectionRegistration(hitbox, bounds).
 		WithDocumentOrder(t.documentOrder).
 		WithTextBounds([]Bounds{bounds}).
+		WithRuns([]TextSelectionRun{
+			NewTextSelectionRun(t.text, t.styledText.Layout(), bounds).WithDocumentOrder(t.documentOrder),
+		}).
 		WithRenderedElement(*handle, w, app)
 	handle.Register(registration, w, app)
 	return hitbox

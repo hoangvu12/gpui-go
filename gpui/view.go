@@ -285,6 +285,23 @@ type viewElement struct {
 	// cached_style: Some for AnyView::cached / Entity::cached; see
 	// view_cache.go CachedView), nil for an uncached view.
 	cachedStyle *StyleRefinement
+	// The automatic reuse's per-frame bookkeeping (browser-core 59,
+	// view_reuse.go — the element instance is fresh for every placement
+	// every frame, so the phases can carry their marks on it):
+	// synthesized reports the request took the synthesized-node path;
+	// requestLogStart and requestLineLayout are the request walk's
+	// element-state and line-layout indices the legacy record's prepaint
+	// range starts from; requestDeps is the request-phase dependency
+	// capture; autoRecording marks the fresh prepaint that recorded the
+	// reuse state (the paint phase then records its half); autoMiss
+	// marks the miss path (its paint runs with refreshing, mirroring the
+	// pin's cached miss).
+	synthesized       bool
+	requestLogStart   int
+	requestLineLayout int
+	requestDeps       map[EntityID]struct{}
+	autoRecording     bool
+	autoMiss          bool
 }
 
 // viewElementOf converts one View into its element (the reference
@@ -336,7 +353,10 @@ type viewRequestResult struct {
 // inside its rendered-view scope and requests the rendered element — or,
 // for a cached view, requests one node laid out at the cached style
 // without rendering (R:view.rs:368-404); the stateless path isolates the
-// subtree by type name.
+// subtree by type name. browser-core 59: an entity-backed view without
+// an explicit style whose reuse record is complete takes the
+// synthesized-node path too — one node at the recorded style, the reuse
+// decided at prepaint against the computed bounds (view_reuse.go).
 func (v *viewElement) RequestLayout(global *GlobalElementID, inspector *InspectorElementID, w *Window, app *App) (LayoutID, AnyElement) {
 	var result viewRequestResult
 	if v.entityID != nil {
@@ -350,8 +370,26 @@ func (v *viewElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 				}
 				return viewRequestResult{layoutID: layoutID}
 			}
+			if state := v.autoReuseRecord(global, w); state != nil {
+				v.synthesized = true
+				layoutID, err := requestLayoutOf(w, state.reuse.nodeStyle)
+				if err != nil {
+					panic(fmt.Sprintf("gpui: automatic view reuse request_layout: %v", err))
+				}
+				return viewRequestResult{layoutID: layoutID}
+			}
+			// The legacy fresh request: capture the request walk's marks the
+			// reuse record needs (its element-state and line-layout indices
+			// precede the prepaint range) and the entities the render
+			// accessed (view_reuse.go).
+			frame := currentFrame(w)
+			v.requestLogStart = len(frame.accessedElementStateLog)
+			v.requestLineLayout = frame.text.layoutIndex()
+			mark := trackedLogMark(w)
 			element := v.view.RenderOnce(w, app)
-			return viewRequestResult{layoutID: element.RequestLayout(w, app), element: element}
+			layoutID := element.RequestLayout(w, app)
+			v.requestDeps = accessedEntitiesSinceMark(w, mark)
+			return viewRequestResult{layoutID: layoutID, element: element}
 		})
 	} else {
 		result = WithID(w, NameElementID(v.typeName), func(w *Window) viewRequestResult {
@@ -368,52 +406,68 @@ func (v *viewElement) RequestLayout(global *GlobalElementID, inspector *Inspecto
 // cached view with no rendered element reuses its previous frame's
 // prepaint range when its cache key holds and it is neither dirty nor
 // refreshing, and otherwise renders, lays itself out as a root at its
-// bounds and prepaints there, recording the new range.
+// bounds and prepaints there, recording the new range. browser-core
+// 59: the automatic path adds two shapes — the legacy fresh request
+// (the element rendered) records the reuse state around its plain
+// prepaint, and the synthesized request (no element) decides the reuse
+// against the computed bounds (view_reuse.go).
 func (v *viewElement) Prepaint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, element *AnyElement, w *Window, app *App) AnyElement {
 	if v.entityID != nil {
 		entityID := *v.entityID
 		currentDispatchTree(w).SetViewID(entityID)
 		return withRenderedView(w, entityID, func(w *Window) AnyElement {
 			if element.obj != nil {
-				element.Prepaint(w, app)
-				return *element
+				if v.cachedStyle != nil || w.IsInspectorPicking() || global == nil {
+					// The cached path's fresh prepaint (the inspector-picking
+					// request rendered the element) and a pathless placement.
+					element.Prepaint(w, app)
+					return *element
+				}
+				// The automatic path's legacy fresh request (view_reuse.go).
+				return v.autoPrepaintFresh(global, element, bounds, w, app)
 			}
-			return WithElementState(w, global, func(state *viewElementState, w *Window) (AnyElement, viewElementState) {
-				ds := drawState(w)
-				contentMask := ContentMask(w)
-				textStyle := WindowTextStyle(w)
-				if state != nil && state.cacheKey.matches(bounds, contentMask, textStyle) && !ds.isViewDirty(entityID) && !ds.refreshing {
-					ds.viewCacheHits++
-					reused := *state
-					prepaintStart := w.prepaintIndex()
-					w.reusePrepaint(state.prepaintStart, state.prepaintEnd)
-					extendAccessedEntities(w, state.accessedEntities)
-					reused.prepaintStart, reused.prepaintEnd = prepaintStart, w.prepaintIndex()
-					return AnyElement{}, reused
-				}
+			if v.cachedStyle != nil {
+				return WithElementState(w, global, func(state *viewElementState, w *Window) (AnyElement, viewElementState) {
+					ds := drawState(w)
+					contentMask := ContentMask(w)
+					textStyle := WindowTextStyle(w)
+					if state != nil && state.cacheKey.matches(bounds, contentMask, textStyle) && !ds.isViewDirty(entityID) && !ds.refreshing {
+						ds.viewCacheHits++
+						reused := *state
+						prepaintStart := w.prepaintIndex()
+						w.reusePrepaint(state.prepaintStart, state.prepaintEnd)
+						extendAccessedEntities(w, state.accessedEntities)
+						reused.prepaintStart, reused.prepaintEnd = prepaintStart, w.prepaintIndex()
+						return AnyElement{}, reused
+					}
 
-				ds.viewCacheMisses++
-				refreshing := ds.refreshing
-				ds.refreshing = true
-				prepaintStart := w.prepaintIndex()
-				var rendered AnyElement
-				accessed := detectAccessedEntities(w, func() {
-					rendered = v.view.RenderOnce(w, app)
-					rendered.LayoutAsRoot(AvailableSize{
-						Width:  DefiniteAvailableSpace(bounds.Size.Width),
-						Height: DefiniteAvailableSpace(bounds.Size.Height),
-					}, w, app)
-					rendered.PrepaintAt(bounds.Origin, w, app)
+					ds.viewCacheMisses++
+					refreshing := ds.refreshing
+					ds.refreshing = true
+					prepaintStart := w.prepaintIndex()
+					var rendered AnyElement
+					accessed := detectAccessedEntities(w, func() {
+						rendered = v.view.RenderOnce(w, app)
+						rendered.LayoutAsRoot(AvailableSize{
+							Width:  DefiniteAvailableSpace(bounds.Size.Width),
+							Height: DefiniteAvailableSpace(bounds.Size.Height),
+						}, w, app)
+						rendered.PrepaintAt(bounds.Origin, w, app)
+					})
+					prepaintEnd := w.prepaintIndex()
+					ds.refreshing = refreshing
+					return rendered, viewElementState{
+						prepaintStart:    prepaintStart,
+						prepaintEnd:      prepaintEnd,
+						cacheKey:         viewElementCacheKey{bounds: bounds, contentMask: contentMask, textStyle: textStyle},
+						accessedEntities: accessed,
+					}
 				})
-				prepaintEnd := w.prepaintIndex()
-				ds.refreshing = refreshing
-				return rendered, viewElementState{
-					prepaintStart:    prepaintStart,
-					prepaintEnd:      prepaintEnd,
-					cacheKey:         viewElementCacheKey{bounds: bounds, contentMask: contentMask, textStyle: textStyle},
-					accessedEntities: accessed,
-				}
-			})
+			}
+			// The automatic path's synthesized request (view_reuse.go):
+			// reuse the previous frame's ranges when the key holds, or
+			// render and lay out as a root at the computed bounds.
+			return v.autoPrepaintSynthesized(global, bounds, w, app)
 		})
 	}
 	return WithID(w, NameElementID(v.typeName), func(w *Window) AnyElement {
@@ -425,32 +479,42 @@ func (v *viewElement) Prepaint(global *GlobalElementID, inspector *InspectorElem
 // Paint implements Element (the reference ViewElement::paint,
 // R:view.rs:487-537): a cached view paints its freshly rendered element
 // (refreshing, so nested cached views paint fresh too) or replays its
-// previous frame's paint range, recording the new range.
+// previous frame's paint range, recording the new range. browser-core
+// 59: the automatic path paints its freshly rendered element — the
+// miss with refreshing, the legacy plain so nested views reuse inside
+// its recorded range — or, with no rendered element (the reuse hit),
+// replays its paint range and re-contributes the paint-phase records
+// (view_reuse.go).
 func (v *viewElement) Paint(global *GlobalElementID, inspector *InspectorElementID, bounds Bounds, requestLayout *AnyElement, prepaint *AnyElement, w *Window, app *App) {
 	if v.entityID != nil {
 		withRenderedViewVoid(w, *v.entityID, func(w *Window) {
-			if v.cachedStyle == nil || w.IsInspectorPicking() {
-				prepaint.Paint(w, app)
+			if v.cachedStyle != nil && !w.IsInspectorPicking() {
+				WithElementState(w, global, func(state *viewElementState, w *Window) (struct{}, viewElementState) {
+					if state == nil {
+						panic("gpui: cached view paint without its prepaint state")
+					}
+					next := *state
+					paintStart := w.paintIndex()
+					if prepaint.obj != nil {
+						ds := drawState(w)
+						refreshing := ds.refreshing
+						ds.refreshing = true
+						prepaint.Paint(w, app)
+						ds.refreshing = refreshing
+					} else {
+						w.reusePaint(state.paintStart, state.paintEnd)
+					}
+					next.paintStart, next.paintEnd = paintStart, w.paintIndex()
+					return struct{}{}, next
+				})
 				return
 			}
-			WithElementState(w, global, func(state *viewElementState, w *Window) (struct{}, viewElementState) {
-				if state == nil {
-					panic("gpui: cached view paint without its prepaint state")
-				}
-				next := *state
-				paintStart := w.paintIndex()
-				if prepaint.obj != nil {
-					ds := drawState(w)
-					refreshing := ds.refreshing
-					ds.refreshing = true
-					prepaint.Paint(w, app)
-					ds.refreshing = refreshing
-				} else {
-					w.reusePaint(state.paintStart, state.paintEnd)
-				}
-				next.paintStart, next.paintEnd = paintStart, w.paintIndex()
-				return struct{}{}, next
-			})
+			// browser-core 59: the automatic path (view_reuse.go).
+			if prepaint.obj != nil {
+				v.autoPaintFresh(global, prepaint, w, app)
+				return
+			}
+			v.autoPaintReused(global, w)
 		})
 		return
 	}
