@@ -3,7 +3,7 @@
 Parent: ../map.md
 Type: task
 Labels: wayfinder:task
-Status: claimed
+Status: resolved
 Assignee: orchestrator 13 (worker: core/79 worktree gpui-go-wt-core-79)
 Blocked by: none
 Triage: ready-for-agent
@@ -17,6 +17,8 @@ Triage: ready-for-agent
 User decision (2026-10-27): add the switch, off by default (asked as open question 1 since 2026-10-26; the user accepted the recommendation).
 
 ## Comments
+
+- 2026-10-27, orchestrator 13: merged at 7907afb (worker commit 3415208, pi glm-5.3, chat 823c50f6). Verified: reviewed the diff (the wrap arms reuse the existing `firstStop`/`lastStop`, so Inert/TabGroup/modal scoping comes from the registered stops; off by default, zero value); the broad set + portfixture on the branch: 82 ok, only the known flakes (portfixture TestFx0004; clipspec TestClipboardPowerShellNativeInterop, which passed alone on the branch and failed the same way on main at the time, so clipboard contention); gpui-go-base `go test ./...` via a temp `-modfile` in %TEMP% ok; both codemod checks 0; gofmt clean on the touched files. Chromium citation checked: `focus_controller.cc` at 0d4dcd4f, the pass-to-Chrome arm and the "Chrome doesn't want focus, so we should wrap focus" fallback just after it.
 
 ## Answer
 
