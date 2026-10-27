@@ -142,6 +142,12 @@ func styleValueType(name string, body []ast.Stmt) (TSType, string, error) {
 	switch {
 	case containsCall(node, "Fields"):
 		kind = "lengthList"
+	case containsCall(node, "ParseClipPath"):
+		kind = "clipPath"
+	case containsCall(node, "ParseMaskImage"):
+		kind = "maskImage"
+	case containsCall(node, "ParseDropShadowValues"):
+		kind = "dropShadow"
 	case containsCall(node, "ParseHex"):
 		kind = "color"
 	case containsCall(node, "px"):
@@ -179,6 +185,8 @@ func styleValueType(name string, body []ast.Stmt) (TSType, string, error) {
 		return colorType, doc, nil
 	case "lengthList":
 		return lengthListType(), doc, nil
+	case "clipPath", "maskImage", "dropShadow":
+		return strType, doc, nil
 	}
 	panic("unreachable")
 }
@@ -267,6 +275,12 @@ var styleDocs = map[string]string{
 	"fontWeight":     `fontWeight: a number (100–900).`,
 	"opacity":        `opacity: a number (0–1).`,
 	"overflowY":      `overflowY: "scroll", "auto" or "hidden".`,
+	"overflowFade":   `overflowFade: one, two or four px lengths — the overflow edge fades.`,
+	"mixBlendMode":   `mixBlendMode: a W3C blend mode or "plus-lighter".`,
+	"isolation":      `isolation: "isolate" or "auto".`,
+	"clipPath":       `clipPath: a CSS basic shape — circle(40px), ellipse(30% 50%), inset(10px 20px), polygon(50% 0, 100% 100%, 0 100%).`,
+	"maskImage":      `maskImage: linear-gradient(to bottom, #000000, #00000000) — a linear gradient mask with hex stops.`,
+	"dropShadow":     `dropShadow: one or more CSS drop-shadow values — "0 4px 6px #00000040".`,
 }
 
 // globalSignatures fills in each global's declared signature. The

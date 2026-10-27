@@ -42,6 +42,20 @@ export function App() {
 			<Label text="surface" />
 			<slot id="demo-slot" name="demo" style={{ display: "block", minHeight: 8 }} />
 			<div
+				id="masked"
+				className="overflow-hidden"
+				style={{
+					overflowFade: "8px 8px",
+					mixBlendMode: "multiply",
+					isolation: "isolate",
+					clipPath: "circle(24px)",
+					maskImage: "linear-gradient(to bottom, #000000, #00000000)",
+					dropShadow: "0 4px 6px #00000040",
+				}}
+			>
+				<text>masked</text>
+			</div>
+			<div
 				id="counter"
 				key="counter"
 				className="bg-slate-800 text-white hover:bg-slate-700"

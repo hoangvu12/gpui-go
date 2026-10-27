@@ -408,6 +408,7 @@ type CoreClass =
 	"backdrop-blur-sm" |
 	"backdrop-blur-xl" |
 	"backdrop-blur-xs" |
+	"bg-conic" |
 	"bg-linear-to-b" |
 	"bg-linear-to-bl" |
 	"bg-linear-to-br" |
@@ -416,6 +417,17 @@ type CoreClass =
 	"bg-linear-to-t" |
 	"bg-linear-to-tl" |
 	"bg-linear-to-tr" |
+	"bg-radial" |
+	"bg-repeating-conic" |
+	"bg-repeating-linear-to-b" |
+	"bg-repeating-linear-to-bl" |
+	"bg-repeating-linear-to-br" |
+	"bg-repeating-linear-to-l" |
+	"bg-repeating-linear-to-r" |
+	"bg-repeating-linear-to-t" |
+	"bg-repeating-linear-to-tl" |
+	"bg-repeating-linear-to-tr" |
+	"bg-repeating-radial" |
 	"block" |
 	"blur" |
 	"blur-2xl" |
@@ -604,6 +616,15 @@ type CoreClass =
 	"debug" |
 	"debug-below" |
 	"diagonal-fractions" |
+	"drop-shadow" |
+	"drop-shadow-2xl" |
+	"drop-shadow-2xs" |
+	"drop-shadow-lg" |
+	"drop-shadow-md" |
+	"drop-shadow-none" |
+	"drop-shadow-sm" |
+	"drop-shadow-xl" |
+	"drop-shadow-xs" |
 	"fixed" |
 	"flex" |
 	"flex-1" |
@@ -654,6 +675,7 @@ type CoreClass =
 	"inset-ring-8" |
 	"inset-ring-[0]" |
 	"invisible" |
+	"isolate" |
 	"italic" |
 	"items-baseline" |
 	"items-center" |
@@ -690,6 +712,24 @@ type CoreClass =
 	"max-w-sm" |
 	"max-w-xl" |
 	"max-w-xs" |
+	"mix-blend-color" |
+	"mix-blend-color-burn" |
+	"mix-blend-color-dodge" |
+	"mix-blend-darken" |
+	"mix-blend-difference" |
+	"mix-blend-exclusion" |
+	"mix-blend-hard-light" |
+	"mix-blend-hue" |
+	"mix-blend-lighten" |
+	"mix-blend-luminosity" |
+	"mix-blend-multiply" |
+	"mix-blend-normal" |
+	"mix-blend-overlay" |
+	"mix-blend-plus-lighter" |
+	"mix-blend-saturation" |
+	"mix-blend-screen" |
+	"mix-blend-soft-light" |
+	"no-isolate" |
 	"normal-case" |
 	"normal-nums" |
 	"not-italic" |
@@ -1069,6 +1109,10 @@ type CoreClass =
 	`-bg-linear-[${number}rad]` |
 	`-bg-linear-[${number}grad]` |
 	`-bg-linear-[${number}turn]` |
+	`via-${"transparent" | PaletteColor}` |
+	`via-[#${string}]` |
+	`via-[${number}%]` |
+	`drop-shadow-[0_${number}px_${number}px_#00000040]` |
 	`blur-[${number}px]` |
 	`backdrop-blur-[${number}px]`;
 
@@ -1103,6 +1147,7 @@ type Class =
 	"backdrop-blur-sm" |
 	"backdrop-blur-xl" |
 	"backdrop-blur-xs" |
+	"bg-conic" |
 	"bg-linear-to-b" |
 	"bg-linear-to-bl" |
 	"bg-linear-to-br" |
@@ -1111,6 +1156,17 @@ type Class =
 	"bg-linear-to-t" |
 	"bg-linear-to-tl" |
 	"bg-linear-to-tr" |
+	"bg-radial" |
+	"bg-repeating-conic" |
+	"bg-repeating-linear-to-b" |
+	"bg-repeating-linear-to-bl" |
+	"bg-repeating-linear-to-br" |
+	"bg-repeating-linear-to-l" |
+	"bg-repeating-linear-to-r" |
+	"bg-repeating-linear-to-t" |
+	"bg-repeating-linear-to-tl" |
+	"bg-repeating-linear-to-tr" |
+	"bg-repeating-radial" |
 	"block" |
 	"blur" |
 	"blur-2xl" |
@@ -1299,6 +1355,15 @@ type Class =
 	"debug" |
 	"debug-below" |
 	"diagonal-fractions" |
+	"drop-shadow" |
+	"drop-shadow-2xl" |
+	"drop-shadow-2xs" |
+	"drop-shadow-lg" |
+	"drop-shadow-md" |
+	"drop-shadow-none" |
+	"drop-shadow-sm" |
+	"drop-shadow-xl" |
+	"drop-shadow-xs" |
 	"fixed" |
 	"flex" |
 	"flex-1" |
@@ -1349,6 +1414,7 @@ type Class =
 	"inset-ring-8" |
 	"inset-ring-[0]" |
 	"invisible" |
+	"isolate" |
 	"italic" |
 	"items-baseline" |
 	"items-center" |
@@ -1385,6 +1451,24 @@ type Class =
 	"max-w-sm" |
 	"max-w-xl" |
 	"max-w-xs" |
+	"mix-blend-color" |
+	"mix-blend-color-burn" |
+	"mix-blend-color-dodge" |
+	"mix-blend-darken" |
+	"mix-blend-difference" |
+	"mix-blend-exclusion" |
+	"mix-blend-hard-light" |
+	"mix-blend-hue" |
+	"mix-blend-lighten" |
+	"mix-blend-luminosity" |
+	"mix-blend-multiply" |
+	"mix-blend-normal" |
+	"mix-blend-overlay" |
+	"mix-blend-plus-lighter" |
+	"mix-blend-saturation" |
+	"mix-blend-screen" |
+	"mix-blend-soft-light" |
+	"no-isolate" |
 	"normal-case" |
 	"normal-nums" |
 	"not-italic" |
@@ -1764,6 +1848,10 @@ type Class =
 	`-bg-linear-[${number}rad]` |
 	`-bg-linear-[${number}grad]` |
 	`-bg-linear-[${number}turn]` |
+	`via-${"transparent" | PaletteColor}` |
+	`via-[#${string}]` |
+	`via-[${number}%]` |
+	`drop-shadow-[0_${number}px_${number}px_#00000040]` |
 	`blur-[${number}px]` |
 	`backdrop-blur-[${number}px]` |
 	`${Variant}:${string}` |
@@ -1881,6 +1969,18 @@ interface CSSProperties {
 	opacity?: number;
 	/** overflowY: scroll, auto, hidden. */
 	overflowY?: "scroll" | "auto" | "hidden";
+	/** overflowFade: one, two or four px lengths — the overflow edge fades. */
+	overflowFade?: number | `${number}px` | `${number} ${number}` | `${number} ${number}px` | `${number}px ${number}` | `${number}px ${number}px` | `${number} ${number} ${number} ${number}` | `${number} ${number} ${number} ${number}px` | `${number} ${number} ${number}px ${number}` | `${number} ${number} ${number}px ${number}px` | `${number} ${number}px ${number} ${number}` | `${number} ${number}px ${number} ${number}px` | `${number} ${number}px ${number}px ${number}` | `${number} ${number}px ${number}px ${number}px` | `${number}px ${number} ${number} ${number}` | `${number}px ${number} ${number} ${number}px` | `${number}px ${number} ${number}px ${number}` | `${number}px ${number} ${number}px ${number}px` | `${number}px ${number}px ${number} ${number}` | `${number}px ${number}px ${number} ${number}px` | `${number}px ${number}px ${number}px ${number}` | `${number}px ${number}px ${number}px ${number}px`;
+	/** mixBlendMode: normal, multiply, screen, overlay, darken, lighten, color-dodge, color-burn, hard-light, soft-light, difference, exclusion, hue, saturation, color, luminosity, plus-lighter. */
+	mixBlendMode?: "normal" | "multiply" | "screen" | "overlay" | "darken" | "lighten" | "color-dodge" | "color-burn" | "hard-light" | "soft-light" | "difference" | "exclusion" | "hue" | "saturation" | "color" | "luminosity" | "plus-lighter";
+	/** isolation: isolate, auto. */
+	isolation?: "isolate" | "auto";
+	/** clipPath: a CSS basic shape — circle(40px), ellipse(30% 50%), inset(10px 20px), polygon(50% 0, 100% 100%, 0 100%). */
+	clipPath?: string;
+	/** maskImage: linear-gradient(to bottom, #000000, #00000000) — a linear gradient mask with hex stops. */
+	maskImage?: string;
+	/** dropShadow: one or more CSS drop-shadow values — "0 4px 6px #00000040". */
+	dropShadow?: string;
 }
 
 // Children are elements, text, numbers, bindings, arrays and
