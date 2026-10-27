@@ -186,9 +186,9 @@ func prepaintDeferredDraws(w *Window, app *App) {
 				w.reusePrepaint(draw.prepaintStart, draw.prepaintEnd)
 				// browser-core 59: the draw's frame records and the entities
 				// its last fresh round read re-join the frame.
-					replayViewPrepaintRecords(w, draw.reuse)
-					if draw.reuse != nil {
-						extendAccessedEntities(w, draw.reuse.deps)
+				replayViewPrepaintRecords(w, draw.reuse)
+				if draw.reuse != nil {
+					extendAccessedEntities(w, draw.reuse.deps)
 				}
 			}
 			draw.prepaintStart, draw.prepaintEnd = prepaintStart, w.prepaintIndex()

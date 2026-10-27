@@ -85,9 +85,9 @@ type paintIndex struct {
 	// reused view re-registers them — the click dispatch, the contextmenu
 	// trigger and the top-layer reconciliation read them from the
 	// completed frame).
-	clickListeners         int
-	contextMenuListeners   int
-	overlayRegistrations   int
+	clickListeners       int
+	contextMenuListeners int
+	overlayRegistrations int
 }
 
 // paintIndexOf is window.rs paint_index (R:window.rs:3774-3784).

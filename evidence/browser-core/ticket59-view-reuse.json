@@ -1,0 +1,71 @@
+{
+  "schema": "browser-core/ticket59-view-reuse",
+  "date": "2026-10-27T04:55:02Z",
+  "window_px": [
+    800,
+    600
+  ],
+  "note": "One test window of 192 fixed-cell panel views (a hoverable button, a label, a focusable field, a model read per panel), the reuse side against the per-view opt-out baseline, interleaved pairs. The draw is the frame loop's flush draw of the notified window. The machine is heavily shared; the paired mean is the comparable statistic.",
+  "measurements": {
+    "partial update (one panel notified, the rest reuse)": {
+      "desc": "partial update (one panel notified, the rest reuse)",
+      "reuse": {
+        "n": 60,
+        "mean_ms": 16.605748333333334,
+        "min_ms": 12.8919
+      },
+      "baseline_opt_out": {
+        "n": 60,
+        "mean_ms": 17.071984999999998,
+        "min_ms": 12.6736
+      },
+      "paired_draw_savings_ms_mean": 0.4662366666666667,
+      "paired_draw_savings_ms_min": -5.8100000000000005,
+      "draw_savings_percent": 2.7310044301624368,
+      "end_to_end_notify_and_flush": {
+        "n": 60,
+        "mean_ms": 14.524959999999998,
+        "min_ms": 8.0424
+      },
+      "end_to_end_baseline_opt_out": {
+        "n": 60,
+        "mean_ms": 13.992483333333336,
+        "min_ms": 8.504
+      },
+      "end_to_end_savings_ms_mean": -0.5324766666666666,
+      "end_to_end_savings_percent": -3.8054479250168827,
+      "reuse_hits": 26810,
+      "fresh_renders": 0
+    },
+    "root re-render (the root notified, every panel unchanged)": {
+      "desc": "root re-render (the root notified, every panel unchanged)",
+      "reuse": {
+        "n": 60,
+        "mean_ms": 17.344263333333334,
+        "min_ms": 13.0137
+      },
+      "baseline_opt_out": {
+        "n": 60,
+        "mean_ms": 17.534333333333333,
+        "min_ms": 13.1754
+      },
+      "paired_draw_savings_ms_mean": 0.19006999999999982,
+      "paired_draw_savings_ms_min": -9.7777,
+      "draw_savings_percent": 1.0839876052696604,
+      "end_to_end_notify_and_flush": {
+        "n": 60,
+        "mean_ms": 14.790558333333333,
+        "min_ms": 8.8621
+      },
+      "end_to_end_baseline_opt_out": {
+        "n": 60,
+        "mean_ms": 14.580063333333335,
+        "min_ms": 8.1504
+      },
+      "end_to_end_savings_ms_mean": -0.21049500000000018,
+      "end_to_end_savings_percent": -1.4437180085408876,
+      "reuse_hits": 53690,
+      "fresh_renders": 0
+    }
+  }
+}
