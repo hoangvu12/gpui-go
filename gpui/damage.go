@@ -106,6 +106,61 @@ type sceneOpDamage struct {
 	bounds  Bounds
 	capture bool
 	tint    bool
+	// table marks the ops that insert into or reference the scene's
+	// index-addressed tables (browser-core 59, view_reuse.go): the
+	// gradient, coverage and filter-op-chain rows the native replay
+	// re-inserts at NEW indices while the copied records keep their
+	// baked indices (scene.rs replay's insert_gradient/insert_coverage/
+	// insert_filter_op_chain), the quads/shadows/boundaries carrying
+	// those baked indices, and the path inserts (data-carried and safe
+	// to replay, but they advance the path array the coverage entries
+	// index into — Replay counts them).
+	table sceneTableKind
+}
+
+// sceneTableKind classifies one op's relationship to the scene's
+// index-addressed tables (sceneOpDamage.table).
+type sceneTableKind uint8
+
+const (
+	// sceneTableNone is an index-free op (the default).
+	sceneTableNone sceneTableKind = iota
+	// sceneTableRef is an op whose record carries a baked table index
+	// (a gradient-table background, a drop-shadow chain reference, a
+	// coverage row's path index).
+	sceneTableRef
+	// sceneTableGradient is a gradient table insert.
+	sceneTableGradient
+	// sceneTableCoverage is a coverage table insert.
+	sceneTableCoverage
+	// sceneTableChain is a filter-op-chain table insert.
+	sceneTableChain
+	// sceneTablePath is a path insert (data-carried; advances the path
+	// array the coverage entries index into).
+	sceneTablePath
+)
+
+// sceneTableInserts is the table-insert classification counted over a
+// range of log entries (Replay advances the kernel's counters by it).
+type sceneTableInserts struct {
+	gradients uint32
+	coverage  uint32
+	chains    uint32
+	paths     uint32
+}
+
+// add accumulates one entry's kind.
+func (c *sceneTableInserts) add(kind sceneTableKind) {
+	switch kind {
+	case sceneTableGradient:
+		c.gradients++
+	case sceneTableCoverage:
+		c.coverage++
+	case sceneTableChain:
+		c.chains++
+	case sceneTablePath:
+		c.paths++
+	}
 }
 
 // recordDamageRect records one positioned op: the clipped bounds, or
@@ -114,6 +169,12 @@ type sceneOpDamage struct {
 // drop rule, replicated field-for-field so the log's index space stays
 // aligned with the native paint-op log).
 func (k *SceneKernel) recordDamageRect(bounds, mask Bounds, capture bool) {
+	k.recordDamageRectTable(bounds, mask, capture, sceneTableNone)
+}
+
+// recordDamageRectTable is recordDamageRect with the op's table
+// classification (browser-core 59).
+func (k *SceneKernel) recordDamageRectTable(bounds, mask Bounds, capture bool, table sceneTableKind) {
 	if k == nil {
 		return
 	}
@@ -121,7 +182,7 @@ func (k *SceneKernel) recordDamageRect(bounds, mask Bounds, capture bool) {
 	if clipped.Size.Width <= 0 || clipped.Size.Height <= 0 {
 		return
 	}
-	k.damageLog = append(k.damageLog, sceneOpDamage{bounds: clipped, capture: capture})
+	k.damageLog = append(k.damageLog, sceneOpDamage{bounds: clipped, capture: capture, table: table})
 }
 
 // recordDamageOpless records one op that counts in the paint-op space
@@ -129,10 +190,42 @@ func (k *SceneKernel) recordDamageRect(bounds, mask Bounds, capture bool) {
 // come from the children they bracket), layer pushes and pops, and the
 // gradient/coverage/filter-op-chain table rows.
 func (k *SceneKernel) recordDamageOpless() {
+	k.recordDamageOplessTable(sceneTableNone)
+}
+
+// recordDamageOplessTable is recordDamageOpless with the op's table
+// classification (browser-core 59).
+func (k *SceneKernel) recordDamageOplessTable(table sceneTableKind) {
 	if k == nil {
 		return
 	}
-	k.damageLog = append(k.damageLog, sceneOpDamage{})
+	k.damageLog = append(k.damageLog, sceneOpDamage{table: table})
+}
+
+// sceneRangeTableRefs reports whether prev's op-log range [start, end)
+// contains ops that insert into or reference the scene's index-
+// addressed tables (browser-core 59): the native replay re-inserts
+// those rows at new table indices while the copied records keep their
+// baked indices, so a range carrying them replays correctly only when
+// the tables align exactly — unprovable at a reuse decision, so the
+// view reuse refuses (renders fresh) instead. A range past the log's
+// end (drift) reports true: unprovable is unsafe.
+func sceneRangeTableRefs(prev *SceneKernel, start, end uint32) bool {
+	if prev == nil {
+		return true
+	}
+	if start >= end {
+		return false
+	}
+	if end > uint32(len(prev.damageLog)) {
+		return true
+	}
+	for i := start; i < end; i++ {
+		if prev.damageLog[i].table != sceneTableNone && prev.damageLog[i].table != sceneTablePath {
+			return true
+		}
+	}
+	return false
 }
 
 // recordDamageReplay copies prev's log range into this scene's log:

@@ -1181,6 +1181,25 @@ type windowDrawState struct {
 	// alternates the tint's color (damage.go).
 	paintFlashing    bool
 	damageFlashFrame uint32
+	// viewReuseDisabled is browser-core 59's per-window opt-out
+	// (WindowOptions.DisableViewReuse / SetWindowViewReuse, view_reuse.go).
+	viewReuseDisabled bool
+	// viewReuseHits and viewReuseMisses count the automatic reuse's
+	// prepaints that replayed their previous range or rendered afresh
+	// (browser-core 59, view_reuse.go; the opt-in path's counters are
+	// viewCacheHits/viewCacheMisses above).
+	viewReuseHits, viewReuseMisses uint64
+	// depViews is browser-core 59's dependency index: an entity mapped to
+	// the view entities whose last fresh render accessed it. A notify of
+	// the entity marks those views (and their ancestors) dirty
+	// (view_cache.go invalidateEntities); setViewDependencies maintains
+	// it per fresh render (view_reuse.go). Stale entries are safe — a
+	// non-rendering view marks nothing.
+	depViews map[EntityID]map[EntityID]struct{}
+	// lastAccessedGlobals is the last completed frame's global-type
+	// reads (view_reuse.go): a NotifyGlobal of a type the frame read
+	// refreshes this window (a stale reuse would miss the new value).
+	lastAccessedGlobals map[reflect.Type]struct{}
 	// lastPropertyAnimations (browser-core ticket 60, propertyframes.go)
 	// is the last completed frame's property-node registry: the
 	// transform/opacity transition nodes whose runs were active, with
@@ -1388,6 +1407,15 @@ type frameDrawState struct {
 	// computes them after the build, before the scene's finish).
 	damageRects []DamageRect
 	damageFull  bool
+	// accessedGlobals is the global-type set read while this frame's
+	// element phases run (view_reuse.go recordViewGlobalRead); published
+	// to the window at completion (completeFrameTracking).
+	accessedGlobals map[reflect.Type]struct{}
+	// scrollReads is the scroll-handle read log of the frame's element
+	// phases (browser-core 59, view_reuse.go recordScrollRead): a view's
+	// fresh render captures its range into the reuse record (the
+	// handle states with their versions); the reuse check compares them.
+	scrollReads []*scrollHandleState
 	// propertyNodeDrafts (browser-core ticket 60, propertyframes.go) are
 	// the elements whose transform/opacity transition runs sampled active
 	// this frame, keyed by the element's global id path — the drafts the

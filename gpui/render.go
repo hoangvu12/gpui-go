@@ -107,6 +107,17 @@ func DrawWindowFrame(w *Window) (*Scene, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gpui: DrawWindowFrame: scene: %w", err)
 	}
+	// browser-core 59: an explicit draw of a CLEAN window renders every
+	// view fresh. The pin's draw re-rendered everything (no reuse below
+	// the opt-in caches), and the frame loop only draws DIRTY windows —
+	// so a caller drawing a clean window by hand (the test settle
+	// pattern: mutate, park, draw) asked for a frame whose content it
+	// owns and gets the full re-render; the automatic reuse stays the
+	// dirty draws' win, where a clean view's replay is exactly the
+	// frame's saving.
+	if !w.isFrameDirty() {
+		ds.refreshing = true
+	}
 	// invalidate_entities (window.rs:3161, 3316-3322): the views notified
 	// since the last draw, and their ancestor views, are dirty for this
 	// frame's cached views (view_cache.go).
@@ -277,6 +288,10 @@ func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawSt
 		ds.lastInlineFacts = frame.inlineFacts
 		ds.lastAutoScrollbarFacts = frame.autoScrollbarFacts
 		ds.lastDeferredPriorities = deferredPrioritiesOf(frame)
+		// browser-core 59 (view_reuse.go): the frame's global-type reads
+		// publish to the window (a NotifyGlobal of a read type refreshes
+		// it — a stale reuse would miss the new value).
+		ds.lastAccessedGlobals = frame.accessedGlobals
 		// The rendered frame's ordered lists a cached view's reused ranges
 		// index into (view_cache.go; the pin keeps them on rendered_frame).
 		ds.lastAccessedElementStateLog = frame.accessedElementStateLog
@@ -316,9 +331,16 @@ func completeFrame(w *Window, ds *windowDrawState, frame *frameDrawState, drawSt
 	// draw is ignored for the dirty marking, frameloop.go's
 	// invalidateViewWindows draw-phase guard); the next frame requests
 	// layout with the updated reservation flags — the one-frame settle
-	// documented in scrollbar.go.
+	// documented in scrollbar.go. browser-core 59: the settle frame is
+	// REFRESHING — the reservation is a request-time read, so the
+	// settle must re-render the views (the notify that would dirty the
+	// scroller's view is dropped while it draws: the window's tracked
+	// set is still the last completed frame's, which for the FIRST
+	// frame is empty — the automatic reuse would otherwise keep the
+	// un-reserved layout).
 	if ds.autoScrollbarAppearanceChanged {
 		ds.autoScrollbarAppearanceChanged = false
+		w.markRefreshing()
 		w.markFrameDirty()
 	}
 }

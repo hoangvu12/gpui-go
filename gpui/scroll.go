@@ -59,6 +59,16 @@ type scrollActiveItem struct {
 type scrollHandleState struct {
 	// offset is the current scroll offset cell (negative y scrolls down).
 	offset *Point
+	// version counts the handle's unnotified mutations (browser-core
+	// 59, view_reuse.go): the programmatic writes (SetOffset,
+	// ScrollToBottom) change what a view's prepaint computes without any
+	// notification — a view that read the handle during its phases
+	// refuses reuse until the version matches its record (gpui-fast's
+	// StateVersion dependency, GF:fast/dependencies.rs:99-129). The
+	// interactive writes (the wheel listener, the smooth ticks) notify the
+	// view and need no version, but the smooth tick bumps anyway because
+	// its write and its notify land in different effects.
+	version uint64
 	// ongoingScroll is the dominant-axis tracker the element's
 	// restrict_scroll_to_axis filter uses (R:div.rs:4727).
 	ongoingScroll *OngoingScroll
@@ -110,12 +120,33 @@ func NewScrollHandle() ScrollHandle {
 
 // Offset returns the current scroll offset (R:div.rs:4767-4770).
 func (h ScrollHandle) Offset() Point {
+	// browser-core 59 (view_reuse.go): a read while a window's frame
+	// runs joins that frame's scroll-read log, so the view whose phases
+	// read the handle refuses reuse until the version matches.
+	recordScrollRead(h.state)
 	return *h.state.offset
 }
 
 // MaxOffset returns the maximum scroll offset (R:div.rs:4772-4775).
 func (h ScrollHandle) MaxOffset() Point {
+	recordScrollRead(h.state)
 	return h.state.maxOffset
+}
+
+// recordScrollRead appends one scroll handle state to the active
+// frame's read log (browser-core 59, view_reuse.go): reads made inside
+// a view's phases are captured into that view's reuse record through
+// the log diff, and the reuse check compares the recorded version.
+func recordScrollRead(state *scrollHandleState) {
+	w := activeFrame
+	if w == nil {
+		return
+	}
+	ds, ok := windowDrawStates[w]
+	if !ok || ds.frame == nil || !ds.frame.trackingAccess {
+		return
+	}
+	ds.frame.scrollReads = append(ds.frame.scrollReads, state)
 }
 
 // pinnedBinarySearch is Rust's slice::binary_search_by over n elements
@@ -270,6 +301,9 @@ func (h ScrollHandle) scrollToActiveItem() {
 // (R:div.rs:4895-4899 scroll_to_bottom).
 func (h ScrollHandle) ScrollToBottom() {
 	h.state.scrollToBottom = true
+	// browser-core 59: the pending request is an unnotified mutation
+	// (view_reuse.go's version rule).
+	h.state.version++
 }
 
 // SetOffset sets the offset explicitly: the distance from the top left of
@@ -283,6 +317,10 @@ func (h ScrollHandle) SetOffset(offset Point) {
 	if h.state == nil {
 		return
 	}
+	// browser-core 59: an unnotified mutation — the version bump makes a
+	// view that read this handle refuse reuse until its next fresh render
+	// re-clamps (view_reuse.go).
+	h.state.version++
 	if h.state.animator != nil {
 		h.state.animator.writeInstant(h.state.offset, offset)
 		return

@@ -74,6 +74,14 @@ type SceneKernel struct {
 	// orders the array (a full-window-bounded path record's sorted
 	// index is its insertion index; see withClipPathScope).
 	pathCount int
+	// gradientCount, coverageCount and chainCount track the scene's
+	// index-addressed table rows inserted so far (browser-core 59,
+	// view_reuse.go): Replay advances them with the copied rows so the
+	// Go-side indices a later fresh insert bakes (the coverage path
+	// index, the table-count alignment check) stay right.
+	gradientCount int
+	coverageCount int
+	chainCount    int
 }
 
 // newSceneKernel creates a fresh native scene for the process-wide
@@ -196,7 +204,13 @@ func (k *SceneKernel) InsertQuad(q Quad) error {
 	if err := k.scene.InsertQuad(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert quad: %w", err)
 	}
-	k.recordDamageRect(q.Bounds, q.ContentMask, false)
+	// browser-core 59: a gradient-table background or border carries a
+	// baked table index — the op is table-referencing (damage.go).
+	kind := sceneTableNone
+	if q.Background.Kind == BackgroundKindGradientTable || q.BorderColor.Kind == BackgroundKindGradientTable {
+		kind = sceneTableRef
+	}
+	k.recordDamageRectTable(q.Bounds, q.ContentMask, false, kind)
 	return nil
 }
 
@@ -228,7 +242,13 @@ func (k *SceneKernel) InsertShadow(sh Shadow) error {
 	if err := k.scene.InsertShadow(&rec); err != nil {
 		return fmt.Errorf("gpui: scene insert shadow: %w", err)
 	}
-	k.recordDamageRect(sh.Bounds, sh.ContentMask, false)
+	// browser-core 59: a gradient-table shadow color carries a baked
+	// table index.
+	kind := sceneTableNone
+	if sh.Color.Kind == BackgroundKindGradientTable {
+		kind = sceneTableRef
+	}
+	k.recordDamageRectTable(sh.Bounds, sh.ContentMask, false, kind)
 	return nil
 }
 
@@ -292,7 +312,13 @@ func (k *SceneKernel) InsertFilterBoundary(b FilterBoundary) error {
 	// A boundary marker never drops, but paints nowhere itself — its
 	// group's pixels come from the children it brackets (the native
 	// damage walk expands the rects across the group; ticket 53).
-	k.recordDamageOpless()
+	// browser-core 59: a boundary carrying a drop-shadow chain reference
+	// is table-referencing (the chain index is baked into the record).
+	kind := sceneTableNone
+	if b.OpChainCount > 0 {
+		kind = sceneTableRef
+	}
+	k.recordDamageOplessTable(kind)
 	return nil
 }
 
@@ -331,8 +357,10 @@ func (k *SceneKernel) insertGradient(g Gradient) (uint32, error) {
 	if err != nil {
 		return 0, fmt.Errorf("gpui: scene insert gradient: %w", err)
 	}
-	// A table row: it counts in the op space but paints nowhere.
-	k.recordDamageOpless()
+	// A table row: it counts in the op space but paints nowhere. Browser-
+	// core 59: the row re-inserts at a new index under replay.
+	k.recordDamageOplessTable(sceneTableGradient)
+	k.gradientCount++
 	return index, nil
 }
 
@@ -364,8 +392,10 @@ func (k *SceneKernel) insertCoverage(pathIndex uint32, bounds Bounds) (uint32, e
 	if err != nil {
 		return 0, fmt.Errorf("gpui: scene insert coverage: %w", err)
 	}
-	// A table row: it counts in the op space but paints nowhere.
-	k.recordDamageOpless()
+	// A table row: it counts in the op space but paints nowhere. Browser-
+	// core 59: the row carries the referenced path's baked index.
+	k.recordDamageOplessTable(sceneTableCoverage)
+	k.coverageCount++
 	return index, nil
 }
 
@@ -390,8 +420,10 @@ func (k *SceneKernel) insertFilterOpChain(ops []FilterOp) (uint32, error) {
 	if err != nil {
 		return 0, fmt.Errorf("gpui: scene insert filter op chain: %w", err)
 	}
-	// A table row: it counts in the op space but paints nowhere.
-	k.recordDamageOpless()
+	// A table row: it counts in the op space but paints nowhere. Browser-
+	// core 59: the boundary records reference the chain by this index.
+	k.recordDamageOplessTable(sceneTableChain)
+	k.chainCount++
 	return index, nil
 }
 
@@ -552,9 +584,46 @@ func (k *SceneKernel) Replay(start, end uint32, prev *SceneKernel) error {
 	if prev == nil || prev.scene == nil {
 		return fmt.Errorf("gpui: Replay: nil source scene")
 	}
+	// browser-core 59: the copied ops re-insert the range's table rows
+	// (paths, gradients, coverage entries, filter-op chains) at THIS
+	// scene's current indices, so the Go-side counters advance with
+	// them — a later fresh coverage insert's nextPathIndex and the
+	// table-count alignment check below read the counters. A log range
+	// shorter than the native range (drift) counts nothing: the
+	// alignment check then refuses the replay instead of painting
+	// wrong rows.
+	var copied sceneTableInserts
+	aligned := end <= uint32(len(prev.damageLog))
+	if aligned {
+		for i := start; i < end; i++ {
+			copied.add(prev.damageLog[i].table)
+		}
+	}
+	// The alignment rule: the copied records that carry baked table
+	// indices (gradient-table backgrounds, chain references, coverage
+	// rows) are only correct when the new scene's tables at the
+	// insertion point hold exactly the rows the previous scene held at
+	// the range's start — the prefix's counts must match. The view
+	// reuse's conservative gate (view_reuse.go viewReuseTableSafe)
+	// refuses table-carrying ranges before ever reaching here, so this
+	// check is the defense for any other caller; a mismatch refuses the
+	// copy rather than painting the wrong rows.
+	if !aligned ||
+		k.gradientCount != prev.gradientCount-int(copied.gradients) ||
+		k.coverageCount != prev.coverageCount-int(copied.coverage) ||
+		k.chainCount != prev.chainCount-int(copied.chains) ||
+		k.pathCount != prev.pathCount-int(copied.paths) {
+		if sceneRangeTableRefs(prev, start, end) {
+			return fmt.Errorf("gpui: Replay: the scene tables shifted under the range's baked indices (the range inserts or references table rows) — render fresh")
+		}
+	}
 	if err := k.scene.Replay(start, end, prev.scene); err != nil {
 		return fmt.Errorf("gpui: scene replay: %w", err)
 	}
+	k.pathCount += int(copied.paths)
+	k.gradientCount += int(copied.gradients)
+	k.coverageCount += int(copied.coverage)
+	k.chainCount += int(copied.chains)
 	// The copied ops keep their parameters, so their damage-log
 	// entries copy too (damage.go's rule reads them as the undamaged
 	// region of the next frame).

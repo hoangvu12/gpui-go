@@ -58,6 +58,13 @@ func (r *dmRoot) Render(w *Window, cx *Context[dmRoot]) AnyElement {
 		var child any = ViewOf(panel)
 		if r.cached {
 			child = CachedView(ViewOf(panel), Styles().SizeFull())
+		} else {
+			// browser-core 59: the plain side of the damage corpus is the
+			// reuse-opt-out side — without it the automatic reuse replays
+			// the unchanged panels (the ticket's own change), and the
+			// "no reused ranges" premise this test pins (the conservative
+			// rule's arm) needs a window that really has none.
+			child = WithoutViewReuse(ViewOf(panel))
 		}
 		grid.Child(Div().Flex().W(Px(200)).H(Px(100)).Child(child))
 	}
@@ -310,10 +317,11 @@ func (r *dmReorderRoot) Render(w *Window, cx *Context[dmReorderRoot]) AnyElement
 	return root.IntoElement()
 }
 
-// TestDamageUncachedWindowDamagesAllContent: without cached views
-// every frame re-renders everything, so the damage covers every panel's
+// TestDamageUncachedWindowDamagesAllContent: a window without view
+// reuse (browser-core 59's per-view opt-out — the pre-59 "uncached"
+// shape) re-renders everything, so the damage covers every panel's
 // bounds (the conservative rule — the savings come from the reused
-// ranges; an uncached window has none). The unpainted gaps between the
+// ranges; a no-reuse window has none). The unpainted gaps between the
 // wrap lines never change, so the damage stays the two painted bands.
 func TestDamageUncachedWindowDamagesAllContent(t *testing.T) {
 	ta := NewTestApp()

@@ -50,6 +50,14 @@ type deferredDraw struct {
 	// element is the deferred element; empty for a draw carried over by
 	// a cached view's reuse_prepaint (the pin's element: None).
 	element AnyElement
+	// reuse is browser-core 59's frame-records half for the deferred
+	// round (view_reuse.go): the registries, a11y nodes and user-select
+	// registrations the draw's fresh round contributed, replayed when the
+	// draw replays its ranges, plus the entities its fresh round read
+	// (attributed to the owning view's dependency index). The map-based
+	// records cannot ride the prepaint/paint ranges the way the list
+	// registrations do, so the draw carries them itself.
+	reuse *viewReuseRecord
 	// absoluteOffset is the element offset the element prepaints under.
 	absoluteOffset Point
 	// prepaintStart/End and paintStart/End are the ranges the draw's
@@ -156,16 +164,32 @@ func prepaintDeferredDraws(w *Window, app *App) {
 			draw := frame.deferredDraws[ix]
 			prepaintStart := w.prepaintIndex()
 			if draw.element.obj != nil {
+				// browser-core 59: capture the frame records and the entities
+				// this fresh round contributes (view_reuse.go) — the owning
+				// view's phases have closed, so the draw carries them.
+				capture := beginViewPrepaintCapture(w)
+				mark := trackedLogMark(w)
 				withDeferredDrawScope(w, draw, func(w *Window) {
 					frame.deferredPriorities = append(frame.deferredPriorities, draw.priority)
 					defer func() { frame.deferredPriorities = frame.deferredPriorities[:len(frame.deferredPriorities)-1] }()
 					draw.element.Prepaint(w, app)
 				})
+				draw.reuse = finishViewPrepaintCapture(w, capture)
+				draw.reuse.deps = accessedEntitiesSinceMark(w, mark)
+				if draw.hasView {
+					setViewDependencies(w, draw.currentView, nil, draw.reuse.deps)
+				}
 			} else {
 				// R:3618-3633, 3647-3649: the stacks and the active node are
 				// restored, then the recorded range is reused.
 				restoreDeferredDrawStacks(w, draw)
 				w.reusePrepaint(draw.prepaintStart, draw.prepaintEnd)
+				// browser-core 59: the draw's frame records and the entities
+				// its last fresh round read re-join the frame.
+				replayViewPrepaintRecords(w, draw.reuse)
+				if draw.reuse != nil {
+					extendAccessedEntities(w, draw.reuse.deps)
+				}
 			}
 			draw.prepaintStart, draw.prepaintEnd = prepaintStart, w.prepaintIndex()
 		}
@@ -194,15 +218,29 @@ func paintDeferredDraws(w *Window, app *App) {
 		draw := frame.deferredDraws[ix]
 		paintStart := w.paintIndex()
 		if draw.element.obj != nil {
+			// browser-core 59: the paint-phase records join the draw's
+			// record (view_reuse.go).
+			pendingStart := len(frame.userSelectPending)
 			withDeferredDrawScope(w, draw, func(w *Window) {
 				WithContentMaskVoid(w, draw.contentMask, func(w *Window) {
 					draw.element.Paint(w, app)
 				})
 			})
+			if draw.reuse != nil {
+				if end := len(frame.userSelectPending); end > pendingStart {
+					draw.reuse.userSelect = append([]userSelectRegistration(nil), frame.userSelectPending[pendingStart:end]...)
+				}
+				draw.reuse.userSelectSlotTo = frame.userSelectSlot
+				captureViewA11yListeners(w, draw.reuse)
+				draw.reuse.complete = true
+			}
 		} else {
 			// R:3679-3683, 3695-3697.
 			restoreDeferredDrawStacks(w, draw)
 			w.reusePaint(draw.paintStart, draw.paintEnd)
+			// browser-core 59: the draw's paint-phase records re-join the
+			// frame (view_reuse.go).
+			replayViewPaintRecords(w, draw.reuse)
 		}
 		draw.paintStart, draw.paintEnd = paintStart, w.paintIndex()
 	}
