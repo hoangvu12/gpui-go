@@ -426,6 +426,8 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.InsetRing8()
 	case "invisible":
 		b.Invisible()
+	case "isolate":
+		b.Isolate()
 	case "italic":
 		b.Italic()
 	case "items-baseline":
@@ -466,6 +468,42 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 		b.LineThrough()
 	case "lowercase":
 		b.Lowercase()
+	case "mix-blend-color":
+		b.MixBlendColor()
+	case "mix-blend-color-burn":
+		b.MixBlendColorBurn()
+	case "mix-blend-color-dodge":
+		b.MixBlendColorDodge()
+	case "mix-blend-darken":
+		b.MixBlendDarken()
+	case "mix-blend-difference":
+		b.MixBlendDifference()
+	case "mix-blend-exclusion":
+		b.MixBlendExclusion()
+	case "mix-blend-hard-light":
+		b.MixBlendHardLight()
+	case "mix-blend-hue":
+		b.MixBlendHue()
+	case "mix-blend-lighten":
+		b.MixBlendLighten()
+	case "mix-blend-luminosity":
+		b.MixBlendLuminosity()
+	case "mix-blend-multiply":
+		b.MixBlendMultiply()
+	case "mix-blend-normal":
+		b.MixBlendNormal()
+	case "mix-blend-overlay":
+		b.MixBlendOverlay()
+	case "mix-blend-plus-lighter":
+		b.MixBlendPlusLighter()
+	case "mix-blend-saturation":
+		b.MixBlendSaturation()
+	case "mix-blend-screen":
+		b.MixBlendScreen()
+	case "mix-blend-soft-light":
+		b.MixBlendSoftLight()
+	case "no-isolate":
+		b.NoIsolate()
 	case "normal-case":
 		b.NormalCase()
 	case "not-italic":
@@ -931,4 +969,4 @@ func applyMethodClass(class string, b *StyleBuilder) bool {
 }
 
 // methodClassCount is the number of classes applyMethodClass knows.
-const methodClassCount = 459
+const methodClassCount = 478

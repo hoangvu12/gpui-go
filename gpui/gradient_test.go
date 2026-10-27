@@ -204,20 +204,14 @@ func TestGradientCornerResolvesInSceneQuad(t *testing.T) {
 	}
 }
 
-// TestGradientErrorsAreNamed checks the two sentinels the class mapper
-// wraps (errors.Is through CheckClasses).
+// TestGradientErrorsAreNamed checks the sentinel the class mapper wraps
+// (errors.Is through CheckClasses); the via-* sentinel retired when
+// via-* landed (browser-core ticket 57).
 func TestGradientErrorsAreNamed(t *testing.T) {
-	if !strings.Contains(ErrGradientViaUnsupported.Error(), "ticket 52") {
-		t.Errorf("ErrGradientViaUnsupported does not point at ticket 52: %v", ErrGradientViaUnsupported)
-	}
 	if !strings.Contains(ErrGradientInterpolationUnsupported.Error(), "ticket 52") {
 		t.Errorf("ErrGradientInterpolationUnsupported does not point at ticket 52: %v", ErrGradientInterpolationUnsupported)
 	}
-	err := CheckClasses("bg-linear-to-r via-orange-400")
-	if !errors.Is(err, ErrGradientViaUnsupported) {
-		t.Errorf("CheckClasses(via) = %v; want errors.Is ErrGradientViaUnsupported", err)
-	}
-	err = CheckClasses("bg-linear-to-r/oklab from-red-500 to-blue-500")
+	err := CheckClasses("bg-linear-to-r/oklab from-red-500 to-blue-500")
 	if !errors.Is(err, ErrGradientInterpolationUnsupported) {
 		t.Errorf("CheckClasses(/oklab) = %v; want errors.Is ErrGradientInterpolationUnsupported", err)
 	}

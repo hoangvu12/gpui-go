@@ -381,6 +381,9 @@ func stageArms(blur, percents, hues []string) []TSType {
 	// modifier. The from-/to- stops are not single classes (the engine
 	// requires a bg-linear-… earlier in the same class string), so they
 	// are not Class arms; the engine checks them inside a class list.
+	// The via-* stops ARE single classes (the engine builds the
+	// three-stop gradient from a via alone), and the radial/conic/
+	// repeating shapes are bare.
 	arms = append(arms,
 		Lits("bg-linear-to-t", "bg-linear-to-tr", "bg-linear-to-r", "bg-linear-to-br",
 			"bg-linear-to-b", "bg-linear-to-bl", "bg-linear-to-l", "bg-linear-to-tl"),
@@ -395,7 +398,17 @@ func stageArms(blur, percents, hues []string) []TSType {
 		Template([]string{"-bg-linear-[", "rad]"}, numType),
 		Template([]string{"-bg-linear-[", "grad]"}, numType),
 		Template([]string{"-bg-linear-[", "turn]"}, numType),
+		Lits("bg-radial", "bg-conic",
+			"bg-repeating-radial", "bg-repeating-conic"),
+		Lits("bg-repeating-linear-to-t", "bg-repeating-linear-to-tr", "bg-repeating-linear-to-r",
+			"bg-repeating-linear-to-br", "bg-repeating-linear-to-b", "bg-repeating-linear-to-bl",
+			"bg-repeating-linear-to-l", "bg-repeating-linear-to-tl"),
+		Template([]string{"via-", ""}, Union(ref("PaletteColor"), Lit("transparent"))),
+		Template([]string{"via-[#", "]"}, strType),
+		Template([]string{"via-[", "%]"}, numType),
 	)
+	// Drop shadows: the preset scale, none and the arbitrary CSS value.
+	arms = append(arms, dropShadowArms()...)
 	// Blur and backdrop blur: the scale, none and arbitrary pixels.
 	blurArms := blurScaleArms(blur, "blur")
 	arms = append(arms, blurArms...)
@@ -423,6 +436,20 @@ func stageArms(blur, percents, hues []string) []TSType {
 		Template([]string{"-", "-[", "deg]"}, angleFamilies, numType),
 	)
 	return arms
+}
+
+// dropShadowArms renders the drop-shadow family's arms: the preset
+// scale (with the bare default), none, and the arbitrary CSS shadow
+// value (offsets, blur and a hex color, underscore-separated).
+func dropShadowArms() []TSType {
+	presets := []string{"drop-shadow", "drop-shadow-none"}
+	for _, s := range []string{"2xs", "xs", "sm", "md", "lg", "xl", "2xl"} {
+		presets = append(presets, "drop-shadow-"+s)
+	}
+	return []TSType{
+		Lits(presets...),
+		Template([]string{"drop-shadow-[0_", "px_", "px_#00000040]"}, numType, numType),
+	}
 }
 
 // blurScaleArms renders one blur family's arms (the parsed scale, none

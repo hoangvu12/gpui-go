@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.scroller {
+		position: relative;
+		box-sizing: border-box;
+		width: 140px;
+		height: 100px;
+		overflow: hidden;
+		/* The edge fade, spelled as the equivalent mask ramp: opaque
+		   until 12px above the bottom, then linear to transparent AT
+		   the edge — the pin's ContentMask fade_out shape. */
+		mask-image: linear-gradient(to bottom, black calc(100% - 12px), transparent);
+	}
+	.child {
+		width: 140px;
+		height: 180px;
+		background: #16a34a;
+	}
+</style>
+</head>
+<body>
+	<div class="scroller" data-id="scroller">
+		<div class="child" data-id="child"></div>
+	</div>
+</body>
+</html>

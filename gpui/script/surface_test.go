@@ -67,7 +67,7 @@ func TestTheSurfaceFixtureRunsThroughTheHost(t *testing.T) {
 	if h.Err() != nil {
 		t.Fatalf("the surface fixture failed to load: %v", h.Err())
 	}
-	if got, ok := h.Text("root"); !ok || got != "surfaceclicked 0no row" {
+	if got, ok := h.Text("root"); !ok || got != "surfacemaskedclicked 0no row" {
 		t.Fatalf("root text = %q, ok=%v", got, ok)
 	}
 	// The function component and the Fragment both lowered into the

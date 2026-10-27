@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 48px;
+	}
+	.pair {
+		position: relative;
+		box-sizing: border-box;
+		width: 120px;
+		height: 90px;
+	}
+	.backdrop {
+		width: 120px;
+		height: 90px;
+	}
+	.blend {
+		position: absolute;
+		top: 0;
+		left: 40px;
+		width: 80px;
+		height: 90px;
+	}
+	.multiply-backdrop {
+		background: #dc2626;
+	}
+	.multiply-blend {
+		background: #808080;
+		mix-blend-mode: multiply;
+	}
+	.plus-backdrop {
+		background: #334155;
+	}
+	.plus-blend {
+		background: #2563eb;
+		mix-blend-mode: plus-lighter;
+	}
+</style>
+</head>
+<body>
+	<div class="pair">
+		<div class="backdrop multiply-backdrop" data-id="multiply-backdrop"></div>
+		<div class="blend multiply-blend" data-id="multiply-blend"></div>
+	</div>
+	<div class="pair">
+		<div class="backdrop plus-backdrop" data-id="plus-backdrop"></div>
+		<div class="blend plus-blend" data-id="plus-blend"></div>
+	</div>
+</body>
+</html>

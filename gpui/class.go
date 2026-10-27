@@ -242,8 +242,6 @@ func (e *classError) Unwrap() error { return e.err }
 // stages return the sentinels' Error() strings).
 func classErrorFor(class, reason string) error {
 	switch reason {
-	case ErrGradientViaUnsupported.Error():
-		return &classError{class: class, reason: reason, err: ErrGradientViaUnsupported}
 	case ErrGradientInterpolationUnsupported.Error():
 		return &classError{class: class, reason: reason, err: ErrGradientInterpolationUnsupported}
 	}
@@ -1348,31 +1346,45 @@ var bgLinearDirections = map[string]GradientDirection{
 }
 
 // gradientClass applies the Tailwind v4 gradient utilities: bg-linear-*
-// (the direction or angle), from-* and to-* (the two stops' colors and
+// (the direction or angle), bg-radial, bg-conic and their repeating-*
+// forms (the shape), and from-*/via-*/to-* (the stops' colors and
 // positions). Tailwind emits `in oklab` interpolation for the named and
 // numeric forms (utilities.ts resolveInterpolationModifier); the record
 // draws CSS's legacy sRGB interpolation, so those classes render like
 // the equivalent CSS without an interpolation method, and the /srgb
 // modifier opts into exactly that — a recorded class-layer divergence
-// (docs/tailwind.md). via-* (a middle stop) is rejected with
-// ErrGradientViaUnsupported: three stops need the n-stop record
-// (ticket 52).
+// (docs/tailwind.md).
 //
-// The direction and the stops are separate classes, so they compose in
-// chain order: bg-linear-* starts the gradient (keeping any stops an
-// earlier bg-linear-* in the same string set, Tailwind's variables
-// being independent) and from-*/to-* set one stop of the gradient the
-// same string (or variant) already started.
+// The shape and the stops are separate classes, so they compose in
+// chain order: bg-linear-*/bg-radial/bg-conic start the gradient
+// (keeping any stops an earlier one in the same string set, Tailwind's
+// variables being independent) and from-*/via-*/to-* set one stop of
+// the gradient the same string (or variant) already started. A via-*
+// stop (or a radial/conic/repeating shape) promotes the gradient to
+// the n-stop table arm (browser-core ticket 57); a two-stop linear
+// gradient keeps the R15 record bit-exact.
 func gradientClass(b *StyleBuilder, u string) (bool, string) {
-	if u == "via-none" || strings.HasPrefix(u, "via-") {
-		return true, ErrGradientViaUnsupported.Error()
-	}
 	body := strings.TrimPrefix(u, "-")
-	if value, ok := strings.CutPrefix(body, "bg-linear-"); ok {
-		return bgLinearClass(b, u, value, strings.HasPrefix(u, "-"))
+	if value, ok := strings.CutPrefix(body, "via-"); ok {
+		return gradientViaClass(b, u, value)
 	}
-	if body == "bg-linear" {
+	repeating := false
+	shape := body
+	if value, ok := strings.CutPrefix(body, "bg-repeating-"); ok {
+		repeating = true
+		shape = "bg-" + value
+	}
+	if value, ok := strings.CutPrefix(shape, "bg-linear-"); ok {
+		return bgLinearClass(b, u, value, strings.HasPrefix(u, "-"), repeating)
+	}
+	if shape == "bg-linear" {
 		return true, "bg-linear takes a direction or an angle: bg-linear-to-r, bg-linear-45, bg-linear-[45deg]"
+	}
+	switch shape {
+	case "bg-radial", "bg-conic":
+		return gradientShapeClass(b, u, shape, repeating)
+	case "bg-radial-[", "bg-conic-[":
+		return true, "bg-" + strings.TrimPrefix(strings.TrimSuffix(shape, "["), "bg-") + "… takes no brackets: Tailwind v4's bg-radial and bg-conic are the bare shapes"
 	}
 	for _, root := range []string{"from-", "to-"} {
 		if value, ok := strings.CutPrefix(u, root); ok {
@@ -1384,8 +1396,8 @@ func gradientClass(b *StyleBuilder, u string) (bool, string) {
 
 // bgLinearClass applies one bg-linear-* utility (u for the error
 // messages, value the class's value after bg-linear-, negative marking
-// a leading minus).
-func bgLinearClass(b *StyleBuilder, u, value string, negative bool) (bool, string) {
+// a leading minus, repeating marking the bg-repeating-linear-* form).
+func bgLinearClass(b *StyleBuilder, u, value string, negative, repeating bool) (bool, string) {
 	value, modifier, hasModifier := cutModifier(value)
 	keyword, isKeyword := bgLinearDirections[value]
 	var direction GradientDirection
@@ -1433,53 +1445,170 @@ func bgLinearClass(b *StyleBuilder, u, value string, negative bool) (bool, strin
 		}
 	}
 	st := b.StyleMut()
-	var gradient LinearGradient
-	if background, ok := st.Background.Get(); ok && background.Kind == BackgroundKindLinearGradient {
-		// Tailwind's direction and stops are independent variables, so a
-		// later bg-linear-* keeps the stops an earlier one set.
-		gradient = background.Gradient
-	} else {
-		gradient.From, gradient.To = gradientDefaultStops()
-	}
+	gradient, _ := loadGradientClass(st)
+	// Tailwind's direction and stops are independent variables, so a
+	// later bg-linear-* keeps the stops an earlier one set.
+	gradient.Kind = CssGradientLinear
+	gradient.Repeating = repeating
 	gradient.Direction = direction
 	gradient.Angle = angle
-	st.Background = Some(Background{Kind: BackgroundKindLinearGradient, Gradient: gradient})
+	saveGradientClass(st, gradient)
+	return true, ""
+}
+
+// gradientShapeClass applies bg-radial and bg-conic (the
+// bg-repeating-* prefix already cut): the CSS default shapes — the
+// ellipse farthest-corner at the box center, and the conic sweep from
+// up — keeping the stops the string already set (Tailwind's
+// --tw-gradient-stops is one variable across the shapes).
+func gradientShapeClass(b *StyleBuilder, u, shape string, repeating bool) (bool, string) {
+	st := b.StyleMut()
+	gradient, _ := loadGradientClass(st)
+	switch shape {
+	case "bg-radial":
+		gradient.Kind = CssGradientRadial
+		gradient.Shape = RadialShapeEllipse
+		gradient.Extent = RadialExtentFarthestCorner
+		gradient.CenterX, gradient.CenterY = 0.5, 0.5
+	default:
+		gradient.Kind = CssGradientConic
+		gradient.FromAngle = 0
+		gradient.CenterX, gradient.CenterY = 0.5, 0.5
+	}
+	gradient.Repeating = repeating
+	saveGradientClass(st, gradient)
+	return true, ""
+}
+
+// loadGradientClass reads the gradient the class string is building
+// (browser-core ticket 57): the two-stop linear arm promoted to the
+// n-stop CSS form, an existing CSS arm as-is, or the defaults
+// (transparent stops at 0 and 1). The second result reports whether a
+// gradient was already started.
+func loadGradientClass(st *StyleRefinement) (CssGradient, bool) {
+	if background, ok := st.Background.Get(); ok {
+		if background.Kind == BackgroundKindLinearGradient {
+			return CssGradient{
+				Kind:      CssGradientLinear,
+				Direction: background.Gradient.Direction,
+				Angle:     background.Gradient.Angle,
+				Stops:     []GradientStop{background.Gradient.From, background.Gradient.To},
+			}, true
+		}
+		if background.Kind == BackgroundKindCssGradient && background.CssGradient != nil {
+			return *background.CssGradient, true
+		}
+	}
+	from, to := gradientDefaultStops()
+	return CssGradient{Kind: CssGradientLinear, Stops: []GradientStop{from, to}}, false
+}
+
+// saveGradientClass writes the gradient back: the n-stop CSS arm when
+// a via stop, a radial/conic shape or the repeating tile demands it
+// (browser-core ticket 57), else the R15 two-stop record — bit-exact
+// with every pre-57 class string.
+func saveGradientClass(st *StyleRefinement, gradient CssGradient) {
+	if gradient.Kind == CssGradientLinear && !gradient.Repeating && len(gradient.Stops) <= 2 {
+		from, to := gradientDefaultStops()
+		if len(gradient.Stops) > 0 {
+			from = gradient.Stops[0]
+		}
+		if len(gradient.Stops) > 1 {
+			to = gradient.Stops[len(gradient.Stops)-1]
+		}
+		st.Background = Some(Background{Kind: BackgroundKindLinearGradient, Gradient: LinearGradient{
+			Direction: gradient.Direction,
+			Angle:     gradient.Angle,
+			From:      from,
+			To:        to,
+		}})
+		return
+	}
+	st.Background = Some(Background{Kind: BackgroundKindCssGradient, CssGradient: &gradient})
+}
+
+// gradientViaClass applies one via-* utility (browser-core ticket 57):
+// the middle stop's color (via-red-500, via-[#ff0000],
+// via-transparent) or position (via-25%, via-[12.5%]). The via promotes
+// the gradient to the n-stop arm: the stop slots in between from and
+// to with an unspecified position (the CSS fixup distributes it evenly
+// between the surrounding positions).
+func gradientViaClass(b *StyleBuilder, u, value string) (bool, string) {
+	st := b.StyleMut()
+	gradient, _ := loadGradientClass(st)
+	if len(gradient.Stops) > 3 {
+		return true, "an element has one via-* stop"
+	}
+	// Promote to the three-stop form: [from, via, to].
+	if len(gradient.Stops) < 3 {
+		_, toDefault := gradientDefaultStops()
+		stops := make([]GradientStop, 0, 3)
+		stops = append(stops, gradient.Stops...)
+		if len(stops) == 1 {
+			stops = append(stops, toDefault)
+		}
+		via := GradientStop{Color: Hsla{}, Position: float32(math.NaN())}
+		last := stops[len(stops)-1]
+		stops[len(stops)-1] = via
+		stops = append(stops, last)
+		gradient.Stops = stops
+	}
+	via := &gradient.Stops[1]
+	if position, ok := gradientStopPosition(value); ok {
+		via.Position = position
+	} else if c, isColor, reason := parseColor(value); isColor && reason == "" {
+		via.Color = c
+	} else if _, isLength := bracketedLength(value); isLength {
+		return true, u + " takes a percentage position (via-25%, via-[25%]): a length resolves against the gradient's extent, which needs the stop list's span"
+	} else if reason != "" {
+		return true, reason
+	} else {
+		return true, u + " takes a color (via-red-500, via-[#ff0000], via-transparent) or a position (via-25%)"
+	}
+	saveGradientClass(st, gradient)
 	return true, ""
 }
 
 // gradientStopClass applies one from-*/to-* utility: a color
 // (from-red-500, from-[#ff0000], from-transparent, from-red-500/50) or a
 // position on the gradient line (from-10%, from-[10%]). root is "from"
-// or "to".
+// or "to". An n-stop gradient (a via, a radial/conic/repeating shape —
+// browser-core ticket 57) takes hard and descending positions like CSS;
+// the two-stop record keeps its own validation.
 func gradientStopClass(b *StyleBuilder, u, root, value string) (bool, string) {
 	st := b.StyleMut()
-	background, ok := st.Background.Get()
-	if !ok || background.Kind != BackgroundKindLinearGradient {
-		return true, u + " sets one stop of a gradient: put bg-linear-… earlier in the same class string (or the same variant), like bg-linear-to-r from-… to-…"
+	gradient, started := loadGradientClass(st)
+	if !started {
+		return true, u + " sets one stop of a gradient: put bg-linear-… (or bg-radial/bg-conic) earlier in the same class string (or the same variant), like bg-linear-to-r from-… to-…"
 	}
-	stop := &background.Gradient.From
-	other := &background.Gradient.To
+	index := 0
+	otherIndex := len(gradient.Stops) - 1
 	if root == "to" {
-		stop, other = &background.Gradient.To, &background.Gradient.From
+		index, otherIndex = otherIndex, 0
 	}
+	stop := &gradient.Stops[index]
+	other := &gradient.Stops[otherIndex]
 	if position, ok := gradientStopPosition(value); ok {
 		stop.Position = position
 	} else if c, isColor, reason := parseColor(value); isColor && reason == "" {
 		stop.Color = c
 	} else if inner, isLength := bracketedLength(value); isLength {
-		return true, u + " takes a percentage position (from-10%, from-[10%]): a length like [" + inner + "] resolves against the gradient line's length, which needs the n-stop record (ticket 52)"
+		return true, u + " takes a percentage position (from-10%, from-[10%]): a length like [" + inner + "] resolves against the gradient line's length, which needs the stop span at paint time"
 	} else if reason != "" {
 		return true, reason
 	} else {
 		return true, u + " takes a color (from-red-500, from-[#ff0000], from-transparent) or a position (from-10%)"
 	}
-	if stop.Position == other.Position {
-		return true, "from and to sit at the same position: a hard stop needs the n-stop record (ticket 52, the R16 gradient redesign)"
+	nStop := len(gradient.Stops) > 2 || gradient.Kind != CssGradientLinear || gradient.Repeating
+	if !nStop {
+		if stop.Position == other.Position {
+			return true, "from and to sit at the same position: a hard stop needs the n-stop form — add a via-* stop (ticket 57)"
+		}
+		if gradient.Stops[0].Position > gradient.Stops[len(gradient.Stops)-1].Position {
+			return true, "from's position must come before to's: CSS clamps a descending pair into a hard stop, which needs the n-stop form — add a via-* stop (ticket 57)"
+		}
 	}
-	if background.Gradient.From.Position > background.Gradient.To.Position {
-		return true, "from's position must come before to's: CSS clamps a descending pair into a hard stop, which needs the n-stop record (ticket 52)"
-	}
-	st.Background = Some(background)
+	saveGradientClass(st, gradient)
 	return true, ""
 }
 
@@ -1725,7 +1854,109 @@ func transformAngleValue(v string) (float32, bool) {
 // order here is a superset of for the single-function cases. The blur
 // family is blurClass's; the backdrop- prefix never reaches this stage
 // (blurClass explains it). An unresolvable suffix reports why.
+// dropShadowScale is Tailwind v4's drop-shadow preset scale (the theme
+// values; the negative third components are the CSS box-shadow spread
+// Tailwind reuses here — filter-effects-2's drop-shadow() spread the
+// scene record has no field for, so the presets carry the offset, the
+// blur and the color and the spread is dropped, the closest the record
+// expresses).
+var dropShadowScale = map[string][]Filter{
+	"2xs": {DropShadow(0, 1, 0, Hsla{H: 0, S: 0, L: 0, A: 0.05})},
+	"xs":  {DropShadow(0, 1, 0, Hsla{H: 0, S: 0, L: 0, A: 0.07})},
+	"sm":  {DropShadow(0, 1, 2, Hsla{H: 0, S: 0, L: 0, A: 0.15})},
+	"": { // drop-shadow (the default): two shadows.
+		DropShadow(0, 1, 3, Hsla{H: 0, S: 0, L: 0, A: 0.1}),
+		DropShadow(0, 1, 2, Hsla{H: 0, S: 0, L: 0, A: 0.1}),
+	},
+	"md": {
+		DropShadow(0, 4, 6, Hsla{H: 0, S: 0, L: 0, A: 0.1}),
+		DropShadow(0, 2, 4, Hsla{H: 0, S: 0, L: 0, A: 0.1}),
+	},
+	"lg": {
+		DropShadow(0, 10, 15, Hsla{H: 0, S: 0, L: 0, A: 0.1}),
+		DropShadow(0, 4, 6, Hsla{H: 0, S: 0, L: 0, A: 0.1}),
+	},
+	"xl": {
+		DropShadow(0, 20, 25, Hsla{H: 0, S: 0, L: 0, A: 0.1}),
+		DropShadow(0, 8, 10, Hsla{H: 0, S: 0, L: 0, A: 0.1}),
+	},
+	"2xl": {DropShadow(0, 25, 50, Hsla{H: 0, S: 0, L: 0, A: 0.25})},
+}
+
+// dropShadowClass applies the Tailwind drop-shadow-* utilities
+// (browser-core ticket 57): the preset scale, none (the reset) and the
+// arbitrary form drop-shadow-[x_y_blur_#rrggbbaa]. The shadows append
+// to the element's filter chain in class order, the CSS spelling.
+func dropShadowClass(b *StyleBuilder, u string) (bool, string) {
+	body := strings.TrimPrefix(u, "-")
+	if body != "drop-shadow" && !strings.HasPrefix(body, "drop-shadow-") {
+		return false, ""
+	}
+	value := strings.TrimPrefix(strings.TrimPrefix(body, "drop-shadow"), "-")
+	if value == "none" {
+		// Tailwind's reset: no drop-shadow filters (the chain's other
+		// functions stay, like blur-none leaves the colour functions).
+		st := b.StyleMut()
+		if filters, ok := st.Filter.Get(); ok {
+			kept := filters[:0]
+			for _, f := range filters {
+				if f.Function != FilterFunctionDropShadow {
+					kept = append(kept, f)
+				}
+			}
+			st.Filter = Some(append([]Filter(nil), kept...))
+		}
+		return true, ""
+	}
+	if inner, ok := arbitrary(value); ok {
+		return dropShadowArbitrary(b, u, inner)
+	}
+	preset, ok := dropShadowScale[value]
+	if !ok {
+		return true, "drop-shadow-… takes none, 2xs, xs, sm, md, lg, xl, 2xl, or [0_4px_6px_#00000040]"
+	}
+	for _, f := range preset {
+		b.DropShadow(f.OffsetX, f.OffsetY, f.BlurRadius, f.Color)
+	}
+	return true, ""
+}
+
+// dropShadowArbitrary applies drop-shadow-[…]: underscore-separated CSS
+// lengths — the two offsets, the optional blur radius and a hex color
+// (0_4px_6px_#00000040). Multiple shadows (Tailwind's comma lists)
+// take two classes.
+func dropShadowArbitrary(b *StyleBuilder, u, inner string) (bool, string) {
+	fields := strings.Fields(strings.ReplaceAll(inner, "_", " "))
+	if len(fields) < 3 || len(fields) > 4 {
+		return true, u + " takes two offsets, an optional blur and a color, like drop-shadow-[0_4px_6px_#00000040]"
+	}
+	var lengths [3]float32
+	for i, field := range fields[:3] {
+		v, ok := pixels(field)
+		if !ok || v < 0 {
+			return true, u + " takes pixel lengths, like drop-shadow-[0_4px_6px_#00000040]"
+		}
+		lengths[i] = v
+	}
+	color := Hsla{H: 0, S: 0, L: 0, A: 0.25}
+	if len(fields) == 4 {
+		if !strings.HasPrefix(fields[3], "#") {
+			return true, u + " takes a hex color, like drop-shadow-[0_4px_6px_#00000040]"
+		}
+		parsed, err := ParseHex(fields[3])
+		if err != nil {
+			return true, u + " takes a hex color, like drop-shadow-[0_4px_6px_#00000040]"
+		}
+		color = parsed
+	}
+	b.DropShadow(lengths[0], lengths[1], lengths[2], color)
+	return true, ""
+}
+
 func filterClass(b *StyleBuilder, u string) (bool, string) {
+	if handled, reason := dropShadowClass(b, u); handled {
+		return handled, reason
+	}
 	body := strings.TrimPrefix(u, "-")
 	var name, suffix string
 	for _, family := range []string{"grayscale", "sepia", "invert", "saturate", "brightness", "contrast", "hue-rotate"} {
@@ -1864,9 +2095,9 @@ var unsupportedClasses = []struct {
 	{[]string{"ring-offset"}, "ring offsets are not supported"},
 	{[]string{"ring-inset"}, "use inset-ring-* for an inset ring"},
 	{[]string{"bg-gradient"}, "Tailwind v4 renamed bg-gradient-* to bg-linear-*; write bg-linear-to-r from-… to-…"},
-	{[]string{"bg-radial", "bg-conic"}, "radial and conic gradients are not supported yet (ticket 52, the R16 gradient redesign); only two-stop linear gradients are"},
 	{[]string{"bg-cover", "bg-contain", "bg-center", "bg-no-repeat", "bg-repeat", "bg-fixed", "bg-clip", "bg-origin", "bg-blend", "bg-none"}, "background images are not supported; put an img element behind the content"},
-	{[]string{"drop-shadow", "filter", "mix-blend"}, "only blur and the colour filters are supported (blur-*, grayscale, sepia, invert, brightness-*, contrast-*, saturate-*, hue-rotate-*); drop-shadow() and mix-blend-mode are not, and the bare filter class is not needed — each filter utility applies itself"},
+	{[]string{"filter"}, "each filter utility applies itself (blur-*, the colour filters, drop-shadow-*); the bare filter class is not needed"},
+	{[]string{"mix-blend-plus-darker"}, "plus-darker is the one blend mode the scene record has no tag for (the 17 W3C modes and plus-lighter are the mix-blend-* methods)"},
 	{[]string{"float", "clear"}, "floats are not supported; use flex or grid"},
 	{[]string{"object"}, "known object-fit and object-position keywords are supported (object-contain, object-cover, object-fill, object-none, object-scale-down, object-left-top, …); arbitrary positions call .ObjectPosition(…) on the img"},
 	{[]string{"order"}, "order-* is not supported; reorder the children"},
@@ -1878,7 +2109,7 @@ var unsupportedClasses = []struct {
 	{[]string{"antialiased", "subpixel-antialiased"}, "GPUI chooses text antialiasing itself; drop it"},
 	{[]string{"list"}, "list styles are not supported"},
 	{[]string{"appearance", "resize", "accent", "caret"}, "form-control styling is not supported; GPUI has no native form controls"},
-	{[]string{"scroll", "snap", "touch", "will-change", "isolation", "isolate"}, "this scrolling or compositing utility is not supported (overflow-auto/scroll, scrollbar-gutter-stable and the overscroll-* classes are)"},
+	{[]string{"scroll", "snap", "touch", "will-change"}, "this scrolling or compositing utility is not supported (overflow-auto/scroll, scrollbar-gutter-stable and the overscroll-* classes are)"},
 	{[]string{"sr-only", "not-sr-only"}, "sr-only is not supported; describe the element through its accessibility properties"},
 	{[]string{"container", "prose"}, "container and prose are not supported; set max-w-* and padding explicitly"},
 	{[]string{"fill", "stroke"}, "an svg element is painted with its text color: use text-<color>"},

@@ -571,7 +571,9 @@ func (d *imgDrawable) Paint(global *GlobalElementID, inspector *InspectorElement
 	// D9 (rev 16, browser-core ticket 55): the element opacity composites
 	// the subtree as one effect group; an element with a backdrop-filter
 	// chain keeps the per-primitive multiply (opacityCompositesAsGroup).
-	WithElementOpacityVoid(w, style.Opacity, bounds, opacityCompositesAsGroup(&style), func(w *Window) {
+	// A mix-blend-mode element's blend group carries the opacity instead
+	// (browser-core ticket 57; styleElementOpacity).
+	WithElementOpacityVoid(w, styleElementOpacity(&style), bounds, opacityCompositesAsGroup(&style), func(w *Window) {
 		style.paint(bounds, w, app, func(w *Window) {
 			WithTextStyleVoid(w, style.TextStyle(), func(w *Window) {
 				WithRoundedContentMaskVoid(w, style.OverflowMask(bounds, RemSize(w)), func(w *Window) {

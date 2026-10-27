@@ -1,6 +1,9 @@
 package gpui
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // This file is the R16 group-styling half of browser-core ticket 55:
 // the style-level content mask with the rounded-corner clip
@@ -30,11 +33,48 @@ import "fmt"
 type ClipMask struct {
 	// Bounds is the clip rectangle, logical pixels.
 	Bounds Bounds
+	// Fade is the clip's per-edge fade distance, logical pixels (rev
+	// 16, browser-core ticket 57): content within the distance of an
+	// edge fades out linearly toward it (the pin's ContentMask
+	// fade_out, Style.OverflowFade's paint). A zero distance leaves
+	// the edge opaque.
+	Fade Edges
 	// CornerRadii of the rounded clip, logical pixels (zero = a plain
 	// rectangular clip).
 	CornerRadii Corners
 	// CornerSmoothing of the rounded clip in [0, 1].
 	CornerSmoothing float32
+}
+
+// HasFade reports whether the mask fades any edge.
+func (m ClipMask) HasFade() bool {
+	return m.Fade.Top != 0 || m.Fade.Right != 0 || m.Fade.Bottom != 0 || m.Fade.Left != 0
+}
+
+// intersectMaskFade intersects two content masks' per-edge fades with
+// the pin's rule (window.rs ContentMask::intersect, window.rs
+// 2128-2170): the mask whose edge actually clips (the closer
+// coordinate) contributes its fade, and when both clip at the same
+// coordinate the stronger (larger) fade wins. aMask pairs with aFade,
+// bMask with bFade.
+func intersectMaskFade(aMask Bounds, aFade Edges, bMask Bounds, bFade Edges) Edges {
+	return Edges{
+		Top:    edgeFade(aMask.Top(), bMask.Top(), aFade.Top, bFade.Top, func(a, b float32) bool { return a > b }),
+		Right:  edgeFade(aMask.Right(), bMask.Right(), aFade.Right, bFade.Right, func(a, b float32) bool { return a < b }),
+		Bottom: edgeFade(aMask.Bottom(), bMask.Bottom(), aFade.Bottom, bFade.Bottom, func(a, b float32) bool { return a < b }),
+		Left:   edgeFade(aMask.Left(), bMask.Left(), aFade.Left, bFade.Left, func(a, b float32) bool { return a > b }),
+	}
+}
+
+// edgeFade is intersectMaskFade's per-edge rule.
+func edgeFade(a, b, aFade, bFade float32, aClipsCloser func(a, b float32) bool) float32 {
+	if aClipsCloser(a, b) {
+		return aFade
+	}
+	if aClipsCloser(b, a) {
+		return bFade
+	}
+	return max32(aFade, bFade)
 }
 
 // IsRounded reports whether the mask clips with rounded corners.
@@ -83,6 +123,63 @@ func withRoundedClipScope[R any](w *Window, mask ClipMask, intersected Bounds, f
 		}
 	}()
 	return f(w)
+}
+
+// InkBounds is the element's ink bounds (the border box dilated by the
+// drop shadows' and the outer ring's extent, and the outline's outset —
+// Chromium's filter reference box, the layer's visual overflow:
+// PaintLayer::LocalBoundingBox → VisualOverflowRect,
+// paint_layer.cc:2199-2205, fed by ComputedStyle::BoxDecorationOutsets
+// and the outline extent, outline_painter.cc:1073-1082): the group
+// bounds of the element's filter and blend groups (the composite must
+// cover the shadow ink; the pin passed the element bounds and cut the
+// blurred shadow at the border).
+func (s *Style) InkBounds(bounds Bounds, rem float32) Bounds {
+	var ink Edges
+	for _, shadow := range s.BoxShadow {
+		if shadow.Inset {
+			continue
+		}
+		o := shadow.inkOutsets()
+		ink.Top = max32(ink.Top, o.Top)
+		ink.Right = max32(ink.Right, o.Right)
+		ink.Bottom = max32(ink.Bottom, o.Bottom)
+		ink.Left = max32(ink.Left, o.Left)
+	}
+	if s.Ring.Width > 0 {
+		ink.Top = max32(ink.Top, s.Ring.Width)
+		ink.Right = max32(ink.Right, s.Ring.Width)
+		ink.Bottom = max32(ink.Bottom, s.Ring.Width)
+		ink.Left = max32(ink.Left, s.Ring.Width)
+	}
+	if outline := s.Outline.inkOutset(s.BorderWidths.ToPixels(rem)); outline > 0 {
+		ink.Top = max32(ink.Top, outline)
+		ink.Right = max32(ink.Right, outline)
+		ink.Bottom = max32(ink.Bottom, outline)
+		ink.Left = max32(ink.Left, outline)
+	}
+	// The filter chain's drop-shadow ops (browser-core ticket 57): the
+	// shadow's own ink — the alpha silhouette blurred at sigma =
+	// radius/2 (3-sigma covers the gaussian), offset — feeds the same
+	// bounds (Chromium's FEDropShadow::MapEffect unions the blurred
+	// offset rect with the source, fe_drop_shadow.cc:46-54, through
+	// the box-blur kernel extent ShadowData::RectOutsets shapes,
+	// shadow_data.cc:43-51: left = extent - dx, right = extent + dx,
+	// … clamped at zero by the union with the base rect).
+	for _, f := range s.Filter {
+		if f.Function != FilterFunctionDropShadow || f.IsIdentity() {
+			continue
+		}
+		extent := float32(math.Ceil(float64(1.5 * f.BlurRadius)))
+		ink.Top = max32(ink.Top, max32(extent-f.OffsetY, 0))
+		ink.Bottom = max32(ink.Bottom, max32(extent+f.OffsetY, 0))
+		ink.Left = max32(ink.Left, max32(extent-f.OffsetX, 0))
+		ink.Right = max32(ink.Right, max32(extent+f.OffsetX, 0))
+	}
+	return Bounds{
+		Origin: Point{X: bounds.Origin.X - ink.Left, Y: bounds.Origin.Y - ink.Top},
+		Size:   Size{Width: bounds.Size.Width + ink.Left + ink.Right, Height: bounds.Size.Height + ink.Top + ink.Bottom},
+	}
 }
 
 // opacityCompositesAsGroup reports whether an element with the given

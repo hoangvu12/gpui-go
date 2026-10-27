@@ -68,6 +68,11 @@ const (
 	FilterFunctionBrightness
 	// FilterFunctionContrast is contrast(amount).
 	FilterFunctionContrast
+	// FilterFunctionDropShadow is drop-shadow(offsetX offsetY blur
+	// color) (rev 16, browser-core ticket 57): the shadow of the
+	// element's alpha silhouette, blurred, tinted, offset, composited
+	// beneath the content — the R16 filter-op chain.
+	FilterFunctionDropShadow
 )
 
 // Grayscale returns the grayscale filter: amount 0 leaves the element
@@ -317,11 +322,20 @@ type FilterChain struct {
 	// 52; the design's §3.9): the chain index of the scene-level
 	// drop-shadow ops, inserted through Scene.InsertFilterOpChain
 	// BEFORE the group opens. Zero (with DropShadowCount zero) is the
-	// R15 legacy chain - bit-exact, nothing changes.
+	// R15 legacy chain - bit-exact, nothing changes. This is the
+	// RESOLVED reference: Scene.WithFilterLayerChain inserts
+	// DropShadowOps and fills it; a hand-built chain carries the ops
+	// (the source form) or this reference (the resolved form).
 	DropShadow uint32
 	// DropShadowCount is the number of ops the chain reference covers
 	// (0 = the R15 legacy chain).
 	DropShadowCount int
+	// DropShadowOps are the chain's drop-shadow ops in CSS chain order
+	// (the SOURCE form, logical pixels; browser-core ticket 57):
+	// WithFilterLayerChain inserts them scene-level (scaled to device
+	// pixels) and resolves DropShadow/DropShadowCount. A chain with
+	// only the resolved reference (a dump round-trip) carries none.
+	DropShadowOps []FilterOp
 }
 
 // filterChainMatrixSlots is the scene filter record's per-function
@@ -332,7 +346,7 @@ const filterChainMatrixSlots = 8
 // IsEmpty reports a chain with no visible filter (every entry
 // identity), which paints inline with no isolation group.
 func (c FilterChain) IsEmpty() bool {
-	return c.BlurRadius <= 0 && c.ColorMatrixCount == 0 && c.DropShadowCount == 0
+	return c.BlurRadius <= 0 && c.ColorMatrixCount == 0 && c.DropShadowCount == 0 && len(c.DropShadowOps) == 0
 }
 
 // composeFilterChain composes a style filter chain into its scene
@@ -347,6 +361,19 @@ func composeFilterChain(filters []Filter) FilterChain {
 	count := 0
 	for _, f := range filters {
 		if f.IsIdentity() {
+			continue
+		}
+		if f.Function == FilterFunctionDropShadow {
+			// rev 16, ticket 57: the drop-shadow op rides the chain's
+			// op list (the scene-level op chain the boundary record
+			// references); the paint seam inserts and resolves it
+			// (Scene.WithFilterLayerChain).
+			chain.DropShadowOps = append(chain.DropShadowOps, FilterOp{
+				OffsetX:    f.OffsetX,
+				OffsetY:    f.OffsetY,
+				BlurRadius: f.BlurRadius,
+				Color:      hslaToRgba(f.Color),
+			})
 			continue
 		}
 		if matrix, ok := f.colorMatrix(); ok {

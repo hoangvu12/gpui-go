@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: #ffffff;
+	}
+	body {
+		width: 640px;
+		height: 400px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.shadowed {
+		box-sizing: border-box;
+		width: 140px;
+		height: 90px;
+		border-radius: 16px;
+		background: rgba(14, 165, 233, 0.8);
+		/* The drop shadow: the box's rounded alpha silhouette, blurred
+		   at sigma = 8/2, offset down, 40% black, under the content.
+		   The 0.1px content blur is the native lease workaround the
+		   view mirrors (see the fixture's comment). */
+		filter: blur(0.1px) drop-shadow(0 6px 8px rgba(0, 0, 0, 0.4));
+	}
+</style>
+</head>
+<body>
+	<div class="shadowed" data-id="shadowed"></div>
+</body>
+</html>
