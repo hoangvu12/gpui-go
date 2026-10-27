@@ -1,0 +1,47 @@
+{
+  "schema": "gpui-go/r60-property-frames-measure@1",
+  "date": "2026-10-27T03:23:50Z",
+  "window_px": [
+    640,
+    300
+  ],
+  "note": "wall-time measurements of the WINDOW frame request (the tick or the rebuild plus the present plus the retirement wait, on the host thread) on one shown-never-activated off-screen window (DComp mode, the app-default surface); the page is a 20x10 grid of 24x24 cached panes plus two absolutely positioned 160x100 animated boxes (a scale and an opacity transition, 30s linear so the ticks keep moving through the whole sequence), so the rebuild side re-renders the root view with real work while the cached panes replay; every scenario is measured as INTERLEAVED pairs (the property-tick frame, then the notified full-rebuild frame, order alternating), so the paired savings mean sees the same machine load on both sides - this machine is heavily shared, so the absolute wall times are several times an idle machine's and the paired mean is the comparable statistic; the r54 ABI-level numbers (the property tick 1.58 ms vs the full redraw 2.17 ms at 1000+ quads) are the pure-present ceiling this window-level path rides on; the damage fraction is the native per-mille of the window area sampled after the property tick's present; the present counters are cumulative deltas over the sequence and include the frame pacer's host-delivered ticks between the pairs - in THIS process the DComp surface accepted the dirty-rect partial present (the tick frames' 76 partial vs the rebuild side's 32 forceFull presents), where ticket 58's same-mode measurement hit its pinned readback fallback and presented full - the per-process verification decides (the design's Q5 rule); the zero-renders gate is the gate test's (TestR60PropertyTicksRenderNothingAndMatchFullRedraw), and the renders_around_one_pair record shows the tick side of it on this window",
+  "model": "the tick samples the retained transition runs at the app clock, mutates the last drawn scene's property nodes in place (UpdateEffectMatrix/Opacity), publishes the update's old ∪ new mapped bounds as the frame's damage and presents through Surface.DrawSceneDamage - no view renders, no layout, no paint; the rebuild side is the pre-60 animation path (the notify forces a full re-render whose damage is full while a transform transition runs)",
+  "measurements": {
+    "identity": {
+      "bytes": 19464192,
+      "native_revision": 16,
+      "sha256": "8ec910d4f24df66f937b312a02345458fd218888eae15a29a906745fc225dd11",
+      "source": "cache"
+    },
+    "renders_around_one_pair": {
+      "after_tick_and_rebuild": 72,
+      "before": 70,
+      "note": "the tick renders nothing (the rebuild side's +2 is its own re-render of the two animated boxes)"
+    },
+    "transition_frames": {
+      "desc": "transform+opacity transition frames: the property tick (UpdateEffectMatrix/Opacity + DrawSceneDamage, no rebuild) vs the pre-60 animation frame (a notified rebuild + full redraw)",
+      "property_tick": {
+        "n": 29,
+        "mean_ms": 2.220982758620689,
+        "min_ms": 1.0726,
+        "present_submit_ms_mean": 0.05431034482758621
+      },
+      "full_rebuild_frame": {
+        "n": 30,
+        "mean_ms": 7.922536666666668,
+        "min_ms": 5.3666,
+        "present_submit_ms_mean": 0.11583333333333336
+      },
+      "paired_savings": {
+        "mean_ms": 5.7015539080459785,
+        "min_ms": 4.2940000000000005,
+        "frame_savings_percent": 71.96626721886607
+      },
+      "damage_fraction_per_mille": 189,
+      "partial_presents": 74,
+      "full_presents": 32,
+      "stolen_frames_skipped": 1
+    }
+  }
+}
