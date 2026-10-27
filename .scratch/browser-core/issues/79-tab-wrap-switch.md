@@ -3,8 +3,8 @@
 Parent: ../map.md
 Type: task
 Labels: wayfinder:task
-Status: open
-Assignee: unassigned
+Status: claimed
+Assignee: orchestrator 13 (worker: core/79 worktree gpui-go-wt-core-79)
 Blocked by: none
 Triage: ready-for-agent
 
